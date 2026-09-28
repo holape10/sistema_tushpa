@@ -8,9 +8,32 @@ use Illuminate\Support\Facades\Auth;
 
 class MesaController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $mesas = Mesa::with('piso')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->get();
+        $query = Mesa::with('piso')
+            ->where('id_empresa_negocio', Auth::user()->id_empresa_negocio);
+        
+        // Búsqueda
+        if ($request->has('search') && $request->search != '') {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('mes_nom', 'LIKE', "%{$search}%")
+                  ->orWhereHas('piso', function($pq) use ($search) {
+                      $pq->where('pis_nom', 'LIKE', "%{$search}%");
+                  });
+            });
+        }
+        
+        // Ordenamiento por piso y luego por nombre de mesa
+        $mesas = $query->orderByRaw("
+            CASE 
+                WHEN pis_id IS NULL THEN 1 
+                ELSE 0 
+            END,
+            pis_id ASC,
+            mes_nom ASC
+        ")->get();
+        
         return view('empresas.mesas.index', compact('mesas'));
     }
 

@@ -5,12 +5,22 @@
     @include('empresas.partials.alert')
 
     <div class="flex flex-col sm:flex-row justify-between gap-3 mb-4">
-        <form method="GET" class="flex-1 max-w-sm">
+        <form method="GET" class="flex flex-col sm:flex-row gap-3 flex-1">
             <input type="text" name="q" value="{{ $q }}" placeholder="Buscar producto..."
-                class="w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                class="w-full sm:max-w-sm rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+
+            <select name="tipo" onchange="this.form.submit()"
+                class="w-full sm:w-auto rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="" @selected($tipo === '')>Todos los tipos</option>
+                <option value="0" @selected($tipo == '0')>Productos</option>
+                <option value="4" @selected($tipo == '4')>Insumos</option>
+                <option value="2" @selected($tipo == '2')>Preparados</option>
+                <option value="6" @selected($tipo == '6')>Combos</option>
+            </select>
         </form>
+
         <a href="{{ route('productos.create') }}"
-           class="inline-flex justify-center items-center px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">
+           class="inline-flex justify-center items-center px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition whitespace-nowrap">
             + Nuevo Producto
         </a>
     </div>
@@ -20,6 +30,7 @@
             <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
                 <tr>
                     <th class="px-4 py-3 text-left">Nombre</th>
+                    <th class="px-4 py-3 text-left">Tipo</th>
                     <th class="px-4 py-3 text-left">Categoría</th>
                     <th class="px-4 py-3 text-right">Precio</th>
                     <th class="px-4 py-3 text-center">Estado</th>
@@ -30,6 +41,9 @@
                 @forelse ($productos as $p)
                     <tr class="hover:bg-gray-50">
                         <td class="px-4 py-3 font-medium text-gray-700">{{ $p->pronom }}</td>
+                        <td class="px-4 py-3">
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">{{ $p->tipo_nombre }}</span>
+                        </td>
                         <td class="px-4 py-3 text-gray-500">{{ $p->categoria->cat_nom ?? '-' }}</td>
                         <td class="px-4 py-3 text-right">S/ {{ number_format($p->propun, 2) }}</td>
                         <td class="px-4 py-3 text-center">
@@ -47,7 +61,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">Sin productos registrados</td></tr>
+                    <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">Sin productos registrados</td></tr>
                 @endforelse
             </tbody>
         </table>

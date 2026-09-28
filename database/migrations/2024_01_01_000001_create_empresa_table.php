@@ -15,8 +15,8 @@ return new class extends Migration {
             $table->string('TelEmpresa', 20)->nullable();
             $table->string('CorEmpresa', 250)->nullable();
             $table->string('EstEmpresa', 10)->default('Activo');
-            $table->string('wsusuario')->default('FACTURA1');
-            $table->string('claveSunat')->default('Factura1');
+            $table->string('wsusuario')->default('TUSHPA01');
+            $table->string('claveSunat')->default('TushPa01');
             $table->string('passcert')->nullable();
             $table->string('certificado')->nullable();
             $table->string('produccion')->nullable();

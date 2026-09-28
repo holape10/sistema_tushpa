@@ -46,7 +46,7 @@ return new class extends Migration {
             ['mod_nom' => 'Tipo Cambio', 'mod_url' => '#', 'mod_gen' => 'Mantenimiento'],
             ['mod_nom' => 'Medios de Pago', 'mod_url' => '/mediospagos', 'mod_gen' => 'Mantenimiento'],
             ['mod_nom' => 'Línea', 'mod_url' => '#', 'mod_gen' => 'Mantenimiento'],
-            ['mod_nom' => 'Sub Líneas', 'mod_url' => '/categorias', 'mod_gen' => 'Mantenimiento'],
+            ['mod_nom' => 'categorias', 'mod_url' => '/categorias', 'mod_gen' => 'Mantenimiento'],
             ['mod_nom' => 'Productos', 'mod_url' => '/productos', 'mod_gen' => 'Mantenimiento'],
             ['mod_nom' => 'Insumos', 'mod_url' => '#', 'mod_gen' => 'Mantenimiento'],
             ['mod_nom' => 'Combos', 'mod_url' => '#', 'mod_gen' => 'Mantenimiento'],
