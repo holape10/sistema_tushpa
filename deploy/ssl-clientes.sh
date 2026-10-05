@@ -16,6 +16,7 @@ ADMIN="$(env_de TENANCY_ADMIN_SUBDOMINIO)"; ADMIN="${ADMIN:-admin}"
 CENTRAL="$(env_de CENTRAL_DB_DATABASE)"; CENTRAL="${CENTRAL:-bd_tushpa_central}"
 export MYSQL_PWD="$(env_de DB_PASSWORD)"
 USUARIO_BD="$(env_de DB_USERNAME)"
+HOST_BD="$(env_de DB_HOST)"; HOST_BD="${HOST_BD:-localhost}"   # localhost = socket (root suele existir solo así)
 
 HOSTS=("${PRINCIPAL}")
 if [ -n "${DOMINIO}" ]; then
@@ -23,7 +24,7 @@ if [ -n "${DOMINIO}" ]; then
     # Empresas activas del multi-empresa (solo RUC de 11 dígitos: nada raro llega al shell)
     while read -r ruc; do
         [[ "${ruc}" =~ ^[0-9]{11}$ ]] && HOSTS+=("${ruc}.${DOMINIO}")
-    done < <(mysql -N -u"${USUARIO_BD}" -h127.0.0.1 "${CENTRAL}" -e "SELECT ruc FROM clientes WHERE estado = 'ACTIVO'" 2>/dev/null)
+    done < <(mysql -N -u"${USUARIO_BD}" -h"${HOST_BD}" "${CENTRAL}" -e "SELECT ruc FROM clientes WHERE estado = 'ACTIVO'" 2>/dev/null)
 fi
 
 nuevos=0
