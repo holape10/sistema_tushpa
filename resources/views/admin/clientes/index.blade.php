@@ -13,6 +13,11 @@
                 <dt class="text-slate-500">Contraseña</dt><dd class="font-mono font-semibold">{{ $c['password'] }}</dd>
                 <dt class="text-slate-500">Base de datos</dt><dd class="font-mono">{{ $c['base'] }}</dd>
             </dl>
+            <p class="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                🔒 El candado https de este subdominio se activa solo en <strong>1 a 2 minutos</strong>.
+                Si el navegador dice "La conexión no es privada", espera un momento o entra mientras tanto por
+                <a href="{{ preg_replace('#^https://#', 'http://', $c['url']) }}" target="_blank" class="font-semibold underline">{{ preg_replace('#^https://#', 'http://', $c['url']) }}</a>.
+            </p>
         </div>
     @endif
 
