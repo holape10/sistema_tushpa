@@ -11,6 +11,7 @@ use Symfony\Component\HttpFoundation\Response;
  * Elige la base de datos según el subdominio (va antes de la sesión, que también vive en esa base):
  *  - {RUC}.{dominio}   => bd_{RUC} del cliente (si está activo)
  *  - admin.{dominio}   => base central, solo para la ruta del panel
+ *  - subdominios principales (TENANCY_PRINCIPALES, ej. a.{dominio}) => la base del .env (la empresa dueña del sistema)
  *  - cualquier otro host (dominio principal, IP, local) => la base del .env, como siempre
  */
 class IdentificarEmpresa
@@ -30,6 +31,9 @@ class IdentificarEmpresa
 
         if ($subdominio === config('tenancy.subdominio_admin')) {
             return $this->panel($request, $next);
+        }
+        if (in_array($subdominio, config('tenancy.principales', []), true)) {
+            return $next($request);
         }
 
         // Los clientes entran solo por su RUC; cualquier otro subdominio no existe

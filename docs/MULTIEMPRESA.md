@@ -1,5 +1,11 @@
 # Multi-empresa TUSHPA
 
+> **Instalación automática (recomendada):** `bash deploy/instalar-almalinux.sh a.tushpa.app correo@gmail.com tushpa.app`
+> deja `a.tushpa.app` como sistema principal (base del `.env`, `TENANCY_PRINCIPALES=a`), el panel en `admin.tushpa.app/panel`
+> y cada cliente en `{RUC}.tushpa.app`. El https de cada subdominio lo saca solo `deploy/ssl-clientes.sh` (cron cada 5 min,
+> por HTTP): **no hace falta Cloudflare ni certificado comodín**. En el DNS basta `A a` y `A *` hacia la IP del VPS.
+> Las secciones de abajo quedan como alternativa manual con certificado comodín.
+
 Cada cliente tiene su propia base de datos `bd_{RUC}` y entra por `https://{RUC}.tushpa.app`.
 Tú administras los clientes desde `https://admin.tushpa.app/{TENANCY_ADMIN_RUTA}`.
 

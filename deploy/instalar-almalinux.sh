@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # =====================================================================================
-#  Instalación de Sistema TUSHPA en un VPS AlmaLinux 8/9 con Apache (Contabo u otro)
+#  Instalación de Sistema TUSHPA en un VPS AlmaLinux 8/9/10 con Apache (Contabo u otro)
 #
 #  Uso (como root):
 #     curl -fsSL https://raw.githubusercontent.com/holape10/sistema_tushpa/main/deploy/instalar-almalinux.sh -o instalar.sh
-#     bash instalar.sh                                  # entra por la IP del VPS (http)
-#     bash instalar.sh midominio.com correo@gmail.com   # con dominio y SSL gratis (https)
+#     bash instalar.sh                                              # entra por la IP del VPS (http)
+#     bash instalar.sh midominio.com correo@gmail.com               # una empresa, con https gratis
+#     bash instalar.sh a.tushpa.app correo@gmail.com tushpa.app     # multi-empresa: a.tushpa.app es tu sistema,
+#                                                                   #   cada cliente entra por {RUC}.tushpa.app y
+#                                                                   #   el panel por admin.tushpa.app/panel
 #
-#  Qué hace: PHP 8.3 (Remi), MySQL 8, Apache, Composer, Node.js; clona el repositorio en
+#  Qué hace: PHP 8.3, MySQL 8, Apache, Composer, Node.js; clona el repositorio en
 #  /var/www/html/sistema_tushpa, crea la base de datos, .env, migraciones, compila estilos,
-#  configura Apache, SELinux y el firewall. Se puede volver a correr sin romper nada.
+#  configura Apache, SELinux, firewall y https (también el de cada empresa nueva, solo).
+#  Se puede volver a correr sin romper nada.
 # =====================================================================================
 set -euo pipefail
 
@@ -18,6 +22,13 @@ REPO="${REPO:-https://github.com/holape10/sistema_tushpa.git}"
 RAMA="${RAMA:-main}"
 DOMINIO="${1:-}"
 CORREO="${2:-}"
+BASE="${3:-}"   # dominio del multi-empresa (vacío = una sola empresa)
+SUB=""
+if [ -n "${BASE}" ]; then
+    [[ "${DOMINIO}" == *".${BASE}" ]] || { echo "El dominio principal debe ser un subdominio de ${BASE} (ej. a.${BASE})."; exit 1; }
+    SUB="${DOMINIO%.${BASE}}"
+fi
+[ -n "${DOMINIO}" ] && [ -z "${CORREO}" ] && { echo "Indica tu correo (Let's Encrypt avisa ahí si un certificado vence)."; exit 1; }
 DIR="/var/www/html/${APP}"
 DB_NOMBRE="bd_${APP}"
 DB_USUARIO="tushpa"
@@ -29,14 +40,25 @@ RHEL=$(rpm -E %rhel)
 
 verde "1/9 Paquetes del sistema"
 dnf -y install epel-release
-dnf -y install "https://rpms.remirepo.net/enterprise/remi-release-${RHEL}.rpm" || true
-dnf -y install git unzip curl tar policycoreutils-python-utils firewalld httpd mod_ssl
+dnf -y install git unzip curl tar openssl policycoreutils-python-utils firewalld httpd mod_ssl cronie
 
 verde "2/9 PHP 8.3 con las extensiones que usa el sistema (SUNAT, PDF, Excel, ZIP)"
-dnf -y module reset php
-dnf -y module enable php:remi-8.3
-dnf -y install php php-cli php-fpm php-common php-mysqlnd php-mbstring php-xml php-gd php-zip \
-    php-intl php-bcmath php-soap php-opcache php-process php-pdo
+if [ "${RHEL}" -ge 10 ]; then
+    # AlmaLinux 10 ya trae PHP 8.3 en sus repositorios
+    dnf -y install php php-cli php-fpm php-common php-mysqlnd php-mbstring php-xml php-gd php-intl \
+        php-bcmath php-soap php-opcache php-process php-pdo
+    dnf -y install php-zip || dnf -y install php-pecl-zip
+else
+    dnf -y install "https://rpms.remirepo.net/enterprise/remi-release-${RHEL}.rpm" || true
+    dnf -y module reset php
+    dnf -y module enable php:remi-8.3
+    dnf -y install php php-cli php-fpm php-common php-mysqlnd php-mbstring php-xml php-gd php-zip \
+        php-intl php-bcmath php-soap php-opcache php-process php-pdo
+fi
+php -r 'exit(version_compare(PHP_VERSION, "8.3.0", ">=") ? 0 : 1);' || { echo "Se necesita PHP 8.3 o mayor (hay $(php -r 'echo PHP_VERSION;'))."; exit 1; }
+FALTAN=""
+for ext in soap zip intl gd bcmath mbstring xml dom pdo_mysql openssl curl; do php -m | grep -qi "^${ext}$" || FALTAN="${FALTAN} ${ext}"; done
+[ -z "${FALTAN}" ] || { echo "Faltan extensiones de PHP:${FALTAN}"; exit 1; }
 cat > /etc/php.d/99-tushpa.ini <<'INI'
 ; Sistema TUSHPA: subir respaldos del sistema antiguo, imágenes y reportes grandes
 upload_max_filesize = 512M
@@ -47,13 +69,15 @@ date.timezone = America/Lima
 INI
 
 verde "3/9 MySQL 8"
-dnf -y install mysql-server
+dnf -y install mysql-server || dnf -y install mysql8.4-server
 systemctl enable --now mysqld
 
 verde "4/9 Node.js (para compilar los estilos) y Composer"
 if ! command -v node >/dev/null || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 20 ]; then
-    dnf -y module reset nodejs || true
-    dnf -y module enable nodejs:22 || dnf -y module enable nodejs:20
+    if [ "${RHEL}" -lt 10 ]; then
+        dnf -y module reset nodejs || true
+        dnf -y module enable nodejs:22 || dnf -y module enable nodejs:20
+    fi
     dnf -y install nodejs npm
 fi
 if ! command -v composer >/dev/null; then
@@ -91,7 +115,7 @@ FLUSH PRIVILEGES;
 SQL
 
 URL="http://$(curl -fsS -4 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')"
-[ -n "${DOMINIO}" ] && URL="https://${DOMINIO}"
+[ -n "${DOMINIO}" ] && URL="http://${DOMINIO}"
 [ -f .env ] || cp .env.example .env
 fijar() {  # fijar CLAVE valor  -> reemplaza (o agrega) la línea en .env, aunque esté comentada
     if grep -qE "^#?\s*$1=" .env; then sed -i -E "s|^#?\s*$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi
@@ -108,6 +132,15 @@ fijar DB_DATABASE "${DB_NOMBRE}"
 fijar DB_USERNAME "${DB_USUARIO}"
 fijar DB_PASSWORD "${DB_CLAVE}"
 fijar LOG_LEVEL warning
+if [ -n "${BASE}" ]; then
+    # Multi-empresa: {RUC}.BASE => bd_{RUC};  SUB.BASE => esta base (tu empresa);  admin.BASE/panel => panel
+    fijar TENANCY_DOMINIO "${BASE}"
+    fijar TENANCY_PRINCIPALES "${SUB}"
+    fijar TENANCY_ADMIN_SUBDOMINIO admin
+    fijar TENANCY_ADMIN_RUTA panel
+    fijar TENANCY_ESQUEMA https
+    fijar CENTRAL_DB_DATABASE bd_tushpa_central
+fi
 chmod 640 .env
 
 verde "7/9 Dependencias, migraciones y estilos"
@@ -115,6 +148,7 @@ export COMPOSER_ALLOW_SUPERUSER=1
 composer install --no-dev --optimize-autoloader --no-interaction
 grep -q '^APP_KEY=base64' .env || php artisan key:generate --force
 php artisan migrate --force
+[ -n "${BASE}" ] && php artisan central:instalar
 npm ci --no-audit --no-fund
 npm run build
 php artisan optimize:clear
@@ -153,7 +187,13 @@ cat > "/etc/httpd/conf.d/00-${APP}.conf" <<CONF
 
 <VirtualHost *:80>
     ServerName ${SERVIDOR}
+    ${BASE:+ServerAlias *.${BASE}}
     DocumentRoot ${DIR}/public
+    # Pasa a https solo los sitios que ya tienen certificado (deploy/ssl-clientes.sh crea su archivo)
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/
+    RewriteCond /etc/httpd/conf.d/tushpa-ssl-%{HTTP_HOST}.conf -f
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
     # Importar respaldos grandes y reportes pesados
     Timeout 600
     ProxyTimeout 600
@@ -168,10 +208,16 @@ firewall-cmd --permanent --add-service=http --add-service=https >/dev/null
 firewall-cmd --reload >/dev/null
 
 if [ -n "${DOMINIO}" ]; then
-    verde "SSL gratis con Let's Encrypt para ${DOMINIO} (la cámara y la voz del PV Móvil necesitan https)"
-    dnf -y install certbot python3-certbot-apache
-    certbot --apache -d "${DOMINIO}" --non-interactive --agree-tos -m "${CORREO:-admin@${DOMINIO}}" --redirect \
-        || echo "No se pudo emitir el SSL: revisa que el dominio apunte a la IP de este VPS y vuelve a correr el script."
+    verde "https gratis con Let's Encrypt (la cámara y la voz del PV Móvil lo necesitan)"
+    dnf -y install certbot
+    printf 'DIR=%s\nPRINCIPAL=%s\nCORREO=%s\n' "${DIR}" "${DOMINIO}" "${CORREO}" > /etc/tushpa-ssl.conf
+    # Cada 5 minutos: certificado para el dominio, el panel y cada empresa nueva del multi-empresa
+    echo "*/5 * * * * root /bin/bash ${DIR}/deploy/ssl-clientes.sh >> /var/log/tushpa-ssl.log 2>&1" > /etc/cron.d/tushpa-ssl
+    systemctl enable --now crond
+    systemctl enable --now certbot-renew.timer 2>/dev/null || true
+    bash "${DIR}/deploy/ssl-clientes.sh" || true
+    [ -f "/etc/letsencrypt/live/${DOMINIO}/fullchain.pem" ] && URL="https://${DOMINIO}" \
+        || echo "Aún no hay certificado para ${DOMINIO}: revisa que el DNS apunte a este VPS; se reintenta solo cada 5 minutos."
 fi
 
 verde "¡Listo!"
@@ -183,5 +229,12 @@ cat <<FIN
   Base de datos:  ${DB_NOMBRE}  ·  usuario ${DB_USUARIO}  ·  clave guardada en ${CREDENCIALES}
   Errores:        ${DIR}/storage/logs  y  /var/log/httpd/${APP}_error.log
   Actualizar:     bash ${DIR}/deploy/actualizar.sh
-
 FIN
+if [ -n "${BASE}" ]; then cat <<FIN
+  Multi-empresa:  cada cliente entra por https://{RUC}.${BASE}  (su https sale solo en máx. 5 minutos)
+  Panel:          https://admin.${BASE}/panel
+                  Crea tu usuario del panel:  cd ${DIR} && php artisan superadmin:crear
+  DNS necesario:  A  ${SUB}  -> IP del VPS     y     A  *  -> IP del VPS
+FIN
+fi
+echo
