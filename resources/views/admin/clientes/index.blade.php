@@ -27,6 +27,7 @@
             <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">{{ $totales['activos'] }} activos</span>
             @if ($totales['suspendidos'])<span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700">{{ $totales['suspendidos'] }} suspendidos</span>@endif
             @if ($totales['por_vencer'])<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">{{ $totales['por_vencer'] }} vencen en 7 días</span>@endif
+            <span class="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700">Ingreso mensual S/ {{ number_format($totales['ingreso'], 2) }}</span>
         </div>
         <form class="ml-auto flex gap-2" method="GET">
             <input type="search" name="q" value="{{ $q }}" placeholder="RUC o nombre" class="rounded-xl border-slate-300 text-sm w-48">
@@ -53,8 +54,24 @@
                             <p class="font-semibold">{{ $cl->nombre_comercial ?: $cl->razon_social }}</p>
                             <p class="text-xs text-slate-400">{{ $cl->ruc }} · {{ $cl->razon_social }}</p>
                         </td>
-                        <td class="px-4 py-3"><a href="{{ $cl->url() }}" target="_blank" class="text-indigo-700 hover:underline">{{ parse_url($cl->url(), PHP_URL_HOST) }}</a></td>
-                        <td class="px-4 py-3">{{ $cl->plan ?: '—' }}</td>
+                        <td class="px-4 py-3">
+                            <a href="{{ $cl->url() }}" target="_blank" class="text-indigo-700 hover:underline">{{ $cl->host() }}</a>
+                            <div class="mt-1 flex items-center gap-2 text-xs">
+                                @if ($cl->tieneHttps())
+                                    <span class="text-emerald-600 font-semibold">🔒 https activo</span>
+                                @else
+                                    <span class="text-amber-600 font-semibold">⚠ sin https</span>
+                                    <form method="POST" action="{{ route('admin.clientes.https', $cl) }}" class="inline">
+                                        @csrf
+                                        <button class="px-2 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-semibold">Activar https</button>
+                                    </form>
+                                @endif
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            {{ $cl->plan ?: '—' }}
+                            @if ($cl->planContratado)<span class="block text-xs text-slate-400">S/ {{ number_format($cl->planContratado->precio, 2) }} /mes</span>@endif
+                        </td>
                         <td class="px-4 py-3">
                             @if ($cl->vence_el)
                                 <span class="{{ $cl->vence_el->isPast() ? 'text-rose-600 font-semibold' : ($cl->vence_el->lte(now()->addDays(7)) ? 'text-amber-600 font-semibold' : '') }}">{{ $cl->vence_el->format('d/m/Y') }}</span>

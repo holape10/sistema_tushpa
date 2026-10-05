@@ -11,11 +11,11 @@ use Illuminate\Support\Facades\DB;
  */
 class Proformas
 {
-    public const ORIGENES = ['PV' => 'Punto Venta', 'FARMACIA' => 'PV Farmacia', 'POS' => 'PV Móvil', 'TACTIL' => 'PV Táctil', 'GRIFO' => 'PV Grifo'];
+    public const ORIGENES = ['PV' => 'Punto Venta', 'FARMACIA' => 'PV Farmacia', 'POS' => 'PV Móvil', 'TACTIL' => 'PV Táctil', 'GRIFO' => 'PV Grifo', 'WEB' => 'Tienda virtual'];
 
     public const REGLAS = [
         'id'                  => 'nullable|integer',
-        'origen'              => 'required|in:PV,FARMACIA,POS,TACTIL,GRIFO',
+        'origen'              => 'required|in:PV,FARMACIA,POS,TACTIL,GRIFO,WEB',
         'tdicod'              => 'required|string|size:1',
         'clinum'              => 'required|string|max:15',
         'clinom'              => 'required|string|max:120',

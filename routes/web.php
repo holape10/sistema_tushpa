@@ -194,6 +194,24 @@ Route::get('/asistencia/m/{emp}/{accion}', [AsistenciaController::class, 'celula
     ->whereNumber('emp')->whereIn('accion', ['check_in_1', 'check_out_1', 'check_in_2', 'check_out_2'])
     ->middleware('throttle:30,1')->name('asistencia.celular');
 
+// Tienda virtual pública de la empresa: {subdominio}/tiendavirtual (sin sesión del sistema)
+Route::prefix('tiendavirtual')->name('tienda.')->controller(\App\Http\Controllers\TiendaController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/ingresar', 'login')->name('login');
+    Route::post('/ingresar', 'entrar')->middleware('throttle:20,1')->name('entrar');
+    Route::get('/registro', 'registro')->name('registro');
+    Route::post('/registro', 'registrar')->middleware('throttle:10,1')->name('registrar');
+    Route::post('/salir', 'salir')->name('salir');
+    Route::get('/mi-cuenta', 'cuenta')->name('cuenta');
+    Route::post('/mi-cuenta/clave', 'cambiarClave')->name('clave');
+    Route::post('/pedido', 'pedido')->middleware('throttle:20,1')->name('pedido');
+});
+
+Route::middleware('auth')->group(function () {
+    Route::get('/tienda/configuracion', [\App\Http\Controllers\TiendaConfigController::class, 'edit'])->name('tienda.config');
+    Route::post('/tienda/configuracion', [\App\Http\Controllers\TiendaConfigController::class, 'update'])->name('tienda.config.guardar');
+});
+
 Route::middleware('auth')->group(function () {
     // Asistencia: kiosko de marcación
     Route::get('/asistencia', [AsistenciaController::class, 'kiosko'])->name('asistencia.kiosko');

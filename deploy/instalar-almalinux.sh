@@ -220,13 +220,10 @@ if [ -n "${DOMINIO}" ]; then
     verde "https gratis con Let's Encrypt (la cámara y la voz del PV Móvil lo necesitan)"
     dnf -y install certbot
     printf 'DIR=%s\nPRINCIPAL=%s\nCORREO=%s\n' "${DIR}" "${DOMINIO}" "${CORREO}" > /etc/tushpa-ssl.conf
-    # Cada 5 minutos: certificado para el dominio, el panel y cada empresa nueva del multi-empresa
-    echo "*/5 * * * * root /bin/bash ${DIR}/deploy/ssl-clientes.sh >> /var/log/tushpa-ssl.log 2>&1" > /etc/cron.d/tushpa-ssl
-    systemctl enable --now crond
-    systemctl enable --now certbot-renew.timer 2>/dev/null || true
-    bash "${DIR}/deploy/ssl-clientes.sh" || true
+    # Certificado para el dominio, el panel y cada empresa nueva (cron cada minuto + botón del panel)
+    bash "${DIR}/deploy/ssl-instalar.sh" "${CORREO}" || true
     [ -f "/etc/letsencrypt/live/${DOMINIO}/fullchain.pem" ] && URL="https://${DOMINIO}" \
-        || echo "Aún no hay certificado para ${DOMINIO}: revisa que el DNS apunte a este VPS; se reintenta solo cada 5 minutos."
+        || echo "Aún no hay certificado para ${DOMINIO}: revisa que el DNS apunte a este VPS; se reintenta solo cada minuto."
 fi
 
 verde "¡Listo!"

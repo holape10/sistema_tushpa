@@ -15,6 +15,10 @@
             <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
                 <img src="{{ asset('imagenes/512.png') }}" alt="" class="w-8 h-8 rounded-lg bg-white p-1">
                 <a href="{{ route('admin.clientes.index') }}" class="font-bold">TUSHPA <span class="font-normal text-slate-400">· Panel de clientes</span></a>
+                <nav class="ml-4 flex gap-1 text-sm">
+                    <a href="{{ route('admin.clientes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.clientes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Clientes</a>
+                    <a href="{{ route('admin.planes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.planes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Planes</a>
+                </nav>
                 <span class="ml-auto text-sm text-slate-400 hidden sm:inline">{{ auth('superadmin')->user()->nombre }}</span>
                 <form method="POST" action="{{ route('admin.logout') }}">
                     @csrf

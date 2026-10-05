@@ -42,6 +42,8 @@ class Provisionador
 
             return Cliente::create([
                 'ruc'               => $ruc,
+                'subdominio'        => ($d['subdominio'] ?? null) ?: null,
+                'plan_id'           => $d['plan_id'] ?? null,
                 'razon_social'      => $d['razon_social'],
                 'nombre_comercial'  => ($d['nombre_comercial'] ?? null) ?: null,
                 'base_datos'        => $base,

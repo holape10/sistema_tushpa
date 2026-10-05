@@ -130,6 +130,12 @@ class UsuarioController extends Controller
     public function store(Request $request)
     {
         $this->autorizar();
+        // Límite de usuarios del plan contratado (multi-empresa)
+        $plan = \App\Support\Tenancy\Tenancy::plan();
+        if ($plan && $plan->max_usuarios && User::where('IdEmpresa', Auth::user()->IdEmpresa)->count() >= $plan->max_usuarios) {
+            return back()->withInput()->with('error', "Tu plan {$plan->nombre} permite hasta {$plan->max_usuarios} usuarios. Para agregar más, cámbiate a un plan mayor.")
+                ->withErrors(['plan' => "Tu plan {$plan->nombre} permite hasta {$plan->max_usuarios} usuarios. Para agregar más, cámbiate a un plan mayor."]);
+        }
         $d = $this->validar($request);
 
         DB::transaction(function () use ($d) {

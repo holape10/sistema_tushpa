@@ -39,9 +39,18 @@
                     <span class="text-sm font-semibold text-slate-600">Razón social</span>
                     <input type="text" name="razon_social" x-ref="razon" value="{{ old('razon_social', $cliente->razon_social) }}" required class="mt-1 w-full rounded-xl border-slate-300">
                 </label>
-                <label class="block sm:col-span-3">
+                <label class="block sm:col-span-2">
                     <span class="text-sm font-semibold text-slate-600">Nombre comercial <span class="font-normal text-slate-400">(opcional)</span></span>
                     <input type="text" name="nombre_comercial" value="{{ old('nombre_comercial', $cliente->nombre_comercial) }}" class="mt-1 w-full rounded-xl border-slate-300">
+                </label>
+                <label class="block">
+                    <span class="text-sm font-semibold text-slate-600">Subdominio propio <span class="font-normal text-slate-400">(opcional)</span></span>
+                    <div class="mt-1 flex items-center rounded-xl border border-slate-300 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-indigo-300">
+                        <input type="text" name="subdominio" x-model="sub" @input="sub = sub.toLowerCase().replace(/[^a-z0-9-]/g, '')" maxlength="40"
+                               placeholder="demo" class="flex-1 min-w-0 border-0 focus:ring-0 font-mono text-sm">
+                        <span class="px-2 text-xs text-slate-400 whitespace-nowrap">.{{ config('tenancy.dominio') }}</span>
+                    </div>
+                    <span class="text-xs text-slate-400" x-text="'Entrará por ' + (sub || ruc || 'RUC') + '.{{ config('tenancy.dominio') }}'"></span>
                 </label>
                 @if ($nuevo)
                     <label class="block sm:col-span-2">
@@ -78,10 +87,27 @@
         <section class="bg-white rounded-2xl shadow-sm p-5 space-y-4">
             <h2 class="font-bold text-slate-700">Contrato y contacto</h2>
             <div class="grid sm:grid-cols-2 gap-4">
-                <label class="block">
+                <div class="sm:col-span-2">
                     <span class="text-sm font-semibold text-slate-600">Plan</span>
-                    <input type="text" name="plan" value="{{ old('plan', $cliente->plan) }}" placeholder="Ej. Mensual, Anual" class="mt-1 w-full rounded-xl border-slate-300">
-                </label>
+                    <div class="mt-1 grid sm:grid-cols-3 gap-3">
+                        @foreach ($planes as $pl)
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="plan_id" value="{{ $pl->id }}" class="peer sr-only" @checked((int) old('plan_id', $cliente->plan_id) === $pl->id)>
+                                <div class="h-full rounded-2xl border-2 p-4 transition peer-checked:border-indigo-600 peer-checked:bg-indigo-50 {{ $pl->destacado ? 'border-indigo-200' : 'border-slate-200' }}">
+                                    @if ($pl->destacado)<span class="absolute -top-2 right-3 px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">MÁS POPULAR</span>@endif
+                                    <p class="font-bold text-slate-800">{{ $pl->nombre }}</p>
+                                    <p class="text-2xl font-black text-indigo-700">S/ {{ number_format($pl->precio, 0) }}<span class="text-xs font-semibold text-slate-400"> /mes</span></p>
+                                    <ul class="mt-2 text-xs text-slate-500 space-y-0.5">
+                                        @foreach ($pl->listaCaracteristicas() as $c)<li>✔ {{ $c }}</li>@endforeach
+                                    </ul>
+                                </div>
+                            </label>
+                        @endforeach
+                    </div>
+                    <label class="inline-flex items-center gap-2 mt-2 text-xs text-slate-500">
+                        <input type="radio" name="plan_id" value="" class="rounded-full" @checked(!old('plan_id', $cliente->plan_id))> Sin plan (sin límites)
+                    </label>
+                </div>
                 <label class="block">
                     <span class="text-sm font-semibold text-slate-600">Vence el</span>
                     <input type="date" name="vence_el" value="{{ old('vence_el', $cliente->vence_el?->format('Y-m-d')) }}" class="mt-1 w-full rounded-xl border-slate-300">
@@ -117,7 +143,7 @@
 <script>
     function clienteForm() {
         return {
-            ruc: @json(old('ruc', '')), buscando: false, msg: '', msgOk: true, enviando: false, ultimo: '',
+            ruc: @json(old('ruc', $cliente->ruc ?? '')), sub: @json(old('subdominio', $cliente->subdominio ?? '')), buscando: false, msg: '', msgOk: true, enviando: false, ultimo: '',
             async buscarRuc() {
                 if (this.buscando || this.ruc === this.ultimo || !/^\d{11}$/.test(this.ruc)) return;
                 this.buscando = true; this.ultimo = this.ruc; this.msg = 'Consultando SUNAT…'; this.msgOk = true;

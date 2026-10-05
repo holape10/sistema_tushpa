@@ -19,8 +19,11 @@ git reset --hard "origin/${RAMA}"
 echo "==> Dependencias y base de datos"
 composer install --no-dev --optimize-autoloader --no-interaction
 php artisan migrate --force
-# Bases de cada cliente si el multi-empresa está activo
-if grep -qE '^TENANCY_DOMINIO=.+' .env; then php artisan clientes:migrar || true; fi
+# Multi-empresa: base central (planes, subdominios) y bases de cada cliente
+if grep -qE '^TENANCY_DOMINIO=.+' .env; then
+    php artisan migrate --database=central --path=database/migrations/central --force
+    php artisan clientes:migrar || true
+fi
 
 echo "==> Estilos"
 npm ci --no-audit --no-fund
@@ -35,5 +38,7 @@ chown -R apache:apache "${DIR}"
 chmod -R ug+rwX storage bootstrap/cache public/imagenes
 command -v restorecon >/dev/null && restorecon -R "${DIR}" || true
 systemctl reload php-fpm httpd
+# El script de certificados corre como root: su copia vive fuera de la carpeta de Apache
+[ -f /usr/local/sbin/tushpa-ssl ] && install -o root -g root -m 755 deploy/ssl-clientes.sh /usr/local/sbin/tushpa-ssl
 
 echo "==> Listo: $(git log -1 --format='%h %s')"

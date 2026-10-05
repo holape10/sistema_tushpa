@@ -5,8 +5,12 @@
 #  certificado, lo pide por HTTP (webroot, sin tocar el DNS) y crea su sitio https en Apache.
 #  Mientras no tenga certificado, la empresa entra por http; apenas lo tiene, Apache la redirige a https.
 #  Configuración: /etc/tushpa-ssl.conf  (DIR, PRINCIPAL, CORREO)
+#  Corre como root desde /usr/local/sbin/tushpa-ssl (copia con dueño root; la carpeta del proyecto es de Apache).
+#  El botón "Activar https" del panel deja storage/app/ssl-solicitud: systemd (tushpa-ssl.path) lo atiende al instante.
 # =====================================================================================
 set -uo pipefail
+exec 9>/run/tushpa-ssl.lock
+flock -n 9 || exit 0          # ya hay otra ejecución en curso
 source /etc/tushpa-ssl.conf
 cd "${DIR}" || exit 1
 
@@ -21,15 +25,16 @@ HOST_BD="$(env_de DB_HOST)"; HOST_BD="${HOST_BD:-localhost}"   # localhost = soc
 HOSTS=("${PRINCIPAL}")
 if [ -n "${DOMINIO}" ]; then
     HOSTS+=("${ADMIN}.${DOMINIO}")
-    # Empresas activas del multi-empresa (solo RUC de 11 dígitos: nada raro llega al shell)
-    while read -r ruc; do
-        [[ "${ruc}" =~ ^[0-9]{11}$ ]] && HOSTS+=("${ruc}.${DOMINIO}")
-    done < <(mysql -N -u"${USUARIO_BD}" -h"${HOST_BD}" "${CENTRAL}" -e "SELECT ruc FROM clientes WHERE estado = 'ACTIVO'" 2>/dev/null)
+    # Empresas activas: su subdominio propio (demo) o su RUC. Solo letras, números y guiones llegan al shell
+    while read -r sub; do
+        [[ "${sub}" =~ ^[a-z0-9-]{1,40}$ ]] && HOSTS+=("${sub}.${DOMINIO}")
+    done < <(mysql -N -u"${USUARIO_BD}" -h"${HOST_BD}" "${CENTRAL}" -e "SELECT COALESCE(NULLIF(subdominio, ''), ruc) FROM clientes WHERE estado = 'ACTIVO'" 2>/dev/null)
 fi
 
 nuevos=0
 for host in "${HOSTS[@]}"; do
-    [ -z "${host}" ] && continue
+    # Nombre de host válido (se escribe en la configuración de Apache)
+    [[ "${host}" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || continue
     conf="/etc/httpd/conf.d/tushpa-ssl-${host}.conf"
     if [ ! -f "/etc/letsencrypt/live/${host}/fullchain.pem" ]; then
         certbot certonly --webroot -w "${DIR}/public" -d "${host}" --non-interactive --agree-tos -m "${CORREO}" \
@@ -58,3 +63,5 @@ done
 if [ "${nuevos}" -eq 1 ]; then
     apachectl configtest >/dev/null 2>&1 && systemctl reload httpd
 fi
+
+rm -f "${DIR}/storage/app/ssl-solicitud"

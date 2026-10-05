@@ -10,6 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Elige la base de datos según el subdominio (va antes de la sesión, que también vive en esa base):
  *  - {RUC}.{dominio}   => bd_{RUC} del cliente (si está activo)
+ *  - {subdominio}.{dominio} => el cliente con ese subdominio propio (ej. demo.{dominio})
  *  - admin.{dominio}   => base central, solo para la ruta del panel
  *  - subdominios principales (TENANCY_PRINCIPALES, ej. a.{dominio}) => la base del .env (la empresa dueña del sistema)
  *  - cualquier otro host (dominio principal, IP, local) => la base del .env, como siempre
@@ -36,10 +37,11 @@ class IdentificarEmpresa
             return $next($request);
         }
 
-        // Los clientes entran solo por su RUC; cualquier otro subdominio no existe
-        abort_unless(preg_match('/^\d{11}$/', $subdominio), 404);
-
-        $cliente = Cliente::where('ruc', $subdominio)->first();
+        // Los clientes entran por su RUC o por su subdominio propio; cualquier otro subdominio no existe
+        abort_unless(preg_match('/^[a-z0-9][a-z0-9-]{0,39}$/', $subdominio), 404);
+        $cliente = preg_match('/^\d{11}$/', $subdominio)
+            ? Cliente::where('ruc', $subdominio)->first()
+            : Cliente::where('subdominio', $subdominio)->first();
         abort_unless($cliente, 404);
 
         if (!$cliente->activo()) {

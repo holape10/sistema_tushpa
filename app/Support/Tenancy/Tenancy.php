@@ -46,9 +46,24 @@ class Tenancy
         return $nombre;
     }
 
-    public static function urlCliente(string $ruc): string
+    /** @param string $subdominio el RUC o el subdominio propio del cliente (demo) */
+    public static function urlCliente(string $subdominio): string
     {
-        return config('tenancy.esquema') . '://' . $ruc . '.' . config('tenancy.dominio');
+        return config('tenancy.esquema') . '://' . $subdominio . '.' . config('tenancy.dominio');
+    }
+
+    /** Subdominios que nunca puede usar un cliente */
+    public static function subdominiosReservados(): array
+    {
+        return array_merge(['www', 'mail', 'ftp', 'api', 'panel', 'webmail', 'cpanel', config('tenancy.subdominio_admin')],
+            config('tenancy.principales', []));
+    }
+
+    /** Plan del cliente del subdominio actual (null = sin límites: empresa principal o modo de una sola empresa) */
+    public static function plan(): ?\App\Models\Central\Plan
+    {
+        $cliente = self::cliente();
+        return $cliente && $cliente->plan_id ? $cliente->planContratado : null;
     }
 
     /** Cliente del subdominio actual (null en el panel o en modo de una sola empresa) */
