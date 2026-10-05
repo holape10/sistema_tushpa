@@ -165,7 +165,7 @@
                 return;
             }
 
-            fetch(`/api/ruc/${ruc}`)
+            fetch(`{{ url('api/ruc') }}/${ruc}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.error) {

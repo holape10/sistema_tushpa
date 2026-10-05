@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\{Auth, Cookie};
 use Illuminate\View\View;
 
 use App\Models\Empresa;
@@ -16,11 +16,18 @@ class AuthenticatedSessionController extends Controller
     /**
      * Display the login view.
      */
-    public function create(): View
+    public function create(Request $request): View|RedirectResponse
     {
         if (Empresa::count() === 0) {
-            redirect()->route('empresa.config')->send();
-            exit;
+            return redirect()->route('empresa.config');
+        }
+
+        // Celulares y tablets van al login de mozos, salvo que elijan expresamente el de escritorio
+        // (la preferencia se guarda en una cookie para que sobreviva al cerrar sesión)
+        if ($request->boolean('escritorio')) {
+            Cookie::queue('login_escritorio', '1', 60 * 24 * 30);
+        } elseif (LoginMovilController::esMovil($request) && !$request->cookie('login_escritorio')) {
+            return redirect()->route('login.movil');
         }
 
         return view('auth.login');
@@ -35,7 +42,9 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        //return redirect()->intended(route('dashboard', absolute: false));
+        // Este equipo queda asociado a la sucursal: el login móvil mostrará a sus mozos
+        LoginMovilController::recordarSucursal($request->user());
+
         return redirect()->intended(route($request->user()->rutaInicio(), absolute: false));
     }
 

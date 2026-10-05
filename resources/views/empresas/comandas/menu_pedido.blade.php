@@ -52,6 +52,12 @@
         .cart-item-remove { background-color: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 5px; margin-left: auto; font-size: 0.85em; }
         .cart-item-old { background-color: #f2dede; color: #843534; font-size: 0.8em; padding: 4px 8px; border-radius: 5px; margin-left: auto; }
 
+        .cart-item-enviado { border-left: 4px solid #f0ad4e; }
+        .badge-enviado { display: inline-block; background: #f0ad4e; color: #fff; font-size: 0.65em; padding: 1px 6px; border-radius: 8px; vertical-align: middle; }
+        .badge-nuevo { display: inline-block; background: #28a745; color: #fff; font-size: 0.65em; padding: 1px 6px; border-radius: 8px; vertical-align: middle; }
+        .badge-cobrado { display: inline-block; background: #6c757d; color: #fff; font-size: 0.65em; padding: 1px 6px; border-radius: 8px; vertical-align: middle; }
+        .cart-obs { flex-basis: 100%; margin-top: 6px; padding: 5px 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 0.85em; }
+        .cart-obs-texto { flex-basis: 100%; margin-top: 4px; color: #888; font-style: italic; }
         .cart-total { font-size: 1.6em; font-weight: bold; text-align: right; margin-top: 10px; color: #28a745; }
         .cart-actions { text-align: center; margin-top: 15px; }
         .cart-actions .btn { font-size: 1.2em; padding: 15px; margin: 5px 0; border-radius: 8px; width: 100%; }
@@ -115,7 +121,74 @@
         </div>
     </div>
 
+    <!-- El modal va ANTES del <script> para que exista en el DOM cuando el script lo busca -->
+    <div id="modal_auth" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; align-items:center; justify-content:center;">
+        <div style="background:#fff; border-radius:10px; padding:20px; width:320px; max-width:90%;">
+            <h4 id="modal_auth_titulo" style="margin-top:0;">Autorización requerida</h4>
+            <p style="font-size:0.85em; color:#666;" id="modal_auth_texto"></p>
+            <div id="auth_credenciales" @if ($esAdmin) style="display:none;" @endif>
+            <label style="font-size:0.8em; font-weight:bold;" id="auth_label_usuario">Usuario (Admin/Caja)</label>
+            <input type="text" id="auth_user" style="width:100%; padding:8px; margin-bottom:8px; border:1px solid #ccc; border-radius:5px;">
+            <label style="font-size:0.8em; font-weight:bold;">Contraseña</label>
+            <input type="password" id="auth_password" style="width:100%; padding:8px; margin-bottom:8px; border:1px solid #ccc; border-radius:5px;">
+            </div>
+            <div id="auth_motivo">
+            <label style="font-size:0.8em; font-weight:bold;">Motivo</label>
+            <textarea id="auth_reason" rows="2" style="width:100%; padding:8px; margin-bottom:12px; border:1px solid #ccc; border-radius:5px;"></textarea>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button id="auth_cancelar" type="button" style="flex:1; padding:10px; border:none; border-radius:6px; background:#ccc;">Cancelar</button>
+                <button id="auth_confirmar" type="button" style="flex:1; padding:10px; border:none; border-radius:6px; background:#dc3545; color:#fff; font-weight:bold;">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        const CSRF = '{{ csrf_token() }}';
+        const ES_ADMIN = {{ $esAdmin ? 'true' : 'false' }};
+        function post(url, data) {
+            return fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+                body: JSON.stringify(data || {})
+            }).then(async r => {
+                if (r.status === 419) { alert('Tu sesión expiró. Vuelve a iniciar sesión.'); location.reload(); throw new Error('419'); }
+                const res = await r.json().catch(() => ({ success: false, message: 'Error del servidor (' + r.status + ').' }));
+                if (r.status === 422 && res.errors) res.message = Object.values(res.errors)[0][0];
+                return res;
+            });
+        }
+
+        // --- Autorización (Admin/Caja) ---
+        let pendienteAuth = null, opcionesAuth = {};
+
+        // opciones: { soloAdmin: solo un Administrador autoriza, pideMotivo: false para no pedir motivo }
+        function abrirModalAuth(texto, cb, opciones = {}) {
+            opcionesAuth = Object.assign({ soloAdmin: false, pideMotivo: true }, opciones);
+            document.getElementById('modal_auth_texto').textContent = texto;
+            document.getElementById('auth_label_usuario').textContent = opcionesAuth.soloAdmin ? 'Usuario (Administrador)' : 'Usuario (Admin/Caja)';
+            document.getElementById('auth_motivo').style.display = opcionesAuth.pideMotivo ? '' : 'none';
+            document.getElementById('auth_user').value = '';
+            document.getElementById('auth_password').value = '';
+            document.getElementById('auth_reason').value = '';
+            document.getElementById('modal_auth').style.display = 'flex';
+            if (!ES_ADMIN) document.getElementById('auth_user').focus();
+            pendienteAuth = cb;
+        }
+        function cerrarModalAuth() { document.getElementById('modal_auth').style.display = 'none'; pendienteAuth = null; }
+
+        document.getElementById('auth_cancelar').addEventListener('click', cerrarModalAuth);
+
+        document.getElementById('auth_confirmar').addEventListener('click', function () {
+            const user = document.getElementById('auth_user').value.trim();
+            const password = document.getElementById('auth_password').value;
+            const reason = document.getElementById('auth_reason').value.trim();
+            if (opcionesAuth.pideMotivo && !reason) { alert('Escribe el motivo.'); return; }
+            if (!ES_ADMIN && (!user || !password)) { alert('Completa usuario y contraseña.'); return; }
+            if (pendienteAuth) pendienteAuth(user, password, reason);
+        });
+
+        // --- Productos ---
         function cargarProductos(catId = null, texto = '') {
             const params = new URLSearchParams();
             if (texto) params.set('search_text', texto); else if (catId) params.set('category_id', catId);
@@ -139,93 +212,141 @@
             timer = setTimeout(() => cargarProductos(null, val), 400);
         });
 
+        // --- Carrito ---
         function recargarCarrito() {
-            fetch("{{ route('comandas.get_cart_details') }}")
+            return fetch("{{ route('comandas.get_cart_details') }}")
                 .then(r => r.json())
                 .then(data => {
                     document.getElementById('cart_items').innerHTML = data.vista;
-                    actualizarTotal();
+                    document.getElementById('cart_total').textContent = 'Total: S/ ' + Number(data.total).toFixed(2);
                 });
         }
 
-        function actualizarTotal() {
-            let total = 0;
-            document.querySelectorAll('.cart-item').forEach(item => {
-                total += parseFloat(item.dataset.cantidad) * parseFloat(item.dataset.precio);
+        function actualizarItem(id, datos) {
+            return post("{{ route('comandas.update_cart_item') }}", Object.assign({ id }, datos)).then(res => {
+                if (!res.success && res.message) alert(res.message);
+                return recargarCarrito();
             });
-            document.getElementById('cart_total').textContent = 'Total: S/ ' + total.toFixed(2);
         }
 
+        function agregarProducto(idProducto) {
+            return post("{{ route('comandas.add_to_cart') }}", { id: idProducto }).then(res => {
+                if (!res.success) alert(res.message || 'No se pudo agregar.');
+                return recargarCarrito();
+            });
+        }
+
+        // Observaciones de los ítems nuevos: se guardan al salir del campo
+        document.addEventListener('change', function (e) {
+            const obs = e.target.closest('.cart-obs');
+            if (obs) actualizarItem(obs.closest('.cart-item').dataset.id, { observaciones: obs.value });
+        });
+
+        // --- Un solo listener de clicks para toda la página ---
         document.addEventListener('click', function (e) {
             const card = e.target.closest('.product-item-kiosko');
-            if (card) {
-                fetch("{{ route('comandas.add_to_cart') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                    body: JSON.stringify({ id: card.dataset.id, producto: card.dataset.nombre, precio: card.dataset.precio })
-                }).then(recargarCarrito);
-            }
+            if (card) { agregarProducto(card.dataset.id); return; }
 
             const plus = e.target.closest('.btn-plus');
             if (plus) {
                 const item = plus.closest('.cart-item');
-                actualizarItem(item.dataset.id, parseInt(item.dataset.cantidad) + 1, item.querySelector('.cart-obs')?.value || '');
+                // Mismo producto = misma línea (también para lo ya enviado)
+                actualizarItem(item.dataset.id, { cantidad: parseFloat(item.dataset.cantidad) + 1 });
+                return;
             }
 
             const minus = e.target.closest('.btn-minus');
             if (minus) {
                 const item = minus.closest('.cart-item');
-                const nueva = parseInt(item.dataset.cantidad) - 1;
-                if (nueva >= 1) actualizarItem(item.dataset.id, nueva, item.querySelector('.cart-obs')?.value || '');
+                const actual = parseFloat(item.dataset.cantidad);
+                const minima = parseFloat(item.dataset.minima);
+                const nueva = actual - 1;
+                if (nueva < 1) return;
+                if (nueva < parseFloat(item.dataset.facturado || 0)) {
+                    alert('Ya se cobraron ' + item.dataset.facturado + ' de este producto en una cuenta separada; no se puede bajar más.');
+                    return;
+                }
+
+                if (item.dataset.old === '1' && nueva < minima) {
+                    abrirModalAuth('Vas a reducir un ítem ya enviado a cocina de ' + actual + ' a ' + nueva + '.', function (user, pass, reason) {
+                        post("{{ route('comandas.reducir_autorizado') }}", { id: item.dataset.id, cantidad: nueva, auth_user: user, auth_password: pass, reason: reason })
+                            .then(res => {
+                                if (!res.success) { alert(res.message); return; }
+                                cerrarModalAuth();
+                                recargarCarrito();
+                            });
+                    });
+                } else {
+                    actualizarItem(item.dataset.id, { cantidad: nueva });
+                }
+                return;
             }
 
             const del = e.target.closest('.btn-quitar');
             if (del) {
                 const item = del.closest('.cart-item');
-                fetch("{{ route('comandas.remove_cart_item') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                    body: JSON.stringify({ id: item.dataset.id })
-                }).then(r => r.json()).then(res => {
+                post("{{ route('comandas.remove_cart_item') }}", { id: item.dataset.id }).then(res => {
                     if (!res.success) alert(res.message);
                     recargarCarrito();
+                });
+                return;
+            }
+
+            const delAuth = e.target.closest('.btn-quitar-autorizado');
+            if (delAuth) {
+                const item = delAuth.closest('.cart-item');
+                abrirModalAuth('Vas a eliminar por completo "' + item.querySelector('.cart-item-name').textContent.trim() + '" del pedido.', function (user, pass, reason) {
+                    post("{{ route('comandas.eliminar_autorizado') }}", { id: item.dataset.id, auth_user: user, auth_password: pass, reason: reason })
+                        .then(res => {
+                            if (!res.success) { alert(res.message); return; }
+                            cerrarModalAuth();
+                            recargarCarrito();
+                        });
                 });
             }
         });
 
-        function actualizarItem(id, cantidad, obs) {
-            fetch("{{ route('comandas.update_cart_item') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                body: JSON.stringify({ id, cantidad, observaciones: obs })
-            }).then(recargarCarrito);
-        }
-
+        // --- Enviar / vaciar pedido ---
         document.getElementById('btn_enviar').addEventListener('click', function () {
-            this.disabled = true;
-            this.textContent = 'ENVIANDO...';
-            fetch("{{ route('comandas.enviar') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                body: JSON.stringify({})
-            }).then(r => r.json()).then(res => {
+            const btn = this;
+            // Si hay una observación escrita sin salir del campo, se guarda antes de enviar
+            const activo = document.activeElement;
+            const previo = activo && activo.classList.contains('cart-obs')
+                ? actualizarItem(activo.closest('.cart-item').dataset.id, { observaciones: activo.value })
+                : Promise.resolve();
+
+            btn.disabled = true;
+            btn.textContent = 'ENVIANDO...';
+            const restaurar = () => { btn.disabled = false; btn.innerHTML = '<strong>ENVIAR COMANDA</strong>'; };
+
+            previo.then(() => post("{{ route('comandas.enviar') }}", {})).then(res => {
                 if (res.success) {
-                    alert('Comanda enviada correctamente.');
+                    // Sin aviso: vuelve directo a las mesas
                     window.location.href = "{{ route('comandas.seleccion') }}";
                 } else {
                     alert(res.message);
-                    this.disabled = false;
-                    this.textContent = 'ENVIAR COMANDA';
+                    restaurar();
                 }
-            });
+            }).catch(() => { alert('Error de conexión. Intenta de nuevo.'); restaurar(); });
         });
 
+        // Vaciar: requiere datos de un Administrador (si el usuario ya es admin, solo confirma)
         document.getElementById('btn_vaciar').addEventListener('click', function () {
-            if (!confirm('¿Vaciar los productos nuevos del pedido?')) return;
-            fetch("{{ route('comandas.clear_cart') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-            }).then(recargarCarrito);
+            const hayNuevos = [...document.querySelectorAll('.cart-item')].some(i => i.dataset.old !== '1');
+            if (!hayNuevos) { alert('No hay productos nuevos para vaciar.'); return; }
+            const texto = '¿Vaciar los productos nuevos del pedido? Lo ya enviado a cocina se mantiene.';
+
+            if (ES_ADMIN) {
+                if (confirm(texto)) post("{{ route('comandas.clear_cart') }}", {}).then(res => { if (!res.success) alert(res.message); recargarCarrito(); });
+                return;
+            }
+            abrirModalAuth(texto, function (user, pass) {
+                post("{{ route('comandas.clear_cart') }}", { auth_user: user, auth_password: pass }).then(res => {
+                    if (!res.success) { alert(res.message); return; }
+                    cerrarModalAuth();
+                    recargarCarrito();
+                });
+            }, { soloAdmin: true, pideMotivo: false });
         });
     </script>
 </body>

@@ -1,27 +1,47 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Empresa;
-use App\Models\EmpresaNegocio;
-use App\Models\Empleado;
-use App\Models\User;
-use App\Models\Almacen;
-use App\Models\MedioPago;
-use App\Models\TipoProducto;
-use App\Models\Categoria;
-use App\Models\Subcategoria;
+use App\Support\EmpresaInicial;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class EmpresaController extends Controller
 {
+    public function index()
+    {
+        // Cada usuario solo ve su propia empresa
+        $empresas = Empresa::where('IdEmpresa', Auth::user()->IdEmpresa)->orderBy('IdEmpresa', 'asc')->paginate(10);
+        return view('empresas.index', compact('empresas'));
+    }
+
+    // Registro libre solo en la instalación inicial; después, solo usuarios logueados
+    private function puedeRegistrar(): bool
+    {
+        return Auth::check() || Empresa::count() === 0;
+    }
+
+    private function autorizarEmpresa($id): void
+    {
+        abort_unless((string) $id === (string) Auth::user()->IdEmpresa, 403, 'No tienes acceso a esta empresa.');
+    }
+
     public function crearempresa()
     {
+        if (!$this->puedeRegistrar()) {
+            return redirect()->route('login');
+        }
+
         return view('empresas.configurar');
     }
 
     public function store(Request $request)
     {
+        abort_unless($this->puedeRegistrar(), 403);
+
         $request->validate([
             'rucEmpresa'   => 'required|size:11|unique:empresa,IdEmpresa',
             'nomEmpresa'   => 'required|string|max:255',
@@ -32,127 +52,201 @@ class EmpresaController extends Controller
             'dirEmpresa' => 'Dirección',
         ]);
 
-        DB::transaction(function () use ($request) {
-            $empresa = Empresa::create([
-                'IdEmpresa'   => $request->rucEmpresa,
-                'NomEmpresa'  => $request->nomEmpresa,
-                'DirEmpresa'  => $request->dirEmpresa,
-                'tipo_envio'  => $request->envio ?? 1,
-                'produccion'  => $request->produccion,
-                'formato'     => $request->formato ?? 'ticket',
-                'icbper'      => $request->icbper,
-                'EstEmpresa'  => 'Activo',
-            ]);
-
-            $sucursal = EmpresaNegocio::create([
-                'IdEmpresa'        => $empresa->IdEmpresa,
-                'tipo_negocio'     => 'Oficina Principal - '.$empresa->IdEmpresa,
-                'nombre_comercial' => $request->NomComercial ?? $request->nomEmpresa,
-                'direccion'        => $request->dirEmpresa,
-                'ubigeo'           => $request->ubigeo,
-                'estado'           => 'Activo',
-            ]);
-
-            // ALMACÉN PRINCIPAL (esto era lo que faltaba)
-            $almacen = Almacen::create([
-                'descripcion'        => 'ALMACEN PRINCIPAL',
-                'predeterminado'     => 1,
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-                'direccion'          => $request->dirEmpresa,
-                'ubigeo'             => $request->ubigeo,
-            ]);
-
-            $empleado = Empleado::create([
-                'emp_nom'            => $empresa->IdEmpresa,
-                'emp_ape_pat'        => $empresa->NomEmpresa,
-                'emp_ape_mat'        => '.',
-                'emp_num_doc'        => $empresa->IdEmpresa,
-                'tdicod'             => '6',
-                'rol_id'             => 2, // admin
-                'est_cod'            => '1',
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-            ]);
-
-            $usuario = User::create([
-                'name'               => $empresa->IdEmpresa,
-                'apeusu'             => $empresa->NomEmpresa,
-                'email'              => $empresa->IdEmpresa, // login = RUC
-                'password'           => bcrypt($empresa->IdEmpresa),
-                'estusu'             => 1,
-                'IdEmpresa'          => $empresa->IdEmpresa,
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-                'emp_id'             => $empleado->emp_id,
-            ]);
-
-            DB::table('role_user')->insert([
-                'role_id'            => 2,
-                'user_IdUsuario'     => $usuario->IdUsuario,
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-            ]);
-
-            $modIds = DB::table('modulos')->pluck('mod_id');
-            $usuario->modulos()->sync($modIds);
-
-            // MEDIO DE PAGO PREDETERMINADO
-            MedioPago::create([
-                'IdEmpresa'          => $empresa->IdEmpresa,
-                'nom_med_pag'        => 'EFECTIVO',
-                'predeterminado'     => '1',
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-            ]);
-
-            // CRÉDITO: CONTADO Y CRÉDITO
-            DB::table('credito_dias')->insert([
-                'IdEmpresa'          => $empresa->IdEmpresa,
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-                'cre_dia_nom'        => 'CONTADO',
-                'cre_dia_fac'        => 0,
-                'cre_dia_tip'        => 'CONTADO',
-            ]);
-            DB::table('credito_dias')->insert([
-                'IdEmpresa'          => $empresa->IdEmpresa,
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-                'cre_dia_nom'        => 'CREDITO',
-                'cre_dia_fac'        => 0,
-                'cre_dia_tip'        => 'PERSONALIZADO',
-            ]);
-
-            // TIPO PRODUCTO / CATEGORÍA / SUBCATEGORÍA GENERAL
-            $tipoProducto = TipoProducto::create([
-                'tip_pro_nom'        => 'GENERAL',
-                'IdEmpresa'          => $empresa->IdEmpresa,
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-            ]);
-
-            $categoria = Categoria::create([
-                'IdEmpresa'          => $empresa->IdEmpresa,
-                'color'              => '#3f4aee',
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-                'predeterminado'     => 1,
-                'cat_nom'            => 'GENERAL',
-                'tip_pro_id'         => $tipoProducto->tip_pro_id,
-            ]);
-
-            Subcategoria::create([
-                'color'              => '#3f4aee',
-                'id_empresa_negocio' => $sucursal->id_empresa_negocio,
-                'subcat_nom'         => 'GENERAL',
-                'cat_id'             => $categoria->cat_id,
-                'IdEmpresa'          => $empresa->IdEmpresa,
-            ]);
-
-            // NOTA: el bucle de "productos" de tu sistema viejo (asignar producto_empresa /
-            // producto_stock a la nueva sucursal) lo dejamos pendiente porque aún no
-            // creamos las tablas `productos`, `producto_empresa` ni `producto_stock`.
-            // Lo agregamos cuando armemos el módulo de Productos.
-        });
+        DB::transaction(fn() => EmpresaInicial::crear([
+            'ruc'              => $request->rucEmpresa,
+            'razon_social'     => $request->nomEmpresa,
+            'nombre_comercial' => $request->NomComercial,
+            'direccion'        => $request->dirEmpresa,
+            'ubigeo'           => $request->ubigeo,
+            // En el registro inicial el usuario y la contraseña son el RUC
+            'usuario'          => $request->rucEmpresa,
+            'password'         => $request->rucEmpresa,
+            'envio'            => $request->envio,
+            'produccion'       => $request->produccion,
+            'formato'          => $request->formato,
+            'icbper'           => $request->icbper,
+        ]));
 
         return redirect()->route('login')
             ->with('success', 'Empresa registrada. Ingresa con tu RUC como usuario y contraseña.');
     }
 
+    public function edit($id)
+    {
+        $this->autorizarEmpresa($id);
+        $empresa = Empresa::findOrFail($id);
+        
+        $tip_env_fac = [];
+        $tipos_sistemas = [];
+        
+        try {
+            if (Schema::hasTable('tipo_envio_facturacion')) {
+                $tip_env_fac = DB::table('tipo_envio_facturacion')->get();
+            }
+        } catch (\Exception $e) {}
+        
+        try {
+            if (Schema::hasTable('tipos_sistemas')) {
+                $tipos_sistemas = DB::table('tipos_sistemas')->get();
+            }
+        } catch (\Exception $e) {}
+        
+        return view('empresas.edit', compact('empresa', 'tip_env_fac', 'tipos_sistemas'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $this->autorizarEmpresa($id);
+
+        // 1. Validar campos obligatorios y el logo (solo imágenes rasterizadas, nada de .php ni .svg)
+        $request->validate([
+            'nomEmpresa'   => 'required|string|max:255',
+            'dirEmpresa'   => 'required|string|max:255',
+            'logologin'    => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
+            'sire_client_id'     => 'nullable|string|max:100',
+            'sire_client_secret' => 'nullable|string|max:255',
+            'sire_usuario'       => 'nullable|string|max:30',
+            'sire_clave'         => 'nullable|string|max:100',
+        ], [], [
+            'nomEmpresa' => 'Razón Social',
+            'dirEmpresa' => 'Dirección',
+            'logologin'  => 'Logo',
+        ]);
+
+        $empresa = Empresa::findOrFail($id);
+        
+        // 2. Asignar valores normales
+        $empresa->NomEmpresa = $request->get('nomEmpresa');
+        $empresa->DirEmpresa = $request->get('dirEmpresa');
+        $empresa->EstEmpresa = $request->get('estEmpresa', 'Activo');
+        $empresa->wsusuario = $request->get('txtWsUsuario');
+        $empresa->claveSunat = $request->get('txtWsContrasena');
+        $empresa->fec_ini_cer = $request->get('fecini');
+        $empresa->fec_fin_cer = $request->get('fecfin');
+        $empresa->produccion = $request->get('produccion');
+        $empresa->ticket_pantalla = $request->get('ticket_pantalla');
+        $empresa->correo_envio = $request->get('correo_envio');
+        $empresa->contrasena_envio = $request->get('contrasena_envio');
+        $empresa->passcert = $request->get('txtPassCert');
+        $empresa->formato = $request->get('formato');
+        $empresa->imp_pedido = $request->get('imp_pedido');
+        $empresa->imp_venta = $request->get('imp_venta');
+        $empresa->icbper = $request->get('icbper');
+        $empresa->tip_env_fac_id = $request->get('tip_env_fac');
+        $empresa->id_tipo_sistema = $request->get('id_tipo_sistema');
+        $empresa->tipo_envio = $request->get('envio');
+
+        // 3. Logo Login
+        if ($request->hasFile('logologin')) {
+            // Nombre generado por el servidor: nunca se usa el nombre ni la extensión que manda el cliente
+            $file = $request->file('logologin');
+            $nombreLogo = $empresa->IdEmpresa . '_' . time() . '.' . $file->guessExtension();
+            $file->move(public_path('logos'), $nombreLogo);
+            $empresa->LogEmpresa = 'logos/' . $nombreLogo;
+        }
+
+        // 4. Certificado Digital (.pfx o .p12): se guarda el .pfx y se genera el .pem que firma los XML.
+        // Ambos van FUERA de public/ (contienen la clave privada) y el nombre sale del RUC de la BD.
+        $dirCertificados = storage_path('app/certificados');
+        $rutaPfx = $dirCertificados . '/' . $empresa->IdEmpresa . '.pfx';
+        $rutaPem = $dirCertificados . '/' . $empresa->IdEmpresa . '.pem';
+        $password = (string) $request->get('txtPassCert');
+        $pfxNuevo = null;
+
+        if ($request->hasFile('txtCertificado')) {
+            $file = $request->file('txtCertificado');
+
+            if (!in_array(strtolower($file->getClientOriginalExtension()), ['pfx', 'p12'])) {
+                return back()->withInput()->with('error', 'El certificado debe ser formato .pfx o .p12');
+            }
+            if ($file->getSize() > 10 * 1024 * 1024) {
+                return back()->withInput()->with('error', 'El certificado no debe superar los 10MB');
+            }
+            if ($password === '') {
+                return back()->withInput()->with('error', 'Escribe la contraseña del certificado.');
+            }
+            $pfxNuevo = file_get_contents($file->getRealPath());
+        } elseif (is_file($rutaPfx) && $password !== '' && ($password !== (string) $empresa->getOriginal('passcert') || !is_file($rutaPem))) {
+            // Sin archivo nuevo pero cambió la contraseña o falta el .pem: se regenera desde el .pfx guardado
+            $pfxNuevo = file_get_contents($rutaPfx);
+        }
+
+        if ($pfxNuevo !== null) {
+            try {
+                // Primero se valida y convierte; solo si todo sale bien se reemplazan los archivos guardados
+                $cert = \App\Support\Sunat\Certificado::aPem($pfxNuevo, $password);
+            } catch (\RuntimeException $e) {
+                return back()->withInput()->with('error', 'Certificado: ' . $e->getMessage());
+            }
+
+            if (!is_dir($dirCertificados)) {
+                mkdir($dirCertificados, 0755, true);
+            }
+            file_put_contents($rutaPfx, $pfxNuevo);
+            file_put_contents($rutaPem, $cert['pem']);
+            $empresa->certificado = $empresa->IdEmpresa . '.pfx';
+            // Las fechas de vigencia se toman del propio certificado
+            $empresa->fec_ini_cer = $cert['desde'] ?? $empresa->fec_ini_cer;
+            $empresa->fec_fin_cer = $cert['hasta'] ?? $empresa->fec_fin_cer;
+        }
+
+        // 4b. Credenciales del API SIRE: la CLAVE y la clave SOL solo cambian si se escriben (nunca se muestran)
+        $cambioSire = false;
+        if ($request->has('sire_client_id')) {
+            $nuevoId = trim((string) $request->get('sire_client_id')) ?: null;
+            $nuevoUsuario = strtoupper(trim((string) $request->get('sire_usuario'))) ?: null;
+            $cambioSire = $nuevoId !== $empresa->client_id || $nuevoUsuario !== $empresa->sire_usuario
+                || $request->filled('sire_client_secret') || $request->filled('sire_clave');
+
+            $empresa->client_id = $nuevoId;
+            $empresa->sire_usuario = $nuevoUsuario;
+            if ($request->filled('sire_client_secret')) {
+                $empresa->client_secret = trim($request->get('sire_client_secret'));
+            }
+            if ($request->filled('sire_clave')) {
+                $empresa->sire_clave = $request->get('sire_clave');
+            }
+        }
+
+        $empresa->save();
+
+        // Si cambiaron las credenciales del SIRE, se prueba la conexión con SUNAT al guardar
+        $mensajeSire = '';
+        if ($cambioSire && \App\Support\Sunat\Sire::configurado($empresa)) {
+            cache()->forget('sire_token_' . $empresa->IdEmpresa);
+            cache()->forget("sire_periodos_{$empresa->IdEmpresa}_140000");
+            cache()->forget("sire_periodos_{$empresa->IdEmpresa}_080000");
+            try {
+                $periodos = (new \App\Support\Sunat\Sire($empresa))->periodos(\App\Support\Sunat\Sire::VENTAS);
+                $mensajeSire = '. SIRE conectado con SUNAT ✔ (' . count($periodos) . ' periodos habilitados).';
+            } catch (\Throwable $e) {
+                $detalle = $e instanceof \RuntimeException ? $e->getMessage() : 'no se pudo conectar con SUNAT.';
+                return redirect()->route('empresas.edit', $empresa->IdEmpresa)
+                    ->with('error', 'Se guardó la empresa, pero el SIRE no conectó: ' . $detalle);
+            }
+        }
+
+        // 5. Actualizar ICBPER en productos (solo si la tabla ya tiene esas columnas)
+        if (Schema::hasColumn('productos', 'icbper') && Schema::hasColumn('productos', 'mon_icbper')) {
+            DB::table('productos')
+                ->where('icbper', '1')
+                ->where('IdEmpresa', Auth::user()->IdEmpresa)
+                ->update(['mon_icbper' => $empresa->icbper]);
+        }
+
+        $mensaje = 'Empresa actualizada correctamente';
+        if ($pfxNuevo !== null) {
+            $mensaje .= ". Certificado guardado (.pfx y .pem), vigente hasta " . ($cert['hasta'] ?? '—') . '.';
+        }
+
+        return redirect()->route('empresas.index')->with('success', $mensaje . $mensajeSire);
+    }
+
     public function consultaRucSunat($ruc)
     {
+        abort_unless($this->puedeRegistrar(), 403);
+        abort_unless(preg_match('/^\d{11}$/', $ruc), 422);
+
         $response = \Illuminate\Support\Facades\Http::withOptions(['verify' => false])
             ->get("https://consultas.holape.app/api/v1/ruc/{$ruc}");
 

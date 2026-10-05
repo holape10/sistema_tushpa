@@ -11,6 +11,10 @@ class Empresa extends Model
     public $incrementing = false;
     protected $keyType = 'string';
     protected $guarded = [];
+    protected $hidden = ['client_secret', 'sire_clave'];
+
+    // Credenciales del API SIRE cifradas con APP_KEY (si cambias APP_KEY hay que volver a ingresarlas)
+    protected $casts = ['client_secret' => 'encrypted', 'sire_clave' => 'encrypted'];
 
     public function sucursales()
     {

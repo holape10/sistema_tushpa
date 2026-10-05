@@ -38,10 +38,39 @@ class User extends Authenticatable
             ->value('roles.name');
     }
 
+    // IDs de la tabla roles: 2 = admin, 4 = caja, 8 = mozo
+    public function tieneRol(array $roleIds): bool
+    {
+        return \Illuminate\Support\Facades\DB::table('role_user')
+            ->where('user_IdUsuario', $this->IdUsuario)
+            ->whereIn('role_id', $roleIds)
+            ->exists();
+    }
+
+    public function esAdmin(): bool
+    {
+        return $this->tieneRol([2]);
+    }
+
+    public function esAdminOCaja(): bool
+    {
+        return $this->tieneRol([2, 4]);
+    }
+
+    public function esMozo(): bool
+    {
+        return $this->tieneRol([8]);
+    }
+
+    public function empleado()
+    {
+        return $this->belongsTo(Empleado::class, 'emp_id', 'emp_id');
+    }
+
     public function rutaInicio(): string
     {
         return match ($this->rolPrincipal()) {
-            'mozo' => 'dashboard', // cámbialo a 'mesas.index' cuando exista ese módulo
+            'mozo' => 'comandas.seleccion', // el mozo entra directo a las mesas
             'caja' => 'dashboard', // cámbialo a 'pos.index' cuando exista
             default => 'dashboard', // admin y cualquier otro caso
         };

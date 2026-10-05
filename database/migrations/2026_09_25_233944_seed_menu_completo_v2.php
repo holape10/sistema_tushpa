@@ -90,7 +90,7 @@ return new class extends Migration {
             ['mod_nom' => 'Configurar IP Local', 'mod_url' => '#', 'mod_gen' => 'Asistencia'],
 
             // MANTENIMIENTO
-            ['mod_nom' => 'Empresas', 'mod_url' => '#', 'mod_gen' => 'Mantenimiento'],
+            ['mod_nom' => 'Empresas', 'mod_url' => '/empresas', 'mod_gen' => 'Mantenimiento'],
             ['mod_nom' => 'Sucursales', 'mod_url' => '#', 'mod_gen' => 'Mantenimiento'],
             ['mod_nom' => 'Tipo Cambio', 'mod_url' => '#', 'mod_gen' => 'Mantenimiento'],
             ['mod_nom' => 'Medios de Pago', 'mod_url' => '/mediospagos', 'mod_gen' => 'Mantenimiento'],

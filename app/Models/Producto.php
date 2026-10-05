@@ -17,6 +17,22 @@ class Producto extends Model
         return $this->hasMany(Combo::class, 'IdProducto_rel', 'IdProducto');
     }
 
+    public function presentaciones()
+    {
+        return $this->hasMany(ProductoPresentacion::class, 'IdProducto', 'IdProducto')->where('estado', 1)->orderBy('factor');
+    }
+
+    public function preciosDinamicos()
+    {
+        return $this->hasMany(ProductoPrecioDinamico::class, 'IdProducto', 'IdProducto')->orderBy('dia')->orderBy('hora_inicio');
+    }
+
+    /** URL pública de la imagen (null si no tiene) */
+    public function getImagenUrlAttribute(): ?string
+    {
+        return $this->imagenproducto ? asset($this->imagenproducto) : null;
+    }
+
     public function getTipoNombreAttribute(): string
     {
         return match ((int) $this->promocion) {

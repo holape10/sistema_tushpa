@@ -1,11 +1,15 @@
 @forelse ($mesas as $m)
+    {{-- El estado sale del pedido abierto real, no del campo mes_est (que puede quedar desfasado) --}}
+    @php $estado = $m->pedido_id ? 'Ocupado' : 'Libre'; @endphp
     <button type="button"
-        class="btn-mesa-comanda btn-mesa-kiosko {{ $m->mes_est == 'Libre' ? 'libre' : 'ocupado' }}"
-        data-id="{{ $m->mes_id }}" data-nombre="{{ $m->mes_nom }}" data-estado="{{ $m->mes_est }}"
+        class="btn-mesa-comanda btn-mesa-kiosko {{ $estado == 'Libre' ? 'libre' : 'ocupado' }}"
+        data-id="{{ $m->mes_id }}" data-nombre="{{ $m->mes_nom }}" data-estado="{{ $estado }}"
         data-pedido-id="{{ $m->pedido_id }}">
         {{ $m->mes_nom }}<br>
-        <span style="font-size: 0.75em; font-weight: normal;">{{ $m->mes_est }}</span>
-        @if ($m->mes_est != 'Libre' && $m->pedido_fecha_hora)
+        <span style="font-size: 0.75em; font-weight: normal;">
+            {{ $estado }}@if ($m->pedido_id) · S/ {{ number_format($m->ped_tot, 2) }}@endif
+        </span>
+        @if ($m->pedido_id && $m->pedido_fecha_hora)
             <span class="mesa-timer" data-inicio="{{ \Carbon\Carbon::parse($m->pedido_fecha_hora)->toIso8601String() }}">00:00:00</span>
         @endif
     </button>

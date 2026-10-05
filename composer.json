@@ -7,6 +7,9 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "dompdf/dompdf": "^3.0",
+        "greenter/greenter": "^4.3",
+        "greenter/xmldsig": "^5.0",
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0"
     },

@@ -1,23 +1,19 @@
 <?php
 namespace App\Http\Controllers;
 
-use App\Models\{Pedido, PedidoDetalle, Mesa, Piso, Producto, Cliente, Almacen, MedioPago, EmpresaNegocio, Empresa};
+use App\Models\{Pedido, PedidoDetalle, Mesa, Piso, Cliente, MedioPago, EmpresaNegocio, Empresa, Turno};
+use App\Support\Comprobante;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, DB, Http};
 
 class CobroController extends Controller
 {
-    // Igual que tu registrar_cobro. OJO: el IGV estándar es 1.18; confirma si 1.105 es intencional.
-    private const FACTOR_IGV = 1.105;
+    // Se mantiene aquí porque SunatService lo usa; el valor vive en Comprobante
+    public const FACTOR_IGV = Comprobante::FACTOR_IGV;
 
     private function autorizar(): void
     {
-        $permitido = DB::table('role_user')
-            ->where('user_IdUsuario', Auth::user()->IdUsuario)
-            ->whereIn('role_id', [2, 4]) // admin y caja
-            ->exists();
-
-        abort_unless($permitido, 403, 'Solo Administrador o Caja pueden cobrar.');
+        abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja pueden cobrar.');
     }
 
     private function itemsPendientes(int $pedId)
@@ -25,13 +21,45 @@ class CobroController extends Controller
         return PedidoDetalle::where('ped_id', $pedId)
             ->where('estadoitem', '!=', 'Eliminado')
             ->whereRaw('(ped_det_can - IFNULL(item_facturado, 0)) > 0')
+            ->orderBy('ped_det_id')
             ->get();
     }
 
-    public function cobrar($ped_id)
+    /**
+     * Agrupa las líneas pendientes por producto y precio: una sola línea por producto en el cobro y en el comprobante.
+     * Cada grupo guarda sus líneas originales para repartir lo cobrado (item_facturado).
+     */
+    private function agrupar($items)
+    {
+        return $items->groupBy(fn($d) => $d->IdProducto . '|' . number_format((float) $d->ped_det_pre, 2, '.', ''))
+            ->map(function ($lineas, $clave) {
+                $primera = $lineas->first();
+                return (object) [
+                    'clave' => $clave,
+                    'IdProducto' => $primera->IdProducto,
+                    'descripcion' => $primera->descripcion,
+                    'ped_det_pre' => (float) $primera->ped_det_pre,
+                    'item_obs' => $lineas->pluck('item_obs')->filter()->unique()->implode(' / '),
+                    'cantidad_pendiente' => round($lineas->sum(fn($d) => $d->ped_det_can - $d->item_facturado), 2),
+                    'lineas' => $lineas,
+                ];
+            })->values();
+    }
+
+    public function separadas($ped_id)
+    {
+        return $this->cobrar($ped_id, true);
+    }
+
+    public function cobrar($ped_id, bool $separadas = false)
     {
         $this->autorizar();
         $user = Auth::user();
+
+        $turno = Turno::abiertoDe($user);
+        if (!$turno) {
+            return redirect()->route('turnos.index')->with('error', 'Debes aperturar tu turno antes de cobrar.');
+        }
 
         $pedido = Pedido::where('ped_id', $ped_id)
             ->where('ped_est', 'Aperturado')
@@ -42,11 +70,15 @@ class CobroController extends Controller
             return redirect()->route('comandas.seleccion');
         }
 
-        $detalle = $this->itemsPendientes($pedido->ped_id)->each(function ($d) {
-            $d->cantidad_pendiente = $d->ped_det_can - $d->item_facturado;
-        });
+        $detalle = $this->agrupar($this->itemsPendientes($pedido->ped_id));
+        if ($detalle->isEmpty()) {
+            return redirect()->route('comandas.seleccion')->with('error', 'El pedido no tiene productos pendientes de cobro.');
+        }
 
         $total = round($detalle->sum(fn($d) => $d->cantidad_pendiente * $d->ped_det_pre), 2);
+        // Lo ya cobrado en cuentas separadas anteriores
+        $cuentasPrevias = DB::table('cpe_cabecera')->where('ped_id', $pedido->ped_id)->whereNull('ccabaj')
+            ->orderBy('IdCpe_cabecera')->get(['IdCpe_cabecera', 'serdoc', 'numdoc', 'ccanom', 'ccaitv']);
 
         $comprobantes = DB::table('tipo_documento')->where('caja', 1)->get();
         $documentos   = DB::table('tipo_documento_identidad')->orderBy('orden')->get();
@@ -58,8 +90,30 @@ class CobroController extends Controller
 
         return view('empresas.cobros.cobrar', compact(
             'pedido', 'detalle', 'total', 'comprobantes', 'documentos',
-            'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso'
+            'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso', 'turno', 'separadas', 'cuentasPrevias'
         ));
+    }
+
+    /** Búsqueda predictiva de clientes por nombre o número de documento (solo la BD propia) */
+    public function sugerirClientes(Request $request)
+    {
+        $q = trim((string) $request->get('q'));
+        if (mb_strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $clientes = Cliente::where('rucemp', Auth::user()->IdEmpresa)
+            ->where('clinum', '!=', '00000000')
+            ->where(fn($w) => $w->where('clinom', 'like', '%' . $q . '%')->orWhere('clinum', 'like', $q . '%'))
+            ->orderByRaw('clinom LIKE ? DESC', [$q . '%']) // primero los que empiezan con lo escrito
+            ->orderBy('clinom')
+            ->limit(10)
+            ->get(['clinum', 'clinom', 'clidir', 'clicor', 'telefono', 'tdicod']);
+
+        return response()->json($clientes->map(fn($c) => [
+            'num' => $c->clinum, 'nom' => $c->clinom, 'dir' => $c->clidir, 'cor' => $c->clicor,
+            'tel' => $c->telefono, 'tdicod' => $c->tdicod,
+        ]));
     }
 
     public function buscarCliente($doc)
@@ -116,6 +170,14 @@ class CobroController extends Controller
             $cabId = DB::transaction(function () use ($request, $user) {
                 $tdocod = $request->tdocod;
 
+                // Sin turno abierto no se cobra: toda venta queda amarrada a un turno de caja
+                $turno = Turno::where('IdUsuario', $user->IdUsuario)
+                    ->where('id_empresa_negocio', $user->id_empresa_negocio)
+                    ->where('estado', 'ABIERTO')->lockForUpdate()->first();
+                if (!$turno) {
+                    throw new \RuntimeException('Debes aperturar tu turno antes de cobrar.');
+                }
+
                 $pedido = Pedido::where('ped_id', $request->ped_id)
                     ->where('ped_est', 'Aperturado')
                     ->where('id_empresa_negocio', $user->id_empresa_negocio)
@@ -130,163 +192,59 @@ class CobroController extends Controller
                     throw new \RuntimeException('El pedido no tiene ítems pendientes de cobro.');
                 }
 
-                $cre = DB::table('credito_dias')
-                    ->where('cre_dia_id', $request->estadopago)
-                    ->where('id_empresa_negocio', $user->id_empresa_negocio)->first();
-                if (!$cre) {
-                    throw new \RuntimeException('Estado de pago no válido.');
-                }
-                $esContado = $cre->cre_dia_tip === 'CONTADO';
-
-                // ---- Cliente ----
-                $clinum = trim($request->clinum);
-
-                if ($tdocod === '01') {
-                    $okRuc = strlen($clinum) === 11
-                        && in_array(substr($clinum, 0, 2), ['10', '20', '15', '17'])
-                        && $request->tdicod === '6';
-                    if (!$okRuc) {
-                        throw new \RuntimeException('TIPO DE DOCUMENTO NO PERMITIDO PARA EMITIR UNA FACTURA (requiere RUC válido).');
+                // ---- Qué se cobra: todo lo pendiente, o solo lo elegido (cuentas separadas) ----
+                $seleccion = $request->input('separadas'); // [clave => cantidad] o null = todo
+                $aCobrar = collect();
+                foreach ($this->agrupar($items) as $g) {
+                    $cant = $seleccion === null ? $g->cantidad_pendiente : round((float) ($seleccion[$g->clave] ?? 0), 2);
+                    if ($cant <= 0) {
+                        continue;
                     }
+                    if ($cant > $g->cantidad_pendiente + 0.001) {
+                        throw new \RuntimeException("De {$g->descripcion} solo quedan {$g->cantidad_pendiente} por cobrar. Actualiza la pantalla.");
+                    }
+                    $g->cantidad_cobrar = $cant;
+                    $aCobrar->push($g);
                 }
-                if (!$esContado && $clinum === '00000000') {
-                    throw new \RuntimeException('Para vender a crédito debes identificar al cliente.');
-                }
-
-                if ($clinum === '00000000') {
-                    $cliente = Cliente::firstOrCreate(
-                        ['clinum' => $clinum, 'rucemp' => $user->IdEmpresa],
-                        ['clinom' => 'VENTA AL PORTADOR', 'tdicod' => '1', 'clidir' => '--']
-                    );
-                } else {
-                    $cliente = Cliente::updateOrCreate(
-                        ['clinum' => $clinum, 'rucemp' => $user->IdEmpresa],
-                        [
-                            'clinom'   => strtoupper(trim($request->clinom)),
-                            'clidir'   => $request->clidir ?: '--',
-                            'clicor'   => $request->clicor,
-                            'tdicod'   => $request->tdicod,
-                            'telefono' => $request->telefono,
-                        ]
-                    );
+                if ($aCobrar->isEmpty()) {
+                    throw new \RuntimeException('Elige al menos un producto para esta cuenta.');
                 }
 
-                // ---- Serie y correlativo (bloqueado para que dos cajas no repitan número) ----
-                $cols = [
-                    '01' => ['FseEmpresa', 'FnuEmpresa'],
-                    '03' => ['BseEmpresa', 'BnuEmpresa'],
-                    '13' => ['SerNota', 'NumNota'],
-                ];
-                [$colSerie, $colNum] = $cols[$tdocod];
+                // ---- Comprobante: cliente, serie, totales, medios de pago, detalle y kardex ----
+                $lineas = $aCobrar->map(fn($g) => [
+                    'IdProducto' => $g->IdProducto, 'descripcion' => $g->descripcion,
+                    'cantidad' => (float) $g->cantidad_cobrar, 'precio' => (float) $g->ped_det_pre,
+                ])->values()->all();
 
-                $sucursal = EmpresaNegocio::where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
-                $numero = $sucursal->$colNum + 1;
-                $serie  = $sucursal->$colSerie;
-                $sucursal->$colNum = $numero;
-                $sucursal->save();
-
-                // ---- Totales ----
-                $gravado = $sucursal->tip_igv_pred === '10';
-                $total = round($items->sum(fn($i) => ($i->ped_det_can - $i->item_facturado) * $i->ped_det_pre), 2);
-
-                $ccatvg = $gravado ? round($total / self::FACTOR_IGV, 2) : 0;
-                $ccaigv = $gravado ? round($total - $ccatvg, 2) : 0;
-                $ccatexo = $gravado ? 0 : $total;
-
-                $fecEmi = $request->fecEmi;
-                $fecVen = $esContado ? $fecEmi : $request->fecVen;
-                if (!$esContado && (!$fecVen || $fecVen <= $fecEmi)) {
-                    throw new \RuntimeException('La fecha de vencimiento debe ser posterior a la de emisión.');
-                }
-
-                $paga = (float) $request->input('paga', 0);
-                $almacen = Almacen::where('id_empresa_negocio', $user->id_empresa_negocio)->where('predeterminado', 1)->first();
-
-                $cabId = DB::table('cpe_cabecera')->insertGetId([
-                    'tdocod' => $tdocod, 'serdoc' => $serie, 'numdoc' => $numero,
-                    'ccafem' => $fecEmi, 'ccafve' => $fecVen,
-                    'tdicod' => $request->tdicod, 'ccandi' => $clinum, 'ccanom' => strtoupper(trim($request->clinom)),
-                    'direccion' => $request->clidir ?: '--', 'clicod' => $cliente->clicod,
-                    'clicorcli' => $request->clicor, 'telefono_cliente' => $request->telefono,
-                    'ccatvg' => $ccatvg, 'ccaigv' => $ccaigv, 'ccatexo' => $ccatexo, 'ccaitv' => $total,
-                    'totalcontado' => $esContado ? $total : 0, 'totalcredito' => $esContado ? 0 : $total,
-                    'paga' => $paga, 'vuelto' => $esContado ? max(0, round($paga - $total, 2)) : 0,
-                    'estadopago' => $esContado ? 'CONTADO' : 'CREDITO', 'cre_dia_id' => $cre->cre_dia_id,
-                    'ccaobs' => $request->observaciones, 'consumo' => (int) $request->consumo,
+                $cabId = Comprobante::emitir($user, $turno, $request->all(), $lineas, [
                     'ped_id' => $pedido->ped_id, 'ped_tip' => $pedido->ped_tip,
                     'pis_id' => $pedido->pis_id, 'mes_id' => $pedido->mes_id, 'mozo' => $pedido->mozo,
-                    'IdUsuario' => $user->IdUsuario, 'IdUsuario_ven' => $pedido->mozo,
-                    'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $user->id_empresa_negocio,
-                    'id_almacen' => $almacen?->id_almacen, 'id_turno' => (int) ($user->id_turno ?? 0),
-                    'est_sunat' => $tdocod === '13' ? null : 'PENDIENTE',
+                    'IdUsuario_ven' => $pedido->mozo,
                 ]);
 
-                // ---- Medios de pago (solo contado) ----
-                if ($esContado) {
-                    $ids = (array) $request->input('id_med_pag', []);
-                    $montos = (array) $request->input('mon_med_pag', []);
-
-                    if (count($ids)) {
-                        $suma = round(array_sum(array_map('floatval', $montos)), 2);
-                        if (abs($suma - $total) > 0.01) {
-                            throw new \RuntimeException('Los medios de pago suman S/ ' . number_format($suma, 2)
-                                . ' y el total es S/ ' . number_format($total, 2) . '.');
+                // Lo cobrado se reparte entre las líneas originales de cada producto
+                foreach ($aCobrar as $it) {
+                    $resta = (float) $it->cantidad_cobrar;
+                    foreach ($it->lineas as $linea) {
+                        if ($resta <= 0) {
+                            break;
                         }
-                        foreach ($ids as $k => $idMedio) {
-                            DB::table('venta_medio_pago')->insert([
-                                'IdCpe_cabecera' => $cabId, 'id_med_pag' => $idMedio, 'monto' => $montos[$k],
-                                'id_turno' => (int) ($user->id_turno ?? 0), 'id_empresa_negocio' => $user->id_empresa_negocio,
-                            ]);
+                        $toma = min($resta, (float) $linea->ped_det_can - (float) $linea->item_facturado);
+                        if ($toma > 0) {
+                            PedidoDetalle::where('ped_det_id', $linea->ped_det_id)->increment('item_facturado', $toma);
+                            $resta = round($resta - $toma, 2);
                         }
-                    } else {
-                        $medio = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->orderByDesc('predeterminado')->first();
-                        if (!$medio) {
-                            throw new \RuntimeException('No hay medios de pago configurados.');
-                        }
-                        DB::table('venta_medio_pago')->insert([
-                            'IdCpe_cabecera' => $cabId, 'id_med_pag' => $medio->id_med_pag, 'monto' => $total,
-                            'id_turno' => (int) ($user->id_turno ?? 0), 'id_empresa_negocio' => $user->id_empresa_negocio,
-                        ]);
                     }
                 }
 
-                // ---- Detalle ----
-                $productos = Producto::whereIn('IdProducto', $items->pluck('IdProducto'))->get()->keyBy('IdProducto');
-
-                foreach ($items as $it) {
-                    $prod = $productos[$it->IdProducto] ?? null;
-                    $cant = (float) ($it->ped_det_can - $it->item_facturado);
-                    $precio = (float) $it->ped_det_pre;
-                    $totalLinea = round($cant * $precio, 2);
-
-                    $subtotal = $gravado ? round($totalLinea / self::FACTOR_IGV, 2) : $totalLinea;
-                    $valorUni = $gravado ? round($precio / self::FACTOR_IGV, 2) : $precio;
-
-                    DB::table('cpe_detalle')->insert([
-                        'IdCpe_cabecera' => $cabId, 'IdProducto' => $it->IdProducto, 'IdProducto_rel' => $it->IdProducto,
-                        'procod' => $prod->procod ?? '', 'umecod' => $prod->umecod ?? 'NIU',
-                        'cdecan' => $cant, 'cdedes' => $it->descripcion,
-                        'cdevun' => $valorUni, 'cdepuni' => $precio, 'cdepve' => $subtotal,
-                        'cdeigv' => round($totalLinea - $subtotal, 2), 'cdevve' => $totalLinea,
-                        'tigcod' => $sucursal->tip_igv_pred, 'costo' => $prod->costo ?? 0,
-                        'cpe_det_factor' => 1, 'id_almacen_pro' => $almacen?->id_almacen,
-                    ]);
-
-                    PedidoDetalle::where('ped_det_id', $it->ped_det_id)->update(['item_facturado' => $it->ped_det_can]);
-
-                    // Stock: solo productos simples. Preparados y combos (recetas) quedan para el módulo de almacén.
-                    if ($prod && (int) $prod->promocion === 0 && $almacen) {
-                        DB::table('producto_stock')
-                            ->where('IdProducto', $it->IdProducto)
-                            ->where('id_almacen', $almacen->id_almacen)
-                            ->decrement('stock', $cant);
+                // ---- Cerrar pedido y liberar mesa (solo cuando ya no queda nada por cobrar) ----
+                if ($this->itemsPendientes($pedido->ped_id)->isEmpty()) {
+                    $pedido->update(['ped_est' => 'Cerrado', 'fecha_hora_modificacion' => now()]);
+                    if ($pedido->mes_id) {
+                        Mesa::where('mes_id', $pedido->mes_id)->update(['mes_est' => 'Libre']);
                     }
-                }
-
-                // ---- Cerrar pedido y liberar mesa ----
-                $pedido->update(['ped_est' => 'Cerrado', 'fecha_hora_modificacion' => now()]);
-                if ($pedido->mes_id) {
-                    Mesa::where('mes_id', $pedido->mes_id)->update(['mes_est' => 'Libre']);
+                } else {
+                    $pedido->update(['fecha_hora_modificacion' => now()]);
                 }
 
                 return $cabId;
@@ -298,6 +256,29 @@ class CobroController extends Controller
             return response()->json([
                 'estado' => 'error',
                 'mensaje' => config('app.debug') ? $e->getMessage() : 'Error al procesar el cobro.',
+            ]);
+        }
+
+        // Impresión directa (sin vista previa) si el agente de impresión está conectado
+        $impreso = false;
+        if ($request->imprimir) {
+            try {
+                $impreso = \App\Support\Impresion\Impresion::comprobante($cabId);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        if ($impreso) {
+            $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->first(['serdoc', 'numdoc', 'ped_id']);
+            $sigueAbierto = $cab->ped_id && Pedido::where('ped_id', $cab->ped_id)->where('ped_est', 'Aperturado')->exists();
+            session()->flash('success', 'Comprobante ' . $cab->serdoc . '-' . str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT) . ' enviado a la impresora.');
+
+            return response()->json([
+                'estado' => 'success',
+                'mensaje' => 'Comprobante emitido e impreso',
+                // Cuentas separadas con saldo: vuelve a separadas para cobrar a la siguiente persona
+                'redirect' => $sigueAbierto ? route('cobros.separadas', $cab->ped_id) : route('comandas.seleccion'),
             ]);
         }
 
@@ -325,6 +306,14 @@ class CobroController extends Controller
         $negocio = EmpresaNegocio::find($cab->id_empresa_negocio);
         $tdodes = DB::table('tipo_documento')->where('tdocod', $cab->tdocod)->value('tdodes');
 
-        return view('empresas.cobros.voucher', compact('cab', 'detalle', 'medios', 'empresa', 'negocio', 'tdodes'));
+        // Si fue una cuenta separada y aún queda algo por cobrar, se ofrece cobrar la siguiente
+        $pedidoPendiente = $cab->ped_id && Pedido::where('ped_id', $cab->ped_id)->where('ped_est', 'Aperturado')->exists()
+            ? $cab->ped_id : null;
+
+        // Formato: el de la sucursal (ticket o A4), salvo que se pida el otro con ?formato=
+        $formato = strtoupper((string) request('formato', $negocio->formato_impresion ?: 'TICKET')) === 'A4' ? 'A4' : 'TICKET';
+        $datos = compact('cab', 'detalle', 'medios', 'empresa', 'negocio', 'tdodes', 'pedidoPendiente');
+
+        return view($formato === 'A4' ? 'empresas.cobros.comprobante_a4' : 'empresas.cobros.voucher', $datos);
     }
 }
