@@ -109,8 +109,13 @@ mysql -uroot <<SQL
 CREATE DATABASE IF NOT EXISTS \`${DB_NOMBRE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '${DB_USUARIO}'@'localhost' IDENTIFIED BY '${DB_CLAVE}';
 ALTER USER '${DB_USUARIO}'@'localhost' IDENTIFIED BY '${DB_CLAVE}';
--- ALL en *.* : el importador crea bases temporales antiguo_* y el multi-empresa crea bd_{RUC}
-GRANT ALL PRIVILEGES ON *.* TO '${DB_USUARIO}'@'localhost';
+-- Solo las bases de este sistema (no toca otros sistemas del mismo VPS):
+-- la principal, la central, cada empresa bd_{RUC} (RUC empieza con 1 o 2) y las temporales del importador
+GRANT ALL PRIVILEGES ON \`${DB_NOMBRE}\`.* TO '${DB_USUARIO}'@'localhost';
+GRANT ALL PRIVILEGES ON \`bd\_tushpa\_central\`.* TO '${DB_USUARIO}'@'localhost';
+GRANT ALL PRIVILEGES ON \`bd\_1%\`.* TO '${DB_USUARIO}'@'localhost';
+GRANT ALL PRIVILEGES ON \`bd\_2%\`.* TO '${DB_USUARIO}'@'localhost';
+GRANT ALL PRIVILEGES ON \`antiguo\_%\`.* TO '${DB_USUARIO}'@'localhost';
 FLUSH PRIVILEGES;
 SQL
 
@@ -173,8 +178,12 @@ if command -v getenforce >/dev/null && [ "$(getenforce)" != "Disabled" ]; then
 fi
 
 verde "9/9 Apache y firewall"
-SERVIDOR="${DOMINIO:-localhost}"   # 00- = primer sitio: también responde al entrar por la IP
-cat > "/etc/httpd/conf.d/00-${APP}.conf" <<CONF
+SERVIDOR="${DOMINIO:-localhost}"
+# Sin dominio, este sistema responde por la IP (00- = primer sitio). Con dominio, solo por sus nombres:
+# así no tapa a otros sistemas del mismo VPS.
+CONF_APACHE="/etc/httpd/conf.d/${APP}.conf"
+[ -z "${DOMINIO}" ] && CONF_APACHE="/etc/httpd/conf.d/00-${APP}.conf"
+cat > "${CONF_APACHE}" <<CONF
 # Sistema TUSHPA: solo la carpeta public/ es visible desde internet (nunca .env, vendor ni storage)
 <Directory "${DIR}">
     Require all denied
