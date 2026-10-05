@@ -30,6 +30,8 @@ class Importador
         'proveedores' => 'Proveedores',
         'medios'      => 'Medios de pago y formas de pago',
         'mesas'       => 'Pisos y mesas',
+        // Al final: necesita clientes, productos, proveedores y medios de pago ya importados para enlazarlos
+        'historial'   => 'Historial: ventas, notas de crédito, compras y cuentas por cobrar/pagar (con estado SUNAT y correlativos)',
     ];
 
     private const TIPOS = [0 => 0, 1 => 0, 2 => 2, 3 => 6, 4 => 4, 6 => 6];
@@ -98,6 +100,8 @@ class Importador
             'Precios por día' => $contar('precios_dia_semana'),
             'Medios de pago' => $contar('medios_pagos'),
             'Mesas' => $contar('mesas'),
+            'Ventas (comprobantes)' => $contar('cpe_cabecera'),
+            'Compras' => $contar('compras_cabecera'),
         ];
     }
 
@@ -144,6 +148,7 @@ class Importador
                     'proveedores' => $this->proveedores($user, $rucAntiguo),
                     'medios'      => $this->medios($user, $suc, $rucAntiguo),
                     'mesas'       => $this->mesas($user, $suc),
+                    'historial'   => $this->historial($user, $suc),
                 });
             } catch (\Throwable $e) {
                 report($e);
@@ -453,18 +458,7 @@ class Importador
         if (!$this->hay('producto_stock')) {
             return;
         }
-        if (!$this->mapa) {
-            // Sin importar productos en esta corrida: relaciona por código y nombre con los que ya existen
-            $porNombre = Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->get()
-                ->keyBy(fn($p) => self::clave($p->pronom) . '|' . (int) $p->promocion);
-            foreach ($this->deSucursal($this->src('productos'), 'productos', $suc)->get() as $a) {
-                $tipo = self::TIPOS[(int) self::v($a, 'promocion', 0)] ?? 0;
-                $p = $porNombre[self::clave($a->pronom) . '|' . $tipo] ?? null;
-                if ($p) {
-                    $this->mapa[$a->IdProducto] = $p;
-                }
-            }
-        }
+        $this->relacionarProductos($user, $suc);
 
         $almacen = Kardex::almacenPredeterminado($user->id_empresa_negocio);
         if (!$almacen) {
@@ -498,6 +492,40 @@ class Importador
                 'ANTIGUO', array_values($items), $productos);
             $this->sumar('stock', 'creados', count($items));
         }
+    }
+
+    /** Sin importar productos en esta corrida: relaciona los antiguos con los que ya existen (nombre + tipo) */
+    private function relacionarProductos(User $user, int $suc): void
+    {
+        if ($this->mapa || !$this->hay('productos')) {
+            return;
+        }
+        $porNombre = Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->get()
+            ->keyBy(fn($p) => self::clave($p->pronom) . '|' . (int) $p->promocion);
+        foreach ($this->deSucursal($this->src('productos'), 'productos', $suc)->get() as $a) {
+            $tipo = self::TIPOS[(int) self::v($a, 'promocion', 0)] ?? 0;
+            if ($p = $porNombre[self::clave($a->pronom) . '|' . $tipo] ?? null) {
+                $this->mapa[$a->IdProducto] = $p;
+            }
+        }
+    }
+
+    // ---------- Historial ----------
+    private function historial(User $user, int $suc): void
+    {
+        $this->relacionarProductos($user, $suc);
+        $r = (new Historial($user,
+            fn(string $t) => $this->src($t),
+            fn(string $t) => $this->hay($t),
+            fn($q, string $t) => $this->deSucursal($q, $t, $suc),
+            fn(string $t) => $this->aviso($t),
+            $this->mapa,
+        ))->importar();
+
+        $this->reporte['historial'] = ['creados' => $r['ventas'] + $r['compras'], 'actualizados' => 0, 'omitidos' => $r['repetidos'],
+            'ventas' => $r['ventas'], 'compras' => $r['compras'], 'cuentas' => $r['cuentas']];
+        $this->aviso("Historial: {$r['ventas']} comprobantes con {$r['detalle']} líneas y {$r['medios']} pagos; {$r['compras']} compras; {$r['cuentas']} cuentas por cobrar/pagar"
+            . ($r['repetidos'] ? "; {$r['repetidos']} ya estaban (no se duplicaron)." : '.'));
     }
 
     // ---------- Clientes y proveedores ----------

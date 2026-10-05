@@ -134,6 +134,7 @@
                     <li>Presentaciones: las filas "tipo presentación" del sistema antiguo (six pack, caja, saco…) pasan como presentaciones de su producto principal.</li>
                     <li>Stock: solo productos sin movimientos en el sistema nuevo; entra como inventario inicial (se ve en Almacén &gt; Inventarios).</li>
                     <li>Clientes y proveedores: solo se agregan los que faltan (por número de documento).</li>
+                    <li>Historial: ventas, notas, compras y cuentas por cobrar/pagar pasan tal cual (lo aceptado por SUNAT no se reenvía) y los correlativos siguen después del último número. No vuelve a descontar stock.</li>
                 </ul>
             </section>
 
@@ -167,6 +168,8 @@
                                 <span><strong class="text-indigo-600 text-lg">{{ number_format($r['actualizados']) }}</strong> actualizados</span>
                                 <span><strong class="text-gray-400 text-lg">{{ number_format($r['omitidos']) }}</strong> ya existían u omitidos</span>
                                 @isset($r['presentaciones'])<span><strong class="text-violet-600 text-lg">{{ number_format($r['presentaciones']) }}</strong> presentaciones</span>@endisset
+                                @isset($r['ventas'])<span><strong class="text-emerald-700 text-lg">{{ number_format($r['ventas']) }}</strong> ventas</span>
+                                    <span><strong class="text-emerald-700 text-lg">{{ number_format($r['compras']) }}</strong> compras</span>@endisset
                                 @isset($r['precios_dinamicos'])<span><strong class="text-orange-600 text-lg">{{ number_format($r['precios_dinamicos']) }}</strong> precios dinámicos</span>@endisset
                             </div>
                         @endif

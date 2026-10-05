@@ -5,8 +5,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Carga un respaldo .sql (o .sql.gz) del sistema antiguo en una base temporal, leyéndolo línea por línea.
- * Solo ejecuta las tablas que el importador usa (productos, clientes, categorías…): un respaldo de cientos de MB
- * se carga en segundos porque se saltan ventas, kardex, logs, etc. Procedimientos, vistas y triggers se ignoran.
+ * Solo ejecuta las tablas que el importador usa (productos, clientes, ventas, compras, cuentas…): se saltan kardex,
+ * logs y demás tablas que no se importan. Procedimientos, vistas y triggers se ignoran.
  * Soporta los formatos de mysqldump (con DELIMITER) y de HeidiSQL/SQLyog (procedimientos sin DELIMITER).
  */
 class CargadorSql
@@ -15,6 +15,9 @@ class CargadorSql
         'empresa', 'empresa_negocios', 'almacenes', 'unidad_medida',
         'categorias', 'subcategorias', 'productos', 'presentaciones', 'producto_codigo', 'precios_dia_semana',
         'producto_stock', 'combos', 'cliente', 'proveedor', 'medios_pagos', 'credito_dias', 'pisos', 'mesas',
+        // Historial
+        'cpe_cabecera', 'cpe_detalle', 'venta_medio_pago', 'compras_cabecera', 'compras_detalle',
+        'cuentas_cobrar', 'cuentas_cobrar_detalle', 'cuentas_pagar', 'cuentas_pagar_detalle',
     ];
 
     private const RUTINA = '/^CREATE\s+(?:OR\s+REPLACE\s+)?(?:DEFINER\s*=\s*\S+\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?(?:PROCEDURE|FUNCTION|TRIGGER|EVENT)\b/i';
