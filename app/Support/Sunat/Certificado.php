@@ -8,8 +8,9 @@ use Symfony\Component\Process\Process;
  * Convierte el certificado digital (.pfx / .p12) a .pem para firmar los XML.
  *
  * OpenSSL 3 (el de PHP 8.3) no lee los .pfx antiguos cifrados con RC2, que es como vienen muchos certificados
- * en Perú. Si la lectura normal falla por eso, se repite en un proceso PHP aparte con el proveedor "legacy"
- * de OpenSSL activado (PHP trae legacy.dll en extras/ssl).
+ * en Perú. Si la lectura normal falla por eso:
+ *  - Linux (VPS): se usa el comando openssl del sistema con -legacy (el proveedor legacy viene con openssl-libs).
+ *  - Windows (Laragon): un proceso PHP aparte con el proveedor "legacy" activado (PHP trae legacy.dll en extras/ssl).
  */
 class Certificado
 {
@@ -43,6 +44,45 @@ class Certificado
         ];
     }
 
+    /**
+     * Linux: openssl pkcs12 -legacy. Bajo Apache, PHP_BINARY es php-fpm (no ejecuta scripts), por eso no se usa PHP.
+     * La contraseña va por variable de entorno, nunca en la línea de comandos.
+     */
+    private static function leerConOpensslCli(string $pfx, string $password): array
+    {
+        $openssl = is_file('/usr/bin/openssl') ? '/usr/bin/openssl' : 'openssl';
+        $pfxPath = storage_path('app/tmp_cert_' . bin2hex(random_bytes(6)) . '.pfx');
+        file_put_contents($pfxPath, $pfx);
+        try {
+            $proceso = new Process([$openssl, 'pkcs12', '-in', $pfxPath, '-nodes', '-legacy', '-passin', 'env:TUSHPA_PASS'],
+                null, ['TUSHPA_PASS' => $password]);
+            $proceso->setTimeout(30)->run();
+            $salida = $proceso->getOutput();
+            if (!$proceso->isSuccessful()) {
+                $err = $proceso->getErrorOutput();
+                if (stripos($err, 'mac verify') !== false || stripos($err, 'invalid password') !== false) {
+                    throw new RuntimeException('La contraseña del certificado es incorrecta.');
+                }
+                throw new RuntimeException('No se pudo convertir el certificado antiguo: ' . trim($err));
+            }
+        } finally {
+            @unlink($pfxPath);
+        }
+
+        // La clave privada y el certificado que le corresponde (el .pfx puede traer también la cadena de la entidad)
+        preg_match('/-----BEGIN (?:RSA |EC )?PRIVATE KEY-----.+?-----END (?:RSA |EC )?PRIVATE KEY-----/s', $salida, $clave);
+        preg_match_all('/-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----/s', $salida, $certs);
+        $pkey = $clave[0] ?? '';
+        $cert = '';
+        foreach ($certs[0] as $c) {
+            if ($pkey && openssl_x509_check_private_key($c, $pkey)) {
+                $cert = $c;
+                break;
+            }
+        }
+        return ['cert' => $cert ? $cert . "\n" : '', 'pkey' => $pkey ? $pkey . "\n" : ''];
+    }
+
     private static function erroresOpenssl(): string
     {
         $errores = [];
@@ -54,6 +94,9 @@ class Certificado
 
     private static function leerConProveedorLegacy(string $pfx, string $password): array
     {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            return self::leerConOpensslCli($pfx, $password);
+        }
         $phpDir = dirname((string) php_ini_loaded_file());
         $phpExe = PHP_OS_FAMILY === 'Windows' ? $phpDir . DIRECTORY_SEPARATOR . 'php.exe' : (PHP_BINARY ?: 'php');
         $modulos = $phpDir . DIRECTORY_SEPARATOR . 'extras' . DIRECTORY_SEPARATOR . 'ssl';
