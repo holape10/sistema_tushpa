@@ -32,3 +32,7 @@ Thumbs.db
 /public/logos
 
 /storage/app/sunat
+
+# Imágenes de productos que suben los usuarios (viven en cada servidor, no en git)
+/public/imagenes/productos/*
+!/public/imagenes/productos/.gitkeep

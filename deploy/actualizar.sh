@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Actualiza Sistema TUSHPA en el VPS con lo último de GitHub (como root):  bash /var/www/html/sistema_tushpa/deploy/actualizar.sh
+set -euo pipefail
+APP="${APP:-sistema_tushpa}"
+RAMA="${RAMA:-main}"
+DIR="/var/www/html/${APP}"
+cd "${DIR}"
+export COMPOSER_ALLOW_SUPERUSER=1
+
+echo "==> Modo mantenimiento"
+php artisan down --retry=15 || true
+trap 'php artisan up || true' EXIT
+
+echo "==> Código"
+git config --global --add safe.directory "${DIR}" || true
+git fetch origin "${RAMA}"
+git reset --hard "origin/${RAMA}"
+
+echo "==> Dependencias y base de datos"
+composer install --no-dev --optimize-autoloader --no-interaction
+php artisan migrate --force
+# Bases de cada cliente si el multi-empresa está activo
+if grep -qE '^TENANCY_DOMINIO=.+' .env; then php artisan clientes:migrar || true; fi
+
+echo "==> Estilos"
+npm ci --no-audit --no-fund
+npm run build
+
+echo "==> Cachés y permisos"
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+chown -R apache:apache "${DIR}"
+chmod -R ug+rwX storage bootstrap/cache public/imagenes
+command -v restorecon >/dev/null && restorecon -R "${DIR}" || true
+systemctl reload php-fpm httpd
+
+echo "==> Listo: $(git log -1 --format='%h %s')"
