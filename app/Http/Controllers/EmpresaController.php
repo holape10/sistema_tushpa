@@ -141,8 +141,9 @@ class EmpresaController extends Controller
             // Nombre generado por el servidor: nunca se usa el nombre ni la extensión que manda el cliente
             $file = $request->file('logologin');
             $nombreLogo = $empresa->IdEmpresa . '_' . time() . '.' . $file->guessExtension();
-            $file->move(public_path('logos'), $nombreLogo);
-            $empresa->LogEmpresa = 'logos/' . $nombreLogo;
+            // Dentro de public/imagenes: es la carpeta pública donde el servidor permite escribir (permisos y SELinux)
+            $file->move(public_path('imagenes/logos'), $nombreLogo);
+            $empresa->LogEmpresa = 'imagenes/logos/' . $nombreLogo;
         }
 
         // 4. Certificado Digital (.pfx o .p12): se guarda el .pfx y se genera el .pem que firma los XML.
