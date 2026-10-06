@@ -90,7 +90,10 @@ class UsuarioController extends Controller
             'emp_cel'       => 'nullable|string|max:20',
             'emp_cor'       => 'nullable|email|max:100',   // el correo NO es obligatorio
             'emp_dir'       => 'nullable|string|max:200',
-            'email'         => ['required', 'string', 'max:50', 'regex:/^\S+$/', Rule::unique('users', 'email')->ignore($usuario?->IdUsuario, 'IdUsuario')],
+            // Sin espacios para usuarios nuevos; los importados del sistema antiguo ("PEDRO BARBA") conservan el suyo si no lo cambian
+            'email'         => array_merge(['required', 'string', 'max:50'],
+                $usuario && trim((string) $request->email) === $usuario->email ? [] : ['regex:/^\S+$/'],
+                [Rule::unique('users', 'email')->ignore($usuario?->IdUsuario, 'IdUsuario')]),
             'role_id'       => 'required|exists:roles,id',
             // El mozo entra desde la tablet/celular con este código
             'codigo_movil'  => ['nullable', 'required_if:role_id,' . self::ROL_MOZO, 'digits_between:3,6',
