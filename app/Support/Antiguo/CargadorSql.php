@@ -15,6 +15,7 @@ class CargadorSql
         'empresa', 'empresa_negocios', 'almacenes', 'unidad_medida',
         'categorias', 'subcategorias', 'productos', 'presentaciones', 'producto_codigo', 'precios_dia_semana',
         'producto_stock', 'combos', 'cliente', 'proveedor', 'medios_pagos', 'credito_dias', 'pisos', 'mesas',
+        'users', 'empleado', 'role_user',
         // Historial
         'cpe_cabecera', 'cpe_detalle', 'venta_medio_pago', 'compras_cabecera', 'compras_detalle',
         'cuentas_cobrar', 'cuentas_cobrar_detalle', 'cuentas_pagar', 'cuentas_pagar_detalle',

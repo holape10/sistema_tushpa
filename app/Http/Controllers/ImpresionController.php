@@ -27,22 +27,26 @@ class ImpresionController extends Controller
         abort_unless($cab, 404);
 
         $ok = Impresion::comprobante((int) $id);
-        return response()->json(['directa' => $ok, 'mensaje' => $ok ? 'Enviado a la impresora.' : $this->motivoNoDirecta()]);
+        return response()->json(['directa' => $ok, 'mensaje' => $ok ? $this->enviado() : $this->motivoNoDirecta()]);
     }
 
     public function precuenta($pedId)
     {
         abort_unless(DB::table('pedidos')->where('ped_id', $pedId)->where('id_empresa_negocio', $this->sucursal())->exists(), 404);
         $ok = Impresion::precuenta((int) $pedId);
-        return response()->json(['directa' => $ok, 'mensaje' => $ok ? 'Precuenta enviada a la impresora.' : $this->motivoNoDirecta()]);
+        return response()->json(['directa' => $ok, 'mensaje' => $ok ? 'Precuenta: ' . mb_strtolower($this->enviado()) : $this->motivoNoDirecta()]);
+    }
+
+    /** Con impresora configurada todo va al agente; si está apagado queda en cola y sale apenas se conecte */
+    private function enviado(): string
+    {
+        return Impresion::agenteConectado($this->sucursal()) ? 'Enviado a la impresora.'
+            : 'En cola: el agente de impresión no está conectado, se imprimirá apenas se conecte.';
     }
 
     private function motivoNoDirecta(): string
     {
-        if (!Impresion::impresoraCaja($this->sucursal())) {
-            return 'No hay impresoras configuradas: se usará la impresión del navegador.';
-        }
-        return 'El agente de impresión no está conectado: se usará la impresión del navegador.';
+        return 'No hay impresoras configuradas: se usará la impresión del navegador.';
     }
 
     // ------------------------------------------------------------------ configuración (admin)

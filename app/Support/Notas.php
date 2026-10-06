@@ -200,6 +200,7 @@ class Notas
             if ($total) {
                 Cuentas::anularPorDocumento('cobrar', $ref->IdCpe_cabecera);
                 DB::table('cpe_cabecera')->where('IdCpe_cabecera', $ref->IdCpe_cabecera)->update(['anulado_nc' => $numNota]);
+                Socios::revertirComprobante((int) $ref->IdCpe_cabecera);   // cuotas de socio pagadas con él vuelven a deberse
             }
 
             return $notaId;
@@ -220,6 +221,7 @@ class Notas
             // costo solo cuando vuelve el producto (para que la utilidad del reporte se corrija)
             'costo' => $conStock ? (float) ($ref->costo ?? 0) : 0,
             'cpe_det_factor' => 1, 'id_almacen_pro' => $ref->id_almacen_pro ?? null,
+            'debe' => $ref->debe ?? null, 'haber' => $ref->haber ?? null,   // misma cuenta que la línea original (CONCAR la invierte)
             'IdCpe_detalle_ref' => $ref->IdCpe_detalle ?? null, 'lotes' => $conStock ? ($ref->lotes ?? null) : null,
             'ref' => $ref, 'stock' => $conStock,
         ];

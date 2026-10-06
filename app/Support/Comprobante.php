@@ -174,6 +174,8 @@ class Comprobante
                 'cdeigv' => round($totalLinea - $subtotal, 2), 'cdevve' => $totalLinea,
                 'tigcod' => $sucursal->tip_igv_pred, 'costo' => round(($prod->costo ?? 0) * $factor, 2),
                 'cpe_det_factor' => $factor, 'id_almacen_pro' => $almacen?->id_almacen,
+                // Cuentas contables del producto al momento de la venta (CONCAR)
+                'debe' => $prod->debe ?? null, 'haber' => $prod->haber ?? null,
             ]);
 
             // Stock + kardex: productos simples descuentan directo y los combos descuentan sus componentes

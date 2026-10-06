@@ -58,6 +58,23 @@ Route::middleware('auth')->group(function () {
     Route::post('/cocina/entregado/{ped_id}', [CocinaController::class, 'entregado'])->whereNumber('ped_id');
 
     // Reservas
+    // Socios (clubes y asociaciones)
+    Route::controller(\App\Http\Controllers\SocioController::class)->prefix('socios')->name('socios.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'guardar')->name('guardar');
+        Route::get('/generar/previa', 'previa')->name('previa');
+        Route::post('/generar', 'generar')->name('generar');
+        Route::post('/cargos', 'cargar')->name('cargar');
+        Route::post('/cargos/{id}/anular', 'anularCargo')->whereNumber('id')->name('anular_cargo');
+        Route::post('/config', 'guardarConfig')->name('config');
+        Route::post('/categorias', 'guardarCategoria')->name('categoria');
+        Route::post('/desde-clientes', 'desdeClientes')->name('desde_clientes');
+        Route::get('/{id}', 'ver')->whereNumber('id')->name('ver');
+        Route::post('/{id}/estado', 'estado')->whereNumber('id')->name('estado');
+        Route::post('/{id}/cobrar', 'cobrar')->whereNumber('id')->name('cobrar');
+        Route::get('/{id}/carnet', 'carnet')->whereNumber('id')->name('carnet');
+    });
+
     // Hotel / hospedaje
     Route::get('/hotel', [\App\Http\Controllers\HotelController::class, 'index'])->name('hotel.index');
     Route::get('/hotel/estado', [\App\Http\Controllers\HotelController::class, 'estado'])->name('hotel.estado');
@@ -228,6 +245,20 @@ Route::middleware('auth')->group(function () {
 Route::get('/asistencia/m/{emp}/{accion}', [AsistenciaController::class, 'celular'])
     ->whereNumber('emp')->whereIn('accion', ['check_in_1', 'check_out_1', 'check_in_2', 'check_out_2'])
     ->middleware('throttle:30,1')->name('asistencia.celular');
+
+// Portería: el QR del carnet de socio muestra si está al día (sin sesión)
+Route::get('/socio/v/{token}', [\App\Http\Controllers\SocioController::class, 'verificar'])->where('token', '[A-Za-z0-9]{32}')
+    ->middleware('throttle:60,1')->name('socios.verificar');
+
+// Portal del socio: {subdominio}/socio (estado de cuenta, pagos y carnet digital; sin sesión del sistema)
+Route::prefix('socio')->name('socio.portal')->controller(\App\Http\Controllers\SocioPortalController::class)->group(function () {
+    Route::get('/', 'index');
+    Route::post('/ingresar', 'entrar')->middleware('throttle:20,1')->name('.entrar');
+    Route::post('/salir', 'salir')->name('.salir');
+    Route::post('/clave', 'cambiarClave')->middleware('throttle:10,1')->name('.clave');
+    Route::get('/estado', 'estado')->middleware('throttle:30,1')->name('.estado');
+    Route::get('/comprobante/{id}', 'comprobante')->whereNumber('id')->middleware('throttle:30,1')->name('.comprobante');
+});
 
 // Tienda virtual pública de la empresa: {subdominio}/tiendavirtual (sin sesión del sistema)
 Route::prefix('tiendavirtual')->name('tienda.')->controller(\App\Http\Controllers\TiendaController::class)->group(function () {

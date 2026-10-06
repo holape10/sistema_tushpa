@@ -603,7 +603,7 @@ document.addEventListener('alpine:init', () => {
                 this.cobroAbierto = false;
                 // Si se pidió imprimir: directo a la impresora; si no se puede, el ticket se imprime en el navegador
                 const directo = this.imprimir ? await (window.TushpaImpresion ? TushpaImpresion.comprobante(d.id) : false) : false;
-                if (directo) this.aviso(`🖨 ${d.numero} enviado a la impresora`, 'ok');
+                if (directo) this.aviso(`🖨 ${d.numero}: ${directo.mensaje || 'enviado a la impresora'}`, 'ok');
                 this.venta = { ...d, ticket: d.ticket + (this.imprimir && !directo ? '&imprimir=1' : '') };
                 this.sonido(true);
             } catch (e) {
@@ -615,7 +615,7 @@ document.addEventListener('alpine:init', () => {
 
         async imprimirTicket() {
             const directo = await (window.TushpaImpresion ? TushpaImpresion.comprobante(this.venta.id) : false);
-            if (directo) { this.aviso('🖨 Enviado a la impresora', 'ok'); return; }
+            if (directo) { this.aviso('🖨 ' + (directo.mensaje || 'Enviado a la impresora'), 'ok'); return; }
             try { this.$refs.ticket.contentWindow.print(); }
             catch (e) { window.open(this.venta.ticket.replace('embed=1', 'embed=0'), '_blank'); }
         },

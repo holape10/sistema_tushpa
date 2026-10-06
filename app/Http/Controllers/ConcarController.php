@@ -38,6 +38,9 @@ class ConcarController extends Controller
             'cta_compras' => $cuenta, 'cta_por_pagar' => $cuenta,
             'anexo_varios' => 'required|string|max:18',
             'tipo_conversion' => 'required|in:V,M,F',
+            'formato' => 'required|in:PLANTILLA,ANTERIOR',
+            'doc_factura' => 'required|string|max:2|regex:/^[0-9A-Za-z]+$/', 'doc_boleta' => 'required|string|max:2|regex:/^[0-9A-Za-z]+$/',
+            'doc_nc' => 'required|string|max:2|regex:/^[0-9A-Za-z]+$/', 'doc_nd' => 'required|string|max:2|regex:/^[0-9A-Za-z]+$/',
         ], ['regex' => 'Solo letras y números, sin espacios ni puntos.'], [
             'cta_por_cobrar' => 'cuenta por cobrar', 'cta_igv' => 'cuenta de IGV', 'cta_ventas' => 'cuenta de ventas gravadas',
             'cta_ventas_exo' => 'cuenta de ventas exoneradas', 'cta_compras' => 'cuenta de compras', 'cta_por_pagar' => 'cuenta por pagar',
@@ -61,7 +64,7 @@ class ConcarController extends Controller
             return back()->with('error', 'El correlativo pasa de 9999 asientos en el mes; CONCAR solo admite 4 dígitos.');
         }
 
-        $ruta = (new Excel())->hoja('Asientos', Concar::titulos(), $datos['filas'])->guardar();
+        $ruta = (new Excel())->hoja('Asientos', Concar::titulos(Concar::config($ruc)), $datos['filas'])->guardar();
         $nombre = 'CONCAR_' . strtoupper($libro) . "_{$ruc}_{$d['periodo']}.xlsx";
 
         return response()->download($ruta, $nombre, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])

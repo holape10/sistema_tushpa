@@ -514,7 +514,8 @@ document.addEventListener('alpine:init', () => {
             if (!this.ultima) return;
             // Primero directo a la impresora (sin vista previa); si el agente no está conectado, por el navegador
             const directo = await (window.TushpaImpresion ? TushpaImpresion.comprobante(this.ultima.id) : false);
-            if (directo) { this.aviso(`🖨 ${this.ultima.numero} enviado a la impresora`, 'ok'); return; }
+            // Con impresora configurada nunca se muestra en pantalla: si el agente está apagado queda en cola
+            if (directo) { this.aviso(`🖨 ${this.ultima.numero}: ${directo.mensaje || 'enviado a la impresora'}`, 'ok'); return; }
             // El ticket se imprime solo al cargar (imprimir=1) dentro de un iframe oculto
             this.$refs.impresion.src = this.ultima.ticket + '&imprimir=1&t=' + Date.now();
         },

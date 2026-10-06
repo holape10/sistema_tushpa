@@ -11,7 +11,7 @@ class UsuarioController extends Controller
     private const ROL_MOZO = 8;
 
     // Módulos que se marcan solos al elegir el rol (el admin puede cambiarlos después)
-    private const PRESETS = [
+    public const PRESETS = [
         8 => ['Comandas'],
         4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Envío de Comprobantes', 'Resumen Diario',
               'Kardex', 'Stock Productos', 'Clientes'],

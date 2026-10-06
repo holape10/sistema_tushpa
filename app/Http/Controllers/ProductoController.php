@@ -49,6 +49,8 @@ class ProductoController extends Controller
             'pronom'             => 'required|string|max:150',
             'propun'             => $esInsumo ? 'nullable|numeric|min:0' : 'required|numeric|min:0.01',
             'costo'              => 'nullable|numeric|min:0',
+            'debe'               => 'nullable|string|max:12|regex:/^[0-9A-Za-z]+$/',
+            'haber'              => 'nullable|string|max:12|regex:/^[0-9A-Za-z]+$/',
             'codigo_barra'       => 'nullable|string|max:50',
             'umecod'             => 'nullable|exists:unidad_medida,umecod',
             'ume_equivalente'    => 'nullable|exists:unidad_medida,umecod',
@@ -70,7 +72,7 @@ class ProductoController extends Controller
     }
 
     private const NOMBRES = [
-        'pronom' => 'Nombre del producto', 'propun' => 'Precio de venta', 'promocion' => 'Tipo', 'codigo_barra' => 'Código de barras',
+        'pronom' => 'Nombre del producto', 'debe' => 'Cuenta Debe', 'haber' => 'Cuenta Haber', 'propun' => 'Precio de venta', 'promocion' => 'Tipo', 'codigo_barra' => 'Código de barras',
         'ume_equivalente' => 'Unidad equivalente', 'factor_equivalente' => 'Factor de equivalencia', 'imagen' => 'Imagen',
         'presentaciones.*.umecod' => 'Unidad de la presentación', 'presentaciones.*.factor' => 'Factor de la presentación',
         'presentaciones.*.precio' => 'Precio de la presentación', 'presentaciones.*.codigo_barra' => 'Código de barras de la presentación',
@@ -223,6 +225,8 @@ class ProductoController extends Controller
                 'cat_id'             => $request->cat_id,
                 'subcat_id'          => $request->subcat_id,
                 'stock_min'          => $request->stock_min ?: 0,
+                'debe'               => trim((string) $request->debe) ?: null,
+                'haber'              => trim((string) $request->haber) ?: null,
                 'control_lote'       => in_array($tipo, [0, 4]) && $request->boolean('control_lote'),
                 'es_combustible'     => $tipo === 0 && $request->boolean('es_combustible'),
                 'proest'             => 'Activo',
@@ -280,6 +284,7 @@ class ProductoController extends Controller
             $producto->update($request->only(['pronom', 'umecod', 'costo', 'cat_id', 'subcat_id', 'stock_min', 'proest'])
                 + ['propun' => $tipo === 4 ? ($request->propun ?: 0) : $request->propun,
                    'codigo_barra' => trim((string) $request->codigo_barra) ?: null,
+                   'debe' => trim((string) $request->debe) ?: null, 'haber' => trim((string) $request->haber) ?: null,
                    'control_lote' => in_array($tipo, [0, 4]) && $request->boolean('control_lote'),
                    'es_combustible' => $tipo === 0 && $request->boolean('es_combustible')]
                 + $this->equivalencia($request, $tipo));

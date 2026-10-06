@@ -83,8 +83,11 @@ class Impresion
 
     // ------------------------------------------------------------------ comprobante
 
-    /** Encola el comprobante en la impresora de caja. Devuelve false si no hay impresión directa. */
-    public static function comprobante(int $idCpe, bool $exigirAgente = true): bool
+    /**
+     * Encola el comprobante en la impresora de caja. Con impresora configurada siempre va al agente (si está apagado,
+     * sale apenas se conecte) y la pantalla no muestra la impresión del navegador. false = no hay impresora configurada.
+     */
+    public static function comprobante(int $idCpe, bool $exigirAgente = false): bool
     {
         $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $idCpe)->first();
         if (!$cab || ($exigirAgente && !self::agenteConectado((int) $cab->id_empresa_negocio))) {
@@ -267,7 +270,7 @@ class Impresion
         $pedido = DB::table('pedidos as p')->leftJoin('mesas as m', 'm.mes_id', '=', 'p.mes_id')
             ->leftJoin('pisos as pi', 'pi.pis_id', '=', 'p.pis_id')->leftJoin('users as u', 'u.IdUsuario', '=', 'p.mozo')
             ->where('p.ped_id', $pedId)->first(['p.*', 'm.mes_nom', 'pi.pis_nom', 'u.apeusu as mozo_nom']);
-        if (!$pedido || !self::agenteConectado((int) $pedido->id_empresa_negocio)) {
+        if (!$pedido) {
             return false;
         }
         $imp = self::impresoraCaja((int) $pedido->id_empresa_negocio);

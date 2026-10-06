@@ -1,7 +1,7 @@
 <?php
 namespace App\Support;
 
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\{DB, Schema};
 
 /**
  * Exporta ventas y compras como asientos para la plantilla "Importar asientos desde Excel" de CONCAR (SQL/CB):
@@ -54,24 +54,35 @@ class Concar
         ['Tasa IGV', '', 'Numérico 14,2'],
     ];
 
-    // Tabla general 06 de CONCAR: tipo de documento
+    // Tabla general 06 de CONCAR: tipo de documento (cada empresa puede tener sus propios códigos en concar_config)
     public const TIPOS_DOC = ['01' => 'FT', '03' => 'BV', '07' => 'NA', '08' => 'ND', '12' => 'TK'];
 
     public const DEFECTO = [
         'subdiario_ventas' => '05', 'subdiario_compras' => '11',
         'cta_por_cobrar' => '121201', 'cta_igv' => '401111', 'cta_ventas' => '701111', 'cta_ventas_exo' => '701111',
         'cta_compras' => '601111', 'cta_por_pagar' => '421201', 'anexo_varios' => '00000000', 'tipo_conversion' => 'V',
+        // PLANTILLA = plantilla oficial (3 filas de títulos); ANTERIOR = como el Excel del sistema antiguo (1 fila de títulos)
+        'formato' => 'PLANTILLA', 'doc_factura' => 'FT', 'doc_boleta' => 'BV', 'doc_nc' => 'NA', 'doc_nd' => 'ND',
     ];
 
     public static function config(string $ruc): array
     {
         $c = DB::table('concar_config')->where('IdEmpresa', $ruc)->first();
-        return array_merge(self::DEFECTO, $c ? array_intersect_key((array) $c, self::DEFECTO) : []);
+        return array_merge(self::DEFECTO, $c ? array_filter(array_intersect_key((array) $c, self::DEFECTO), fn($v) => $v !== null && $v !== '') : []);
     }
 
-    /** Títulos de la plantilla: 3 filas con la columna A "Campo" / "Restricciones" / "Tamaño/Formato" */
-    public static function titulos(): array
+    /** Códigos de tipo de documento de la empresa */
+    private static function tiposDoc(array $cfg): array
     {
+        return ['01' => $cfg['doc_factura'], '03' => $cfg['doc_boleta'], '07' => $cfg['doc_nc'], '08' => $cfg['doc_nd']] + self::TIPOS_DOC;
+    }
+
+    /** Títulos: plantilla oficial (3 filas: Campo / Restricciones / Tamaño) o una sola fila como el sistema antiguo */
+    public static function titulos(?array $cfg = null): array
+    {
+        if (($cfg['formato'] ?? 'PLANTILLA') === 'ANTERIOR') {
+            return [array_merge([''], str_replace('Tipo Cambio para F', "Tipo Cambio para 'F'", array_column(self::CAMPOS, 0)))];
+        }
         return [
             array_merge(['Campo'], array_column(self::CAMPOS, 0)),
             array_merge(['Restricciones'], array_column(self::CAMPOS, 1)),
@@ -79,51 +90,126 @@ class Concar
         ];
     }
 
-    /** @return array{filas: array, asientos: int, total: float, omitidos: array} */
+    /** Reparte $total según los pesos (redondeo a céntimos; la diferencia va a la línea más grande) */
+    private static function repartir(float $total, array $pesos): array
+    {
+        $suma = array_sum($pesos);
+        if (!$pesos || $suma <= 0) {
+            return [];
+        }
+        $r = [];
+        foreach ($pesos as $k => $p) {
+            $r[$k] = round($total * $p / $suma, 2);
+        }
+        $dif = round($total - array_sum($r), 2);
+        if ($dif != 0) {
+            $mayor = array_search(max($pesos), $pesos, true);
+            $r[$mayor] = round($r[$mayor] + $dif, 2);
+        }
+        return array_filter($r, fn($v) => $v != 0);
+    }
+
+    /**
+     * Asientos de ventas: uno por comprobante y, dentro, una línea por cuenta contable.
+     * Cuenta de cada línea: la guardada al vender (cpe_detalle.debe/haber) -> la actual del producto -> la de su tipo de producto
+     * -> las generales de CONCAR. Las notas de crédito van al revés.
+     * @return array{filas: array, asientos: int, total: float, omitidos: array}
+     */
     public static function ventas(string $ruc, string $periodo, int $desde = 1): array
     {
         $cfg = self::config($ruc);
+        $tipos = self::tiposDoc($cfg);
+        $anterior = $cfg['formato'] === 'ANTERIOR';
         [$ini, $fin] = self::rango($periodo);
-        $docs = DB::table('cpe_cabecera')->where('IdEmpresa', $ruc)->whereBetween('ccafem', [$ini, $fin])
-            ->orderBy('ccafem')->orderBy('tdocod')->orderBy('serdoc')->orderBy('numdoc')->get();
+        $q = DB::table('cpe_cabecera')->where('IdEmpresa', $ruc)->whereBetween('ccafem', [$ini, $fin]);
+        // El sistema antiguo numeraba primero todas las facturas y luego las boletas
+        $docs = ($anterior ? $q->orderBy('tdocod')->orderBy('serdoc')->orderBy('numdoc')
+            : $q->orderBy('ccafem')->orderBy('tdocod')->orderBy('serdoc')->orderBy('numdoc'))->get();
+
+        // Detalle con sus cuentas (y las del producto / tipo de producto para lo vendido antes de configurarlas)
+        $tipoCtas = Schema::hasColumn('tipo_producto', 'cta_contable_12');
+        $detalles = DB::table('cpe_detalle as d')->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
+            ->when($tipoCtas, fn($w) => $w->leftJoin('tipo_producto as t', 't.tip_pro_id', '=', 'p.tip_pro_id'))
+            ->whereIn('d.IdCpe_cabecera', $docs->pluck('IdCpe_cabecera'))
+            ->get(array_merge(['d.IdCpe_cabecera', 'd.cdevve', 'd.cdepve', 'd.tigcod', 'd.debe', 'd.haber', 'p.debe as p_debe', 'p.haber as p_haber'],
+                $tipoCtas ? ['t.cta_contable_12 as t_debe', 't.cta_contable_70 as t_haber'] : []))
+            ->groupBy('IdCpe_cabecera');
 
         $filas = [];
         $omitidos = ['Anulados' => 0, 'Notas de venta (no van a contabilidad)' => 0];
         $n = $desde;
         $total = 0;
         foreach ($docs as $d) {
-            if (!isset(self::TIPOS_DOC[$d->tdocod])) {
+            if (!isset($tipos[$d->tdocod])) {
                 $omitidos['Notas de venta (no van a contabilidad)']++;
                 continue;
             }
-            if ($d->ccabaj) {
+            $anulado = (bool) $d->ccabaj;
+            // Plantilla: los anulados no van. Formato anterior: van con importe 0 (así los registraba el sistema antiguo)
+            if ($anulado && !$anterior) {
                 $omitidos['Anulados']++;
                 continue;
             }
 
             $esNota = $d->tdocod === '07';                 // nota de crédito: el asiento va al revés
-            $numero = $d->serdoc . '-' . str_pad($d->numdoc, 8, '0', STR_PAD_LEFT);
+            $numero = $d->serdoc . '-' . ($anterior ? (int) $d->numdoc : str_pad($d->numdoc, 8, '0', STR_PAD_LEFT));
             $anexo = in_array(trim((string) $d->ccandi), ['', '0', '00000000'], true) ? $cfg['anexo_varios'] : trim($d->ccandi);
-            $cab = self::cabecera($cfg, $cfg['subdiario_ventas'], $periodo, $n++, $d->ccafem, $d->moncod ?: 'PEN', null,
-                ($esNota ? 'N.CRED. ' : 'VENTA ') . $numero . ' ' . $d->ccanom);
+            $glosa = $anterior ? 'VENTAS ' . $tipos[$d->tdocod] . ' ' . $numero : ($esNota ? 'N.CRED. ' : 'VENTA ') . $numero . ' ' . $d->ccanom;
+            $cab = self::cabecera($cfg, $cfg['subdiario_ventas'], $periodo, $n++, $d->ccafem, $d->moncod ?: 'PEN', null, $glosa);
             $doc = [
-                'tipo' => self::TIPOS_DOC[$d->tdocod], 'numero' => $numero, 'fecha' => $d->ccafem, 'vence' => $d->ccafve ?: $d->ccafem,
-                'ref' => $d->tdocod_ref ? [self::TIPOS_DOC[$d->tdocod_ref] ?? $d->tdocod_ref, $d->serie_ref . '-' . str_pad((string) $d->num_ref, 8, '0', STR_PAD_LEFT), $d->ccafem_ref] : null,
+                'tipo' => $tipos[$d->tdocod], 'numero' => $numero, 'fecha' => $d->ccafem, 'vence' => $d->ccafve ?: $d->ccafem,
+                'ref' => $d->tdocod_ref ? [$tipos[$d->tdocod_ref] ?? $d->tdocod_ref,
+                    $d->serie_ref . '-' . ($anterior ? (int) $d->num_ref : str_pad((string) $d->num_ref, 8, '0', STR_PAD_LEFT)), $d->ccafem_ref] : null,
+                'glosa' => $anterior ? $tipos[$d->tdocod] . ' ' . $numero : null,
             ];
+            $dh = fn(string $normal) => $esNota ? ($normal === 'D' ? 'H' : 'D') : $normal;
+            $lineas = $detalles[$d->IdCpe_cabecera] ?? collect();
+            $porCobrarDef = ($d->cuenta12 ?? null) ?: $cfg['cta_por_cobrar'];
+            $debeDe = fn($l) => $l->debe ?: $l->p_debe ?: ($l->t_debe ?? null) ?: $porCobrarDef;
+            $haberDe = fn($l, bool $grav) => $l->haber ?: $l->p_haber ?: ($l->t_haber ?? null) ?: ($grav ? $cfg['cta_ventas'] : $cfg['cta_ventas_exo']);
+
+            if ($anulado) {
+                $l = $lineas->first();
+                $filas[] = self::linea($cab, $l ? $debeDe($l) : $porCobrarDef, $anexo, $dh('D'), 0, $doc, 'ANULADO', $anterior);
+                $filas[] = self::linea($cab, $l ? $haberDe($l, $l->tigcod === '10') : $cfg['cta_ventas_exo'], $anexo, $dh('H'), 0, $doc, 'ANULADO', $anterior);
+                continue;
+            }
 
             $igv = round((float) $d->ccaigv, 2);
             $grav = round((float) $d->ccatvg, 2);
             $exo = round((float) $d->ccatexo + (float) $d->ccatinaf, 2);
             $tot = round((float) $d->ccaitv, 2);
-            // Lo que no cuadre por redondeo (o ICBPER) se carga a la cuenta de ventas
+            // Lo que no cuadre por redondeo (o ICBPER) se carga a la venta
             $resto = round($tot - $igv - $grav - $exo, 2);
             if ($exo > 0 && $grav <= 0) $exo = round($exo + $resto, 2); else $grav = round($grav + $resto, 2);
 
-            $dh = fn(string $normal) => $esNota ? ($normal === 'D' ? 'H' : 'D') : $normal;
-            $filas[] = self::linea($cab, $d->cuenta12 ?: $cfg['cta_por_cobrar'], $anexo, $dh('D'), $tot, $doc, 'POR COBRAR');
-            if ($igv > 0) $filas[] = self::linea($cab, $cfg['cta_igv'], $anexo, $dh('H'), $igv, $doc, 'IGV');
-            if ($grav > 0) $filas[] = self::linea($cab, $cfg['cta_ventas'], $anexo, $dh('H'), $grav, $doc, 'VENTA GRAVADA');
-            if ($exo > 0) $filas[] = self::linea($cab, $cfg['cta_ventas_exo'], $anexo, $dh('H'), $exo, $doc, 'VENTA EXONERADA');
+            // Pesos por cuenta según el detalle; los importes salen de los totales del comprobante (siempre cuadra)
+            $pDebe = $pGrav = $pExo = [];
+            foreach ($lineas as $l) {
+                $cDebe = $debeDe($l);
+                $pDebe[$cDebe] = ($pDebe[$cDebe] ?? 0) + (float) $l->cdevve;
+                if ($l->tigcod === '10') {
+                    $cHaber = $haberDe($l, true);
+                    $pGrav[$cHaber] = ($pGrav[$cHaber] ?? 0) + (float) $l->cdepve;
+                } else {
+                    $cHaber = $haberDe($l, false);
+                    $pExo[$cHaber] = ($pExo[$cHaber] ?? 0) + (float) $l->cdevve;
+                }
+            }
+            $debe = self::repartir($tot, $pDebe) ?: [$porCobrarDef => $tot];
+            $hGrav = $grav > 0 ? (self::repartir($grav, $pGrav) ?: [$cfg['cta_ventas'] => $grav]) : [];
+            $hExo = $exo > 0 ? (self::repartir($exo, $pExo) ?: [$cfg['cta_ventas_exo'] => $exo]) : [];
+
+            foreach ($debe as $cta => $imp) {
+                $filas[] = self::linea($cab, (string) $cta, $anexo, $dh('D'), $imp, $doc, 'POR COBRAR', $anterior);
+            }
+            if ($igv > 0) $filas[] = self::linea($cab, $cfg['cta_igv'], $anexo, $dh('H'), $igv, $doc, 'IGV', $anterior);
+            foreach ($hGrav as $cta => $imp) {
+                $filas[] = self::linea($cab, (string) $cta, $anexo, $dh('H'), $imp, $doc, 'VENTA GRAVADA', $anterior);
+            }
+            foreach ($hExo as $cta => $imp) {
+                $filas[] = self::linea($cab, (string) $cta, $anexo, $dh('H'), $imp, $doc, 'VENTA EXONERADA', $anterior);
+            }
             $total += $esNota ? -$tot : $tot;
         }
 
@@ -134,6 +220,7 @@ class Concar
     public static function compras(string $ruc, string $periodo, int $desde = 1): array
     {
         $cfg = self::config($ruc);
+        $tipos = self::tiposDoc($cfg);
         [$ini, $fin] = self::rango($periodo);
         $docs = DB::table('compras_cabecera as c')->leftJoin('proveedor as p', 'p.prov_id', '=', 'c.prov_id')
             ->where('c.IdEmpresa', $ruc)->where('c.est_compra', 'Registrado')->whereBetween('c.com_fec', [$ini, $fin])
@@ -145,7 +232,7 @@ class Concar
         $n = $desde;
         $total = 0;
         foreach ($docs as $d) {
-            if (!isset(self::TIPOS_DOC[$d->tdocod])) {
+            if (!isset($tipos[$d->tdocod])) {
                 $omitidos['Notas de venta / otros sin tipo CONCAR']++;
                 continue;
             }
@@ -154,7 +241,7 @@ class Concar
             $usd = $d->mon_id === 'USD' && (float) $d->tip_cam > 0;
             $cab = self::cabecera($cfg, $cfg['subdiario_compras'], $periodo, $n++, $d->com_fec, $usd ? 'USD' : 'PEN', $usd ? (float) $d->tip_cam : null,
                 ($esNota ? 'N.CRED. ' : 'COMPRA ') . $numero . ' ' . $d->prov_raz);
-            $doc = ['tipo' => self::TIPOS_DOC[$d->tdocod], 'numero' => $numero, 'fecha' => $d->com_fec, 'vence' => $d->com_fec_ven ?: $d->com_fec, 'ref' => null];
+            $doc = ['tipo' => $tipos[$d->tdocod], 'numero' => $numero, 'fecha' => $d->com_fec, 'vence' => $d->com_fec_ven ?: $d->com_fec, 'ref' => null, 'glosa' => null];
 
             $igv = round((float) $d->igv_com, 2);
             $tot = round((float) $d->total_com, 2);
@@ -190,7 +277,7 @@ class Concar
     }
 
     /** Una fila de la plantilla: columna A vacía + los 40 campos */
-    private static function linea(array $cab, string $cuenta, ?string $anexo, string $dh, float $importe, array $doc, string $detalle): array
+    private static function linea(array $cab, string $cuenta, ?string $anexo, string $dh, float $importe, array $doc, string $detalle, bool $anterior = false): array
     {
         $f = array_fill(0, 41, null);
         $f[1] = $cab['subdiario'];
@@ -210,12 +297,22 @@ class Concar
         $f[18] = $doc['numero'];
         $f[19] = self::fecha($doc['fecha']);
         $f[20] = self::fecha($doc['vence']);
-        $f[22] = mb_substr($detalle, 0, 30);
+        $f[22] = mb_substr($doc['glosa'] ?? $detalle, 0, 30);
         if ($doc['ref']) {
             [$f[25], $f[26], $fechaRef] = $doc['ref'];
             $f[27] = $fechaRef ? self::fecha($fechaRef) : null;
         }
         $f[38] = $cab['tc_f'];
+        if ($anterior) {
+            // Igual que el Excel del sistema antiguo que ya importa su CONCAR
+            $f[6] = $f[6] ?? 0;
+            $f[9] = $f[9] ?? $cab['fecha'];
+            $f[15] = 0;
+            $f[16] = round($importe, 2);
+            $f[26] = $f[26] ?? '-';
+            $f[29] = 0;
+            $f[30] = 0;
+        }
         return $f;
     }
 

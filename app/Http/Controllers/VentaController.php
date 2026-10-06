@@ -219,6 +219,7 @@ class VentaController extends Controller
                 'motivo_baja' => mb_substr(trim($request->motivo), 0, 70),
                 'IdUsuario_baja' => Auth::id(),
             ]);
+            \App\Support\Socios::revertirComprobante((int) $cab->IdCpe_cabecera);   // cuotas de socio pagadas con esta venta
 
             // El stock que salió con esta venta vuelve al almacén
             return Kardex::revertirVenta($cab->IdCpe_cabecera, [

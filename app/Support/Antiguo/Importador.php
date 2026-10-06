@@ -30,6 +30,7 @@ class Importador
         'proveedores' => 'Proveedores',
         'medios'      => 'Medios de pago y formas de pago',
         'mesas'       => 'Pisos y mesas',
+        'usuarios'    => 'Usuarios y empleados (con sus mismas contraseñas y rol)',
         // Al final: necesita clientes, productos, proveedores y medios de pago ya importados para enlazarlos
         'historial'   => 'Historial: ventas, notas de crédito, compras y cuentas por cobrar/pagar (con estado SUNAT y correlativos)',
     ];
@@ -148,6 +149,7 @@ class Importador
                     'proveedores' => $this->proveedores($user, $rucAntiguo),
                     'medios'      => $this->medios($user, $suc, $rucAntiguo),
                     'mesas'       => $this->mesas($user, $suc),
+                    'usuarios'    => $this->usuarios($user, $suc),
                     'historial'   => $this->historial($user, $suc),
                 });
             } catch (\Throwable $e) {
@@ -303,6 +305,9 @@ class Importador
                 'control_lote' => in_array($tipo, [0, 4]) && (int) self::v($a, 'requiere_lote_vencimiento', 0) === 1,
                 'ume_equivalente' => $tipo === 4 && isset($unidades[$umeCons]) && $umeCons !== $ume && $factorCons > 0 ? $umeCons : null,
                 'factor_equivalente' => $tipo === 4 && isset($unidades[$umeCons]) && $umeCons !== $ume && $factorCons > 0 ? $factorCons : 1,
+                // Cuentas contables del producto (CONCAR)
+                'debe' => mb_substr(trim((string) self::v($a, 'debe', '')), 0, 12) ?: null,
+                'haber' => mb_substr(trim((string) self::v($a, 'haber', '')), 0, 12) ?: null,
             ];
 
             if ($prod) {
@@ -529,6 +534,77 @@ class Importador
     }
 
     // ---------- Clientes y proveedores ----------
+    /**
+     * Usuarios con su empleado, rol y módulos. La contraseña se copia tal cual (mismo cifrado de Laravel):
+     * cada uno entra con la misma clave del sistema antiguo. Los usuarios que ya existen aquí no se tocan.
+     */
+    private function usuarios(User $user, int $suc): void
+    {
+        if (!$this->hay('users')) {
+            $this->aviso('El respaldo no tiene la tabla users: vuelve a subir el SQL completo para importar usuarios.');
+            return;
+        }
+        $nuevaSuc = (int) $user->id_empresa_negocio;
+        $existentes = DB::table('users')->pluck('email')->map(fn($e) => mb_strtolower(trim($e)))->flip();
+        $roles = $this->hay('role_user') ? $this->src('role_user')->pluck('role_id', 'user_IdUsuario') : collect();
+        $empleados = $this->hay('empleado') ? $this->src('empleado')->get()->keyBy('emp_id') : collect();
+        $colsEmp = array_flip(Schema::getColumnListing('empleado'));
+        // Rol nuevo: administrador, caja o mozo; los demás (vendedor, contador...) entran como caja
+        $rolDe = fn($r) => in_array((int) $r, [2, 4, 8], true) ? (int) $r : 4;
+        $modulos = \App\Models\Modulo::orderBy('mod_id')->get();
+        $presets = [2 => $modulos->pluck('mod_id')->all()];
+        foreach (\App\Http\Controllers\UsuarioController::PRESETS as $rol => $nombres) {
+            $presets[$rol] = $modulos->whereIn('mod_nom', $nombres)->pluck('mod_id')->all();
+        }
+
+        foreach ($this->deSucursal($this->src('users'), 'users', $suc)->orderBy('IdUsuario')->get() as $a) {
+            $email = mb_substr(trim((string) self::v($a, 'email', '')), 0, 100);
+            if ($email === '') {
+                $this->sumar('usuarios', 'omitidos');
+                continue;
+            }
+            if (isset($existentes[mb_strtolower($email)])) {
+                $this->sumar('usuarios', 'omitidos');
+                $this->aviso("El usuario {$email} ya existe en el sistema nuevo: no se modificó.");
+                continue;
+            }
+            $rol = $rolDe($roles[$a->IdUsuario] ?? 4);
+
+            // Empleado (datos personales para asistencia y planilla)
+            $e = $empleados[self::v($a, 'emp_id', 0)] ?? null;
+            $emp = ['id_empresa_negocio' => $nuevaSuc, 'rol_id' => $rol, 'created_at' => now(), 'updated_at' => now()];
+            foreach (['emp_nom', 'emp_ape_pat', 'emp_ape_mat', 'emp_dir', 'emp_tel', 'emp_cel', 'sex_cod', 'emp_cor', 'emp_est', 'emp_num_doc', 'tdicod', 'est_cod', 'emp_fec_nac'] as $c) {
+                $v = $e ? self::v($e, $c) : null;
+                if (isset($colsEmp[$c]) && $v !== null && !(is_string($v) && str_starts_with($v, '0000-00-00'))) {
+                    $emp[$c] = $v;
+                }
+            }
+            $emp['emp_nom'] ??= mb_substr((string) self::v($a, 'name', $email), 0, 255);
+            $empId = DB::table('empleado')->insertGetId($emp);
+
+            $hash = (string) self::v($a, 'password', '');
+            $valido = preg_match('/^\$2[aby]\$\d{2}\$/', $hash) === 1;
+            $nuevoId = DB::table('users')->insertGetId([
+                'name' => mb_substr((string) self::v($a, 'name', $email), 0, 100),
+                'apeusu' => mb_substr(trim((string) self::v($a, 'apeusu', '')) ?: $email, 0, 100),
+                'email' => $email,
+                'password' => $valido ? $hash : \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(24)),
+                'estusu' => (string) self::v($a, 'estusu', '1') === '1' ? 1 : 0,
+                'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $nuevaSuc, 'emp_id' => $empId,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('role_user')->insert(['role_id' => $rol, 'user_IdUsuario' => $nuevoId, 'id_empresa_negocio' => $nuevaSuc]);
+            foreach ($presets[$rol] ?? [] as $mod) {
+                DB::table('modulos_usuario')->insert(['user_IdUsuario' => $nuevoId, 'mod_id' => $mod, 'created_at' => now(), 'updated_at' => now()]);
+            }
+            if (!$valido) {
+                $this->aviso("El usuario {$email} no tenía una contraseña compatible: pónle una nueva en Usuarios.");
+            }
+            $existentes[mb_strtolower($email)] = true;
+            $this->sumar('usuarios', 'creados');
+        }
+    }
+
     private function clientes(User $user, ?string $rucAntiguo): void
     {
         if (!$this->hay('cliente')) {

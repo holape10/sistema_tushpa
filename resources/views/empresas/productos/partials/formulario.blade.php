@@ -193,6 +193,22 @@
                     </label>
                 </div>
             </section>
+
+            {{-- Cuentas contables de este producto para el asiento de venta (CONCAR). Vacías = las generales de CONCAR --}}
+            <section class="bg-white rounded-2xl shadow-sm">
+                <header class="px-5 py-4 border-b border-gray-100">
+                    <h3 class="font-bold text-gray-800">Contabilidad <span class="text-xs font-normal text-gray-400">(opcional)</span></h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Cuentas para el asiento de venta en CONCAR. Si las dejas vacías se usan las de Contabilidad &gt; CONCAR.</p>
+                </header>
+                <div class="p-5 grid grid-cols-2 gap-3">
+                    <label class="block text-sm font-medium text-gray-700">Debe <span class="text-xs text-gray-400">(12 / 14)</span>
+                        <input name="debe" value="{{ old('debe', $p->debe ?? '') }}" maxlength="12" placeholder="121201"
+                               class="{{ $campo }} font-mono mt-1"></label>
+                    <label class="block text-sm font-medium text-gray-700">Haber <span class="text-xs text-gray-400">(70 / 75)</span>
+                        <input name="haber" value="{{ old('haber', $p->haber ?? '') }}" maxlength="12" placeholder="704101"
+                               class="{{ $campo }} font-mono mt-1"></label>
+                </div>
+            </section>
         </aside>
     </div>
 

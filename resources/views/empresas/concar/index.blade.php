@@ -137,9 +137,20 @@
                         <option value="F" @selected($cfg['tipo_conversion'] === 'F')>F · Según fecha del documento</option>
                     </select>
                 </label>
+                <label class="text-xs font-semibold text-slate-500">Formato del Excel
+                    <select name="formato" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm">
+                        <option value="PLANTILLA" @selected($cfg['formato'] === 'PLANTILLA')>Plantilla oficial (3 filas de títulos)</option>
+                        <option value="ANTERIOR" @selected($cfg['formato'] === 'ANTERIOR')>Como el sistema anterior (1 fila, anulados en 0)</option>
+                    </select>
+                </label>
+                @foreach ([['doc_factura', 'Código factura'], ['doc_boleta', 'Código boleta'], ['doc_nc', 'Código nota de crédito'], ['doc_nd', 'Código nota de débito']] as [$campo, $etiqueta])
+                    <label class="text-xs font-semibold text-slate-500">{{ $etiqueta }} <span class="font-normal">(T.G. 06)</span>
+                        <input name="{{ $campo }}" value="{{ old($campo, $cfg[$campo]) }}" maxlength="2" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm font-mono uppercase">
+                    </label>
+                @endforeach
             </div>
             <p class="text-xs text-slate-400">Las compras en dólares usan siempre conversión especial (C) con el tipo de cambio registrado en la compra.
-                Si una boleta o factura tiene su propia cuenta 12, se respeta esa.</p>
+                Cada línea de venta usa la cuenta Debe/Haber de su producto (Productos &gt; Contabilidad); si no tiene, la de su tipo de producto y, al final, las de aquí.</p>
             <div class="flex justify-end">
                 <button class="h-10 px-5 rounded-xl bg-slate-800 text-white text-sm font-bold">Guardar cuentas</button>
             </div>
