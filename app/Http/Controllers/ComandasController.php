@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\{Auth, DB, RateLimiter};
  */
 class ComandasController extends Controller
 {
-    private const SESION = ['comanda_cart', 'comanda_order_type', 'comanda_mesa_id', 'comanda_mesa_nombre', 'comanda_pedido_id', 'comanda_eliminados'];
+    private const SESION = ['comanda_cart', 'comanda_order_type', 'comanda_mesa_id', 'comanda_mesa_nombre', 'comanda_pedido_id', 'comanda_eliminados', 'comanda_reserva_id'];
 
     public function seleccionServicio()
     {
@@ -162,7 +162,7 @@ class ComandasController extends Controller
 
     private function mesasDelPiso($piso_id, $id_empresa_negocio)
     {
-        return Mesa::leftJoin('pedidos', function ($join) {
+        $mesas = Mesa::leftJoin('pedidos', function ($join) {
                 $join->on('mesas.mes_id', '=', 'pedidos.mes_id')->where('pedidos.ped_est', 'Aperturado');
             })
             ->where('mesas.pis_id', $piso_id)
@@ -171,6 +171,27 @@ class ComandasController extends Controller
             ->groupBy('mesas.mes_id')
             ->orderBy('mesas.mes_nom')
             ->get();
+
+        // Cocina terminó y falta llevarlo a la mesa (pantalla de cocina)
+        $listos = DB::table('cocina_tickets')->whereIn('ped_id', $mesas->pluck('pedido_id')->filter())
+            ->whereNotNull('listo')->whereNull('entregado')->where('tipo', '!=', 'ANULACION')
+            ->groupBy('ped_id')->select('ped_id', DB::raw('COUNT(*) as n'))->pluck('n', 'ped_id');
+
+        // Próxima reserva de hoy (en las siguientes 3 horas) de cada mesa
+        $reservas = DB::table('reservas')->where('id_empresa_negocio', $id_empresa_negocio)
+            ->whereIn('mes_id', $mesas->pluck('mes_id'))->where('fecha_reserva', now()->toDateString())
+            ->whereIn('estado', ['Pendiente', 'Confirmada'])
+            // Rango de horas del mismo día (cerca de la medianoche no se pasa al día siguiente)
+            ->whereBetween('hora_inicio', [
+                now()->subMinutes(30)->isSameDay(now()) ? now()->subMinutes(30)->format('H:i:s') : '00:00:00',
+                now()->addHours(3)->isSameDay(now()) ? now()->addHours(3)->format('H:i:s') : '23:59:59',
+            ])
+            ->orderBy('hora_inicio')->get(['mes_id', 'hora_inicio', 'nombre_cliente'])->unique('mes_id')->keyBy('mes_id');
+
+        return $mesas->each(function ($m) use ($listos, $reservas) {
+            $m->listos = (int) ($listos[$m->pedido_id] ?? 0);
+            $m->reserva = $reservas[$m->mes_id] ?? null;
+        });
     }
 
     public function getMesasPorPiso($piso_id)
@@ -701,6 +722,11 @@ class ComandasController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
 
+        // Si la comanda viene de una reserva, la reserva queda enlazada a su pedido
+        if ($reservaId = session('comanda_reserva_id')) {
+            DB::table('reservas')->where('res_id', $reservaId)->whereNull('ped_id')->update(['ped_id' => $resultado['pedido_id']]);
+        }
+
         session()->forget(self::SESION);
 
         // Tickets de cocina/bar (directo a la impresora de cada categoría). Un fallo aquí no deshace la comanda.
@@ -708,6 +734,13 @@ class ComandasController extends Controller
         try {
             $tickets = \App\Support\Impresion\Impresion::comanda($resultado['pedido_id'], $cocina)
                 + \App\Support\Impresion\Impresion::comanda($resultado['pedido_id'], $anulaciones, true);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        // Pantalla de cocina (KDS): misma información que se imprime
+        try {
+            \App\Support\Cocina::registrar($resultado['pedido_id'], $cocina, $anulaciones);
         } catch (\Throwable $e) {
             report($e);
         }

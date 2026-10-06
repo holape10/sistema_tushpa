@@ -76,6 +76,7 @@ class Notas
             $ref = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $refId)
                 ->where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
             self::validarReferencia($ref);
+            $factor = Comprobante::factorDe($ref);   // la nota lleva el mismo IGV que el comprobante
 
             $tdocod = $d['tdocod'] === '08' ? '08' : '07';
             $motivo = (string) $d['tipnot'];
@@ -95,7 +96,7 @@ class Notas
                     throw new \RuntimeException('El comprobante ya tiene notas de crédito; ya no se puede anular por completo. Usa devolución por ítem o disminución en el valor.');
                 }
                 foreach ($detRef as $l) {
-                    $lineas[] = self::linea($l->cdedes, (float) $l->cdecan, (float) $l->cdepuni, $l->tigcod ?: $tigPred, $l, true);
+                    $lineas[] = self::linea($l->cdedes, (float) $l->cdecan, (float) $l->cdepuni, $l->tigcod ?: $tigPred, $l, true, $factor);
                 }
             } else {
                 foreach ($d['items'] ?? [] as $i) {
@@ -118,13 +119,13 @@ class Notas
                         if ($cant > $queda + 0.001) {
                             throw new \RuntimeException("De {$l->cdedes} solo quedan {$queda} por devolver.");
                         }
-                        $lineas[] = self::linea($l->cdedes, $cant, (float) $l->cdepuni, $l->tigcod ?: $tigPred, $l, true);
+                        $lineas[] = self::linea($l->cdedes, $cant, (float) $l->cdepuni, $l->tigcod ?: $tigPred, $l, true, $factor);
                     } else {
                         $desc = mb_strtoupper(trim((string) ($i['descripcion'] ?? ''))) ?: ($l->cdedes ?? '');
                         if ($desc === '') {
                             throw new \RuntimeException('Escribe la descripción de cada línea.');
                         }
-                        $lineas[] = self::linea($desc, $cant, $precio, $l->tigcod ?? $tigPred, $l, false);
+                        $lineas[] = self::linea($desc, $cant, $precio, $l->tigcod ?? $tigPred, $l, false, $factor);
                     }
                 }
             }
@@ -162,7 +163,7 @@ class Notas
                 'ccafem' => now()->toDateString(), 'ccafve' => now()->toDateString(), 'fecha_hora' => now(),
                 'tdicod' => $ref->tdicod, 'ccandi' => $ref->ccandi, 'ccanom' => $ref->ccanom, 'direccion' => $ref->direccion,
                 'clicod' => $ref->clicod, 'moncod' => $ref->moncod ?: 'PEN',
-                'ccatvg' => $tot['grav'], 'ccaigv' => $tot['igv'], 'ccatexo' => $tot['exo'], 'ccatinaf' => $tot['inaf'], 'ccaitv' => $tot['total'],
+                'ccatvg' => $tot['grav'], 'ccaigv' => $tot['igv'], 'por_igv' => $tot['igv'] > 0 ? round(($factor - 1) * 100, 2) : null, 'ccatexo' => $tot['exo'], 'ccatinaf' => $tot['inaf'], 'ccaitv' => $tot['total'],
                 'totalcontado' => 0, 'totalcredito' => 0, 'estadopago' => 'CONTADO',
                 'ccaobs' => mb_substr(trim((string) ($d['motivo'] ?? '')), 0, 100) ?: null,
                 'IdUsuario' => $user->IdUsuario, 'IdEmpresa' => $ref->IdEmpresa, 'id_empresa_negocio' => $ref->id_empresa_negocio,
@@ -206,15 +207,15 @@ class Notas
     }
 
     /** Línea de detalle con IGV según su afectación; $conStock = devolución de producto */
-    private static function linea(string $desc, float $cant, float $precio, string $tig, ?object $ref, bool $conStock): array
+    private static function linea(string $desc, float $cant, float $precio, string $tig, ?object $ref, bool $conStock, float $factor): array
     {
         $totalLinea = round($cant * $precio, 2);
-        $sub = $tig === '10' ? round($totalLinea / Comprobante::FACTOR_IGV, 2) : $totalLinea;
+        $sub = $tig === '10' ? round($totalLinea / $factor, 2) : $totalLinea;
         return [
             'IdProducto' => $ref->IdProducto ?? null, 'IdProducto_rel' => $ref->IdProducto_rel ?? null,
             'procod' => $ref->procod ?? '', 'umecod' => $ref->umecod ?? 'NIU',
             'cdecan' => $cant, 'cdedes' => mb_substr($desc, 0, 150),
-            'cdevun' => $tig === '10' ? round($precio / Comprobante::FACTOR_IGV, 2) : $precio, 'cdepuni' => $precio,
+            'cdevun' => $tig === '10' ? round($precio / $factor, 2) : $precio, 'cdepuni' => $precio,
             'cdepve' => $sub, 'cdeigv' => round($totalLinea - $sub, 2), 'cdevve' => $totalLinea, 'tigcod' => $tig,
             // costo solo cuando vuelve el producto (para que la utilidad del reporte se corrija)
             'costo' => $conStock ? (float) ($ref->costo ?? 0) : 0,

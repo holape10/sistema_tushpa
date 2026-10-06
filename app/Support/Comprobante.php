@@ -11,8 +11,23 @@ use Illuminate\Support\Facades\DB;
  */
 class Comprobante
 {
-    // Igual que tu registrar_cobro. OJO: el IGV estándar es 1.18; confirma si 1.105 es intencional.
-    public const FACTOR_IGV = 1.105;
+    // IGV general (puntos de venta, compras)
+    public const FACTOR_IGV = 1.18;
+    // Restaurante y hotel: lo que se cobra desde Comandas (mesa, llevar, delivery y su punto de venta) y las habitaciones
+    public const FACTOR_RESTAURANTE = 1.105;
+    private const ORIGENES_RESTAURANTE = ['SALON', 'LLEVAR', 'DELIVERY', 'PVCOMANDA', 'HOTEL'];
+
+    /** Factor de IGV según de dónde sale la venta (cpe_cabecera.ped_tip) */
+    public static function factorPara(?string $origen): float
+    {
+        return in_array(mb_strtoupper((string) $origen), self::ORIGENES_RESTAURANTE, true) ? self::FACTOR_RESTAURANTE : self::FACTOR_IGV;
+    }
+
+    /** Factor con el que se emitió un comprobante (lo anterior a guardar la tasa se hizo con 10.5%) */
+    public static function factorDe(object $cab): float
+    {
+        return $cab->por_igv !== null ? 1 + (float) $cab->por_igv / 100 : self::FACTOR_RESTAURANTE;
+    }
 
     // Comprobante => columnas de serie y correlativo en empresa_negocios
     private const SERIES = [
@@ -93,11 +108,12 @@ class Comprobante
 
         // ---- Totales ----
         $gravado = $sucursal->tip_igv_pred === '10';
+        $factorIgv = self::factorPara($extra['ped_tip'] ?? null);
         // Total de una línea: cantidad x precio, o el importe cobrado si se vendió por importe (S/ 20 de combustible)
         $totalDe = fn(array $l) => isset($l['importe']) ? round((float) $l['importe'], 2) : round($l['cantidad'] * $l['precio'], 2);
         $total = round(array_sum(array_map($totalDe, $lineas)), 2);
 
-        $ccatvg = $gravado ? round($total / self::FACTOR_IGV, 2) : 0;
+        $ccatvg = $gravado ? round($total / $factorIgv, 2) : 0;
         $ccaigv = $gravado ? round($total - $ccatvg, 2) : 0;
         $ccatexo = $gravado ? 0 : $total;
 
@@ -116,7 +132,7 @@ class Comprobante
             'tdicod' => $tdicod, 'ccandi' => $clinum, 'ccanom' => $clinom,
             'direccion' => ($datos['clidir'] ?? null) ?: '--', 'clicod' => $cliente->clicod,
             'clicorcli' => $datos['clicor'] ?? null, 'telefono_cliente' => $datos['telefono'] ?? null,
-            'ccatvg' => $ccatvg, 'ccaigv' => $ccaigv, 'ccatexo' => $ccatexo, 'ccaitv' => $total,
+            'ccatvg' => $ccatvg, 'ccaigv' => $ccaigv, 'por_igv' => $gravado ? round(($factorIgv - 1) * 100, 2) : null, 'ccatexo' => $ccatexo, 'ccaitv' => $total,
             'totalcontado' => $esContado ? $total : 0, 'totalcredito' => $esContado ? 0 : $total,
             'paga' => $paga, 'vuelto' => $esContado ? max(0, round($paga - $total, 2)) : 0,
             'estadopago' => $esContado ? 'CONTADO' : 'CREDITO', 'cre_dia_id' => $cre->cre_dia_id,
@@ -147,8 +163,8 @@ class Comprobante
             $precio = (float) $it['precio'];
             $totalLinea = $totalDe($it);
 
-            $subtotal = $gravado ? round($totalLinea / self::FACTOR_IGV, 2) : $totalLinea;
-            $valorUni = $gravado ? round($precio / self::FACTOR_IGV, 2) : $precio;
+            $subtotal = $gravado ? round($totalLinea / $factorIgv, 2) : $totalLinea;
+            $valorUni = $gravado ? round($precio / $factorIgv, 2) : $precio;
 
             $detId = DB::table('cpe_detalle')->insertGetId([
                 'IdCpe_cabecera' => $cabId, 'IdProducto' => $it['IdProducto'], 'IdProducto_rel' => $it['IdProducto'],

@@ -1,7 +1,6 @@
 <?php
 namespace App\Support\Sunat;
 
-use App\Http\Controllers\CobroController;
 use App\Models\{Empresa, EmpresaNegocio};
 use DateTime;
 use DateTimeZone;
@@ -208,7 +207,7 @@ class SunatService
             }
         }
 
-        $porcentajeIgv = round((CobroController::FACTOR_IGV - 1) * 100, 2);
+        $porcentajeIgv = round((\App\Support\Comprobante::factorDe($cab) - 1) * 100, 2);
         $items = [];
         foreach ($detalles as $d) {
             $cant = (float) $d->cdecan ?: 1;

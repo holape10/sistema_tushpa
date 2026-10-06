@@ -29,11 +29,20 @@
         .btn-mesa-kiosko.libre { background-color: #52BE80; }
         .btn-mesa-kiosko.ocupado { background-color: #E74C3C; }
         .btn-mesa-kiosko:hover { transform: translateY(-3px); }
+        .mesa-listo { position: absolute; top: -8px; right: -8px; background: #facc15; color: #000; font-size: .55em; font-weight: 900;
+                      padding: 3px 7px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,.3); animation: parpadeo 1.2s infinite; }
+        .mesa-reserva { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); background: #fff; color: #8e44ad;
+                        font-size: .55em; font-weight: 900; padding: 2px 7px; border-radius: 10px; border: 2px solid #8e44ad; white-space: nowrap; }
+        @keyframes parpadeo { 50% { opacity: .55; } }
+        .reserva-item { border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+        .reserva-item.proxima { border-color: #8e44ad; background: #faf5ff; }
         .mesa-timer { font-size: 0.7em; font-weight: normal; font-family: monospace; margin-top: 2px; }
 
         .button-group-bottom { text-align: center; margin-top: 30px; margin-bottom: 30px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
         .btn-llevar-kiosko, .btn-delivery-kiosko { color: white; font-size: 2.0em; padding: 20px 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); border: none; cursor: pointer; }
         .btn-llevar-kiosko { background-color: #007bff; }
+        .btn-pv-kiosko { background-color: #e67e22; color: #fff; font-size: 2.0em; padding: 20px 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); border: none; }
+        .btn-pv-kiosko:hover, .btn-pv-kiosko:focus { color: #fff; background-color: #d35400; text-decoration: none; }
         .btn-delivery-kiosko { background-color: #28a745; }
 
         .takeaway-section { margin-top: 30px; background-color: #f2f2f2; padding: 20px; border-radius: 8px; }
@@ -124,7 +133,7 @@
             .header-kiosko-content h2 { font-size: 1.6em; }
             .btn-mesa-kiosko { width: 110px; height: 80px; font-size: 1.05em; }
             .button-group-bottom { flex-direction: column; }
-            .btn-llevar-kiosko, .btn-delivery-kiosko { width: 100%; font-size: 1.5em; }
+            .btn-llevar-kiosko, .btn-delivery-kiosko, .btn-pv-kiosko { width: 100%; font-size: 1.5em; }
             .takeaway-table thead { display: none; }
             .takeaway-table, .takeaway-table tbody, .takeaway-table tr, .takeaway-table td { display: block; width: 100%; }
             .takeaway-table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; }
@@ -150,6 +159,9 @@
             <div class="logo-container-kiosko"><img src="{{ asset('imagenes/logo.png') }}" alt="Logo"></div>
             <div class="header-kiosko-content"><h2>Selecciona tu Mesa o Tipo de Pedido</h2></div>
             <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+            <button type="button" id="btn_reservas" class="btn btn-default" style="font-weight:bold; border-radius:20px; color:#8e44ad;">
+                <i class="fas fa-calendar-check"></i> Reservas <span class="badge" id="n_reservas" style="background:#8e44ad;">0</span>
+            </button>
             @if ($puedeCobrar)
                 <a href="{{ route('turnos.index') }}" class="btn btn-default" style="font-weight:bold; border-radius:20px;">
                     <i class="fas fa-cash-register"></i> Caja
@@ -191,6 +203,9 @@
         <div class="button-group-bottom">
             <button type="button" class="btn btn-llevar-kiosko" id="btn_llevar"><strong>PARA LLEVAR</strong></button>
             <button type="button" class="btn btn-delivery-kiosko" id="btn_delivery"><strong>DELIVERY</strong></button>
+            @if ($puedeCobrar)
+                <a href="{{ route('cobros.directa') }}" class="btn btn-pv-kiosko"><strong>PUNTO DE VENTA</strong></a>
+            @endif
         </div>
 
         <div class="takeaway-section">
@@ -208,6 +223,10 @@
                     <h4 class="modal-title" id="modal_mesa_titulo" style="margin: 0;">Mesa</h4>
                 </div>
                 <div class="modal-body" style="padding: 15px;">
+                    <div id="modal_mesa_listo" style="display:none; background:#fef9c3; border:2px solid #facc15; border-radius:8px; padding:8px; margin-bottom:10px; text-align:center;">
+                        <strong>🔔 Cocina tiene listo un pedido de esta mesa</strong><br>
+                        <button type="button" class="btn btn-warning btn-sm" id="btn_modal_entregado" style="margin-top:6px; font-weight:bold;">✔ Ya lo llevé a la mesa</button>
+                    </div>
                     <div id="modal_mesa_detalle" class="modal-mesa-content">Cargando...</div>
                     <div class="modal-mesa-btns">
                         <button type="button" class="btn btn-mesa-editar" id="btn_modal_editar">
@@ -234,6 +253,24 @@
                             <i class="fas fa-times"></i> Cerrar
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal_reservas" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header" style="background:#8e44ad; color:#fff;">
+                    <button type="button" class="close" data-dismiss="modal" style="color:#fff; opacity:1;">&times;</button>
+                    <h4 class="modal-title"><i class="fas fa-calendar-check"></i> Reservas de hoy</h4>
+                </div>
+                <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
+                    <div id="lista_reservas"><p class="text-muted">Cargando...</p></div>
+                </div>
+                <div class="modal-footer">
+                    <a href="{{ route('reservas.index') }}" class="btn btn-default"><i class="fas fa-plus"></i> Nueva reserva / ver todas</a>
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -272,7 +309,6 @@
             }).then(r => r.json().catch(() => ({ success: false, message: 'Error del servidor.' })));
         }
 
-        // Cambiar mesa (a una libre) o unir mesa (traer el pedido de otra mesa ocupada a esta)
         function toast(texto, ms = 3000) {
             const t = document.getElementById('toast');
             t.textContent = texto;
@@ -301,17 +337,18 @@
             }
         }
 
-        // Cambiar mesa (a una libre) o unir mesa (traer el pedido de otra mesa ocupada), con pestañas por zona/piso
-        function elegirMesa(tipo, pedidoId, mesaNombre) {
+        /**
+         * Selector de mesas por zona (pestañas por piso). tipo: 'libres' | 'ocupadas'.
+         * alElegir(mesa, zona, boton) hace la acción y devuelve una promesa {success, message}.
+         */
+        function selectorMesas({ tipo, pedidoId = '', titulo, ayuda, desde, confirmar, alElegir }) {
             const lista = document.getElementById('elegir_lista');
             const zonas = document.getElementById('elegir_zonas');
-            document.getElementById('elegir_titulo').textContent = tipo === 'libres' ? `Cambiar ${mesaNombre} a...` : `Unir a ${mesaNombre}`;
-            document.getElementById('elegir_ayuda').textContent = tipo === 'libres'
-                ? 'Elige la zona y la mesa libre a la que se pasa el pedido.'
-                : `Elige la mesa cuyo pedido se juntará en ${mesaNombre}. Esa mesa quedará libre.`;
+            document.getElementById('elegir_titulo').textContent = titulo;
+            document.getElementById('elegir_ayuda').textContent = ayuda;
             lista.innerHTML = '<p class="text-muted">Cargando...</p>';
             zonas.innerHTML = '';
-            cambiarModal('#modal_mesa', '#modal_elegir_mesa');
+            cambiarModal(desde, '#modal_elegir_mesa');
 
             fetch(`{{ route('comandas.mesas_disponibles') }}?tipo=${tipo}&ped_id=${pedidoId}`)
                 .then(r => r.json())
@@ -320,7 +357,6 @@
                         lista.innerHTML = `<p class="text-muted" style="grid-column:1/-1;">${tipo === 'libres' ? 'No hay mesas libres.' : 'No hay otras mesas ocupadas.'}</p>`;
                         return;
                     }
-
                     const nombresZona = [...new Set(data.mesas.map(m => m.piso || 'SIN ZONA'))];
                     let zonaActiva = nombresZona[0];
 
@@ -335,7 +371,6 @@
                             tab.onclick = () => { zonaActiva = z; pintar(); };
                             zonas.appendChild(tab);
                         });
-
                         lista.innerHTML = '';
                         data.mesas.filter(m => (m.piso || 'SIN ZONA') === zonaActiva).forEach(m => {
                             const b = document.createElement('button');
@@ -346,22 +381,12 @@
                             b.innerHTML = '<strong></strong>';
                             b.querySelector('strong').textContent = m.nombre;
                             b.onclick = () => {
-                                const texto = tipo === 'libres'
-                                    ? `¿Pasar el pedido de ${mesaNombre} a ${m.nombre} (${zonaActiva})?`
-                                    : `¿Juntar el pedido de ${m.nombre} (${zonaActiva}) en ${mesaNombre}?`;
-                                if (!confirm(texto)) return;
+                                if (!confirm(confirmar(m, zonaActiva))) return;
                                 b.disabled = true;
-                                const peticion = tipo === 'libres'
-                                    ? postJson("{{ route('comandas.cambiar_mesa') }}", { ped_id: pedidoId, mes_id: m.mes_id })
-                                    : postJson("{{ route('comandas.unir_mesa') }}", { ped_id: pedidoId, ped_id_origen: m.ped_id });
-                                peticion.then(res => {
+                                alElegir(m, zonaActiva).then(res => {
                                     b.disabled = false;
                                     if (!res.success) { alert(res.message || 'No se pudo completar.'); return; }
                                     $('#modal_elegir_mesa').modal('hide');
-                                    toast(tipo === 'libres' ? `✔ Pedido pasado a ${m.nombre}` : `✔ ${m.nombre} unida a ${mesaNombre}`);
-                                    const activo = document.querySelector('.piso-btn.active');
-                                    if (activo) refrescarMesas(activo.dataset.pisoId);
-                                    cargarActivos();
                                 });
                             };
                             lista.appendChild(b);
@@ -370,6 +395,93 @@
                     pintar();
                 });
         }
+
+        function refrescarTodo() {
+            const activo = document.querySelector('.piso-btn.active');
+            if (activo) refrescarMesas(activo.dataset.pisoId);
+            cargarActivos();
+        }
+
+        // Cambiar mesa (a una libre) o unir mesa (traer el pedido de otra mesa ocupada)
+        function elegirMesa(tipo, pedidoId, mesaNombre) {
+            selectorMesas({
+                tipo, pedidoId, desde: '#modal_mesa',
+                titulo: tipo === 'libres' ? `Cambiar ${mesaNombre} a...` : `Unir a ${mesaNombre}`,
+                ayuda: tipo === 'libres' ? 'Elige la zona y la mesa libre a la que se pasa el pedido.'
+                                         : `Elige la mesa cuyo pedido se juntará en ${mesaNombre}. Esa mesa quedará libre.`,
+                confirmar: (m, z) => tipo === 'libres' ? `¿Pasar el pedido de ${mesaNombre} a ${m.nombre} (${z})?`
+                                                       : `¿Juntar el pedido de ${m.nombre} (${z}) en ${mesaNombre}?`,
+                alElegir: m => (tipo === 'libres'
+                        ? postJson("{{ route('comandas.cambiar_mesa') }}", { ped_id: pedidoId, mes_id: m.mes_id })
+                        : postJson("{{ route('comandas.unir_mesa') }}", { ped_id: pedidoId, ped_id_origen: m.ped_id }))
+                    .then(res => { if (res.success) { toast(tipo === 'libres' ? `✔ Pedido pasado a ${m.nombre}` : `✔ ${m.nombre} unida a ${mesaNombre}`); refrescarTodo(); } return res; }),
+            });
+        }
+
+        // ---------------- Reservas de hoy
+        let reservasHoy = [];
+
+        function cargarReservas() {
+            return fetch("{{ route('reservas.dia') }}", { headers: { Accept: 'application/json' } })
+                .then(r => r.json())
+                .then(d => {
+                    reservasHoy = d.reservas;
+                    document.getElementById('n_reservas').textContent = reservasHoy.length;
+                    pintarReservas();
+                }).catch(() => {});
+        }
+
+        function pintarReservas() {
+            const cont = document.getElementById('lista_reservas');
+            if (!reservasHoy.length) { cont.innerHTML = '<p class="text-muted text-center">No hay reservas pendientes para hoy.</p>'; return; }
+            const ahora = new Date();
+            cont.innerHTML = reservasHoy.map(r => {
+                const [h, m] = r.hora_inicio.split(':');
+                const llegada = new Date(); llegada.setHours(+h, +m, 0, 0);
+                const minutos = Math.round((llegada - ahora) / 60000);
+                const cuando = minutos > 0 ? `en ${minutos >= 60 ? Math.floor(minutos / 60) + ' h ' : ''}${minutos % 60} min` : (minutos > -30 ? 'ya debería estar' : 'atrasada');
+                const mesa = r.mes_nom
+                    ? `${esc(r.pis_nom || '')} / <b>${esc(r.mes_nom)}</b> <span class="label ${r.mesa_libre ? 'label-success' : 'label-danger'}">${r.mesa_libre ? 'libre' : 'ocupada'}</span>`
+                    : '<span class="text-muted">sin mesa elegida</span>';
+                return `<div class="reserva-item ${minutos <= 60 ? 'proxima' : ''}">
+                    <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+                        <div>
+                            <div style="font-size:1.15em;"><b>${r.hora_inicio.slice(0, 5)}</b> · <b>${esc(r.nombre_cliente)}</b> · ${r.cantidad_personas} pers.</div>
+                            <div class="text-muted" style="font-size:.9em;">${cuando}${r.telefono ? ' · 📞 ' + esc(r.telefono) : ''} · ${esc(r.estado)}</div>
+                            <div style="font-size:.9em; margin-top:3px;">Mesa: ${mesa}</div>
+                            ${r.platos.length ? `<div style="font-size:.85em; margin-top:3px;">🍽 ${r.platos.map(esc).join(', ')}</div>` : ''}
+                            ${r.observacion ? `<div style="font-size:.85em; color:#8a6d3b;">» ${esc(r.observacion)}</div>` : ''}
+                        </div>
+                        <button type="button" class="btn btn-success" style="font-weight:bold;" onclick="atenderReserva(${r.res_id})">LLEGÓ ✔</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // Llegó el cliente: mesa reservada si está libre; si no (o no eligió), se escoge otra por zona
+        function atenderReserva(resId) {
+            const r = reservasHoy.find(x => x.res_id === resId);
+            const atender = mesId => postJson("{{ url('reservas') }}/" + resId + '/atender', { mes_id: mesId }).then(res => {
+                if (res.success) window.location.href = res.redirect;
+                return res;
+            });
+
+            if (r.mes_id && r.mesa_libre && confirm(`Asignar la ${r.mes_nom} reservada a ${r.nombre_cliente}?`)) {
+                atender(r.mes_id).then(res => { if (!res.success) alert(res.message); });
+                return;
+            }
+            selectorMesas({
+                tipo: 'libres', desde: '#modal_reservas',
+                titulo: `Mesa para ${r.nombre_cliente} (${r.cantidad_personas} pers.)`,
+                ayuda: r.mes_id && !r.mesa_libre ? `La ${r.mes_nom} reservada está ocupada: elige otra mesa.` : 'Elige la mesa para la reserva.',
+                confirmar: (m, z) => `¿Atender a ${r.nombre_cliente} en ${m.nombre} (${z})?`,
+                alElegir: m => atender(m.mes_id),
+            });
+        }
+
+        document.getElementById('btn_reservas').addEventListener('click', () => { cargarReservas(); $('#modal_reservas').modal('show'); });
+        cargarReservas();
+        setInterval(cargarReservas, 60000);
 
         function irAServicio(orderType, mesaId, mesaNombre, pedidoId) {
             fetch("{{ route('comandas.set_servicio') }}", {
@@ -460,6 +572,13 @@
                 document.getElementById('btn_modal_separadas').onclick = () => window.location.href = URL_COBRAR + pedidoId + '/separadas';
             }
             document.getElementById('btn_modal_precuenta').onclick = () => imprimirPrecuenta(pedidoId);
+            const hayListo = Number(mesa.dataset.listos) > 0;
+            document.getElementById('modal_mesa_listo').style.display = hayListo ? 'block' : 'none';
+            document.getElementById('btn_modal_entregado').onclick = () => postJson("{{ url('cocina/entregado') }}/" + pedidoId, {}).then(() => {
+                document.getElementById('modal_mesa_listo').style.display = 'none';
+                toast('✔ Entregado a la mesa');
+                refrescarTodo();
+            });
             document.getElementById('btn_modal_cambiar').onclick = () => elegirMesa('libres', pedidoId, mesaNombre);
             document.getElementById('btn_modal_unir').onclick = () => elegirMesa('ocupadas', pedidoId, mesaNombre);
 

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\{Auth, DB};
 
 /**
  * Impresión directa: arma el ticket ESC/POS y lo deja en cola_impresion.
- * El agente de la PC de las impresoras lo recibe al instante (long-polling) y lo imprime sin vista previa.
+ * El agente de la PC de las impresoras (resources/stubs/agente) lo recoge cada 2 s y lo imprime sin vista previa.
  */
 class Impresion
 {
@@ -93,6 +93,13 @@ class Impresion
         $imp = self::impresoraCaja((int) $cab->id_empresa_negocio);
         if (!$imp) {
             return false;
+        }
+
+        // Impresora A4 (instalada en Windows): va el PDF y el agente lo imprime con SumatraPDF
+        if ($imp->tip_conex_imp === 'WINDOWS') {
+            [, $pdf] = ComprobantePdf::generar($idCpe);
+            self::encolar($imp, $pdf, 'COMPROBANTE A4', $cab->serdoc . '-' . str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT));
+            return true;
         }
 
         $detalle = DB::table('cpe_detalle')->where('IdCpe_cabecera', $idCpe)->get();
@@ -187,9 +194,24 @@ class Impresion
             return 0;
         }
 
+        $destino = $pedido->ped_tip === 'Hotel' ? (string) $pedido->ped_obs
+            : ($pedido->mes_nom ? ($pedido->pis_nom ? $pedido->pis_nom . ' / ' : '') . $pedido->mes_nom : mb_strtoupper((string) $pedido->ped_tip));
+        return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° ' . $pedido->ped_id, $lineas, $anulacion, $motivo);
+    }
+
+    /**
+     * Imprime la comanda en la impresora de la categoría de cada producto.
+     * Sirve para pedidos de mesa/llevar y para ventas directas (sin pedido).
+     */
+    public static function comandaPara(int $sucursal, string $destino, string $referencia, array $lineas, bool $anulacion = false, string $motivo = ''): int
+    {
+        if (!$lineas) {
+            return 0;
+        }
+
         // Impresora de cada producto según su categoría
         $impresoraDe = DB::table('productos as pr')->leftJoin('categorias as c', 'c.cat_id', '=', 'pr.cat_id')
-            ->whereIn('pr.IdProducto', array_column($lineas, 'IdProducto'))->pluck('c.impresora', 'pr.IdProducto');
+            ->whereIn('pr.IdProducto', array_filter(array_column($lineas, 'IdProducto')))->pluck('c.impresora', 'pr.IdProducto');
 
         $grupos = [];
         foreach ($lineas as $l) {
@@ -199,12 +221,11 @@ class Impresion
             }
         }
 
-        $destino = $pedido->mes_nom ? ($pedido->pis_nom ? $pedido->pis_nom . ' / ' : '') . $pedido->mes_nom : mb_strtoupper((string) $pedido->ped_tip);
         $usuario = Auth::user()?->apeusu;
         $enviados = 0;
 
         foreach ($grupos as $idImp => $items) {
-            $imp = self::impresora($idImp, (int) $pedido->id_empresa_negocio);
+            $imp = self::impresora($idImp, $sucursal);
             if (!$imp) {
                 continue;
             }
@@ -216,7 +237,7 @@ class Impresion
                 $p->negrita()->texto('COMANDA - ' . mb_strtoupper($imp->descripcion))->negrita(false);
             }
             $p->tamano(2, 2)->negrita()->texto($destino)->negrita(false)->tamano()
-                ->texto('Pedido N° ' . $pedido->ped_id . ' · ' . now()->format('d/m/Y H:i'))
+                ->texto($referencia . ' · ' . now()->format('d/m/Y H:i'))
                 ->texto('Atiende: ' . ($usuario ?? ''))
                 ->alinear('izq')->linea('=');
 
@@ -232,7 +253,7 @@ class Impresion
             }
             $p->linea('=')->avanzar(3)->cortar();
 
-            self::encolar($imp, $p->bytes(), $anulacion ? 'ANULACION' : 'COMANDA', 'Pedido ' . $pedido->ped_id . ' ' . $destino);
+            self::encolar($imp, $p->bytes(), $anulacion ? 'ANULACION' : 'COMANDA', $referencia . ' ' . $destino);
             $enviados++;
         }
 
@@ -284,6 +305,16 @@ class Impresion
 
     public static function prueba(object $imp): void
     {
+        if ($imp->tip_conex_imp === 'WINDOWS') {
+            $pdf = new \Dompdf\Dompdf();
+            $pdf->loadHtml('<div style="font-family:DejaVu Sans; text-align:center; margin-top:80px;"><h1>PRUEBA OK</h1><p>Impresora A4: '
+                . e($imp->descripcion) . '</p><p>' . now()->format('d/m/Y H:i:s') . '</p><p>Tildes: áéíóú ÁÉÍÓÚ ñÑ ¿? ¡!</p></div>', 'UTF-8');
+            $pdf->setPaper('A4');
+            $pdf->render();
+            self::encolar($imp, $pdf->output(), 'PRUEBA A4', 'Prueba ' . $imp->descripcion);
+            return;
+        }
+
         $p = new Escpos((int) $imp->columnas);
         self::encabezado($p, (int) $imp->id_empresa_negocio);
         $p->linea('=')->tamano(2, 2)->negrita()->texto('PRUEBA OK')->negrita(false)->tamano()

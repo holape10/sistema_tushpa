@@ -1,10 +1,9 @@
 <?php
 namespace App\Http\Controllers;
 
-use App\Models\{Empresa, EmpresaNegocio, Turno};
+use App\Models\Turno;
 use App\Support\VentaDirecta;
 use Carbon\Carbon;
-use Dompdf\{Dompdf, Options};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, DB};
 
@@ -98,34 +97,9 @@ class VentaMasivaController extends Controller
         return response()->json(VentaDirecta::respuesta($cabId) + ['pdf' => route('ventas.masiva.pdf', $cabId)]);
     }
 
-    private function datosComprobante(int $id): array
-    {
-        $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->first();
-        abort_unless($cab, 404);
-        return [
-            'cab' => $cab,
-            'detalle' => DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->get(),
-            'empresa' => Empresa::find($cab->IdEmpresa),
-            'negocio' => EmpresaNegocio::find($cab->id_empresa_negocio),
-            'tdodes' => DB::table('tipo_documento')->where('tdocod', $cab->tdocod)->value('tdodes'),
-        ];
-    }
-
     private function generarPdf(int $id): array
     {
-        $datos = $this->datosComprobante($id);
-        $opciones = new Options();
-        $opciones->set('defaultFont', 'DejaVu Sans');
-        $opciones->set('isRemoteEnabled', false);
-        $opciones->setChroot(public_path());
-        $pdf = new Dompdf($opciones);
-        $pdf->loadHtml(view('empresas.cobros.comprobante_pdf', $datos)->render(), 'UTF-8');
-        $pdf->setPaper('A4');
-        $pdf->render();
-
-        $c = $datos['cab'];
-        $nombre = $c->serdoc . '-' . str_pad($c->numdoc, 8, '0', STR_PAD_LEFT) . ' ' . preg_replace('/[^A-Za-z0-9 &.-]/', '', $c->ccanom);
-        return [mb_substr(trim($nombre), 0, 90) . '.pdf', $pdf->output()];
+        return \App\Support\Impresion\ComprobantePdf::generar($id, (int) Auth::user()->id_empresa_negocio);
     }
 
     /** PDF A4 de un comprobante */

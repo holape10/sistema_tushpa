@@ -1,10 +1,11 @@
+@php $directa = $directa ?? false; @endphp
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Cobrar - Sistema Tushpa</title>
+    <title>{{ $directa ? 'Punto de venta' : 'Cobrar' }} - Sistema Tushpa</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
     <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css">
@@ -31,11 +32,26 @@
         .sep-ctrl button { width: 24px; height: 24px; padding: 0; border: none; border-radius: 4px; background: #8e44ad; color: #fff; font-weight: bold; }
         .sep-ctrl input { width: 46px; text-align: center; height: 24px; border: 1px solid #ccc; border-radius: 4px; }
         tr.sep-elegido td { background: #f5eefa !important; }
+        .cat-btn { border: none; color: #fff; font-weight: bold; border-radius: 6px; padding: 6px 12px; margin: 0 4px 6px 0; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,.12); }
+        .cat-btn.active { outline: 3px solid #f0ad4e; }
+        .grid-productos { display: grid; grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); gap: 8px; max-height: 300px; overflow-y: auto; padding: 2px; }
+        .product-item-kiosko { border: 1px solid #ddd; border-radius: 8px; padding: 8px 4px; background: #fff; text-align: center; cursor: pointer; min-height: 78px;
+                               display: flex; flex-direction: column; justify-content: center; transition: transform .1s; }
+        .product-item-kiosko:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,.12); border-color: #3498db; }
+        .product-name-kiosko { font-size: 12px; font-weight: bold; color: #333; line-height: 1.2; }
+        .product-price-kiosko { font-size: 13px; font-weight: bold; color: #2980b9; margin-top: 3px; }
+        .product-stock-kiosko { font-size: 10px; color: #27ae60; }
+        .cart-ctrl { display: flex; align-items: center; justify-content: center; gap: 3px; }
+        .cart-ctrl button { width: 24px; height: 24px; padding: 0; border: none; border-radius: 4px; background: #3498db; color: #fff; font-weight: bold; }
+        .cart-ctrl input { width: 46px; text-align: center; height: 24px; border: 1px solid #ccc; border-radius: 4px; }
+        .cart-obs { width: 100%; border: 1px solid #eee; border-radius: 4px; font-size: 11px; padding: 2px 5px; margin-top: 3px; }
         @media (max-width: 991px) { .panel-pago { border-left: none; padding-left: 0; border-top: 2px dashed #ccc; padding-top: 15px; margin-top: 10px; } }
     </style>
 </head>
 <body>
 <div class="container-fluid">
+    <div id="aviso_venta" class="alert alert-success text-center" style="display:none; margin-bottom:10px; font-size:14px;"></div>
+    <iframe id="marco_impresion" style="display:none;" title="Impresión"></iframe>
     @if (session('success'))
         <div class="alert alert-success text-center" style="margin-bottom:10px;"><i class="fas fa-print"></i> {{ session('success') }}</div>
     @endif
@@ -113,7 +129,7 @@
                             <div class="form-group">
                                 <label>DNI / RUC</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="text" id="clinum" class="form-control" value="00000000" maxlength="15">
+                                    <input type="text" id="clinum" class="form-control" value="{{ ($pedido->ped_num_doc ?? null) ?: '00000000' }}" maxlength="15">
                                     <span class="input-group-btn">
                                         <button type="button" class="btn btn-primary" id="btn_buscar"><i class="fas fa-search"></i></button>
                                     </span>
@@ -125,7 +141,7 @@
                             <div class="form-group">
                                 <label>Nombre o razón social <small class="text-muted">(escribe para buscar)</small></label>
                                 <div class="sug-wrap">
-                                <input type="text" id="clinom" class="form-control input-sm" autocomplete="off" value="{{ !empty($pedido->ped_cli_nom) && !in_array($pedido->ped_cli_nom, ['CONSUMO EN SALON', 'PARA LLEVAR']) ? $pedido->ped_cli_nom : 'VENTA AL PORTADOR' }}">
+                                <input type="text" id="clinom" class="form-control input-sm" autocomplete="off" value="{{ !empty($pedido->ped_cli_nom) && !in_array($pedido->ped_cli_nom, ['CONSUMO EN SALON', 'PARA LLEVAR', 'CLIENTE HOSPEDAJE']) ? $pedido->ped_cli_nom : 'VENTA AL PORTADOR' }}">
                                 <ul id="sug_clientes" class="sug-list"></ul>
                                 </div>
                             </div>
@@ -166,6 +182,9 @@
             <div class="box-x">
                 <div class="box-x-h">
                     <span>
+                        @if ($directa)
+                            <span style="background:#e67e22; padding:2px 8px; border-radius:10px; margin-right:6px;">PUNTO DE VENTA</span> Venta directa
+                        @else
                         @if ($separadas)<span style="background:#8e44ad; padding:2px 8px; border-radius:10px; margin-right:6px;">CUENTA SEPARADA</span>@endif
                         Detalle:
                         @if ($mesa)
@@ -173,8 +192,12 @@
                         @else
                             {{ strtoupper($pedido->ped_tip) }} - {{ strtoupper($pedido->ped_cli_nom) }}
                         @endif
+                        @endif
                     </span>
-                    @if ($separadas)
+                    @if ($directa)
+                        <label style="margin:0; font-weight:bold; text-transform:none;" title="Manda los platos a la pantalla e impresora de cocina">
+                            <input type="checkbox" id="enviar_cocina" checked> Enviar a cocina</label>
+                    @elseif ($separadas)
                         <a href="{{ route('cobros.cobrar', $pedido->ped_id) }}" class="btn btn-default btn-xs">Cobrar todo junto</a>
                     @else
                         <a href="{{ route('cobros.separadas', $pedido->ped_id) }}" class="btn btn-primary btn-xs" style="background:#8e44ad; border-color:#8e44ad;">Cuentas Separadas</a>
@@ -183,6 +206,19 @@
                 <div class="box-x-b">
                     <div class="row">
                         <div class="col-md-7">
+                            @if ($directa)
+                                <div style="margin-bottom:6px;">
+                                    @foreach ($categorias as $cat)
+                                        <button type="button" class="cat-btn" data-cat-id="{{ $cat->cat_id }}" style="background: {{ $cat->color ?? '#3f4aee' }};">{{ $cat->cat_nom }}</button>
+                                    @endforeach
+                                </div>
+                                <input type="text" id="buscar_producto" class="form-control input-sm" placeholder="Buscar producto..." style="margin-bottom:6px;" autocomplete="off">
+                                <div id="productos_grid" class="grid-productos"><p class="text-muted">Cargando...</p></div>
+                                <table class="table table-bordered table-condensed tbl-det" style="margin-top:10px;">
+                                    <thead><tr><th>PRODUCTO</th><th style="width:110px">CANT.</th><th style="width:70px">PRECIO</th><th style="width:75px">TOTAL</th><th style="width:28px"></th></tr></thead>
+                                    <tbody id="carrito"><tr><td colspan="5" class="text-center text-muted">Toca un producto para agregarlo.</td></tr></tbody>
+                                </table>
+                            @else
                             @if ($separadas)
                                 <div style="display:flex; gap:6px; margin-bottom:6px;">
                                     <span style="font-size:12px; color:#555; flex:1;">Elige qué productos paga <strong>esta</strong> persona:</span>
@@ -223,6 +259,7 @@
                                 </div>
                             @endif
                             <p class="text-muted" style="font-size:11px;">Para agregar o quitar productos vuelve a la comanda (botón EDITAR de la mesa).</p>
+                            @endif
                         </div>
 
                         <div class="col-md-5 panel-pago">
@@ -269,9 +306,9 @@
                             <hr style="margin:10px 0;">
 
                             <button type="button" id="btnRegistrar" class="btn btn-success btn-block" style="height:45px; font-size:11pt; font-weight:bold;">
-                                {{ $separadas ? 'COBRAR ESTA CUENTA' : 'REGISTRAR Y COBRAR' }}
+                                {{ $directa ? 'REGISTRAR VENTA' : ($separadas ? 'COBRAR ESTA CUENTA' : 'REGISTRAR Y COBRAR') }}
                             </button>
-                            <a href="{{ route('comandas.seleccion') }}" class="btn btn-default btn-block" style="margin-top:8px; font-weight:bold;">SALIR</a>
+                            <a href="{{ $volver ?? route('comandas.seleccion') }}" class="btn btn-default btn-block" style="margin-top:8px; font-weight:bold;">SALIR</a>
                         </div>
                     </div>
                 </div>
@@ -283,9 +320,10 @@
 
 <script>
     const SEPARADAS = {{ $separadas ? 'true' : 'false' }};
+    const DIRECTA = {{ $directa ? 'true' : 'false' }};
     const TDOCOD_PRED = '{{ $negocio->tdocod_pred ?? '13' }}';
     let TOTAL = {{ $separadas ? 0 : number_format($total, 2, '.', '') }};
-    const PED_ID = {{ $pedido->ped_id }};
+    const PED_ID = {{ $pedido->ped_id ?? 'null' }};
     let medios = [];
 
     const el = id => document.getElementById(id);
@@ -380,6 +418,8 @@
             });
     }
     el('btn_buscar').addEventListener('click', buscarCliente);
+    // Hotel: el huésped dio su RUC al ingresar → se busca para pasar a FACTURA
+    if (/^\d{11}$/.test(el('clinum').value.trim())) buscarCliente();
     el('clinum').addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); buscarCliente(); } });
     // Al completar un RUC (11 dígitos) se busca solo; un DNI (8) se busca al salir del campo
     // (no al llegar a 8 dígitos, porque también puede ser el inicio de un RUC)
@@ -503,6 +543,116 @@
     el('clinom').addEventListener('blur', () => setTimeout(cerrarSugerencias, 150));
     el('clinom').addEventListener('focus', function () { if (this.value === 'VENTA AL PORTADOR') this.select(); });
 
+    // ---------- Punto de venta (venta directa) ----------
+    let carrito = [];
+
+    function pintarCarrito() {
+        const tb = el('carrito');
+        if (!tb) return;
+        if (!carrito.length) {
+            tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Toca un producto para agregarlo.</td></tr>';
+        } else {
+            tb.innerHTML = '';
+            carrito.forEach((it, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><span class="nom"></span><input class="cart-obs" maxlength="100" placeholder="nota para cocina"></td>
+                    <td><div class="cart-ctrl"><button type="button" class="c-menos">−</button><input type="number" class="c-cant" min="1" step="1"><button type="button" class="c-mas">+</button></div></td>
+                    <td class="text-right"></td><td class="text-right"><strong></strong></td>
+                    <td class="text-center"><button type="button" class="btn btn-danger btn-xs c-quitar">&times;</button></td>`;
+                tr.querySelector('.nom').textContent = it.nombre;
+                tr.querySelector('.cart-obs').value = it.observacion;
+                tr.querySelector('.c-cant').value = it.cantidad;
+                tr.children[2].textContent = fmt(it.precio);
+                tr.querySelector('strong').textContent = fmt(it.cantidad * it.precio);
+                tr.querySelector('.c-menos').onclick = () => { if (it.cantidad > 1) { it.cantidad--; pintarCarrito(); } };
+                tr.querySelector('.c-mas').onclick = () => { it.cantidad++; pintarCarrito(); };
+                tr.querySelector('.c-cant').onchange = e => { it.cantidad = Math.max(1, parseFloat(e.target.value) || 1); pintarCarrito(); };
+                tr.querySelector('.cart-obs').onchange = e => { it.observacion = e.target.value; };
+                tr.querySelector('.c-quitar').onclick = () => { carrito.splice(i, 1); pintarCarrito(); };
+                tb.appendChild(tr);
+            });
+        }
+        TOTAL = Math.round(carrito.reduce((a, it) => a + it.cantidad * it.precio, 0) * 100) / 100;
+        el('lbl_total').textContent = fmt(TOTAL);
+        el('total_comp').value = fmt(TOTAL);
+        medios = [];
+        renderMedios();
+        el('vuelto').value = fmt(Math.max(0, (parseFloat(el('paga').value) || 0) - TOTAL));
+    }
+
+    function cargarProductos(catId = null, texto = '') {
+        const params = new URLSearchParams();
+        if (texto) params.set('search_text', texto); else if (catId) params.set('category_id', catId);
+        fetch(`{{ route('comandas.search_products') }}?${params}`, { headers: { Accept: 'application/json' } })
+            .then(r => r.json()).then(d => el('productos_grid').innerHTML = d.vista);
+    }
+
+    async function registrarDirecta(body, contado, restaurar) {
+        const datos = Object.assign({}, body, {
+            items: carrito.map(it => ({ id: it.id, cantidad: it.cantidad, precio: it.precio, observacion: it.observacion || null })),
+            enviar_cocina: el('enviar_cocina').checked ? 1 : 0,
+        });
+        delete datos.ped_id;
+        delete datos.separadas;
+        try {
+            const res = await fetch("{{ route('cobros.directa.registrar') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                body: JSON.stringify(datos),
+            });
+            const d = await res.json();
+            if (res.status === 422) { alert(Object.values(d.errors)[0][0]); restaurar(); return; }
+            if (d.estado !== 'success') { alert(d.mensaje || 'No se pudo registrar la venta.'); restaurar(); return; }
+
+            // Sin agente de impresión: el ticket se imprime con el navegador sin salir de la pantalla
+            if (el('imprimir').checked && !d.impreso) el('marco_impresion').src = d.ticket + '&imprimir=1&t=' + Date.now();
+            el('aviso_venta').innerHTML = `✔ <b>${d.numero}</b> registrada por S/ ${fmt(d.total)}` + (d.vuelto > 0 ? ` · Vuelto <b>S/ ${fmt(d.vuelto)}</b>` : '')
+                + (d.impreso ? ' · 🖨 enviada a la impresora' : '');
+            el('aviso_venta').style.display = 'block';
+
+            // Lista para la siguiente venta
+            carrito = [];
+            pintarCarrito();
+            el('paga').value = '0.00';
+            el('observaciones').value = '';
+            llenarCliente({ num: '00000000', nom: 'VENTA AL PORTADOR', dir: '--', tdicod: '1' });
+            el('msg_cliente').textContent = '';
+            restaurar();
+        } catch (e) {
+            alert('Error de conexión con el servidor.');
+            restaurar();
+        }
+    }
+
+    if (DIRECTA) {
+        document.addEventListener('click', e => {
+            const card = e.target.closest('.product-item-kiosko');
+            if (card) {
+                const id = Number(card.dataset.id);
+                const ya = carrito.find(it => it.id === id);
+                if (ya) ya.cantidad++; else carrito.push({ id, nombre: card.dataset.nombre, precio: parseFloat(card.dataset.precio), cantidad: 1, observacion: '' });
+                pintarCarrito();
+                return;
+            }
+            const cat = e.target.closest('.cat-btn');
+            if (cat) {
+                document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+                cat.classList.add('active');
+                el('buscar_producto').value = '';
+                cargarProductos(cat.dataset.catId);
+            }
+        });
+        let tBusca;
+        el('buscar_producto').addEventListener('input', function () {
+            clearTimeout(tBusca);
+            const v = this.value.trim();
+            tBusca = setTimeout(() => cargarProductos(null, v), 300);
+        });
+        const primera = document.querySelector('.cat-btn');
+        if (primera) { primera.classList.add('active'); cargarProductos(primera.dataset.catId); } else { cargarProductos(); }
+        pintarCarrito();
+    }
+
     // Registrar
     el('btnRegistrar').addEventListener('click', async function () {
         const btn = this;
@@ -517,9 +667,10 @@
         }
 
         if (SEPARADAS && TOTAL <= 0) { alert('Elige qué productos se cobran en esta cuenta.'); return; }
+        if (DIRECTA && !carrito.length) { alert('Agrega al menos un producto.'); return; }
         btn.disabled = true;
         btn.textContent = 'PROCESANDO...';
-        const restaurar = () => { btn.disabled = false; btn.textContent = SEPARADAS ? 'COBRAR ESTA CUENTA' : 'REGISTRAR Y COBRAR'; };
+        const restaurar = () => { btn.disabled = false; btn.textContent = DIRECTA ? 'REGISTRAR VENTA' : (SEPARADAS ? 'COBRAR ESTA CUENTA' : 'REGISTRAR Y COBRAR'); };
 
         const body = {
             ped_id: PED_ID,
@@ -543,6 +694,11 @@
             // Cuentas separadas: { clave: cantidad } de lo que paga esta persona (null = todo lo pendiente)
             separadas: SEPARADAS ? seleccionSeparada() : null,
         };
+
+        if (DIRECTA) {
+            await registrarDirecta(body, contado, restaurar);
+            return;
+        }
 
         try {
             const res = await fetch("{{ route('cobros.registrar') }}", {

@@ -1,0 +1,34 @@
+AGENTE DE IMPRESION (tickets y A4)
+==================================
+
+Imprime directo, sin vista previa, lo que manda el sistema: comprobantes, comandas,
+precuentas y comprobantes A4 en PDF. Revisa cada 2 segundos todos los sistemas de config.ini.
+
+PC NUEVA
+1. Copia estos archivos en una carpeta, por ejemplo C:\sistema
+2. En esa carpeta debe estar php.exe (PHP 7 u 8 con openssl) y, para A4, sumatrapdf.exe
+   (descarga oficial: https://www.sumatrapdfreader.org/download-free-pdf-viewer  version "portable").
+3. Doble clic en iniciar.bat para probar. Debe decir "Configuracion cargada".
+4. Para que arranque solo con Windows: Win+R, escribe shell:startup y pega ahi
+   un acceso directo a invisible.vbs
+
+PC QUE YA TIENE EL AGENTE ANTIGUO (C:\sistema)
+1. Cierra el agente (Administrador de tareas > php.exe > Finalizar tarea).
+2. Reemplaza worker.php por el de este paquete.
+3. Abre tu config.ini y AGREGA al final el bloque [ ... ] del config.ini de este paquete.
+   Tus bloques antiguos [SISTEMA_1], [SISTEMA_2]... siguen funcionando igual.
+4. Vuelve a iniciar con tu holape.bat / invisible.vbs de siempre.
+
+IMPRESORAS (en el sistema: Impresoras)
+- Compartida en Windows: la impresora (ticketera o A4) instalada y COMPARTIDA en Windows,
+  con el mismo nombre que el compartido. En Ruta:
+     CAJA              -> si esta en la misma PC del agente
+     PC_COCINA/COCINA  -> si esta en otra PC de la red (esa PC debe estar prendida)
+- Red: ticketera con cable de red; en Ruta su IP (ej. 192.168.1.50). No necesita PC.
+- A4 / PDF: impresora normal (no ticketera). En Ruta su nombre: EPSON A4 o PC_CAJA/EPSON A4.
+  Los comprobantes salen en PDF A4 con sumatrapdf.exe.
+
+PROBLEMAS
+- Todo queda anotado en agente.log (en esta carpeta).
+- "CLAVE NO VALIDA": se genero una clave nueva en el sistema; descarga otra vez "Solo la clave"
+  y reemplaza ese bloque en config.ini.

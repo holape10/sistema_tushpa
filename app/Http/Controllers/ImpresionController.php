@@ -67,14 +67,14 @@ class ImpresionController extends Controller
     {
         $d = $request->validate([
             'descripcion'   => 'required|string|max:30',
-            'tip_conex_imp' => 'required|in:COMPARTIDO,RED',
+            'tip_conex_imp' => 'required|in:COMPARTIDO,RED,WINDOWS',
             'ruta'          => ['required', 'string', 'max:100', $request->tip_conex_imp === 'RED'
                 ? 'regex:/^[\w.\-]+(:\d{2,5})?$/' : 'regex:/^[^"<>|*?]+$/'],
             'columnas'      => 'required|integer|in:32,42,48',
             'predeterminado'=> 'nullable|boolean',
             'abrir_cajon'   => 'nullable|boolean',
             'activo'        => 'nullable|boolean',
-        ], ['ruta.regex' => 'Para RED escribe la IP (ej. 192.168.1.50 o 192.168.1.50:9100); para COMPARTIDO el nombre con el que compartiste la impresora en Windows.'],
+        ], ['ruta.regex' => 'Para RED escribe la IP (ej. 192.168.1.50 o 192.168.1.50:9100); para COMPARTIDO el nombre con el que compartiste la impresora; para A4 el nombre de la impresora en Windows.'],
             ['descripcion' => 'Nombre', 'ruta' => 'Ruta / IP', 'tip_conex_imp' => 'Conexión']);
 
         return [
@@ -152,20 +152,43 @@ class ImpresionController extends Controller
         return back()->with('success', 'Trabajo enviado otra vez a la cola.');
     }
 
-    /** Descarga el agente con una clave NUEVA (el agente anterior de esta sucursal deja de funcionar) */
+    /**
+     * Agente con una clave NUEVA (el agente anterior de esta sucursal deja de funcionar).
+     *  - completo: ZIP con worker.php, config.ini de esta sucursal, iniciar.bat, invisible.vbs y LEEME.txt
+     *  - clave:    solo el bloque para agregar al config.ini de una PC que ya tiene el agente (varias empresas en una PC)
+     */
     public function descargarAgente(Request $request)
     {
         $this->soloAdmin();
+        $sucursal = $this->sucursal();
         $token = Str::random(48);
-        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal())->update(['token_impresion' => hash('sha256', $token)]);
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->update(['token_impresion' => hash('sha256', $token)]);
 
-        $codigo = str_replace(['__SERVIDOR__', '__TOKEN__'], [rtrim(url('/'), '/'), $token],
-            file_get_contents(resource_path('stubs/tushpa-impresora.php.stub')));
+        $negocio = DB::table('empresa_negocios as n')->join('empresa as e', 'e.IdEmpresa', '=', 'n.IdEmpresa')
+            ->where('n.id_empresa_negocio', $sucursal)->first(['n.nombre_comercial', 'e.NomEmpresa', 'e.IdEmpresa']);
+        $nombre = trim(preg_replace('/[^A-Za-z0-9 ._-]/', '', (string) ($negocio->nombre_comercial ?: $negocio->NomEmpresa))) ?: 'SUCURSAL';
+        $seccion = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '_', $negocio->IdEmpresa . '_' . $sucursal));
+        $bloque = "[{$seccion}]\r\n; {$nombre}\r\ntipo = nuevo\r\nservidor = \"" . rtrim(url('/'), '/') . "\"\r\ntoken = \"{$token}\"\r\n";
 
-        return response($codigo, 200, [
-            'Content-Type' => 'application/octet-stream',
-            'Content-Disposition' => 'attachment; filename="tushpa-impresora.php"',
-        ]);
+        if ($request->input('modo') === 'clave') {
+            return response($bloque, 200, [
+                'Content-Type' => 'text/plain; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="agregar-al-config-' . $seccion . '.txt"',
+            ]);
+        }
+
+        $carpeta = resource_path('stubs/agente');
+        $zipRuta = tempnam(sys_get_temp_dir(), 'agente');
+        $zip = new \ZipArchive();
+        $zip->open($zipRuta, \ZipArchive::OVERWRITE);
+        $zip->addFile($carpeta . '/worker.php', 'worker.php');
+        $zip->addFromString('config.ini', str_replace('__SISTEMAS__', $bloque, file_get_contents($carpeta . '/config.ini')));
+        foreach (['iniciar.bat', 'invisible.vbs', 'LEEME.txt'] as $archivo) {
+            $zip->addFile($carpeta . '/' . $archivo, $archivo);
+        }
+        $zip->close();
+
+        return response()->download($zipRuta, 'agente-impresion.zip', ['Content-Type' => 'application/zip'])->deleteFileAfterSend();
     }
 
     // ------------------------------------------------------------------ API del agente (sin sesión, con token)
@@ -179,7 +202,10 @@ class ImpresionController extends Controller
         return (int) $id;
     }
 
-    /** Long-polling: espera hasta N segundos a que haya trabajos y los entrega al instante */
+    /**
+     * Trabajos pendientes de la sucursal. El agente pregunta cada 2 s con espera=0 (responde al instante y no deja
+     * procesos PHP ocupados); con espera=N el servidor la mantiene abierta hasta N s (agentes antiguos).
+     */
     public function trabajos(Request $request)
     {
         $sucursal = $this->sucursalDelToken($request);
@@ -187,15 +213,27 @@ class ImpresionController extends Controller
         $limite = microtime(true) + $espera;
         @set_time_limit($espera + 15);
 
-        do {
-            DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->update(['impresion_contacto' => now()]);
+        // "Agente conectado": basta marcarlo una vez por consulta (llega cada <= 25 s; se considera caído a los 90 s)
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->update(['impresion_contacto' => now()]);
 
-            $ids = DB::transaction(function () use ($sucursal) {
-                // Pendientes, o entregados hace más de 90 s sin confirmación (el agente se cayó a medio camino)
-                $ids = DB::table('cola_impresion')->where('id_empresa_negocio', $sucursal)
-                    ->where(fn($q) => $q->where('estado', 0)
-                        ->orWhere(fn($q2) => $q2->where('estado', 1)->where('entregado', '<', now()->subSeconds(90))->where('intentos', '<', 3)))
-                    ->orderBy('id')->limit(10)->lockForUpdate()->pluck('id');
+        // Lo que se le puede entregar: pendiente, o entregado hace más de 90 s sin confirmación (el agente se cayó a medio camino)
+        $porEntregar = fn($q) => $q->where('id_empresa_negocio', $sucursal)
+            ->where(fn($q) => $q->where('estado', 0)
+                ->orWhere(fn($q2) => $q2->where('estado', 1)->where('entregado', '<', now()->subSeconds(90))->where('intentos', '<', 3)));
+
+        do {
+            // Mientras no hay nada solo se hace una lectura liviana (sin bloqueo ni escritura):
+            // con muchas sucursales conectadas la base no carga trabajo cuando nadie imprime
+            if (!DB::table('cola_impresion')->where($porEntregar)->exists()) {
+                if (microtime(true) + 0.7 >= $limite) {
+                    break;   // espera=0 (el agente pregunta cada 2 s): responde al instante
+                }
+                usleep(700000);
+                continue;
+            }
+
+            $ids = DB::transaction(function () use ($porEntregar) {
+                $ids = DB::table('cola_impresion')->where($porEntregar)->orderBy('id')->limit(10)->lockForUpdate()->pluck('id');
                 if ($ids->isNotEmpty()) {
                     DB::table('cola_impresion')->whereIn('id', $ids)->update(['estado' => 1, 'entregado' => now(), 'intentos' => DB::raw('intentos + 1')]);
                 }
@@ -209,8 +247,6 @@ class ImpresionController extends Controller
                     ->get(['c.id', 'c.tipo', 'c.referencia', 'c.contenido', 'i.descripcion', 'i.ruta', 'i.tip_conex_imp']);
                 return response()->json(['trabajos' => $trabajos]);
             }
-
-            usleep(400000);
         } while (microtime(true) < $limite);
 
         return response()->json(['trabajos' => []]);

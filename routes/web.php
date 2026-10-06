@@ -4,6 +4,7 @@ use App\Http\Controllers\CobroController;
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\ComandasController;
 use App\Http\Controllers\ImpresionController;
+use App\Http\Controllers\{CocinaController, ReservaController};
 use App\Http\Controllers\{TurnoController, KardexController, SunatController, SucursalController, VentaController, PosMovilController, PuntoVentaController, CompraController, SireController, ConcarController, CuentaController, PvTactilController, ProformaController, PvGrifoController};
 use App\Http\Controllers\{AlmacenController, InventarioController, TransferenciaController, LoteController, NotaController, AsistenciaController, AsistenciaAdminController, ContabilidadController, GastoController, PlanillaController, TributoController, ReporteController, ContactoController};
 use App\Http\Controllers\{ProductoController, CategoriaController, MesaController, PisoController, MedioPagoController, UsuarioController};
@@ -46,6 +47,38 @@ Route::middleware('auth')->group(function () {
     Route::post('/turnos/movimiento/{id}/anular', [TurnoController::class, 'anularMovimiento'])->name('turnos.anular_movimiento');
     Route::get('/turnos/listado', [TurnoController::class, 'listado'])->name('turnos.listado');
     Route::get('/turnos/{id}', [TurnoController::class, 'show'])->whereNumber('id')->name('turnos.show');
+
+    // Pantalla de cocina (KDS)
+    Route::get('/cocina', [CocinaController::class, 'index'])->name('cocina.index');
+    Route::get('/cocina/datos', [CocinaController::class, 'datos'])->name('cocina.datos');
+    Route::post('/cocina/item/{id}/alternar', [CocinaController::class, 'alternarItem'])->whereNumber('id');
+    Route::post('/cocina/ticket/{id}/listo', [CocinaController::class, 'listo'])->whereNumber('id');
+    Route::post('/cocina/ticket/{id}/recuperar', [CocinaController::class, 'recuperar'])->whereNumber('id');
+    Route::post('/cocina/configuracion', [CocinaController::class, 'configuracion'])->name('cocina.config');
+    Route::post('/cocina/entregado/{ped_id}', [CocinaController::class, 'entregado'])->whereNumber('ped_id');
+
+    // Reservas
+    // Hotel / hospedaje
+    Route::get('/hotel', [\App\Http\Controllers\HotelController::class, 'index'])->name('hotel.index');
+    Route::get('/hotel/estado', [\App\Http\Controllers\HotelController::class, 'estado'])->name('hotel.estado');
+    Route::get('/hotel/estadia/{id}', [\App\Http\Controllers\HotelController::class, 'detalle'])->whereNumber('id')->name('hotel.detalle');
+    Route::post('/hotel/ingresar', [\App\Http\Controllers\HotelController::class, 'ingresar'])->name('hotel.ingresar');
+    Route::post('/hotel/extender', [\App\Http\Controllers\HotelController::class, 'extender'])->name('hotel.extender');
+    Route::post('/hotel/consumo', [\App\Http\Controllers\HotelController::class, 'consumo'])->name('hotel.consumo');
+    Route::post('/hotel/salida', [\App\Http\Controllers\HotelController::class, 'salida'])->name('hotel.salida');
+    Route::post('/hotel/anular', [\App\Http\Controllers\HotelController::class, 'anular'])->name('hotel.anular');
+    Route::post('/hotel/estado-habitacion', [\App\Http\Controllers\HotelController::class, 'cambiarEstado'])->name('hotel.cambiar_estado');
+    Route::post('/hotel/habitaciones', [\App\Http\Controllers\HotelController::class, 'guardarHabitacion'])->name('hotel.habitacion');
+    Route::delete('/hotel/habitaciones/{id}', [\App\Http\Controllers\HotelController::class, 'eliminarHabitacion'])->whereNumber('id');
+    Route::post('/hotel/servicios', [\App\Http\Controllers\HotelController::class, 'guardarServicio'])->name('hotel.servicio');
+    Route::delete('/hotel/servicios/{id}', [\App\Http\Controllers\HotelController::class, 'quitarServicio'])->whereNumber('id');
+
+    Route::get('/reservas', [ReservaController::class, 'index'])->name('reservas.index');
+    Route::get('/reservas/hoy', [ReservaController::class, 'delDia'])->name('reservas.dia');
+    Route::post('/reservas', [ReservaController::class, 'guardar'])->name('reservas.guardar');
+    Route::post('/reservas/{id}', [ReservaController::class, 'guardar'])->whereNumber('id');
+    Route::post('/reservas/{id}/estado', [ReservaController::class, 'estado'])->whereNumber('id');
+    Route::post('/reservas/{id}/atender', [ReservaController::class, 'atender'])->whereNumber('id');
 
     // Impresión directa (sin vista previa) y configuración de impresoras
     Route::post('/impresion/comprobante/{id}', [ImpresionController::class, 'comprobante'])->whereNumber('id')->name('impresion.comprobante');
@@ -102,6 +135,8 @@ Route::middleware('auth')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/cobrarmesa/{ped_id}', [CobroController::class, 'cobrar'])->name('cobros.cobrar');
     Route::get('/cobrarmesa/{ped_id}/separadas', [CobroController::class, 'separadas'])->name('cobros.separadas');
+    Route::get('/comandas/punto-venta', [CobroController::class, 'directa'])->name('cobros.directa');
+    Route::post('/comandas/punto-venta', [CobroController::class, 'registrarDirecta'])->name('cobros.directa.registrar');
     Route::get('/cobros/clientes', [CobroController::class, 'sugerirClientes'])->name('cobros.clientes');
     Route::post('/cobros/registrar', [CobroController::class, 'registrar'])->name('cobros.registrar');
     Route::get('/cobros/cliente/{doc}', [CobroController::class, 'buscarCliente'])->name('cobros.cliente');

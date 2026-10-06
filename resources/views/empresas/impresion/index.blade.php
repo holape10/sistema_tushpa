@@ -31,22 +31,26 @@
                         Mientras esté desconectado, los comprobantes y precuentas se imprimen con el navegador (con vista previa).
                     </p>
                 </div>
-                <form method="POST" action="{{ route('impresion.agente') }}"
-                      onsubmit="return confirm('Se generará una clave nueva. Si ya tienes un agente instalado, deberás reemplazarlo por este. ¿Continuar?')">
+                <form method="POST" action="{{ route('impresion.agente') }}" class="flex flex-wrap gap-2"
+                      onsubmit="return confirm('Se generará una clave nueva para esta sucursal. Si ya tienes el agente instalado, tendrás que poner la clave nueva en su config.ini. ¿Continuar?')">
                     @csrf
-                    <button class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"><i class="fas fa-download"></i> Descargar agente</button>
+                    <button name="modo" value="completo" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+                            title="ZIP con worker.php, config.ini, iniciar.bat, invisible.vbs y LEEME.txt"><i class="fas fa-download"></i> Descargar agente (ZIP)</button>
+                    <button name="modo" value="clave" class="px-4 py-2 rounded-xl bg-white border border-indigo-300 text-indigo-700 text-sm font-semibold hover:bg-indigo-50"
+                            title="Para una PC que ya tiene el agente: el bloque que se agrega a su config.ini"><i class="fas fa-key"></i> Solo la clave</button>
                 </form>
             </div>
             <details class="mt-4 text-sm text-gray-600">
                 <summary class="cursor-pointer font-semibold text-indigo-700">¿Cómo instalarlo en la PC de las impresoras?</summary>
                 <ol class="list-decimal list-inside mt-2 space-y-1">
-                    <li>En esa PC instala PHP (por ejemplo, Laragon o XAMPP).</li>
-                    <li>Para impresoras USB: en Windows ve a <em>Impresoras &gt; Propiedades &gt; Compartir</em> y compártela con un nombre corto (ej. <strong>CAJA</strong>). Ese nombre va en "Ruta".</li>
-                    <li>Para impresoras de red: usa su IP (ej. <strong>192.168.1.50</strong>; el puerto 9100 es el normal).</li>
-                    <li>Descarga el agente con el botón de arriba y ejecútalo: <code class="bg-gray-100 px-1 rounded">php tushpa-impresora.php</code></li>
-                    <li>Para que arranque solo: crea un <code class="bg-gray-100 px-1 rounded">.bat</code> con esa línea y ponlo en la carpeta <code class="bg-gray-100 px-1 rounded">shell:startup</code>.</li>
+                    <li>Descarga el <strong>ZIP</strong> y descomprímelo en una carpeta, por ejemplo <code class="bg-gray-100 px-1 rounded">C:\sistema</code>.</li>
+                    <li>En esa carpeta debe estar <code class="bg-gray-100 px-1 rounded">php.exe</code> (PHP 7 u 8) y, para comprobantes A4, <code class="bg-gray-100 px-1 rounded">sumatrapdf.exe</code>
+                        (<a href="https://www.sumatrapdfreader.org/download-free-pdf-viewer" target="_blank" rel="noopener" class="text-indigo-700 underline">descarga oficial</a>, versión portable).</li>
+                    <li>Doble clic en <code class="bg-gray-100 px-1 rounded">iniciar.bat</code> para probar. Para que arranque solo: <em>Win+R</em> &gt; <code class="bg-gray-100 px-1 rounded">shell:startup</code> y pega un acceso directo a <code class="bg-gray-100 px-1 rounded">invisible.vbs</code>.</li>
+                    <li><strong>¿La PC ya tiene el agente</strong> (de otra empresa o del sistema antiguo)? Usa <strong>Solo la clave</strong> y pega ese bloque al final de su <code class="bg-gray-100 px-1 rounded">config.ini</code>. Una sola PC puede imprimir para varias empresas.</li>
+                    <li>Impresoras USB: compártelas en Windows (<em>Propiedades &gt; Compartir</em>) con un nombre corto (ej. <strong>CAJA</strong>). De red: su IP (ej. <strong>192.168.1.50</strong>). A4: el nombre exacto de la impresora en Windows.</li>
                 </ol>
-                <p class="mt-2">El agente recibe cada ticket en menos de un segundo (se queda escuchando al servidor), así que no hace falta una base de datos local ni un script consultando cada cierto tiempo.</p>
+                <p class="mt-2">El agente revisa cada 2 segundos y deja todo anotado en <code class="bg-gray-100 px-1 rounded">agente.log</code>. Si la impresora de caja es <strong>A4</strong>, los comprobantes salen en PDF A4; si es ticketera, en ticket.</p>
             </details>
         </div>
 
@@ -64,9 +68,9 @@
                     @forelse ($impresoras as $i)
                         <tr>
                             <td class="px-4 py-2 font-semibold text-gray-700">{{ $i->descripcion }} @if ($i->abrir_cajon)<span class="text-xs text-gray-400">(abre cajón)</span>@endif</td>
-                            <td class="px-4 py-2">{{ $i->tip_conex_imp === 'RED' ? 'Red (IP)' : 'Compartida Windows' }}</td>
+                            <td class="px-4 py-2">{{ ['RED' => 'Red (IP)', 'WINDOWS' => 'A4 / PDF (Windows)'][$i->tip_conex_imp] ?? 'Compartida Windows' }}</td>
                             <td class="px-4 py-2 font-mono text-xs">{{ $i->ruta }}</td>
-                            <td class="px-4 py-2 text-center">{{ $i->columnas == 32 ? '58 mm' : '80 mm' }} <span class="text-xs text-gray-400">({{ $i->columnas }} car.)</span></td>
+                            <td class="px-4 py-2 text-center">@if ($i->tip_conex_imp === 'WINDOWS') A4 @else {{ $i->columnas == 32 ? '58 mm' : '80 mm' }} <span class="text-xs text-gray-400">({{ $i->columnas }} car.)</span> @endif</td>
                             <td class="px-4 py-2 text-center">{{ $i->predeterminado ? '✅' : '' }}</td>
                             <td class="px-4 py-2 text-center">{{ $i->activo ? 'Activa' : 'Inactiva' }}</td>
                             <td class="px-4 py-2 text-right whitespace-nowrap space-x-2">
@@ -170,11 +174,12 @@
                     <select name="tip_conex_imp" x-model="form.tip_conex_imp" class="{{ $in }}">
                         <option value="COMPARTIDO">Compartida en Windows (USB)</option>
                         <option value="RED">Red (IP, puerto 9100)</option>
+                        <option value="WINDOWS">A4 / PDF (impresora instalada en Windows)</option>
                     </select></label>
-                <label class="block text-sm"><span x-text="form && form.tip_conex_imp === 'RED' ? 'IP de la impresora' : 'Nombre con el que se compartió en Windows'"></span>
+                <label class="block text-sm"><span x-text="form && form.tip_conex_imp === 'RED' ? 'IP de la impresora' : (form && form.tip_conex_imp === 'WINDOWS' ? 'Nombre de la impresora A4 (EPSON A4 o PC_CAJA/EPSON A4)' : 'Compartida: CAJA (en la PC del agente) o PC_COCINA/COCINA (otra PC)')"></span>
                     <input name="ruta" x-model="form.ruta" required maxlength="100" class="{{ $in }} font-mono"
-                           :placeholder="form && form.tip_conex_imp === 'RED' ? '192.168.1.50' : 'CAJA'"></label>
-                <label class="block text-sm">Papel
+                           :placeholder="form && form.tip_conex_imp === 'RED' ? '192.168.1.50' : (form && form.tip_conex_imp === 'WINDOWS' ? 'PC_CAJA/EPSON A4' : 'PC_CAJA/CAJA')"></label>
+                <label class="block text-sm" x-show="form.tip_conex_imp !== 'WINDOWS'">Papel
                     <select name="columnas" x-model.number="form.columnas" class="{{ $in }}">
                         <option value="42">80 mm (42 caracteres)</option>
                         <option value="48">80 mm (48 caracteres, letra pequeña)</option>

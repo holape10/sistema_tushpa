@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\{Auth, DB, Http};
 class CobroController extends Controller
 {
     // Se mantiene aquí porque SunatService lo usa; el valor vive en Comprobante
-    public const FACTOR_IGV = Comprobante::FACTOR_IGV;
 
     private function autorizar(): void
     {
@@ -46,6 +45,12 @@ class CobroController extends Controller
             })->values();
     }
 
+    /** A dónde vuelve el cajero: las habitaciones si es hotel, si no las mesas */
+    private function volver(?Pedido $pedido): string
+    {
+        return $pedido && $pedido->ped_tip === 'Hotel' ? route('hotel.index') : route('comandas.seleccion');
+    }
+
     public function separadas($ped_id)
     {
         return $this->cobrar($ped_id, true);
@@ -69,10 +74,11 @@ class CobroController extends Controller
         if (!$pedido) {
             return redirect()->route('comandas.seleccion');
         }
+        $volver = $this->volver($pedido);
 
         $detalle = $this->agrupar($this->itemsPendientes($pedido->ped_id));
         if ($detalle->isEmpty()) {
-            return redirect()->route('comandas.seleccion')->with('error', 'El pedido no tiene productos pendientes de cobro.');
+            return redirect($volver)->with('error', 'El pedido no tiene productos pendientes de cobro.');
         }
 
         $total = round($detalle->sum(fn($d) => $d->cantidad_pendiente * $d->ped_det_pre), 2);
@@ -90,8 +96,85 @@ class CobroController extends Controller
 
         return view('empresas.cobros.cobrar', compact(
             'pedido', 'detalle', 'total', 'comprobantes', 'documentos',
-            'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso', 'turno', 'separadas', 'cuentasPrevias'
+            'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso', 'turno', 'separadas', 'cuentasPrevias', 'volver'
         ));
+    }
+
+    /**
+     * Punto de venta desde Comandas: venta directa (sin mesa) con la misma pantalla del cobro de mesa.
+     * Emite con VentaDirecta, igual que los otros puntos de venta, y usa la afectación de IGV de la sucursal.
+     */
+    public function directa()
+    {
+        $this->autorizar();
+        $user = Auth::user();
+
+        $turno = Turno::abiertoDe($user);
+        if (!$turno) {
+            return redirect()->route('turnos.index')->with('error', 'Debes aperturar tu turno antes de vender.');
+        }
+
+        return view('empresas.cobros.cobrar', [
+            'directa' => true, 'separadas' => false,
+            'volver' => request('desde') === 'hotel' ? route('hotel.index') : route('comandas.seleccion'), 'pedido' => null, 'detalle' => collect(), 'total' => 0,
+            'cuentasPrevias' => collect(), 'mesa' => null, 'piso' => null, 'turno' => $turno,
+            'comprobantes' => DB::table('tipo_documento')->where('caja', 1)->get(),
+            'documentos' => DB::table('tipo_documento_identidad')->orderBy('orden')->get(),
+            'estadopagos' => DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)->get(),
+            'mediospagos' => MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->get(),
+            'negocio' => EmpresaNegocio::find($user->id_empresa_negocio),
+            'categorias' => DB::table('categorias')->where('id_empresa_negocio', $user->id_empresa_negocio)->where('visible', 1)->get(),
+        ]);
+    }
+
+    public function registrarDirecta(Request $request)
+    {
+        $this->autorizar();
+        $user = Auth::user();
+        $datos = $request->validate(\App\Support\VentaDirecta::REGLAS + [
+            'items.*.observacion' => 'nullable|string|max:100',
+            'enviar_cocina' => 'nullable|boolean',
+            'imprimir' => 'nullable|boolean',
+        ], \App\Support\VentaDirecta::MENSAJES, \App\Support\VentaDirecta::NOMBRES);
+
+        try {
+            $cabId = \App\Support\VentaDirecta::registrar($user, $datos, 'PVCOMANDA');
+        } catch (\RuntimeException $e) {
+            return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['estado' => 'error', 'mensaje' => config('app.debug') ? $e->getMessage() : 'Error al registrar la venta.']);
+        }
+
+        $respuesta = \App\Support\VentaDirecta::respuesta($cabId);
+
+        // Platos a cocina (pantalla y comanda impresa), con el número del comprobante como referencia
+        if ($request->boolean('enviar_cocina')) {
+            try {
+                $nombres = DB::table('productos')->whereIn('IdProducto', collect($datos['items'])->pluck('id')->filter())->pluck('pronom', 'IdProducto');
+                $lineas = collect($datos['items'])->filter(fn($i) => !empty($i['id']))->map(fn($i) => [
+                    'IdProducto' => (int) $i['id'], 'nombre' => $nombres[$i['id']] ?? '', 'cantidad' => (float) $i['cantidad'],
+                    'observacion' => $i['observacion'] ?? null,
+                ])->values()->all();
+                $destino = 'PUNTO DE VENTA';
+                \App\Support\Impresion\Impresion::comandaPara($user->id_empresa_negocio, $destino, $respuesta['numero'], $lineas);
+                \App\Support\Cocina::registrarDirecta($user->id_empresa_negocio, $destino . ' ' . $respuesta['numero'], $lineas);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        // Comprobante directo a la impresora; si el agente no está conectado, la pantalla lo imprime con el navegador
+        $impreso = false;
+        if ($request->boolean('imprimir')) {
+            try {
+                $impreso = \App\Support\Impresion\Impresion::comprobante($cabId);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        return response()->json($respuesta + ['impreso' => $impreso]);
     }
 
     /** Búsqueda predictiva de clientes por nombre o número de documento (solo la BD propia) */
@@ -238,7 +321,8 @@ class CobroController extends Controller
                 }
 
                 // ---- Cerrar pedido y liberar mesa (solo cuando ya no queda nada por cobrar) ----
-                if ($this->itemsPendientes($pedido->ped_id)->isEmpty()) {
+                // En hotel el pedido sigue abierto hasta "Dar salida": el huésped puede pagar al entrar y seguir pidiendo
+                if ($pedido->ped_tip !== 'Hotel' && $this->itemsPendientes($pedido->ped_id)->isEmpty()) {
                     $pedido->update(['ped_est' => 'Cerrado', 'fecha_hora_modificacion' => now()]);
                     if ($pedido->mes_id) {
                         Mesa::where('mes_id', $pedido->mes_id)->update(['mes_est' => 'Libre']);
@@ -270,15 +354,15 @@ class CobroController extends Controller
         }
 
         if ($impreso) {
-            $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->first(['serdoc', 'numdoc', 'ped_id']);
-            $sigueAbierto = $cab->ped_id && Pedido::where('ped_id', $cab->ped_id)->where('ped_est', 'Aperturado')->exists();
+            $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->first(['serdoc', 'numdoc', 'ped_id', 'ped_tip']);
+            $sigueAbierto = $cab->ped_id && $cab->ped_tip !== 'Hotel' && Pedido::where('ped_id', $cab->ped_id)->where('ped_est', 'Aperturado')->exists();
             session()->flash('success', 'Comprobante ' . $cab->serdoc . '-' . str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT) . ' enviado a la impresora.');
 
             return response()->json([
                 'estado' => 'success',
                 'mensaje' => 'Comprobante emitido e impreso',
                 // Cuentas separadas con saldo: vuelve a separadas para cobrar a la siguiente persona
-                'redirect' => $sigueAbierto ? route('cobros.separadas', $cab->ped_id) : route('comandas.seleccion'),
+                'redirect' => $sigueAbierto ? route('cobros.separadas', $cab->ped_id) : ($cab->ped_tip === 'Hotel' ? route('hotel.index') : route('comandas.seleccion')),
             ]);
         }
 
@@ -307,7 +391,7 @@ class CobroController extends Controller
         $tdodes = DB::table('tipo_documento')->where('tdocod', $cab->tdocod)->value('tdodes');
 
         // Si fue una cuenta separada y aún queda algo por cobrar, se ofrece cobrar la siguiente
-        $pedidoPendiente = $cab->ped_id && Pedido::where('ped_id', $cab->ped_id)->where('ped_est', 'Aperturado')->exists()
+        $pedidoPendiente = $cab->ped_id && $cab->ped_tip !== 'Hotel' && Pedido::where('ped_id', $cab->ped_id)->where('ped_est', 'Aperturado')->exists()
             ? $cab->ped_id : null;
 
         // Formato: el de la sucursal (ticket o A4), salvo que se pida el otro con ?formato=

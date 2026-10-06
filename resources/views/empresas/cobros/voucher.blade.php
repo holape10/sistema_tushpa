@@ -99,6 +99,10 @@
     @endif
     @if (in_array($cab->tdocod, ['07', '08'], true))
         <a class="b1" href="{{ route('notas.index') }}">VOLVER A NOTAS</a>
+    @elseif ($cab->ped_tip === 'Hotel')
+        <a class="b1" href="{{ route('hotel.index') }}">VOLVER A HABITACIONES</a>
+    @elseif ($cab->ped_tip === 'PVCOMANDA')
+        <a class="b1" href="{{ route('cobros.directa') }}">NUEVA VENTA</a>
     @elseif (in_array($cab->ped_tip, ['POS', 'PV', 'TACTIL', 'FARMACIA', 'GRIFO'], true))
         <a class="b1" href="{{ route(['PV' => 'pv.index', 'TACTIL' => 'pv.tactil', 'POS' => 'pos.movil', 'FARMACIA' => 'pv.farmacia', 'GRIFO' => 'pv.grifo'][$cab->ped_tip]) }}">NUEVA VENTA</a>
     @else
