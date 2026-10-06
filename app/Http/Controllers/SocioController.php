@@ -72,8 +72,10 @@ class SocioController extends Controller
             'socios' => $socios,
             'cfg' => $cfg,
             'categorias' => DB::table('socio_categorias')->where('id_empresa_negocio', $suc)->orderBy('nombre')->get(),
-            'conceptos' => DB::table('productos')->where('id_empresa_negocio', $suc)->where('proest', 'Activo')->orderBy('pronom')
-                ->get(['IdProducto', 'pronom', 'propun', 'debe', 'haber']),
+            // Los conceptos que se llaman CUOTA/MULTA/APORTE van primero (son los que se usan aquí)
+            'conceptos' => DB::table('productos')->where('id_empresa_negocio', $suc)->where('proest', 'Activo')
+                ->orderByRaw("CASE WHEN pronom = 'CUOTA ORDINARIA' THEN 0 WHEN pronom LIKE 'CUOTA%' OR pronom LIKE 'MULTA%' OR pronom LIKE 'APORTE%' THEN 1 ELSE 2 END")
+                ->orderBy('pronom')->get(['IdProducto', 'pronom', 'propun', 'debe', 'haber']),
             'mediospagos' => MedioPago::where('id_empresa_negocio', $suc)->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag']),
             'turno' => Turno::abiertoDe(Auth::user()),
             'esAdmin' => Auth::user()->esAdmin(),
@@ -185,6 +187,62 @@ class SocioController extends Controller
         $d = $request->validate(['estado' => 'required|in:' . implode(',', Socios::ESTADOS)]);
         DB::table('socios')->where('soc_id', $id)->where('id_empresa_negocio', $this->sucursal())->update(['estado' => $d['estado'], 'suspendido_auto' => 0]);
         return response()->json(['ok' => true, 'mensaje' => 'Estado actualizado.']);
+    }
+
+    /**
+     * Quitar del padrón a los que no son socios (por ejemplo, clientes que vinieron una sola vez).
+     * Sin cuotas ni pagos se borran; con historial quedan RETIRADO para no perder sus pagos.
+     */
+    public function eliminar(Request $request)
+    {
+        $this->soloAdmin();
+        $d = $request->validate(['ids' => 'required|array|min:1|max:5000', 'ids.*' => 'integer']);
+        $suc = $this->sucursal();
+        $borrados = $retirados = 0;
+        DB::transaction(function () use ($d, $suc, &$borrados, &$retirados) {
+            $ids = DB::table('socios')->where('id_empresa_negocio', $suc)->whereIn('soc_id', $d['ids'])->pluck('soc_id');
+            $conHistorial = DB::table('socio_cargos')->whereIn('soc_id', $ids)->where('estado', '!=', 'ANULADO')->distinct()->pluck('soc_id');
+            $retirados = DB::table('socios')->whereIn('soc_id', $conHistorial)->update(['estado' => 'RETIRADO', 'suspendido_auto' => 0]);
+            $libres = $ids->diff($conHistorial)->values();
+            DB::table('socio_familiares')->whereIn('soc_id', $libres)->delete();
+            DB::table('socio_cargos')->whereIn('soc_id', $libres)->delete();
+            $borrados = DB::table('socios')->whereIn('soc_id', $libres)->delete();
+        });
+        $msg = $borrados ? "Se quitaron {$borrados} del padrón." : '';
+        if ($retirados) {
+            $msg .= " {$retirados} tenían cuotas o pagos: quedaron como RETIRADO.";
+        }
+        return response()->json(['ok' => true, 'mensaje' => trim($msg) ?: 'Nada que quitar.']);
+    }
+
+    /** Poner la misma categoría a varios socios: los marcados o todos los que no tienen */
+    public function ponerCategoria(Request $request)
+    {
+        $this->soloAdmin();
+        $d = $request->validate(['cat_soc_id' => 'required|integer', 'ids' => 'nullable|array|max:5000', 'ids.*' => 'integer', 'sin_categoria' => 'nullable|boolean']);
+        $suc = $this->sucursal();
+        $cat = DB::table('socio_categorias')->where('cat_soc_id', $d['cat_soc_id'])->where('id_empresa_negocio', $suc)->first();
+        if (!$cat) {
+            return response()->json(['ok' => false, 'mensaje' => 'Elige una categoría.']);
+        }
+        $q = DB::table('socios')->where('id_empresa_negocio', $suc);
+        if (!empty($d['ids'])) {
+            $q->whereIn('soc_id', $d['ids']);
+        } elseif (!empty($d['sin_categoria'])) {
+            $q->whereNull('cat_soc_id')->whereIn('estado', ['ACTIVO', 'SUSPENDIDO']);
+        } else {
+            return response()->json(['ok' => false, 'mensaje' => 'Marca al menos un socio.']);
+        }
+        $n = $q->update(['cat_soc_id' => $cat->cat_soc_id]);
+        return response()->json(['ok' => true, 'mensaje' => "{$n} socio(s) ahora son {$cat->nombre} (S/ " . number_format($cat->cuota, 2) . ' al mes).']);
+    }
+
+    /** Olvidó su contraseña del portal: vuelve a ser su DNI/RUC y se le pedirá crear otra */
+    public function restablecerClave(int $id)
+    {
+        $this->puedeUsar();
+        DB::table('socios')->where('soc_id', $id)->where('id_empresa_negocio', $this->sucursal())->update(['clave' => null]);
+        return response()->json(['ok' => true, 'mensaje' => 'Listo: su contraseña del portal vuelve a ser su DNI/RUC.']);
     }
 
     // ------------------------------------------------------------------ cuotas y cargos

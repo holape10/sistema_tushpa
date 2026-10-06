@@ -69,8 +69,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/config', 'guardarConfig')->name('config');
         Route::post('/categorias', 'guardarCategoria')->name('categoria');
         Route::post('/desde-clientes', 'desdeClientes')->name('desde_clientes');
+        Route::post('/eliminar', 'eliminar')->name('eliminar');
+        Route::post('/poner-categoria', 'ponerCategoria')->name('poner_categoria');
         Route::get('/{id}', 'ver')->whereNumber('id')->name('ver');
         Route::post('/{id}/estado', 'estado')->whereNumber('id')->name('estado');
+        Route::post('/{id}/clave', 'restablecerClave')->whereNumber('id')->name('clave');
         Route::post('/{id}/cobrar', 'cobrar')->whereNumber('id')->name('cobrar');
         Route::get('/{id}/carnet', 'carnet')->whereNumber('id')->name('carnet');
     });

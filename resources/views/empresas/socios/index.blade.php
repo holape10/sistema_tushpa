@@ -22,6 +22,7 @@
             <div class="flex flex-wrap gap-2">
                 <button type="button" @click="nuevoSocio()" class="{{ $btn }} bg-emerald-600 text-white hover:bg-emerald-700"><i class="fas fa-user-plus"></i> Nuevo socio</button>
                 @if ($esAdmin)
+                    <button type="button" @click="modal = 'traer'" class="{{ $btn }} bg-white border border-emerald-500 text-emerald-700 hover:bg-emerald-50"><i class="fas fa-users"></i> Traer clientes como socios</button>
                     <button type="button" @click="abrirGenerar()" class="{{ $btn }} bg-indigo-600 text-white hover:bg-indigo-700"><i class="fas fa-calendar-plus"></i> Generar cuotas del mes</button>
                     <button type="button" @click="abrirCargo()" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"><i class="fas fa-file-invoice-dollar"></i> Cargo extraordinario</button>
                     <button type="button" @click="modal = 'config'" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"><i class="fas fa-gear"></i> Configuración</button>
@@ -35,10 +36,41 @@
                 <a href="{{ route('turnos.index') }}" class="font-bold underline">apertura tu turno</a>.
             </div>
         @endif
-        @if (!$cfg->IdProducto_ordinaria && $esAdmin)
-            <div class="rounded-xl bg-sky-50 border border-sky-200 px-4 py-3 text-sm text-sky-800">
-                <i class="fas fa-circle-info"></i> Para empezar: en <button type="button" @click="modal = 'config'" class="font-bold underline">Configuración</button>
-                crea las categorías con su cuota y elige el concepto (producto) de la cuota ordinaria.
+        {{-- Primeros pasos: se muestra hasta completar la puesta en marcha --}}
+        @php
+            $pasos = [
+                ['hecho' => $categorias->where('cuota', '>', 0)->isNotEmpty(), 'titulo' => 'Crea las categorías y su cuota',
+                 'texto' => 'Ej.: ACTIVO S/ 100, JUVENIL S/ 50.', 'boton' => 'Crear categorías', 'accion' => "modal = 'config'"],
+                ['hecho' => (bool) $cfg->IdProducto_ordinaria, 'titulo' => 'Elige el producto de la cuota',
+                 'texto' => 'El producto CUOTA ORDINARIA (sirve para todos los meses).', 'boton' => 'Elegir producto', 'accion' => "modal = 'config'"],
+                ['hecho' => $socios->isNotEmpty(), 'titulo' => 'Trae a tus socios',
+                 'texto' => 'Todos los clientes con DNI entran de una vez; luego quitas a los que no son.', 'boton' => 'Traer clientes', 'accion' => "modal = 'traer'"],
+                ['hecho' => (bool) $cfg->ultimo_periodo, 'titulo' => 'Genera las cuotas del mes',
+                 'texto' => 'Un clic a fin de mes y cada socio queda con su cuota por pagar.', 'boton' => 'Generar cuotas', 'accion' => 'abrirGenerar()'],
+            ];
+            $pendientes = collect($pasos)->where('hecho', false)->count();
+        @endphp
+        @if ($esAdmin && $pendientes)
+            <div class="bg-white rounded-2xl shadow-sm p-5 border-2 border-emerald-200">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="font-extrabold text-gray-800"><i class="fas fa-flag-checkered text-emerald-600"></i> Primeros pasos</h2>
+                    <span class="text-sm text-gray-500">{{ 4 - $pendientes }} de 4 listos</span>
+                </div>
+                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    @php $siguiente = collect($pasos)->search(fn($p) => !$p['hecho']); @endphp
+                    @foreach ($pasos as $i => $p)
+                        <div class="rounded-xl p-4 border {{ $p['hecho'] ? 'bg-emerald-50 border-emerald-200' : ($i === $siguiente ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-gray-200 opacity-70') }}">
+                            <div class="flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold {{ $p['hecho'] ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600' }}">{!! $p['hecho'] ? '<i class="fas fa-check"></i>' : $i + 1 !!}</span>
+                                <p class="font-bold text-gray-800 text-sm">{{ $p['titulo'] }}</p>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2 min-h-[2.5rem]">{{ $p['texto'] }}</p>
+                            @unless ($p['hecho'])
+                                <button type="button" @click="{{ $p['accion'] }}" class="mt-2 w-full py-2 rounded-lg text-sm font-bold {{ $i === $siguiente ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-100 text-gray-700' }}">{{ $p['boton'] }}</button>
+                            @endunless
+                        </div>
+                    @endforeach
+                </div>
             </div>
         @endif
 
@@ -67,15 +99,30 @@
         </div>
 
         {{-- Padrón --}}
+        @if ($esAdmin)
+            <div x-show="sel.length" x-cloak class="flex flex-wrap items-center gap-3 rounded-xl bg-rose-50 border border-rose-200 px-4 py-2 text-sm">
+                <span class="font-semibold text-rose-800"><span x-text="sel.length"></span> seleccionado(s)</span>
+                <select x-model="catMasiva" class="rounded-lg border-gray-300 text-sm py-1.5">
+                    <option value="">Poner categoría…</option>
+                    @foreach ($categorias as $c)<option value="{{ $c->cat_soc_id }}">{{ $c->nombre }} · S/ {{ number_format($c->cuota, 2) }}</option>@endforeach
+                </select>
+                <button type="button" @click="ponerCategoria({ ids: sel })" :disabled="ocupado || !catMasiva" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold disabled:opacity-40">Aplicar categoría</button>
+                <button type="button" @click="eliminar(sel)" :disabled="ocupado" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white font-bold disabled:opacity-40"><i class="fas fa-trash"></i> Quitar del padrón</button>
+                <button type="button" @click="sel = []" class="text-rose-700 underline">Quitar selección</button>
+                <span class="text-xs text-rose-700">Los que tienen cuotas o pagos no se borran: quedan como RETIRADO.</span>
+            </div>
+        @endif
         <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-gray-500 text-xs uppercase"><tr>
+                    @if ($esAdmin)<th class="pl-4 py-2 w-8"><input type="checkbox" class="rounded" :checked="todosMarcados" @change="marcarTodos($event.target.checked)" title="Seleccionar los de la lista"></th>@endif
                     <th class="px-4 py-2 text-left">N°</th><th class="px-4 py-2 text-left">Socio</th><th class="px-4 py-2 text-left">Categoría</th>
                     <th class="px-4 py-2 text-center">Estado</th><th class="px-4 py-2 text-center">Fam.</th><th class="px-4 py-2 text-center">Meses</th>
                     <th class="px-4 py-2 text-right">Debe</th><th class="px-4 py-2"></th></tr></thead>
                 <tbody class="divide-y divide-gray-100">
                     <template x-for="s in filtrados.slice(0, mostrar)" :key="s.soc_id">
-                        <tr class="hover:bg-gray-50">
+                        <tr class="hover:bg-gray-50" :class="sel.includes(s.soc_id) ? 'bg-rose-50' : ''">
+                            @if ($esAdmin)<td class="pl-4 py-2"><input type="checkbox" class="rounded" :checked="sel.includes(s.soc_id)" @change="sel = $event.target.checked ? [...sel, s.soc_id] : sel.filter(i => i !== s.soc_id)"></td>@endif
                             <td class="px-4 py-2 font-mono font-bold text-gray-600" x-text="s.codigo"></td>
                             <td class="px-4 py-2"><p class="font-semibold text-gray-800" x-text="s.clinom"></p><p class="text-xs text-gray-400" x-text="s.clinum + (s.telefono ? ' · ' + s.telefono : '')"></p></td>
                             <td class="px-4 py-2" x-text="s.categoria || '—'"></td>
@@ -87,10 +134,14 @@
                                 <button type="button" @click="abrirFicha(s.soc_id, 'cobro')" class="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700">Cobrar</button>
                                 <button type="button" @click="abrirFicha(s.soc_id, 'datos')" class="px-2 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs hover:bg-gray-200" title="Ficha"><i class="fas fa-pen"></i></button>
                                 <a :href="'{{ url('socios') }}/' + s.soc_id + '/carnet'" target="_blank" class="px-2 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs hover:bg-gray-200" title="Carnet"><i class="fas fa-id-badge"></i></a>
+                                @if ($esAdmin)<button type="button" @click="eliminar([s.soc_id], s.clinom)" class="px-2 py-1 rounded-lg bg-gray-100 text-rose-600 text-xs hover:bg-rose-100" title="Quitar del padrón"><i class="fas fa-trash"></i></button>@endif
                             </td>
                         </tr>
                     </template>
-                    <tr x-show="!filtrados.length"><td colspan="8" class="px-4 py-8 text-center text-gray-400">No hay socios con ese filtro.</td></tr>
+                    <tr x-show="!filtrados.length"><td colspan="9" class="px-4 py-8 text-center text-gray-400">
+                        <span x-text="lista.length ? 'No hay socios con ese filtro.' : 'Aún no hay socios.'"></span>
+                        @if ($esAdmin)<button type="button" x-show="!lista.length" @click="modal = 'traer'" class="block mx-auto mt-3 px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold"><i class="fas fa-users"></i> Traer todos los clientes como socios</button>@endif
+                    </td></tr>
                 </tbody>
             </table>
             <div x-show="filtrados.length > mostrar" class="p-3 text-center">
@@ -119,14 +170,14 @@
                 <div x-show="tab === 'cobro'" class="p-5 grid lg:grid-cols-5 gap-5">
                     <div class="lg:col-span-3 space-y-3">
                         <div class="flex items-end gap-2">
-                            <label class="text-xs font-semibold text-gray-500 flex-1">Paga S/ (se aplica desde la cuota más antigua)
+                            <label class="text-xs font-semibold text-gray-500 flex-1">¿Paga solo una parte? Escribe cuánto trae y pulsa Aplicar
                                 <input type="number" step="0.10" min="0" x-model.number="aCuenta" class="{{ $in }} mt-1"></label>
                             <button type="button" @click="repartir()" class="h-9 px-3 rounded-lg bg-gray-800 text-white text-xs font-bold">Aplicar</button>
                             <button type="button" @click="todo()" class="h-9 px-3 rounded-lg bg-gray-100 text-gray-700 text-xs font-bold">Todo</button>
                         </div>
                         <div class="border rounded-xl overflow-hidden">
                             <table class="w-full text-sm">
-                                <thead class="bg-gray-50 text-xs text-gray-500"><tr><th class="px-3 py-2 text-left">Concepto</th><th class="px-3 py-2 text-right">Saldo</th><th class="px-3 py-2 text-right w-28">Pagar</th><th class="w-8"></th></tr></thead>
+                                <thead class="bg-gray-50 text-xs text-gray-500"><tr><th class="px-3 py-2 text-left">Concepto</th><th class="px-3 py-2 text-right">Saldo</th><th class="px-3 py-2 text-right w-28">Cobrar ahora</th><th class="w-8"></th></tr></thead>
                                 <tbody class="divide-y">
                                     <template x-for="c in ficha.pendientes" :key="c.car_id">
                                         <tr>
@@ -165,6 +216,7 @@
                             <select x-model="cobro.tdocod" @change="if (cobro.tdocod === '01') { cobro.clinum = ''; cobro.clinom = ''; cobro.tdicod = '6' } else { datosSocioEnCobro() }" class="{{ $in }} mt-1">
                                 <option value="03">Boleta</option><option value="01">Factura</option><option value="13">Nota de venta</option>
                             </select></label>
+                        <p x-show="cobro.tdocod === '01'" class="text-xs text-indigo-700">Escribe el RUC de la empresa: el nombre y la dirección salen solos de SUNAT.</p>
                         <div class="grid grid-cols-3 gap-2">
                             <label class="col-span-1 block text-xs font-semibold text-gray-500">DNI / RUC
                                 <input x-model="cobro.clinum" @keydown.enter.prevent="buscarDoc('cobro')" @change="buscarDoc('cobro')" maxlength="15" class="{{ $in }} mt-1"></label>
@@ -249,6 +301,7 @@
                                 <button type="button" @click="cambiarEstado()" class="px-3 py-1 rounded-lg bg-gray-800 text-white text-xs font-bold">Cambiar</button>
                             </div>
                         @endif
+                        <button type="button" x-show="form.soc_id" @click="restablecerClave()" class="text-xs text-gray-500 underline">Restablecer clave del portal</button>
                         <button :disabled="ocupado" class="ml-auto px-5 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 disabled:opacity-40">Guardar socio</button>
                     </div>
                 </form>
@@ -274,6 +327,24 @@
         </div>
 
         @if ($esAdmin)
+        {{-- ================= Traer clientes ================= --}}
+        <div x-show="modal === 'traer'" x-cloak class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4" @click.outside="modal = null">
+                <h3 class="font-bold text-gray-800"><i class="fas fa-users text-emerald-600"></i> Traer clientes como socios</h3>
+                <p class="text-sm text-gray-600">Todos los clientes con DNI que aún no son socios se agregan como socios ACTIVOS, con número correlativo.
+                    Luego quita del padrón a los que no son socios (marca las casillas y pulsa "Quitar del padrón").</p>
+                <label class="block text-sm font-semibold text-gray-600">Categoría con la que entran
+                    <select x-model="desdeCat" class="{{ $in }} mt-1">
+                        <option value="">Sin categoría (no genera cuota hasta que le pongas una)</option>
+                        @foreach ($categorias as $c)<option value="{{ $c->cat_soc_id }}">{{ $c->nombre }} · S/ {{ number_format($c->cuota, 2) }}</option>@endforeach
+                    </select></label>
+                <div class="flex justify-end gap-2">
+                    <button type="button" @click="modal = null" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold">Cancelar</button>
+                    <button type="button" @click="desdeClientes()" :disabled="ocupado" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold disabled:opacity-40">Traer clientes</button>
+                </div>
+            </div>
+        </div>
+
         {{-- ================= Generar cuotas ================= --}}
         <div x-show="modal === 'generar'" x-cloak class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4" @click.outside="modal = null">
@@ -283,11 +354,21 @@
                 <div class="rounded-xl bg-gray-50 p-3 text-sm space-y-1" x-show="gen.datos">
                     <p>Se cargará la cuota de <strong x-text="gen.datos?.mes"></strong> a <strong x-text="gen.datos?.socios"></strong> socio(s) por <strong x-text="soles(gen.datos?.total)"></strong>.</p>
                     <p x-show="gen.datos?.ya_generados" class="text-gray-500"><span x-text="gen.datos?.ya_generados"></span> ya la tienen (no se repite).</p>
-                    <p x-show="gen.datos?.sin_categoria" class="text-amber-700"><span x-text="gen.datos?.sin_categoria"></span> socio(s) activos sin categoría con cuota: no se les carga.</p>
+                    <p x-show="gen.datos?.sin_categoria" class="text-amber-700"><span x-text="gen.datos?.sin_categoria"></span> socio(s) no tienen categoría con cuota: no se les carga.</p>
+                </div>
+                <div x-show="gen.datos?.sin_categoria" class="rounded-xl border border-amber-300 bg-amber-50 p-3 space-y-2">
+                    <p class="text-sm font-semibold text-amber-900">Ponles una categoría para que paguen cuota:</p>
+                    <div class="flex gap-2">
+                        <select x-model="catMasiva" class="{{ $in }}">
+                            <option value="">Elige la categoría…</option>
+                            @foreach ($categorias->where('cuota', '>', 0) as $c)<option value="{{ $c->cat_soc_id }}">{{ $c->nombre }} · S/ {{ number_format($c->cuota, 2) }}</option>@endforeach
+                        </select>
+                        <button type="button" @click="ponerCategoria({ sin_categoria: 1 }, true)" :disabled="ocupado || !catMasiva" class="px-3 rounded-lg bg-amber-600 text-white text-sm font-bold whitespace-nowrap disabled:opacity-40">Ponérsela</button>
+                    </div>
                 </div>
                 <p class="text-xs text-gray-500">Activos y suspendidos reciben la cuota de su categoría. Luego, quien deba {{ $cfg->meses_suspension }} cuota(s) o más pasa a SUSPENDIDO.</p>
                 <div class="flex justify-end gap-2">
-                    <button type="button" @click="modal = null" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold">Cancelar</button>
+                    <button type="button" @click="cerrar()" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold">Cancelar</button>
                     <button type="button" @click="generar()" :disabled="ocupado || !gen.datos?.socios" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold disabled:opacity-40">Generar</button>
                 </div>
             </div>
@@ -358,7 +439,9 @@
                             <option value="">Elige el producto…</option>
                             @foreach ($conceptos as $p)<option value="{{ $p->IdProducto }}">{{ $p->pronom }}{{ $p->debe ? ' · ' . $p->debe . ' / ' . $p->haber : '' }}</option>@endforeach
                         </select>
-                        <span class="text-xs font-normal text-gray-400">Un solo producto (ej. CUOTA ORDINARIA): el mes va en la descripción. Sus cuentas contables van al comprobante.</span></label>
+                        <span class="text-xs font-normal text-gray-400">Elige <b>CUOTA ORDINARIA</b> (sin mes): sirve para todos los meses. Sus cuentas contables van al comprobante.</span>
+                        <span x-show="cfg.IdProducto_ordinaria && !/^CUOTA ORDINARIA$/i.test(nombreConcepto(cfg.IdProducto_ordinaria))" class="block mt-1 text-xs font-semibold text-rose-600">
+                            Ojo: elegiste «<span x-text="nombreConcepto(cfg.IdProducto_ordinaria)"></span>». Lo normal es «CUOTA ORDINARIA».</span></label>
                     <label class="block text-sm font-semibold text-gray-600">Suspender al deber (cuotas)
                         <input type="number" min="0" max="36" x-model.number="cfg.meses_suspension" class="{{ $in }} mt-1">
                         <span class="text-xs font-normal text-gray-400">0 = nunca suspender automáticamente</span></label>
@@ -402,15 +485,15 @@
                 conceptos: @js($conceptos),
                 cfg: @js(['IdProducto_ordinaria' => (string) $cfg->IdProducto_ordinaria, 'meses_suspension' => (int) $cfg->meses_suspension, 'edad_max_hijos' => (int) $cfg->edad_max_hijos, 'parentescos' => $cfg->parentescos]),
                 f: { texto: '', estado: '', cat: '', deuda: false },
-                mostrar: 200, modal: null, tab: 'cobro', ocupado: false, cambios: false,
+                mostrar: 200, modal: null, sel: [], tab: 'cobro', ocupado: false, cambios: false,
                 ficha: { socio: {}, familiares: [], pendientes: [], pagos: [] },
                 form: {}, estadoManual: 'ACTIVO',
                 pagos: {}, aCuenta: null,
-                cobro: { tdocod: '03', tdicod: '1', clinum: '', clinom: '', medio: '{{ $mediospagos->first()->id_med_pag ?? '' }}', paga: null, imprimir: true },
+                cobro: { tdocod: '03', tdicod: '1', clinum: '', clinom: '', clidir: '', medio: '{{ $mediospagos->first()->id_med_pag ?? '' }}', paga: null, imprimir: true },
                 cargoUno: { IdProducto: '', monto: null, descripcion: '' },
                 cargo: { IdProducto: '', monto: null, descripcion: '', cat_soc_id: '' },
                 gen: { mes: '{{ substr($periodo, 0, 4) }}-{{ substr($periodo, 4, 2) }}', datos: null },
-                nuevaCat: { nombre: '', cuota: null }, desdeCat: '',
+                nuevaCat: { nombre: '', cuota: null }, desdeCat: '{{ $categorias->where('cuota', '>', 0)->first()->cat_soc_id ?? '' }}', catMasiva: '{{ $categorias->where('cuota', '>', 0)->first()->cat_soc_id ?? '' }}',
                 aviso: '', avisoOk: true,
 
                 iniciar() {},
@@ -425,6 +508,29 @@
                     const t = this.f.texto.trim().toUpperCase();
                     return this.lista.filter(s => (!t || (s.clinom || '').toUpperCase().includes(t) || (s.clinum || '').includes(t) || (s.codigo || '').toUpperCase() === t)
                         && (!this.f.estado || s.estado === this.f.estado) && (!this.f.cat || String(s.cat_soc_id) === this.f.cat) && (!this.f.deuda || s.saldo > 0));
+                },
+                get todosMarcados() { const v = this.filtrados.slice(0, this.mostrar); return v.length > 0 && v.every(s => this.sel.includes(s.soc_id)); },
+                marcarTodos(si) {
+                    const ids = this.filtrados.slice(0, this.mostrar).map(s => s.soc_id);
+                    this.sel = si ? [...new Set([...this.sel, ...ids])] : this.sel.filter(i => !ids.includes(i));
+                },
+                async eliminar(ids, nombre) {
+                    if (!confirm(nombre ? '¿Quitar a ' + nombre + ' del padrón de socios?' : '¿Quitar ' + ids.length + ' socio(s) del padrón?')) return;
+                    this.ocupado = true;
+                    const r = await this.post(URL_SOCIOS + '/eliminar', { ids });
+                    this.ocupado = false;
+                    this.avisar(r.mensaje, r.ok);
+                    if (r.ok) setTimeout(() => location.reload(), 1200);
+                },
+                nombreConcepto(id) { const p = this.conceptos.find(x => String(x.IdProducto) === String(id)); return p ? p.pronom : ''; },
+                async ponerCategoria(donde, enGenerar = false) {
+                    this.ocupado = true;
+                    const r = await this.post(URL_SOCIOS + '/poner-categoria', Object.assign({ cat_soc_id: this.catMasiva }, donde));
+                    this.ocupado = false;
+                    this.avisar(r.mensaje, r.ok);
+                    if (!r.ok) return;
+                    this.cambios = true;
+                    if (enGenerar) { await this.previa(); } else { setTimeout(() => location.reload(), 1200); }
                 },
                 get totalPago() { return Math.round(Object.values(this.pagos).reduce((a, v) => a + (Number(v) || 0), 0) * 100) / 100; },
                 avisar(t, ok = true) { this.aviso = t; this.avisoOk = ok; clearTimeout(this._t); this._t = setTimeout(() => this.aviso = '', 4500); },
@@ -452,12 +558,12 @@
                         familiares: d.familiares.map(f => ({ fam_id: f.fam_id, nombre: f.nombre, dni: f.dni || '', parentesco: f.parentesco, fecha_nac: f.fecha_nac || '', activo: !!+f.activo })) };
                     this.estadoManual = s.estado;
                     this.pagos = {}; this.aCuenta = null;
-                    d.pendientes.forEach(c => this.pagos[c.car_id] = null);
+                    d.pendientes.forEach(c => this.pagos[c.car_id] = Math.round((c.monto - c.pagado) * 100) / 100);
                     this.datosSocioEnCobro();
                     this.cobro.tdocod = '03'; this.cobro.paga = null;
                     this.tab = tab; this.modal = 'ficha';
                 },
-                datosSocioEnCobro() { const s = this.ficha.socio; this.cobro.clinum = s.clinum || ''; this.cobro.clinom = s.clinom || ''; this.cobro.tdicod = s.tdicod || '1'; },
+                datosSocioEnCobro() { const s = this.ficha.socio; this.cobro.clinum = s.clinum || ''; this.cobro.clinom = s.clinom || ''; this.cobro.tdicod = s.tdicod || '1'; this.cobro.clidir = s.clidir && s.clidir !== '--' ? s.clidir : ''; },
                 async buscarDoc(donde) {
                     const obj = donde === 'cobro' ? this.cobro : this.form;
                     const doc = (obj.clinum || '').trim();
@@ -466,6 +572,7 @@
                     if (d && d.nom) {
                         obj.clinom = d.nom; obj.tdicod = d.tdicod || (doc.length === 11 ? '6' : '1');
                         if (donde === 'form') { this.form.clidir = d.dir && d.dir !== '--' ? d.dir : this.form.clidir; this.form.telefono = d.tel || this.form.telefono; this.form.clicor = d.cor || this.form.clicor; }
+                        if (donde === 'cobro') obj.clidir = d.dir && d.dir !== '--' ? d.dir : '';
                         if (donde === 'cobro' && doc.length === 11) obj.tdocod = '01';
                     }
                 },
@@ -475,6 +582,11 @@
                     this.ocupado = false;
                     this.avisar(r.mensaje, r.ok);
                     if (r.ok) { this.cambios = true; await this.abrirFicha(r.soc_id, 'datos'); }
+                },
+                async restablecerClave() {
+                    if (!confirm('¿Restablecer la contraseña del portal? Volverá a ser su DNI/RUC.')) return;
+                    const r = await this.post(URL_SOCIOS + '/' + this.form.soc_id + '/clave');
+                    this.avisar(r.mensaje, r.ok);
                 },
                 async cambiarEstado() {
                     const r = await this.post(URL_SOCIOS + '/' + this.form.soc_id + '/estado', { estado: this.estadoManual });
@@ -497,7 +609,7 @@
                     if (this.cobro.tdocod === '01' && !/^\d{11}$/.test(this.cobro.clinum)) return this.avisar('Para factura escribe el RUC.', false);
                     this.ocupado = true;
                     const r = await this.post(URL_SOCIOS + '/' + this.ficha.socio.soc_id + '/cobrar', {
-                        montos: this.pagos, tdocod: this.cobro.tdocod, clinum: this.cobro.clinum, clinom: this.cobro.clinom, tdicod: this.cobro.tdicod,
+                        montos: this.pagos, tdocod: this.cobro.tdocod, clinum: this.cobro.clinum, clinom: this.cobro.clinom, tdicod: this.cobro.tdicod, clidir: this.cobro.clidir,
                         id_med_pag: [this.cobro.medio], mon_med_pag: [this.totalPago], paga: this.cobro.paga || this.totalPago, imprimir: this.cobro.imprimir ? 1 : 0,
                     });
                     this.ocupado = false;
