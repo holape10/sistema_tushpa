@@ -28,6 +28,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Consultas DNI (respaldo) y tipo de cambio SUNAT: https://apiperu.dev (token en "Api Tokens" de su panel)
+    'apiperu' => [
+        'token' => env('APIPERU_TOKEN'),
+        'url' => env('APIPERU_URL', 'https://api.apiperu.dev'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

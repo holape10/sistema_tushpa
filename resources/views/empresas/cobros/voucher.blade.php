@@ -144,6 +144,8 @@
         <a class="b1" href="{{ route('notas.index') }}">VOLVER A NOTAS</a>
     @elseif ($cab->ped_tip === 'SOCIO')
         <a class="b1" href="{{ route('socios.index') }}">VOLVER A SOCIOS</a>
+    @elseif ($cab->ped_tip === 'Clinica')
+        <a class="b1" href="{{ route('clinica.agenda') }}">VOLVER A LA AGENDA</a>
     @elseif ($cab->ped_tip === 'Hotel')
         <a class="b1" href="{{ route('hotel.index') }}">VOLVER A HABITACIONES</a>
     @elseif ($cab->ped_tip === 'PVCOMANDA')

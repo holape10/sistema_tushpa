@@ -54,6 +54,16 @@ document.addEventListener('alpine:init', () => {
         subtotal(it) { return this.gravado(it) ? r2(this.total(it) / F) : this.total(it); },
         valUni(it) { return this.gravado(it) ? r4(it.costo / F) : r4(it.costo); },
         fleteUnd(it) { return it.cantidad > 0 ? r4((Number(it.flete) || 0) / it.cantidad) : 0; },
+        // Tipo de cambio SUNAT (venta) de la fecha de emisión, como pide SUNAT para compras en dólares
+        buscandoTc: false, tcInfo: '',
+        async consultarTipoCambio() {
+            this.buscandoTc = true; this.tcInfo = '';
+            try {
+                const d = await (await fetch(`${CFG.rutas.tipoCambio}?moneda=USD&fecha=${encodeURIComponent(this.doc.fecEmi)}`, { headers: { Accept: 'application/json' } })).json();
+                if (d.ok) { this.doc.tip_cam = d.venta; this.tcInfo = `SUNAT ${d.fecha_sunat || d.fecha}: compra ${d.compra} · venta ${d.venta}`; }
+                else this.aviso(d.mensaje || 'No se pudo consultar el tipo de cambio.', 'error');
+            } catch (e) { this.aviso('No se pudo consultar el tipo de cambio.', 'error'); } finally { this.buscandoTc = false; }
+        },
         costoFinal(it) { return r4((Number(it.costo) + this.fleteUnd(it)) * (this.doc.moneda === 'USD' ? (Number(this.doc.tip_cam) || 0) : 1)); },
         setValUni(it, v) { v = Math.max(0, parseFloat(v) || 0); it.costo = r4(this.gravado(it) ? v * F : v); },
         setTotal(it, v) { v = Math.max(0, parseFloat(v) || 0); if (it.cantidad > 0) it.costo = r4(v / it.cantidad); },

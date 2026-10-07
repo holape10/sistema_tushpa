@@ -205,15 +205,11 @@ class CompraController extends Controller
             return response()->json(['nom' => $p->prov_raz, 'dir' => $p->prov_dir, 'tdicod' => $p->tdicod]);
         }
 
-        if (preg_match('/^\d{11}$/', $doc)) {
-            try {
-                $r = Http::timeout(8)->withOptions(['verify' => false])->get("https://consultas.holape.app/api/v1/ruc/{$doc}")->json();
-                if (!empty($r['success'])) {
-                    return response()->json(['nom' => $r['data']['razon_social'], 'dir' => $r['data']['direccion'], 'tdicod' => '6']);
-                }
-            } catch (\Throwable $e) {
-                // el servicio no respondió
-            }
+        if ($r = \App\Support\ConsultaPeru::ruc($doc)) {
+            return response()->json(['nom' => $r['nombre'], 'dir' => $r['direccion'], 'tdicod' => '6']);
+        }
+        if ($r = \App\Support\ConsultaPeru::dni($doc)) {
+            return response()->json(['nom' => $r['nombre'], 'dir' => '', 'tdicod' => '1']);
         }
         return response()->json(['error' => 'No se encontró. Escribe el nombre del proveedor.']);
     }

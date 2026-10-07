@@ -58,6 +58,31 @@ Route::middleware('auth')->group(function () {
     Route::post('/cocina/entregado/{ped_id}', [CocinaController::class, 'entregado'])->whereNumber('ped_id');
 
     // Reservas
+    // Clínica: historias clínicas y agenda de citas
+    Route::controller(\App\Http\Controllers\ClinicaController::class)->prefix('clinica')->name('clinica.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/pacientes', 'guardarPaciente')->name('paciente');
+        Route::get('/pacientes/buscar', 'buscar')->name('buscar');
+        Route::get('/historia/{id}', 'ver')->whereNumber('id')->name('historia');
+        Route::post('/historia/{id}/ficha', 'guardarFicha')->whereNumber('id')->name('ficha');
+        Route::post('/historia/{id}/atencion', 'nuevaAtencion')->whereNumber('id')->name('nueva_atencion');
+        Route::get('/historia/{id}/imprimir', 'imprimirHistoria')->whereNumber('id')->name('imprimir');
+        Route::get('/historia/{id}/consentimiento', 'consentimiento')->whereNumber('id')->name('consentimiento');
+        Route::get('/atencion/{id}', 'verAtencion')->whereNumber('id')->name('atencion');
+        Route::post('/atencion/{id}', 'guardarAtencion')->whereNumber('id')->name('atencion.guardar');
+        Route::post('/atencion/{id}/servicio', 'agregarServicio')->whereNumber('id')->name('atencion.servicio');
+        Route::delete('/atencion/{id}/servicio/{det}', 'quitarServicio')->whereNumber('id')->whereNumber('det');
+        Route::get('/atencion/{id}/receta', 'receta')->whereNumber('id')->name('receta');
+        Route::post('/especialidades', 'guardarEspecialidad')->name('especialidad');
+    });
+    Route::controller(\App\Http\Controllers\AgendaController::class)->prefix('clinica')->name('clinica.')->group(function () {
+        Route::get('/agenda', 'index')->name('agenda');
+        Route::get('/agenda/datos', 'datos')->name('agenda.datos');
+        Route::post('/citas', 'guardar')->name('cita');
+        Route::post('/citas/{id}/estado', 'estado')->whereNumber('id')->name('cita.estado');
+        Route::get('/citas/{id}/atender', 'atender')->whereNumber('id')->name('cita.atender');
+    });
+
     // Socios (clubes y asociaciones)
     Route::controller(\App\Http\Controllers\SocioController::class)->prefix('socios')->name('socios.')->group(function () {
         Route::get('/', 'index')->name('index');
@@ -190,6 +215,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/sire/{libro}/solicitud/{id}/archivo', [SireController::class, 'archivo'])->whereIn('libro', ['ventas', 'compras'])->whereNumber('id')->name('sire.archivo');
 
     // Compras: ingreso de mercadería al kardex
+    // Tipo de cambio SUNAT (apiperu.dev)
+    Route::get('/tipo-cambio', [\App\Http\Controllers\TipoCambioController::class, 'index'])->name('tipo_cambio.index');
+    Route::get('/tipo-cambio/consultar', [\App\Http\Controllers\TipoCambioController::class, 'consultar'])->middleware('throttle:30,1')->name('tipo_cambio.consultar');
+
     Route::get('/compras', [CompraController::class, 'index'])->name('compras.index');
     Route::get('/compras/nueva', [CompraController::class, 'create'])->name('compras.create');
     Route::post('/compras', [CompraController::class, 'store'])->name('compras.store');

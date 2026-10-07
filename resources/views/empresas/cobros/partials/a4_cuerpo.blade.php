@@ -190,6 +190,6 @@
     <div class="pie">
         @if ($electronico)Representación impresa del comprobante electrónico · Consúltelo en www.sunat.gob.pe<br>@endif
         <strong>"BIENES TRANSFERIDOS EN LA AMAZONÍA PARA SER CONSUMIDOS EN LA MISMA" - "SERVICIOS PRESTADOS EN LA AMAZONÍA"</strong><br>
-        SISTEMA DESARROLLADO POR <a href="https://web.holape.app">{{ $soporte['nombre'] ?? 'HOLAPE' }}</a> - {{ $soporte['telefono'] ?? '' }}
+        SISTEMA DESARROLLADO POR <a href="https://holape.app">{{ $soporte['nombre'] ?? 'HOLAPE EIRL' }}</a> - {{ $soporte['telefono'] ?? '' }}
     </div>
 </div>

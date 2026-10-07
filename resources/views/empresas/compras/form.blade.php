@@ -70,7 +70,12 @@
                     </select>
                 </label>
                 <label x-show="doc.moneda === 'USD'" x-cloak class="text-xs font-semibold text-slate-500">Tipo de cambio
-                    <input type="number" step="0.001" min="0" x-model.number="doc.tip_cam" class="mt-1 w-full h-10 rounded-xl border-slate-300 text-sm text-right">
+                    <div class="mt-1 flex gap-1">
+                        <input type="number" step="0.001" min="0" x-model.number="doc.tip_cam" class="w-full h-10 rounded-xl border-slate-300 text-sm text-right">
+                        <button type="button" @click="consultarTipoCambio()" :disabled="buscandoTc" title="Traer el tipo de cambio SUNAT (venta) de la fecha de emisión"
+                                class="h-10 px-3 rounded-xl bg-indigo-600 text-white text-xs font-bold whitespace-nowrap disabled:opacity-50" x-text="buscandoTc ? '...' : 'SUNAT'"></button>
+                    </div>
+                    <span x-show="tcInfo" x-text="tcInfo" class="block mt-1 text-[11px] font-normal text-slate-400"></span>
                 </label>
             </div>
         </section>
@@ -274,6 +279,7 @@
             productos: @json(route('compras.productos')),
             proveedores: @json(route('compras.proveedores')),
             proveedor: @json(url('compras/proveedor')),
+            tipoCambio: @json(route('tipo_cambio.consultar')),
         },
     };
 </script>

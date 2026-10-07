@@ -198,18 +198,12 @@ class ContactoController extends Controller
     public function sunat(string $doc)
     {
         $this->ruc();
-        if (!preg_match('/^\d{11}$/', $doc)) {
-            return response()->json(['error' => 'La consulta automática solo funciona con RUC (11 dígitos).']);
+        if ($r = \App\Support\ConsultaPeru::ruc($doc)) {
+            return response()->json(['nombre' => $r['nombre'], 'direccion' => $r['direccion'], 'estado' => $r['estado'], 'condicion' => $r['condicion']]);
         }
-        try {
-            $r = Http::timeout(8)->withOptions(['verify' => false])->get("https://consultas.holape.app/api/v1/ruc/{$doc}")->json();
-            if (!empty($r['success'])) {
-                return response()->json(['nombre' => $r['data']['razon_social'], 'direccion' => $r['data']['direccion'],
-                    'estado' => $r['data']['estado'] ?? null, 'condicion' => $r['data']['condicion'] ?? null]);
-            }
-        } catch (\Throwable $e) {
-            // el servicio no respondió
+        if ($r = \App\Support\ConsultaPeru::dni($doc)) {
+            return response()->json(['nombre' => $r['nombre'], 'direccion' => null, 'estado' => null, 'condicion' => null]);
         }
-        return response()->json(['error' => 'No se encontró el RUC en SUNAT. Escribe los datos.']);
+        return response()->json(['error' => preg_match('/^\d{8}$|^\d{11}$/', $doc) ? 'No se encontró el documento. Escribe los datos.' : 'Escribe un DNI (8 dígitos) o RUC (11).']);
     }
 }

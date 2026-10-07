@@ -48,7 +48,11 @@ class CobroController extends Controller
     /** A dónde vuelve el cajero: las habitaciones si es hotel, si no las mesas */
     private function volver(?Pedido $pedido): string
     {
-        return $pedido && $pedido->ped_tip === 'Hotel' ? route('hotel.index') : route('comandas.seleccion');
+        return match ($pedido?->ped_tip) {
+            'Hotel' => route('hotel.index'),
+            'Clinica' => route('clinica.agenda'),
+            default => route('comandas.seleccion'),
+        };
     }
 
     public function separadas($ped_id)
@@ -212,20 +216,12 @@ class CobroController extends Controller
             ]);
         }
 
-        // RUC: tu microservicio propio (sin token). El DNI lo dejamos para después (necesita token en .env)
-        if (strlen($doc) === 11 && ctype_digit($doc)) {
-            try {
-                $r = Http::timeout(8)->withOptions(['verify' => false])
-                    ->get("https://consultas.holape.app/api/v1/ruc/{$doc}")->json();
-
-                if (!empty($r['success'])) {
-                    return response()->json([
-                        'nom' => $r['data']['razon_social'], 'dir' => $r['data']['direccion'], 'tdicod' => '6',
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                // si el servicio no responde, seguimos con el mensaje de "no encontrado"
-            }
+        // RUC: tu servicio consultas.holape.app · DNI: consultas.holape.app y, de respaldo, apiperu.dev
+        if ($r = \App\Support\ConsultaPeru::ruc($doc)) {
+            return response()->json(['nom' => $r['nombre'], 'dir' => $r['direccion'], 'tdicod' => '6']);
+        }
+        if ($r = \App\Support\ConsultaPeru::dni($doc)) {
+            return response()->json(['nom' => $r['nombre'], 'dir' => '', 'tdicod' => '1']);
         }
 
         return response()->json(['error' => 'No se encontró el documento. Ingresa los datos manualmente.']);
@@ -362,7 +358,8 @@ class CobroController extends Controller
                 'estado' => 'success',
                 'mensaje' => 'Comprobante emitido e impreso',
                 // Cuentas separadas con saldo: vuelve a separadas para cobrar a la siguiente persona
-                'redirect' => $sigueAbierto ? route('cobros.separadas', $cab->ped_id) : ($cab->ped_tip === 'Hotel' ? route('hotel.index') : route('comandas.seleccion')),
+                'redirect' => $sigueAbierto ? route('cobros.separadas', $cab->ped_id)
+                    : ['Hotel' => route('hotel.index'), 'Clinica' => route('clinica.agenda')][$cab->ped_tip] ?? route('comandas.seleccion'),
             ]);
         }
 
