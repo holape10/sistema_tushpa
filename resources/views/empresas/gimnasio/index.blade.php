@@ -417,6 +417,7 @@
                 fondo(c) { return { green: 'bg-emerald-500', amber: 'bg-amber-500', sky: 'bg-sky-500', red: 'bg-rose-500' }[c] || 'bg-gray-400'; },
                 anillo(c) { return { green: 'ring-emerald-400', amber: 'ring-amber-400', sky: 'ring-sky-400', red: 'ring-rose-400' }[c] || 'ring-gray-300'; },
                 avisar(texto, ok = true) {
+                    if (window.tushpaAviso) return window.tushpaAviso(texto, ok);
                     this.aviso = { visible: true, ok, texto };
                     clearTimeout(this._t); this._t = setTimeout(() => this.aviso.visible = false, ok ? 3500 : 6000);
                 },

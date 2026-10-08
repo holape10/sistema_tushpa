@@ -1,9 +1,11 @@
 <?php
+
 namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
 use App\Support\EmpresaInicial;
-use Illuminate\Support\Facades\{Artisan, DB};
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Alta de una empresa cliente: crea bd_{RUC}, corre las migraciones (tablas y catálogos),
@@ -13,8 +15,8 @@ use Illuminate\Support\Facades\{Artisan, DB};
 class Provisionador
 {
     /**
-     * @param array $d ruc, razon_social, nombre_comercial, direccion, ubigeo, usuario, password,
-     *                 plan, vence_el, contacto_nombre, contacto_telefono, contacto_correo, notas
+     * @param  array  $d  ruc, razon_social, nombre_comercial, direccion, ubigeo, usuario, password,
+     *                    plan, vence_el, contacto_nombre, contacto_telefono, contacto_correo, notas
      */
     public static function crear(array $d): Cliente
     {
@@ -35,25 +37,26 @@ class Provisionador
             Tenancy::en($base, function () use ($d) {
                 $codigo = Artisan::call('migrate', ['--force' => true, '--database' => config('database.default')]);
                 if ($codigo !== 0) {
-                    throw new \RuntimeException('Fallaron las migraciones: ' . trim(Artisan::output()));
+                    throw new \RuntimeException('Fallaron las migraciones: '.trim(Artisan::output()));
                 }
-                DB::transaction(fn() => EmpresaInicial::crear($d));
+                DB::transaction(fn () => EmpresaInicial::crear($d));
             });
 
             return Cliente::create([
-                'ruc'               => $ruc,
-                'subdominio'        => ($d['subdominio'] ?? null) ?: null,
-                'plan_id'           => $d['plan_id'] ?? null,
-                'razon_social'      => $d['razon_social'],
-                'nombre_comercial'  => ($d['nombre_comercial'] ?? null) ?: null,
-                'base_datos'        => $base,
-                'estado'            => 'ACTIVO',
-                'plan'              => $d['plan'] ?? null,
-                'vence_el'          => $d['vence_el'] ?? null,
-                'contacto_nombre'   => $d['contacto_nombre'] ?? null,
+                'ruc' => $ruc,
+                'subdominio' => ($d['subdominio'] ?? null) ?: null,
+                'plan_id' => $d['plan_id'] ?? null,
+                'razon_social' => $d['razon_social'],
+                'rubro' => $d['rubro'] ?? null,
+                'nombre_comercial' => ($d['nombre_comercial'] ?? null) ?: null,
+                'base_datos' => $base,
+                'estado' => 'ACTIVO',
+                'plan' => $d['plan'] ?? null,
+                'vence_el' => $d['vence_el'] ?? null,
+                'contacto_nombre' => $d['contacto_nombre'] ?? null,
                 'contacto_telefono' => $d['contacto_telefono'] ?? null,
-                'contacto_correo'   => $d['contacto_correo'] ?? null,
-                'notas'             => $d['notas'] ?? null,
+                'contacto_correo' => $d['contacto_correo'] ?? null,
+                'notas' => $d['notas'] ?? null,
             ]);
         } catch (\Throwable $e) {
             // Solo se borra la base creada en esta misma llamada (arriba se verificó que no existía)
@@ -71,6 +74,7 @@ class Provisionador
             if ($codigo !== 0) {
                 throw new \RuntimeException($salida ?: 'Fallaron las migraciones.');
             }
+
             return $salida;
         });
     }

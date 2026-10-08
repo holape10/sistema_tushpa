@@ -140,6 +140,65 @@
             </div>
         </section>
 
+
+        {{-- Tipo de negocio: define el menú con el que arranca su administrador (y luego se puede ajustar aquí mismo) --}}
+        @php
+            $todas = $catalogo->flatten()->pluck('mod_url')->unique()->values()->all();
+            $presets = collect($rubros)->map(fn ($r, $k) => \App\Support\Rubros::urls($k) === ['*'] ? $todas : \App\Support\Rubros::urls($k));
+            $rubroActual = old('rubro', $cliente->rubro ?: ($nuevo ? 'GENERAL' : ''));
+            $marcados = old('modulos', $nuevo ? ($presets[$rubroActual] ?? []) : ($menuActual ?? []));
+        @endphp
+        <section class="bg-white rounded-2xl shadow-sm p-5 space-y-4"
+                 x-data="{ rubro: @js($rubroActual), sel: @js(array_values($marcados)), presets: @js($presets), cambiar: {{ $nuevo ? 'true' : 'false' }},
+                           aplicar() { if (this.presets[this.rubro]) this.sel = [...this.presets[this.rubro]]; } }">
+            <div>
+                <h2 class="font-bold text-slate-700">Tipo de negocio y menú</h2>
+                <p class="text-xs text-slate-500">Su administrador verá solo estas opciones. Sus trabajadores no podrán tener más que eso.</p>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                @foreach ($rubros as $clave => $r)
+                    <label class="cursor-pointer rounded-xl border-2 p-3 transition" :class="rubro === '{{ $clave }}' ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200'">
+                        <input type="radio" name="rubro" value="{{ $clave }}" x-model="rubro" @change="if (cambiar) aplicar()" class="sr-only">
+                        <span class="block font-bold text-sm text-slate-800">{{ $r['nombre'] }}</span>
+                        <span class="block text-[11px] text-slate-500 leading-tight">{{ $r['ejemplos'] }}</span>
+                    </label>
+                @endforeach
+            </div>
+
+            @unless ($nuevo)
+                @if ($menuActual === null)
+                    <p class="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">No se pudo leer el menú actual de esta empresa (¿su base existe?).</p>
+                @else
+                    <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                        <input type="checkbox" name="cambiar_menu" value="1" x-model="cambiar" class="rounded border-slate-300">
+                        Cambiar el menú de sus administradores <span class="font-normal text-slate-400" x-text="'(hoy tiene ' + sel.length + ' opciones)'"></span>
+                    </label>
+                @endif
+            @endunless
+
+            <div x-show="cambiar" x-cloak class="space-y-3">
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                    <button type="button" @click="aplicar()" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold">Marcar el menú del tipo elegido</button>
+                    <button type="button" @click="sel = @js($todas)" class="px-3 py-1.5 rounded-lg bg-slate-100 font-semibold">Todo</button>
+                    <button type="button" @click="sel = []" class="px-3 py-1.5 rounded-lg bg-slate-100 font-semibold">Nada</button>
+                    <span class="text-slate-500" x-text="sel.length + ' opciones marcadas'"></span>
+                </div>
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto pr-1">
+                    @foreach ($catalogo as $grupo => $mods)
+                        <div class="rounded-xl border border-slate-200 p-3">
+                            <p class="text-xs font-bold uppercase text-indigo-700 mb-1">{{ $grupo }}</p>
+                            @foreach ($mods->unique('mod_url') as $m)
+                                <label class="flex items-center gap-2 text-sm py-0.5">
+                                    <input type="checkbox" name="modulos[]" value="{{ $m->mod_url }}" x-model="sel" :disabled="!cambiar" class="rounded border-slate-300">
+                                    {{ $m->mod_nom }}
+                                </label>
+                            @endforeach
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+
         <div class="flex justify-end gap-2">
             <a href="{{ route('admin.clientes.index') }}" class="px-4 h-11 inline-flex items-center rounded-xl bg-white border border-slate-300 text-sm font-semibold">Cancelar</a>
             <button :disabled="enviando" class="px-5 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:opacity-60">

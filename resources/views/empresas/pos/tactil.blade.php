@@ -288,5 +288,6 @@
         <div class="pointer-events-auto max-w-md w-full rounded-xl px-4 py-3 text-sm font-semibold shadow-xl text-white" :class="t.tipo === 'error' ? 'bg-rose-600' : 'bg-slate-800'" x-text="t.texto"></div>
     </template>
 </div>
+@include('partials.avisos')
 </body>
 </html>

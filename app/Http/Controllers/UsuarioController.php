@@ -36,9 +36,16 @@ class UsuarioController extends Controller
         abort_unless($usuario->IdEmpresa === Auth::user()->IdEmpresa, 404);
     }
 
+    /** @return array<int, int> mod_id que el administrador conectado puede dar a sus usuarios */
+    private function modulosPermitidos(): array
+    {
+        return array_map('intval', Auth::user()->modulos()->pluck('modulos.mod_id')->all());
+    }
+
     private function datosFormulario(): array
     {
-        $modulos = Modulo::orderBy('mod_id')->get();
+        // Solo se reparte el menú que tiene la empresa (el de su administrador, que define el panel TUSHPA)
+        $modulos = Modulo::whereIn('mod_id', $this->modulosPermitidos())->orderBy('mod_id')->get();
         $presets = [2 => $modulos->pluck('mod_id')->all()];
         foreach (self::PRESETS as $rol => $nombres) {
             $presets[$rol] = $modulos->whereIn('mod_nom', $nombres)->pluck('mod_id')->values()->all();
@@ -192,7 +199,7 @@ class UsuarioController extends Controller
             DB::table('role_user')->insert([
                 'role_id' => $d['role_id'], 'user_IdUsuario' => $usuario->IdUsuario, 'id_empresa_negocio' => $d['id_empresa_negocio'],
             ]);
-            $usuario->modulos()->sync($d['modulos'] ?? []);
+            $usuario->modulos()->sync(array_values(array_intersect(array_map('intval', $d['modulos'] ?? []), $this->modulosPermitidos())));
 
             return $empleado;
         });
@@ -247,7 +254,7 @@ class UsuarioController extends Controller
             DB::table('role_user')->insert([
                 'role_id' => $d['role_id'], 'user_IdUsuario' => $usuario->IdUsuario, 'id_empresa_negocio' => $d['id_empresa_negocio'],
             ]);
-            $usuario->modulos()->sync($d['modulos'] ?? []);
+            $usuario->modulos()->sync(array_values(array_intersect(array_map('intval', $d['modulos'] ?? []), $this->modulosPermitidos())));
         });
         $this->guardarFoto($request, Empleado::find($usuario->emp_id));
 

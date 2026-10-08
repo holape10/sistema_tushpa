@@ -37,5 +37,6 @@
         @endif
         @yield('content')
     </main>
+@include('partials.avisos')
 </body>
 </html>

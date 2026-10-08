@@ -346,6 +346,7 @@
     const textoMin = min => min % 1440 === 0 ? (min / 1440) + ' día(s)' : (min >= 60 ? (Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + (min % 60) + ' min' : '')) : min + ' min');
 
     function toast(texto, ms = 3500) {
+        if (window.tushpaAviso) return window.tushpaAviso(texto, /no se|error|falta|debe|no hay|inv[aá]lid|ya est/i.test(texto) ? 'aviso' : 'ok');
         const t = el('toast'); t.textContent = texto; t.style.display = 'block';
         clearTimeout(t._timer); t._timer = setTimeout(() => t.style.display = 'none', ms);
     }
@@ -712,5 +713,6 @@
     setInterval(tick, 1000);
     setInterval(cargar, 30000);
 </script>
+@include('partials.avisos')
 </body>
 </html>

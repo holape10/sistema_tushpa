@@ -177,7 +177,7 @@
                 serv: { IdProducto: '', cantidad: 1 }, ocupado: false, aviso: '', ok: true,
                 get imc() { const p = Number(this.d.peso), t = Number(this.d.talla); return {{ $mascota ? 'false' : 'true' }} && p > 0 && t > 0.3 ? (p / (t * t)).toFixed(1) : ''; },
                 get imcTexto() { const i = Number(this.imc); return !i ? '' : i < 18.5 ? '(bajo peso)' : i < 25 ? '(normal)' : i < 30 ? '(sobrepeso)' : '(obesidad)'; },
-                avisar(t, ok = true) { this.aviso = t; this.ok = ok; clearTimeout(this._t); this._t = setTimeout(() => this.aviso = '', 3500); },
+                avisar(t, ok = true) { if (window.tushpaAviso) return window.tushpaAviso(t, ok); this.aviso = t; this.ok = ok; clearTimeout(this._t); this._t = setTimeout(() => this.aviso = '', 3500); },
                 async post(url, data, metodo = 'POST') {
                     const r = await fetch(url, { method: metodo, headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF }, body: JSON.stringify(data || {}) });
                     const j = await r.json().catch(() => ({}));

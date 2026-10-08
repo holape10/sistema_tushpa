@@ -311,6 +311,7 @@
         }
 
         function toast(texto, ms = 3000) {
+            if (window.tushpaAviso) return window.tushpaAviso(texto, /no se|error|falta|debe|no hay|inv[aá]lid|ya est/i.test(texto) ? 'aviso' : 'ok');
             const t = document.getElementById('toast');
             t.textContent = texto;
             t.style.display = 'block';
@@ -634,5 +635,6 @@
         cargarActivos();
         setInterval(cargarActivos, 15000);
     </script>
+@include('partials.avisos')
 </body>
 </html>

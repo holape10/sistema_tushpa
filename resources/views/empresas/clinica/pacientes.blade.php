@@ -110,7 +110,7 @@
                     const t = this.texto.trim().toUpperCase();
                     return !t ? this.lista : this.lista.filter(p => (p.nombre || '').toUpperCase().includes(t) || (p.clinum || '').includes(t) || (p.his_cli_cod || '').toUpperCase().includes(t));
                 },
-                avisar(t, ok = true) { this.aviso = t; this.ok = ok; clearTimeout(this._t); this._t = setTimeout(() => this.aviso = '', 4000); },
+                avisar(t, ok = true) { if (window.tushpaAviso) return window.tushpaAviso(t, ok); this.aviso = t; this.ok = ok; clearTimeout(this._t); this._t = setTimeout(() => this.aviso = '', 4000); },
                 async post(url, data) {
                     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF }, body: JSON.stringify(data) });
                     const j = await r.json().catch(() => ({}));

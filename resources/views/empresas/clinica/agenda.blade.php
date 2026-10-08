@@ -150,7 +150,7 @@
                 nombreEstado(e) { return { PROGRAMADA: 'Programada', CONFIRMADA: 'Confirmada', EN_ESPERA: 'En sala', ATENDIDA: 'Atendida', NO_ASISTIO: 'No vino', CANCELADA: 'Cancelada' }[e] || e; },
                 color(e) { return { PROGRAMADA: 'bg-gray-100 text-gray-700', CONFIRMADA: 'bg-sky-100 text-sky-800', EN_ESPERA: 'bg-amber-100 text-amber-800', ATENDIDA: 'bg-teal-100 text-teal-800', NO_ASISTIO: 'bg-rose-100 text-rose-700', CANCELADA: 'bg-gray-200 text-gray-500 line-through' }[e]; },
                 borde(e) { return { EN_ESPERA: 'border-amber-400', ATENDIDA: 'border-teal-500', CONFIRMADA: 'border-sky-400', CANCELADA: 'border-gray-200 opacity-60', NO_ASISTIO: 'border-rose-300 opacity-60' }[e] || 'border-gray-300'; },
-                avisar(t, ok = true) { this.aviso = t; this.ok = ok; clearTimeout(this._t); this._t = setTimeout(() => this.aviso = '', 3500); },
+                avisar(t, ok = true) { if (window.tushpaAviso) return window.tushpaAviso(t, ok); this.aviso = t; this.ok = ok; clearTimeout(this._t); this._t = setTimeout(() => this.aviso = '', 3500); },
                 async post(url, data) {
                     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF }, body: JSON.stringify(data || {}) });
                     const j = await r.json().catch(() => ({}));

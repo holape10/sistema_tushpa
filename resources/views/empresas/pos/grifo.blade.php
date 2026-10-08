@@ -387,5 +387,6 @@
              :class="t.tipo === 'error' ? 'bg-rose-600' : (t.tipo === 'ok' ? 'bg-emerald-600' : 'bg-slate-800')" x-text="t.texto"></div>
     </template>
 </div>
+@include('partials.avisos')
 </body>
 </html>

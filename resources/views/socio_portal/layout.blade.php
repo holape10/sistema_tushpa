@@ -35,5 +35,6 @@
     <main class="max-w-3xl mx-auto px-4 py-6">
         @yield('contenido')
     </main>
+@include('partials.avisos')
 </body>
 </html>

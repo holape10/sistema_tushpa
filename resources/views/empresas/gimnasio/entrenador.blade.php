@@ -164,7 +164,7 @@
                 dif(i) { const l = this.sel.nutricion.filter(n => n.peso); return l[i + 1] ? Math.round((l[i].peso - l[i + 1].peso) * 10) / 10 : null; },
                 fecha(s) { if (!s) return ''; const [a, m, d] = s.slice(0, 10).split('-'); return `${d}/${m}/${a}`; },
                 chip(c) { return { green: 'bg-emerald-100 text-emerald-700', amber: 'bg-amber-100 text-amber-800', sky: 'bg-sky-100 text-sky-700', red: 'bg-rose-100 text-rose-700' }[c] || 'bg-gray-100 text-gray-600'; },
-                avisar(texto, ok = true) { this.aviso = { visible: true, ok, texto }; clearTimeout(this._t); this._t = setTimeout(() => this.aviso.visible = false, 3500); },
+                avisar(texto, ok = true) { if (window.tushpaAviso) return window.tushpaAviso(texto, ok); this.aviso = { visible: true, ok, texto }; clearTimeout(this._t); this._t = setTimeout(() => this.aviso.visible = false, 3500); },
                 async post(url, datos = {}) {
                     try {
                         const r = await fetch(url, { method: 'POST', body: JSON.stringify(datos), headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF } });

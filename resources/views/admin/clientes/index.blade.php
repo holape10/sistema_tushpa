@@ -52,7 +52,8 @@
                 @forelse ($clientes as $cl)
                     <tr class="{{ $cl->activo() ? '' : 'bg-rose-50/50' }}">
                         <td class="px-4 py-3">
-                            <p class="font-semibold">{{ $cl->nombre_comercial ?: $cl->razon_social }}</p>
+                            <p class="font-semibold">{{ $cl->nombre_comercial ?: $cl->razon_social }}
+                                @if ($cl->rubro)<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700">{{ \App\Support\Rubros::RUBROS[$cl->rubro]['nombre'] ?? $cl->rubro }}</span>@endif</p>
                             <p class="text-xs text-slate-400">{{ $cl->ruc }} · {{ $cl->razon_social }}</p>
                         </td>
                         <td class="px-4 py-3">

@@ -350,5 +350,6 @@
             }, { soloAdmin: true, pideMotivo: false });
         });
     </script>
+@include('partials.avisos')
 </body>
 </html>

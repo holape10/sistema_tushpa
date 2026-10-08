@@ -238,20 +238,10 @@
 
     
 {{-- Aviso flotante y campanita de SUNAT al día: cada envío a SUNAT (desde cualquier pantalla) muestra el resultado y refresca la campanita --}}
-<div id="aviso-flotante" class="fixed bottom-5 right-5 z-[100] max-w-sm hidden"></div>
+@include('partials.avisos')
 <script>
     (function () {
         const URL_CAMPANA = @json(route('sunat.campana'));
-        let temporizador = null;
-
-        window.tushpaAviso = function (texto, ok = true) {
-            const caja = document.getElementById('aviso-flotante');
-            caja.className = 'fixed bottom-5 right-5 z-[100] max-w-sm flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold text-white '
-                + (ok ? 'bg-emerald-600' : 'bg-rose-600');
-            caja.textContent = (ok ? '✔ ' : '✖ ') + texto;
-            clearTimeout(temporizador);
-            temporizador = setTimeout(() => caja.classList.add('hidden'), ok ? 4000 : 7000);
-        };
 
         let refrescando = null;
         window.tushpaRefrescarCampana = function () {
@@ -276,11 +266,15 @@
         const fetchOriginal = window.fetch.bind(window);
         window.fetch = async function (recurso, opciones) {
             const respuesta = await fetchOriginal(recurso, opciones);
+            // Fallas que la pantalla no siempre explica: se avisan grande para que nadie se quede esperando
+            if (respuesta.status === 419) tushpaAviso('Tu sesión venció. Recarga la página (F5) e ingresa de nuevo.', 'aviso', 'Sesión vencida');
+            else if (respuesta.status >= 500) tushpaAviso('El servidor tuvo un problema y no se completó la acción. Intenta otra vez; si sigue, avisa a soporte.', 'error');
+            else if (respuesta.status === 403) tushpaAviso('No tienes permiso para esta acción. Pide acceso al administrador.', 'aviso', 'Sin permiso');
             const url = typeof recurso === 'string' ? recurso : (recurso?.url || '');
             if (/\/sunat\/enviar\/\d+/.test(url)) {
                 respuesta.clone().json().then(d => {
                     const ok = !!d.success;
-                    tushpaAviso(ok ? `Enviado correctamente a SUNAT: ${d.estado}` : (d.mensaje || 'No se pudo enviar a SUNAT.'), ok);
+                    tushpaAviso(ok ? `Comprobante ${d.estado} por SUNAT.` : (d.mensaje || 'No se pudo enviar a SUNAT.'), ok, ok ? 'Enviado a SUNAT' : 'SUNAT no lo aceptó');
                     tushpaRefrescarCampana();
                 }).catch(() => {});
             }

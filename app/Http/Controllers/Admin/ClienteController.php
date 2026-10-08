@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Central\Cliente;
 use App\Models\Central\Plan;
 use App\Models\Central\Superadmin;
+use App\Models\User;
+use App\Support\Rubros;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\Request;
@@ -14,6 +16,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 
 class ClienteController extends Controller
 {
@@ -86,7 +89,8 @@ class ClienteController extends Controller
 
     public function create()
     {
-        return view('admin.clientes.form', ['cliente' => new Cliente, 'planes' => $this->planes()]);
+        return view('admin.clientes.form', ['cliente' => new Cliente, 'planes' => $this->planes(),
+            'rubros' => Rubros::RUBROS, 'catalogo' => Rubros::catalogo(), 'menuActual' => null]);
     }
 
     public function store(Request $request)
@@ -98,6 +102,8 @@ class ClienteController extends Controller
             'ubigeo' => 'nullable|digits:6',
             'usuario' => 'nullable|string|max:60',
             'password' => 'nullable|string|min:8|max:60',
+            'rubro' => ['required', Rule::in(array_keys(Rubros::RUBROS))],
+            'modulos' => 'nullable|array', 'modulos.*' => 'string|max:100',
         ], [
             'ruc.regex' => 'El RUC debe tener 11 dígitos y empezar con 10, 15, 17 o 20 (o 99999999999 para una demo).',
             'ruc.unique' => 'Ya existe un cliente con ese RUC.',
@@ -110,6 +116,8 @@ class ClienteController extends Controller
         // Si no se escriben, el usuario y la contraseña son el RUC (igual que el registro inicial /config)
         $d['usuario'] = ($d['usuario'] ?? null) ?: $d['ruc'];
         $d['password'] = ($d['password'] ?? null) ?: $d['ruc'];
+        // Menú con el que arranca su administrador: lo marcado en el formulario (o el del rubro)
+        $d['modulos'] = ! empty($d['modulos']) ? $d['modulos'] : Rubros::urls($d['rubro']);
 
         set_time_limit(180); // crear la base y correr las migraciones toma unos segundos
 
@@ -138,13 +146,16 @@ class ClienteController extends Controller
         $this->autorizar($cliente);
 
         return view('admin.clientes.form', ['cliente' => $cliente, 'planes' => $this->planes(),
-            'usuarios' => $this->esDueno() ? Superadmin::orderBy('nombre')->pluck('nombre', 'id') : collect()]);
+            'usuarios' => $this->esDueno() ? Superadmin::orderBy('nombre')->pluck('nombre', 'id') : collect(),
+            'rubros' => Rubros::RUBROS, 'catalogo' => Rubros::catalogo(), 'menuActual' => $this->menuAdministrador($cliente)]);
     }
 
     public function update(Request $request, Cliente $cliente)
     {
         $this->autorizar($cliente);
-        $d = $request->validate($this->reglas() + ['creado_por' => 'nullable|integer|exists:central.superadmins,id'], $this->mensajes(), $this->nombres());
+        $d = $request->validate($this->reglas() + ['creado_por' => 'nullable|integer|exists:central.superadmins,id',
+            'rubro' => ['nullable', Rule::in(array_keys(Rubros::RUBROS))],
+            'cambiar_menu' => 'nullable|boolean', 'modulos' => 'nullable|array', 'modulos.*' => 'string|max:100'], $this->mensajes(), $this->nombres());
         if (! $this->esDueno()) {
             unset($d['creado_por']);   // solo el dueño reasigna empresas
         }
@@ -153,9 +164,55 @@ class ClienteController extends Controller
         }
         $d['subdominio'] = ($d['subdominio'] ?? null) ?: null;
         $d['plan'] = isset($d['plan_id']) ? Plan::find($d['plan_id'])?->nombre : null;
+        $menu = ! empty($d['cambiar_menu']) ? ($d['modulos'] ?? []) : null;
+        unset($d['cambiar_menu'], $d['modulos']);
         $cliente->update($d);
 
-        return redirect()->route('admin.clientes.index')->with('ok', "Se actualizó {$cliente->razon_social}.");
+        $aviso = '';
+        if ($menu !== null) {
+            try {
+                $n = $this->guardarMenuAdministrador($cliente, $menu);
+                $aviso = " Menú de sus administradores actualizado ({$n} opciones).";
+            } catch (\Throwable $e) {
+                report($e);
+                $aviso = ' No se pudo actualizar su menú: '.$e->getMessage();
+            }
+        }
+
+        return redirect()->route('admin.clientes.index')->with('ok', "Se actualizó {$cliente->razon_social}.".$aviso);
+    }
+
+    /** URLs del menú que hoy tiene el administrador principal de la empresa (null si no se pudo leer su base) */
+    private function menuAdministrador(Cliente $cliente): ?array
+    {
+        try {
+            return Tenancy::en($cliente->base_datos, function () {
+                $admin = DB::table('role_user')->where('role_id', 2)->orderBy('user_IdUsuario')->value('user_IdUsuario');
+
+                return $admin ? DB::table('modulos_usuario as mu')->join('modulos as m', 'm.mod_id', '=', 'mu.mod_id')
+                    ->where('mu.user_IdUsuario', $admin)->pluck('m.mod_url')->unique()->values()->all() : [];
+            });
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /** Pone el menú elegido a todos los administradores de la empresa; los demás usuarios no pueden tener más que eso */
+    private function guardarMenuAdministrador(Cliente $cliente, array $urls): int
+    {
+        return Tenancy::en($cliente->base_datos, function () use ($urls) {
+            $ids = Rubros::ids($urls);
+            $admins = DB::table('role_user')->where('role_id', 2)->pluck('user_IdUsuario')->unique();
+            DB::transaction(function () use ($admins, $ids) {
+                foreach ($admins as $id) {
+                    User::find($id)?->modulos()->sync($ids);
+                }
+                // Lo que se quitó al administrador tampoco lo ven sus trabajadores
+                DB::table('modulos_usuario')->whereNotIn('mod_id', $ids ?: [0])->delete();
+            });
+
+            return count($ids);
+        });
     }
 
     /** Suspender (p. ej. por falta de pago) o reactivar: el cliente suspendido ve un aviso en vez del sistema */
