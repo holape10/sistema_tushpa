@@ -16,6 +16,9 @@ git config --global --add safe.directory "${DIR}" || true
 git fetch origin "${RAMA}"
 git reset --hard "origin/${RAMA}"
 
+# Mensajes del sistema (validaciones, login) en español
+sed -i 's/^APP_LOCALE=en$/APP_LOCALE=es/; s/^APP_FALLBACK_LOCALE=en$/APP_FALLBACK_LOCALE=es/' .env
+
 echo "==> Dependencias y base de datos"
 composer install --no-dev --optimize-autoloader --no-interaction
 php artisan migrate --force

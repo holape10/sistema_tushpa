@@ -65,6 +65,7 @@
         }
     </script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('partials.pwa')
 </head>
 
 <body class="bg-gray-100" x-data="menuLateral(@js($modulosMenu), @js($grupoActual ?: null))"
@@ -203,6 +204,16 @@
         <header class="relative z-20 bg-white shadow-sm px-4 py-3 flex items-center justify-between" :class="anclado ? 'pl-6' : 'pl-16'">
             <h1 class="text-gray-700 font-semibold text-sm sm:text-base">@yield('title', 'Panel')</h1>
             <div class="flex items-center gap-4">
+                @include('partials.pwa_boton')
+                {{-- Multisucursal: en qué sucursal trabaja (el administrador puede cambiarla) --}}
+                @if (!empty($sucursalActual))
+                    @if ($usuario->esAdmin())
+                        <a href="{{ route('sucursales.index') }}" title="Cambiar de sucursal" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>{{ $sucursalActual }}</a>
+                    @else
+                        <span class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold">{{ $sucursalActual }}</span>
+                    @endif
+                @endif
                 {{-- Ayuda: soporte del sistema desde cualquier pantalla --}}
                 <a href="{{ route('soporte') }}" title="Soporte" aria-label="Soporte"
                    class="p-2 rounded-full hover:bg-gray-100 text-gray-600 {{ request()->routeIs('soporte') ? 'bg-indigo-50 text-indigo-700' : '' }}">

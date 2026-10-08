@@ -183,7 +183,7 @@
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                         <div class="bg-emerald-700 px-5 py-3 flex items-center justify-between gap-3">
                             <h2 class="text-white font-semibold text-sm tracking-wide uppercase">
-                                <i class="fas fa-book mr-2"></i>SIRE · Credenciales de API SUNAT
+                                <i class="fas fa-book mr-2"></i>Credenciales de API SUNAT · SIRE y guías de remisión
                             </h2>
                             <span class="text-[11px] font-bold px-2 py-0.5 rounded-full {{ $sireListo ? 'bg-white text-emerald-700' : 'bg-amber-300 text-amber-900' }}">
                                 {{ $sireListo ? 'Configurado' : 'Sin configurar' }}

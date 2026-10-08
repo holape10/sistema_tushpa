@@ -16,6 +16,7 @@
         @keyframes entrada { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         .nueva { animation: entrada .4s ease-out; outline: 4px solid #facc15; }
     </style>
+    @include('partials.pwa')
 </head>
 <body class="text-slate-100 min-h-screen" x-data="kds()" x-init="iniciar()">
 

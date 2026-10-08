@@ -47,6 +47,7 @@
         .cart-obs { width: 100%; border: 1px solid #eee; border-radius: 4px; font-size: 11px; padding: 2px 5px; margin-top: 3px; }
         @media (max-width: 991px) { .panel-pago { border-left: none; padding-left: 0; border-top: 2px dashed #ccc; padding-top: 15px; margin-top: 10px; } }
     </style>
+    @include('partials.pwa')
 </head>
 <body>
 <div class="container-fluid">

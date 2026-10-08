@@ -162,6 +162,7 @@
                                                 'notas' => in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc,
                                                 'aceptado' => in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
                                                 'estado' => $v->est_sunat ?: 'PENDIENTE',
+                                                'guia' => !$anulada,
                                                 'baja' => in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja && $turnoAbierto
                                                     && in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true)
                                                     && $v->ccafem >= now()->subDays(\App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS)->toDateString(),
@@ -202,6 +203,9 @@
                     <div class="border-t border-gray-100 my-1"></div>
                 </div>
             </template>
+            <a x-show="menu.venta?.guia" :href="`{{ route('guias.crear') }}?venta=${menu.venta?.id}`" class="flex items-center gap-3 px-3 py-2 hover:bg-indigo-50">
+                <i class="fas fa-truck-fast text-indigo-600 w-4"></i>
+                <span><span class="font-semibold">Guía de remisión</span><span class="block text-[11px] text-gray-400">Ya trae el cliente y los productos</span></span></a>
             <a :href="`{{ url('voucher') }}/${menu.venta?.id}?formato=a4`" target="_blank" class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50">
                 <i class="fas fa-file-lines text-indigo-600 w-4"></i> Ver / imprimir en A4</a>
             <a :href="`{{ url('voucher') }}/${menu.venta?.id}?formato=ticket`" target="_blank" class="flex items-center gap-3 px-3 py-2 hover:bg-gray-50">

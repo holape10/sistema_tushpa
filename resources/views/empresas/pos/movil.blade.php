@@ -33,6 +33,7 @@
     <script src="{{ asset('js/impresion.js') }}?v={{ filemtime(public_path('js/impresion.js')) }}" data-url="{{ url('impresion/comprobante') }}" data-csrf="{{ csrf_token() }}"></script>
 <script src="{{ asset('js/escaner-barras.js') }}?v={{ filemtime(public_path('js/escaner-barras.js')) }}"></script>
 <script src="{{ asset('js/pos-movil.js') }}?v={{ filemtime(public_path('js/pos-movil.js')) }}"></script>
+    @include('partials.pwa')
 </head>
 
 <body class="bg-slate-100 text-slate-800 antialiased" x-data="posMovil" x-init="iniciar()"

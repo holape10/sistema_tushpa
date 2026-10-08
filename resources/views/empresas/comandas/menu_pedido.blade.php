@@ -70,6 +70,7 @@
             .cart-section { order: 1; }
         }
     </style>
+    @include('partials.pwa')
 </head>
 <body>
     <div class="header-kiosko">

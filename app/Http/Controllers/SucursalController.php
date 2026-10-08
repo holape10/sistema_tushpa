@@ -1,9 +1,14 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\EmpresaNegocio;
+use App\Models\Turno;
+use App\Support\SucursalNueva;
+use App\Support\Ubigeo;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class SucursalController extends Controller
 {
@@ -19,6 +24,8 @@ class SucursalController extends Controller
         '08B' => ['tdocod' => '08', 'serie' => 'SerNDB', 'numero' => 'NumNDB', 'nombre' => 'Nota de débito de boletas', 'regex' => '/^B[A-Z0-9]{3}$/'],
         // Proformas de los puntos de venta (no son comprobantes; su correlativo se cuenta en la tabla proformas)
         'PR' => ['tdocod' => 'PR', 'serie' => 'SerProforma', 'numero' => 'NumProforma', 'nombre' => 'Proforma', 'regex' => '/^[A-Z0-9]{4}$/'],
+        // Guías de remisión electrónicas (su correlativo se cuenta en gre_cabecera)
+        'GR' => ['tdocod' => '09', 'serie' => 'SerGuia', 'numero' => 'NumGuia', 'nombre' => 'Guía de remisión', 'regex' => '/^T[A-Z0-9]{3}$/'],
     ];
 
     private function autorizar(): void
@@ -39,6 +46,10 @@ class SucursalController extends Controller
         if ($tdocod === 'PR') {
             return (int) DB::table('proformas')->where('id_empresa_negocio', $idSucursal)->where('serie', $serie)->max('numero');
         }
+        if ($tdocod === '09') {
+            return (int) DB::table('gre_cabecera')->where('id_empresa_negocio', $idSucursal)->where('serie', $serie)->max('numero');
+        }
+
         return (int) DB::table('cpe_cabecera')
             ->where('id_empresa_negocio', $idSucursal)
             ->where('tdocod', $tdocod)->where('serdoc', $serie)
@@ -50,7 +61,10 @@ class SucursalController extends Controller
         $this->autorizar();
         $sucursales = EmpresaNegocio::where('IdEmpresa', Auth::user()->IdEmpresa)->orderBy('id_empresa_negocio')->get();
 
-        return view('empresas.sucursales.index', compact('sucursales'));
+        $usuarios = DB::table('users')->where('IdEmpresa', Auth::user()->IdEmpresa)->where('estusu', 1)
+            ->groupBy('id_empresa_negocio')->select('id_empresa_negocio', DB::raw('COUNT(*) as n'))->pluck('n', 'id_empresa_negocio');
+
+        return view('empresas.sucursales.index', compact('sucursales', 'usuarios') + ['actual' => (int) Auth::user()->id_empresa_negocio]);
     }
 
     public function edit($id)
@@ -78,40 +92,41 @@ class SucursalController extends Controller
 
         $reglas = [
             'nombre_comercial' => 'required|string|max:255',
-            'tipo_negocio'     => 'nullable|string|max:255',
-            'estado'           => 'required|in:Activo,Inactivo',
-            'direccion'        => 'required|string|max:255',
-            'telefono'         => 'nullable|string|max:30',
-            'correo'           => 'nullable|email|max:255',
-            'web'              => 'nullable|string|max:255',
-            'ubigeo'           => 'required|digits:6',
-            'departamento'     => 'required|string|max:100',
-            'provincia'        => 'required|string|max:100',
-            'distrito'         => 'required|string|max:100',
-            'codigofiscal'     => 'nullable|digits:4',
-            'tip_igv_pred'     => 'required|in:10,20',
-            'tdocod_pred'      => 'required|in:01,03,13',
+            'tipo_negocio' => 'nullable|string|max:255',
+            'estado' => 'required|in:Activo,Inactivo',
+            'direccion' => 'required|string|max:255',
+            'telefono' => 'nullable|string|max:30',
+            'correo' => 'nullable|email|max:255',
+            'web' => 'nullable|string|max:255',
+            'ubigeo' => 'required|digits:6',
+            'departamento' => 'nullable|string|max:100',
+            'provincia' => 'nullable|string|max:100',
+            'distrito' => 'nullable|string|max:100',
+            'codigofiscal' => 'nullable|digits:4',
+            'tip_igv_pred' => 'required|in:10,20',
+            'tdocod_pred' => 'required|in:01,03,13',
             'formato_impresion' => 'required|in:TICKET,A4',
         ];
         $nombres = ['nombre_comercial' => 'Nombre comercial', 'codigofiscal' => 'Código de establecimiento',
             'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión'];
 
         foreach (self::SERIES as $c) {
-            $reglas[$c['serie']] = ['required', 'regex:' . $c['regex']];
+            $reglas[$c['serie']] = ['required', 'regex:'.$c['regex']];
             $reglas[$c['numero']] = 'required|integer|min:0|max:99999999';
-            $nombres[$c['serie']] = 'Serie de ' . strtolower($c['nombre']);
-            $nombres[$c['numero']] = 'Correlativo de ' . strtolower($c['nombre']);
+            $nombres[$c['serie']] = 'Serie de '.strtolower($c['nombre']);
+            $nombres[$c['numero']] = 'Correlativo de '.strtolower($c['nombre']);
         }
 
         $datos = $request->validate($reglas, [
             'FseEmpresa.regex' => 'La serie de factura debe empezar con F y tener 4 caracteres (ej. F001).',
             'BseEmpresa.regex' => 'La serie de boleta debe empezar con B y tener 4 caracteres (ej. B001).',
-            'SerNota.regex'    => 'La serie de nota de venta debe tener 4 caracteres (ej. N001).',
-            'SerNCF.regex'     => 'La serie de nota de crédito de facturas debe empezar con F (ej. FC01).',
-            'SerNCB.regex'     => 'La serie de nota de crédito de boletas debe empezar con B (ej. BC01).',
-            'SerNDF.regex'     => 'La serie de nota de débito de facturas debe empezar con F (ej. FD01).',
-            'SerNDB.regex'     => 'La serie de nota de débito de boletas debe empezar con B (ej. BD01).',
+            'SerNota.regex' => 'La serie de nota de venta debe tener 4 caracteres (ej. N001).',
+            'SerNCF.regex' => 'La serie de nota de crédito de facturas debe empezar con F (ej. FC01).',
+            'SerNCB.regex' => 'La serie de nota de crédito de boletas debe empezar con B (ej. BC01).',
+            'SerNDF.regex' => 'La serie de nota de débito de facturas debe empezar con F (ej. FD01).',
+            'SerNDB.regex' => 'La serie de nota de débito de boletas debe empezar con B (ej. BD01).',
             'SerProforma.regex' => 'La serie de proforma debe tener 4 caracteres (ej. PR01).',
+            'SerGuia.regex' => 'La serie de guía de remisión debe empezar con T y tener 4 caracteres (ej. T001).',
         ], $nombres);
 
         // Reglas que dependen de lo ya emitido
@@ -138,6 +153,7 @@ class SucursalController extends Controller
         }
 
         $datos['codigofiscal'] = $datos['codigofiscal'] ?? null;
+        $datos = array_merge($datos, Ubigeo::partes($datos['ubigeo']) ?? []);
         foreach (['departamento', 'provincia', 'distrito'] as $campo) {
             $datos[$campo] = mb_strtoupper(trim($datos[$campo]));
         }
@@ -149,5 +165,74 @@ class SucursalController extends Controller
         });
 
         return redirect()->route('sucursales.index')->with('success', "Sucursal {$sucursal->nombre_comercial} actualizada.");
+    }
+
+    // ------------------------------------------------------------------ nueva sucursal
+
+    public function create()
+    {
+        $this->autorizar();
+        $ruc = Auth::user()->IdEmpresa;
+
+        return view('empresas.sucursales.create', [
+            'series' => self::SERIES, 'sugeridas' => SucursalNueva::seriesSugeridas($ruc),
+            'sucursales' => EmpresaNegocio::where('IdEmpresa', $ruc)->orderBy('id_empresa_negocio')->get(['id_empresa_negocio', 'nombre_comercial']),
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $this->autorizar();
+        $ruc = Auth::user()->IdEmpresa;
+        foreach (self::SERIES as $c) {
+            $request->merge([$c['serie'] => strtoupper(trim((string) $request->input($c['serie'])))]);
+        }
+        $reglas = [
+            'nombre_comercial' => 'required|string|max:255', 'direccion' => 'required|string|max:255',
+            'ubigeo' => 'required|digits:6', 'telefono' => 'nullable|string|max:30', 'correo' => 'nullable|email|max:255',
+            'codigofiscal' => 'nullable|digits:4', 'copiar_de' => 'nullable|integer',
+        ];
+        $nombres = ['nombre_comercial' => 'el nombre de la sucursal', 'direccion' => 'la dirección', 'ubigeo' => 'la ciudad o distrito',
+            'codigofiscal' => 'el código de establecimiento SUNAT'];
+        foreach (self::SERIES as $c) {
+            $reglas[$c['serie']] = ['required', 'regex:'.$c['regex']];
+            $nombres[$c['serie']] = 'la serie de '.mb_strtolower($c['nombre']);
+        }
+        $d = $request->validate($reglas, ['regex' => 'Revisa :attribute (4 caracteres, ej. F002).'], $nombres);
+
+        $errores = [];
+        foreach (self::SERIES as $c) {
+            if ($otra = EmpresaNegocio::where('IdEmpresa', $ruc)->where($c['serie'], $d[$c['serie']])->value('nombre_comercial')) {
+                $errores[$c['serie']] = "La serie {$d[$c['serie']]} ya la usa la sucursal {$otra}.";
+            }
+        }
+        if ($errores) {
+            return back()->withInput()->withErrors($errores);
+        }
+        $d = array_merge($d, Ubigeo::partes($d['ubigeo']) ?? []);
+        $d['nombre_comercial'] = mb_strtoupper(trim($d['nombre_comercial']));
+        $d['direccion'] = mb_strtoupper(trim($d['direccion']));
+
+        $sucursal = SucursalNueva::crear(Auth::user(), $d, $d['copiar_de'] ?? null);
+
+        return redirect()->route('sucursales.index')->with('success', "Sucursal {$sucursal->nombre_comercial} creada con sus propias series. "
+            .'Ahora crea sus usuarios en Usuarios eligiendo esta sucursal; al entrar, trabajarán directo en ella.');
+    }
+
+    /** El administrador pasa a trabajar en otra sucursal (sus ventas, caja y reportes serán de esa sucursal) */
+    public function cambiar(Request $request)
+    {
+        $this->autorizar();
+        $user = Auth::user();
+        $destino = $this->sucursal((int) $request->input('id'));
+        if (Turno::abiertoDe($user)) {
+            return back()->withErrors(['sucursal' => 'Cierra tu turno de caja antes de cambiar de sucursal.']);
+        }
+        DB::transaction(function () use ($user, $destino) {
+            DB::table('users')->where('IdUsuario', $user->IdUsuario)->update(['id_empresa_negocio' => $destino->id_empresa_negocio]);
+            DB::table('role_user')->where('user_IdUsuario', $user->IdUsuario)->update(['id_empresa_negocio' => $destino->id_empresa_negocio]);
+        });
+
+        return redirect()->route('dashboard')->with('success', "Ahora trabajas en la sucursal {$destino->nombre_comercial}.");
     }
 }

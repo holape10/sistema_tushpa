@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#312e81">
+    <title>Sin conexión</title>
+    <style>
+        body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box;
+               font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: #eef2ff; color: #1e1b4b; text-align: center; }
+        .caja { max-width: 360px; background: #fff; border-radius: 24px; padding: 32px 24px; box-shadow: 0 10px 30px rgba(49, 46, 129, .12); }
+        .icono { width: 72px; height: 72px; border-radius: 50%; background: #e0e7ff; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; }
+        h1 { font-size: 20px; margin: 0 0 8px; }
+        p { color: #4b5563; font-size: 15px; line-height: 1.5; margin: 0 0 20px; }
+        button { border: 0; border-radius: 14px; background: #4338ca; color: #fff; font-weight: bold; font-size: 16px; padding: 14px 24px; width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="caja">
+        <div class="icono">
+            <svg width="36" height="36" fill="none" stroke="#4338ca" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M8.5 16.5a5 5 0 017 0M5 13a10 10 0 015.2-2.8M19 13a10 10 0 00-2.1-1.6M2 8.8a15 15 0 014.2-2.6M22 8.8A15 15 0 0011 5"/></svg>
+        </div>
+        <h1>Sin conexión a internet</h1>
+        <p>Revisa tu WiFi o tus datos móviles. Tus ventas están seguras: en cuanto vuelva la conexión, sigue trabajando.</p>
+        <button onclick="location.reload()">Reintentar</button>
+    </div>
+    <script>window.addEventListener('online', () => location.reload());</script>
+</body>
+</html>

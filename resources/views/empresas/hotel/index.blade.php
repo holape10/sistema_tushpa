@@ -74,6 +74,7 @@
             .modal-dialog { margin: 10px; }
         }
     </style>
+    @include('partials.pwa')
 </head>
 <body>
 <div class="container-fluid">

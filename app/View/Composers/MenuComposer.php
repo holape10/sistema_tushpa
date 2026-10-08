@@ -16,6 +16,9 @@ class MenuComposer
             $view->with('menu', $user->modulos()->orderBy('mod_id')->get()->groupBy('mod_gen'));
             $view->with('usuario', $user);
             $view->with('notifSunat', $user->esAdminOCaja() ? self::pendientesSunat($user) : null);
+            // Nombre de la sucursal en la cabecera, solo si la empresa tiene más de una
+            $sucursales = DB::table('empresa_negocios')->where('IdEmpresa', $user->IdEmpresa)->pluck('nombre_comercial', 'id_empresa_negocio');
+            $view->with('sucursalActual', $sucursales->count() > 1 ? ($sucursales[$user->id_empresa_negocio] ?? null) : null);
         }
     }
 

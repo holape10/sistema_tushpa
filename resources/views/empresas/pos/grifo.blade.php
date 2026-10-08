@@ -34,6 +34,7 @@
     </script>
     <script src="{{ asset('js/impresion.js') }}?v={{ filemtime(public_path('js/impresion.js')) }}" data-url="{{ url('impresion/comprobante') }}" data-csrf="{{ csrf_token() }}"></script>
     <script src="{{ asset('js/pv-grifo.js') }}?v={{ filemtime(public_path('js/pv-grifo.js')) }}"></script>
+    @include('partials.pwa')
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased overflow-hidden" x-data="pvGrifo" x-init="iniciar()" @keydown.window="tecla($event)">
 

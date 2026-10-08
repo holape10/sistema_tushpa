@@ -12,6 +12,7 @@
             ['titulo' => 'Notas de crédito', 'icono' => 'fa-file-circle-minus', 'claves' => ['07F', '07B']],
             ['titulo' => 'Notas de débito', 'icono' => 'fa-file-circle-plus', 'claves' => ['08F', '08B']],
             ['titulo' => 'Proformas (cotizaciones, sin valor tributario)', 'icono' => 'fa-file-lines', 'claves' => ['PR']],
+            ['titulo' => 'Guías de remisión electrónicas', 'icono' => 'fa-truck-fast', 'claves' => ['GR']],
         ];
         // Clases completas (Tailwind no detecta clases armadas por partes)
         $azul = ['badge' => 'bg-blue-100 text-blue-700', 'texto' => 'text-blue-700'];
@@ -20,8 +21,8 @@
         $rojo = ['badge' => 'bg-rose-100 text-rose-700', 'texto' => 'text-rose-700'];
         $ambar = ['badge' => 'bg-amber-100 text-amber-700', 'texto' => 'text-amber-700'];
         $violeta = ['badge' => 'bg-violet-100 text-violet-700', 'texto' => 'text-violet-700'];
-        $colores = ['01' => $azul, '03' => $verde, '13' => $gris, '07F' => $rojo, '07B' => $rojo, '08F' => $ambar, '08B' => $ambar, 'PR' => $violeta];
-        $nombresCortos = ['01' => 'Factura', '03' => 'Boleta', '13' => 'Nota de venta', '07F' => 'De facturas', '07B' => 'De boletas', '08F' => 'De facturas', '08B' => 'De boletas', 'PR' => 'Proforma'];
+        $colores = ['01' => $azul, '03' => $verde, '13' => $gris, '07F' => $rojo, '07B' => $rojo, '08F' => $ambar, '08B' => $ambar, 'PR' => $violeta, 'GR' => $azul];
+        $nombresCortos = ['01' => 'Factura', '03' => 'Boleta', '13' => 'Nota de venta', '07F' => 'De facturas', '07B' => 'De boletas', '08F' => 'De facturas', '08B' => 'De boletas', 'PR' => 'Proforma', 'GR' => 'Guía remitente'];
         $secciones = ['datos' => ['Datos', 'fa-store'], 'direccion' => ['Dirección', 'fa-location-dot'], 'series' => ['Series', 'fa-hashtag'],
                       'impresion' => ['Impresión', 'fa-print'], 'venta' => ['Venta', 'fa-cash-register']];
     @endphp
@@ -88,14 +89,8 @@
                     <div class="grid sm:grid-cols-4 gap-4 p-5">
                         <label class="text-sm font-medium text-gray-600 sm:col-span-4">Dirección
                             <input name="direccion" value="{{ $campo('direccion') }}" required maxlength="255" class="{{ $input }}"></label>
-                        <label class="text-sm font-medium text-gray-600">Ubigeo
-                            <input name="ubigeo" value="{{ $campo('ubigeo') }}" required maxlength="6" inputmode="numeric" class="{{ $input }} font-mono"></label>
-                        <label class="text-sm font-medium text-gray-600">Departamento
-                            <input name="departamento" value="{{ $campo('departamento') }}" required class="{{ $input }} uppercase"></label>
-                        <label class="text-sm font-medium text-gray-600">Provincia
-                            <input name="provincia" value="{{ $campo('provincia') }}" required class="{{ $input }} uppercase"></label>
-                        <label class="text-sm font-medium text-gray-600">Distrito
-                            <input name="distrito" value="{{ $campo('distrito') }}" required class="{{ $input }} uppercase"></label>
+                        <div class="text-sm font-medium text-gray-600 sm:col-span-3">Ciudad / distrito <span class="font-normal text-gray-400">(escribe y elige; el ubigeo, departamento y provincia salen solos)</span>
+                            <div class="mt-1">@include('empresas.partials.ubigeo', ['name' => 'ubigeo', 'valor' => $campo('ubigeo')])</div></div>
                         <label class="text-sm font-medium text-gray-600">Código de establecimiento SUNAT
                             <input name="codigofiscal" value="{{ $campo('codigofiscal') }}" maxlength="4" inputmode="numeric" placeholder="0000" class="{{ $input }} font-mono">
                             <span class="text-xs font-normal text-gray-400">0000 = domicilio fiscal (principal)</span></label>

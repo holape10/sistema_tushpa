@@ -8,6 +8,7 @@
     <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('partials.pwa')
 </head>
 <body class="min-h-screen bg-gray-50">
 
@@ -119,6 +120,9 @@
                     <a href="{{ route('login.movil') }}" class="block text-center text-sm text-indigo-600 hover:underline mt-5">
                         <i class="fas fa-tablet-screen-button"></i> Login para tablet / celular (mozos)
                     </a>
+                    <div class="text-center mt-4">
+                        @include('partials.pwa_boton', ['clase' => 'inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-indigo-200 text-indigo-700 text-sm font-semibold hover:bg-indigo-50'])
+                    </div>
                 </div>
 
                 <p class="text-center text-gray-400 text-xs mt-6">© {{ date('Y') }} Sistema Tushpa · Todos los derechos reservados</p>

@@ -14,6 +14,7 @@
     @if ($logoClub)<link rel="icon" href="{{ asset($logoClub) }}">@endif
     <style>[x-cloak]{display:none!important}</style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('partials.pwa', ['app' => 'socio'])
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased min-h-screen">
     <header class="bg-emerald-800 text-white">
@@ -27,6 +28,7 @@
                 <p class="font-extrabold truncate leading-tight">{{ $nombreClub }}</p>
                 <p class="text-xs text-emerald-200">@yield('subtitulo', 'Portal del socio')</p>
             </div>
+            <span class="ml-auto">@include('partials.pwa_boton', ['clase' => 'inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-bold'])</span>
             @yield('acciones')
         </div>
     </header>

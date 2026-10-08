@@ -3,7 +3,7 @@
 @section('subtitulo', 'Mi gimnasio')
 
 @section('acciones')
-    <form method="POST" action="{{ route('socio.portal.salir') }}" class="ml-auto">
+    <form method="POST" action="{{ route('socio.portal.salir') }}" class="ml-2">
         @csrf
         <button class="text-sm font-semibold bg-white/10 hover:bg-white/20 rounded-xl px-3 py-2">Salir</button>
     </form>

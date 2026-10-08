@@ -19,6 +19,7 @@ use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\EntrenadorController;
 use App\Http\Controllers\GastoController;
 use App\Http\Controllers\GimnasioController;
+use App\Http\Controllers\GuiaController;
 use App\Http\Controllers\HotelController;
 use App\Http\Controllers\ImportarAntiguoController;
 use App\Http\Controllers\ImpresionController;
@@ -36,6 +37,7 @@ use App\Http\Controllers\ProformaController;
 use App\Http\Controllers\PuntoVentaController;
 use App\Http\Controllers\PvGrifoController;
 use App\Http\Controllers\PvTactilController;
+use App\Http\Controllers\PwaController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\SireController;
@@ -148,6 +150,24 @@ Route::middleware('auth')->group(function () {
         Route::get('/{id}/carnet', 'carnet')->whereNumber('id')->name('carnet');
     });
 
+    // Ubigeos (INEI): buscar distrito por nombre
+    Route::get('/ubigeos', [GuiaController::class, 'ubigeos'])->name('ubigeos');
+
+    // Guías de remisión electrónicas
+    Route::controller(GuiaController::class)->prefix('guias')->name('guias.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/crear', 'crear')->name('crear');
+        Route::post('/', 'guardar')->name('guardar');
+        Route::get('/productos', 'productos')->name('productos');
+        Route::get('/documento/{doc}', 'documento')->where('doc', '[0-9]{8,11}')->name('documento');
+        Route::post('/{id}/enviar', 'enviar')->whereNumber('id')->name('enviar');
+        Route::post('/{id}/consultar', 'consultar')->whereNumber('id')->name('consultar');
+        Route::post('/{id}/eliminar', 'eliminar')->whereNumber('id')->name('eliminar');
+        Route::get('/{id}/imprimir', 'imprimir')->whereNumber('id')->name('imprimir');
+        Route::get('/{id}/pdf', 'pdf')->whereNumber('id')->name('pdf');
+        Route::get('/{id}/{tipo}', 'archivo')->whereNumber('id')->whereIn('tipo', ['xml', 'cdr'])->name('archivo');
+    });
+
     // Gimnasio: recepción, control de ingreso y panel del entrenador
     Route::controller(GimnasioController::class)->prefix('gimnasio')->name('gimnasio.')->group(function () {
         Route::get('/', 'index')->name('index');
@@ -230,6 +250,9 @@ Route::middleware('auth')->group(function () {
 
     // Sucursales (empresa_negocios): datos, series y correlativos
     Route::get('/sucursales', [SucursalController::class, 'index'])->name('sucursales.index');
+    Route::get('/sucursales/nueva', [SucursalController::class, 'create'])->name('sucursales.create');
+    Route::post('/sucursales', [SucursalController::class, 'store'])->name('sucursales.store');
+    Route::post('/sucursales/cambiar', [SucursalController::class, 'cambiar'])->name('sucursales.cambiar');
     Route::get('/sucursales/{id}/editar', [SucursalController::class, 'edit'])->whereNumber('id')->name('sucursales.edit');
     Route::patch('/sucursales/{id}', [SucursalController::class, 'update'])->whereNumber('id')->name('sucursales.update');
 
@@ -350,6 +373,13 @@ Route::middleware('auth')->group(function () {
 Route::get('/asistencia/m/{emp}/{accion}', [AsistenciaController::class, 'celular'])
     ->whereNumber('emp')->whereIn('accion', ['check_in_1', 'check_out_1', 'check_in_2', 'check_out_2'])
     ->middleware('throttle:30,1')->name('asistencia.celular');
+
+// App instalable (PWA): manifiesto por empresa (sin sesión)
+Route::get('/manifest.webmanifest', [PwaController::class, 'manifest'])->name('pwa.manifest');
+
+// QR de la guía de remisión impresa: datos del traslado y estado en SUNAT (sin sesión)
+Route::get('/guia/v/{token}', [GuiaController::class, 'verificar'])->where('token', '[A-Za-z0-9]{32}')
+    ->middleware('throttle:60,1')->name('guias.verificar');
 
 // Portería: el QR del carnet de socio muestra si está al día (sin sesión)
 Route::get('/socio/v/{token}', [SocioController::class, 'verificar'])->where('token', '[A-Za-z0-9]{32}')

@@ -40,6 +40,7 @@
         .pie small { display: block; margin-top: 8px; color: #999; font-size: 10px; letter-spacing: .5px; }
         .oculto { display: none; }
     </style>
+    @include('partials.pwa')
 </head>
 <body>
 <div class="card">

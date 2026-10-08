@@ -33,6 +33,7 @@
     </script>
     <script src="{{ asset('js/impresion.js') }}?v={{ filemtime(public_path('js/impresion.js')) }}" data-url="{{ url('impresion/comprobante') }}" data-csrf="{{ csrf_token() }}"></script>
 <script src="{{ asset('js/pv-tactil.js') }}?v={{ filemtime(public_path('js/pv-tactil.js')) }}"></script>
+    @include('partials.pwa')
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased overflow-hidden select-none" x-data="pvTactil" x-init="iniciar()" @keydown.window="tecla($event)">
 
