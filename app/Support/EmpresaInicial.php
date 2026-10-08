@@ -51,7 +51,7 @@ class EmpresaInicial
             'predeterminado' => 1,
             'id_empresa_negocio' => $sucursal->id_empresa_negocio,
             'direccion' => $d['direccion'],
-            'ubigeo' => $d['ubigeo'] ?? null,
+            'ubigeo' => ($d['ubigeo'] ?? null) ?: '',   // la tabla no acepta nulo; se completa al editar el almacén
         ]);
 
         $empleado = Empleado::create([

@@ -17,10 +17,13 @@ return [
     'admin_ips' => array_values(array_filter(array_map('trim', explode(',', (string) env('TENANCY_ADMIN_IPS', ''))))),
 
     // Subdominios que entran a la base del .env (la empresa dueña del sistema), separados por coma. Ej. "a" => a.tushpa.app
-    'principales' => array_values(array_filter(array_map(fn($s) => strtolower(trim($s)), explode(',', (string) env('TENANCY_PRINCIPALES', ''))))),
+    'principales' => array_values(array_filter(array_map(fn ($s) => strtolower(trim($s)), explode(',', (string) env('TENANCY_PRINCIPALES', ''))))),
 
     // Nombre de la base de cada cliente: {prefijo_bd}{RUC}
     'prefijo_bd' => env('TENANCY_PREFIJO_BD', 'bd_'),
+
+    // Base de la empresa dueña (la del .env): el panel lee de aquí el catálogo del menú (modulos), porque trabaja en la base central
+    'base_sistema' => env('DB_DATABASE'),
 
     // Esquema de los enlaces a los clientes (https en producción)
     'esquema' => env('TENANCY_ESQUEMA', 'https'),

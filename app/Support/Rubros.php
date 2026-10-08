@@ -2,8 +2,10 @@
 
 namespace App\Support;
 
+use App\Support\Tenancy\Tenancy;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Tipos de negocio: al crear una empresa desde el panel admin.tushpa.app se elige el rubro y su usuario administrador
@@ -59,9 +61,17 @@ class Rubros
         return $r['modulos'] === ['*'] ? ['*'] : array_values(array_unique(array_merge(self::BASE, $r['modulos'])));
     }
 
-    /** Menú disponible (de la base actual) agrupado como se ve en el sistema; sin las opciones "Pronto" */
+    /**
+     * Menú disponible agrupado como se ve en el sistema; sin las opciones "Pronto".
+     * Si la base actual no tiene menú (el panel trabaja en la base central), se lee de la base del sistema.
+     */
     public static function catalogo(): Collection
     {
+        $base = config('tenancy.base_sistema');
+        if (! Schema::hasTable('modulos') && $base && $base !== Tenancy::baseActual()) {
+            return Tenancy::en($base, fn () => self::catalogo());
+        }
+
         return DB::table('modulos')->whereNotNull('mod_url')->where('mod_url', '!=', '#')->where('mod_url', '!=', '')
             ->orderBy('mod_gen')->orderBy('mod_id')->get(['mod_id', 'mod_nom', 'mod_url', 'mod_gen'])->groupBy('mod_gen');
     }
