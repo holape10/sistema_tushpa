@@ -25,7 +25,7 @@
             @endif
             <div class="min-w-0">
                 <p class="font-extrabold truncate leading-tight">{{ $nombreClub }}</p>
-                <p class="text-xs text-emerald-200">Portal del socio</p>
+                <p class="text-xs text-emerald-200">@yield('subtitulo', 'Portal del socio')</p>
             </div>
             @yield('acciones')
         </div>

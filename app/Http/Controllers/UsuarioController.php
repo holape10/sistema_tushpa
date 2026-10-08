@@ -19,6 +19,7 @@ class UsuarioController extends Controller
     // Módulos que se marcan solos al elegir el rol (el admin puede cambiarlos después)
     public const PRESETS = [
         8 => ['Comandas'],
+        11 => ['Inicio', 'Entrenador'],
         10 => ['Inicio', 'Historias Clínicas', 'Agenda de Citas'],
         4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Envío de Comprobantes', 'Resumen Diario',
             'Kardex', 'Stock Productos', 'Clientes'],

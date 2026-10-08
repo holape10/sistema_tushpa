@@ -1,17 +1,23 @@
 <?php
+
 // app/Models/User.php
+
 namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 
 class User extends Authenticatable
 {
     use Notifiable;
 
     protected $table = 'users';
+
     protected $primaryKey = 'IdUsuario';
+
     protected $guarded = [];
+
     protected $hidden = ['password', 'remember_token'];
 
     public function sucursal()
@@ -32,7 +38,7 @@ class User extends Authenticatable
 
     public function rolPrincipal(): ?string
     {
-        return \Illuminate\Support\Facades\DB::table('role_user')
+        return DB::table('role_user')
             ->join('roles', 'roles.id', '=', 'role_user.role_id')
             ->where('user_IdUsuario', $this->IdUsuario)
             ->value('roles.name');
@@ -41,7 +47,7 @@ class User extends Authenticatable
     // IDs de la tabla roles: 2 = admin, 4 = caja, 8 = mozo
     public function tieneRol(array $roleIds): bool
     {
-        return \Illuminate\Support\Facades\DB::table('role_user')
+        return DB::table('role_user')
             ->where('user_IdUsuario', $this->IdUsuario)
             ->whereIn('role_id', $roleIds)
             ->exists();
@@ -71,6 +77,7 @@ class User extends Authenticatable
     {
         return match ($this->rolPrincipal()) {
             'mozo' => 'comandas.seleccion', // el mozo entra directo a las mesas
+            'entrenador' => 'entrenador.index', // el entrenador entra a su panel
             'caja' => 'dashboard', // cámbialo a 'pos.index' cuando exista
             default => 'dashboard', // admin y cualquier otro caso
         };

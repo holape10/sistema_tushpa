@@ -27,6 +27,7 @@ class AnulacionVenta
                 'IdUsuario_baja' => $usuarioId,
             ]);
             Socios::revertirComprobante($cabId);   // cuotas de socio pagadas con esta venta
+            Gimnasio::revertirComprobante($cabId); // membresía de gimnasio pagada con esta venta
 
             // El stock que salió con esta venta vuelve al almacén
             return Kardex::revertirVenta($cabId, [

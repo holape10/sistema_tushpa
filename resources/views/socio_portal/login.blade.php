@@ -4,7 +4,7 @@
 @section('contenido')
 <div class="max-w-md mx-auto py-6">
     <div class="bg-white rounded-3xl shadow-sm p-6">
-        <h1 class="text-2xl font-extrabold">Hola, socio 👋</h1>
+        <h1 class="text-2xl font-extrabold">{{ $negocio && \App\Support\Gimnasio::usa((int) $negocio->id_empresa_negocio) ? 'Hola, bienvenido 💪' : 'Hola, socio 👋' }}</h1>
         <p class="text-sm text-slate-500 mt-1">Ingresa con tu DNI. Si es tu primer ingreso, tu contraseña es tu mismo DNI.</p>
         @if ($errors->any())
             <div class="mt-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ $errors->first() }}</div>

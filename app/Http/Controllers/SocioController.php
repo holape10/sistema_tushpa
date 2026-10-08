@@ -1,15 +1,23 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Cliente, MedioPago, Turno};
+use App\Models\Cliente;
+use App\Models\MedioPago;
+use App\Models\Turno;
+use App\Support\Gimnasio;
+use App\Support\Impresion\Impresion;
 use App\Support\Socios;
+use App\Support\VentaDirecta;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Socios de un club o asociación: padrón con familiares, cuotas del mes con un clic, cargos extraordinarios,
@@ -38,8 +46,9 @@ class SocioController extends Controller
             return response()->json(['ok' => true] + (array) $accion());
         } catch (\RuntimeException $e) {
             return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             report($e);
+
             return response()->json(['ok' => false, 'mensaje' => str_contains($e->getMessage(), 'Duplicate') ? 'Ese código de socio ya existe.' : 'No se pudo guardar.']);
         }
     }
@@ -65,6 +74,7 @@ class SocioController extends Controller
                 $s->saldo = round((float) ($deuda[$s->soc_id] ?? 0), 2);
                 $s->meses = (int) ($meses[$s->soc_id] ?? 0);
                 $s->familiares = (int) ($familiares[$s->soc_id] ?? 0);
+
                 return $s;
             });
 
@@ -124,33 +134,34 @@ class SocioController extends Controller
         return $this->json(function () use ($d, $suc, $cfg) {
             $permitidos = Socios::parentescos($cfg);
             foreach ($d['familiares'] ?? [] as $f) {
-                if ($permitidos && !in_array(mb_strtoupper($f['parentesco']), $permitidos, true)) {
+                if ($permitidos && ! in_array(mb_strtoupper($f['parentesco']), $permitidos, true)) {
                     throw new \RuntimeException("Parentesco no permitido: {$f['parentesco']}. Revisa la configuración.");
                 }
             }
+
             return DB::transaction(function () use ($d, $suc) {
                 $user = Auth::user();
                 $cliente = Cliente::updateOrCreate(['clinum' => trim($d['clinum']), 'rucemp' => $user->IdEmpresa], [
                     'clinom' => mb_strtoupper(trim($d['clinom'])), 'tdicod' => $d['tdicod'], 'clidir' => ($d['clidir'] ?? null) ?: '--',
                     'telefono' => $d['telefono'] ?? null, 'clicor' => $d['clicor'] ?? null,
                 ]);
-                $actual = !empty($d['soc_id']) ? DB::table('socios')->where('soc_id', $d['soc_id'])->where('id_empresa_negocio', $suc)->first() : null;
-                if (!empty($d['soc_id']) && !$actual) {
+                $actual = ! empty($d['soc_id']) ? DB::table('socios')->where('soc_id', $d['soc_id'])->where('id_empresa_negocio', $suc)->first() : null;
+                if (! empty($d['soc_id']) && ! $actual) {
                     throw new \RuntimeException('Socio no encontrado.');
                 }
                 $otro = DB::table('socios')->where('id_empresa_negocio', $suc)->where('clicod', $cliente->clicod)
-                    ->when($actual, fn($q) => $q->where('soc_id', '!=', $actual->soc_id))->value('codigo');
+                    ->when($actual, fn ($q) => $q->where('soc_id', '!=', $actual->soc_id))->value('codigo');
                 if ($otro) {
                     throw new \RuntimeException("Esa persona ya está registrada como socio N° {$otro}.");
                 }
 
                 // Código: el que escriban o el siguiente número
                 $codigo = trim((string) ($d['codigo'] ?? '')) ?: ($actual->codigo ?? null);
-                if (!$codigo) {
+                if (! $codigo) {
                     $ultimo = DB::table('socios')->where('id_empresa_negocio', $suc)->whereRaw("codigo REGEXP '^[0-9]+$'")->max(DB::raw('CAST(codigo AS UNSIGNED)'));
                     $codigo = str_pad((string) ((int) $ultimo + 1), 4, '0', STR_PAD_LEFT);
                 }
-                $catValida = !empty($d['cat_soc_id']) && DB::table('socio_categorias')->where('cat_soc_id', $d['cat_soc_id'])->where('id_empresa_negocio', $suc)->exists();
+                $catValida = ! empty($d['cat_soc_id']) && DB::table('socio_categorias')->where('cat_soc_id', $d['cat_soc_id'])->where('id_empresa_negocio', $suc)->exists();
                 $fila = ['codigo' => mb_strtoupper($codigo), 'clicod' => $cliente->clicod, 'cat_soc_id' => $catValida ? $d['cat_soc_id'] : null,
                     'fecha_ingreso' => $d['fecha_ingreso'] ?? null, 'fecha_nac' => $d['fecha_nac'] ?? null, 'obs' => $d['obs'] ?? null];
 
@@ -166,7 +177,7 @@ class SocioController extends Controller
                 foreach ($d['familiares'] ?? [] as $f) {
                     $fam = ['nombre' => mb_strtoupper(trim($f['nombre'])), 'dni' => trim((string) ($f['dni'] ?? '')) ?: null,
                         'parentesco' => mb_strtoupper(trim($f['parentesco'])), 'fecha_nac' => $f['fecha_nac'] ?? null, 'activo' => (int) ($f['activo'] ?? 1)];
-                    if (!empty($f['fam_id']) && DB::table('socio_familiares')->where('fam_id', $f['fam_id'])->where('soc_id', $socId)->exists()) {
+                    if (! empty($f['fam_id']) && DB::table('socio_familiares')->where('fam_id', $f['fam_id'])->where('soc_id', $socId)->exists()) {
                         DB::table('socio_familiares')->where('fam_id', $f['fam_id'])->update($fam);
                         $vistos[] = (int) $f['fam_id'];
                     } else {
@@ -175,7 +186,7 @@ class SocioController extends Controller
                 }
                 DB::table('socio_familiares')->where('soc_id', $socId)->whereNotIn('fam_id', $vistos ?: [0])->update(['activo' => 0]);
 
-                return ['mensaje' => 'Socio N° ' . mb_strtoupper($codigo) . ' guardado.', 'soc_id' => $socId];
+                return ['mensaje' => 'Socio N° '.mb_strtoupper($codigo).' guardado.', 'soc_id' => $socId];
             });
         });
     }
@@ -184,8 +195,9 @@ class SocioController extends Controller
     public function estado(Request $request, int $id)
     {
         $this->soloAdmin();
-        $d = $request->validate(['estado' => 'required|in:' . implode(',', Socios::ESTADOS)]);
+        $d = $request->validate(['estado' => 'required|in:'.implode(',', Socios::ESTADOS)]);
         DB::table('socios')->where('soc_id', $id)->where('id_empresa_negocio', $this->sucursal())->update(['estado' => $d['estado'], 'suspendido_auto' => 0]);
+
         return response()->json(['ok' => true, 'mensaje' => 'Estado actualizado.']);
     }
 
@@ -212,6 +224,7 @@ class SocioController extends Controller
         if ($retirados) {
             $msg .= " {$retirados} tenían cuotas o pagos: quedaron como RETIRADO.";
         }
+
         return response()->json(['ok' => true, 'mensaje' => trim($msg) ?: 'Nada que quitar.']);
     }
 
@@ -222,19 +235,20 @@ class SocioController extends Controller
         $d = $request->validate(['cat_soc_id' => 'required|integer', 'ids' => 'nullable|array|max:5000', 'ids.*' => 'integer', 'sin_categoria' => 'nullable|boolean']);
         $suc = $this->sucursal();
         $cat = DB::table('socio_categorias')->where('cat_soc_id', $d['cat_soc_id'])->where('id_empresa_negocio', $suc)->first();
-        if (!$cat) {
+        if (! $cat) {
             return response()->json(['ok' => false, 'mensaje' => 'Elige una categoría.']);
         }
         $q = DB::table('socios')->where('id_empresa_negocio', $suc);
-        if (!empty($d['ids'])) {
+        if (! empty($d['ids'])) {
             $q->whereIn('soc_id', $d['ids']);
-        } elseif (!empty($d['sin_categoria'])) {
+        } elseif (! empty($d['sin_categoria'])) {
             $q->whereNull('cat_soc_id')->whereIn('estado', ['ACTIVO', 'SUSPENDIDO']);
         } else {
             return response()->json(['ok' => false, 'mensaje' => 'Marca al menos un socio.']);
         }
         $n = $q->update(['cat_soc_id' => $cat->cat_soc_id]);
-        return response()->json(['ok' => true, 'mensaje' => "{$n} socio(s) ahora son {$cat->nombre} (S/ " . number_format($cat->cuota, 2) . ' al mes).']);
+
+        return response()->json(['ok' => true, 'mensaje' => "{$n} socio(s) ahora son {$cat->nombre} (S/ ".number_format($cat->cuota, 2).' al mes).']);
     }
 
     /** Olvidó su contraseña del portal: vuelve a ser su DNI/RUC y se le pedirá crear otra */
@@ -242,6 +256,7 @@ class SocioController extends Controller
     {
         $this->puedeUsar();
         DB::table('socios')->where('soc_id', $id)->where('id_empresa_negocio', $this->sucursal())->update(['clave' => null]);
+
         return response()->json(['ok' => true, 'mensaje' => 'Listo: su contraseña del portal vuelve a ser su DNI/RUC.']);
     }
 
@@ -251,6 +266,7 @@ class SocioController extends Controller
     {
         $this->soloAdmin();
         $periodo = preg_match('/^\d{6}$/', (string) $request->periodo) ? $request->periodo : now()->format('Ym');
+
         return response()->json(Socios::previsualizar($this->sucursal(), $periodo) + ['mes' => Socios::nombreMes($periodo)]);
     }
 
@@ -258,10 +274,12 @@ class SocioController extends Controller
     {
         $this->soloAdmin();
         $d = $request->validate(['periodo' => 'required|digits:6']);
+
         return $this->json(function () use ($d) {
             $r = Socios::generarCuotas(Auth::user(), $d['periodo']);
-            return $r + ['mensaje' => "Se generaron {$r['cargos']} cuotas de " . Socios::nombreMes($d['periodo']) . ' por S/ ' . number_format($r['total'], 2) . '.'
-                . ($r['suspendidos'] ? " {$r['suspendidos']} socio(s) pasaron a SUSPENDIDO por deuda." : '')];
+
+            return $r + ['mensaje' => "Se generaron {$r['cargos']} cuotas de ".Socios::nombreMes($d['periodo']).' por S/ '.number_format($r['total'], 2).'.'
+                .($r['suspendidos'] ? " {$r['suspendidos']} socio(s) pasaron a SUSPENDIDO por deuda." : '')];
         });
     }
 
@@ -272,9 +290,11 @@ class SocioController extends Controller
             'IdProducto' => 'required|integer', 'descripcion' => 'nullable|string|max:150', 'monto' => 'required|numeric|min:0.01|max:999999',
             'cat_soc_id' => 'nullable|integer', 'soc_ids' => 'nullable|array|max:5000', 'soc_ids.*' => 'integer', 'periodo' => 'nullable|digits:6',
         ]);
+
         return $this->json(function () use ($d) {
             $r = Socios::cargar(Auth::user(), $d);
-            return $r + ['mensaje' => "Cargo aplicado a {$r['cargos']} socio(s) por S/ " . number_format($r['total'], 2) . '.'];
+
+            return $r + ['mensaje' => "Cargo aplicado a {$r['cargos']} socio(s) por S/ ".number_format($r['total'], 2).'.'];
         });
     }
 
@@ -282,7 +302,7 @@ class SocioController extends Controller
     {
         $this->soloAdmin();
         $c = DB::table('socio_cargos')->where('car_id', $id)->where('id_empresa_negocio', $this->sucursal())->first();
-        if (!$c || $c->estado !== 'PENDIENTE') {
+        if (! $c || $c->estado !== 'PENDIENTE') {
             return response()->json(['ok' => false, 'mensaje' => 'Ese cargo ya no está pendiente.']);
         }
         if ($c->pagado > 0) {
@@ -290,6 +310,7 @@ class SocioController extends Controller
         }
         DB::table('socio_cargos')->where('car_id', $id)->update(['estado' => 'ANULADO']);
         Socios::actualizarMorosidad($this->sucursal(), (int) $c->soc_id);
+
         return response()->json(['ok' => true, 'mensaje' => 'Cargo anulado.']);
     }
 
@@ -311,18 +332,20 @@ class SocioController extends Controller
             return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json(['ok' => false, 'mensaje' => config('app.debug') ? $e->getMessage() : 'No se pudo registrar el cobro.']);
         }
 
         $impreso = false;
-        if (!empty($d['imprimir'])) {
+        if (! empty($d['imprimir'])) {
             try {
-                $impreso = \App\Support\Impresion\Impresion::comprobante($cabId);
+                $impreso = Impresion::comprobante($cabId);
             } catch (\Throwable $e) {
                 report($e);
             }
         }
-        return response()->json(['ok' => true, 'impreso' => $impreso] + \App\Support\VentaDirecta::respuesta($cabId));
+
+        return response()->json(['ok' => true, 'impreso' => $impreso] + VentaDirecta::respuesta($cabId));
     }
 
     // ------------------------------------------------------------------ configuración
@@ -335,12 +358,13 @@ class SocioController extends Controller
             'parentescos' => 'required|string|max:255', 'IdProducto_ordinaria' => 'nullable|integer',
         ]);
         $suc = $this->sucursal();
-        if (!empty($d['IdProducto_ordinaria']) && !DB::table('productos')->where('IdProducto', $d['IdProducto_ordinaria'])->where('id_empresa_negocio', $suc)->exists()) {
+        if (! empty($d['IdProducto_ordinaria']) && ! DB::table('productos')->where('IdProducto', $d['IdProducto_ordinaria'])->where('id_empresa_negocio', $suc)->exists()) {
             return response()->json(['ok' => false, 'mensaje' => 'Concepto no válido.']);
         }
-        $d['parentescos'] = implode(',', array_unique(array_filter(array_map(fn($p) => mb_strtoupper(trim($p)), explode(',', $d['parentescos'])))));
+        $d['parentescos'] = implode(',', array_unique(array_filter(array_map(fn ($p) => mb_strtoupper(trim($p)), explode(',', $d['parentescos'])))));
         DB::table('socio_config')->updateOrInsert(['id_empresa_negocio' => $suc], $d);
         Socios::actualizarMorosidad($suc);
+
         return response()->json(['ok' => true, 'mensaje' => 'Configuración guardada.']);
     }
 
@@ -349,9 +373,10 @@ class SocioController extends Controller
     {
         $this->soloAdmin();
         $d = $request->validate(['cat_soc_id' => 'nullable|integer']);
-        $cat = !empty($d['cat_soc_id']) && DB::table('socio_categorias')->where('cat_soc_id', $d['cat_soc_id'])->where('id_empresa_negocio', $this->sucursal())->exists()
+        $cat = ! empty($d['cat_soc_id']) && DB::table('socio_categorias')->where('cat_soc_id', $d['cat_soc_id'])->where('id_empresa_negocio', $this->sucursal())->exists()
             ? (int) $d['cat_soc_id'] : null;
         $n = Socios::desdeClientes(Auth::user(), $cat);
+
         return response()->json(['ok' => true, 'mensaje' => $n ? "Se agregaron {$n} socios desde los clientes con DNI." : 'Todos los clientes con DNI ya son socios.']);
     }
 
@@ -361,11 +386,12 @@ class SocioController extends Controller
         $d = $request->validate(['cat_soc_id' => 'nullable|integer', 'nombre' => 'required|string|max:60', 'cuota' => 'required|numeric|min:0|max:99999',
             'activo' => 'nullable|boolean']);
         $fila = ['nombre' => mb_strtoupper(trim($d['nombre'])), 'cuota' => $d['cuota'], 'activo' => (int) ($d['activo'] ?? 1)];
-        if (!empty($d['cat_soc_id'])) {
+        if (! empty($d['cat_soc_id'])) {
             DB::table('socio_categorias')->where('cat_soc_id', $d['cat_soc_id'])->where('id_empresa_negocio', $this->sucursal())->update($fila);
         } else {
             DB::table('socio_categorias')->insert($fila + ['id_empresa_negocio' => $this->sucursal()]);
         }
+
         return response()->json(['ok' => true, 'mensaje' => 'Categoría guardada.']);
     }
 
@@ -373,7 +399,8 @@ class SocioController extends Controller
 
     private function qr(string $texto, int $tam = 180): string
     {
-        $svg = (new Writer(new ImageRenderer(new RendererStyle($tam, 1), new SvgImageBackEnd())))->writeString($texto);
+        $svg = (new Writer(new ImageRenderer(new RendererStyle($tam, 1), new SvgImageBackEnd)))->writeString($texto);
+
         return preg_replace('/^<\?xml[^>]*>\s*/', '', $svg);
     }
 
@@ -393,6 +420,7 @@ class SocioController extends Controller
         }
         $negocio = DB::table('empresa_negocios as n')->join('empresa as e', 'e.IdEmpresa', '=', 'n.IdEmpresa')
             ->where('n.id_empresa_negocio', $suc)->first(['n.nombre_comercial', 'n.logo_suc', 'e.NomEmpresa', 'e.LogEmpresa']);
+
         return view('empresas.socios.carnet', ['socio' => $s, 'carnets' => $carnets, 'negocio' => $negocio]);
     }
 
@@ -401,7 +429,7 @@ class SocioController extends Controller
     {
         $fam = null;
         $s = DB::table('socios')->where('token', $token)->first();
-        if (!$s) {
+        if (! $s) {
             $fam = DB::table('socio_familiares')->where('token', $token)->first();
             $s = $fam ? DB::table('socios')->where('soc_id', $fam->soc_id)->first() : null;
         }
@@ -411,10 +439,15 @@ class SocioController extends Controller
         $meses = (int) (Socios::mesesDebe((int) $s->id_empresa_negocio)[$s->soc_id] ?? 0);
         $deuda = (float) DB::table('socio_cargos')->where('soc_id', $s->soc_id)->where('estado', 'PENDIENTE')->sum(DB::raw('monto - pagado'));
         [$texto, $color] = Socios::situacion($s, $meses, $deuda);
+        // Gimnasio: lo que importa es si su plan está vigente o congelado
+        if (Gimnasio::usa((int) $s->id_empresa_negocio)) {
+            $sit = Gimnasio::situacionDe((int) $s->soc_id, (int) $s->id_empresa_negocio);
+            [$texto, $color] = [$sit['texto'], ['green' => 'green', 'amber' => 'amber', 'red' => 'red'][$sit['color']] ?? 'gray'];
+        }
         $titular = DB::table('cliente')->where('clicod', $s->clicod)->value('clinom');
         $aviso = null;
         if ($fam) {
-            if (!$fam->activo) {
+            if (! $fam->activo) {
                 [$texto, $color] = ['DADO DE BAJA', 'gray'];
             }
             $edad = $fam->fecha_nac ? Carbon::parse($fam->fecha_nac)->age : null;
@@ -426,7 +459,7 @@ class SocioController extends Controller
             ->where('n.id_empresa_negocio', $s->id_empresa_negocio)->first(['n.nombre_comercial', 'n.logo_suc', 'e.NomEmpresa', 'e.LogEmpresa']);
 
         return view('empresas.socios.verificar', [
-            'nombre' => $fam ? $fam->nombre : $titular, 'tipo' => $fam ? $fam->parentesco . ' DE ' . $titular : 'TITULAR',
+            'nombre' => $fam ? $fam->nombre : $titular, 'tipo' => $fam ? $fam->parentesco.' DE '.$titular : 'TITULAR',
             'codigo' => $s->codigo, 'texto' => $texto, 'color' => $color, 'aviso' => $aviso, 'negocio' => $negocio,
         ]);
     }

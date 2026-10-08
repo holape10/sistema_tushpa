@@ -212,6 +212,7 @@ class Notas
                 Cuentas::anularPorDocumento('cobrar', $ref->IdCpe_cabecera);
                 DB::table('cpe_cabecera')->where('IdCpe_cabecera', $ref->IdCpe_cabecera)->update(['anulado_nc' => $numNota]);
                 Socios::revertirComprobante((int) $ref->IdCpe_cabecera);   // cuotas de socio pagadas con él vuelven a deberse
+                Gimnasio::revertirComprobante((int) $ref->IdCpe_cabecera); // la membresía de gimnasio que pagó queda anulada
             }
 
             EnvioAutomatico::programar($notaId);

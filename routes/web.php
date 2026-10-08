@@ -16,7 +16,9 @@ use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmpresaController;
+use App\Http\Controllers\EntrenadorController;
 use App\Http\Controllers\GastoController;
+use App\Http\Controllers\GimnasioController;
 use App\Http\Controllers\HotelController;
 use App\Http\Controllers\ImportarAntiguoController;
 use App\Http\Controllers\ImpresionController;
@@ -144,6 +146,33 @@ Route::middleware('auth')->group(function () {
         Route::post('/{id}/clave', 'restablecerClave')->whereNumber('id')->name('clave');
         Route::post('/{id}/cobrar', 'cobrar')->whereNumber('id')->name('cobrar');
         Route::get('/{id}/carnet', 'carnet')->whereNumber('id')->name('carnet');
+    });
+
+    // Gimnasio: recepción, control de ingreso y panel del entrenador
+    Route::controller(GimnasioController::class)->prefix('gimnasio')->name('gimnasio.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/clientes', 'lista')->name('lista');
+        Route::post('/clientes', 'guardar')->name('guardar');
+        Route::get('/clientes/{id}', 'ficha')->whereNumber('id')->name('ficha');
+        Route::post('/clientes/{id}/estado', 'estado')->whereNumber('id')->name('estado');
+        Route::post('/clientes/{id}/clave', 'restablecerClave')->whereNumber('id')->name('clave');
+        Route::post('/clientes/{id}/vender', 'vender')->whereNumber('id')->name('vender');
+        Route::post('/clientes/{id}/congelar', 'congelar')->whereNumber('id')->name('congelar');
+        Route::post('/congelamientos/{id}', 'editarCongelamiento')->whereNumber('id')->name('congelamiento');
+        Route::post('/congelamientos/{id}/anular', 'anularCongelamiento')->whereNumber('id')->name('congelamiento.anular');
+        Route::post('/congelamientos/{id}/levantar', 'levantarCongelamiento')->whereNumber('id')->name('congelamiento.levantar');
+        Route::post('/planes', 'guardarPlan')->name('plan');
+        Route::get('/acceso', 'acceso')->name('acceso');
+        Route::get('/acceso/hoy', 'ingresosHoy')->name('acceso.hoy');
+        Route::post('/acceso/marcar', 'marcar')->middleware('throttle:120,1')->name('acceso.marcar');
+        Route::post('/acceso/aprobar', 'aprobar')->middleware('throttle:30,1')->name('acceso.aprobar');
+    });
+    Route::controller(EntrenadorController::class)->prefix('gimnasio/entrenador')->name('entrenador.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/clientes/{id}', 'cliente')->whereNumber('id')->name('cliente');
+        Route::post('/clientes/{id}/asignar', 'asignar')->whereNumber('id')->name('asignar');
+        Route::post('/clientes/{id}/nutricion', 'guardarNutricion')->whereNumber('id')->name('nutricion');
+        Route::post('/nutricion/{id}/quitar', 'quitarNutricion')->whereNumber('id')->name('nutricion.quitar');
     });
 
     // Hotel / hospedaje
@@ -334,6 +363,7 @@ Route::prefix('socio')->name('socio.portal')->controller(SocioPortalController::
     Route::post('/clave', 'cambiarClave')->middleware('throttle:10,1')->name('.clave');
     Route::get('/estado', 'estado')->middleware('throttle:30,1')->name('.estado');
     Route::get('/comprobante/{id}', 'comprobante')->whereNumber('id')->middleware('throttle:30,1')->name('.comprobante');
+    Route::post('/congelar', 'congelar')->middleware('throttle:10,1')->name('.congelar');
 });
 
 // Tienda virtual pública de la empresa: {subdominio}/tiendavirtual (sin sesión del sistema)
