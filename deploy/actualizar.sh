@@ -38,6 +38,11 @@ chown -R apache:apache "${DIR}"
 chmod -R ug+rwX storage bootstrap/cache public/imagenes
 command -v restorecon >/dev/null && restorecon -R "${DIR}" || true
 systemctl reload php-fpm httpd
+# Tareas programadas de Laravel (limpieza de la cola de impresión a las 4 am, etc.)
+if [ ! -f /etc/cron.d/tushpa-schedule ]; then
+    echo "* * * * * apache cd ${DIR} && php artisan schedule:run >> /dev/null 2>&1" > /etc/cron.d/tushpa-schedule
+    systemctl enable --now crond >/dev/null 2>&1 || true
+fi
 # El script de certificados corre como root: su copia vive fuera de la carpeta de Apache
 [ -f /usr/local/sbin/tushpa-ssl ] && install -o root -g root -m 755 deploy/ssl-clientes.sh /usr/local/sbin/tushpa-ssl
 

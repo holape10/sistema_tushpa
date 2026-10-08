@@ -169,24 +169,26 @@
                 </template>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-                <label class="text-[11px] font-semibold text-slate-500">Cliente / N° beeper
-                    <input x-model="nombre" maxlength="60" placeholder="Opcional" :class="faltaNombre ? 'border-rose-400 ring-2 ring-rose-200' : 'border-slate-200'"
-                           class="mt-0.5 w-full h-11 rounded-xl text-sm uppercase select-text">
-                </label>
-                <label class="text-[11px] font-semibold text-slate-500">Paga con
-                    <input type="number" inputmode="decimal" step="0.10" min="0" x-model.number="paga" placeholder="0.00"
-                           class="mt-0.5 w-full h-11 rounded-xl border-emerald-300 text-right text-lg font-bold select-text">
-                </label>
+            {{-- Datos del comprobante: DNI o RUC (el nombre se busca solo) y nombre o razón social --}}
+            <div x-show="tdocod !== '13'" x-cloak class="space-y-2">
+                <div class="grid grid-cols-[1fr_auto] gap-2 items-end">
+                    <label class="text-[11px] font-semibold text-slate-500" x-text="tdocod === '01' ? 'RUC del cliente' : 'DNI o RUC del cliente'"></label>
+                    <span class="text-[11px] max-w-[160px] truncate text-right" :class="docOk ? 'text-emerald-600' : 'text-slate-400'"
+                          x-text="buscandoDoc ? 'Buscando…' : (docOk ? '✔ Encontrado' : (docNombre || ''))"></span>
+                </div>
+                <input x-model="doc" @input="autoDoc()" inputmode="numeric" maxlength="11" :placeholder="tdocod === '01' ? 'RUC de 11 dígitos' : 'DNI de 8 dígitos o RUC'"
+                       :class="faltaDoc ? 'border-rose-400 ring-2 ring-rose-200' : 'border-slate-200'"
+                       class="-mt-1 w-full h-11 rounded-xl text-sm font-semibold select-text">
+                <input x-model="nombre" maxlength="150" :placeholder="tdocod === '01' ? 'Razón social' : 'Nombres y apellidos'"
+                       :class="faltaDoc && doc.trim() ? 'border-rose-400 ring-2 ring-rose-200' : 'border-slate-200'"
+                       class="w-full h-11 rounded-xl text-sm uppercase select-text">
+                <p x-show="tdocod === '03' && !doc.trim()" class="text-[11px] text-slate-500 -mt-1">Sin DNI la boleta sale a <b>VENTA AL PORTADOR</b> (SUNAT lo permite hasta S/ 699.99).</p>
             </div>
-            <p x-show="faltaNombre" x-cloak class="text-[11px] text-rose-600 -mt-1">Desde S/ <span x-text="num(cfg.nombreDesde)"></span> pon el nombre del cliente y su N° de beeper.</p>
 
-            {{-- DNI/RUC solo si es boleta o factura --}}
-            <div x-show="tdocod !== '13'" x-cloak class="grid grid-cols-[1fr_auto] gap-2">
-                <input x-model="doc" @input="autoDoc()" inputmode="numeric" maxlength="11" :placeholder="tdocod === '01' ? 'RUC (obligatorio)' : 'DNI / RUC (opcional)'"
-                       class="h-11 rounded-xl border-slate-200 text-sm font-semibold select-text">
-                <span class="h-11 flex items-center text-xs max-w-[150px] truncate" :class="docOk ? 'text-emerald-600' : 'text-slate-400'" x-text="docNombre || (buscandoDoc ? 'Buscando…' : '')"></span>
-            </div>
+            <label class="block text-[11px] font-semibold text-slate-500">Paga con
+                <input type="number" inputmode="decimal" step="0.10" min="0" x-model.number="paga" placeholder="0.00"
+                       class="mt-0.5 w-full h-11 rounded-xl border-emerald-300 text-right text-lg font-bold select-text">
+            </label>
 
             <div class="flex gap-1.5 overflow-x-auto scroll-fino">
                 <template x-for="m in cfg.medios" :key="m.id">

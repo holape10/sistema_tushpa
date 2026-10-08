@@ -1,7 +1,15 @@
 <?php
+
 namespace App\Support;
 
-use App\Models\{Almacen, Cliente, EmpresaNegocio, MedioPago, Producto, Turno, User};
+use App\Models\Almacen;
+use App\Models\Cliente;
+use App\Models\EmpresaNegocio;
+use App\Models\MedioPago;
+use App\Models\Producto;
+use App\Models\Turno;
+use App\Models\User;
+use App\Support\Sunat\EnvioAutomatico;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -13,8 +21,10 @@ class Comprobante
 {
     // IGV general (puntos de venta, compras)
     public const FACTOR_IGV = 1.18;
+
     // Restaurante y hotel: lo que se cobra desde Comandas (mesa, llevar, delivery y su punto de venta) y las habitaciones
     public const FACTOR_RESTAURANTE = 1.105;
+
     private const ORIGENES_RESTAURANTE = ['SALON', 'LLEVAR', 'DELIVERY', 'PVCOMANDA', 'HOTEL'];
 
     /** Factor de IGV según de dónde sale la venta (cpe_cabecera.ped_tip) */
@@ -37,27 +47,27 @@ class Comprobante
     ];
 
     /**
-     * @param array $datos  tdocod, estadopago (cre_dia_id), fecEmi, fecVen, tdicod, clinum, clinom, clidir, clicor,
-     *                      telefono, observaciones, consumo, paga, id_med_pag[], mon_med_pag[]
-     * @param array $lineas [['IdProducto' => ?int, 'descripcion' => string, 'cantidad' => float, 'precio' => float, 'lote' => ?string,
-     *                       'factor' => ?float (presentación: unidades base por unidad vendida), 'umecod' => ?string], ...]
-     * @param array $extra  columnas propias del origen para cpe_cabecera (ped_id, mes_id, mozo, IdUsuario_ven...)
+     * @param  array  $datos  tdocod, estadopago (cre_dia_id), fecEmi, fecVen, tdicod, clinum, clinom, clidir, clicor,
+     *                        telefono, observaciones, consumo, paga, id_med_pag[], mon_med_pag[]
+     * @param  array  $lineas  [['IdProducto' => ?int, 'descripcion' => string, 'cantidad' => float, 'precio' => float, 'lote' => ?string,
+     *                         'factor' => ?float (presentación: unidades base por unidad vendida), 'umecod' => ?string], ...]
+     * @param  array  $extra  columnas propias del origen para cpe_cabecera (ped_id, mes_id, mozo, IdUsuario_ven...)
      * @return int IdCpe_cabecera
      */
     public static function emitir(User $user, Turno $turno, array $datos, array $lineas, array $extra = []): int
     {
         $tdocod = $datos['tdocod'];
-        if (!isset(self::SERIES[$tdocod])) {
+        if (! isset(self::SERIES[$tdocod])) {
             throw new \RuntimeException('Tipo de comprobante no válido.');
         }
-        if (!$lineas) {
+        if (! $lineas) {
             throw new \RuntimeException('No hay productos para cobrar.');
         }
 
         $cre = DB::table('credito_dias')
             ->where('cre_dia_id', $datos['estadopago'])
             ->where('id_empresa_negocio', $user->id_empresa_negocio)->first();
-        if (!$cre) {
+        if (! $cre) {
             throw new \RuntimeException('Estado de pago no válido.');
         }
         $esContado = $cre->cre_dia_tip === 'CONTADO';
@@ -71,11 +81,11 @@ class Comprobante
             $okRuc = strlen($clinum) === 11
                 && in_array(substr($clinum, 0, 2), ['10', '20', '15', '17'])
                 && $tdicod === '6';
-            if (!$okRuc) {
+            if (! $okRuc) {
                 throw new \RuntimeException('TIPO DE DOCUMENTO NO PERMITIDO PARA EMITIR UNA FACTURA (requiere RUC válido).');
             }
         }
-        if (!$esContado && $clinum === '00000000') {
+        if (! $esContado && $clinum === '00000000') {
             throw new \RuntimeException('Para vender a crédito debes identificar al cliente.');
         }
 
@@ -88,10 +98,10 @@ class Comprobante
             $cliente = Cliente::updateOrCreate(
                 ['clinum' => $clinum, 'rucemp' => $user->IdEmpresa],
                 [
-                    'clinom'   => $clinom,
-                    'clidir'   => ($datos['clidir'] ?? null) ?: '--',
-                    'clicor'   => $datos['clicor'] ?? null,
-                    'tdicod'   => $tdicod,
+                    'clinom' => $clinom,
+                    'clidir' => ($datos['clidir'] ?? null) ?: '--',
+                    'clicor' => $datos['clicor'] ?? null,
+                    'tdicod' => $tdicod,
                     'telefono' => $datos['telefono'] ?? null,
                 ]
             );
@@ -102,7 +112,7 @@ class Comprobante
 
         $sucursal = EmpresaNegocio::where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
         $numero = $sucursal->$colNum + 1;
-        $serie  = $sucursal->$colSerie;
+        $serie = $sucursal->$colSerie;
         $sucursal->$colNum = $numero;
         $sucursal->save();
 
@@ -110,7 +120,7 @@ class Comprobante
         $gravado = $sucursal->tip_igv_pred === '10';
         $factorIgv = self::factorPara($extra['ped_tip'] ?? null);
         // Total de una línea: cantidad x precio, o el importe cobrado si se vendió por importe (S/ 20 de combustible)
-        $totalDe = fn(array $l) => isset($l['importe']) ? round((float) $l['importe'], 2) : round($l['cantidad'] * $l['precio'], 2);
+        $totalDe = fn (array $l) => isset($l['importe']) ? round((float) $l['importe'], 2) : round($l['cantidad'] * $l['precio'], 2);
         $total = round(array_sum(array_map($totalDe, $lineas)), 2);
 
         $ccatvg = $gravado ? round($total / $factorIgv, 2) : 0;
@@ -119,7 +129,7 @@ class Comprobante
 
         $fecEmi = $datos['fecEmi'];
         $fecVen = $esContado ? $fecEmi : ($datos['fecVen'] ?? null);
-        if (!$esContado && (!$fecVen || $fecVen <= $fecEmi)) {
+        if (! $esContado && (! $fecVen || $fecVen <= $fecEmi)) {
             throw new \RuntimeException('La fecha de vencimiento debe ser posterior a la de emisión.');
         }
 
@@ -192,36 +202,39 @@ class Comprobante
             }
         }
 
+        EnvioAutomatico::programar($cabId);   // si la empresa tiene envío automático
+
         return $cabId;
     }
 
     /** Medios de pago de una venta al contado; sin medios elegidos se cobra todo con el predeterminado */
     private static function registrarMedios(User $user, Turno $turno, int $cabId, float $total, array $ids, array $montos): void
     {
-        $fila = fn($idMedio, $monto) => [
+        $fila = fn ($idMedio, $monto) => [
             'IdCpe_cabecera' => $cabId, 'id_med_pag' => $idMedio, 'monto' => $monto,
             'id_turno' => $turno->id_turno, 'id_empresa_negocio' => $user->id_empresa_negocio,
         ];
 
-        if (!count($ids)) {
+        if (! count($ids)) {
             $medio = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->orderByDesc('predeterminado')->first();
-            if (!$medio) {
+            if (! $medio) {
                 throw new \RuntimeException('No hay medios de pago configurados.');
             }
             DB::table('venta_medio_pago')->insert($fila($medio->id_med_pag, $total));
+
             return;
         }
 
         $mediosValidos = array_map('intval', MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->pluck('id_med_pag')->all());
         foreach ($ids as $k => $idMedio) {
-            if (!in_array((int) $idMedio, $mediosValidos, true) || (float) ($montos[$k] ?? 0) <= 0) {
+            if (! in_array((int) $idMedio, $mediosValidos, true) || (float) ($montos[$k] ?? 0) <= 0) {
                 throw new \RuntimeException('Medio de pago o monto no válido.');
             }
         }
         $suma = round(array_sum(array_map('floatval', $montos)), 2);
         if (abs($suma - $total) > 0.01) {
-            throw new \RuntimeException('Los medios de pago suman S/ ' . number_format($suma, 2)
-                . ' y el total es S/ ' . number_format($total, 2) . '.');
+            throw new \RuntimeException('Los medios de pago suman S/ '.number_format($suma, 2)
+                .' y el total es S/ '.number_format($total, 2).'.');
         }
         foreach ($ids as $k => $idMedio) {
             DB::table('venta_medio_pago')->insert($fila($idMedio, $montos[$k]));

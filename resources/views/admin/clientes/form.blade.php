@@ -124,6 +124,15 @@
                     <span class="text-sm font-semibold text-slate-600">Correo</span>
                     <input type="email" name="contacto_correo" value="{{ old('contacto_correo', $cliente->contacto_correo) }}" class="mt-1 w-full rounded-xl border-slate-300">
                 </label>
+                @if (!empty($usuarios) && $usuarios->isNotEmpty() && $cliente->exists)
+                    <label class="block sm:col-span-2">
+                        <span class="text-sm font-semibold text-slate-600">Pertenece al usuario del panel</span>
+                        <select name="creado_por" class="mt-1 w-full rounded-xl border-slate-300">
+                            @foreach ($usuarios as $id => $nombre)<option value="{{ $id }}" @selected((int) old('creado_por', $cliente->creado_por) === $id)>{{ $nombre }}</option>@endforeach
+                        </select>
+                        <span class="text-xs text-slate-400">Ese usuario la verá en su panel. Tú (dueño) ves todas.</span>
+                    </label>
+                @endif
                 <label class="block sm:col-span-2">
                     <span class="text-sm font-semibold text-slate-600">Notas</span>
                     <textarea name="notas" rows="2" class="mt-1 w-full rounded-xl border-slate-300">{{ old('notas', $cliente->notas) }}</textarea>

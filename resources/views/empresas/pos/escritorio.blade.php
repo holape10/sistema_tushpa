@@ -18,7 +18,7 @@
     <div class="grid lg:grid-cols-12 gap-4 items-start">
 
         {{-- ================= IZQUIERDA: búsqueda, detalle y medios de pago ================= --}}
-        <div class="lg:col-span-7 space-y-4">
+        <div class="lg:col-span-7 space-y-4 min-w-0">
 
             {{-- Buscador: nombre, código o lector de barras --}}
             <div class="relative" @click.outside="resultadosAbiertos = false">
@@ -78,7 +78,7 @@
 
             {{-- Detalle --}}
             <section class="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div class="flex items-center gap-2 px-4 py-3 bg-slate-800 text-white">
+                <div class="flex flex-wrap items-center gap-2 px-3 sm:px-4 py-3 bg-slate-800 text-white">
                     <h2 class="font-bold tracking-wide flex-1">DETALLE <span x-show="carrito.length" x-cloak class="text-slate-300 font-normal" x-text="'· ' + carrito.length + (carrito.length === 1 ? ' línea' : ' líneas')"></span></h2>
                     <button type="button" x-show="carrito.length" x-cloak @click="vaciar()" class="text-xs px-2.5 py-1.5 rounded-lg text-rose-200 hover:bg-white/10">Vaciar</button>
                     <button type="button" @click="lineaLibre()" title="Agregar una línea escrita a mano (sin producto)"
@@ -88,22 +88,23 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
                             <tr>
-                                <th class="text-left px-4 py-2">Producto</th>
-                                <th class="px-2 py-2 w-24">Cant.</th>
-                                <th class="px-2 py-2 w-28">P. Unit.</th>
-                                <th class="text-right px-4 py-2 w-28">Total</th>
-                                <th class="w-10"></th>
+                                <th class="text-left px-2 sm:px-4 py-2">Producto</th>
+                                <th class="px-1 sm:px-2 py-2 w-16 sm:w-24">Cant.</th>
+                                <th class="px-1 sm:px-2 py-2 w-20 sm:w-28">P. Unit.</th>
+                                <th class="hidden sm:table-cell text-right px-4 py-2 w-28">Total</th>
+                                <th class="w-8 sm:w-10"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             <template x-for="(it, i) in carrito" :key="it.key">
                                 <tr :class="it.flash ? 'bg-emerald-50' : ''" class="transition-colors duration-500">
-                                    <td class="px-4 py-1.5">
+                                    <td class="px-2 sm:px-4 py-1.5">
                                         <input type="text" x-model="it.descripcion" :id="'des-' + it.key" maxlength="150"
                                                @keydown.enter.prevent="enfocar('cant-' + it.key)"
                                                :placeholder="it.id ? '' : 'Descripción (línea libre)'"
                                                class="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-indigo-400 focus:ring-0 px-0 py-1 font-semibold uppercase text-slate-800">
                                         <span class="block text-[11px] text-slate-400 -mt-0.5">
+                                            <span class="sm:hidden font-bold text-slate-700" x-text="soles(redondear(it.cantidad * it.precio)) + ' · '"></span>
                                             <span x-text="it.id ? it.codigo : 'Línea libre · no mueve stock'"></span>
                                             <span x-show="it.dinamico && !it.presentacion" class="text-emerald-600 font-semibold"> · ⚡ precio dinámico</span>
                                             <span x-show="it.stock !== null && it.cantidad * (it.factor || 1) > it.stock" class="text-rose-500" x-text="' · Stock disponible: ' + num(it.stock) + ' ' + (it.unidad || '')"></span>
@@ -130,18 +131,18 @@
                                             </div>
                                         </template>
                                     </td>
-                                    <td class="px-2 py-1.5">
+                                    <td class="px-1 sm:px-2 py-1.5">
                                         <input type="number" step="any" min="0.01" x-model.number="it.cantidad" :id="'cant-' + it.key"
                                                @keydown.enter.prevent="enfocar('pre-' + it.key)" @change="normalizar(it)"
                                                class="w-full rounded-lg border-slate-200 text-center font-bold focus:ring-indigo-300 focus:border-indigo-400">
                                     </td>
-                                    <td class="px-2 py-1.5">
+                                    <td class="px-1 sm:px-2 py-1.5">
                                         <input type="number" step="any" min="0.01" x-model.number="it.precio" :id="'pre-' + it.key"
                                                @keydown.enter.prevent="$refs.buscador.focus()" @change="normalizar(it)"
                                                class="w-full rounded-lg border-dashed border-amber-300 bg-amber-50 text-right font-semibold text-amber-900 focus:ring-amber-200 focus:border-amber-400">
                                     </td>
-                                    <td class="text-right px-4 py-1.5 font-bold text-slate-800 whitespace-nowrap" x-text="soles(redondear(it.cantidad * it.precio))"></td>
-                                    <td class="pr-2">
+                                    <td class="hidden sm:table-cell text-right px-4 py-1.5 font-bold text-slate-800 whitespace-nowrap" x-text="soles(redondear(it.cantidad * it.precio))"></td>
+                                    <td class="pr-1 sm:pr-2">
                                         <button type="button" @click="quitar(i)" class="p-1.5 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50" aria-label="Quitar línea">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                         </button>
@@ -184,9 +185,9 @@
                     <thead class="text-xs uppercase text-slate-500 border-b border-slate-100">
                         <tr>
                             <th class="text-left py-2">Medio</th>
-                            <th class="py-2 w-32">Monto</th>
-                            <th class="text-center py-2">% Com.</th>
-                            <th class="text-right py-2">Comisión</th>
+                            <th class="py-2 w-24 sm:w-32">Monto</th>
+                            <th class="hidden sm:table-cell text-center py-2">% Com.</th>
+                            <th class="hidden sm:table-cell text-right py-2">Comisión</th>
                             <th class="text-right py-2">Total</th>
                             <th class="w-8"></th>
                         </tr>
@@ -202,8 +203,8 @@
                                     <input type="number" step="any" min="0" :value="montoDe(m).toFixed(2)" @change="editarMonto(m, $event.target.value)"
                                            class="w-full h-9 rounded-lg border-slate-200 text-right font-semibold">
                                 </td>
-                                <td class="text-center py-1.5 text-slate-500" x-text="num(m.comision) + '%'"></td>
-                                <td class="text-right py-1.5 text-rose-600" x-text="soles(comisionDe(m))"></td>
+                                <td class="hidden sm:table-cell text-center py-1.5 text-slate-500" x-text="num(m.comision) + '%'"></td>
+                                <td class="hidden sm:table-cell text-right py-1.5 text-rose-600" x-text="soles(comisionDe(m))"></td>
                                 <td class="text-right py-1.5 font-semibold" x-text="soles(montoDe(m) + comisionDe(m))"></td>
                                 <td class="text-right">
                                     <button type="button" @click="quitarMedio(i)" class="p-1 rounded text-slate-300 hover:text-rose-600" aria-label="Quitar medio">✕</button>
@@ -214,7 +215,7 @@
                     <tfoot>
                         <tr class="border-t border-slate-200">
                             <td class="pt-2 font-bold text-slate-500 uppercase text-xs">Total pagado</td>
-                            <td colspan="4" class="pt-2 text-right text-lg font-extrabold" x-text="soles(sumaMedios + comisionTotal)"></td>
+                            <td colspan="4" class="pt-2 text-right text-lg font-extrabold whitespace-nowrap" x-text="soles(sumaMedios + comisionTotal)"></td>
                             <td></td>
                         </tr>
                     </tfoot>
@@ -226,7 +227,7 @@
         </div>
 
         {{-- ================= DERECHA: comprobante, cliente y totales ================= --}}
-        <div class="lg:col-span-5 space-y-4 lg:sticky lg:top-0">
+        <div class="lg:col-span-5 space-y-4 lg:sticky lg:top-0 min-w-0">
 
             <section class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
                 <div class="flex items-center justify-between">

@@ -60,7 +60,7 @@
         <!-- IZQUIERDA: datos del comprobante -->
         <div class="col-lg-5">
             <div class="box-x">
-                <div class="box-x-h">
+                <div class="box-x-h" style="flex-wrap:wrap; gap:6px;">
                     <span>Datos del comprobante <small style="font-weight:normal; text-transform:none; background:#27ae60; padding:2px 8px; border-radius:10px; margin-left:6px;">Turno N° {{ $turno->turno }} abierto</small></span>
                     <label style="margin:0; font-weight:bold;">IMPRIMIR
                         <input type="checkbox" id="imprimir" checked>
@@ -68,7 +68,7 @@
                 </div>
                 <div class="box-x-b">
                     <div class="row">
-                        <div class="col-sm-4">
+                        <div class="col-xs-6 col-sm-4">
                             <div class="form-group">
                                 <label>Comprobante</label>
                                 <select id="tdocod" class="form-control input-sm">
@@ -78,7 +78,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-sm-4">
+                        <div class="col-xs-6 col-sm-4">
                             <div class="form-group">
                                 <label>Estado pago</label>
                                 <select id="estadopago" class="form-control input-sm">
@@ -88,7 +88,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-sm-4">
+                        <div class="col-xs-12 col-sm-4">
                             <div class="form-group">
                                 <label>X consumo</label>
                                 <select id="consumo" class="form-control input-sm">
@@ -100,13 +100,13 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-sm-6">
+                        <div class="col-xs-6 col-sm-6">
                             <div class="form-group">
                                 <label>F. emisión</label>
                                 <input type="date" id="fecEmi" class="form-control input-sm" value="{{ now()->format('Y-m-d') }}">
                             </div>
                         </div>
-                        <div class="col-sm-6" id="div_fecVen" style="display:none;">
+                        <div class="col-xs-6 col-sm-6" id="div_fecVen" style="display:none;">
                             <div class="form-group">
                                 <label>F. vencimiento</label>
                                 <input type="date" id="fecVen" class="form-control input-sm" value="{{ now()->addDay()->format('Y-m-d') }}">
@@ -115,7 +115,7 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-sm-3">
+                        <div class="col-xs-6 col-sm-3">
                             <div class="form-group">
                                 <label>Tipo</label>
                                 <select id="tdicod" class="form-control input-sm">
@@ -125,7 +125,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-sm-4">
+                        <div class="col-xs-6 col-sm-4">
                             <div class="form-group">
                                 <label>DNI / RUC</label>
                                 <div class="input-group input-group-sm">
@@ -155,13 +155,13 @@
                                 <input type="text" id="clidir" class="form-control input-sm" value="--">
                             </div>
                         </div>
-                        <div class="col-sm-4">
+                        <div class="col-xs-6 col-sm-4">
                             <div class="form-group">
                                 <label>Correo</label>
                                 <input type="text" id="clicor" class="form-control input-sm">
                             </div>
                         </div>
-                        <div class="col-sm-4">
+                        <div class="col-xs-6 col-sm-4">
                             <div class="form-group">
                                 <label>Teléfono</label>
                                 <input type="text" id="telefono" class="form-control input-sm">

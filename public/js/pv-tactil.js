@@ -65,8 +65,21 @@ document.addEventListener('alpine:init', () => {
         get totalCobrar() { return r2(this.total + this.comision); },
         get esEfectivo() { return /efectivo/i.test(this.medioActual?.nombre || ''); },
         get billetes() { return [10, 20, 50, 100, 200].filter(b => b > this.totalCobrar).slice(0, 3); },
-        get faltaNombre() {
-            return this.intento && CFG.nombreDesde > 0 && this.total >= CFG.nombreDesde && this.nombre.trim().length < 3;
+        // Hay datos de cliente para el comprobante: documento válido y su nombre
+        get conDoc() { return this.tdocod !== '13' && /^(\d{8}|\d{11})$/.test(this.doc.trim()) && this.nombre.trim().length >= 3; },
+        get faltaDoc() { return this.intento && !!this.validarCliente(); },
+        validarCliente() {
+            const d = this.doc.trim();
+            if (this.tdocod === '13') return null;
+            if (this.tdocod === '01') {
+                if (!/^(10|15|17|20)\d{9}$/.test(d)) return 'La factura necesita el RUC del cliente (11 dígitos).';
+                if (this.nombre.trim().length < 3) return 'Escribe la razón social del cliente.';
+                return null;
+            }
+            if (d && !/^(\d{8}|\d{11})$/.test(d)) return 'El DNI tiene 8 dígitos y el RUC 11.';
+            if (d && this.nombre.trim().length < 3) return 'Escribe el nombre del cliente.';
+            if (this.total >= 700 && !this.conDoc) return 'Para boletas desde S/ 700 SUNAT pide el DNI y el nombre del cliente.';
+            return null;
         },
 
         soles(n) { return 'S/ ' + this.num(n); },
@@ -147,6 +160,7 @@ document.addEventListener('alpine:init', () => {
             this.docOk = false;
             this.docNombre = '';
             if (!/^(\d{8}|\d{11})$/.test(d) || d === this._ultimoDoc) return;
+            this.nombre = '';
             this._ultimoDoc = d;
             this.docTdicod = d.length === 11 ? '6' : '1';
             if (d.length === 11 && this.tdocod !== '01' && CFG.comprobantes.some(c => c.tdocod === '01')) this.tdocod = '01';
@@ -154,8 +168,8 @@ document.addEventListener('alpine:init', () => {
             try {
                 const r = await (await fetch(CFG.rutas.cliente + '/' + d, { headers: { Accept: 'application/json' } })).json();
                 if (this.doc.trim() !== d) return;
-                if (r.error) { this.docNombre = 'No encontrado'; return; }
-                this.docNombre = r.nom; this.docOk = true;
+                if (r.error) { this.docNombre = 'No encontrado: escribe el nombre'; return; }
+                this.docNombre = r.nom; this.nombre = r.nom; this.docOk = true;
                 if (r.tdicod) this.docTdicod = r.tdicod;
             } catch (e) { this.docNombre = 'Sin conexión'; } finally { this.buscandoDoc = false; }
         },
@@ -163,10 +177,8 @@ document.addEventListener('alpine:init', () => {
         // ---------- Cobrar ----------
         validar() {
             if (!this.carrito.length) return 'El pedido está vacío.';
-            if (this.faltaNombre) return `Desde S/ ${this.num(CFG.nombreDesde)} pon el nombre del cliente y su N° de beeper.`;
-            const d = this.doc.trim();
-            if (this.tdocod === '01' && !(this.docOk && /^(10|15|17|20)\d{9}$/.test(d))) return 'La factura necesita un RUC válido.';
-            if (this.tdocod === '03' && this.total >= 700 && !this.docOk) return 'Para boletas desde S/ 700 ingresa el DNI del cliente.';
+            const errorCliente = this.validarCliente();
+            if (errorCliente) return errorCliente;
             if (!CFG.contado) return 'No hay forma de pago CONTADO configurada.';
             return null;
         },
@@ -180,16 +192,15 @@ document.addEventListener('alpine:init', () => {
             const paga = this.esEfectivo ? (Number(this.paga) || 0) : 0;
             if (paga > 0 && paga < this.totalCobrar && !confirm(`Paga ${this.soles(paga)} y el total es ${this.soles(this.totalCobrar)}. ¿Continuar?`)) return;
 
-            const conDoc = this.tdocod !== '13' && this.docOk;
+            const conDoc = this.conDoc;
             const body = {
                 items: this.itemsParaEnviar(),
                 tdocod: this.tdocod,
                 estadopago: CFG.contado,
                 fecEmi: CFG.hoy,
-                tdicod: conDoc ? this.docTdicod : '1',
+                tdicod: conDoc ? (this.doc.trim().length === 11 ? '6' : '1') : '1',
                 clinum: conDoc ? this.doc.trim() : '00000000',
-                clinom: conDoc ? this.docNombre : 'VENTA AL PORTADOR',
-                observaciones: this.nombre.trim() ? ('CLIENTE: ' + this.nombre.trim().toUpperCase()).slice(0, 100) : '',
+                clinom: conDoc ? this.nombre.trim().toUpperCase() : 'VENTA AL PORTADOR',
                 paga,
                 // Monto sin recargo: el servidor calcula y suma la comisión del medio
                 id_med_pag: [this.medio],
@@ -231,16 +242,15 @@ document.addEventListener('alpine:init', () => {
         async guardarProforma() {
             if (this.procesando) return;
             if (!this.carrito.length) { this.aviso('El pedido está vacío.', 'error'); return; }
-            const conDoc = this.docOk;
+            const conDoc = this.conDoc;
             this.procesando = true;
             try {
                 const r = await fetch(CFG.rutas.proforma, {
                     method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CFG.csrf },
                     body: JSON.stringify({
                         origen: 'TACTIL', items: this.itemsParaEnviar(),
-                        tdicod: conDoc ? this.docTdicod : '1', clinum: conDoc ? this.doc.trim() : '00000000',
-                        clinom: conDoc ? this.docNombre : (this.nombre.trim() || 'VENTA AL PORTADOR'),
-                        observaciones: this.nombre.trim() && conDoc ? ('CLIENTE: ' + this.nombre.trim().toUpperCase()).slice(0, 100) : '',
+                        tdicod: conDoc ? (this.doc.trim().length === 11 ? '6' : '1') : '1', clinum: conDoc ? this.doc.trim() : '00000000',
+                        clinom: conDoc ? this.nombre.trim().toUpperCase() : 'VENTA AL PORTADOR',
                     }),
                 });
                 if (r.status === 419) { this.aviso('La sesión expiró. Recarga la página (el pedido se conserva).', 'error'); return; }

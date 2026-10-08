@@ -44,6 +44,7 @@
                     <th class="text-left px-4 py-3">Plan</th>
                     <th class="text-left px-4 py-3">Vence</th>
                     <th class="text-left px-4 py-3">Estado</th>
+                    <th class="text-left px-4 py-3">Comprobantes</th>
                     <th class="px-4 py-3"></th>
                 </tr>
             </thead>
@@ -84,6 +85,16 @@
                                 <span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold" title="{{ $cl->motivo_suspension }}">Suspendido</span>
                             @endif
                         </td>
+                        <td class="px-4 py-3">
+                            @php $cp = $comprobantes[$cl->id] ?? ['tipos' => [], 'total' => 0, 'mes' => 0]; @endphp
+                            @if ($cp['total'])
+                                <p class="font-semibold">{{ number_format($cp['total']) }} <span class="text-xs font-normal text-slate-400">· {{ number_format($cp['mes']) }} este mes</span></p>
+                                <p class="text-xs text-slate-500 whitespace-nowrap">
+                                    @foreach ($cp['tipos'] as $t => $n)<span class="mr-1.5" title="{{ ['01' => 'Facturas', '03' => 'Boletas', '07' => 'Notas de crédito', '08' => 'Notas de débito', '13' => 'Notas de venta'][$t] ?? 'Tipo ' . $t }}">{{ $t }}: {{ number_format($n) }}</span>@endforeach
+                                </p>
+                            @else <span class="text-slate-400">—</span> @endif
+                            @if ($usuarios->isNotEmpty() && $cl->creado_por)<p class="text-[11px] text-slate-400 mt-0.5">De: {{ $usuarios[$cl->creado_por] ?? '—' }}</p>@endif
+                        </td>
                         <td class="px-4 py-3 whitespace-nowrap text-right">
                             <a href="{{ route('admin.clientes.edit', $cl) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2">Editar</a>
                             <form method="POST" action="{{ route('admin.clientes.estado', $cl) }}" class="inline"
@@ -95,7 +106,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-10 text-center text-slate-400">Aún no hay clientes. Crea el primero con “+ Nuevo cliente”.</td></tr>
+                    <tr><td colspan="7" class="px-4 py-10 text-center text-slate-400">Aún no hay clientes. Crea el primero con “+ Nuevo cliente”.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -1,18 +1,31 @@
 <?php
+
 namespace App\Support\Sunat;
 
-use App\Models\{Empresa, EmpresaNegocio};
+use App\Models\Empresa;
+use App\Models\EmpresaNegocio;
+use App\Support\Comprobante;
 use DateTime;
 use DateTimeZone;
 use Greenter\Model\Client\Client;
-use Greenter\Model\Company\{Address, Company};
-use Greenter\Model\Response\{BillResult, CdrResponse};
-use Greenter\Model\Sale\{Cuota, Document, Invoice, Legend, Note, SaleDetail};
-use Greenter\Model\Sale\FormaPagos\{FormaPagoContado, FormaPagoCredito};
-use Greenter\Model\Summary\{Summary, SummaryDetail};
+use Greenter\Model\Company\Address;
+use Greenter\Model\Company\Company;
+use Greenter\Model\Response\BillResult;
+use Greenter\Model\Response\CdrResponse;
+use Greenter\Model\Sale\Cuota;
+use Greenter\Model\Sale\Document;
+use Greenter\Model\Sale\FormaPagos\FormaPagoContado;
+use Greenter\Model\Sale\FormaPagos\FormaPagoCredito;
+use Greenter\Model\Sale\Invoice;
+use Greenter\Model\Sale\Legend;
+use Greenter\Model\Sale\Note;
+use Greenter\Model\Sale\SaleDetail;
+use Greenter\Model\Summary\Summary;
+use Greenter\Model\Summary\SummaryDetail;
 use Greenter\See;
 use Greenter\Ws\Services\SunatEndpoints;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -26,18 +39,19 @@ use RuntimeException;
 class SunatService
 {
     public const TIPOS_ELECTRONICOS = ['01', '03', '07', '08'];
+
     public const ESTADOS_REENVIABLES = ['PENDIENTE', 'ERROR', 'RECHAZADO'];
+
     private const MAX_POR_RESUMEN = 500;
 
     private ?See $see = null;
 
-    public function __construct(private Empresa $empresa, private EmpresaNegocio $negocio)
-    {
-    }
+    public function __construct(private Empresa $empresa, private EmpresaNegocio $negocio) {}
 
     public static function paraUsuario($user): self
     {
         $negocio = EmpresaNegocio::findOrFail($user->id_empresa_negocio);
+
         return new self(Empresa::findOrFail($negocio->IdEmpresa), $negocio);
     }
 
@@ -58,15 +72,18 @@ class SunatService
             throw new RuntimeException('La empresa está configurada para envío por OSE; este módulo solo envía directo a SUNAT.');
         }
 
-        $pem = storage_path('app/certificados/' . $this->empresa->IdEmpresa . '.pem');
-        if (!is_file($pem)) {
+        $pem = storage_path('app/certificados/'.$this->empresa->IdEmpresa.'.pem');
+        if (! is_file($pem)) {
             throw new RuntimeException('Falta el certificado digital. Súbelo en Mantenimiento > Empresas > Editar.');
         }
 
-        $see = new See();
-        $see->setCertificate(file_get_contents($pem));
+        $see = new See;
+        // Firma SHA-256: el servidor (OpenSSL 3 en AlmaLinux 10) ya no firma con SHA-1
+        $firma = new FirmaSha256;
+        $firma->setCertificate(file_get_contents($pem));
+        $see->getFactory()->setSigner($firma);
         if ($this->esProduccion()) {
-            if (!$this->empresa->wsusuario || !$this->empresa->claveSunat) {
+            if (! $this->empresa->wsusuario || ! $this->empresa->claveSunat) {
                 throw new RuntimeException('Configura el usuario y la clave SOL de la empresa.');
             }
             $see->setService(SunatEndpoints::FE_PRODUCCION);
@@ -100,9 +117,9 @@ class SunatService
         }
         $distrito = array_pop($partes);
         $provincia = array_pop($partes);
-        $resto = ' ' . implode(' - ', $partes);
-        $departamento = collect(self::DEPARTAMENTOS)->first(fn($d) => str_ends_with($resto, ' ' . $d));
-        if (!$departamento) {
+        $resto = ' '.implode(' - ', $partes);
+        $departamento = collect(self::DEPARTAMENTOS)->first(fn ($d) => str_ends_with($resto, ' '.$d));
+        if (! $departamento) {
             return;
         }
 
@@ -116,7 +133,7 @@ class SunatService
     {
         $this->completarUbicacion();
         $n = $this->negocio;
-        $address = (new Address())
+        $address = (new Address)
             ->setUbigueo($n->ubigeo ?: '150101')
             ->setDepartamento($n->departamento ?: '-')
             ->setProvincia($n->provincia ?: '-')
@@ -125,7 +142,7 @@ class SunatService
             ->setDireccion($n->direccion ?: $this->empresa->DirEmpresa)
             ->setCodLocal(str_pad(preg_replace('/\D/', '', (string) $n->codigofiscal) ?: '0', 4, '0', STR_PAD_LEFT));
 
-        return (new Company())
+        return (new Company)
             ->setRuc($this->empresa->IdEmpresa)
             ->setRazonSocial($this->empresa->NomEmpresa)
             ->setNombreComercial($n->nombre_comercial ?: $this->empresa->NomEmpresa)
@@ -134,16 +151,17 @@ class SunatService
 
     private function carpeta(): string
     {
-        $dir = storage_path('app/sunat/' . $this->empresa->IdEmpresa);
-        if (!is_dir($dir)) {
+        $dir = storage_path('app/sunat/'.$this->empresa->IdEmpresa);
+        if (! is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
+
         return $dir;
     }
 
     public function rutaArchivo(string $nombre, string $tipo): string
     {
-        return $this->carpeta() . '/' . ($tipo === 'cdr' ? 'R-' . $nombre . '.zip' : $nombre . '.xml');
+        return $this->carpeta().'/'.($tipo === 'cdr' ? 'R-'.$nombre.'.zip' : $nombre.'.xml');
     }
 
     // ------------------------------------------------------------------ armado del comprobante
@@ -156,10 +174,10 @@ class SunatService
         }
 
         $esNota = in_array($cab->tdocod, ['07', '08'], true);
-        $doc = $esNota ? new Note() : new Invoice();
+        $doc = $esNota ? new Note : new Invoice;
 
-        $fecha = new DateTime(($cab->ccafem) . ' ' . date('H:i:s', strtotime((string) $cab->fecha_hora)), new DateTimeZone('America/Lima'));
-        $client = (new Client())
+        $fecha = new DateTime(($cab->ccafem).' '.date('H:i:s', strtotime((string) $cab->fecha_hora)), new DateTimeZone('America/Lima'));
+        $client = (new Client)
             ->setTipoDoc((string) $cab->tdicod)
             ->setNumDoc((string) $cab->ccandi)
             ->setRznSocial(mb_substr((string) $cab->ccanom, 0, 100));
@@ -182,32 +200,32 @@ class SunatService
             ->setValorVenta($valorVenta)
             ->setSubTotal((float) $cab->ccaitv)
             ->setMtoImpVenta((float) $cab->ccaitv)
-            ->setLegends([(new Legend())->setCode('1000')->setValue(NumeroLetras::convertir((float) $cab->ccaitv))]);
+            ->setLegends([(new Legend)->setCode('1000')->setValue(NumeroLetras::convertir((float) $cab->ccaitv))]);
 
         if ($esNota) {
-            if (!$cab->tdocod_ref || !$cab->serie_ref || !$cab->num_ref || !$cab->tipnot) {
+            if (! $cab->tdocod_ref || ! $cab->serie_ref || ! $cab->num_ref || ! $cab->tipnot) {
                 throw new RuntimeException('La nota no tiene el documento que modifica o el motivo.');
             }
             $motivo = $cab->tdocod === '07'
                 ? DB::table('tipo_nota_credito')->where('nccod', $cab->tipnot)->value('ncdes')
                 : DB::table('tipo_nota_debito')->where('ndcod', $cab->tipnot)->value('nddes');
             $doc->setTipDocAfectado($cab->tdocod_ref)
-                ->setNumDocfectado($cab->serie_ref . '-' . (int) $cab->num_ref)
+                ->setNumDocfectado($cab->serie_ref.'-'.(int) $cab->num_ref)
                 ->setCodMotivo($cab->tipnot)
-                ->setDesMotivo(mb_substr(trim(($motivo ?? '') . ' ' . ($cab->ccaobs ?? '')), 0, 250) ?: 'NOTA');
+                ->setDesMotivo(mb_substr(trim(($motivo ?? '').' '.($cab->ccaobs ?? '')), 0, 250) ?: 'NOTA');
         } else {
             $doc->setTipoOperacion($cab->topcod ?: '0101');
             if ($cab->estadopago === 'CREDITO' && $cab->ccafve) {
                 $doc->setFormaPago(new FormaPagoCredito((float) $cab->ccaitv))
-                    ->setCuotas([(new Cuota())->setMonto((float) $cab->ccaitv)
+                    ->setCuotas([(new Cuota)->setMonto((float) $cab->ccaitv)
                         ->setFechaPago(new DateTime($cab->ccafve, new DateTimeZone('America/Lima')))])
                     ->setFecVencimiento(new DateTime($cab->ccafve, new DateTimeZone('America/Lima')));
             } else {
-                $doc->setFormaPago(new FormaPagoContado());
+                $doc->setFormaPago(new FormaPagoContado);
             }
         }
 
-        $porcentajeIgv = round((\App\Support\Comprobante::factorDe($cab) - 1) * 100, 2);
+        $porcentajeIgv = round((Comprobante::factorDe($cab) - 1) * 100, 2);
         $items = [];
         foreach ($detalles as $d) {
             $cant = (float) $d->cdecan ?: 1;
@@ -216,8 +234,8 @@ class SunatService
             $afecto = (string) $d->tigcod ?: '20';
             $unidad = strtoupper((string) $d->umecod);
 
-            $items[] = (new SaleDetail())
-                ->setCodProducto($d->procod ?: 'P' . $d->IdProducto)
+            $items[] = (new SaleDetail)
+                ->setCodProducto($d->procod ?: 'P'.$d->IdProducto)
                 ->setUnidad(in_array($unidad, ['', 'UNI', 'UND'], true) ? 'NIU' : $unidad)
                 ->setCantidad($cant)
                 ->setDescripcion(mb_substr((string) $d->cdedes, 0, 250))
@@ -245,13 +263,13 @@ class SunatService
             ->where('id_empresa_negocio', $this->negocio->id_empresa_negocio)
             ->first();
 
-        if (!$cab) {
+        if (! $cab) {
             throw new RuntimeException('Comprobante no encontrado.');
         }
-        if (!in_array($cab->tdocod, self::TIPOS_ELECTRONICOS, true)) {
+        if (! in_array($cab->tdocod, self::TIPOS_ELECTRONICOS, true)) {
             throw new RuntimeException('La nota de venta es un documento interno y no se envía a SUNAT.');
         }
-        if (!in_array($cab->est_sunat ?? 'PENDIENTE', self::ESTADOS_REENVIABLES, true)) {
+        if (! in_array($cab->est_sunat ?? 'PENDIENTE', self::ESTADOS_REENVIABLES, true)) {
             throw new RuntimeException("El comprobante {$cab->serdoc}-{$cab->numdoc} ya está {$cab->est_sunat}.");
         }
 
@@ -271,11 +289,11 @@ class SunatService
         }
 
         DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update([
-            'est_sunat'    => $r['estado'],
+            'est_sunat' => $r['estado'],
             'ccasunrescod' => $r['codigo'],
-            'ccadessun'    => mb_substr($r['mensaje'], 0, 500),
-            'ccaqr'        => $hash ?? $cab->ccaqr,
-            'enviado'      => in_array($r['estado'], ['ACEPTADO', 'OBSERVADO'], true) ? 1 : 0,
+            'ccadessun' => mb_substr($r['mensaje'], 0, 500),
+            'ccaqr' => $hash ?? $cab->ccaqr,
+            'enviado' => in_array($r['estado'], ['ACEPTADO', 'OBSERVADO'], true) ? 1 : 0,
         ]);
 
         return $r;
@@ -284,14 +302,15 @@ class SunatService
     /** Traduce la respuesta de SUNAT a un estado del sistema */
     private function interpretar($resultado): array
     {
-        if (!$resultado->isSuccess()) {
+        if (! $resultado->isSuccess()) {
             $error = $resultado->getError();
             $codigo = (string) ($error?->getCode() ?? '');
             $num = (int) preg_replace('/\D/', '', $codigo);
             // 2000-3999 = rechazo (hay que corregir y reenviar); lo demás = excepción o problema de conexión (reintentar)
             $estado = ($num >= 2000 && $num < 4000) ? 'RECHAZADO' : 'ERROR';
+
             return ['ok' => false, 'estado' => $estado, 'codigo' => $codigo ?: null,
-                'mensaje' => trim(($codigo ? "[$codigo] " : '') . ($error?->getMessage() ?? 'Error desconocido'))];
+                'mensaje' => trim(($codigo ? "[$codigo] " : '').($error?->getMessage() ?? 'Error desconocido'))];
         }
 
         return $this->interpretarCdr($resultado->getCdrResponse());
@@ -299,13 +318,13 @@ class SunatService
 
     private function interpretarCdr(?CdrResponse $cdr): array
     {
-        if (!$cdr) {
+        if (! $cdr) {
             return ['ok' => false, 'estado' => 'ERROR', 'codigo' => null, 'mensaje' => 'SUNAT no devolvió constancia (CDR).'];
         }
 
         $codigo = (int) $cdr->getCode();
         $notas = $cdr->getNotes() ?: [];
-        $mensaje = trim($cdr->getDescription() . ($notas ? ' | Observaciones: ' . implode(' | ', $notas) : ''));
+        $mensaje = trim($cdr->getDescription().($notas ? ' | Observaciones: '.implode(' | ', $notas) : ''));
 
         $estado = match (true) {
             $codigo === 0 => $notas ? 'OBSERVADO' : 'ACEPTADO',
@@ -328,7 +347,7 @@ class SunatService
             ->where('ccafem', $fecha)
             ->where(function ($q) {
                 $q->where('tdocod', '03')
-                  ->orWhere(fn($q2) => $q2->whereIn('tdocod', ['07', '08'])->where('serdoc', 'like', 'B%'));
+                    ->orWhere(fn ($q2) => $q2->whereIn('tdocod', ['07', '08'])->where('serdoc', 'like', 'B%'));
             })
             ->whereIn('est_sunat', self::ESTADOS_REENVIABLES)
             ->whereNull('ccabaj')
@@ -360,7 +379,7 @@ class SunatService
                     'res_fec_com' => $fecha, 'res_fec_gen' => $hoy, 'res_tip' => 'RC', 'tip_res_com' => '03',
                     'res_cor' => $cor, 'IdEmpresa' => $this->empresa->IdEmpresa,
                     'id_empresa_negocio' => $this->negocio->id_empresa_negocio,
-                    'nom_arch' => $this->empresa->IdEmpresa . '-RC-' . str_replace('-', '', $hoy) . '-' . str_pad((string) $cor, 3, '0', STR_PAD_LEFT),
+                    'nom_arch' => $this->empresa->IdEmpresa.'-RC-'.str_replace('-', '', $hoy).'-'.str_pad((string) $cor, 3, '0', STR_PAD_LEFT),
                     'res_cant' => $lote->count(), 'res_total' => round($lote->sum('ccaitv'), 2),
                     'est_sunat' => 'GENERADO', 'IdUsuario' => Auth::id(), 'fecha_hora' => now(),
                 ]);
@@ -369,9 +388,9 @@ class SunatService
             $res = DB::table('resumenes')->where('res_id', $resId)->first();
 
             $detalles = $lote->map(function ($c) {
-                $d = (new SummaryDetail())
+                $d = (new SummaryDetail)
                     ->setTipoDoc($c->tdocod)
-                    ->setSerieNro($c->serdoc . '-' . $c->numdoc)
+                    ->setSerieNro($c->serdoc.'-'.$c->numdoc)
                     ->setEstado('1') // 1 = adicionar
                     ->setClienteTipo((string) $c->tdicod)
                     ->setClienteNro((string) $c->ccandi)
@@ -381,12 +400,13 @@ class SunatService
                     ->setMtoOperInafectas((float) $c->ccatinaf)
                     ->setMtoIGV((float) $c->ccaigv);
                 if (in_array($c->tdocod, ['07', '08'], true)) {
-                    $d->setDocReferencia((new Document())->setTipoDoc($c->tdocod_ref)->setNroDoc($c->serie_ref . '-' . (int) $c->num_ref));
+                    $d->setDocReferencia((new Document)->setTipoDoc($c->tdocod_ref)->setNroDoc($c->serie_ref.'-'.(int) $c->num_ref));
                 }
+
                 return $d;
             })->values()->all();
 
-            $summary = (new Summary())
+            $summary = (new Summary)
                 ->setFecGeneracion(new DateTime($res->res_fec_gen, new DateTimeZone('America/Lima')))
                 ->setFecResumen(new DateTime($fecha, new DateTimeZone('America/Lima')))
                 ->setCorrelativo(str_pad((string) $res->res_cor, 3, '0', STR_PAD_LEFT))
@@ -398,13 +418,14 @@ class SunatService
                 file_put_contents($this->rutaArchivo($summary->getName(), 'xml'), $xml);
             }
 
-            if (!$resultado->isSuccess()) {
+            if (! $resultado->isSuccess()) {
                 $e = $resultado->getError();
                 DB::table('resumenes')->where('res_id', $resId)->update([
                     'est_sunat' => 'ERROR', 'error_code' => $e?->getCode(), 'error' => $e?->getMessage(),
-                    'res_est' => trim('[' . $e?->getCode() . '] ' . $e?->getMessage()),
+                    'res_est' => trim('['.$e?->getCode().'] '.$e?->getMessage()),
                 ]);
                 $creados[] = $resId;
+
                 continue;
             }
 
@@ -413,7 +434,7 @@ class SunatService
             ]);
             DB::table('cpe_cabecera')->whereIn('IdCpe_cabecera', $lote->pluck('IdCpe_cabecera'))->update([
                 'res_id' => $resId, 'est_sunat' => 'EN RESUMEN', 'ccasunrescod' => null,
-                'ccadessun' => 'Enviado en resumen ' . $res->nom_arch,
+                'ccadessun' => 'Enviado en resumen '.$res->nom_arch,
             ]);
 
             $creados[] = $resId;
@@ -435,11 +456,11 @@ class SunatService
     {
         $res = DB::table('resumenes')->where('res_id', $resId)
             ->where('id_empresa_negocio', $this->negocio->id_empresa_negocio)->first();
-        if (!$res) {
+        if (! $res) {
             throw new RuntimeException('Resumen no encontrado.');
         }
         // Sin ticket o con respuesta final: no se vuelve a consultar (SUNAT da error al reconsultar un ticket cerrado)
-        if (!$res->res_ticket || in_array($res->est_sunat, ['ACEPTADO', 'RECHAZADO'], true)) {
+        if (! $res->res_ticket || in_array($res->est_sunat, ['ACEPTADO', 'RECHAZADO'], true)) {
             return ['estado' => $res->est_sunat, 'mensaje' => $res->res_est ?? 'Sin ticket'];
         }
 
@@ -450,16 +471,18 @@ class SunatService
             DB::table('resumenes')->where('res_id', $resId)->update([
                 'res_cod_est' => '98', 'est_sunat' => 'EN PROCESO', 'res_est' => 'SUNAT aún está procesando el resumen.',
             ]);
+
             return ['estado' => 'EN PROCESO', 'mensaje' => 'SUNAT aún está procesando el resumen. Consulta en unos minutos.'];
         }
 
-        if (!$status->isSuccess() && !$status->getCdrResponse()) {
+        if (! $status->isSuccess() && ! $status->getCdrResponse()) {
             $e = $status->getError();
             DB::table('resumenes')->where('res_id', $resId)->update([
                 'res_cod_est' => $codigoTicket, 'error_code_ticket' => $e?->getCode(), 'error_ticket' => $e?->getMessage(),
-                'res_est' => trim('[' . $e?->getCode() . '] ' . $e?->getMessage()),
+                'res_est' => trim('['.$e?->getCode().'] '.$e?->getMessage()),
             ]);
-            return ['estado' => $res->est_sunat, 'mensaje' => trim('[' . $e?->getCode() . '] ' . $e?->getMessage())];
+
+            return ['estado' => $res->est_sunat, 'mensaje' => trim('['.$e?->getCode().'] '.$e?->getMessage())];
         }
 
         if ($status->getCdrZip()) {
@@ -473,7 +496,7 @@ class SunatService
             ]);
             DB::table('cpe_cabecera')->where('res_id', $resId)->update([
                 'est_sunat' => $r['estado'], 'ccasunrescod' => $r['codigo'], 'enviado' => 1,
-                'ccadessun' => mb_substr('Aceptado en resumen ' . $res->nom_arch . '. ' . $r['mensaje'], 0, 500),
+                'ccadessun' => mb_substr('Aceptado en resumen '.$res->nom_arch.'. '.$r['mensaje'], 0, 500),
             ]);
         } else {
             // Rechazado: las boletas se liberan para poder ir en un nuevo resumen
@@ -483,7 +506,7 @@ class SunatService
             ]);
             DB::table('cpe_cabecera')->where('res_id', $resId)->update([
                 'est_sunat' => 'RECHAZADO', 'res_id' => null, 'ccasunrescod' => $r['codigo'],
-                'ccadessun' => mb_substr('Resumen ' . $res->nom_arch . ' rechazado: ' . $r['mensaje'], 0, 500),
+                'ccadessun' => mb_substr('Resumen '.$res->nom_arch.' rechazado: '.$r['mensaje'], 0, 500),
             ]);
         }
 

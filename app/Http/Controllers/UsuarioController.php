@@ -1,9 +1,15 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Empleado, EmpresaNegocio, Modulo, User};
+use App\Models\Empleado;
+use App\Models\EmpresaNegocio;
+use App\Models\Modulo;
+use App\Models\User;
+use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class UsuarioController extends Controller
@@ -15,7 +21,7 @@ class UsuarioController extends Controller
         8 => ['Comandas'],
         10 => ['Inicio', 'Historias Clínicas', 'Agenda de Citas'],
         4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Envío de Comprobantes', 'Resumen Diario',
-              'Kardex', 'Stock Productos', 'Clientes'],
+            'Kardex', 'Stock Productos', 'Clientes'],
     ];
 
     private function autorizar(): void
@@ -38,9 +44,9 @@ class UsuarioController extends Controller
         }
 
         return [
-            'roles'      => DB::table('roles')->orderBy('id')->get(),
-            'modulos'    => $modulos->groupBy('mod_gen'),
-            'presets'    => $presets,
+            'roles' => DB::table('roles')->orderBy('id')->get(),
+            'modulos' => $modulos->groupBy('mod_gen'),
+            'presets' => $presets,
             'sucursales' => EmpresaNegocio::where('IdEmpresa', Auth::user()->IdEmpresa)->get(),
             'documentos' => DB::table('tipo_documento_identidad')->whereIn('tdicod', ['1', '4', '7'])->orderBy('orden')->get(),
         ];
@@ -56,7 +62,7 @@ class UsuarioController extends Controller
             ->leftJoin('roles as r', 'r.id', '=', 'ru.role_id')
             ->leftJoin('empleado as e', 'e.emp_id', '=', 'users.emp_id')
             ->where('users.IdEmpresa', Auth::user()->IdEmpresa)
-            ->when($q, fn($w) => $w->where(fn($x) => $x->where('users.apeusu', 'like', "%$q%")
+            ->when($q, fn ($w) => $w->where(fn ($x) => $x->where('users.apeusu', 'like', "%$q%")
                 ->orWhere('users.email', 'like', "%$q%")->orWhere('e.emp_num_doc', 'like', "$q%")))
             ->orderBy('users.apeusu')
             ->select('users.*', 'r.id as role_id', 'r.name as rol', 'r.description as rol_nombre')
@@ -68,6 +74,7 @@ class UsuarioController extends Controller
     public function create()
     {
         $this->autorizar();
+
         return view('empresas.usuarios.form', $this->datosFormulario() + ['usuario' => null, 'empleado' => null, 'rolActual' => null, 'modulosAsignados' => []]);
     }
 
@@ -78,34 +85,34 @@ class UsuarioController extends Controller
 
         return $request->validate([
             'id_empresa_negocio' => ['required', Rule::exists('empresa_negocios', 'id_empresa_negocio')->where('IdEmpresa', Auth::user()->IdEmpresa)],
-            'tdicod'        => 'required|in:1,4,7',
-            'emp_num_doc'   => 'nullable|string|max:15',
-            'emp_nom'       => 'required|string|max:100',
-            'emp_ape_pat'   => 'required|string|max:100',
-            'emp_ape_mat'   => 'nullable|string|max:100',
-            'sex_cod'       => 'nullable|in:M,F',
-            'emp_fec_nac'   => 'nullable|date|before:today',
-            'estusu'        => 'required|in:0,1',
-            'asistencia'    => 'required|in:0,1',
-            'emp_tel'       => 'nullable|string|max:20',
-            'emp_cel'       => 'nullable|string|max:20',
-            'emp_cor'       => 'nullable|email|max:100',   // el correo NO es obligatorio
-            'emp_dir'       => 'nullable|string|max:200',
+            'tdicod' => 'required|in:1,4,7',
+            'emp_num_doc' => 'nullable|string|max:15',
+            'emp_nom' => 'required|string|max:100',
+            'emp_ape_pat' => 'required|string|max:100',
+            'emp_ape_mat' => 'nullable|string|max:100',
+            'sex_cod' => 'nullable|in:M,F',
+            'emp_fec_nac' => 'nullable|date|before:today',
+            'estusu' => 'required|in:0,1',
+            'asistencia' => 'required|in:0,1',
+            'emp_tel' => 'nullable|string|max:20',
+            'emp_cel' => 'nullable|string|max:20',
+            'emp_cor' => 'nullable|email|max:100',   // el correo NO es obligatorio
+            'emp_dir' => 'nullable|string|max:200',
             // Sin espacios para usuarios nuevos; los importados del sistema antiguo ("PEDRO BARBA") conservan el suyo si no lo cambian
-            'email'         => array_merge(['required', 'string', 'max:50'],
+            'email' => array_merge(['required', 'string', 'max:50'],
                 $usuario && trim((string) $request->email) === $usuario->email ? [] : ['regex:/^\S+$/'],
                 [Rule::unique('users', 'email')->ignore($usuario?->IdUsuario, 'IdUsuario')]),
-            'role_id'       => 'required|exists:roles,id',
+            'role_id' => 'required|exists:roles,id',
             // El mozo entra desde la tablet/celular con este código
-            'codigo_movil'  => ['nullable', 'required_if:role_id,' . self::ROL_MOZO, 'digits_between:3,6',
+            'codigo_movil' => ['nullable', 'required_if:role_id,'.self::ROL_MOZO, 'digits_between:1,6',
                 Rule::unique('users', 'codigo_movil')->where('id_empresa_negocio', $sucursal)->ignore($usuario?->IdUsuario, 'IdUsuario')],
-            'password'      => [$nuevo ? 'required' : 'nullable', 'string', 'min:4', 'confirmed'],
-            'modulos'       => 'nullable|array',
-            'modulos.*'     => 'integer|exists:modulos,mod_id',
+            'password' => [$nuevo ? 'required' : 'nullable', 'string', 'min:4', 'confirmed'],
+            'modulos' => 'nullable|array',
+            'modulos.*' => 'integer|exists:modulos,mod_id',
         ], [
             'codigo_movil.required_if' => 'El código móvil es obligatorio para los mozos (lo usan para entrar desde la tablet o celular).',
-            'codigo_movil.unique'      => 'Ese código móvil ya lo tiene otro usuario de la sucursal.',
-            'email.regex'              => 'El usuario de acceso no puede tener espacios.',
+            'codigo_movil.unique' => 'Ese código móvil ya lo tiene otro usuario de la sucursal.',
+            'email.regex' => 'El usuario de acceso no puede tener espacios.',
         ], [
             'emp_nom' => 'Nombres', 'emp_ape_pat' => 'Apellido paterno', 'email' => 'Usuario de acceso',
             'emp_cor' => 'Correo', 'codigo_movil' => 'Código móvil', 'role_id' => 'Rol', 'password' => 'Contraseña',
@@ -128,14 +135,14 @@ class UsuarioController extends Controller
 
     private function nombreCompleto(array $d): string
     {
-        return mb_strtoupper(trim($d['emp_nom'] . ' ' . $d['emp_ape_pat'] . ' ' . ($d['emp_ape_mat'] ?? '')));
+        return mb_strtoupper(trim($d['emp_nom'].' '.$d['emp_ape_pat'].' '.($d['emp_ape_mat'] ?? '')));
     }
 
     public function store(Request $request)
     {
         $this->autorizar();
         // Límite de usuarios del plan contratado (multi-empresa)
-        $plan = \App\Support\Tenancy\Tenancy::plan();
+        $plan = Tenancy::plan();
         if ($plan && $plan->max_usuarios && User::where('IdEmpresa', Auth::user()->IdEmpresa)->count() >= $plan->max_usuarios) {
             return back()->withInput()->with('error', "Tu plan {$plan->nombre} permite hasta {$plan->max_usuarios} usuarios. Para agregar más, cámbiate a un plan mayor.")
                 ->withErrors(['plan' => "Tu plan {$plan->nombre} permite hasta {$plan->max_usuarios} usuarios. Para agregar más, cámbiate a un plan mayor."]);
@@ -146,15 +153,15 @@ class UsuarioController extends Controller
             $empleado = Empleado::create($this->datosEmpleado($d));
 
             $usuario = User::create([
-                'name'               => mb_strtoupper(trim($d['emp_nom'])),
-                'apeusu'             => $this->nombreCompleto($d),
-                'email'              => trim($d['email']),
-                'codigo_movil'       => $d['codigo_movil'] ?? null,
-                'password'           => bcrypt($d['password']),
-                'estusu'             => (int) $d['estusu'],
-                'IdEmpresa'          => Auth::user()->IdEmpresa,
+                'name' => mb_strtoupper(trim($d['emp_nom'])),
+                'apeusu' => $this->nombreCompleto($d),
+                'email' => trim($d['email']),
+                'codigo_movil' => $d['codigo_movil'] ?? null,
+                'password' => bcrypt($d['password']),
+                'estusu' => (int) $d['estusu'],
+                'IdEmpresa' => Auth::user()->IdEmpresa,
                 'id_empresa_negocio' => $d['id_empresa_negocio'],
-                'emp_id'             => $empleado->emp_id,
+                'emp_id' => $empleado->emp_id,
             ]);
 
             DB::table('role_user')->insert([
@@ -163,7 +170,7 @@ class UsuarioController extends Controller
             $usuario->modulos()->sync($d['modulos'] ?? []);
         });
 
-        return redirect()->route('usuarios.index')->with('success', 'Usuario ' . $this->nombreCompleto($d) . ' registrado.');
+        return redirect()->route('usuarios.index')->with('success', 'Usuario '.$this->nombreCompleto($d).' registrado.');
     }
 
     public function edit(User $usuario)
@@ -203,7 +210,7 @@ class UsuarioController extends Controller
                 'email' => trim($d['email']), 'codigo_movil' => $d['codigo_movil'] ?? null,
                 'estusu' => (int) $d['estusu'], 'id_empresa_negocio' => $d['id_empresa_negocio'],
             ]);
-            if (!empty($d['password'])) {
+            if (! empty($d['password'])) {
                 $usuario->password = bcrypt($d['password']);
             }
             $usuario->save();
@@ -234,6 +241,7 @@ class UsuarioController extends Controller
         if ($tieneHistorial) {
             $usuario->update(['estusu' => 0]);
             $usuario->empleado?->update(['est_cod' => '0', 'emp_est' => 'INACTIVO']);
+
             return back()->with('success', 'El usuario tiene ventas o pedidos registrados: se DESACTIVÓ en vez de eliminarse.');
         }
 
