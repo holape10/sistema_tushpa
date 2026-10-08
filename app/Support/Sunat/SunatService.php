@@ -4,6 +4,7 @@ namespace App\Support\Sunat;
 
 use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
+use App\Support\AnulacionVenta;
 use App\Support\Comprobante;
 use DateTime;
 use DateTimeZone;
@@ -22,6 +23,8 @@ use Greenter\Model\Sale\Note;
 use Greenter\Model\Sale\SaleDetail;
 use Greenter\Model\Summary\Summary;
 use Greenter\Model\Summary\SummaryDetail;
+use Greenter\Model\Voided\Voided;
+use Greenter\Model\Voided\VoidedDetail;
 use Greenter\See;
 use Greenter\Ws\Services\SunatEndpoints;
 use Illuminate\Support\Facades\Auth;
@@ -43,6 +46,9 @@ class SunatService
     public const ESTADOS_REENVIABLES = ['PENDIENTE', 'ERROR', 'RECHAZADO'];
 
     private const MAX_POR_RESUMEN = 500;
+
+    /** Días que SUNAT da para comunicar la baja de una factura o boleta */
+    public const PLAZO_BAJA_DIAS = 7;
 
     private ?See $see = null;
 
@@ -407,8 +413,9 @@ class SunatService
             })->values()->all();
 
             $summary = (new Summary)
-                ->setFecGeneracion(new DateTime($res->res_fec_gen, new DateTimeZone('America/Lima')))
-                ->setFecResumen(new DateTime($fecha, new DateTimeZone('America/Lima')))
+                // ReferenceDate (fecGeneracion) = día de las boletas; IssueDate (fecResumen) = día en que se genera el resumen
+                ->setFecGeneracion(new DateTime($fecha, new DateTimeZone('America/Lima')))
+                ->setFecResumen(new DateTime($res->res_fec_gen, new DateTimeZone('America/Lima')))
                 ->setCorrelativo(str_pad((string) $res->res_cor, 3, '0', STR_PAD_LEFT))
                 ->setCompany($this->company())
                 ->setDetails($detalles);
@@ -451,6 +458,141 @@ class SunatService
         return $creados;
     }
 
+    // ------------------------------------------------------------------ comunicación de baja
+
+    /**
+     * Da de baja ante SUNAT una factura o boleta ya aceptada (hasta 7 días después de emitida):
+     *  - Factura: Comunicación de Baja (RA-YYYYMMDD-NNN).
+     *  - Boleta: Resumen Diario con estado 3 = anular (RC-YYYYMMDD-NNN).
+     * La venta se anula en el sistema (stock, cobros) recién cuando SUNAT acepta el ticket.
+     *
+     * @return array{ok: bool, estado: string, mensaje: string}
+     */
+    public function comunicarBaja(int $id, string $motivo): array
+    {
+        $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)
+            ->where('id_empresa_negocio', $this->negocio->id_empresa_negocio)->first();
+        if (! $cab) {
+            throw new RuntimeException('Comprobante no encontrado.');
+        }
+        if (! in_array($cab->tdocod, ['01', '03'], true)) {
+            throw new RuntimeException('La comunicación de baja es para facturas y boletas.');
+        }
+        if ($cab->ccabaj) {
+            throw new RuntimeException('El comprobante ya está anulado.');
+        }
+        if (! in_array($cab->est_sunat, ['ACEPTADO', 'OBSERVADO'], true)) {
+            throw new RuntimeException("El comprobante está {$cab->est_sunat} en SUNAT: primero envíalo y, cuando esté ACEPTADO, dale de baja.");
+        }
+        if ($cab->res_id_baja) {
+            $previo = DB::table('resumenes')->where('res_id', $cab->res_id_baja)->first();
+            if ($previo && ! in_array($previo->est_sunat, ['RECHAZADO', 'ERROR'], true)) {
+                throw new RuntimeException("La baja ya se envió ({$previo->nom_arch}, {$previo->est_sunat}). Consulta su ticket en Resumen diario.");
+            }
+        }
+        $limite = now()->subDays(self::PLAZO_BAJA_DIAS)->toDateString();
+        if ($cab->ccafem < $limite) {
+            throw new RuntimeException('SUNAT solo acepta la baja hasta '.self::PLAZO_BAJA_DIAS.' días después de emitido el comprobante. Emite una Nota de Crédito.');
+        }
+
+        $esFactura = $cab->tdocod === '01';
+        $tipo = $esFactura ? 'RA' : 'RC';
+        $hoy = now()->toDateString();
+        $motivo = mb_strtoupper(mb_substr(trim($motivo), 0, 70));
+
+        $resId = DB::transaction(function () use ($hoy, $cab, $tipo) {
+            $cor = (int) DB::table('resumenes')->where('IdEmpresa', $this->empresa->IdEmpresa)
+                ->where('res_fec_gen', $hoy)->lockForUpdate()->max('res_cor') + 1;
+
+            return DB::table('resumenes')->insertGetId([
+                'res_fec_com' => $cab->ccafem, 'res_fec_gen' => $hoy, 'res_tip' => $tipo, 'tip_res_com' => $cab->tdocod,
+                'res_cor' => $cor, 'IdEmpresa' => $this->empresa->IdEmpresa, 'es_baja' => 1,
+                'id_empresa_negocio' => $this->negocio->id_empresa_negocio,
+                'nom_arch' => $this->empresa->IdEmpresa.'-'.$tipo.'-'.str_replace('-', '', $hoy).'-'.str_pad((string) $cor, 3, '0', STR_PAD_LEFT),
+                'res_cant' => 1, 'res_total' => round((float) $cab->ccaitv, 2),
+                'est_sunat' => 'GENERADO', 'IdUsuario' => Auth::id(), 'fecha_hora' => now(),
+            ]);
+        });
+        $res = DB::table('resumenes')->where('res_id', $resId)->first();
+        $correlativo = str_pad((string) $res->res_cor, 3, '0', STR_PAD_LEFT);
+        $zona = new DateTimeZone('America/Lima');
+
+        if ($esFactura) {
+            $documento = (new Voided)
+                ->setCorrelativo($correlativo)
+                ->setFecGeneracion(new DateTime($cab->ccafem, $zona))
+                ->setFecComunicacion(new DateTime($hoy, $zona))
+                ->setCompany($this->company())
+                ->setDetails([(new VoidedDetail)
+                    ->setTipoDoc('01')->setSerie($cab->serdoc)->setCorrelativo((string) (int) $cab->numdoc)
+                    ->setDesMotivoBaja($motivo)]);
+        } else {
+            $documento = (new Summary)
+                ->setFecGeneracion(new DateTime($cab->ccafem, $zona))
+                ->setFecResumen(new DateTime($hoy, $zona))
+                ->setCorrelativo($correlativo)
+                ->setCompany($this->company())
+                ->setDetails([(new SummaryDetail)
+                    ->setTipoDoc('03')
+                    ->setSerieNro($cab->serdoc.'-'.$cab->numdoc)
+                    ->setEstado('3') // 3 = anular
+                    ->setClienteTipo((string) $cab->tdicod)
+                    ->setClienteNro((string) $cab->ccandi)
+                    ->setTotal((float) $cab->ccaitv)
+                    ->setMtoOperGravadas((float) $cab->ccatvg)
+                    ->setMtoOperExoneradas((float) $cab->ccatexo)
+                    ->setMtoOperInafectas((float) $cab->ccatinaf)
+                    ->setMtoIGV((float) $cab->ccaigv)]);
+        }
+
+        $see = $this->see();
+        $resultado = $see->send($documento);
+        if ($xml = $see->getFactory()->getLastXml()) {
+            file_put_contents($this->rutaArchivo($documento->getName(), 'xml'), $xml);
+        }
+
+        if (! $resultado->isSuccess()) {
+            $e = $resultado->getError();
+            $mensaje = trim('['.$e?->getCode().'] '.$e?->getMessage());
+            DB::table('resumenes')->where('res_id', $resId)->update([
+                'est_sunat' => 'ERROR', 'error_code' => $e?->getCode(), 'error' => $e?->getMessage(), 'res_est' => $mensaje,
+            ]);
+
+            return ['ok' => false, 'estado' => 'ERROR', 'mensaje' => 'SUNAT no recibió la baja: '.$mensaje];
+        }
+
+        DB::table('resumenes')->where('res_id', $resId)->update([
+            'res_ticket' => $resultado->getTicket(), 'est_sunat' => 'ENVIADO', 'res_est' => 'Enviado, esperando respuesta del ticket.',
+        ]);
+        // El motivo y el usuario quedan guardados: se usan al anular la venta cuando SUNAT acepte
+        DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update([
+            'res_id_baja' => $resId, 'motivo_baja' => $motivo, 'IdUsuario_baja' => Auth::id(),
+        ]);
+
+        sleep(2);
+        $r = $this->consultarTicket($resId);
+
+        return match ($r['estado']) {
+            'ACEPTADO' => ['ok' => true, 'estado' => 'ACEPTADO', 'mensaje' => "Baja aceptada por SUNAT ({$res->nom_arch}). La venta quedó anulada y el stock volvió al almacén."],
+            'RECHAZADO' => ['ok' => false, 'estado' => 'RECHAZADO', 'mensaje' => 'SUNAT rechazó la baja: '.$r['mensaje']],
+            default => ['ok' => true, 'estado' => 'EN PROCESO', 'mensaje' => "Baja enviada ({$res->nom_arch}). SUNAT aún la procesa: consulta el ticket en Resumen diario en unos minutos; al aceptarse se anula la venta."],
+        };
+    }
+
+    /** SUNAT aceptó la baja: el comprobante queda ANULADO y la venta se anula en el sistema */
+    private function aplicarBaja(object $res, array $r): void
+    {
+        $cabs = DB::table('cpe_cabecera')->where('res_id_baja', $res->res_id)->get();
+        foreach ($cabs as $cab) {
+            DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([
+                'est_sunat' => 'ANULADO',
+                'ccadessun' => mb_substr('Baja aceptada en '.$res->nom_arch.'. '.$r['mensaje'], 0, 500),
+            ]);
+            AnulacionVenta::anular((int) $cab->IdCpe_cabecera, (string) ($cab->motivo_baja ?: 'COMUNICACIÓN DE BAJA'),
+                $cab->IdUsuario_baja ? (int) $cab->IdUsuario_baja : null, 'BAJA SUNAT');
+        }
+    }
+
     /** Consulta el ticket del resumen y actualiza el estado de las boletas que incluye */
     public function consultarTicket(int $resId): array
     {
@@ -489,6 +631,24 @@ class SunatService
             file_put_contents($this->rutaArchivo($res->nom_arch, 'cdr'), $status->getCdrZip());
         }
         $r = $this->interpretarCdr($status->getCdrResponse());
+
+        // Comunicación de baja: el comprobante sigue ACEPTADO hasta que SUNAT acepta la baja
+        if ($res->es_baja ?? 0) {
+            DB::table('resumenes')->where('res_id', $resId)->update($r['ok']
+                ? ['res_cod_est' => $codigoTicket, 'est_sunat' => 'ACEPTADO', 'res_est' => $r['mensaje']]
+                : ['res_cod_est' => $codigoTicket, 'est_sunat' => 'RECHAZADO', 'res_est' => $r['mensaje'],
+                    'error_code_ticket' => $r['codigo'], 'error_ticket' => $r['mensaje']]);
+            if ($r['ok']) {
+                $this->aplicarBaja($res, $r);
+            } else {
+                DB::table('cpe_cabecera')->where('res_id_baja', $resId)->update([
+                    'res_id_baja' => null,
+                    'ccadessun' => mb_substr('Baja '.$res->nom_arch.' rechazada: '.$r['mensaje'], 0, 500),
+                ]);
+            }
+
+            return ['estado' => $r['ok'] ? 'ACEPTADO' : 'RECHAZADO', 'mensaje' => $r['mensaje']];
+        }
 
         if ($r['ok']) {
             DB::table('resumenes')->where('res_id', $resId)->update([

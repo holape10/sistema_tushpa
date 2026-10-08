@@ -1,9 +1,12 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Support\Sunat\SunatService;
+use App\View\Composers\MenuComposer;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class SunatController extends Controller
 {
@@ -35,23 +38,33 @@ class SunatController extends Controller
             ->whereBetween('c.ccafem', [$desde, $hasta]);
 
         // Contadores por estado (sin filtrar por estado)
-        $conteo = (clone $base)->when($tipo, fn($q) => $q->where('c.tdocod', $tipo))
+        $conteo = (clone $base)->when($tipo, fn ($q) => $q->where('c.tdocod', $tipo))
             ->groupBy('c.est_sunat')->pluck(DB::raw('COUNT(*)'), 'c.est_sunat');
 
         $comprobantes = (clone $base)
             ->leftJoin('tipo_documento as t', 't.tdocod', '=', 'c.tdocod')
-            ->when($tipo, fn($q) => $q->where('c.tdocod', $tipo))
-            ->when($estado === 'pendientes', fn($q) => $q->whereIn('c.est_sunat', SunatService::ESTADOS_REENVIABLES))
-            ->when($estado && $estado !== 'pendientes' && $estado !== 'todos', fn($q) => $q->where('c.est_sunat', $estado))
+            ->when($tipo, fn ($q) => $q->where('c.tdocod', $tipo))
+            ->when($estado === 'pendientes', fn ($q) => $q->whereIn('c.est_sunat', SunatService::ESTADOS_REENVIABLES))
+            ->when($estado && $estado !== 'pendientes' && $estado !== 'todos', fn ($q) => $q->where('c.est_sunat', $estado))
             ->orderByDesc('c.ccafem')->orderByDesc('c.IdCpe_cabecera')
             ->select('c.IdCpe_cabecera', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccafem', 'c.ccandi', 'c.ccanom', 'c.ccaitv',
                 'c.est_sunat', 'c.ccasunrescod', 'c.ccadessun', 'c.res_id', 'c.serie_ref', 'c.num_ref', 't.tdodes')
             ->paginate(50)->withQueryString();
 
         $empresa = DB::table('empresa')->where('IdEmpresa', Auth::user()->IdEmpresa)->first();
-        $tieneCertificado = is_file(storage_path('app/certificados/' . Auth::user()->IdEmpresa . '.pem'));
+        $tieneCertificado = is_file(storage_path('app/certificados/'.Auth::user()->IdEmpresa.'.pem'));
 
         return view('empresas.sunat.envios', compact('comprobantes', 'conteo', 'desde', 'hasta', 'tipo', 'estado', 'empresa', 'tieneCertificado'));
+    }
+
+    /** Campanita de pendientes ya actualizada (la pide el layout después de cada envío a SUNAT) */
+    public function campana()
+    {
+        $user = Auth::user();
+
+        return view('layouts._campana_sunat', [
+            'notifSunat' => $user->esAdminOCaja() ? MenuComposer::pendientesSunat($user) : null,
+        ]);
     }
 
     public function enviar($id)
@@ -59,12 +72,14 @@ class SunatController extends Controller
         $this->autorizar();
         try {
             $r = $this->sunat()->enviarComprobante((int) $id);
+
             return response()->json(['success' => $r['ok'], 'estado' => $r['estado'], 'codigo' => $r['codigo'], 'mensaje' => $r['mensaje']]);
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'estado' => null, 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
-            return response()->json(['success' => false, 'estado' => 'ERROR', 'mensaje' => 'Error al enviar: ' . $e->getMessage()]);
+
+            return response()->json(['success' => false, 'estado' => 'ERROR', 'mensaje' => 'Error al enviar: '.$e->getMessage()]);
         }
     }
 
@@ -75,7 +90,8 @@ class SunatController extends Controller
             ->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->first();
         abort_unless($cab, 404);
 
-        $nombre = $cab->IdEmpresa . '-' . $cab->tdocod . '-' . $cab->serdoc . '-' . $cab->numdoc;
+        $nombre = $cab->IdEmpresa.'-'.$cab->tdocod.'-'.$cab->serdoc.'-'.$cab->numdoc;
+
         return $this->bajarArchivo($nombre, $tipo);
     }
 
@@ -84,6 +100,7 @@ class SunatController extends Controller
         abort_unless(in_array($tipo, ['xml', 'cdr'], true), 404);
         $ruta = $this->sunat()->rutaArchivo($nombre, $tipo);
         abort_unless(is_file($ruta), 404, 'El archivo aún no existe (envía el comprobante primero).');
+
         return response()->download($ruta);
     }
 
@@ -100,7 +117,7 @@ class SunatController extends Controller
         // Fechas con boletas aún pendientes (para avisar si quedó algún día sin resumen)
         $diasPendientes = DB::table('cpe_cabecera')
             ->where('id_empresa_negocio', $sucursal)
-            ->where(fn($q) => $q->where('tdocod', '03')->orWhere(fn($q2) => $q2->whereIn('tdocod', ['07', '08'])->where('serdoc', 'like', 'B%')))
+            ->where(fn ($q) => $q->where('tdocod', '03')->orWhere(fn ($q2) => $q2->whereIn('tdocod', ['07', '08'])->where('serdoc', 'like', 'B%')))
             ->whereIn('est_sunat', SunatService::ESTADOS_REENVIABLES)
             ->whereNull('ccabaj')
             ->groupBy('ccafem')->orderBy('ccafem')
@@ -130,11 +147,12 @@ class SunatController extends Controller
             return back()->withErrors(['resumen' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
-            return back()->withErrors(['resumen' => 'Error al enviar el resumen: ' . $e->getMessage()]);
+
+            return back()->withErrors(['resumen' => 'Error al enviar el resumen: '.$e->getMessage()]);
         }
 
         $resumenes = DB::table('resumenes')->whereIn('res_id', $ids)->get();
-        $msg = $resumenes->map(fn($r) => "{$r->nom_arch}: {$r->est_sunat}" . ($r->res_est ? " ({$r->res_est})" : ''))->implode(' · ');
+        $msg = $resumenes->map(fn ($r) => "{$r->nom_arch}: {$r->est_sunat}".($r->res_est ? " ({$r->res_est})" : ''))->implode(' · ');
 
         return redirect()->route('sunat.resumenes', ['fecha' => $request->fecha])->with('success', $msg);
     }
@@ -144,10 +162,12 @@ class SunatController extends Controller
         $this->autorizar();
         try {
             $r = $this->sunat()->consultarTicket((int) $id);
+
             return back()->with('success', "{$r['estado']}: {$r['mensaje']}");
         } catch (\Throwable $e) {
             report($e);
-            return back()->withErrors(['resumen' => 'No se pudo consultar el ticket: ' . $e->getMessage()]);
+
+            return back()->withErrors(['resumen' => 'No se pudo consultar el ticket: '.$e->getMessage()]);
         }
     }
 

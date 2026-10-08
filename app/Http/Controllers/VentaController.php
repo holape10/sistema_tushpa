@@ -1,10 +1,17 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{EmpresaNegocio, MedioPago, Turno};
-use App\Support\{Kardex, Notas};
+use App\Models\EmpresaNegocio;
+use App\Models\MedioPago;
+use App\Models\Turno;
+use App\Support\AnulacionVenta;
+use App\Support\Notas;
+use App\Support\Sunat\SunatService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class VentaController extends Controller
 {
@@ -24,6 +31,7 @@ class VentaController extends Controller
         $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)
             ->whereIn('id_empresa_negocio', $this->sucursales()->pluck('id_empresa_negocio'))->first();
         abort_unless($cab, 404);
+
         return $cab;
     }
 
@@ -44,23 +52,23 @@ class VentaController extends Controller
             ->leftJoin('mesas as m', 'm.mes_id', '=', 'c.mes_id')
             ->where('c.id_empresa_negocio', $sucursal)
             ->whereBetween('c.ccafem', [$desde, $hasta])
-            ->when($request->filled('tipo'), fn($w) => $w->where('c.tdocod', $request->tipo))
-            ->when($cliente !== '', fn($w) => $w->where(fn($x) => $x->where('c.ccanom', 'like', "%$cliente%")->orWhere('c.ccandi', 'like', "$cliente%")))
+            ->when($request->filled('tipo'), fn ($w) => $w->where('c.tdocod', $request->tipo))
+            ->when($cliente !== '', fn ($w) => $w->where(fn ($x) => $x->where('c.ccanom', 'like', "%$cliente%")->orWhere('c.ccandi', 'like', "$cliente%")))
             ->when($comprobante !== '', function ($w) use ($comprobante) {
                 // Acepta "F001-123", "F001" o solo "123"
-                if (preg_match('/^([A-Z0-9]{4})-?(\d+)?$/', $comprobante, $m) && !ctype_digit($comprobante)) {
+                if (preg_match('/^([A-Z0-9]{4})-?(\d+)?$/', $comprobante, $m) && ! ctype_digit($comprobante)) {
                     $w->where('c.serdoc', $m[1]);
-                    if (!empty($m[2])) {
+                    if (! empty($m[2])) {
                         $w->where('c.numdoc', (int) $m[2]);
                     }
                 } elseif (ctype_digit($comprobante)) {
                     $w->where('c.numdoc', (int) $comprobante);
                 }
             })
-            ->when($request->get('estado') === 'anuladas', fn($w) => $w->whereNotNull('c.ccabaj'))
-            ->when($request->get('estado') === 'vigentes', fn($w) => $w->whereNull('c.ccabaj'))
-            ->when($request->filled('sunat'), fn($w) => $w->where('c.est_sunat', $request->sunat))
-            ->when($request->filled('medio'), fn($w) => $w->whereExists(fn($s) => $s->select(DB::raw(1))->from('venta_medio_pago as v')
+            ->when($request->get('estado') === 'anuladas', fn ($w) => $w->whereNotNull('c.ccabaj'))
+            ->when($request->get('estado') === 'vigentes', fn ($w) => $w->whereNull('c.ccabaj'))
+            ->when($request->filled('sunat'), fn ($w) => $w->where('c.est_sunat', $request->sunat))
+            ->when($request->filled('medio'), fn ($w) => $w->whereExists(fn ($s) => $s->select(DB::raw(1))->from('venta_medio_pago as v')
                 ->whereColumn('v.IdCpe_cabecera', 'c.IdCpe_cabecera')->where('v.id_med_pag', $request->medio)));
 
         return [$q, compact('sucursal', 'desde', 'hasta', 'cliente', 'comprobante')];
@@ -75,13 +83,13 @@ class VentaController extends Controller
         $vigentes = (clone $q)->whereNull('c.ccabaj');
         $resumen = [
             // Las notas de crédito restan y no cuentan como venta
-            'total'     => (float) (clone $vigentes)->sum(DB::raw(Notas::SIGNO_SQL . ' * c.ccaitv')),
-            'cantidad'  => (clone $vigentes)->whereNotIn('c.tdocod', ['07', '08'])->count(),
-            'credito'   => (float) (clone $vigentes)->sum('c.totalcredito'),
-            'anuladas'  => (clone $q)->whereNotNull('c.ccabaj')->count(),
-            'porTipo'   => (clone $vigentes)->groupBy('c.tdocod', 't.tdodes')
-                ->select('t.tdodes', DB::raw('COUNT(*) as n'), DB::raw('SUM(' . Notas::SIGNO_SQL . ' * c.ccaitv) as total'))->get(),
-            'porMedio'  => DB::table('venta_medio_pago as v')->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'v.id_med_pag')
+            'total' => (float) (clone $vigentes)->sum(DB::raw(Notas::SIGNO_SQL.' * c.ccaitv')),
+            'cantidad' => (clone $vigentes)->whereNotIn('c.tdocod', ['07', '08'])->count(),
+            'credito' => (float) (clone $vigentes)->sum('c.totalcredito'),
+            'anuladas' => (clone $q)->whereNotNull('c.ccabaj')->count(),
+            'porTipo' => (clone $vigentes)->groupBy('c.tdocod', 't.tdodes')
+                ->select('t.tdodes', DB::raw('COUNT(*) as n'), DB::raw('SUM('.Notas::SIGNO_SQL.' * c.ccaitv) as total'))->get(),
+            'porMedio' => DB::table('venta_medio_pago as v')->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'v.id_med_pag')
                 ->whereIn('v.IdCpe_cabecera', (clone $vigentes)->select('c.IdCpe_cabecera'))
                 ->groupBy('mp.nom_med_pag')->select('mp.nom_med_pag', DB::raw('SUM(v.monto) as total'))->orderByDesc('total')->get(),
         ];
@@ -115,10 +123,10 @@ class VentaController extends Controller
 
         return response()->json([
             'cabecera' => $cab,
-            'detalle'  => DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->get(['cdedes', 'cdecan', 'cdepuni', 'cdevve']),
-            'medios'   => DB::table('venta_medio_pago as v')->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'v.id_med_pag')
+            'detalle' => DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->get(['cdedes', 'cdecan', 'cdepuni', 'cdevve']),
+            'medios' => DB::table('venta_medio_pago as v')->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'v.id_med_pag')
                 ->where('v.IdCpe_cabecera', $id)->get(['v.id_med_pag', 'mp.nom_med_pag', 'v.monto']),
-            'usuario'  => DB::table('users')->where('IdUsuario', $cab->IdUsuario)->value('apeusu'),
+            'usuario' => DB::table('users')->where('IdUsuario', $cab->IdUsuario)->value('apeusu'),
             'anuladoPor' => $cab->IdUsuario_baja ? DB::table('users')->where('IdUsuario', $cab->IdUsuario_baja)->value('apeusu') : null,
         ]);
     }
@@ -126,9 +134,10 @@ class VentaController extends Controller
     /** Ventas de un turno ya cerrado no se tocan: cambiarían el cuadre de caja que ya se entregó */
     private function validarTurnoAbierto(object $cab): ?string
     {
-        if (!$cab->id_turno || !Turno::where('id_turno', $cab->id_turno)->where('estado', 'ABIERTO')->exists()) {
+        if (! $cab->id_turno || ! Turno::where('id_turno', $cab->id_turno)->where('estado', 'ABIERTO')->exists()) {
             return 'Esta venta pertenece a un turno ya CERRADO; no se puede modificar.';
         }
+
         return null;
     }
 
@@ -152,14 +161,14 @@ class VentaController extends Controller
             return response()->json(['success' => false, 'message' => $error]);
         }
 
-        $validos = MedioPago::where('id_empresa_negocio', $cab->id_empresa_negocio)->pluck('id_med_pag')->map(fn($v) => (int) $v)->all();
-        $lineas = collect($request->medios)->map(fn($m) => ['id' => (int) $m['id_med_pag'], 'monto' => round((float) $m['monto'], 2)]);
+        $validos = MedioPago::where('id_empresa_negocio', $cab->id_empresa_negocio)->pluck('id_med_pag')->map(fn ($v) => (int) $v)->all();
+        $lineas = collect($request->medios)->map(fn ($m) => ['id' => (int) $m['id_med_pag'], 'monto' => round((float) $m['monto'], 2)]);
         if ($lineas->pluck('id')->diff($validos)->isNotEmpty() || $lineas->pluck('id')->duplicates()->isNotEmpty()) {
             return response()->json(['success' => false, 'message' => 'Medio de pago no válido o repetido.']);
         }
         if (abs($lineas->sum('monto') - (float) $cab->ccaitv) > 0.01) {
-            return response()->json(['success' => false, 'message' => 'Los medios suman S/ ' . number_format($lineas->sum('monto'), 2)
-                . ' y el total de la venta es S/ ' . number_format($cab->ccaitv, 2) . '.']);
+            return response()->json(['success' => false, 'message' => 'Los medios suman S/ '.number_format($lineas->sum('monto'), 2)
+                .' y el total de la venta es S/ '.number_format($cab->ccaitv, 2).'.']);
         }
 
         DB::transaction(function () use ($cab, $lineas) {
@@ -184,48 +193,39 @@ class VentaController extends Controller
         if ($cab->ccabaj) {
             return response()->json(['success' => false, 'message' => 'La venta ya está anulada.']);
         }
-        // Los comprobantes electrónicos se anulan ante SUNAT (nota de crédito o comunicación de baja), no aquí
-        if ($cab->tdocod !== '13') {
-            return response()->json(['success' => false, 'message' => 'Las facturas y boletas electrónicas se anulan con una Nota de Crédito o Comunicación de Baja ante SUNAT. Aquí solo se anulan Notas de Venta.']);
+        if ($cab->tdocod !== '13' && ! in_array($cab->tdocod, ['01', '03'], true)) {
+            return response()->json(['success' => false, 'message' => 'Las notas de crédito y débito no se anulan aquí.']);
         }
         if ($error = $this->validarTurnoAbierto($cab)) {
             return response()->json(['success' => false, 'message' => $error]);
         }
 
+        // Factura o boleta ya informada a SUNAT: se anula con Comunicación de Baja (la venta se anula cuando SUNAT la acepta)
+        if ($cab->tdocod !== '13') {
+            try {
+                $r = SunatService::paraUsuario(Auth::user())->comunicarBaja((int) $cab->IdCpe_cabecera, trim($request->motivo));
+            } catch (\RuntimeException $e) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()]);
+            } catch (\Throwable $e) {
+                report($e);
+
+                return response()->json(['success' => false, 'message' => 'Error al comunicar la baja: '.$e->getMessage()]);
+            }
+
+            return response()->json(['success' => $r['ok'], 'message' => $r['mensaje']]);
+        }
+
         try {
-            $devueltos = $this->anularEnTransaccion($cab, $request);
+            $devueltos = AnulacionVenta::anular((int) $cab->IdCpe_cabecera, $request->motivo, Auth::id());
         } catch (\RuntimeException $e) {
-            return response()->json(['success' => false, 'message' => 'No se puede anular: ' . $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'No se puede anular: '.$e->getMessage()]);
         }
 
         if ($devueltos === null) {
             return response()->json(['success' => false, 'message' => 'La venta ya fue anulada por otro usuario.']);
         }
 
-        return response()->json(['success' => true, 'message' => 'Venta anulada.' . ($devueltos ? " Se devolvió al stock lo vendido ($devueltos movimiento(s) de kardex)." : '')]);
-    }
-
-    private function anularEnTransaccion(object $cab, Request $request): ?int
-    {
-        return DB::transaction(function () use ($cab, $request) {
-            $actual = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->lockForUpdate()->first();
-            if ($actual->ccabaj) {
-                return null;
-            }
-            // Venta al crédito con cobros registrados: primero se anulan los cobros
-            \App\Support\Cuentas::anularPorDocumento('cobrar', $cab->IdCpe_cabecera);
-            DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([
-                'ccabaj' => 'ANULADO ' . now()->format('d/m/Y H:i'),
-                'motivo_baja' => mb_substr(trim($request->motivo), 0, 70),
-                'IdUsuario_baja' => Auth::id(),
-            ]);
-            \App\Support\Socios::revertirComprobante((int) $cab->IdCpe_cabecera);   // cuotas de socio pagadas con esta venta
-
-            // El stock que salió con esta venta vuelve al almacén
-            return Kardex::revertirVenta($cab->IdCpe_cabecera, [
-                'cliente' => $cab->ccanom, 'descripcion' => 'ANULACIÓN: ' . trim($request->motivo), 'fecha_mov' => now()->toDateString(),
-            ]);
-        });
+        return response()->json(['success' => true, 'message' => 'Venta anulada.'.($devueltos ? " Se devolvió al stock lo vendido ($devueltos movimiento(s) de kardex)." : '')]);
     }
 
     /** Excel (CSV) con todo lo filtrado */
@@ -244,15 +244,15 @@ class VentaController extends Controller
                 'Condición', 'Medios de pago', 'Estado SUNAT', 'Anulado', 'Motivo anulación', 'Usuario'], ';');
             foreach ($filas as $f) {
                 fputcsv($out, [
-                    \Carbon\Carbon::parse($f->ccafem)->format('d/m/Y'), \Carbon\Carbon::parse($f->fecha_hora)->format('H:i'),
+                    Carbon::parse($f->ccafem)->format('d/m/Y'), Carbon::parse($f->fecha_hora)->format('H:i'),
                     $f->tdodes, $f->serdoc, $f->numdoc, $f->ccandi, $f->ccanom,
                     number_format($f->ccatvg, 2, '.', ''), number_format($f->ccatexo, 2, '.', ''), number_format($f->ccaigv, 2, '.', ''),
                     number_format($f->ccaitv, 2, '.', ''), $f->estadopago,
-                    ($medios[$f->IdCpe_cabecera] ?? collect())->map(fn($m) => $m->nom_med_pag . ' ' . number_format($m->monto, 2, '.', ''))->implode(' / '),
+                    ($medios[$f->IdCpe_cabecera] ?? collect())->map(fn ($m) => $m->nom_med_pag.' '.number_format($m->monto, 2, '.', ''))->implode(' / '),
                     $f->est_sunat, $f->ccabaj ? 'SÍ' : '', $f->motivo_baja, $f->usuario,
                 ], ';');
             }
             fclose($out);
-        }, 'ventas_' . now()->format('Ymd_His') . '.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, 'ventas_'.now()->format('Ymd_His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 }

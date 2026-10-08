@@ -109,6 +109,7 @@ class UsuarioController extends Controller
             'password' => [$nuevo ? 'required' : 'nullable', 'string', 'min:4', 'confirmed'],
             'modulos' => 'nullable|array',
             'modulos.*' => 'integer|exists:modulos,mod_id',
+            'foto' => 'nullable|image|max:5120',
         ], [
             'codigo_movil.required_if' => 'El código móvil es obligatorio para los mozos (lo usan para entrar desde la tablet o celular).',
             'codigo_movil.unique' => 'Ese código móvil ya lo tiene otro usuario de la sucursal.',
@@ -116,7 +117,7 @@ class UsuarioController extends Controller
         ], [
             'emp_nom' => 'Nombres', 'emp_ape_pat' => 'Apellido paterno', 'email' => 'Usuario de acceso',
             'emp_cor' => 'Correo', 'codigo_movil' => 'Código móvil', 'role_id' => 'Rol', 'password' => 'Contraseña',
-            'id_empresa_negocio' => 'Sucursal', 'emp_fec_nac' => 'Fecha de nacimiento',
+            'id_empresa_negocio' => 'Sucursal', 'emp_fec_nac' => 'Fecha de nacimiento', 'foto' => 'Foto',
         ]);
     }
 
@@ -138,6 +139,29 @@ class UsuarioController extends Controller
         return mb_strtoupper(trim($d['emp_nom'].' '.$d['emp_ape_pat'].' '.($d['emp_ape_mat'] ?? '')));
     }
 
+    /** Foto del trabajador en public/imagenes/empleados/{RUC}/ (se ve en el kiosko de asistencia); borra la anterior */
+    private function guardarFoto(Request $request, ?Empleado $empleado): void
+    {
+        if (! $empleado) {
+            return;
+        }
+        $anterior = $empleado->emp_foto;
+        if ($request->hasFile('foto')) {
+            $archivo = $request->file('foto');
+            $carpeta = 'imagenes/empleados/'.preg_replace('/\D/', '', (string) Auth::user()->IdEmpresa);
+            $nombre = $empleado->emp_id.'_'.uniqid().'.'.strtolower($archivo->guessExtension() ?: 'jpg');
+            $archivo->move(public_path($carpeta), $nombre);
+            $empleado->update(['emp_foto' => $carpeta.'/'.$nombre]);
+        } elseif ($request->boolean('quitar_foto')) {
+            $empleado->update(['emp_foto' => null]);
+        } else {
+            return;
+        }
+        if ($anterior && str_starts_with($anterior, 'imagenes/empleados/') && is_file(public_path($anterior))) {
+            @unlink(public_path($anterior));
+        }
+    }
+
     public function store(Request $request)
     {
         $this->autorizar();
@@ -149,7 +173,7 @@ class UsuarioController extends Controller
         }
         $d = $this->validar($request);
 
-        DB::transaction(function () use ($d) {
+        $empleado = DB::transaction(function () use ($d) {
             $empleado = Empleado::create($this->datosEmpleado($d));
 
             $usuario = User::create([
@@ -168,7 +192,10 @@ class UsuarioController extends Controller
                 'role_id' => $d['role_id'], 'user_IdUsuario' => $usuario->IdUsuario, 'id_empresa_negocio' => $d['id_empresa_negocio'],
             ]);
             $usuario->modulos()->sync($d['modulos'] ?? []);
+
+            return $empleado;
         });
+        $this->guardarFoto($request, $empleado);
 
         return redirect()->route('usuarios.index')->with('success', 'Usuario '.$this->nombreCompleto($d).' registrado.');
     }
@@ -221,6 +248,7 @@ class UsuarioController extends Controller
             ]);
             $usuario->modulos()->sync($d['modulos'] ?? []);
         });
+        $this->guardarFoto($request, Empleado::find($usuario->emp_id));
 
         return redirect()->route('usuarios.index')->with('success', 'Usuario actualizado.');
     }

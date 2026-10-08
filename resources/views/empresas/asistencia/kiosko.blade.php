@@ -59,7 +59,15 @@
                 <button type="button" @click="abrirQr(t)" :class="estilo(t.estado).tarjeta"
                         class="relative text-left rounded-2xl border-2 p-4 transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-300">
                     <span class="absolute top-3 right-3 text-[10px] font-black uppercase px-2 py-0.5 rounded-full" :class="estilo(t.estado).etiqueta" x-text="estilo(t.estado).nombre"></span>
-                    <span class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black text-white shadow" :class="estilo(t.estado).avatar" x-text="t.inicial"></span>
+                    <template x-if="t.foto">
+                        {{-- El marco toma el color del estado del trabajador --}}
+                        <span class="block w-16 h-16 rounded-2xl p-[3px] shadow" :class="estilo(t.estado).avatar">
+                            <img :src="t.foto" :alt="t.nombre" loading="lazy" class="w-full h-full rounded-[13px] object-cover bg-white">
+                        </span>
+                    </template>
+                    <template x-if="!t.foto">
+                        <span class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black text-white shadow" :class="estilo(t.estado).avatar" x-text="t.inicial"></span>
+                    </template>
                     <span class="block mt-3 font-extrabold text-slate-800 leading-tight uppercase" x-text="t.nombre"></span>
                     <span class="block text-xs font-semibold text-slate-500 uppercase truncate" x-text="t.apellidos"></span>
                     <span class="mt-2 flex flex-wrap items-center gap-1 text-[11px]">
@@ -127,7 +135,10 @@
     <div x-show="aviso.visible" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div class="pointer-events-auto max-w-xl w-full rounded-3xl shadow-2xl p-8 text-center text-white"
              :class="aviso.ok ? 'bg-emerald-600' : 'bg-rose-600'" @click="aviso.visible = false">
-            <i class="fas text-6xl" :class="aviso.ok ? 'fa-circle-check' : 'fa-circle-exclamation'"></i>
+            <template x-if="aviso.foto">
+                <img :src="aviso.foto" alt="" class="w-32 h-32 mx-auto rounded-3xl object-cover ring-4 ring-white/80 shadow-xl">
+            </template>
+            <i x-show="!aviso.foto" class="fas text-6xl" :class="aviso.ok ? 'fa-circle-check' : 'fa-circle-exclamation'"></i>
             <p class="mt-4 text-2xl font-black leading-snug" x-text="aviso.texto"></p>
         </div>
     </div>
@@ -156,7 +167,7 @@
             return {
                 tarjetas, motivos, reloj: '', fecha: '', dni: '', buscar: '', filtro: '', modal: null, enviando: false,
                 qr: { svg: '', empleado: '', accion: '', restante: 0, total: 90, id: null, marcas: 0 },
-                auth: {}, aviso: { visible: false, ok: true, texto: '' }, _timerQr: null, _timerAviso: null,
+                auth: {}, aviso: { visible: false, ok: true, texto: '', foto: null }, _timerQr: null, _timerAviso: null,
 
                 iniciar() {
                     this.tic(); setInterval(() => this.tic(), 1000);
@@ -188,7 +199,7 @@
                             const t = d.tarjetas.find(x => x.id === this.qr.id);
                             if (t && t.marcas.length > this.qr.marcas) {
                                 this.cerrar();
-                                this.mostrar(true, `✔ ${t.nombre}: ${t.marcas[t.marcas.length - 1].nombre} registrada a las ${t.marcas[t.marcas.length - 1].hora}`);
+                                this.mostrar(true, `✔ ${t.nombre}: ${t.marcas[t.marcas.length - 1].nombre} registrada a las ${t.marcas[t.marcas.length - 1].hora}`, t.foto);
                             }
                         }
                         this.tarjetas = d.tarjetas;
@@ -203,7 +214,7 @@
                     const d = await json(R.lector, { method: 'POST', body: JSON.stringify({ dni }) }).catch(() => ({ message: 'Sin conexión con el servidor.' }));
                     this.enviando = false;
                     if (d.require_auth) return this.pedirAutorizacion(d);
-                    this.mostrar(!!d.success, d.message || 'No se pudo registrar.');
+                    this.mostrar(!!d.success, d.message || 'No se pudo registrar.', d.success ? d.foto : null);
                     if (d.success) this.refrescar();
                 },
 
@@ -243,8 +254,8 @@
                     this.modal = null; clearInterval(this._timerQr);
                     this.$nextTick(() => this.$refs.dni.focus());
                 },
-                mostrar(ok, texto) {
-                    this.aviso = { visible: true, ok, texto };
+                mostrar(ok, texto, foto = null) {
+                    this.aviso = { visible: true, ok, texto, foto };
                     this.sonido(ok);
                     clearTimeout(this._timerAviso);
                     this._timerAviso = setTimeout(() => { this.aviso.visible = false; }, ok ? 3500 : 5000);

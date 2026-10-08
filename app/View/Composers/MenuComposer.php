@@ -1,9 +1,11 @@
 <?php
+
 namespace App\View\Composers;
 
 use App\Support\Sunat\SunatService;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
-use Illuminate\Support\Facades\{Auth, DB};
 
 class MenuComposer
 {
@@ -13,12 +15,12 @@ class MenuComposer
             $user = Auth::user();
             $view->with('menu', $user->modulos()->orderBy('mod_id')->get()->groupBy('mod_gen'));
             $view->with('usuario', $user);
-            $view->with('notifSunat', $user->esAdminOCaja() ? $this->pendientesSunat($user) : null);
+            $view->with('notifSunat', $user->esAdminOCaja() ? self::pendientesSunat($user) : null);
         }
     }
 
     /** Comprobantes electrónicos que aún no tienen respuesta final de SUNAT (para la campanita) */
-    private function pendientesSunat($user): array
+    public static function pendientesSunat($user): array
     {
         $base = DB::table('cpe_cabecera')
             ->where('id_empresa_negocio', $user->id_empresa_negocio)

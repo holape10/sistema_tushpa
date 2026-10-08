@@ -10,7 +10,7 @@
         $modSel = array_map('intval', old('modulos', $modulosAsignados));
     @endphp
 
-    <form method="POST" action="{{ $usuario ? route('usuarios.update', $usuario->IdUsuario) : route('usuarios.store') }}"
+    <form method="POST" action="{{ $usuario ? route('usuarios.update', $usuario->IdUsuario) : route('usuarios.store') }}" enctype="multipart/form-data"
           class="max-w-6xl space-y-5" x-data="formUsuario({{ $rolSel ?: 'null' }}, {{ $usuario ? 'true' : 'false' }})">
         @csrf
         @if ($usuario) @method('PUT') @endif
@@ -18,6 +18,32 @@
         {{-- INFORMACIÓN PERSONAL --}}
         <div class="bg-white rounded-2xl shadow-sm p-5">
             <h3 class="text-sm font-bold text-indigo-700 uppercase tracking-wide mb-4">Información personal</h3>
+
+            {{-- Foto del trabajador: se muestra en su tarjeta del kiosko de asistencia --}}
+            <div class="flex items-center gap-4 mb-5" x-data="{ vista: @js($empleado?->emp_foto ? asset($empleado->emp_foto) : null), quitar: false }">
+                <div class="w-20 h-20 rounded-2xl overflow-hidden bg-indigo-50 ring-2 ring-indigo-100 flex items-center justify-center shrink-0">
+                    <img x-show="vista && !quitar" :src="vista" alt="Foto del trabajador" class="w-full h-full object-cover">
+                    <svg x-show="!vista || quitar" class="w-10 h-10 text-indigo-300" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z"/></svg>
+                </div>
+                <div class="text-sm">
+                    <p class="font-semibold text-gray-700">Foto del trabajador</p>
+                    <p class="text-xs text-gray-400 mb-2">Se ve en el control de asistencia. JPG o PNG, hasta 5 MB.</p>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <label class="cursor-pointer px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">
+                            <span x-text="vista ? 'Cambiar foto' : 'Subir foto'"></span>
+                            <input type="file" name="foto" accept="image/*" class="hidden"
+                                   @change="const f = $event.target.files[0]; if (f) { vista = URL.createObjectURL(f); quitar = false; }">
+                        </label>
+                        @if ($empleado?->emp_foto)
+                            <label class="flex items-center gap-1 text-xs text-rose-600">
+                                <input type="checkbox" name="quitar_foto" value="1" x-model="quitar" class="rounded border-gray-300"> Quitar foto
+                            </label>
+                        @endif
+                    </div>
+                    @error('foto')<p class="text-xs text-rose-600 mt-1">{{ $message }}</p>@enderror
+                </div>
+            </div>
+
             <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <label class="text-sm">Sucursal de trabajo
                     <select name="id_empresa_negocio" class="{{ $in }}">

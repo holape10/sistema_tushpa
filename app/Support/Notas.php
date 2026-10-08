@@ -55,6 +55,9 @@ class Notas
             throw new \RuntimeException("El comprobante {$ref->serdoc}-{$ref->numdoc} está ".($ref->est_sunat ?: 'PENDIENTE')
                 .' en SUNAT. Primero envíalo y espera que sea ACEPTADO (las boletas van en el resumen diario).');
         }
+        if (! empty($ref->res_id_baja)) {
+            throw new \RuntimeException('El comprobante tiene una comunicación de baja en proceso. Consulta su ticket en Resumen diario.');
+        }
     }
 
     /** Lo que ya se rebajó con notas de crédito anteriores: total y cantidad devuelta por línea del comprobante */

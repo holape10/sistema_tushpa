@@ -1,18 +1,61 @@
 <?php
 
+use App\Http\Controllers\AgendaController;
+use App\Http\Controllers\AlmacenController;
+use App\Http\Controllers\AsistenciaAdminController;
+use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\ClinicaController;
 use App\Http\Controllers\CobroController;
-use App\Http\Controllers\EmpresaController;
+use App\Http\Controllers\CocinaController;
 use App\Http\Controllers\ComandasController;
+use App\Http\Controllers\CompraController;
+use App\Http\Controllers\ConcarController;
+use App\Http\Controllers\ContabilidadController;
+use App\Http\Controllers\ContactoController;
+use App\Http\Controllers\CuentaController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmpresaController;
+use App\Http\Controllers\GastoController;
+use App\Http\Controllers\HotelController;
+use App\Http\Controllers\ImportarAntiguoController;
 use App\Http\Controllers\ImpresionController;
-use App\Http\Controllers\{CocinaController, ReservaController};
-use App\Http\Controllers\{TurnoController, KardexController, SunatController, SucursalController, VentaController, PosMovilController, PuntoVentaController, CompraController, SireController, ConcarController, CuentaController, PvTactilController, ProformaController, PvGrifoController};
-use App\Http\Controllers\{AlmacenController, InventarioController, TransferenciaController, LoteController, NotaController, AsistenciaController, AsistenciaAdminController, ContabilidadController, GastoController, PlanillaController, TributoController, ReporteController, ContactoController};
-use App\Http\Controllers\{ProductoController, CategoriaController, MesaController, PisoController, MedioPagoController, UsuarioController};
+use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\KardexController;
+use App\Http\Controllers\LoteController;
+use App\Http\Controllers\MedioPagoController;
+use App\Http\Controllers\MesaController;
+use App\Http\Controllers\NotaController;
+use App\Http\Controllers\PisoController;
+use App\Http\Controllers\PlanillaController;
+use App\Http\Controllers\PosMovilController;
+use App\Http\Controllers\ProductoController;
+use App\Http\Controllers\ProformaController;
+use App\Http\Controllers\PuntoVentaController;
+use App\Http\Controllers\PvGrifoController;
+use App\Http\Controllers\PvTactilController;
+use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\ReservaController;
+use App\Http\Controllers\SireController;
+use App\Http\Controllers\SocioController;
+use App\Http\Controllers\SocioPortalController;
+use App\Http\Controllers\SucursalController;
+use App\Http\Controllers\SunatController;
+use App\Http\Controllers\TiendaConfigController;
+use App\Http\Controllers\TiendaController;
+use App\Http\Controllers\TipoCambioController;
+use App\Http\Controllers\TransferenciaController;
+use App\Http\Controllers\TributoController;
+use App\Http\Controllers\TurnoController;
+use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\VentaController;
+use App\Http\Controllers\VentaMasivaController;
 
 Route::get('/', function () {
     if (auth()->check()) {
         return redirect()->route('home.usuario');
     }
+
     return redirect()->route('login');
 });
 
@@ -59,7 +102,7 @@ Route::middleware('auth')->group(function () {
 
     // Reservas
     // Clínica: historias clínicas y agenda de citas
-    Route::controller(\App\Http\Controllers\ClinicaController::class)->prefix('clinica')->name('clinica.')->group(function () {
+    Route::controller(ClinicaController::class)->prefix('clinica')->name('clinica.')->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/pacientes', 'guardarPaciente')->name('paciente');
         Route::get('/pacientes/buscar', 'buscar')->name('buscar');
@@ -75,7 +118,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/atencion/{id}/receta', 'receta')->whereNumber('id')->name('receta');
         Route::post('/especialidades', 'guardarEspecialidad')->name('especialidad');
     });
-    Route::controller(\App\Http\Controllers\AgendaController::class)->prefix('clinica')->name('clinica.')->group(function () {
+    Route::controller(AgendaController::class)->prefix('clinica')->name('clinica.')->group(function () {
         Route::get('/agenda', 'index')->name('agenda');
         Route::get('/agenda/datos', 'datos')->name('agenda.datos');
         Route::post('/citas', 'guardar')->name('cita');
@@ -84,7 +127,7 @@ Route::middleware('auth')->group(function () {
     });
 
     // Socios (clubes y asociaciones)
-    Route::controller(\App\Http\Controllers\SocioController::class)->prefix('socios')->name('socios.')->group(function () {
+    Route::controller(SocioController::class)->prefix('socios')->name('socios.')->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'guardar')->name('guardar');
         Route::get('/generar/previa', 'previa')->name('previa');
@@ -104,19 +147,19 @@ Route::middleware('auth')->group(function () {
     });
 
     // Hotel / hospedaje
-    Route::get('/hotel', [\App\Http\Controllers\HotelController::class, 'index'])->name('hotel.index');
-    Route::get('/hotel/estado', [\App\Http\Controllers\HotelController::class, 'estado'])->name('hotel.estado');
-    Route::get('/hotel/estadia/{id}', [\App\Http\Controllers\HotelController::class, 'detalle'])->whereNumber('id')->name('hotel.detalle');
-    Route::post('/hotel/ingresar', [\App\Http\Controllers\HotelController::class, 'ingresar'])->name('hotel.ingresar');
-    Route::post('/hotel/extender', [\App\Http\Controllers\HotelController::class, 'extender'])->name('hotel.extender');
-    Route::post('/hotel/consumo', [\App\Http\Controllers\HotelController::class, 'consumo'])->name('hotel.consumo');
-    Route::post('/hotel/salida', [\App\Http\Controllers\HotelController::class, 'salida'])->name('hotel.salida');
-    Route::post('/hotel/anular', [\App\Http\Controllers\HotelController::class, 'anular'])->name('hotel.anular');
-    Route::post('/hotel/estado-habitacion', [\App\Http\Controllers\HotelController::class, 'cambiarEstado'])->name('hotel.cambiar_estado');
-    Route::post('/hotel/habitaciones', [\App\Http\Controllers\HotelController::class, 'guardarHabitacion'])->name('hotel.habitacion');
-    Route::delete('/hotel/habitaciones/{id}', [\App\Http\Controllers\HotelController::class, 'eliminarHabitacion'])->whereNumber('id');
-    Route::post('/hotel/servicios', [\App\Http\Controllers\HotelController::class, 'guardarServicio'])->name('hotel.servicio');
-    Route::delete('/hotel/servicios/{id}', [\App\Http\Controllers\HotelController::class, 'quitarServicio'])->whereNumber('id');
+    Route::get('/hotel', [HotelController::class, 'index'])->name('hotel.index');
+    Route::get('/hotel/estado', [HotelController::class, 'estado'])->name('hotel.estado');
+    Route::get('/hotel/estadia/{id}', [HotelController::class, 'detalle'])->whereNumber('id')->name('hotel.detalle');
+    Route::post('/hotel/ingresar', [HotelController::class, 'ingresar'])->name('hotel.ingresar');
+    Route::post('/hotel/extender', [HotelController::class, 'extender'])->name('hotel.extender');
+    Route::post('/hotel/consumo', [HotelController::class, 'consumo'])->name('hotel.consumo');
+    Route::post('/hotel/salida', [HotelController::class, 'salida'])->name('hotel.salida');
+    Route::post('/hotel/anular', [HotelController::class, 'anular'])->name('hotel.anular');
+    Route::post('/hotel/estado-habitacion', [HotelController::class, 'cambiarEstado'])->name('hotel.cambiar_estado');
+    Route::post('/hotel/habitaciones', [HotelController::class, 'guardarHabitacion'])->name('hotel.habitacion');
+    Route::delete('/hotel/habitaciones/{id}', [HotelController::class, 'eliminarHabitacion'])->whereNumber('id');
+    Route::post('/hotel/servicios', [HotelController::class, 'guardarServicio'])->name('hotel.servicio');
+    Route::delete('/hotel/servicios/{id}', [HotelController::class, 'quitarServicio'])->whereNumber('id');
 
     Route::get('/reservas', [ReservaController::class, 'index'])->name('reservas.index');
     Route::get('/reservas/hoy', [ReservaController::class, 'delDia'])->name('reservas.dia');
@@ -142,10 +185,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/ventas/exportar', [VentaController::class, 'exportar'])->name('ventas.exportar');
 
     // Venta masiva: comprobantes mensuales de los clientes con facturación mensual
-    Route::get('/ventas/masiva', [\App\Http\Controllers\VentaMasivaController::class, 'index'])->name('ventas.masiva');
-    Route::post('/ventas/masiva/emitir', [\App\Http\Controllers\VentaMasivaController::class, 'emitir'])->name('ventas.masiva.emitir');
-    Route::get('/ventas/masiva/zip', [\App\Http\Controllers\VentaMasivaController::class, 'zip'])->name('ventas.masiva.zip');
-    Route::get('/ventas/masiva/pdf/{id}', [\App\Http\Controllers\VentaMasivaController::class, 'pdf'])->whereNumber('id')->name('ventas.masiva.pdf');
+    Route::get('/ventas/masiva', [VentaMasivaController::class, 'index'])->name('ventas.masiva');
+    Route::post('/ventas/masiva/emitir', [VentaMasivaController::class, 'emitir'])->name('ventas.masiva.emitir');
+    Route::get('/ventas/masiva/zip', [VentaMasivaController::class, 'zip'])->name('ventas.masiva.zip');
+    Route::get('/ventas/masiva/pdf/{id}', [VentaMasivaController::class, 'pdf'])->whereNumber('id')->name('ventas.masiva.pdf');
     Route::get('/ventas/{id}/detalle', [VentaController::class, 'detalle'])->whereNumber('id')->name('ventas.detalle');
     Route::post('/ventas/{id}/medios', [VentaController::class, 'actualizarMedios'])->whereNumber('id')->name('ventas.medios');
     Route::post('/ventas/{id}/anular', [VentaController::class, 'anular'])->whereNumber('id')->name('ventas.anular');
@@ -163,6 +206,7 @@ Route::middleware('auth')->group(function () {
 
     // SUNAT: envío individual y resumen diario
     Route::get('/sunat/envios', [SunatController::class, 'envios'])->name('sunat.envios');
+    Route::get('/sunat/campana', [SunatController::class, 'campana'])->name('sunat.campana');
     Route::post('/sunat/enviar/{id}', [SunatController::class, 'enviar'])->whereNumber('id')->name('sunat.enviar');
     Route::get('/sunat/descargar/{id}/{tipo}', [SunatController::class, 'descargar'])->whereNumber('id')->name('sunat.descargar');
     Route::get('/sunat/resumenes', [SunatController::class, 'resumenes'])->name('sunat.resumenes');
@@ -216,8 +260,8 @@ Route::middleware('auth')->group(function () {
 
     // Compras: ingreso de mercadería al kardex
     // Tipo de cambio SUNAT (apiperu.dev)
-    Route::get('/tipo-cambio', [\App\Http\Controllers\TipoCambioController::class, 'index'])->name('tipo_cambio.index');
-    Route::get('/tipo-cambio/consultar', [\App\Http\Controllers\TipoCambioController::class, 'consultar'])->middleware('throttle:30,1')->name('tipo_cambio.consultar');
+    Route::get('/tipo-cambio', [TipoCambioController::class, 'index'])->name('tipo_cambio.index');
+    Route::get('/tipo-cambio/consultar', [TipoCambioController::class, 'consultar'])->middleware('throttle:30,1')->name('tipo_cambio.consultar');
 
     Route::get('/compras', [CompraController::class, 'index'])->name('compras.index');
     Route::get('/compras/nueva', [CompraController::class, 'create'])->name('compras.create');
@@ -247,11 +291,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/pv/registrar', [PvTactilController::class, 'registrar'])->name('pv.tactil.registrar');
 
     // Importar datos del sistema antiguo (solo Administrador)
-    Route::get('/importar-antiguo', [\App\Http\Controllers\ImportarAntiguoController::class, 'index'])->name('importar.index');
-    Route::post('/importar-antiguo/cargar', [\App\Http\Controllers\ImportarAntiguoController::class, 'cargar'])->name('importar.cargar');
-    Route::get('/importar-antiguo/revisar', [\App\Http\Controllers\ImportarAntiguoController::class, 'revisar'])->name('importar.revisar');
-    Route::post('/importar-antiguo/ejecutar', [\App\Http\Controllers\ImportarAntiguoController::class, 'ejecutar'])->name('importar.ejecutar');
-    Route::post('/importar-antiguo/eliminar', [\App\Http\Controllers\ImportarAntiguoController::class, 'eliminar'])->name('importar.eliminar');
+    Route::get('/importar-antiguo', [ImportarAntiguoController::class, 'index'])->name('importar.index');
+    Route::post('/importar-antiguo/cargar', [ImportarAntiguoController::class, 'cargar'])->name('importar.cargar');
+    Route::get('/importar-antiguo/revisar', [ImportarAntiguoController::class, 'revisar'])->name('importar.revisar');
+    Route::post('/importar-antiguo/ejecutar', [ImportarAntiguoController::class, 'ejecutar'])->name('importar.ejecutar');
+    Route::post('/importar-antiguo/eliminar', [ImportarAntiguoController::class, 'eliminar'])->name('importar.eliminar');
 
     // PV Grifo: combustible por importe o galones (placa para factura) y productos de la tienda
     Route::get('/pv-grifo', [PvGrifoController::class, 'index'])->name('pv.grifo');
@@ -279,11 +323,11 @@ Route::get('/asistencia/m/{emp}/{accion}', [AsistenciaController::class, 'celula
     ->middleware('throttle:30,1')->name('asistencia.celular');
 
 // Portería: el QR del carnet de socio muestra si está al día (sin sesión)
-Route::get('/socio/v/{token}', [\App\Http\Controllers\SocioController::class, 'verificar'])->where('token', '[A-Za-z0-9]{32}')
+Route::get('/socio/v/{token}', [SocioController::class, 'verificar'])->where('token', '[A-Za-z0-9]{32}')
     ->middleware('throttle:60,1')->name('socios.verificar');
 
 // Portal del socio: {subdominio}/socio (estado de cuenta, pagos y carnet digital; sin sesión del sistema)
-Route::prefix('socio')->name('socio.portal')->controller(\App\Http\Controllers\SocioPortalController::class)->group(function () {
+Route::prefix('socio')->name('socio.portal')->controller(SocioPortalController::class)->group(function () {
     Route::get('/', 'index');
     Route::post('/ingresar', 'entrar')->middleware('throttle:20,1')->name('.entrar');
     Route::post('/salir', 'salir')->name('.salir');
@@ -293,7 +337,7 @@ Route::prefix('socio')->name('socio.portal')->controller(\App\Http\Controllers\S
 });
 
 // Tienda virtual pública de la empresa: {subdominio}/tiendavirtual (sin sesión del sistema)
-Route::prefix('tiendavirtual')->name('tienda.')->controller(\App\Http\Controllers\TiendaController::class)->group(function () {
+Route::prefix('tiendavirtual')->name('tienda.')->controller(TiendaController::class)->group(function () {
     Route::get('/', 'index')->name('index');
     Route::get('/ingresar', 'login')->name('login');
     Route::post('/ingresar', 'entrar')->middleware('throttle:20,1')->name('entrar');
@@ -306,8 +350,8 @@ Route::prefix('tiendavirtual')->name('tienda.')->controller(\App\Http\Controller
 });
 
 Route::middleware('auth')->group(function () {
-    Route::get('/tienda/configuracion', [\App\Http\Controllers\TiendaConfigController::class, 'edit'])->name('tienda.config');
-    Route::post('/tienda/configuracion', [\App\Http\Controllers\TiendaConfigController::class, 'update'])->name('tienda.config.guardar');
+    Route::get('/tienda/configuracion', [TiendaConfigController::class, 'edit'])->name('tienda.config');
+    Route::post('/tienda/configuracion', [TiendaConfigController::class, 'update'])->name('tienda.config.guardar');
 });
 
 Route::middleware('auth')->group(function () {
@@ -444,11 +488,11 @@ Route::get('/config', [EmpresaController::class, 'crearempresa'])->name('empresa
 Route::post('/config', [EmpresaController::class, 'store'])->name('empresa.store');
 Route::get('/api/ruc/{ruc}', [EmpresaController::class, 'consultaRucSunat'])->name('api.ruc');
 
-//Route::get('/config', [EmpresaController::class, 'crearempresa'])->name('empresa.config');
-//Route::post('/config', [EmpresaController::class, 'store'])->name('empresa.store');
-//Route::get('/api/ruc/{ruc}', [EmpresaController::class, 'consultaRucSunat']);
+// Route::get('/config', [EmpresaController::class, 'crearempresa'])->name('empresa.config');
+// Route::post('/config', [EmpresaController::class, 'store'])->name('empresa.store');
+// Route::get('/api/ruc/{ruc}', [EmpresaController::class, 'consultaRucSunat']);
 
-Route::get('/dashboard', [App\Http\Controllers\DashboardController::class, 'index'])
+Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth'])
     ->name('dashboard');
 

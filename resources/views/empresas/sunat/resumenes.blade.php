@@ -82,7 +82,8 @@
                     @forelse ($resumenes as $r)
                         <tr class="align-top">
                             <td class="px-3 py-2 whitespace-nowrap">
-                                <span class="font-semibold">RC-{{ str_replace('-', '', $r->res_fec_gen) }}-{{ str_pad($r->res_cor, 3, '0', STR_PAD_LEFT) }}</span>
+                                <span class="font-semibold">{{ $r->res_tip ?: 'RC' }}-{{ str_replace('-', '', $r->res_fec_gen) }}-{{ str_pad($r->res_cor, 3, '0', STR_PAD_LEFT) }}</span>
+                                @if ($r->es_baja ?? 0)<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">BAJA {{ $r->tip_res_com === '01' ? 'FACTURA' : 'BOLETA' }}</span>@endif
                                 <span class="block text-xs text-gray-400">Ticket: {{ $r->res_ticket ?? '—' }}</span>
                                 <span class="block text-xs text-gray-400">{{ \Carbon\Carbon::parse($r->fecha_hora)->format('d/m/Y H:i') }} · {{ $r->apeusu }}</span>
                             </td>

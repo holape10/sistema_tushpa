@@ -133,6 +133,9 @@
                                     <span class="block text-[10px] text-gray-500 mt-0.5">{{ $v->motivo_baja }}</span>
                                 @elseif ($electronico)
                                     @include('empresas.sunat._estado', ['estado' => $v->est_sunat])
+                                    @if ($v->res_id_baja)
+                                        <a href="{{ route('sunat.resumenes') }}" class="block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 hover:bg-amber-200">BAJA EN PROCESO</a>
+                                    @endif
                                 @else
                                     <span class="text-xs text-gray-400">Interno</span>
                                 @endif
@@ -159,6 +162,9 @@
                                                 'notas' => in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc,
                                                 'aceptado' => in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
                                                 'estado' => $v->est_sunat ?: 'PENDIENTE',
+                                                'baja' => in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja && $turnoAbierto
+                                                    && in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true)
+                                                    && $v->ccafem >= now()->subDays(\App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS)->toDateString(),
                                             ]))"><i class="fas fa-ellipsis-vertical"></i></button>
                                 </div>
                             </td>
@@ -170,7 +176,7 @@
             </table>
         </div>
         <div class="mt-4">{{ $ventas->links() }}</div>
-        <p class="text-xs text-gray-400 mt-2">Solo se pueden anular <strong>Notas de Venta</strong> y cambiar el medio de pago de ventas cuyo <strong>turno sigue abierto</strong>. Las facturas y boletas aceptadas por SUNAT se anulan con <a href="{{ route('notas.index') }}" class="text-rose-600 font-semibold hover:underline">nota de crédito</a> desde el botón <i class="fas fa-ellipsis-vertical"></i> de cada venta.</p>
+        <p class="text-xs text-gray-400 mt-2">Solo se pueden anular y cambiar el medio de pago de ventas cuyo <strong>turno sigue abierto</strong>. Las facturas y boletas aceptadas por SUNAT se anulan con <strong>Comunicación de baja</strong> (hasta 7 días después de emitidas) o con <a href="{{ route('notas.index') }}" class="text-rose-600 font-semibold hover:underline">nota de crédito</a>, desde el botón <i class="fas fa-ellipsis-vertical"></i> de cada venta.</p>
 
         {{-- Menú de opciones (fuera de la tabla para que no se corte con el scroll) --}}
         <div x-show="menu.abierto" x-cloak @click.outside="menu.abierto = false" @scroll.window="menu.abierto = false"
@@ -187,6 +193,10 @@
                             class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-amber-50 disabled:opacity-40 disabled:hover:bg-transparent">
                         <i class="fas fa-file-circle-plus text-amber-600 w-4"></i>
                         <span><span class="font-semibold">Nota de débito</span><span class="block text-[11px] text-gray-400">Intereses, penalidad, aumento</span></span></button>
+                    <button type="button" x-show="menu.venta.baja" @click="menu.abierto = false; abrirAnular(menu.venta.id, menu.venta.numero, true)"
+                            class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-red-50">
+                        <i class="fas fa-ban text-red-600 w-4"></i>
+                        <span><span class="font-semibold">Comunicación de baja</span><span class="block text-[11px] text-gray-400">Anular ante SUNAT sin nota de crédito</span></span></button>
                     <p x-show="!menu.venta.aceptado" class="px-3 py-1.5 text-[11px] text-amber-700 bg-amber-50"
                        x-text="'SUNAT: ' + menu.venta.estado + '. Las notas se habilitan cuando el comprobante esté ACEPTADO.'"></p>
                     <div class="border-t border-gray-100 my-1"></div>
@@ -355,15 +365,17 @@
         <div x-show="modal === 'anular'" x-cloak class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" @click.self="cerrar()">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-md">
                 <div class="px-5 py-3 border-b flex justify-between items-center">
-                    <h3 class="font-bold text-red-700">Anular <span x-text="anularNumero"></span></h3>
+                    <h3 class="font-bold text-red-700"><span x-text="esBaja ? 'Comunicación de baja' : 'Anular'"></span> <span x-text="anularNumero"></span></h3>
                     <button @click="cerrar()" class="text-gray-400 text-xl">&times;</button>
                 </div>
                 <div class="p-5 space-y-3 text-sm">
                     <p class="text-gray-600">La venta dejará de contar en la caja y lo vendido volverá al stock. Esta acción no se puede deshacer.</p>
+                    <p x-show="esBaja" class="text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">Se informa a SUNAT que el comprobante queda <strong>sin efecto</strong> (hasta {{ \App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS }} días después de emitido). La venta se anula cuando SUNAT acepta la baja; suele tardar unos segundos.</p>
                     <label class="block">Motivo *
-                        <input x-model="motivo" maxlength="70" placeholder="Ej. cliente devolvió el pedido" class="block w-full rounded-lg border-gray-300 text-sm"></label>
+                        <input x-model="motivo" maxlength="70" placeholder="Ej. cliente desistió de la compra" class="block w-full rounded-lg border-gray-300 text-sm"></label>
                     <p class="text-xs text-red-600" x-text="error"></p>
-                    <button type="button" @click="anular()" :disabled="enviando" class="w-full py-2.5 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-50">ANULAR VENTA</button>
+                    <button type="button" @click="anular()" :disabled="enviando" class="w-full py-2.5 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-50"
+                            x-text="enviando ? (esBaja ? 'Enviando a SUNAT…' : 'Anulando…') : (esBaja ? 'ENVIAR BAJA A SUNAT' : 'ANULAR VENTA')"></button>
                 </div>
             </div>
         </div>
@@ -389,7 +401,7 @@
             });
 
             return {
-                modal: null, det: null, lineas: [], error: '', enviando: false, idActual: null, motivo: '', anularNumero: '',
+                modal: null, det: null, lineas: [], error: '', enviando: false, idActual: null, motivo: '', anularNumero: '', esBaja: false,
                 menu: { abierto: false, x: 0, y: 0, venta: null },
                 nota: { datos: null, tdocod: '07', tipnot: '01', motivo: '', items: [] },
 
@@ -516,7 +528,7 @@
                     location.reload();
                 },
 
-                abrirAnular(id, numero) { this.idActual = id; this.anularNumero = numero; this.motivo = ''; this.error = ''; this.modal = 'anular'; },
+                abrirAnular(id, numero, esBaja = false) { this.idActual = id; this.anularNumero = numero; this.esBaja = esBaja; this.motivo = ''; this.error = ''; this.modal = 'anular'; },
 
                 async anular() {
                     if (this.motivo.trim().length < 5) { this.error = 'Escribe el motivo (mínimo 5 letras).'; return; }
