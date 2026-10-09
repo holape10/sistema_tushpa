@@ -131,6 +131,11 @@
             <tr><td style="font-size:11px;">VUELTO S/</td><td class="r" style="font-size:11px;">{{ number_format($cab->vuelto, 2) }}</td></tr>
         @endif
     </table>
+    {{-- Fidelización: los puntos que ganó con esta compra y su saldo en ese momento --}}
+    @php $fid = \Illuminate\Support\Facades\DB::table('fid_movimientos')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->where('tipo', 'VENTA')->first(['puntos', 'saldo']); @endphp
+    @if ($fid)
+        <div class="c b" style="margin-top:6px; border:1px dashed #000; padding:4px;">★ GANASTE {{ $fid->puntos }} PUNTOS ★<br><span style="font-weight:normal">Tus puntos acumulados: {{ $fid->saldo }}</span></div>
+    @endif
 </div>
 
 @unless (request('embed'))
@@ -161,5 +166,6 @@
 @if (request('imprimir') == 1)
     <script>window.addEventListener('load', () => setTimeout(() => window.print(), 400));</script>
 @endif
+@unless (request('embed'))@include('partials.avisos')@endunless
 </body>
 </html>

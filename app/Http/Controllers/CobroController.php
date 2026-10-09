@@ -1,10 +1,25 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Pedido, PedidoDetalle, Mesa, Piso, Cliente, MedioPago, EmpresaNegocio, Empresa, Turno};
+use App\Models\Cliente;
+use App\Models\Empresa;
+use App\Models\EmpresaNegocio;
+use App\Models\MedioPago;
+use App\Models\Mesa;
+use App\Models\Pedido;
+use App\Models\PedidoDetalle;
+use App\Models\Piso;
+use App\Models\Turno;
+use App\Support\Cocina;
 use App\Support\Comprobante;
+use App\Support\ConsultaPeru;
+use App\Support\Fidelizacion;
+use App\Support\Impresion\Impresion;
+use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB, Http};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class CobroController extends Controller
 {
@@ -30,16 +45,17 @@ class CobroController extends Controller
      */
     private function agrupar($items)
     {
-        return $items->groupBy(fn($d) => $d->IdProducto . '|' . number_format((float) $d->ped_det_pre, 2, '.', ''))
+        return $items->groupBy(fn ($d) => $d->IdProducto.'|'.number_format((float) $d->ped_det_pre, 2, '.', ''))
             ->map(function ($lineas, $clave) {
                 $primera = $lineas->first();
+
                 return (object) [
                     'clave' => $clave,
                     'IdProducto' => $primera->IdProducto,
                     'descripcion' => $primera->descripcion,
                     'ped_det_pre' => (float) $primera->ped_det_pre,
                     'item_obs' => $lineas->pluck('item_obs')->filter()->unique()->implode(' / '),
-                    'cantidad_pendiente' => round($lineas->sum(fn($d) => $d->ped_det_can - $d->item_facturado), 2),
+                    'cantidad_pendiente' => round($lineas->sum(fn ($d) => $d->ped_det_can - $d->item_facturado), 2),
                     'lineas' => $lineas,
                 ];
             })->values();
@@ -66,7 +82,7 @@ class CobroController extends Controller
         $user = Auth::user();
 
         $turno = Turno::abiertoDe($user);
-        if (!$turno) {
+        if (! $turno) {
             return redirect()->route('turnos.index')->with('error', 'Debes aperturar tu turno antes de cobrar.');
         }
 
@@ -75,7 +91,7 @@ class CobroController extends Controller
             ->where('id_empresa_negocio', $user->id_empresa_negocio)
             ->first();
 
-        if (!$pedido) {
+        if (! $pedido) {
             return redirect()->route('comandas.seleccion');
         }
         $volver = $this->volver($pedido);
@@ -85,18 +101,18 @@ class CobroController extends Controller
             return redirect($volver)->with('error', 'El pedido no tiene productos pendientes de cobro.');
         }
 
-        $total = round($detalle->sum(fn($d) => $d->cantidad_pendiente * $d->ped_det_pre), 2);
+        $total = round($detalle->sum(fn ($d) => $d->cantidad_pendiente * $d->ped_det_pre), 2);
         // Lo ya cobrado en cuentas separadas anteriores
         $cuentasPrevias = DB::table('cpe_cabecera')->where('ped_id', $pedido->ped_id)->whereNull('ccabaj')
             ->orderBy('IdCpe_cabecera')->get(['IdCpe_cabecera', 'serdoc', 'numdoc', 'ccanom', 'ccaitv']);
 
         $comprobantes = DB::table('tipo_documento')->where('caja', 1)->get();
-        $documentos   = DB::table('tipo_documento_identidad')->orderBy('orden')->get();
-        $estadopagos  = DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)->get();
-        $mediospagos  = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->get();
-        $negocio      = EmpresaNegocio::find($user->id_empresa_negocio);
-        $mesa         = $pedido->mes_id ? Mesa::find($pedido->mes_id) : null;
-        $piso         = $pedido->pis_id ? Piso::find($pedido->pis_id) : null;
+        $documentos = DB::table('tipo_documento_identidad')->orderBy('orden')->get();
+        $estadopagos = DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)->get();
+        $mediospagos = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->get();
+        $negocio = EmpresaNegocio::find($user->id_empresa_negocio);
+        $mesa = $pedido->mes_id ? Mesa::find($pedido->mes_id) : null;
+        $piso = $pedido->pis_id ? Piso::find($pedido->pis_id) : null;
 
         return view('empresas.cobros.cobrar', compact(
             'pedido', 'detalle', 'total', 'comprobantes', 'documentos',
@@ -114,7 +130,7 @@ class CobroController extends Controller
         $user = Auth::user();
 
         $turno = Turno::abiertoDe($user);
-        if (!$turno) {
+        if (! $turno) {
             return redirect()->route('turnos.index')->with('error', 'Debes aperturar tu turno antes de vender.');
         }
 
@@ -135,34 +151,35 @@ class CobroController extends Controller
     {
         $this->autorizar();
         $user = Auth::user();
-        $datos = $request->validate(\App\Support\VentaDirecta::REGLAS + [
+        $datos = $request->validate(VentaDirecta::REGLAS + [
             'items.*.observacion' => 'nullable|string|max:100',
             'enviar_cocina' => 'nullable|boolean',
             'imprimir' => 'nullable|boolean',
-        ], \App\Support\VentaDirecta::MENSAJES, \App\Support\VentaDirecta::NOMBRES);
+        ], VentaDirecta::MENSAJES, VentaDirecta::NOMBRES);
 
         try {
-            $cabId = \App\Support\VentaDirecta::registrar($user, $datos, 'PVCOMANDA');
+            $cabId = VentaDirecta::registrar($user, $datos, 'PVCOMANDA');
         } catch (\RuntimeException $e) {
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json(['estado' => 'error', 'mensaje' => config('app.debug') ? $e->getMessage() : 'Error al registrar la venta.']);
         }
 
-        $respuesta = \App\Support\VentaDirecta::respuesta($cabId);
+        $respuesta = VentaDirecta::respuesta($cabId);
 
         // Platos a cocina (pantalla y comanda impresa), con el número del comprobante como referencia
         if ($request->boolean('enviar_cocina')) {
             try {
                 $nombres = DB::table('productos')->whereIn('IdProducto', collect($datos['items'])->pluck('id')->filter())->pluck('pronom', 'IdProducto');
-                $lineas = collect($datos['items'])->filter(fn($i) => !empty($i['id']))->map(fn($i) => [
+                $lineas = collect($datos['items'])->filter(fn ($i) => ! empty($i['id']))->map(fn ($i) => [
                     'IdProducto' => (int) $i['id'], 'nombre' => $nombres[$i['id']] ?? '', 'cantidad' => (float) $i['cantidad'],
                     'observacion' => $i['observacion'] ?? null,
                 ])->values()->all();
                 $destino = 'PUNTO DE VENTA';
-                \App\Support\Impresion\Impresion::comandaPara($user->id_empresa_negocio, $destino, $respuesta['numero'], $lineas);
-                \App\Support\Cocina::registrarDirecta($user->id_empresa_negocio, $destino . ' ' . $respuesta['numero'], $lineas);
+                Impresion::comandaPara($user->id_empresa_negocio, $destino, $respuesta['numero'], $lineas);
+                Cocina::registrarDirecta($user->id_empresa_negocio, $destino.' '.$respuesta['numero'], $lineas);
             } catch (\Throwable $e) {
                 report($e);
             }
@@ -172,7 +189,7 @@ class CobroController extends Controller
         $impreso = false;
         if ($request->boolean('imprimir')) {
             try {
-                $impreso = \App\Support\Impresion\Impresion::comprobante($cabId);
+                $impreso = Impresion::comprobante($cabId);
             } catch (\Throwable $e) {
                 report($e);
             }
@@ -191,13 +208,13 @@ class CobroController extends Controller
 
         $clientes = Cliente::where('rucemp', Auth::user()->IdEmpresa)
             ->where('clinum', '!=', '00000000')
-            ->where(fn($w) => $w->where('clinom', 'like', '%' . $q . '%')->orWhere('clinum', 'like', $q . '%'))
-            ->orderByRaw('clinom LIKE ? DESC', [$q . '%']) // primero los que empiezan con lo escrito
+            ->where(fn ($w) => $w->where('clinom', 'like', '%'.$q.'%')->orWhere('clinum', 'like', $q.'%'))
+            ->orderByRaw('clinom LIKE ? DESC', [$q.'%']) // primero los que empiezan con lo escrito
             ->orderBy('clinom')
             ->limit(10)
             ->get(['clinum', 'clinom', 'clidir', 'clicor', 'telefono', 'tdicod']);
 
-        return response()->json($clientes->map(fn($c) => [
+        return response()->json($clientes->map(fn ($c) => [
             'num' => $c->clinum, 'nom' => $c->clinom, 'dir' => $c->clidir, 'cor' => $c->clicor,
             'tel' => $c->telefono, 'tdicod' => $c->tdicod,
         ]));
@@ -217,10 +234,10 @@ class CobroController extends Controller
         }
 
         // RUC: tu servicio consultas.holape.app · DNI: consultas.holape.app y, de respaldo, apiperu.dev
-        if ($r = \App\Support\ConsultaPeru::ruc($doc)) {
+        if ($r = ConsultaPeru::ruc($doc)) {
             return response()->json(['nom' => $r['nombre'], 'dir' => $r['direccion'], 'tdicod' => '6']);
         }
-        if ($r = \App\Support\ConsultaPeru::dni($doc)) {
+        if ($r = ConsultaPeru::dni($doc)) {
             return response()->json(['nom' => $r['nombre'], 'dir' => '', 'tdicod' => '1']);
         }
 
@@ -232,13 +249,13 @@ class CobroController extends Controller
         $this->autorizar();
 
         $request->validate([
-            'ped_id'     => 'required|integer',
-            'tdocod'     => 'required|in:01,03,13',
+            'ped_id' => 'required|integer',
+            'tdocod' => 'required|in:01,03,13',
             'estadopago' => 'required|integer',
-            'fecEmi'     => 'required|date',
-            'tdicod'     => 'required|string|size:1',
-            'clinum'     => 'required|string|max:15',
-            'clinom'     => 'required|string|max:120',
+            'fecEmi' => 'required|date',
+            'tdicod' => 'required|string|size:1',
+            'clinum' => 'required|string|max:15',
+            'clinom' => 'required|string|max:120',
         ], [], [
             'clinum' => 'DNI / RUC', 'clinom' => 'Nombre o razón social', 'fecEmi' => 'Fecha de emisión',
         ]);
@@ -253,7 +270,7 @@ class CobroController extends Controller
                 $turno = Turno::where('IdUsuario', $user->IdUsuario)
                     ->where('id_empresa_negocio', $user->id_empresa_negocio)
                     ->where('estado', 'ABIERTO')->lockForUpdate()->first();
-                if (!$turno) {
+                if (! $turno) {
                     throw new \RuntimeException('Debes aperturar tu turno antes de cobrar.');
                 }
 
@@ -262,7 +279,7 @@ class CobroController extends Controller
                     ->where('id_empresa_negocio', $user->id_empresa_negocio)
                     ->lockForUpdate()->first();
 
-                if (!$pedido) {
+                if (! $pedido) {
                     throw new \RuntimeException('El pedido ya fue cobrado o no existe.');
                 }
 
@@ -290,7 +307,7 @@ class CobroController extends Controller
                 }
 
                 // ---- Comprobante: cliente, serie, totales, medios de pago, detalle y kardex ----
-                $lineas = $aCobrar->map(fn($g) => [
+                $lineas = $aCobrar->map(fn ($g) => [
                     'IdProducto' => $g->IdProducto, 'descripcion' => $g->descripcion,
                     'cantidad' => (float) $g->cantidad_cobrar, 'precio' => (float) $g->ped_det_pre,
                 ])->values()->all();
@@ -333,17 +350,23 @@ class CobroController extends Controller
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json([
                 'estado' => 'error',
                 'mensaje' => config('app.debug') ? $e->getMessage() : 'Error al procesar el cobro.',
             ]);
         }
 
+        // Puntos del cliente: la pantalla siguiente los muestra en un aviso grande
+        if ($puntos = Fidelizacion::resumen($cabId)) {
+            session()->flash('puntos', $puntos);
+        }
+
         // Impresión directa (sin vista previa) si el agente de impresión está conectado
         $impreso = false;
         if ($request->imprimir) {
             try {
-                $impreso = \App\Support\Impresion\Impresion::comprobante($cabId);
+                $impreso = Impresion::comprobante($cabId);
             } catch (\Throwable $e) {
                 report($e);
             }
@@ -352,7 +375,7 @@ class CobroController extends Controller
         if ($impreso) {
             $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->first(['serdoc', 'numdoc', 'ped_id', 'ped_tip']);
             $sigueAbierto = $cab->ped_id && $cab->ped_tip !== 'Hotel' && Pedido::where('ped_id', $cab->ped_id)->where('ped_est', 'Aperturado')->exists();
-            session()->flash('success', 'Comprobante ' . $cab->serdoc . '-' . str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT) . ' enviado a la impresora.');
+            session()->flash('success', 'Comprobante '.$cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT).' enviado a la impresora.');
 
             return response()->json([
                 'estado' => 'success',
@@ -366,7 +389,7 @@ class CobroController extends Controller
         return response()->json([
             'estado' => 'success',
             'mensaje' => 'Comprobante emitido',
-            'redirect' => route('cobros.voucher', $cabId) . '?imprimir=' . ($request->imprimir ? 1 : 0),
+            'redirect' => route('cobros.voucher', $cabId).'?imprimir='.($request->imprimir ? 1 : 0),
         ]);
     }
 

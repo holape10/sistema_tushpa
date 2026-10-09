@@ -30,6 +30,7 @@
             error: { c: '#dc2626', t: 'No se pudo', i: '!', ms: 9000 },
             aviso: { c: '#d97706', t: 'Atención', i: '!', ms: 8000 },
             info: { c: '#2563eb', t: 'Información', i: 'i', ms: 5000 },
+            puntos: { c: '#7c3aed', t: 'Puntos del cliente', i: '★', ms: 10000 },
         };
         window.tushpaAviso = function (texto, tipo = true, titulo = null) {
             if (!texto) return;
@@ -59,6 +60,23 @@
             while (caja.children.length > 4) caja.firstElementChild.remove();
         };
 
+        // Fidelización: toda venta que responde con "fidelizacion" (PV, PV Móvil, Punto de venta, grifo, socios, gimnasio…)
+        // muestra los puntos del cliente, sin tocar cada pantalla
+        const verPuntos = (d) => { if (d && d.fidelizacion && d.fidelizacion.mensaje) tushpaAviso(d.fidelizacion.mensaje, 'puntos', '★ ' + d.fidelizacion.cliente); };
+        const fetchOriginal = window.fetch.bind(window);
+        window.fetch = async function (...args) {
+            const r = await fetchOriginal(...args);
+            if ((r.headers.get('content-type') || '').includes('json')) r.clone().json().then(verPuntos).catch(() => {});
+            return r;
+        };
+        const abrirXhr = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function (...args) {
+            this.addEventListener('load', () => {
+                if ((this.getResponseHeader('content-type') || '').includes('json')) { try { verPuntos(JSON.parse(this.responseText)); } catch (e) {} }
+            });
+            return abrirXhr.apply(this, args);
+        };
+
         // Mensajes que dejó el servidor al guardar
         document.addEventListener('DOMContentLoaded', () => {
             @if (session('success'))
@@ -66,6 +84,9 @@
             @endif
             @if (session('ok'))
                 tushpaAviso(@json((string) session('ok')), 'ok');
+            @endif
+            @if (is_array(session('puntos')))
+                tushpaAviso(@json(session('puntos')['mensaje']), 'puntos', @json('★ '.session('puntos')['cliente']));
             @endif
             @if (session('error'))
                 tushpaAviso(@json((string) session('error')), 'error');

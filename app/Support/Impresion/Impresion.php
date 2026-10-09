@@ -1,8 +1,13 @@
 <?php
+
 namespace App\Support\Impresion;
 
+use App\Support\Sunat\CodigoQr;
 use App\Support\Sunat\NumeroLetras;
-use Illuminate\Support\Facades\{Auth, DB};
+use Carbon\Carbon;
+use Dompdf\Dompdf;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Impresión directa: arma el ticket ESC/POS y lo deja en cola_impresion.
@@ -17,9 +22,10 @@ class Impresion
 
     public static function impresora(?int $id, int $sucursal): ?object
     {
-        if (!$id) {
+        if (! $id) {
             return null;
         }
+
         return DB::table('configuracion_impresoras')->where('Id', $id)
             ->where('id_empresa_negocio', $sucursal)->where('activo', 1)->first();
     }
@@ -28,6 +34,7 @@ class Impresion
     public static function impresoraCaja(int $sucursal, $user = null): ?object
     {
         $user ??= Auth::user();
+
         return self::impresora($user?->terminal ? (int) $user->terminal : null, $sucursal)
             ?? DB::table('configuracion_impresoras')->where('id_empresa_negocio', $sucursal)->where('activo', 1)
                 ->orderByDesc('predeterminado')->orderBy('Id')->first();
@@ -36,7 +43,8 @@ class Impresion
     public static function agenteConectado(int $sucursal): bool
     {
         $contacto = DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->value('impresion_contacto');
-        return $contacto && now()->diffInSeconds(\Carbon\Carbon::parse($contacto), true) <= self::AGENTE_TIMEOUT;
+
+        return $contacto && now()->diffInSeconds(Carbon::parse($contacto), true) <= self::AGENTE_TIMEOUT;
     }
 
     /** ¿Se puede imprimir directo en esta sucursal ahora? (hay impresora y el agente está conectado) */
@@ -70,14 +78,14 @@ class Impresion
         if ($negocio->nombre_comercial && $negocio->nombre_comercial !== $empresa->NomEmpresa) {
             $p->texto($empresa->NomEmpresa);
         }
-        $p->texto('RUC: ' . $empresa->IdEmpresa);
+        $p->texto('RUC: '.$empresa->IdEmpresa);
         $p->parrafo((string) $negocio->direccion);
         // La dirección del padrón SUNAT ya suele terminar en "DEPARTAMENTO - PROVINCIA - DISTRITO"
-        if ($negocio->distrito && !str_contains(mb_strtoupper((string) $negocio->direccion), mb_strtoupper($negocio->distrito))) {
-            $p->texto(trim($negocio->distrito . ' - ' . $negocio->provincia . ' - ' . $negocio->departamento, ' -'));
+        if ($negocio->distrito && ! str_contains(mb_strtoupper((string) $negocio->direccion), mb_strtoupper($negocio->distrito))) {
+            $p->texto(trim($negocio->distrito.' - '.$negocio->provincia.' - '.$negocio->departamento, ' -'));
         }
         if ($negocio->telefono) {
-            $p->texto('Tel: ' . $negocio->telefono);
+            $p->texto('Tel: '.$negocio->telefono);
         }
     }
 
@@ -90,18 +98,19 @@ class Impresion
     public static function comprobante(int $idCpe, bool $exigirAgente = false): bool
     {
         $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $idCpe)->first();
-        if (!$cab || ($exigirAgente && !self::agenteConectado((int) $cab->id_empresa_negocio))) {
+        if (! $cab || ($exigirAgente && ! self::agenteConectado((int) $cab->id_empresa_negocio))) {
             return false;
         }
         $imp = self::impresoraCaja((int) $cab->id_empresa_negocio);
-        if (!$imp) {
+        if (! $imp) {
             return false;
         }
 
         // Impresora A4 (instalada en Windows): va el PDF y el agente lo imprime con SumatraPDF
         if ($imp->tip_conex_imp === 'WINDOWS') {
             [, $pdf] = ComprobantePdf::generar($idCpe);
-            self::encolar($imp, $pdf, 'COMPROBANTE A4', $cab->serdoc . '-' . str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT));
+            self::encolar($imp, $pdf, 'COMPROBANTE A4', $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT));
+
             return true;
         }
 
@@ -112,26 +121,26 @@ class Impresion
         $pedido = $cab->ped_id ? DB::table('pedidos as p')->leftJoin('mesas as m', 'm.mes_id', '=', 'p.mes_id')
             ->leftJoin('users as u', 'u.IdUsuario', '=', 'p.mozo')->where('p.ped_id', $cab->ped_id)
             ->first(['m.mes_nom', 'u.apeusu as mozo']) : null;
-        $numero = $cab->serdoc . '-' . str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT);
+        $numero = $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT);
 
         $p = new Escpos((int) $imp->columnas);
         self::encabezado($p, (int) $cab->id_empresa_negocio);
         $p->linea('=')->negrita()->texto(mb_strtoupper((string) $tdodes))->tamano(1, 2)->texto($numero)->tamano()->negrita(false)->linea('=');
 
         $p->alinear('izq')
-            ->texto('Fecha : ' . \Carbon\Carbon::parse($cab->fecha_hora)->format('d/m/Y H:i'))
-            ->parrafo('Cliente: ' . $cab->ccanom)
-            ->texto(($cab->tdicod === '6' ? 'RUC' : 'DOC') . '   : ' . $cab->ccandi);
+            ->texto('Fecha : '.Carbon::parse($cab->fecha_hora)->format('d/m/Y H:i'))
+            ->parrafo('Cliente: '.$cab->ccanom)
+            ->texto(($cab->tdicod === '6' ? 'RUC' : 'DOC').'   : '.$cab->ccandi);
         if ($cab->direccion && $cab->direccion !== '--') {
-            $p->parrafo('Dir.  : ' . $cab->direccion);
+            $p->parrafo('Dir.  : '.$cab->direccion);
         }
         if ($pedido?->mes_nom) {
-            $p->texto('Mesa  : ' . $pedido->mes_nom);
+            $p->texto('Mesa  : '.$pedido->mes_nom);
         }
         if ($pedido?->mozo) {
-            $p->texto('Mozo  : ' . $pedido->mozo);
+            $p->texto('Mozo  : '.$pedido->mozo);
         }
-        $p->texto('Pago  : ' . $cab->estadopago . ($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence ' . \Carbon\Carbon::parse($cab->ccafve)->format('d/m/Y') . ')' : ''));
+        $p->texto('Pago  : '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''));
 
         $p->linea();
         if ($cab->consumo) {
@@ -163,11 +172,16 @@ class Impresion
             $p->dosColumnas('VUELTO', number_format($cab->vuelto, 2));
         }
         $p->parrafo(NumeroLetras::convertir((float) $cab->ccaitv));
+        // Fidelización: puntos ganados con esta compra y saldo
+        if ($fid = DB::table('fid_movimientos')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->where('tipo', 'VENTA')->first(['puntos', 'saldo'])) {
+            $p->alinear('centro')->negrita()->texto('*** GANASTE '.$fid->puntos.' PUNTOS ***')->negrita(false)
+                ->texto('Tus puntos acumulados: '.$fid->saldo)->alinear('izq');
+        }
 
         // QR de SUNAT para comprobantes electrónicos
         if (in_array($cab->tdocod, ['01', '03', '07', '08'], true)) {
-            $p->avanzar()->alinear('centro')->qr(\App\Support\Sunat\CodigoQr::texto($cab));
-            $p->texto('Representación impresa de la ' . mb_strtolower((string) $tdodes));
+            $p->avanzar()->alinear('centro')->qr(CodigoQr::texto($cab));
+            $p->texto('Representación impresa de la '.mb_strtolower((string) $tdodes));
         }
         $p->alinear('centro')->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA')
             ->texto('¡Gracias por su preferencia!')->avanzar(3)->cortar();
@@ -176,6 +190,7 @@ class Impresion
         }
 
         self::encolar($imp, $p->bytes(), 'COMPROBANTE', $numero);
+
         return true;
     }
 
@@ -187,19 +202,20 @@ class Impresion
      */
     public static function comanda(int $pedId, array $lineas, bool $anulacion = false, string $motivo = ''): int
     {
-        if (!$lineas) {
+        if (! $lineas) {
             return 0;
         }
         $pedido = DB::table('pedidos as p')->leftJoin('mesas as m', 'm.mes_id', '=', 'p.mes_id')
             ->leftJoin('pisos as pi', 'pi.pis_id', '=', 'p.pis_id')
             ->where('p.ped_id', $pedId)->first(['p.*', 'm.mes_nom', 'pi.pis_nom']);
-        if (!$pedido) {
+        if (! $pedido) {
             return 0;
         }
 
         $destino = $pedido->ped_tip === 'Hotel' ? (string) $pedido->ped_obs
-            : ($pedido->mes_nom ? ($pedido->pis_nom ? $pedido->pis_nom . ' / ' : '') . $pedido->mes_nom : mb_strtoupper((string) $pedido->ped_tip));
-        return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° ' . $pedido->ped_id, $lineas, $anulacion, $motivo);
+            : ($pedido->mes_nom ? ($pedido->pis_nom ? $pedido->pis_nom.' / ' : '').$pedido->mes_nom : mb_strtoupper((string) $pedido->ped_tip));
+
+        return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° '.$pedido->ped_id, $lineas, $anulacion, $motivo);
     }
 
     /**
@@ -208,7 +224,7 @@ class Impresion
      */
     public static function comandaPara(int $sucursal, string $destino, string $referencia, array $lineas, bool $anulacion = false, string $motivo = ''): int
     {
-        if (!$lineas) {
+        if (! $lineas) {
             return 0;
         }
 
@@ -229,7 +245,7 @@ class Impresion
 
         foreach ($grupos as $idImp => $items) {
             $imp = self::impresora($idImp, $sucursal);
-            if (!$imp) {
+            if (! $imp) {
                 continue;
             }
             $p = new Escpos((int) $imp->columnas);
@@ -237,26 +253,26 @@ class Impresion
             if ($anulacion) {
                 $p->negrita()->tamano(2, 2)->texto('ANULACIÓN')->tamano()->negrita(false);
             } else {
-                $p->negrita()->texto('COMANDA - ' . mb_strtoupper($imp->descripcion))->negrita(false);
+                $p->negrita()->texto('COMANDA - '.mb_strtoupper($imp->descripcion))->negrita(false);
             }
             $p->tamano(2, 2)->negrita()->texto($destino)->negrita(false)->tamano()
-                ->texto($referencia . ' · ' . now()->format('d/m/Y H:i'))
-                ->texto('Atiende: ' . ($usuario ?? ''))
+                ->texto($referencia.' · '.now()->format('d/m/Y H:i'))
+                ->texto('Atiende: '.($usuario ?? ''))
                 ->alinear('izq')->linea('=');
 
             foreach ($items as $it) {
                 $cant = rtrim(rtrim(number_format($it['cantidad'], 2, '.', ''), '0'), '.');
-                $p->tamano(1, 2)->negrita()->parrafo($cant . '  ' . $it['nombre'])->negrita(false)->tamano();
-                if (!empty($it['observacion'])) {
-                    $p->parrafo('   >> ' . $it['observacion']);
+                $p->tamano(1, 2)->negrita()->parrafo($cant.'  '.$it['nombre'])->negrita(false)->tamano();
+                if (! empty($it['observacion'])) {
+                    $p->parrafo('   >> '.$it['observacion']);
                 }
             }
             if ($anulacion && $motivo) {
-                $p->linea()->parrafo('Motivo: ' . $motivo);
+                $p->linea()->parrafo('Motivo: '.$motivo);
             }
             $p->linea('=')->avanzar(3)->cortar();
 
-            self::encolar($imp, $p->bytes(), $anulacion ? 'ANULACION' : 'COMANDA', $referencia . ' ' . $destino);
+            self::encolar($imp, $p->bytes(), $anulacion ? 'ANULACION' : 'COMANDA', $referencia.' '.$destino);
             $enviados++;
         }
 
@@ -270,37 +286,38 @@ class Impresion
         $pedido = DB::table('pedidos as p')->leftJoin('mesas as m', 'm.mes_id', '=', 'p.mes_id')
             ->leftJoin('pisos as pi', 'pi.pis_id', '=', 'p.pis_id')->leftJoin('users as u', 'u.IdUsuario', '=', 'p.mozo')
             ->where('p.ped_id', $pedId)->first(['p.*', 'm.mes_nom', 'pi.pis_nom', 'u.apeusu as mozo_nom']);
-        if (!$pedido) {
+        if (! $pedido) {
             return false;
         }
         $imp = self::impresoraCaja((int) $pedido->id_empresa_negocio);
-        if (!$imp) {
+        if (! $imp) {
             return false;
         }
 
         $items = DB::table('pedidos_detalle')->where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')->get()
-            ->groupBy(fn($d) => $d->IdProducto . '|' . $d->ped_det_pre)
-            ->map(fn($g) => (object) ['descripcion' => $g->first()->descripcion, 'precio' => (float) $g->first()->ped_det_pre,
+            ->groupBy(fn ($d) => $d->IdProducto.'|'.$d->ped_det_pre)
+            ->map(fn ($g) => (object) ['descripcion' => $g->first()->descripcion, 'precio' => (float) $g->first()->ped_det_pre,
                 'cantidad' => (float) $g->sum('ped_det_can'), 'pagado' => (float) $g->sum('item_facturado')]);
-        $total = round($items->sum(fn($i) => $i->cantidad * $i->precio), 2);
-        $pagado = round($items->sum(fn($i) => $i->pagado * $i->precio), 2);
+        $total = round($items->sum(fn ($i) => $i->cantidad * $i->precio), 2);
+        $pagado = round($items->sum(fn ($i) => $i->pagado * $i->precio), 2);
 
         $p = new Escpos((int) $imp->columnas);
         self::encabezado($p, (int) $pedido->id_empresa_negocio);
         $p->linea('=')->tamano(2, 2)->negrita()->texto('PRECUENTA')->negrita(false)->tamano()
-            ->tamano(1, 2)->texto($pedido->mes_nom ? trim(($pedido->pis_nom ?? '') . ' / ' . $pedido->mes_nom, ' /') : mb_strtoupper((string) $pedido->ped_tip))->tamano()
+            ->tamano(1, 2)->texto($pedido->mes_nom ? trim(($pedido->pis_nom ?? '').' / '.$pedido->mes_nom, ' /') : mb_strtoupper((string) $pedido->ped_tip))->tamano()
             ->alinear('izq')->linea('=')
-            ->texto('Fecha : ' . now()->format('d/m/Y H:i'))->texto('Mozo  : ' . $pedido->mozo_nom)->texto('Pedido: ' . $pedido->ped_id)->linea();
+            ->texto('Fecha : '.now()->format('d/m/Y H:i'))->texto('Mozo  : '.$pedido->mozo_nom)->texto('Pedido: '.$pedido->ped_id)->linea();
         foreach ($items as $i) {
             $p->item($i->descripcion, $i->cantidad, $i->precio, $i->cantidad * $i->precio);
         }
         $p->linea()->negrita()->tamano(1, 2)->dosColumnas('TOTAL S/', number_format($total, 2))->tamano()->negrita(false);
         if ($pagado > 0) {
-            $p->dosColumnas('YA PAGADO', '-' . number_format($pagado, 2))->negrita()->dosColumnas('SALDO S/', number_format($total - $pagado, 2))->negrita(false);
+            $p->dosColumnas('YA PAGADO', '-'.number_format($pagado, 2))->negrita()->dosColumnas('SALDO S/', number_format($total - $pagado, 2))->negrita(false);
         }
         $p->linea()->alinear('centro')->texto('*** NO VÁLIDO COMO COMPROBANTE ***')->texto('Solicite su boleta o factura')->avanzar(3)->cortar();
 
-        self::encolar($imp, $p->bytes(), 'PRECUENTA', 'Pedido ' . $pedido->ped_id);
+        self::encolar($imp, $p->bytes(), 'PRECUENTA', 'Pedido '.$pedido->ped_id);
+
         return true;
     }
 
@@ -309,25 +326,26 @@ class Impresion
     public static function prueba(object $imp): void
     {
         if ($imp->tip_conex_imp === 'WINDOWS') {
-            $pdf = new \Dompdf\Dompdf();
+            $pdf = new Dompdf;
             $pdf->loadHtml('<div style="font-family:DejaVu Sans; text-align:center; margin-top:80px;"><h1>PRUEBA OK</h1><p>Impresora A4: '
-                . e($imp->descripcion) . '</p><p>' . now()->format('d/m/Y H:i:s') . '</p><p>Tildes: áéíóú ÁÉÍÓÚ ñÑ ¿? ¡!</p></div>', 'UTF-8');
+                .e($imp->descripcion).'</p><p>'.now()->format('d/m/Y H:i:s').'</p><p>Tildes: áéíóú ÁÉÍÓÚ ñÑ ¿? ¡!</p></div>', 'UTF-8');
             $pdf->setPaper('A4');
             $pdf->render();
-            self::encolar($imp, $pdf->output(), 'PRUEBA A4', 'Prueba ' . $imp->descripcion);
+            self::encolar($imp, $pdf->output(), 'PRUEBA A4', 'Prueba '.$imp->descripcion);
+
             return;
         }
 
         $p = new Escpos((int) $imp->columnas);
         self::encabezado($p, (int) $imp->id_empresa_negocio);
         $p->linea('=')->tamano(2, 2)->negrita()->texto('PRUEBA OK')->negrita(false)->tamano()
-            ->texto('Impresora: ' . $imp->descripcion)->texto(now()->format('d/m/Y H:i:s'))
+            ->texto('Impresora: '.$imp->descripcion)->texto(now()->format('d/m/Y H:i:s'))
             ->alinear('izq')->linea()->texto('Tildes: áéíóú ÁÉÍÓÚ ñÑ ¿? ¡!')
             ->texto(mb_substr(str_repeat('1234567890', 5), 0, $p->columnas()))->dosColumnas('Izquierda', 'Derecha')->linea()
             ->alinear('centro')->qr('https://tushpa.app')->avanzar(3)->cortar();
         if ($imp->abrir_cajon) {
             $p->abrirCajon();
         }
-        self::encolar($imp, $p->bytes(), 'PRUEBA', 'Prueba ' . $imp->descripcion);
+        self::encolar($imp, $p->bytes(), 'PRUEBA', 'Prueba '.$imp->descripcion);
     }
 }

@@ -6,6 +6,7 @@ use App\Support\Antiguo\CargadorSql;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
@@ -138,3 +139,19 @@ Artisan::command('impresion:limpiar', function () {
 })->purpose('Vacía la cola de impresión (lo impreso y lo viejo) en todas las empresas');
 
 Schedule::command('impresion:limpiar')->dailyAt('04:00');
+
+// Advertencias de pago del panel: al pasar la fecha límite (si se marcó "suspender automáticamente") la empresa se suspende
+Artisan::command('clientes:suspender-vencidos', function () {
+    if (! Tenancy::activa()) {
+        return;
+    }
+    $vencidos = Cliente::where('estado', 'ACTIVO')->where('aviso_suspender', 1)
+        ->whereNotNull('aviso_fecha')->where('aviso_fecha', '<', now()->toDateString())->get();
+    foreach ($vencidos as $c) {
+        $c->update(['estado' => 'SUSPENDIDO', 'motivo_suspension' => 'Falta de pago (venció el '.Carbon::parse($c->aviso_fecha)->format('d/m/Y').')']);
+        $this->info("Suspendido: {$c->ruc} {$c->razon_social}");
+    }
+    $this->info($vencidos->count().' empresa(s) suspendida(s).');
+})->purpose('Suspende las empresas cuya advertencia de pago venció');
+
+Schedule::command('clientes:suspender-vencidos')->dailyAt('00:15');

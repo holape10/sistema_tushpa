@@ -288,5 +288,6 @@
 </script>
 
 @stack('scripts')
+@include('partials.aviso_servicio')
 </body>
 </html>

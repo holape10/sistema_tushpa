@@ -446,5 +446,6 @@
 </div>
 
 @include('partials.avisos')
+@include('partials.aviso_servicio')
 </body>
 </html>

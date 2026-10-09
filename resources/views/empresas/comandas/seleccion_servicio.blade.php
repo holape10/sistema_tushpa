@@ -636,5 +636,6 @@
         setInterval(cargarActivos, 15000);
     </script>
 @include('partials.avisos')
+@include('partials.aviso_servicio')
 </body>
 </html>

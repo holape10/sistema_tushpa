@@ -187,6 +187,12 @@
         </tr>
     </table>
 
+    @php $fid = \Illuminate\Support\Facades\DB::table('fid_movimientos')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->where('tipo', 'VENTA')->first(['puntos', 'saldo']); @endphp
+    @if ($fid)
+        <div style="margin-top:10px; border:2px dashed #7c3aed; color:#5b21b6; border-radius:8px; padding:7px; text-align:center; font-weight:bold; font-size:9.5px;">
+            ★ Con esta compra ganaste {{ $fid->puntos }} puntos · Tus puntos acumulados: {{ $fid->saldo }} ★</div>
+    @endif
+
     <div class="pie">
         @if ($electronico)Representación impresa del comprobante electrónico · Consúltelo en www.sunat.gob.pe<br>@endif
         <strong>"BIENES TRANSFERIDOS EN LA AMAZONÍA PARA SER CONSUMIDOS EN LA MISMA" - "SERVICIOS PRESTADOS EN LA AMAZONÍA"</strong><br>

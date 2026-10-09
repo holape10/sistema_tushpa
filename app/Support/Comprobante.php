@@ -202,6 +202,7 @@ class Comprobante
             }
         }
 
+        Fidelizacion::acumular($cabId);       // puntos del cliente (si la sucursal tiene fidelización)
         EnvioAutomatico::programar($cabId);   // si la empresa tiene envío automático
 
         return $cabId;

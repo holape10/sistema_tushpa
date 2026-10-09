@@ -215,6 +215,35 @@ class ClienteController extends Controller
         });
     }
 
+    /**
+     * Advertencia antes de suspender: el cliente la ve en su sistema (todas las pantallas) con la fecha límite.
+     * Si se marca, se suspende solo al pasar esa fecha (tarea programada clientes:suspender-vencidos).
+     */
+    public function aviso(Request $request, Cliente $cliente)
+    {
+        $this->autorizar($cliente);
+        $d = $request->validate([
+            'aviso_mensaje' => 'required|string|min:10|max:600',
+            'aviso_fecha' => 'nullable|date|after_or_equal:today',
+            'aviso_suspender' => 'nullable|boolean',
+        ], [], ['aviso_mensaje' => 'el mensaje', 'aviso_fecha' => 'la fecha límite']);
+        if (! empty($d['aviso_suspender']) && empty($d['aviso_fecha'])) {
+            return back()->withErrors(['aviso_fecha' => 'Para suspender automáticamente elige la fecha límite.']);
+        }
+        $cliente->update(['aviso_mensaje' => trim($d['aviso_mensaje']), 'aviso_fecha' => $d['aviso_fecha'] ?? null,
+            'aviso_suspender' => (int) ($d['aviso_suspender'] ?? 0), 'aviso_creado' => now()]);
+
+        return back()->with('ok', "Advertencia enviada a {$cliente->razon_social}: la verá al entrar a su sistema.");
+    }
+
+    public function quitarAviso(Cliente $cliente)
+    {
+        $this->autorizar($cliente);
+        $cliente->update(['aviso_mensaje' => null, 'aviso_fecha' => null, 'aviso_suspender' => 0]);
+
+        return back()->with('ok', "Se quitó la advertencia de {$cliente->razon_social}.");
+    }
+
     /** Suspender (p. ej. por falta de pago) o reactivar: el cliente suspendido ve un aviso en vez del sistema */
     public function estado(Request $request, Cliente $cliente)
     {
@@ -226,7 +255,8 @@ class ClienteController extends Controller
             return back()->with('ok', "Se suspendió {$cliente->razon_social}.");
         }
 
-        $cliente->update(['estado' => 'ACTIVO', 'motivo_suspension' => null]);
+        // Al reactivar (ya pagó) se quita también la advertencia
+        $cliente->update(['estado' => 'ACTIVO', 'motivo_suspension' => null, 'aviso_mensaje' => null, 'aviso_fecha' => null, 'aviso_suspender' => 0]);
 
         return back()->with('ok', "Se reactivó {$cliente->razon_social}.");
     }

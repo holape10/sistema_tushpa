@@ -17,6 +17,7 @@ use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\EntrenadorController;
+use App\Http\Controllers\FidelizacionController;
 use App\Http\Controllers\GastoController;
 use App\Http\Controllers\GimnasioController;
 use App\Http\Controllers\GuiaController;
@@ -148,6 +149,18 @@ Route::middleware('auth')->group(function () {
         Route::post('/{id}/clave', 'restablecerClave')->whereNumber('id')->name('clave');
         Route::post('/{id}/cobrar', 'cobrar')->whereNumber('id')->name('cobrar');
         Route::get('/{id}/carnet', 'carnet')->whereNumber('id')->name('carnet');
+    });
+
+    // Fidelización: puntos y premios
+    Route::controller(FidelizacionController::class)->prefix('fidelizacion')->name('fidelizacion.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/config', 'guardarConfig')->name('config');
+        Route::post('/premios', 'guardarPremio')->name('premio');
+        Route::get('/productos', 'productos')->name('productos');
+        Route::get('/clientes', 'buscar')->name('buscar');
+        Route::get('/clientes/{clicod}', 'cliente')->whereNumber('clicod')->name('cliente');
+        Route::post('/clientes/{clicod}/canjear', 'canjear')->whereNumber('clicod')->name('canjear');
+        Route::post('/clientes/{clicod}/ajustar', 'ajustar')->whereNumber('clicod')->name('ajustar');
     });
 
     // Ubigeos (INEI): buscar distrito por nombre

@@ -1,7 +1,12 @@
 <?php
+
 namespace App\Support;
 
-use App\Models\{MedioPago, Producto, ProductoPresentacion, Turno, User};
+use App\Models\MedioPago;
+use App\Models\Producto;
+use App\Models\ProductoPresentacion;
+use App\Models\Turno;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -11,28 +16,28 @@ use Illuminate\Support\Facades\DB;
 class VentaDirecta
 {
     public const REGLAS = [
-        'tdocod'            => 'required|in:01,03,13',
-        'estadopago'        => 'required|integer',
-        'fecEmi'            => 'required|date',
-        'tdicod'            => 'required|string|size:1',
-        'clinum'            => 'required|string|max:15',
-        'clinom'            => 'required|string|max:120',
-        'clidir'            => 'nullable|string|max:150',
-        'observaciones'     => 'nullable|string|max:100',
-        'items'             => 'required|array|min:1|max:200',
-        'items.*.id'        => 'nullable|integer',
+        'tdocod' => 'required|in:01,03,13',
+        'estadopago' => 'required|integer',
+        'fecEmi' => 'required|date',
+        'tdicod' => 'required|string|size:1',
+        'clinum' => 'required|string|max:15',
+        'clinom' => 'required|string|max:120',
+        'clidir' => 'nullable|string|max:150',
+        'observaciones' => 'nullable|string|max:100',
+        'items' => 'required|array|min:1|max:200',
+        'items.*.id' => 'nullable|integer',
         'items.*.descripcion' => 'nullable|string|max:150',
-        'items.*.cantidad'  => 'required|numeric|min:0.001|max:99999',
-        'items.*.importe'   => 'nullable|numeric|min:0.01|max:999999',
-        'items.*.precio'    => 'required|numeric|min:0.01|max:999999',
-        'items.*.lote'      => 'nullable|string|max:50',
+        'items.*.cantidad' => 'required|numeric|min:0.001|max:99999',
+        'items.*.importe' => 'nullable|numeric|min:0.01|max:999999',
+        'items.*.precio' => 'required|numeric|min:0.01|max:999999',
+        'items.*.lote' => 'nullable|string|max:50',
         'items.*.presentacion' => 'nullable|integer',
-        'proforma_id'       => 'nullable|integer',
-        'placa'             => 'nullable|string|max:10',
-        'guia_remision'     => 'nullable|string|max:20',
-        'id_med_pag'        => 'nullable|array|max:10',
-        'mon_med_pag'       => 'nullable|array|max:10',
-        'paga'              => 'nullable|numeric|min:0',
+        'proforma_id' => 'nullable|integer',
+        'placa' => 'nullable|string|max:10',
+        'guia_remision' => 'nullable|string|max:20',
+        'id_med_pag' => 'nullable|array|max:10',
+        'mon_med_pag' => 'nullable|array|max:10',
+        'paga' => 'nullable|numeric|min:0',
     ];
 
     public const MENSAJES = ['items.required' => 'El carrito está vacío.'];
@@ -40,8 +45,8 @@ class VentaDirecta
     public const NOMBRES = ['clinum' => 'DNI / RUC', 'clinom' => 'Nombre o razón social', 'fecEmi' => 'Fecha de emisión'];
 
     /**
-     * @param string $origen   se guarda en cpe_cabecera.ped_tip (POS, PV)
-     * @param bool   $recargos suma la comisión de cada medio de pago como una línea del comprobante
+     * @param  string  $origen  se guarda en cpe_cabecera.ped_tip (POS, PV)
+     * @param  bool  $recargos  suma la comisión de cada medio de pago como una línea del comprobante
      * @return int IdCpe_cabecera
      */
     public static function registrar(User $user, array $datos, string $origen, bool $recargos = false): int
@@ -51,7 +56,7 @@ class VentaDirecta
             $turno = Turno::where('IdUsuario', $user->IdUsuario)
                 ->where('id_empresa_negocio', $user->id_empresa_negocio)
                 ->where('estado', 'ABIERTO')->lockForUpdate()->first();
-            if (!$turno) {
+            if (! $turno) {
                 throw new \RuntimeException('Tu turno ya no está abierto. Apertura un turno para seguir vendiendo.');
             }
 
@@ -75,6 +80,7 @@ class VentaDirecta
             if ($proformaId) {
                 Proformas::marcarFacturada($proformaId, $cabId);
             }
+
             return $cabId;
         });
     }
@@ -96,21 +102,21 @@ class VentaDirecta
         foreach ($items as $i) {
             $descripcion = mb_strtoupper(trim((string) ($i['descripcion'] ?? '')));
 
-            if (!empty($i['id'])) {
+            if (! empty($i['id'])) {
                 $prod = $productos[$i['id']] ?? null;
-                if (!$prod) {
+                if (! $prod) {
                     throw new \RuntimeException('Un producto del detalle ya no está disponible. Quítalo y vuelve a intentar.');
                 }
                 $idProducto = $prod->IdProducto;
                 $descripcion = $descripcion ?: $prod->pronom;
 
-                if (!empty($i['presentacion'])) {
+                if (! empty($i['presentacion'])) {
                     $pres = $presentaciones[$i['presentacion']] ?? null;
-                    if (!$pres || (int) $pres->IdProducto !== (int) $prod->IdProducto) {
+                    if (! $pres || (int) $pres->IdProducto !== (int) $prod->IdProducto) {
                         throw new \RuntimeException("La presentación elegida de {$prod->pronom} ya no está disponible. Elígela de nuevo.");
                     }
-                    if (!str_contains($descripcion, $pres->nombre)) {
-                        $descripcion = mb_substr($descripcion . ' (' . $pres->nombre . ')', 0, 150);
+                    if (! str_contains($descripcion, $pres->nombre)) {
+                        $descripcion = mb_substr($descripcion.' ('.$pres->nombre.')', 0, 150);
                     }
                 }
             } else {
@@ -120,7 +126,7 @@ class VentaDirecta
                 }
                 $idProducto = null;
             }
-            $pres = $idProducto && !empty($i['presentacion']) ? $presentaciones[$i['presentacion']] : null;
+            $pres = $idProducto && ! empty($i['presentacion']) ? $presentaciones[$i['presentacion']] : null;
 
             $precio = round((float) $i['precio'], 2);
             // Lote elegido en el PV Farmacia (vacío = el sistema elige el que vence antes)
@@ -132,8 +138,8 @@ class VentaDirecta
                 throw new \RuntimeException("El importe de {$descripcion} no corresponde a la cantidad por el precio.");
             }
 
-            $clave = ($idProducto ?? 'libre') . '|' . ($pres->id_presentacion ?? '') . '|' . $descripcion . '|' . number_format($precio, 2, '.', '') . '|' . $lote
-                . ($importe !== null ? '|importe' . count($lineas) : '');
+            $clave = ($idProducto ?? 'libre').'|'.($pres->id_presentacion ?? '').'|'.$descripcion.'|'.number_format($precio, 2, '.', '').'|'.$lote
+                .($importe !== null ? '|importe'.count($lineas) : '');
             $lineas[$clave] ??= ['IdProducto' => $idProducto, 'descripcion' => $descripcion, 'cantidad' => 0, 'precio' => $precio, 'lote' => $lote,
                 'presentacion' => $pres?->id_presentacion, 'factor' => $pres ? (float) $pres->factor : 1, 'umecod' => $pres?->umecod];
             $lineas[$clave]['cantidad'] = round($lineas[$clave]['cantidad'] + (float) $i['cantidad'], 3);
@@ -155,7 +161,7 @@ class VentaDirecta
         $montos = array_values((array) ($datos['mon_med_pag'] ?? []));
         $contado = DB::table('credito_dias')->where('cre_dia_id', $datos['estadopago'] ?? 0)
             ->where('id_empresa_negocio', $user->id_empresa_negocio)->value('cre_dia_tip') === 'CONTADO';
-        if (!$ids || !$contado) {
+        if (! $ids || ! $contado) {
             return [$lineas, $datos];
         }
 
@@ -170,12 +176,13 @@ class VentaDirecta
                 $montos[$k] = round((float) $montos[$k] + $recargo, 2);
                 $lineas[] = [
                     'IdProducto' => null, 'cantidad' => 1, 'precio' => $recargo,
-                    'descripcion' => 'RECARGO PAGO CON ' . mb_strtoupper($medio->nom_med_pag) . ' (' . rtrim(rtrim(number_format($porcentaje, 2), '0'), '.') . '%)',
+                    'descripcion' => 'RECARGO PAGO CON '.mb_strtoupper($medio->nom_med_pag).' ('.rtrim(rtrim(number_format($porcentaje, 2), '0'), '.').'%)',
                 ];
             }
         }
 
         $datos['mon_med_pag'] = $montos;
+
         return [$lineas, $datos];
     }
 
@@ -187,10 +194,12 @@ class VentaDirecta
         return [
             'estado' => 'success',
             'id' => $cabId,
-            'numero' => $cab->serdoc . '-' . str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT),
+            'numero' => $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT),
             'total' => (float) $cab->ccaitv,
             'vuelto' => (float) $cab->vuelto,
-            'ticket' => route('cobros.voucher', $cabId) . '?origen=pos&embed=1',
+            'ticket' => route('cobros.voucher', $cabId).'?origen=pos&embed=1',
+            // Puntos del cliente (todas las pantallas de venta lo muestran en un aviso grande)
+            'fidelizacion' => Fidelizacion::resumen($cabId),
         ];
     }
 }

@@ -98,6 +98,12 @@
                         </td>
                         <td class="px-4 py-3 whitespace-nowrap text-right">
                             <a href="{{ route('admin.clientes.edit', $cl) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2">Editar</a>
+                            @if ($cl->activo())
+                                <button type="button" x-data class="text-xs font-semibold text-amber-600 hover:text-amber-700 mr-2"
+                                        @click="$dispatch('advertir', @js(['id' => $cl->id, 'nombre' => $cl->nombre_comercial ?: $cl->razon_social, 'telefono' => $cl->contacto_telefono,
+                                            'mensaje' => $cl->aviso_mensaje, 'fecha' => $cl->aviso_fecha ? \Illuminate\Support\Carbon::parse($cl->aviso_fecha)->toDateString() : null, 'suspender' => (bool) $cl->aviso_suspender,
+                                            'accion' => route('admin.clientes.aviso', $cl), 'quitar' => route('admin.clientes.aviso.quitar', $cl)]))">{{ $cl->aviso_mensaje ? '⚠ Advertido' : 'Advertir' }}</button>
+                            @endif
                             <form method="POST" action="{{ route('admin.clientes.estado', $cl) }}" class="inline"
                                   onsubmit="{{ $cl->activo() ? "const m = prompt('Motivo de la suspensión (lo verá el cliente):', 'Falta de pago'); if (m === null) return false; this.motivo.value = m;" : "return confirm('¿Reactivar este cliente?')" }}">
                                 @csrf
@@ -113,4 +119,50 @@
         </table>
     </div>
     <div class="mt-4">{{ $clientes->links() }}</div>
+
+    {{-- Advertencia antes de suspender --}}
+    <div x-data="advertencia()" @advertir.window="abrir($event.detail)" x-show="c" x-cloak class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <form method="POST" :action="c?.accion" class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 space-y-3" @click.outside="c = null">
+            @csrf
+            <h2 class="text-lg font-bold">⚠ Advertir a <span x-text="c?.nombre"></span></h2>
+            <p class="text-sm text-slate-500">Lo verá en todas las pantallas de su sistema hasta que pague o quites la advertencia.</p>
+            <label class="block text-sm font-semibold text-slate-600">Fecha límite de pago
+                <input type="date" name="aviso_fecha" x-model="fecha" @change="armar()" min="{{ now()->toDateString() }}" class="mt-1 w-full rounded-xl border-slate-300"></label>
+            <label class="block text-sm font-semibold text-slate-600">Mensaje
+                <textarea name="aviso_mensaje" x-model="mensaje" rows="5" required minlength="10" maxlength="600" class="mt-1 w-full rounded-xl border-slate-300 text-sm"></textarea></label>
+            <label class="flex items-start gap-2 text-sm"><input type="checkbox" name="aviso_suspender" value="1" x-model="suspender" class="mt-0.5 rounded border-slate-300">
+                <span>Suspender automáticamente si no paga hasta esa fecha</span></label>
+            <div class="flex flex-wrap gap-2 pt-1">
+                <button class="px-4 h-10 rounded-xl bg-amber-500 text-white text-sm font-bold">Enviar advertencia</button>
+                <a x-show="c?.telefono" :href="'https://wa.me/' + tel() + '?text=' + encodeURIComponent(mensaje)" target="_blank" rel="noopener"
+                   class="px-4 h-10 inline-flex items-center rounded-xl bg-green-600 text-white text-sm font-bold">También por WhatsApp</a>
+                <button type="button" x-show="c?.mensaje" @click="quitar()" class="px-4 h-10 rounded-xl bg-slate-100 text-sm font-semibold">Quitar advertencia</button>
+                <button type="button" @click="c = null" class="px-4 h-10 rounded-xl text-sm text-slate-500">Cancelar</button>
+            </div>
+        </form>
+        <form x-ref="quitar" method="POST" :action="c?.quitar" class="hidden">@csrf</form>
+    </div>
+    <script>
+        function advertencia() {
+            return {
+                c: null, fecha: '', mensaje: '', suspender: true,
+                abrir(c) {
+                    this.c = c;
+                    const d = new Date(); d.setDate(d.getDate() + 5);
+                    this.fecha = c.fecha || d.toISOString().slice(0, 10);
+                    this.suspender = c.mensaje ? c.suspender : true;
+                    if (c.mensaje) this.mensaje = c.mensaje; else this.armar();
+                },
+                fechaTexto() { const [a, m, d] = this.fecha.split('-'); return `${d}/${m}/${a}`; },
+                armar() {
+                    if (this.c?.mensaje) return;
+                    this.mensaje = `Estimado cliente ${this.c.nombre}: tiene pendiente el pago del servicio TUSHPA de este mes. `
+                        + `Si no se regulariza hasta el ${this.fechaTexto()}, el sistema se suspenderá automáticamente. `
+                        + 'Si ya pagó, envíenos su comprobante por WhatsApp. Gracias.';
+                },
+                tel() { const n = (this.c?.telefono || '').replace(/\D/g, ''); return n.length === 9 ? '51' + n : n; },
+                quitar() { if (confirm('¿Quitar la advertencia?')) this.$refs.quitar.submit(); },
+            };
+        }
+    </script>
 @endsection

@@ -26,7 +26,10 @@ use Greenter\Model\Summary\SummaryDetail;
 use Greenter\Model\Voided\Voided;
 use Greenter\Model\Voided\VoidedDetail;
 use Greenter\See;
+use Greenter\Ws\Services\ConsultCdrService;
+use Greenter\Ws\Services\SoapClient;
 use Greenter\Ws\Services\SunatEndpoints;
+use Greenter\Ws\Services\WsdlProvider;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -294,6 +297,10 @@ class SunatService
             file_put_contents($this->rutaArchivo($doc->getName(), 'cdr'), $resultado->getCdrZip());
         }
 
+        // 1033 = "ya fue registrado anteriormente": el primer envío sí llegó, pero la respuesta se perdió (internet).
+        // Se pide a SUNAT su constancia (CDR) original; si no se puede, se toma como aceptado.
+        $r = $this->resolver1033($r, $cab, $doc->getName());
+
         DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update([
             'est_sunat' => $r['estado'],
             'ccasunrescod' => $r['codigo'],
@@ -301,6 +308,52 @@ class SunatService
             'ccaqr' => $hash ?? $cab->ccaqr,
             'enviado' => in_array($r['estado'], ['ACEPTADO', 'OBSERVADO'], true) ? 1 : 0,
         ]);
+
+        return $r;
+    }
+
+    /** Si SUNAT respondió 1033 (ya registrado), se recupera su constancia o se toma como aceptado */
+    public function resolver1033(array $r, object $cab, ?string $nombre = null): array
+    {
+        if ($r['ok'] || (int) preg_replace('/\D/', '', (string) $r['codigo']) !== 1033) {
+            return $r;
+        }
+
+        return $this->consultarCdr($cab, $nombre) ?? ['ok' => true, 'estado' => 'ACEPTADO', 'codigo' => '1033',
+            'mensaje' => 'SUNAT indica que ya fue registrado anteriormente (1033): el primer envío sí llegó. Se toma como ACEPTADO.'];
+    }
+
+    /**
+     * Pide a SUNAT la constancia (CDR) de un comprobante ya enviado (servicio de consulta, solo en producción).
+     *
+     * @return array{ok: bool, estado: string, codigo: ?string, mensaje: string}|null null si no se pudo obtener
+     */
+    public function consultarCdr(object $cab, ?string $nombre = null): ?array
+    {
+        if (! $this->esProduccion() || ! $this->empresa->wsusuario || ! $this->empresa->claveSunat) {
+            return null;
+        }
+        try {
+            $ws = new SoapClient(WsdlProvider::getConsultPath());
+            $ws->setService(SunatEndpoints::FE_CONSULTA_CDR);
+            $ws->setCredentials($this->empresa->IdEmpresa.$this->empresa->wsusuario, $this->empresa->claveSunat);
+            $servicio = new ConsultCdrService;
+            $servicio->setClient($ws);
+            $res = $servicio->getStatusCdr($this->empresa->IdEmpresa, $cab->tdocod, $cab->serdoc, (int) $cab->numdoc);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
+        if (! $res->isSuccess() || ! $res->getCdrResponse()) {
+            return null;
+        }
+        if ($res->getCdrZip()) {
+            $nombre ??= $this->empresa->IdEmpresa.'-'.$cab->tdocod.'-'.$cab->serdoc.'-'.$cab->numdoc;
+            file_put_contents($this->rutaArchivo($nombre, 'cdr'), $res->getCdrZip());
+        }
+        $r = $this->interpretarCdr($res->getCdrResponse());
+        $r['mensaje'] = 'Constancia recuperada de SUNAT: '.$r['mensaje'];
 
         return $r;
     }
