@@ -68,6 +68,11 @@
                         <input type="text" name="pronom" value="{{ old('pronom', $p->pronom ?? '') }}" required maxlength="150"
                                class="{{ $campo }} uppercase font-semibold">
                     </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Descripción <span class="text-xs font-normal text-gray-400">(opcional · sale en la carta digital, ej.: "Ron, menta, limón, soda")</span></label>
+                        <input type="text" name="descripcion" value="{{ old('descripcion', $p->descripcion ?? '') }}" maxlength="255"
+                               class="{{ $campo }}">
+                    </div>
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Código interno</label>

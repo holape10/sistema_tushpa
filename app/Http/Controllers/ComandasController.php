@@ -10,6 +10,7 @@ use App\Models\Pedido;
 use App\Models\PedidoDetalle;
 use App\Models\Piso;
 use App\Models\Producto;
+use App\Models\ProductoPresentacion;
 use App\Models\User;
 use App\Support\Cocina;
 use App\Support\Impresion\Impresion;
@@ -21,7 +22,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 
 /**
- * Carrito de la comanda (en sesión), UNA línea por producto (clave = IdProducto):
+ * Carrito de la comanda (en sesión), UNA línea por producto y presentación (clave = IdProducto, o IdProducto-p{id} si se
+ * eligió una presentación como TAJADA / ENTERA):
  *  - is_old_item = true  -> ya enviado a cocina; guarda los ped_det_id que agrupa (si había líneas repetidas
  *    se fusionan en una al enviar). Bajar de lo enviado pide autorización; nunca se baja de lo ya cobrado.
  *  - is_old_item = false -> producto nuevo en esta edición.
@@ -63,7 +65,7 @@ class ComandasController extends Controller
         $pedido = $this->pedidoAbierto($ped_id);
         $lineas = PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')->get();
 
-        $items = $lineas->groupBy(fn ($d) => $d->IdProducto.'|'.$d->ped_det_pre)->map(fn ($g) => (object) [
+        $items = $lineas->groupBy(fn ($d) => $d->IdProducto.'|'.$d->id_presentacion.'|'.$d->ped_det_pre)->map(fn ($g) => (object) [
             'descripcion' => $g->first()->descripcion,
             'precio' => (float) $g->first()->ped_det_pre,
             'cantidad' => (float) $g->sum('ped_det_can'),
@@ -301,13 +303,16 @@ class ComandasController extends Controller
                 ->get();
 
             // Las líneas repetidas del mismo producto se muestran juntas en una sola
-            foreach ($detalles->groupBy('IdProducto') as $idProducto => $lineas) {
-                $key = (string) $idProducto;
+            foreach ($detalles->groupBy(fn ($d) => $d->IdProducto.'|'.$d->id_presentacion) as $lineas) {
+                $idProducto = $lineas->first()->IdProducto;
+                $presentacion = $lineas->first()->id_presentacion;
+                $key = $presentacion ? $idProducto.'-p'.$presentacion : (string) $idProducto;
                 $enviado = (float) $lineas->sum('ped_det_can');
                 $obs = $lineas->pluck('item_obs')->filter()->unique()->implode(' / ');
                 $cart[$key] = [
                     'id' => $key,
                     'IdProducto' => (int) $idProducto,
+                    'presentacion' => $presentacion ? (int) $presentacion : null,
                     'ped_det_ids' => $lineas->pluck('ped_det_id')->map(fn ($v) => (int) $v)->all(),
                     'nombre' => $lineas->first()->descripcion,
                     'precio' => (float) $lineas->first()->ped_det_pre,
@@ -356,9 +361,10 @@ class ComandasController extends Controller
             ->get();
         // Precio dinámico (happy hour, fin de semana…) vigente en este momento
         $precios = Precios::vigentes($productos);
+        $presentaciones = Precios::presentaciones($productos->pluck('IdProducto'));
 
         return response()->json([
-            'vista' => view('empresas.comandas.partials.productos_grid', compact('productos', 'precios'))->render(),
+            'vista' => view('empresas.comandas.partials.productos_grid', compact('productos', 'precios', 'presentaciones'))->render(),
         ]);
     }
 
@@ -398,8 +404,17 @@ class ComandasController extends Controller
             return response()->json(['success' => false, 'message' => 'Producto no disponible.'], 404);
         }
 
+        $presentacion = null;
+        if ($request->filled('presentacion')) {
+            $presentacion = ProductoPresentacion::where('id_presentacion', $request->integer('presentacion'))
+                ->where('IdProducto', $producto->IdProducto)->where('estado', 1)->first();
+            if (! $presentacion) {
+                return response()->json(['success' => false, 'message' => 'Esa presentación ya no está disponible.'], 404);
+            }
+        }
+
         $cart = session('comanda_cart', []);
-        $id = (string) $producto->IdProducto;
+        $id = $presentacion ? $producto->IdProducto.'-p'.$presentacion->id_presentacion : (string) $producto->IdProducto;
 
         if (isset($cart[$id])) {
             $cart[$id]['cantidad']++;
@@ -407,8 +422,11 @@ class ComandasController extends Controller
             $cart[$id] = [
                 'id' => $id,
                 'IdProducto' => (int) $producto->IdProducto,
-                'nombre' => $producto->pronom,
-                'precio' => Precios::de($producto),
+                'presentacion' => $presentacion?->id_presentacion,
+                'nombre' => $presentacion ? mb_substr($producto->pronom.' - '.$presentacion->nombre, 0, 150) : $producto->pronom,
+                'precio' => $presentacion
+                    ? ((float) $presentacion->precio > 0 ? (float) $presentacion->precio : round(Precios::de($producto) * (float) $presentacion->factor, 2))
+                    : Precios::de($producto),
                 'cantidad' => 1,
                 'observaciones' => '',
                 'is_old_item' => false,
@@ -712,6 +730,7 @@ class ComandasController extends Controller
                         PedidoDetalle::create([
                             'ped_id' => $pedido->ped_id,
                             'IdProducto' => $item['IdProducto'] ?? $item['id'],
+                            'id_presentacion' => $item['presentacion'] ?? null,
                             'IdEmpresa' => $usuario->IdEmpresa,
                             'descripcion' => $item['nombre'],
                             'detalle' => $item['nombre'],

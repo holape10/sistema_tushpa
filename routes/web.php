@@ -4,6 +4,7 @@ use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AlmacenController;
 use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\CartaController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ClinicaController;
 use App\Http\Controllers\CobroController;
@@ -426,6 +427,14 @@ Route::prefix('socio')->name('socio.portal')->controller(SocioPortalController::
     Route::get('/comprobante/{id}', 'comprobante')->whereNumber('id')->middleware('throttle:30,1')->name('.comprobante');
     Route::post('/congelar', 'congelar')->middleware('throttle:10,1')->name('.congelar');
 });
+
+// Carta digital con QR: configuración (Administrador) y la carta pública que ven los clientes (sin sesión)
+Route::middleware('auth')->prefix('carta')->name('carta.')->controller(CartaController::class)->group(function () {
+    Route::get('/configuracion', 'configuracion')->name('config');
+    Route::post('/configuracion', 'guardar')->name('guardar');
+    Route::get('/imprimir', 'imprimir')->name('imprimir');
+});
+Route::get('/carta/{sucursal?}', [CartaController::class, 'ver'])->whereNumber('sucursal')->middleware('throttle:120,1')->name('carta.ver');
 
 // Tienda virtual pública de la empresa: {subdominio}/tiendavirtual (sin sesión del sistema)
 Route::prefix('tiendavirtual')->name('tienda.')->controller(TiendaController::class)->group(function () {

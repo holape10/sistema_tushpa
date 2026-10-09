@@ -40,6 +40,15 @@
         .product-item-kiosko .product-name-kiosko { font-size: 0.9em; font-weight: bold; color: #333; line-height: 1.2; }
         .product-item-kiosko .product-price-kiosko { font-size: 1.05em; font-weight: bold; color: #007bff; margin-top: 4px; }
         .product-item-kiosko .product-stock-kiosko { font-size: 0.75em; color: #28a745; }
+        .product-item-kiosko .product-pres-kiosko { font-size: 0.72em; font-weight: bold; color: #4f46e5; background: #eef2ff; border-radius: 6px; padding: 2px 6px; margin-top: 4px; }
+        .pres-fondo { position: fixed; inset: 0; background: rgba(15,23,42,.6); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .pres-caja { background: #fff; border-radius: 18px; width: 100%; max-width: 380px; padding: 18px; box-shadow: 0 20px 40px rgba(0,0,0,.3); }
+        .pres-caja h3 { margin: 0 0 4px; font-size: 1.05em; font-weight: 800; color: #1e293b; }
+        .pres-caja p { margin: 0 0 12px; font-size: .85em; color: #64748b; }
+        .pres-opcion { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 10px; border: 2px solid #e2e8f0; background: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; font-weight: 700; font-size: 1em; color: #1e293b; cursor: pointer; }
+        .pres-opcion:hover { border-color: #4f46e5; background: #eef2ff; }
+        .pres-opcion span:last-child { color: #4f46e5; white-space: nowrap; }
+        .pres-cancelar { width: 100%; border: 0; background: #f1f5f9; border-radius: 12px; padding: 10px; font-weight: 700; color: #475569; cursor: pointer; }
 
         .cart-header { font-size: 1.4em; font-weight: bold; color: #333; margin-bottom: 15px; text-align: center; }
         .cart-items-container { max-height: calc(100vh - 400px); overflow-y: auto; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px; }
@@ -242,11 +251,24 @@
             });
         }
 
-        function agregarProducto(idProducto) {
-            return post("{{ route('comandas.add_to_cart') }}", { id: idProducto }).then(res => {
+        function agregarProducto(idProducto, presentacion = null) {
+            return post("{{ route('comandas.add_to_cart') }}", { id: idProducto, presentacion: presentacion }).then(res => {
                 if (!res.success) alert(res.message || 'No se pudo agregar.');
                 return recargarCarrito();
             });
+        }
+
+        // Producto con presentaciones (TAJADA / ENTERA, VASO / JARRA): el mozo elige cuál
+        function elegirPresentacion(card) {
+            const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            const soles = (n) => 'S/ ' + Number(n).toFixed(2);
+            const opciones = [{ id: '', nombre: 'UNIDAD', precio: card.dataset.precio }].concat(JSON.parse(card.dataset.presentaciones));
+            const html = '<div class="pres-fondo" id="pres_modal"><div class="pres-caja">'
+                + '<h3>' + esc(card.dataset.nombre) + '</h3><p>¿Qué presentación?</p>'
+                + opciones.map((o) => '<button type="button" class="pres-opcion" data-id="' + card.dataset.id + '" data-pres="' + o.id + '">'
+                    + '<span>' + esc(o.nombre) + '</span><span>' + soles(o.precio) + '</span></button>').join('')
+                + '<button type="button" class="pres-cancelar">Cancelar</button></div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
         }
 
         // Observaciones de los ítems nuevos: se guardan al salir del campo
@@ -258,7 +280,20 @@
         // --- Un solo listener de clicks para toda la página ---
         document.addEventListener('click', function (e) {
             const card = e.target.closest('.product-item-kiosko');
-            if (card) { agregarProducto(card.dataset.id); return; }
+            if (card) {
+                if (card.dataset.presentaciones) elegirPresentacion(card); else agregarProducto(card.dataset.id);
+                return;
+            }
+            const opcion = e.target.closest('.pres-opcion');
+            if (opcion) {
+                agregarProducto(opcion.dataset.id, opcion.dataset.pres || null);
+                document.getElementById('pres_modal')?.remove();
+                return;
+            }
+            if (e.target.closest('.pres-cancelar') || e.target.classList.contains('pres-fondo')) {
+                document.getElementById('pres_modal')?.remove();
+                return;
+            }
 
             const plus = e.target.closest('.btn-plus');
             if (plus) {

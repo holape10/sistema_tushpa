@@ -10,6 +10,7 @@ use App\Models\Mesa;
 use App\Models\Pedido;
 use App\Models\PedidoDetalle;
 use App\Models\Piso;
+use App\Models\ProductoPresentacion;
 use App\Models\Turno;
 use App\Support\Cocina;
 use App\Support\Comprobante;
@@ -45,13 +46,14 @@ class CobroController extends Controller
      */
     private function agrupar($items)
     {
-        return $items->groupBy(fn ($d) => $d->IdProducto.'|'.number_format((float) $d->ped_det_pre, 2, '.', ''))
+        return $items->groupBy(fn ($d) => $d->IdProducto.'|'.$d->id_presentacion.'|'.number_format((float) $d->ped_det_pre, 2, '.', ''))
             ->map(function ($lineas, $clave) {
                 $primera = $lineas->first();
 
                 return (object) [
                     'clave' => $clave,
                     'IdProducto' => $primera->IdProducto,
+                    'id_presentacion' => $primera->id_presentacion,
                     'descripcion' => $primera->descripcion,
                     'ped_det_pre' => (float) $primera->ped_det_pre,
                     'item_obs' => $lineas->pluck('item_obs')->filter()->unique()->implode(' / '),
@@ -307,9 +309,13 @@ class CobroController extends Controller
                 }
 
                 // ---- Comprobante: cliente, serie, totales, medios de pago, detalle y kardex ----
+                // Presentación (TORTA ENTERA = 8 tajadas): del stock salen cantidad x factor unidades base
+                $presentaciones = ProductoPresentacion::whereIn('id_presentacion', $aCobrar->pluck('id_presentacion')->filter())->get()->keyBy('id_presentacion');
                 $lineas = $aCobrar->map(fn ($g) => [
                     'IdProducto' => $g->IdProducto, 'descripcion' => $g->descripcion,
                     'cantidad' => (float) $g->cantidad_cobrar, 'precio' => (float) $g->ped_det_pre,
+                    'factor' => (float) ($presentaciones[$g->id_presentacion]->factor ?? 1),
+                    'umecod' => $presentaciones[$g->id_presentacion]->umecod ?? null,
                 ])->values()->all();
 
                 $cabId = Comprobante::emitir($user, $turno, $request->all(), $lineas, [
