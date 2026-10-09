@@ -1,11 +1,24 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Pedido, PedidoDetalle, Piso, Mesa, Producto, Categoria};
+use App\Models\Almacen;
+use App\Models\Categoria;
+use App\Models\EmpresaNegocio;
+use App\Models\Mesa;
+use App\Models\Pedido;
+use App\Models\PedidoDetalle;
+use App\Models\Piso;
+use App\Models\Producto;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
+use App\Support\Cocina;
+use App\Support\Impresion\Impresion;
+use App\Support\Precios;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB, RateLimiter};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 
 /**
  * Carrito de la comanda (en sesión), UNA línea por producto (clave = IdProducto):
@@ -15,7 +28,7 @@ use Illuminate\Support\Facades\{Auth, DB, RateLimiter};
  */
 class ComandasController extends Controller
 {
-    private const SESION = ['comanda_cart', 'comanda_order_type', 'comanda_mesa_id', 'comanda_mesa_nombre', 'comanda_pedido_id', 'comanda_eliminados', 'comanda_reserva_id'];
+    private const SESION = ['comanda_cart', 'comanda_order_type', 'comanda_mesa_id', 'comanda_mesa_nombre', 'comanda_pedido_id', 'comanda_eliminados', 'comanda_reserva_id', 'comanda_mot_id'];
 
     public function seleccionServicio()
     {
@@ -50,22 +63,22 @@ class ComandasController extends Controller
         $pedido = $this->pedidoAbierto($ped_id);
         $lineas = PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')->get();
 
-        $items = $lineas->groupBy(fn($d) => $d->IdProducto . '|' . $d->ped_det_pre)->map(fn($g) => (object) [
+        $items = $lineas->groupBy(fn ($d) => $d->IdProducto.'|'.$d->ped_det_pre)->map(fn ($g) => (object) [
             'descripcion' => $g->first()->descripcion,
             'precio' => (float) $g->first()->ped_det_pre,
             'cantidad' => (float) $g->sum('ped_det_can'),
             'pagado' => (float) $g->sum('item_facturado'),
         ])->values();
 
-        $total = round($items->sum(fn($i) => $i->cantidad * $i->precio), 2);
-        $pagado = round($items->sum(fn($i) => $i->pagado * $i->precio), 2);
+        $total = round($items->sum(fn ($i) => $i->cantidad * $i->precio), 2);
+        $pagado = round($items->sum(fn ($i) => $i->pagado * $i->precio), 2);
 
         return view('empresas.comandas.precuenta', [
             'pedido' => $pedido, 'items' => $items, 'total' => $total, 'pagado' => $pagado,
             'mesa' => $pedido->mes_id ? Mesa::find($pedido->mes_id) : null,
             'piso' => $pedido->pis_id ? Piso::find($pedido->pis_id) : null,
             'mozo' => User::find($pedido->mozo)?->apeusu,
-            'negocio' => \App\Models\EmpresaNegocio::find($pedido->id_empresa_negocio),
+            'negocio' => EmpresaNegocio::find($pedido->id_empresa_negocio),
         ]);
     }
 
@@ -80,10 +93,10 @@ class ComandasController extends Controller
             ->where('mesas.id_empresa_negocio', $sucursal)
             ->orderBy('pisos.pis_nom')->orderBy('mesas.mes_nom')
             ->get(['mesas.mes_id', 'mesas.mes_nom', 'pisos.pis_nom'])
-            ->filter(fn($m) => $request->tipo === 'ocupadas'
+            ->filter(fn ($m) => $request->tipo === 'ocupadas'
                 ? isset($abiertos[$m->mes_id]) && (int) $abiertos[$m->mes_id] !== (int) $request->ped_id
-                : !isset($abiertos[$m->mes_id]))
-            ->map(fn($m) => ['mes_id' => $m->mes_id, 'nombre' => $m->mes_nom, 'piso' => $m->pis_nom, 'ped_id' => $abiertos[$m->mes_id] ?? null])
+                : ! isset($abiertos[$m->mes_id]))
+            ->map(fn ($m) => ['mes_id' => $m->mes_id, 'nombre' => $m->mes_nom, 'piso' => $m->pis_nom, 'ped_id' => $abiertos[$m->mes_id] ?? null])
             ->values();
 
         return response()->json(['success' => true, 'mesas' => $mesas]);
@@ -99,10 +112,10 @@ class ComandasController extends Controller
                 $pedido = Pedido::where('ped_id', $request->ped_id)->where('id_empresa_negocio', $sucursal)
                     ->where('ped_est', 'Aperturado')->lockForUpdate()->first();
                 $destino = Mesa::where('mes_id', $request->mes_id)->where('id_empresa_negocio', $sucursal)->lockForUpdate()->first();
-                if (!$pedido || !$pedido->mes_id) {
+                if (! $pedido || ! $pedido->mes_id) {
                     throw new \RuntimeException('El pedido ya no está abierto o no es de salón.');
                 }
-                if (!$destino) {
+                if (! $destino) {
                     throw new \RuntimeException('Mesa no válida.');
                 }
                 if (Pedido::where('mes_id', $destino->mes_id)->where('ped_est', 'Aperturado')->exists()) {
@@ -134,7 +147,7 @@ class ComandasController extends Controller
                     ->orderBy('ped_id')->lockForUpdate()->get()->keyBy('ped_id');
                 $destino = $pedidos[$request->ped_id] ?? null;
                 $origen = $pedidos[$request->ped_id_origen] ?? null;
-                if (!$destino || !$origen) {
+                if (! $destino || ! $origen) {
                     throw new \RuntimeException('Alguno de los pedidos ya no está abierto.');
                 }
                 if (PedidoDetalle::where('ped_id', $origen->ped_id)->where('item_facturado', '>', 0)->exists()) {
@@ -163,8 +176,8 @@ class ComandasController extends Controller
     private function mesasDelPiso($piso_id, $id_empresa_negocio)
     {
         $mesas = Mesa::leftJoin('pedidos', function ($join) {
-                $join->on('mesas.mes_id', '=', 'pedidos.mes_id')->where('pedidos.ped_est', 'Aperturado');
-            })
+            $join->on('mesas.mes_id', '=', 'pedidos.mes_id')->where('pedidos.ped_est', 'Aperturado');
+        })
             ->where('mesas.pis_id', $piso_id)
             ->where('mesas.id_empresa_negocio', $id_empresa_negocio)
             ->select('mesas.*', DB::raw('MAX(pedidos.ped_id) as pedido_id'), DB::raw('MAX(pedidos.ped_tot) as ped_tot'), DB::raw('MAX(pedidos.fecha_hora) as pedido_fecha_hora'))
@@ -197,6 +210,7 @@ class ComandasController extends Controller
     public function getMesasPorPiso($piso_id)
     {
         $mesas = $this->mesasDelPiso($piso_id, Auth::user()->id_empresa_negocio);
+
         return response()->json([
             'vista' => view('empresas.comandas.partials.mesas_grid', compact('mesas'))->render(),
         ]);
@@ -208,23 +222,23 @@ class ComandasController extends Controller
         $orderType = $request->order_type;
         $pedidoId = $request->pedido_id;
 
-        if (!in_array($orderType, ['salon', 'llevar', 'delivery'], true)) {
+        if (! in_array($orderType, ['salon', 'llevar', 'delivery'], true)) {
             return response()->json(['success' => false, 'message' => 'Tipo de pedido no válido.'], 422);
         }
 
         // La mesa y el pedido deben ser de la sucursal del usuario
         if ($orderType === 'salon') {
             $mesa = Mesa::where('mes_id', $request->mesa_id)->where('id_empresa_negocio', $id_empresa_negocio)->first();
-            if (!$mesa) {
+            if (! $mesa) {
                 return response()->json(['success' => false, 'message' => 'Mesa no válida.'], 403);
             }
             // Si la pantalla estaba desactualizada y la mesa ya tiene pedido abierto, se continúa ese pedido
-            if (!$pedidoId) {
+            if (! $pedidoId) {
                 $pedidoId = Pedido::where('mes_id', $mesa->mes_id)->where('ped_est', 'Aperturado')->value('ped_id');
             }
         }
 
-        if ($pedidoId && !Pedido::where('ped_id', $pedidoId)->where('id_empresa_negocio', $id_empresa_negocio)->where('ped_est', 'Aperturado')->exists()) {
+        if ($pedidoId && ! Pedido::where('ped_id', $pedidoId)->where('id_empresa_negocio', $id_empresa_negocio)->where('ped_est', 'Aperturado')->exists()) {
             return response()->json(['success' => false, 'message' => 'El pedido ya fue cobrado o no existe.'], 409);
         }
 
@@ -245,7 +259,7 @@ class ComandasController extends Controller
             ->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)
             ->firstOrFail();
         $detalles = PedidoDetalle::where('ped_id', $ped_id)->where('estadoitem', '!=', 'Eliminado')->get();
-        $total = $detalles->sum(fn($d) => $d->ped_det_can * $d->ped_det_pre);
+        $total = $detalles->sum(fn ($d) => $d->ped_det_can * $d->ped_det_pre);
 
         return response()->json(['success' => true, 'pedido' => $pedido, 'detalles' => $detalles, 'total' => $total]);
     }
@@ -294,7 +308,7 @@ class ComandasController extends Controller
                 $cart[$key] = [
                     'id' => $key,
                     'IdProducto' => (int) $idProducto,
-                    'ped_det_ids' => $lineas->pluck('ped_det_id')->map(fn($v) => (int) $v)->all(),
+                    'ped_det_ids' => $lineas->pluck('ped_det_id')->map(fn ($v) => (int) $v)->all(),
                     'nombre' => $lineas->first()->descripcion,
                     'precio' => (float) $lineas->first()->ped_det_pre,
                     'cantidad' => $enviado,
@@ -315,29 +329,33 @@ class ComandasController extends Controller
 
         $esAdmin = Auth::user()->esAdmin(); // el admin reduce o elimina sin pedir clave (solo el motivo)
 
-        return view('empresas.comandas.menu_pedido', compact('categorias', 'cat_default_id', 'cart', 'order_type', 'mesa_info', 'esAdmin'));
+        // Delivery: motorizado elegido (el del pedido si ya existe)
+        $motorizados = $order_type === 'delivery' ? MotorizadoController::activos($id_empresa_negocio) : collect();
+        $motActual = $order_type === 'delivery' ? ($pedidoId ? Pedido::where('ped_id', $pedidoId)->value('mot_id') : session('comanda_mot_id')) : null;
+
+        return view('empresas.comandas.menu_pedido', compact('categorias', 'cat_default_id', 'cart', 'order_type', 'mesa_info', 'esAdmin', 'motorizados', 'motActual'));
     }
 
     public function searchProducts(Request $request)
     {
         $id_empresa_negocio = Auth::user()->id_empresa_negocio;
-        $almacen_id = \App\Models\Almacen::where('id_empresa_negocio', $id_empresa_negocio)
+        $almacen_id = Almacen::where('id_empresa_negocio', $id_empresa_negocio)
             ->where('predeterminado', 1)->value('id_almacen');
 
         $productos = Producto::leftJoin('producto_stock', function ($join) use ($almacen_id) {
-                $join->on('productos.IdProducto', '=', 'producto_stock.IdProducto')
-                     ->where('producto_stock.id_almacen', $almacen_id);
-            })
+            $join->on('productos.IdProducto', '=', 'producto_stock.IdProducto')
+                ->where('producto_stock.id_almacen', $almacen_id);
+        })
             ->where('productos.id_empresa_negocio', $id_empresa_negocio)
             ->where('productos.proest', 'Activo')
             ->where('productos.promocion', '!=', 4)
-            ->when($request->search_text, fn($q) => $q->where('productos.pronom', 'like', '%' . $request->search_text . '%'))
-            ->when($request->category_id && !$request->search_text, fn($q) => $q->where('productos.cat_id', $request->category_id))
+            ->when($request->search_text, fn ($q) => $q->where('productos.pronom', 'like', '%'.$request->search_text.'%'))
+            ->when($request->category_id && ! $request->search_text, fn ($q) => $q->where('productos.cat_id', $request->category_id))
             ->select('productos.*', 'producto_stock.stock as stock_disponible')
             ->orderBy('productos.pronom')
             ->get();
         // Precio dinámico (happy hour, fin de semana…) vigente en este momento
-        $precios = \App\Support\Precios::vigentes($productos);
+        $precios = Precios::vigentes($productos);
 
         return response()->json([
             'vista' => view('empresas.comandas.partials.productos_grid', compact('productos', 'precios'))->render(),
@@ -348,13 +366,13 @@ class ComandasController extends Controller
     {
         // Solo se vacía lo nuevo; lo ya enviado a cocina se mantiene
         $cart = session('comanda_cart', []);
-        $newCart = array_filter($cart, fn($item) => !empty($item['is_old_item']));
+        $newCart = array_filter($cart, fn ($item) => ! empty($item['is_old_item']));
         if (count($newCart) === count($cart)) {
             return response()->json(['success' => false, 'message' => 'No hay productos nuevos para vaciar.']);
         }
 
         // Requiere usuario y contraseña de un Administrador (si el que vacía ya es admin, basta con confirmar)
-        if (!Auth::user()->esAdmin()) {
+        if (! Auth::user()->esAdmin()) {
             $request->validate(['auth_user' => 'required|string', 'auth_password' => 'required|string'],
                 [], ['auth_user' => 'Usuario', 'auth_password' => 'Contraseña']);
             if ($error = $this->validarAutorizacionAdminCaja($request, true)) {
@@ -363,6 +381,7 @@ class ComandasController extends Controller
         }
 
         session()->put('comanda_cart', $newCart);
+
         return response()->json(['success' => true]);
     }
 
@@ -375,7 +394,7 @@ class ComandasController extends Controller
             ->where('promocion', '!=', 4)
             ->first();
 
-        if (!$producto) {
+        if (! $producto) {
             return response()->json(['success' => false, 'message' => 'Producto no disponible.'], 404);
         }
 
@@ -389,7 +408,7 @@ class ComandasController extends Controller
                 'id' => $id,
                 'IdProducto' => (int) $producto->IdProducto,
                 'nombre' => $producto->pronom,
-                'precio' => \App\Support\Precios::de($producto),
+                'precio' => Precios::de($producto),
                 'cantidad' => 1,
                 'observaciones' => '',
                 'is_old_item' => false,
@@ -397,6 +416,7 @@ class ComandasController extends Controller
         }
 
         session()->put('comanda_cart', $cart);
+
         return response()->json(['success' => true]);
     }
 
@@ -405,7 +425,7 @@ class ComandasController extends Controller
         $cart = session('comanda_cart', []);
         $id = (string) $request->id;
 
-        if (!isset($cart[$id])) {
+        if (! isset($cart[$id])) {
             return response()->json(['success' => false, 'message' => 'Producto no encontrado.']);
         }
 
@@ -413,11 +433,11 @@ class ComandasController extends Controller
             $nueva = max(1, (float) $request->cantidad);
 
             if ($nueva < ($cart[$id]['facturado'] ?? 0)) {
-                return response()->json(['success' => false, 'message' => 'Ya se cobraron ' . $cart[$id]['facturado'] . ' de este producto; no se puede bajar de ahí.']);
+                return response()->json(['success' => false, 'message' => 'Ya se cobraron '.$cart[$id]['facturado'].' de este producto; no se puede bajar de ahí.']);
             }
 
             // Bajar un ítem ya comandado por debajo de lo autorizado requiere Admin/Caja
-            if (!empty($cart[$id]['is_old_item']) && $nueva < ($cart[$id]['cantidad_minima'] ?? $cart[$id]['cantidad_original'])) {
+            if (! empty($cart[$id]['is_old_item']) && $nueva < ($cart[$id]['cantidad_minima'] ?? $cart[$id]['cantidad_original'])) {
                 return response()->json(['success' => false, 'requiere_autorizacion' => true]);
             }
             $cart[$id]['cantidad'] = $nueva;
@@ -437,6 +457,7 @@ class ComandasController extends Controller
     private function reglasAutorizacion(): array
     {
         $req = Auth::user()->esAdmin() ? 'nullable' : 'required';
+
         return ['auth_user' => "$req|string", 'auth_password' => "$req|string", 'reason' => 'required|string|max:150'];
     }
 
@@ -453,9 +474,9 @@ class ComandasController extends Controller
         }
 
         // Límite de intentos para que no se pueda adivinar la clave del admin desde la comanda
-        $llave = 'autoriza-comanda:' . Auth::id();
+        $llave = 'autoriza-comanda:'.Auth::id();
         if (RateLimiter::tooManyAttempts($llave, 5)) {
-            return 'Demasiados intentos. Espera ' . RateLimiter::availableIn($llave) . ' segundos.';
+            return 'Demasiados intentos. Espera '.RateLimiter::availableIn($llave).' segundos.';
         }
 
         // Solo usuarios de la misma sucursal pueden autorizar
@@ -463,8 +484,9 @@ class ComandasController extends Controller
             ->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)
             ->first();
 
-        if (!$user || !Hash::check($request->auth_password, $user->password)) {
+        if (! $user || ! Hash::check($request->auth_password, $user->password)) {
             RateLimiter::hit($llave, 60);
+
             return 'Usuario o contraseña incorrectos.';
         }
 
@@ -473,6 +495,7 @@ class ComandasController extends Controller
         if ($soloAdmin) {
             return $user->esAdmin() ? null : 'Solo un Administrador puede autorizar esto.';
         }
+
         return $user->esAdminOCaja() ? null : 'Ese usuario no tiene permisos de Admin/Caja para autorizar esto.';
     }
 
@@ -488,19 +511,19 @@ class ComandasController extends Controller
         $cart = session('comanda_cart', []);
         $id = (string) $request->id;
 
-        if (!isset($cart[$id]) || empty($cart[$id]['is_old_item'])) {
+        if (! isset($cart[$id]) || empty($cart[$id]['is_old_item'])) {
             return response()->json(['success' => false, 'message' => 'Ítem no encontrado en el pedido original.']);
         }
         if ($request->cantidad >= $cart[$id]['cantidad']) {
             return response()->json(['success' => false, 'message' => 'Esa cantidad no reduce el ítem, usa los botones normales.']);
         }
         if ($request->cantidad < ($cart[$id]['facturado'] ?? 0)) {
-            return response()->json(['success' => false, 'message' => 'Ya se cobraron ' . $cart[$id]['facturado'] . ' de este producto; no se puede bajar de ahí.']);
+            return response()->json(['success' => false, 'message' => 'Ya se cobraron '.$cart[$id]['facturado'].' de este producto; no se puede bajar de ahí.']);
         }
 
         $cart[$id]['cantidad'] = (float) $request->cantidad;
         $cart[$id]['cantidad_minima'] = (float) $request->cantidad;
-        $cart[$id]['motivo_reduccion'] = trim($request->reason) . ' - Autorizado por: ' . $this->autorizadoPor($request);
+        $cart[$id]['motivo_reduccion'] = trim($request->reason).' - Autorizado por: '.$this->autorizadoPor($request);
         session()->put('comanda_cart', $cart);
 
         return response()->json(['success' => true]);
@@ -518,12 +541,12 @@ class ComandasController extends Controller
         $cart = session('comanda_cart', []);
         $id = (string) $request->id;
 
-        if (!isset($cart[$id]) || empty($cart[$id]['is_old_item'])) {
+        if (! isset($cart[$id]) || empty($cart[$id]['is_old_item'])) {
             return response()->json(['success' => false, 'message' => 'Ítem no encontrado en el pedido original.']);
         }
 
         if (($cart[$id]['facturado'] ?? 0) > 0) {
-            return response()->json(['success' => false, 'message' => 'Parte de este producto ya se cobró en una cuenta separada; solo puedes reducirlo hasta ' . $cart[$id]['facturado'] . '.']);
+            return response()->json(['success' => false, 'message' => 'Parte de este producto ya se cobró en una cuenta separada; solo puedes reducirlo hasta '.$cart[$id]['facturado'].'.']);
         }
 
         $pedDetIds = $cart[$id]['ped_det_ids'] ?? [];
@@ -543,21 +566,23 @@ class ComandasController extends Controller
         $cart = session('comanda_cart', []);
         $id = (string) $request->id;
 
-        if (isset($cart[$id]) && !empty($cart[$id]['is_old_item'])) {
+        if (isset($cart[$id]) && ! empty($cart[$id]['is_old_item'])) {
             return response()->json(['success' => false, 'message' => 'No se puede eliminar un ítem ya comandado desde aquí.']);
         }
 
         unset($cart[$id]);
         session()->put('comanda_cart', $cart);
+
         return response()->json(['success' => true]);
     }
 
     public function getCartDetails()
     {
         $cart = session('comanda_cart', []);
+
         return response()->json([
             'vista' => view('empresas.comandas.partials.cart_details', compact('cart'))->render(),
-            'total' => round(collect($cart)->sum(fn($i) => $i['cantidad'] * $i['precio']), 2),
+            'total' => round(collect($cart)->sum(fn ($i) => $i['cantidad'] * $i['precio']), 2),
         ]);
     }
 
@@ -567,7 +592,7 @@ class ComandasController extends Controller
         $eliminados = session('comanda_eliminados', []);
         $order_type = session('comanda_order_type');
 
-        if (!$order_type) {
+        if (! $order_type) {
             return response()->json(['success' => false, 'message' => 'La sesión de la comanda expiró. Vuelve a elegir la mesa.']);
         }
         if (empty($cart) && empty($eliminados)) {
@@ -587,7 +612,7 @@ class ComandasController extends Controller
                 if ($order_type == 'salon') {
                     // Bloquea la mesa: dos mozos no pueden abrir pedido en la misma mesa a la vez
                     $mesa = Mesa::where('mes_id', $mesa_id)->where('id_empresa_negocio', $usuario->id_empresa_negocio)->lockForUpdate()->first();
-                    if (!$mesa) {
+                    if (! $mesa) {
                         throw new \RuntimeException('Mesa no válida.');
                     }
                     $pis_id = $mesa->pis_id;
@@ -597,7 +622,7 @@ class ComandasController extends Controller
                     $pedido = Pedido::where('ped_id', $pedidoId)
                         ->where('id_empresa_negocio', $usuario->id_empresa_negocio)
                         ->lockForUpdate()->first();
-                    if (!$pedido || $pedido->ped_est !== 'Aperturado') {
+                    if (! $pedido || $pedido->ped_est !== 'Aperturado') {
                         throw new \RuntimeException('Este pedido ya fue cobrado o anulado. No se guardaron los cambios.');
                     }
                 } else {
@@ -616,7 +641,10 @@ class ComandasController extends Controller
                         'ped_est' => 'Aperturado',
                         'mozo' => $usuario->IdUsuario,
                         'IdUsuario' => $usuario->IdUsuario,
-                        'ped_cli_nom' => match ($order_type) { 'salon' => 'CONSUMO EN SALON', 'delivery' => 'DELIVERY', default => 'PARA LLEVAR' },
+                        'ped_cli_nom' => match ($order_type) {
+                            'salon' => 'CONSUMO EN SALON', 'delivery' => 'DELIVERY', default => 'PARA LLEVAR'
+                        },
+                        'mot_id' => $order_type === 'delivery' ? session('comanda_mot_id') : null,
                         'ped_tot' => 0,
                     ]);
                 }
@@ -624,7 +652,7 @@ class ComandasController extends Controller
                 // 1) Eliminados con autorización (solo líneas sin nada cobrado)
                 foreach ($eliminados as $el) {
                     $ids = $el['ped_det_ids'] ?? (isset($el['ped_det_id']) ? [$el['ped_det_id']] : []);
-                    if (!$ids) {
+                    if (! $ids) {
                         continue;
                     }
                     if (PedidoDetalle::where('ped_id', $pedido->ped_id)->whereIn('ped_det_id', $ids)->where('item_facturado', '>', 0)->exists()) {
@@ -632,17 +660,17 @@ class ComandasController extends Controller
                     }
                     foreach (PedidoDetalle::where('ped_id', $pedido->ped_id)->whereIn('ped_det_id', $ids)->where('estadoitem', '!=', 'Eliminado')->get() as $f) {
                         $anulaciones[] = ['IdProducto' => $f->IdProducto, 'nombre' => $f->descripcion, 'cantidad' => (float) $f->ped_det_can,
-                            'observacion' => 'Motivo: ' . $el['motivo']];
+                            'observacion' => 'Motivo: '.$el['motivo']];
                     }
                     PedidoDetalle::where('ped_id', $pedido->ped_id)->whereIn('ped_det_id', $ids)->update([
                         'estadoitem' => 'Eliminado',
-                        'item_obs' => mb_substr('[ELIMINADO - Motivo: ' . $el['motivo'] . ' - Autorizado por: ' . $el['autorizado_por'] . ']', 0, 255),
+                        'item_obs' => mb_substr('[ELIMINADO - Motivo: '.$el['motivo'].' - Autorizado por: '.$el['autorizado_por'].']', 0, 255),
                     ]);
                 }
 
                 // 2) Ítems ya comandados: quedan en UNA sola línea por producto y 3) ítems nuevos
                 foreach ($cart as $item) {
-                    if (!empty($item['is_old_item'])) {
+                    if (! empty($item['is_old_item'])) {
                         $lineas = PedidoDetalle::where('ped_id', $pedido->ped_id)
                             ->whereIn('ped_det_id', $item['ped_det_ids'] ?? [])
                             ->where('estadoitem', '!=', 'Eliminado')
@@ -658,8 +686,8 @@ class ComandasController extends Controller
                         }
 
                         $obs = $item['observaciones'] ?? '';
-                        if (!empty($item['motivo_reduccion'])) {
-                            $obs = trim($obs . ' [Reducido: ' . $item['motivo_reduccion'] . ']');
+                        if (! empty($item['motivo_reduccion'])) {
+                            $obs = trim($obs.' [Reducido: '.$item['motivo_reduccion'].']');
                         }
                         $cambios = ['ped_det_can' => $item['cantidad'], 'item_obs' => mb_substr($obs, 0, 255), 'item_facturado' => $facturado];
                         // Si piden más unidades, la línea vuelve a cocina (solo la diferencia); si bajan, sale como anulación
@@ -708,6 +736,7 @@ class ComandasController extends Controller
                     if ($pedido->mes_id) {
                         Mesa::where('mes_id', $pedido->mes_id)->update(['mes_est' => 'Libre']);
                     }
+
                     return ['pedido_id' => $pedido->ped_id, 'anulado' => true, 'mesa' => (bool) $pedido->mes_id];
                 }
 
@@ -732,15 +761,15 @@ class ComandasController extends Controller
         // Tickets de cocina/bar (directo a la impresora de cada categoría). Un fallo aquí no deshace la comanda.
         $tickets = 0;
         try {
-            $tickets = \App\Support\Impresion\Impresion::comanda($resultado['pedido_id'], $cocina)
-                + \App\Support\Impresion\Impresion::comanda($resultado['pedido_id'], $anulaciones, true);
+            $tickets = Impresion::comanda($resultado['pedido_id'], $cocina)
+                + Impresion::comanda($resultado['pedido_id'], $anulaciones, true);
         } catch (\Throwable $e) {
             report($e);
         }
 
         // Pantalla de cocina (KDS): misma información que se imprime
         try {
-            \App\Support\Cocina::registrar($resultado['pedido_id'], $cocina, $anulaciones);
+            Cocina::registrar($resultado['pedido_id'], $cocina, $anulaciones);
         } catch (\Throwable $e) {
             report($e);
         }
@@ -749,7 +778,7 @@ class ComandasController extends Controller
             'success' => true,
             'tickets' => $tickets,
             'message' => $resultado['anulado']
-                ? 'Se eliminaron todos los ítems: el pedido quedó ANULADO' . ($resultado['mesa'] ? ' y la mesa libre.' : '.')
+                ? 'Se eliminaron todos los ítems: el pedido quedó ANULADO'.($resultado['mesa'] ? ' y la mesa libre.' : '.')
                 : 'Comanda enviada correctamente.',
             'pedido_id' => $resultado['pedido_id'],
         ]);

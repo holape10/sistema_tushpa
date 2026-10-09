@@ -9,9 +9,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Puntos y premios: la regla de la sucursal (Sí/No, S/ por punto, compra mínima), los premios,
- * los clientes con más puntos, su historial, el canje de premios y los ajustes.
- * Caja consulta y canjea; solo el administrador cambia la regla, los premios y hace ajustes.
+ * Puntos y premios: fidelización Sí/No de la sucursal, sus reglas (varias, con fechas), los premios,
+ * los clientes con más puntos, su historial, el canje de premios y los ajustes; y, desde los puntos de venta,
+ * la vista previa de puntos antes de cobrar y la reserva del premio que se lleva el cliente.
+ * Caja consulta y canjea; solo el administrador cambia reglas, premios y hace ajustes.
  */
 class FidelizacionController extends Controller
 {
@@ -37,7 +38,14 @@ class FidelizacionController extends Controller
         $mov = DB::table('fid_movimientos')->where('id_empresa_negocio', $suc);
 
         return view('empresas.fidelizacion.index', [
-            'cfg' => DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['fid_activo', 'fid_soles_por_punto', 'fid_compra_minima']),
+            'cfg' => DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['fid_activo']),
+            'reglas' => DB::table('fid_reglas')->where('id_empresa_negocio', $suc)->orderByDesc('activo')->orderBy('regla_id')->get()
+                ->map(function ($r) {
+                    $hoy = now()->toDateString();
+                    $r->vigente = $r->activo && (! $r->desde || $r->desde <= $hoy) && (! $r->hasta || $r->hasta >= $hoy);
+
+                    return $r;
+                }),
             'premios' => DB::table('fid_premios as p')->leftJoin('productos as pr', 'pr.IdProducto', '=', 'p.IdProducto')
                 ->leftJoin('producto_stock as st', fn ($j) => $j->on('st.IdProducto', '=', 'p.IdProducto')->where('st.id_almacen', Kardex::almacenPredeterminado($suc)?->id_almacen ?? 0))
                 ->where('p.id_empresa_negocio', $suc)->orderByDesc('p.activo')->orderBy('p.puntos')
@@ -61,16 +69,59 @@ class FidelizacionController extends Controller
     public function guardarConfig(Request $request)
     {
         $this->soloAdmin();
-        $d = $request->validate([
-            'fid_activo' => 'required|boolean',
-            'fid_soles_por_punto' => 'required|numeric|min:0.01|max:100000',
-            'fid_compra_minima' => 'nullable|numeric|min:0|max:1000000',
-        ], [], ['fid_soles_por_punto' => 'los soles por punto', 'fid_compra_minima' => 'la compra mínima']);
-        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal())->update([
-            'fid_activo' => (int) $d['fid_activo'], 'fid_soles_por_punto' => $d['fid_soles_por_punto'], 'fid_compra_minima' => $d['fid_compra_minima'] ?? 0,
-        ]);
+        $d = $request->validate(['fid_activo' => 'required|boolean']);
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal())->update(['fid_activo' => (int) $d['fid_activo']]);
 
         return back()->with('success', $d['fid_activo'] ? 'Fidelización activada: desde ahora cada venta con DNI o RUC suma puntos.' : 'Fidelización desactivada: las ventas ya no suman puntos.');
+    }
+
+    /** Regla de puntos: S/ por punto, compra mínima y, si es una promoción, sus fechas */
+    public function guardarRegla(Request $request)
+    {
+        $this->soloAdmin();
+        $d = $request->validate([
+            'regla_id' => 'nullable|integer', 'nombre' => 'required|string|min:2|max:100',
+            'soles_por_punto' => 'required|numeric|min:0.01|max:100000', 'compra_minima' => 'nullable|numeric|min:0|max:1000000',
+            'desde' => 'nullable|date', 'hasta' => 'nullable|date|after_or_equal:desde', 'activo' => 'nullable|boolean',
+        ], [], ['nombre' => 'el nombre de la regla', 'soles_por_punto' => 'los soles por cada punto', 'compra_minima' => 'la compra mínima',
+            'desde' => 'la fecha de inicio', 'hasta' => 'la fecha de fin']);
+        $fila = ['nombre' => mb_strtoupper(trim($d['nombre'])), 'soles_por_punto' => $d['soles_por_punto'], 'compra_minima' => $d['compra_minima'] ?? 0,
+            'desde' => $d['desde'] ?? null, 'hasta' => $d['hasta'] ?? null, 'activo' => (int) ($d['activo'] ?? 1)];
+        if (! empty($d['regla_id'])) {
+            DB::table('fid_reglas')->where('regla_id', $d['regla_id'])->where('id_empresa_negocio', $this->sucursal())->update($fila);
+        } else {
+            DB::table('fid_reglas')->insert($fila + ['id_empresa_negocio' => $this->sucursal()]);
+        }
+
+        return back()->with('success', 'Regla guardada.');
+    }
+
+    public function eliminarRegla(int $id)
+    {
+        $this->soloAdmin();
+        DB::table('fid_reglas')->where('regla_id', $id)->where('id_empresa_negocio', $this->sucursal())->delete();
+
+        return back()->with('success', 'Regla eliminada. Los puntos ya ganados no cambian.');
+    }
+
+    /** Puntos de venta: lo que el cajero ve antes de cobrar (puntos del cliente, los que gana con esta compra y premios) */
+    public function previa(Request $request)
+    {
+        $this->recepcion();
+
+        return response()->json(Fidelizacion::previa($this->sucursal(), (string) $request->get('doc'), (float) $request->get('total')));
+    }
+
+    /** Puntos de venta: reservar (o quitar) el premio que se descuenta al cobrar esta venta */
+    public function reservar(Request $request)
+    {
+        $this->recepcion();
+        $d = $request->validate(['doc' => 'required|string|max:15', 'premio_id' => 'nullable|integer', 'total' => 'nullable|numeric|min:0']);
+        try {
+            return response()->json(['ok' => true] + Fidelizacion::reservar($this->sucursal(), $d['doc'], $d['premio_id'] ?? null, (float) ($d['total'] ?? 0)));
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
     }
 
     public function guardarPremio(Request $request)

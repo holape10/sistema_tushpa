@@ -1,4 +1,36 @@
 {{-- Filtros propios de cada reporte --}}
+@if (in_array('vendedor', $usa, true))
+    <label class="text-sm">Vendedor / cajero
+        <select name="vendedor" class="block rounded-lg border-gray-300 text-sm">
+            <option value="">Todos</option>
+            @foreach ($vendedores as $v)<option value="{{ $v->IdUsuario }}" @selected((string) request('vendedor') === (string) $v->IdUsuario)>{{ $v->apeusu ?: $v->name }}{{ $v->estusu ? '' : ' (inactivo)' }}</option>@endforeach
+        </select></label>
+@endif
+@if (in_array('medio', $usa, true))
+    <label class="text-sm">Medio de pago
+        <select name="medio" class="block rounded-lg border-gray-300 text-sm">
+            <option value="">Todos</option>
+            @foreach ($medios as $m)<option value="{{ $m->id_med_pag }}" @selected((string) request('medio') === (string) $m->id_med_pag)>{{ $m->nom_med_pag }}</option>@endforeach
+        </select></label>
+@endif
+@if (in_array('cliente', $usa, true))
+    <label class="text-sm">Cliente
+        <input name="cliente" value="{{ request('cliente') }}" placeholder="DNI/RUC o nombre" class="block rounded-lg border-gray-300 text-sm w-44"></label>
+@endif
+@if (in_array('motorizado', $usa, true))
+    <label class="text-sm">Motorizado
+        <select name="motorizado" class="block rounded-lg border-gray-300 text-sm">
+            <option value="">Todos</option>
+            <option value="sin" @selected(request('motorizado') === 'sin')>Sin motorizado</option>
+            @foreach ($motorizados as $m)<option value="{{ $m->mot_id }}" @selected((string) request('motorizado') === (string) $m->mot_id)>{{ $m->nombre }}</option>@endforeach
+        </select></label>
+@endif
+@if (in_array('estado_sunat', $usa, true))
+    <label class="text-sm">Estado SUNAT
+        <select name="estado_sunat" class="block rounded-lg border-gray-300 text-sm">
+            @foreach (['' => 'Todos', 'ACEPTADO' => 'Aceptados', 'OBSERVADO' => 'Observados', 'pendientes' => 'Pendientes / con error', 'RECHAZADO' => 'Rechazados'] as $k => $n)<option value="{{ $k }}" @selected((string) request('estado_sunat') === $k)>{{ $n }}</option>@endforeach
+        </select></label>
+@endif
 @if (in_array('tipo', $usa, true))
     <label class="text-sm">Comprobante
         <select name="tipo" class="block rounded-lg border-gray-300 text-sm">

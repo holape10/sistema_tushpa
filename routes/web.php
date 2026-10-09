@@ -29,6 +29,7 @@ use App\Http\Controllers\KardexController;
 use App\Http\Controllers\LoteController;
 use App\Http\Controllers\MedioPagoController;
 use App\Http\Controllers\MesaController;
+use App\Http\Controllers\MotorizadoController;
 use App\Http\Controllers\NotaController;
 use App\Http\Controllers\PisoController;
 use App\Http\Controllers\PlanillaController;
@@ -151,10 +152,20 @@ Route::middleware('auth')->group(function () {
         Route::get('/{id}/carnet', 'carnet')->whereNumber('id')->name('carnet');
     });
 
+    // Motorizados del delivery
+    Route::get('/motorizados', [MotorizadoController::class, 'index'])->name('motorizados.index');
+    Route::post('/motorizados', [MotorizadoController::class, 'guardar'])->name('motorizados.guardar');
+    Route::post('/motorizados/asignar', [MotorizadoController::class, 'asignar'])->name('motorizados.asignar');
+    Route::post('/motorizados/{id}/eliminar', [MotorizadoController::class, 'eliminar'])->whereNumber('id')->name('motorizados.eliminar');
+
     // Fidelización: puntos y premios
     Route::controller(FidelizacionController::class)->prefix('fidelizacion')->name('fidelizacion.')->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/config', 'guardarConfig')->name('config');
+        Route::post('/reglas', 'guardarRegla')->name('regla');
+        Route::post('/reglas/{id}/eliminar', 'eliminarRegla')->whereNumber('id')->name('regla.eliminar');
+        Route::get('/previa', 'previa')->name('previa');
+        Route::post('/reservar', 'reservar')->name('reservar');
         Route::post('/premios', 'guardarPremio')->name('premio');
         Route::get('/productos', 'productos')->name('productos');
         Route::get('/clientes', 'buscar')->name('buscar');

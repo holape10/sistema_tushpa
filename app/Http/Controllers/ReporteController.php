@@ -1,12 +1,17 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\EmpresaNegocio;
-use App\Support\{Excel, Reportes};
+use App\Support\Excel;
+use App\Support\Reportes;
 use Carbon\Carbon;
-use Dompdf\{Dompdf, Options};
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ReporteController extends Controller
 {
@@ -20,7 +25,8 @@ class ReporteController extends Controller
     {
         $this->autorizar();
         $grupo = $request->get('grupo');
-        $reportes = collect(Reportes::CATALOGO)->filter(fn($r) => !$grupo || $r[1] === $grupo);
+        $reportes = collect(Reportes::CATALOGO)->filter(fn ($r) => ! $grupo || $r[1] === $grupo);
+
         return view('empresas.reportes.index', compact('reportes', 'grupo'));
     }
 
@@ -37,7 +43,8 @@ class ReporteController extends Controller
         if ($hasta < $desde) {
             [$desde, $hasta] = [$hasta, $desde];
         }
-        $filtros = ['sucursal' => $sucursal, 'desde' => $desde, 'hasta' => $hasta] + $request->only(['tipo', 'estado', 'agrupar', 'categoria', 'orden', 'limite']);
+        $filtros = ['sucursal' => $sucursal, 'desde' => $desde, 'hasta' => $hasta]
+            + $request->only(['tipo', 'estado', 'agrupar', 'categoria', 'orden', 'limite', 'vendedor', 'medio', 'cliente', 'motorizado', 'estado_sunat']);
         $r = Reportes::generar($clave, $filtros);
         $nombreSucursal = $sucursales->firstWhere('id_empresa_negocio', $sucursal)->nombre_comercial ?? '';
         $archivo = "reporte_{$clave}_{$desde}_{$hasta}";
@@ -52,7 +59,11 @@ class ReporteController extends Controller
         return view('empresas.reportes.ver', $r + [
             'clave' => $clave, 'filtros' => $filtros, 'sucursales' => $sucursales, 'otros' => collect(Reportes::CATALOGO)->where(1, $r['grupo']),
             'categorias' => DB::table('categorias')->where('id_empresa_negocio', $sucursal)->orderBy('cat_nom')->get(['cat_id', 'cat_nom']),
-            'tipos' => ['01' => 'Factura', '03' => 'Boleta', '13' => 'Nota de venta', '07' => 'Nota de crédito', '08' => 'Nota de débito'],
+            'tipos' => ['sunat' => 'Solo SUNAT (sin notas de venta)', '01' => 'Factura', '03' => 'Boleta', '13' => 'Nota de venta', '07' => 'Nota de crédito', '08' => 'Nota de débito'],
+            'vendedores' => DB::table('users')->where('IdEmpresa', Auth::user()->IdEmpresa)->orderBy('apeusu')->get(['IdUsuario', 'apeusu', 'name', 'estusu']),
+            'medios' => DB::table('medios_pagos')->where('id_empresa_negocio', $sucursal)->orderBy('nom_med_pag')->get(['id_med_pag', 'nom_med_pag']),
+            'motorizados' => Schema::hasTable('motorizados')
+                ? DB::table('motorizados')->where('id_empresa_negocio', $sucursal)->orderBy('nombre')->get(['mot_id', 'nombre']) : collect(),
         ]);
     }
 
@@ -64,7 +75,7 @@ class ReporteController extends Controller
             'datetime' => $valor ? Carbon::parse($valor)->format('d/m/Y H:i') : '',
             'money' => number_format((float) $valor, 2),
             'num' => rtrim(rtrim(number_format((float) $valor, 2), '0'), '.'),
-            'pct' => number_format((float) $valor, 1) . ' %',
+            'pct' => number_format((float) $valor, 1).' %',
             default => (string) $valor,
         };
     }
@@ -79,6 +90,7 @@ class ReporteController extends Controller
                 $out[] = in_array($tipo, ['money', 'num'], true) ? round((float) $v, 2)
                     : ($tipo === 'pct' ? round((float) $v, 2) : self::texto($v, $tipo));
             }
+
             return $out;
         }, $r['filas']);
         // Fila de totales
@@ -87,9 +99,10 @@ class ReporteController extends Controller
             $tot[] = $i === 0 ? 'TOTALES' : (isset($r['totales'][$k]) ? (float) $r['totales'][$k] : '');
         }
         $filas[] = $tot;
-        $titulos = [[$r['titulo'] . ' · ' . $sucursal . ' · del ' . Carbon::parse($desde)->format('d/m/Y') . ' al ' . Carbon::parse($hasta)->format('d/m/Y')],
-            array_map(fn($c) => $c[0] . ($c[1] === 'pct' ? ' (%)' : ''), array_values($cols))];
-        $ruta = (new Excel())->hoja(mb_substr($r['titulo'], 0, 31), $titulos, $filas)->guardar();
+        $titulos = [[$r['titulo'].' · '.$sucursal.' · del '.Carbon::parse($desde)->format('d/m/Y').' al '.Carbon::parse($hasta)->format('d/m/Y')],
+            array_map(fn ($c) => $c[0].($c[1] === 'pct' ? ' (%)' : ''), array_values($cols))];
+        $ruta = (new Excel)->hoja(mb_substr($r['titulo'], 0, 31), $titulos, $filas)->guardar();
+
         return response()->download($ruta, "$archivo.xlsx", ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend();
     }
 
@@ -97,7 +110,7 @@ class ReporteController extends Controller
     {
         $html = view('empresas.reportes.pdf', $r + ['desde' => $desde, 'hasta' => $hasta, 'sucursal' => $sucursal,
             'empresa' => DB::table('empresa')->where('IdEmpresa', Auth::user()->IdEmpresa)->first()])->render();
-        $opciones = new Options();
+        $opciones = new Options;
         $opciones->set('defaultFont', 'DejaVu Sans');
         $opciones->set('isRemoteEnabled', false);
         $pdf = new Dompdf($opciones);
@@ -105,6 +118,7 @@ class ReporteController extends Controller
         // Muchas columnas → horizontal
         $pdf->setPaper('A4', count($r['columnas']) > 6 ? 'landscape' : 'portrait');
         $pdf->render();
+
         return response($pdf->output(), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => "attachment; filename=\"$archivo.pdf\""]);
     }
 }

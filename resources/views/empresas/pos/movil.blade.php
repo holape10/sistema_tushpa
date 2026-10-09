@@ -340,6 +340,7 @@
                 <span class="text-sm font-bold text-slate-500 uppercase">Total a pagar</span>
                 <span class="text-3xl font-extrabold text-indigo-700" x-text="soles(total)"></span>
             </div>
+            <div data-fidelizacion data-doc="cliente.num" data-total="total"></div>
             <button type="button" @click="guardarProforma()" :disabled="procesando || !carrito.length"
                     class="w-full h-11 mb-2 rounded-2xl bg-violet-50 text-violet-700 font-bold disabled:opacity-50"
                     x-text="proformaId ? 'Guardar cambios de la proforma ' + proformaNumero : 'Guardar como proforma'"></button>
@@ -447,5 +448,6 @@
 
 @include('partials.avisos')
 @include('partials.aviso_servicio')
+<script src="{{ asset('js/fidelizacion-pos.js') }}?v={{ filemtime(public_path('js/fidelizacion-pos.js')) }}" data-previa="{{ route('fidelizacion.previa') }}" data-reservar="{{ route('fidelizacion.reservar') }}" data-csrf="{{ csrf_token() }}"></script>
 </body>
 </html>

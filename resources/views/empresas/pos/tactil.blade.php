@@ -186,6 +186,7 @@
                 <p x-show="tdocod === '03' && !doc.trim()" class="text-[11px] text-slate-500 -mt-1">Sin DNI la boleta sale a <b>VENTA AL PORTADOR</b> (SUNAT lo permite hasta S/ 699.99).</p>
             </div>
 
+            <div data-fidelizacion data-doc="doc" data-total="total"></div>
             <label class="block text-[11px] font-semibold text-slate-500">Paga con
                 <input type="number" inputmode="decimal" step="0.10" min="0" x-model.number="paga" placeholder="0.00"
                        class="mt-0.5 w-full h-11 rounded-xl border-emerald-300 text-right text-lg font-bold select-text">
@@ -290,5 +291,6 @@
 </div>
 @include('partials.avisos')
 @include('partials.aviso_servicio')
+<script src="{{ asset('js/fidelizacion-pos.js') }}?v={{ filemtime(public_path('js/fidelizacion-pos.js')) }}" data-previa="{{ route('fidelizacion.previa') }}" data-reservar="{{ route('fidelizacion.reservar') }}" data-csrf="{{ csrf_token() }}"></script>
 </body>
 </html>

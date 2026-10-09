@@ -330,6 +330,7 @@
                             class="h-14 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
                         REGISTRAR<span class="block text-[10px] font-semibold opacity-80">F10</span>
                     </button>
+                    <div data-fidelizacion data-doc="cliente.num" data-total="total"></div>
                     <button type="button" @click="guardarProforma()" :disabled="procesando" title="Guardar como proforma (no emite comprobante)"
                             class="h-14 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
                         <span x-text="proformaId ? 'GUARDAR PROF.' : 'PROFORMA'"></span><span class="block text-[10px] font-semibold opacity-80">F8</span>
@@ -409,6 +410,7 @@
         </template>
     </div>
 </div>
+<script src="{{ asset('js/fidelizacion-pos.js') }}?v={{ filemtime(public_path('js/fidelizacion-pos.js')) }}" data-previa="{{ route('fidelizacion.previa') }}" data-reservar="{{ route('fidelizacion.reservar') }}" data-csrf="{{ csrf_token() }}"></script>
 @endsection
 
 @push('scripts')

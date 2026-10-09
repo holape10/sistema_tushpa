@@ -2,6 +2,7 @@
 
 namespace App\Support\Impresion;
 
+use App\Support\Fidelizacion;
 use App\Support\Sunat\CodigoQr;
 use App\Support\Sunat\NumeroLetras;
 use Carbon\Carbon;
@@ -173,9 +174,21 @@ class Impresion
         }
         $p->parrafo(NumeroLetras::convertir((float) $cab->ccaitv));
         // Fidelización: puntos ganados con esta compra y saldo
-        if ($fid = DB::table('fid_movimientos')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->where('tipo', 'VENTA')->first(['puntos', 'saldo'])) {
-            $p->alinear('centro')->negrita()->texto('*** GANASTE '.$fid->puntos.' PUNTOS ***')->negrita(false)
-                ->texto('Tus puntos acumulados: '.$fid->saldo)->alinear('izq');
+        if ($fid = Fidelizacion::delComprobante((int) $cab->IdCpe_cabecera)) {
+            $p->linea()->alinear('centro')->negrita()->texto('*** TUS PUNTOS ***')->negrita(false)->alinear('izq')
+                ->dosColumnas('Tenias', (string) $fid['antes']);
+            if ($fid['ganados']) {
+                $p->dosColumnas('Ganaste con esta compra', '+'.$fid['ganados']);
+            }
+            if ($fid['premio']) {
+                $p->dosColumnas('Canjeaste', '-'.$fid['canjeados']);
+            }
+            $p->negrita()->dosColumnas('Te quedan', (string) $fid['saldo'])->negrita(false);
+            if ($fid['premio']) {
+                $p->alinear('centro')->negrita()->texto('PREMIO ENTREGADO:')->texto(($fid['cantidad'] ? rtrim(rtrim(number_format($fid['cantidad'], 3), '0'), '.').' x ' : '').$fid['premio'])
+                    ->negrita(false)->alinear('izq');
+            }
+            $p->linea();
         }
 
         // QR de SUNAT para comprobantes electrónicos

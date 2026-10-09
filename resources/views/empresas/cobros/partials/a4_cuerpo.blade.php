@@ -187,10 +187,15 @@
         </tr>
     </table>
 
-    @php $fid = \Illuminate\Support\Facades\DB::table('fid_movimientos')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->where('tipo', 'VENTA')->first(['puntos', 'saldo']); @endphp
+    @php $fid = \App\Support\Fidelizacion::delComprobante((int) $cab->IdCpe_cabecera); @endphp
     @if ($fid)
         <div style="margin-top:10px; border:2px dashed #7c3aed; color:#5b21b6; border-radius:8px; padding:7px; text-align:center; font-weight:bold; font-size:9.5px;">
-            ★ Con esta compra ganaste {{ $fid->puntos }} puntos · Tus puntos acumulados: {{ $fid->saldo }} ★</div>
+            ★ Tus puntos: tenías {{ $fid['antes'] }}
+            @if ($fid['ganados']) · ganaste +{{ $fid['ganados'] }}@endif
+            @if ($fid['premio']) · canjeaste −{{ $fid['canjeados'] }}@endif
+            · te quedan {{ $fid['saldo'] }} ★
+            @if ($fid['premio'])<br><span style="font-size:11px; color:#b45309;">🎁 PREMIO ENTREGADO: {{ $fid['cantidad'] ? rtrim(rtrim(number_format($fid['cantidad'], 3), '0'), '.').' × ' : '' }}{{ $fid['premio'] }}</span>@endif
+        </div>
     @endif
 
     <div class="pie">

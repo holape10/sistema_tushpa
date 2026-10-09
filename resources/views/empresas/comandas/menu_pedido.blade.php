@@ -85,7 +85,19 @@
                 {{ strtoupper($order_type) }}
             @endif
         </span>
-        <span></span>
+        @if ($order_type === 'delivery')
+            {{-- Delivery: quién lo lleva (se puede crear uno nuevo aquí mismo) --}}
+            <span style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <i class="fas fa-motorcycle"></i>
+                <select id="motorizado" style="color:#111; border-radius:6px; padding:4px 6px; font-size:14px; max-width:180px;">
+                    <option value="">Motorizado…</option>
+                    @foreach ($motorizados as $m)<option value="{{ $m->mot_id }}" @selected((int) $motActual === (int) $m->mot_id)>{{ $m->nombre }}</option>@endforeach
+                </select>
+                <button type="button" id="mot_nuevo" title="Nuevo motorizado" style="border:0; border-radius:6px; padding:4px 9px; background:#fff; color:#111; font-weight:bold;">+</button>
+            </span>
+        @else
+            <span></span>
+        @endif
     </div>
 
     <div class="container-fluid main-content">
@@ -308,6 +320,20 @@
         });
 
         // --- Enviar / vaciar pedido ---
+        // Delivery: el motorizado se guarda al elegirlo (si el pedido aún no existe, se aplica al enviar la comanda)
+        const selMot = document.getElementById('motorizado');
+        if (selMot) {
+            selMot.addEventListener('change', () => post("{{ route('motorizados.asignar') }}", { mot_id: selMot.value || null }));
+            document.getElementById('mot_nuevo').addEventListener('click', async () => {
+                const nombre = prompt('Nombre del motorizado:');
+                if (!nombre || nombre.trim().length < 2) return;
+                const r = await post("{{ route('motorizados.guardar') }}", { nombre: nombre.trim() });
+                if (!r.ok) return alert(r.message || r.mensaje || 'No se pudo guardar.');
+                selMot.add(new Option(r.motorizado.nombre, r.motorizado.mot_id, true, true));
+                post("{{ route('motorizados.asignar') }}", { mot_id: r.motorizado.mot_id });
+            });
+        }
+
         document.getElementById('btn_enviar').addEventListener('click', function () {
             const btn = this;
             // Si hay una observación escrita sin salir del campo, se guarda antes de enviar

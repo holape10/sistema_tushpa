@@ -132,9 +132,20 @@
         @endif
     </table>
     {{-- Fidelización: los puntos que ganó con esta compra y su saldo en ese momento --}}
-    @php $fid = \Illuminate\Support\Facades\DB::table('fid_movimientos')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->where('tipo', 'VENTA')->first(['puntos', 'saldo']); @endphp
+    @php $fid = \App\Support\Fidelizacion::delComprobante((int) $cab->IdCpe_cabecera); @endphp
     @if ($fid)
-        <div class="c b" style="margin-top:6px; border:1px dashed #000; padding:4px;">★ GANASTE {{ $fid->puntos }} PUNTOS ★<br><span style="font-weight:normal">Tus puntos acumulados: {{ $fid->saldo }}</span></div>
+        <div style="margin-top:6px; border:1px dashed #000; padding:5px;">
+            <div class="c b">★ TUS PUNTOS ★</div>
+            <table class="medios" style="width:100%">
+                <tr><td>Tenías</td><td class="r">{{ $fid['antes'] }}</td></tr>
+                @if ($fid['ganados'])<tr><td>Ganaste con esta compra</td><td class="r">+{{ $fid['ganados'] }}</td></tr>@endif
+                @if ($fid['premio'])<tr><td>Canjeaste</td><td class="r">−{{ $fid['canjeados'] }}</td></tr>@endif
+                <tr class="b"><td>Te quedan</td><td class="r">{{ $fid['saldo'] }}</td></tr>
+            </table>
+            @if ($fid['premio'])
+                <div class="c b" style="margin-top:4px; border-top:1px dashed #000; padding-top:4px;">🎁 PREMIO ENTREGADO:<br>{{ $fid['cantidad'] ? rtrim(rtrim(number_format($fid['cantidad'], 3), '0'), '.').' × ' : '' }}{{ $fid['premio'] }}</div>
+            @endif
+        </div>
     @endif
 </div>
 

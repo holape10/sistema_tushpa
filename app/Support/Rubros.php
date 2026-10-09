@@ -24,7 +24,7 @@ class Rubros
 
     public const RUBROS = [
         'RESTOBAR' => ['nombre' => 'Restobar', 'ejemplos' => 'Restaurante, cafetería, discoteca, bar', 'modulos' => [
-            '/comandas', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/reservas', '/productos?tipo=4', '/productos?tipo=6',
+            '/comandas', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/reservas', '/motorizados', '/productos?tipo=4', '/productos?tipo=6',
             '/reportes/ventas-vendedor', '/reportes/ventas-delivery',
         ]],
         'GENERAL' => ['nombre' => 'Comercio general', 'ejemplos' => 'Comercio, ferretería, construcción, lavandería', 'modulos' => [

@@ -170,6 +170,21 @@
                         </div>
                     </div>
 
+                    @if (($pedido->ped_tip ?? null) === 'Delivery')
+                        {{-- Delivery: quién lo lleva (se guarda al elegirlo) --}}
+                        <div class="form-group">
+                            <label><i class="fa fa-motorcycle"></i> Motorizado</label>
+                            <select id="motorizado" class="form-control input-sm"
+                                    onchange="fetch('{{ route('motorizados.asignar') }}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify({ ped_id: {{ (int) $pedido->ped_id }}, mot_id: this.value || null }) })">
+                                <option value="">— Sin asignar —</option>
+                                @foreach (\App\Http\Controllers\MotorizadoController::activos((int) $pedido->id_empresa_negocio) as $m)
+                                    <option value="{{ $m->mot_id }}" @selected((int) ($pedido->mot_id ?? 0) === (int) $m->mot_id)>{{ $m->nombre }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+
+                    <div data-fidelizacion data-doc-input="#clinum" data-total-input="#total_comp"></div>
                     <div class="form-group">
                         <label>Observaciones</label>
                         <textarea id="observaciones" rows="2" class="form-control" maxlength="100"></textarea>
@@ -725,5 +740,6 @@
 </script>
 @include('partials.avisos')
 @include('partials.aviso_servicio')
+<script src="{{ asset('js/fidelizacion-pos.js') }}?v={{ filemtime(public_path('js/fidelizacion-pos.js')) }}" data-previa="{{ route('fidelizacion.previa') }}" data-reservar="{{ route('fidelizacion.reservar') }}" data-csrf="{{ csrf_token() }}"></script>
 </body>
 </html>

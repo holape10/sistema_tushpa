@@ -6,7 +6,6 @@
     @php
         $in = 'block w-full rounded-lg border-gray-300 text-sm focus:border-violet-500 focus:ring-violet-500';
         $activo = (int) ($cfg->fid_activo ?? 0) === 1;
-        $porPunto = (float) ($cfg->fid_soles_por_punto ?? 1);
     @endphp
 
     <div class="space-y-5" x-data="fidelizacion()">
@@ -26,26 +25,56 @@
         </div>
 
         <div class="grid lg:grid-cols-2 gap-5">
-            {{-- Regla --}}
-            <form method="POST" action="{{ route('fidelizacion.config') }}" class="bg-white rounded-2xl shadow-sm p-5 space-y-4" x-data="{ on: {{ $activo ? 'true' : 'false' }}, pp: {{ $porPunto }} }">
-                @csrf
-                <h2 class="font-bold text-gray-700">1. Regla de puntos de esta sucursal</h2>
-                <div class="flex gap-2">
-                    <label class="flex-1 cursor-pointer rounded-xl border-2 p-3 text-center font-bold" :class="on ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-500'">
-                        <input type="radio" name="fid_activo" value="1" x-model="on" @change="on = true" class="sr-only" {{ $activo ? 'checked' : '' }} @disabled(!$esAdmin)> SÍ, sumar puntos</label>
-                    <label class="flex-1 cursor-pointer rounded-xl border-2 p-3 text-center font-bold" :class="!on ? 'border-gray-500 bg-gray-50 text-gray-700' : 'border-gray-200 text-gray-500'">
-                        <input type="radio" name="fid_activo" value="0" @change="on = false" class="sr-only" {{ $activo ? '' : 'checked' }} @disabled(!$esAdmin)> NO</label>
+            {{-- Reglas --}}
+            <div class="bg-white rounded-2xl shadow-sm p-5 space-y-4" x-data="{ r: { regla_id: '', nombre: '', soles_por_punto: 1, compra_minima: 0, desde: '', hasta: '', activo: true } }">
+                <div class="flex items-center justify-between gap-3">
+                    <h2 class="font-bold text-gray-700">1. Reglas de puntos</h2>
+                    <form method="POST" action="{{ route('fidelizacion.config') }}" class="flex rounded-xl border-2 overflow-hidden text-sm font-bold">
+                        @csrf
+                        <button name="fid_activo" value="1" @disabled(!$esAdmin) class="px-4 py-1.5 {{ $activo ? 'bg-emerald-500 text-white' : 'text-gray-500 hover:bg-gray-50' }}">SÍ</button>
+                        <button name="fid_activo" value="0" @disabled(!$esAdmin) class="px-4 py-1.5 {{ ! $activo ? 'bg-gray-600 text-white' : 'text-gray-500 hover:bg-gray-50' }}">NO</button>
+                    </form>
                 </div>
-                <div class="grid grid-cols-2 gap-3 text-sm">
-                    <label>Cada S/ … de compra = 1 punto
-                        <input type="number" step="0.01" min="0.01" name="fid_soles_por_punto" x-model.number="pp" value="{{ $porPunto }}" class="{{ $in }} mt-1" @disabled(!$esAdmin)></label>
-                    <label>Compra mínima para sumar (S/)
-                        <input type="number" step="0.10" min="0" name="fid_compra_minima" value="{{ (float) ($cfg->fid_compra_minima ?? 0) }}" class="{{ $in }} mt-1" @disabled(!$esAdmin)></label>
+                <p class="text-xs text-gray-500">Puedes tener varias reglas: los puntos de una compra son la <b>suma</b> de las reglas vigentes. Ej.: GENERAL 1 punto por cada S/ 1 todo el año + NAVIDAD 1 punto extra por cada S/ 2 solo en diciembre.</p>
+                <div class="divide-y border rounded-xl text-sm">
+                    @forelse ($reglas as $r)
+                        <div class="flex items-center gap-3 px-3 py-2 {{ $r->vigente ? '' : 'opacity-50' }}">
+                            <span class="w-2.5 h-2.5 rounded-full {{ $r->vigente ? 'bg-emerald-500' : 'bg-gray-300' }}"></span>
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-gray-800">{{ $r->nombre }} <span class="font-normal text-gray-500">· 1 punto por cada S/ {{ rtrim(rtrim(number_format($r->soles_por_punto, 2), '0'), '.') }}</span></p>
+                                <p class="text-xs text-gray-500">
+                                    {{ (float) $r->compra_minima > 0 ? 'Desde compras de S/ '.number_format($r->compra_minima, 2) : 'Cualquier compra' }}
+                                    · {{ $r->desde || $r->hasta ? 'Del '.($r->desde ? \Illuminate\Support\Carbon::parse($r->desde)->format('d/m/Y') : '…').' al '.($r->hasta ? \Illuminate\Support\Carbon::parse($r->hasta)->format('d/m/Y') : '…') : 'Todo el tiempo' }}
+                                    {{ $r->activo ? '' : '· inactiva' }}</p>
+                            </div>
+                            @if ($esAdmin)
+                                <button type="button" @click="r = @js(['regla_id' => $r->regla_id, 'nombre' => $r->nombre, 'soles_por_punto' => (float) $r->soles_por_punto, 'compra_minima' => (float) $r->compra_minima, 'desde' => $r->desde, 'hasta' => $r->hasta, 'activo' => (bool) $r->activo])" class="text-xs text-violet-600 font-semibold">Editar</button>
+                                <form method="POST" action="{{ route('fidelizacion.regla.eliminar', $r->regla_id) }}" onsubmit="return confirm('¿Eliminar la regla {{ $r->nombre }}?')">@csrf<button class="text-xs text-rose-600 font-semibold">Eliminar</button></form>
+                            @endif
+                        </div>
+                    @empty
+                        <p class="p-4 text-center text-gray-400">Sin reglas: las ventas no suman puntos.</p>
+                    @endforelse
                 </div>
-                <p class="text-sm bg-violet-50 text-violet-800 rounded-lg px-3 py-2" x-text="'Ejemplo: una compra de S/ 100 da ' + Math.floor(100 / (pp || 1)) + ' puntos.'"></p>
-                <p class="text-xs text-gray-500">Suman las facturas, boletas y notas de venta con DNI o RUC (no "VENTA AL PORTADOR"). Si la venta se anula o tiene nota de crédito total, sus puntos se descuentan.</p>
-                @if ($esAdmin)<button class="px-5 py-2.5 rounded-xl bg-violet-600 text-white font-bold hover:bg-violet-700">Guardar regla</button>@endif
-            </form>
+                @if ($esAdmin)
+                    <form method="POST" action="{{ route('fidelizacion.regla') }}" class="rounded-xl bg-violet-50 p-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm items-end">
+                        @csrf
+                        <input type="hidden" name="regla_id" :value="r.regla_id">
+                        <label class="col-span-2">Nombre<input name="nombre" x-model="r.nombre" required maxlength="100" placeholder="GENERAL / PROMO NAVIDAD" class="{{ $in }} mt-1 uppercase"></label>
+                        <label>S/ por cada punto<input type="number" step="0.01" min="0.01" name="soles_por_punto" x-model="r.soles_por_punto" required class="{{ $in }} mt-1"></label>
+                        <label>Compra mínima S/<input type="number" step="0.10" min="0" name="compra_minima" x-model="r.compra_minima" class="{{ $in }} mt-1"></label>
+                        <label>Desde <span class="text-gray-400">(opcional)</span><input type="date" name="desde" x-model="r.desde" class="{{ $in }} mt-1"></label>
+                        <label>Hasta <span class="text-gray-400">(opcional)</span><input type="date" name="hasta" x-model="r.hasta" class="{{ $in }} mt-1"></label>
+                        <label class="flex items-center gap-1 pb-2"><input type="hidden" name="activo" value="0"><input type="checkbox" name="activo" value="1" x-model="r.activo" class="rounded"> Activa</label>
+                        <div class="flex gap-2">
+                            <button class="px-4 py-2 rounded-lg bg-violet-600 text-white font-bold" x-text="r.regla_id ? 'Guardar' : 'Agregar regla'"></button>
+                            <button type="button" x-show="r.regla_id" @click="r = { regla_id: '', nombre: '', soles_por_punto: 1, compra_minima: 0, desde: '', hasta: '', activo: true }" class="px-3 py-2 rounded-lg bg-white">Nueva</button>
+                        </div>
+                        <p class="col-span-2 sm:col-span-4 text-xs text-violet-800" x-text="'Ejemplo: una compra de S/ 100 da ' + Math.floor(100 / (r.soles_por_punto || 1)) + ' puntos con esta regla.'"></p>
+                    </form>
+                @endif
+                <p class="text-xs text-gray-500">Suman las facturas, boletas y notas de venta con DNI o RUC (no "VENTA AL PORTADOR"). Si la venta se anula o tiene nota de crédito total, sus puntos se descuentan y los del premio vuelven.</p>
+            </div>
 
             {{-- Premios --}}
             <div class="bg-white rounded-2xl shadow-sm p-5 space-y-3">
