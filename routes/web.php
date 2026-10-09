@@ -24,6 +24,7 @@ use App\Http\Controllers\GuiaController;
 use App\Http\Controllers\HotelController;
 use App\Http\Controllers\ImportarAntiguoController;
 use App\Http\Controllers\ImpresionController;
+use App\Http\Controllers\InicioController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\KardexController;
 use App\Http\Controllers\LoteController;
@@ -581,6 +582,10 @@ Route::get('/api/ruc/{ruc}', [EmpresaController::class, 'consultaRucSunat'])->na
 // Route::get('/config', [EmpresaController::class, 'crearempresa'])->name('empresa.config');
 // Route::post('/config', [EmpresaController::class, 'store'])->name('empresa.store');
 // Route::get('/api/ruc/{ruc}', [EmpresaController::class, 'consultaRucSunat']);
+
+Route::get('/inicio', [InicioController::class, 'index'])
+    ->middleware(['auth'])
+    ->name('inicio');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth'])

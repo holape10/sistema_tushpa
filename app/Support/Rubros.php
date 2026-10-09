@@ -16,7 +16,7 @@ class Rubros
 {
     /** Lo que usa cualquier negocio: ventas, caja, SUNAT, productos, compras y almacén */
     private const BASE = [
-        '/dashboard', '/turnos', '/turnos/listado', '/ventas', '/notas', '/sunat/envios', '/sunat/resumenes',
+        '/inicio', '/dashboard', '/turnos', '/turnos/listado', '/ventas', '/notas', '/sunat/envios', '/sunat/resumenes',
         '/reportes/ventas', '/reportes/ventas-cliente', '/reportes/ventas-producto', '/reportes/productos-ranking',
         '/clientes', '/proveedores', '/usuarios', '/empresas', '/sucursales', '/mediospagos', '/categorias', '/productos',
         '/impresoras', '/compras', '/gastos', '/almacenes', '/kardex', '/kardex/stock', '/cuentas/cobrar', '/cuentas/pagar', '/soporte',

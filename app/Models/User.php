@@ -78,8 +78,8 @@ class User extends Authenticatable
         return match ($this->rolPrincipal()) {
             'mozo' => 'comandas.seleccion', // el mozo entra directo a las mesas
             'entrenador' => 'entrenador.index', // el entrenador entra a su panel
-            'caja' => 'dashboard', // cámbialo a 'pos.index' cuando exista
-            default => 'dashboard', // admin y cualquier otro caso
+            'caja' => 'inicio', // accesos del menú del usuario
+            default => 'inicio', // admin y cualquier otro caso
         };
     }
 }
