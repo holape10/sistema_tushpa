@@ -6,12 +6,14 @@ use App\Models\EmpresaNegocio;
 use App\Models\MedioPago;
 use App\Models\Turno;
 use App\Support\AnulacionVenta;
+use App\Support\Impresion\ComprobantePdf;
 use App\Support\Notas;
 use App\Support\Sunat\SunatService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 
 class VentaController extends Controller
 {
@@ -226,6 +228,70 @@ class VentaController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => 'Venta anulada.'.($devueltos ? " Se devolvió al stock lo vendido ($devueltos movimiento(s) de kardex)." : '')]);
+    }
+
+    // ------------------------------------------------------------------ WhatsApp
+
+    /** Celular para WhatsApp con código de país (9 dígitos de Perú → 51…), o null */
+    private static function celular(?string $numero): ?string
+    {
+        $n = preg_replace('/\D/', '', (string) $numero);
+        if (strlen($n) === 9 && str_starts_with($n, '9')) {
+            return '51'.$n;
+        }
+
+        return strlen($n) >= 10 && strlen($n) <= 15 ? $n : null;
+    }
+
+    /**
+     * Datos para enviar el comprobante por WhatsApp: el celular guardado (de la venta o del cliente),
+     * el mensaje y el enlace al PDF A4 (enlace firmado: el cliente lo abre sin usuario ni contraseña).
+     */
+    public function whatsapp($id)
+    {
+        $this->autorizar();
+        $cab = $this->venta($id);
+        $cliente = $cab->ccandi && $cab->ccandi !== '00000000'
+            ? DB::table('cliente')->where('clinum', $cab->ccandi)->where('rucemp', $cab->IdEmpresa)->first(['telefono']) : null;
+        $empresa = DB::table('empresa_negocios')->where('id_empresa_negocio', $cab->id_empresa_negocio)->value('nombre_comercial')
+            ?: DB::table('empresa')->where('IdEmpresa', $cab->IdEmpresa)->value('NomEmpresa');
+        $tipo = DB::table('tipo_documento')->where('tdocod', $cab->tdocod)->value('tdodes') ?: 'comprobante';
+        $numero = $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT);
+        $pdf = URL::signedRoute('comprobante.pdf', ['id' => $cab->IdCpe_cabecera]);
+
+        return response()->json([
+            'telefono' => self::celular($cab->telefono_cliente) ?? self::celular($cliente->telefono ?? null),
+            'cliente' => $cab->ccanom, 'numero' => $numero, 'archivo' => $numero.'.pdf', 'pdf' => $pdf,
+            'texto' => "Hola 👋, gracias por tu compra en *{$empresa}*.\nTe enviamos tu ".mb_strtolower($tipo)." *{$numero}* por *S/ "
+                .number_format((float) $cab->ccaitv, 2)."*.\n\n📄 Descarga tu comprobante en PDF:\n{$pdf}",
+        ]);
+    }
+
+    /** Guarda el celular en la venta y en el cliente (para la próxima vez) */
+    public function telefono(Request $request, $id)
+    {
+        $this->autorizar();
+        $cab = $this->venta($id);
+        $request->validate(['telefono' => 'required|string|max:20'], [], ['telefono' => 'el número de WhatsApp']);
+        $celular = self::celular($request->telefono);
+        if (! $celular) {
+            return response()->json(['ok' => false, 'mensaje' => 'Escribe el celular de 9 dígitos (ej. 987654321) o con código de país.']);
+        }
+        $guardar = str_starts_with($celular, '51') ? substr($celular, 2) : $celular;
+        DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update(['telefono_cliente' => $guardar]);
+        if ($cab->ccandi && $cab->ccandi !== '00000000') {
+            DB::table('cliente')->where('clinum', $cab->ccandi)->where('rucemp', $cab->IdEmpresa)->update(['telefono' => $guardar]);
+        }
+
+        return response()->json(['ok' => true, 'telefono' => $celular]);
+    }
+
+    /** PDF A4 del comprobante para el cliente (enlace firmado que va en el WhatsApp; sin sesión) */
+    public function pdfPublico($id)
+    {
+        [$nombre, $pdf] = ComprobantePdf::generar((int) $id);
+
+        return response($pdf, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="'.$nombre.'"']);
     }
 
     /** Excel (CSV) con todo lo filtrado */

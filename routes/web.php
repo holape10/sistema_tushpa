@@ -241,6 +241,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/ventas/{id}/detalle', [VentaController::class, 'detalle'])->whereNumber('id')->name('ventas.detalle');
     Route::post('/ventas/{id}/medios', [VentaController::class, 'actualizarMedios'])->whereNumber('id')->name('ventas.medios');
     Route::post('/ventas/{id}/anular', [VentaController::class, 'anular'])->whereNumber('id')->name('ventas.anular');
+    Route::get('/ventas/{id}/whatsapp', [VentaController::class, 'whatsapp'])->whereNumber('id')->name('ventas.whatsapp');
+    Route::post('/ventas/{id}/telefono', [VentaController::class, 'telefono'])->whereNumber('id')->name('ventas.telefono');
 
     // Notas de crédito y débito electrónicas
     Route::get('/notas', [NotaController::class, 'index'])->name('notas.index');
@@ -376,6 +378,10 @@ Route::get('/asistencia/m/{emp}/{accion}', [AsistenciaController::class, 'celula
 
 // App instalable (PWA): manifiesto por empresa (sin sesión)
 Route::get('/manifest.webmanifest', [PwaController::class, 'manifest'])->name('pwa.manifest');
+
+// PDF A4 del comprobante que se envía por WhatsApp (enlace firmado, sin sesión)
+Route::get('/cpe/pdf/{id}', [VentaController::class, 'pdfPublico'])->whereNumber('id')
+    ->middleware(['signed', 'throttle:30,1'])->name('comprobante.pdf');
 
 // QR de la guía de remisión impresa: datos del traslado y estado en SUNAT (sin sesión)
 Route::get('/guia/v/{token}', [GuiaController::class, 'verificar'])->where('token', '[A-Za-z0-9]{32}')

@@ -93,9 +93,6 @@
                             $electronico = in_array($v->tdocod, ['01', '03', '07', '08'], true);
                             $turnoAbierto = in_array($v->id_turno, $turnosAbiertos);
                             $numero = $v->serdoc . '-' . str_pad($v->numdoc, 8, '0', STR_PAD_LEFT);
-                            $tel = preg_replace('/\D/', '', (string) $v->telefono_cliente);
-                            if (strlen($tel) === 9) { $tel = '51' . $tel; }
-                            $textoWa = "Hola {$v->ccanom}, gracias por tu compra en " . ($empresa->NomEmpresa ?? '') . ". {$v->tdodes} {$numero} por S/ " . number_format($v->ccaitv, 2) . '.';
                         @endphp
                         <tr class="hover:bg-gray-50 {{ $anulada ? 'bg-red-50/40' : '' }}">
                             <td class="px-3 py-2 whitespace-nowrap">
@@ -143,7 +140,7 @@
                             <td class="px-3 py-2">
                                 <div class="flex items-center justify-center gap-1">
                                     <a href="{{ route('cobros.voucher', $v->IdCpe_cabecera) }}" target="_blank" title="Ticket" class="btn-ico text-red-600"><i class="fas fa-file-pdf"></i></a>
-                                    <a href="https://wa.me/{{ $tel }}?text={{ rawurlencode($textoWa) }}" target="_blank" rel="noopener" title="Enviar por WhatsApp" class="btn-ico text-green-600"><i class="fab fa-whatsapp"></i></a>
+                                    <button type="button" onclick="TushpaWhatsApp.abrir({{ $v->IdCpe_cabecera }})" title="Enviar el comprobante por WhatsApp" class="btn-ico text-green-600"><i class="fab fa-whatsapp"></i></button>
                                     @if ($electronico)
                                         <a href="{{ route('sunat.descargar', [$v->IdCpe_cabecera, 'xml']) }}" title="XML" class="btn-ico text-sky-700"><i class="fas fa-file-code"></i></a>
                                         <a href="{{ route('sunat.descargar', [$v->IdCpe_cabecera, 'cdr']) }}" title="CDR (constancia SUNAT)" class="btn-ico text-amber-700"><i class="fas fa-file-zipper"></i></a>
@@ -546,4 +543,5 @@
             };
         }
     </script>
+    <script src="{{ asset('js/whatsapp-cpe.js') }}?v={{ filemtime(public_path('js/whatsapp-cpe.js')) }}" data-base="{{ url('/') }}" data-csrf="{{ csrf_token() }}"></script>
 @endsection
