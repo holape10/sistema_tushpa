@@ -29,6 +29,9 @@
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Editando {{ strtolower($p->tipo_nombre) }}</p>
                     <h2 class="text-lg font-bold text-gray-800 truncate">{{ $p->pronom }}</h2>
                 </div>
+                @if ((int) $p->promocion === 2 && auth()->user()->esAdmin())
+                    <a href="{{ route('recetas.editar', $p->IdProducto) }}" class="h-10 px-4 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-sm font-bold flex items-center gap-1.5">🍳 Receta y costo</a>
+                @endif
                 <span class="text-xs text-gray-400 max-w-xs">El tipo no se cambia una vez creado. Si te equivocaste, elimínalo y créalo de nuevo.</span>
             </div>
         @else

@@ -164,6 +164,8 @@ class Comprobante
         // ---- Detalle: una línea por producto, con su salida de stock ----
         // Las líneas libres (sin producto, ej. un servicio escrito a mano o un recargo) no mueven stock
         $productos = Producto::whereIn('IdProducto', array_filter(array_column($lineas, 'IdProducto')))->get()->keyBy('IdProducto');
+        // Platos con receta: su costo es el de sus ingredientes al precio de hoy (para la rentabilidad)
+        $costosReceta = Recetas::costos($productos->where('promocion', 2)->keys());
 
         foreach ($lineas as $it) {
             $prod = $it['IdProducto'] ? ($productos[$it['IdProducto']] ?? null) : null;
@@ -182,7 +184,7 @@ class Comprobante
                 'cdecan' => $cant, 'cdedes' => $it['descripcion'],
                 'cdevun' => $valorUni, 'cdepuni' => $precio, 'cdepve' => $subtotal,
                 'cdeigv' => round($totalLinea - $subtotal, 2), 'cdevve' => $totalLinea,
-                'tigcod' => $sucursal->tip_igv_pred, 'costo' => round(($prod->costo ?? 0) * $factor, 2),
+                'tigcod' => $sucursal->tip_igv_pred, 'costo' => round(($costosReceta[$it['IdProducto']] ?? $prod->costo ?? 0) * $factor, 2),
                 'cpe_det_factor' => $factor, 'id_almacen_pro' => $almacen?->id_almacen,
                 // Cuentas contables del producto al momento de la venta (CONCAR)
                 'debe' => $prod->debe ?? null, 'haber' => $prod->haber ?? null,

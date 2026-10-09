@@ -1,8 +1,12 @@
 <?php
+
 namespace App\Support;
 
-use App\Models\{Almacen, Combo, Producto};
-use Illuminate\Support\Facades\{Auth, DB};
+use App\Models\Almacen;
+use App\Models\Combo;
+use App\Models\Producto;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Único punto para mover stock: actualiza producto_stock y deja la huella en movimientos_productos (kardex).
@@ -11,11 +15,11 @@ use Illuminate\Support\Facades\{Auth, DB};
 class Kardex
 {
     /**
-     * @param string $movTip 'I' ingreso | 'E' egreso
-     * @param array  $doc    datos opcionales: cod_tip_ope, tdocod, serie, numero, IdCpe_cabecera, mov_cab_id, com_cab_id,
-     *                       cliente, descripcion, precio, costo, fecha_mov, IdProducto_rel, lote, vencimiento,
-     *                       inv_cab_id, id_almacen_origen, id_almacen_destino,
-     *                       lote_preferido (salida: lote elegido por el cajero; si no, FEFO)
+     * @param  string  $movTip  'I' ingreso | 'E' egreso
+     * @param  array  $doc  datos opcionales: cod_tip_ope, tdocod, serie, numero, IdCpe_cabecera, mov_cab_id, com_cab_id,
+     *                      cliente, descripcion, precio, costo, fecha_mov, IdProducto_rel, lote, vencimiento,
+     *                      inv_cab_id, id_almacen_origen, id_almacen_destino,
+     *                      lote_preferido (salida: lote elegido por el cajero; si no, FEFO)
      * @return array partes por lote que se movieron: [['lote' => ?string, 'vencimiento' => ?string, 'cantidad' => float]]
      *               (en el kardex queda una fila por cada lote)
      */
@@ -33,7 +37,7 @@ class Kardex
             ->where('IdProducto', $idProducto)->where('id_almacen', $idAlmacen)
             ->lockForUpdate()->first();
 
-        if (!$fila) {
+        if (! $fila) {
             DB::table('producto_stock')->insert([
                 'IdProducto' => $idProducto, 'id_almacen' => $idAlmacen,
                 'id_empresa_negocio' => $sucursal, 'stock' => 0, 'stock_inicial' => 0,
@@ -75,38 +79,38 @@ class Kardex
     }
 
     private static function fila(int $idProducto, int $idAlmacen, $sucursal, $user, string $movTip, float $cantidad,
-                                 float $stockAntes, float $stockDespues, array $doc): void
+        float $stockAntes, float $stockDespues, array $doc): void
     {
         DB::table('movimientos_productos')->insert([
-            'IdProducto'         => $idProducto,
-            'IdProducto_rel'     => $doc['IdProducto_rel'] ?? null,
-            'precio'             => $doc['precio'] ?? 0,
-            'costo'              => $doc['costo'] ?? 0,
-            'cantidad'           => $cantidad,
-            'stock_inicial'      => $stockAntes,
-            'stock'              => $stockDespues,
-            'mov_tip'            => $movTip,
-            'tipo'               => $movTip === 'I' ? 1 : 2,
-            'cod_tip_ope'        => $doc['cod_tip_ope'] ?? null,
-            'tdocod'             => $doc['tdocod'] ?? null,
-            'serie'              => $doc['serie'] ?? null,
-            'numero'             => $doc['numero'] ?? null,
-            'IdCpe_cabecera'     => $doc['IdCpe_cabecera'] ?? null,
-            'mov_cab_id'         => $doc['mov_cab_id'] ?? null,
-            'com_cab_id'         => $doc['com_cab_id'] ?? null,
-            'inv_cab_id'         => $doc['inv_cab_id'] ?? null,
-            'id_almacen_origen'  => $doc['id_almacen_origen'] ?? null,
+            'IdProducto' => $idProducto,
+            'IdProducto_rel' => $doc['IdProducto_rel'] ?? null,
+            'precio' => $doc['precio'] ?? 0,
+            'costo' => $doc['costo'] ?? 0,
+            'cantidad' => $cantidad,
+            'stock_inicial' => $stockAntes,
+            'stock' => $stockDespues,
+            'mov_tip' => $movTip,
+            'tipo' => $movTip === 'I' ? 1 : 2,
+            'cod_tip_ope' => $doc['cod_tip_ope'] ?? null,
+            'tdocod' => $doc['tdocod'] ?? null,
+            'serie' => $doc['serie'] ?? null,
+            'numero' => $doc['numero'] ?? null,
+            'IdCpe_cabecera' => $doc['IdCpe_cabecera'] ?? null,
+            'mov_cab_id' => $doc['mov_cab_id'] ?? null,
+            'com_cab_id' => $doc['com_cab_id'] ?? null,
+            'inv_cab_id' => $doc['inv_cab_id'] ?? null,
+            'id_almacen_origen' => $doc['id_almacen_origen'] ?? null,
             'id_almacen_destino' => $doc['id_almacen_destino'] ?? null,
-            'mov_lote'           => $doc['lote'] ?? null,
-            'mov_vencimiento'    => $doc['vencimiento'] ?? null,
-            'cliente'            => isset($doc['cliente']) ? mb_substr($doc['cliente'], 0, 150) : null,
-            'descripcion'        => isset($doc['descripcion']) ? mb_substr($doc['descripcion'], 0, 100) : null,
-            'fecha_mov'          => $doc['fecha_mov'] ?? now()->toDateString(),
-            'fecha_hora'         => now(),
-            'fecha_registro'     => now(),
-            'id_almacen'         => $idAlmacen,
+            'mov_lote' => $doc['lote'] ?? null,
+            'mov_vencimiento' => $doc['vencimiento'] ?? null,
+            'cliente' => isset($doc['cliente']) ? mb_substr($doc['cliente'], 0, 150) : null,
+            'descripcion' => isset($doc['descripcion']) ? mb_substr($doc['descripcion'], 0, 100) : null,
+            'fecha_mov' => $doc['fecha_mov'] ?? now()->toDateString(),
+            'fecha_hora' => now(),
+            'fecha_registro' => now(),
+            'id_almacen' => $idAlmacen,
             'id_empresa_negocio' => $sucursal,
-            'IdUsuario'          => $user?->IdUsuario,
+            'IdUsuario' => $user?->IdUsuario,
         ]);
     }
 
@@ -122,16 +126,37 @@ class Kardex
             return self::registrar($producto->IdProducto, $idAlmacen, $cantidad, 'E', $doc + ['costo' => $producto->costo]);
         }
 
+        // Plato preparado: salen los insumos de su receta (si tiene)
+        if ($tipo === 2) {
+            self::salidaPorReceta($producto->IdProducto, $idAlmacen, $cantidad, $doc);
+        }
+
         if ($tipo === 6) {
             $componentes = Combo::where('IdProducto_rel', $producto->IdProducto)->with('itemProducto')->get();
             foreach ($componentes as $c) {
-                if ($c->itemProducto && (int) $c->itemProducto->promocion === 0) {
+                $item = $c->itemProducto;
+                if ($item && (int) $item->promocion === 0) {
                     self::registrar($c->IdProducto_comb, $idAlmacen, $cantidad * (float) $c->prod_comb_cant, 'E',
-                        $doc + ['IdProducto_rel' => $producto->IdProducto, 'costo' => $c->itemProducto->costo, 'precio' => 0]);
+                        $doc + ['IdProducto_rel' => $producto->IdProducto, 'costo' => $item->costo, 'precio' => 0]);
+                } elseif ($item && (int) $item->promocion === 2) {
+                    self::salidaPorReceta($item->IdProducto, $idAlmacen, $cantidad * (float) $c->prod_comb_cant, $doc);
                 }
             }
         }
+
         return [];
+    }
+
+    /** Salida de los insumos de la receta de un plato (cantidad de platos x lo que lleva cada uno, en la unidad del insumo) */
+    private static function salidaPorReceta(int $idPlato, int $idAlmacen, float $platos, array $doc): void
+    {
+        foreach (Recetas::de($idPlato) as $r) {
+            $cantidad = round($platos * $r->cantidad_base, 4);
+            if ($cantidad > 0) {
+                self::registrar($r->IdInsumo, $idAlmacen, $cantidad, 'E',
+                    $doc + ['IdProducto_rel' => $idPlato, 'costo' => $r->costo_unitario, 'precio' => 0]);
+            }
+        }
     }
 
     /**

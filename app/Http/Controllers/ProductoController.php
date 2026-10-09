@@ -30,7 +30,7 @@ class ProductoController extends Controller
                 ->orWhere('procod', $q)->orWhere('codigo_barra', $q)))
             ->when($tipo !== '', fn ($query) => $query->where('promocion', $tipo))
             ->orderBy('pronom')
-            ->paginate(15)
+            ->paginate(100)
             ->withQueryString();
 
         $almacenes = Almacen::where('id_empresa_negocio', $sucursal)->orderByDesc('predeterminado')->get();

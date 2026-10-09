@@ -42,6 +42,7 @@ use App\Http\Controllers\PuntoVentaController;
 use App\Http\Controllers\PvGrifoController;
 use App\Http\Controllers\PvTactilController;
 use App\Http\Controllers\PwaController;
+use App\Http\Controllers\RecetaController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\SireController;
@@ -426,6 +427,16 @@ Route::prefix('socio')->name('socio.portal')->controller(SocioPortalController::
     Route::get('/estado', 'estado')->middleware('throttle:30,1')->name('.estado');
     Route::get('/comprobante/{id}', 'comprobante')->whereNumber('id')->middleware('throttle:30,1')->name('.comprobante');
     Route::post('/congelar', 'congelar')->middleware('throttle:10,1')->name('.congelar');
+});
+
+// Recetas y food cost de los platos (Administrador)
+Route::middleware('auth')->prefix('recetas')->name('recetas.')->controller(RecetaController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/insumos', 'insumos')->name('insumos');
+    Route::post('/insumos', 'crearInsumo')->name('insumo.crear');
+    Route::get('/{id}', 'editar')->whereNumber('id')->name('editar');
+    Route::get('/{id}/receta', 'receta')->whereNumber('id')->name('receta');
+    Route::post('/{id}', 'guardar')->whereNumber('id')->name('guardar');
 });
 
 // Carta digital con QR: configuración (Administrador) y la carta pública que ven los clientes (sin sesión)
