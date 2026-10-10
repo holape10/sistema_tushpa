@@ -21,7 +21,8 @@
     @include('empresas.partials.alert')
 
     {{-- Qué es el food cost, en simple --}}
-    <section class="rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-600 text-white p-5 sm:p-7 shadow-lg">
+    <section class="rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-600 text-white p-5 sm:p-7 shadow-lg relative isolate overflow-hidden">
+        <x-kene-adorno patron="meandro" />
         <div class="flex flex-col md:flex-row gap-6 md:items-center">
             <div class="flex-1">
                 <h1 class="text-2xl font-black">🍳 Recetas y Food Cost</h1>

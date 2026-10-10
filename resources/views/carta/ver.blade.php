@@ -30,9 +30,8 @@
 <body class="bg-slate-100 text-slate-800 antialiased" x-data="carta()" x-init="iniciar()">
 
     {{-- Portada --}}
-    <header class="hero relative overflow-hidden text-white rounded-b-[2rem] shadow-lg">
-        <div class="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/10"></div>
-        <div class="absolute -left-14 bottom-0 w-40 h-40 rounded-full bg-white/5"></div>
+    <header class="hero relative overflow-hidden text-white rounded-b-[2rem] shadow-lg isolate">
+        <x-kene-adorno />
         <div class="relative max-w-3xl mx-auto px-5 pt-8 pb-7 text-center">
             @if ($logo)
                 <img src="{{ asset($logo) }}" alt="{{ $nombre }}" class="mx-auto h-24 w-24 rounded-3xl object-contain bg-white p-1.5 shadow-xl ring-4 ring-white/30">

@@ -13,7 +13,8 @@
 
     <div class="min-h-screen flex flex-col">
         <!-- Header -->
-        <header class="bg-gradient-to-r from-indigo-600 to-blue-600 py-6 px-4 sm:px-8 shadow-md">
+        <header class="bg-gradient-to-r from-indigo-600 to-blue-600 py-6 px-4 sm:px-8 shadow-md relative isolate overflow-hidden">
+            <x-kene-adorno patron="meandro" />
             <div class="max-w-6xl mx-auto">
                 <div class="flex justify-between items-center">
                     <div>

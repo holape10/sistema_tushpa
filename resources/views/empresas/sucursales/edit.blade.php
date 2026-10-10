@@ -32,7 +32,8 @@
         @csrf @method('PATCH')
 
         {{-- Encabezado --}}
-        <div class="rounded-2xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 text-white p-5 sm:p-6 mb-5 shadow-sm">
+        <div class="rounded-2xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 text-white p-5 sm:p-6 mb-5 shadow-sm relative isolate overflow-hidden">
+            <x-kene-adorno patron="cruces" />
             <div class="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div class="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center text-2xl shrink-0"><i class="fas fa-store"></i></div>
                 <div class="min-w-0 flex-1">

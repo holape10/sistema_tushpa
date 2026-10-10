@@ -6,7 +6,8 @@
 
     <form method="POST" action="{{ route('sucursales.store') }}" class="max-w-4xl space-y-5">
         @csrf
-        <div class="rounded-2xl bg-gradient-to-r from-indigo-700 to-violet-600 text-white p-5">
+        <div class="rounded-2xl bg-gradient-to-r from-indigo-700 to-violet-600 text-white p-5 relative isolate overflow-hidden">
+            <x-kene-adorno patron="cruces" />
             <h1 class="text-xl font-extrabold">Nueva sucursal</h1>
             <p class="text-sm text-indigo-100">Otro local de la misma empresa (otra calle u otra ciudad), con sus propias series y correlativos.</p>
         </div>

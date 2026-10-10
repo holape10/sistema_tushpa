@@ -75,9 +75,11 @@
 
     <!-- Menú lateral -->
     <aside :class="visible ? 'translate-x-0' : '-translate-x-full'"
-           class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full bg-indigo-900 text-white transform transition-transform duration-200 shadow-2xl flex flex-col">
+           class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full bg-indigo-900 text-white transform transition-transform duration-200 shadow-2xl flex flex-col isolate">
+        {{-- Textura kené de fondo: muy tenue para no competir con el texto --}}
+        <div class="kene kene-meandro absolute inset-0 -z-10 text-white/[0.04]" aria-hidden="true"></div>
 
-        <div class="px-4 pt-4 pb-3 border-b border-indigo-800 shrink-0">
+        <div class="px-4 pt-4 pb-3 shrink-0">
             <div class="flex items-center gap-2">
                 <img src="{{ asset('imagenes/512.png') }}" alt="Logo" class="w-9 h-9 rounded-lg object-contain bg-white p-1">
                 <div class="min-w-0 flex-1">
@@ -101,6 +103,7 @@
                        class="w-full h-9 pl-9 pr-3 rounded-lg border-0 bg-indigo-800/70 text-sm text-white placeholder:text-indigo-300 focus:ring-2 focus:ring-indigo-400">
             </div>
         </div>
+        <div class="kene kene-franja h-3 mx-3 shrink-0 text-indigo-400/50" aria-hidden="true"></div>
 
         <nav class="flex-1 overflow-y-auto overscroll-contain px-2 py-3 text-sm [scrollbar-width:thin] [scrollbar-color:#6366f1_transparent]">
             {{-- Resultados del buscador --}}
@@ -123,8 +126,11 @@
                         @foreach ($modulos as $mod)
                             @if ($listo($mod))
                                 <a href="{{ url($mod->mod_url) }}"
-                                   class="flex items-center px-3 py-2 rounded-lg font-medium transition {{ $esActual($mod) ? 'bg-white text-indigo-900' : 'text-indigo-100 hover:bg-indigo-800' }}">
+                                   class="flex items-center justify-between px-3 py-2 rounded-lg font-medium transition {{ $esActual($mod) ? 'bg-white text-indigo-900' : 'text-indigo-100 hover:bg-indigo-800' }}">
                                     {{ $mod->mod_nom }}
+                                    @if ($esActual($mod))
+                                        <span class="w-2 h-2 rotate-45 bg-indigo-500 shrink-0" aria-hidden="true"></span>
+                                    @endif
                                 </a>
                             @else
                                 <span class="flex items-center justify-between px-3 py-2 rounded-lg font-medium text-indigo-100/50 cursor-default" title="Aún en desarrollo">
@@ -133,7 +139,7 @@
                                 </span>
                             @endif
                         @endforeach
-                        <div class="my-2 border-t border-indigo-800"></div>
+                        <div class="kene kene-franja h-3 my-2 mx-1 text-indigo-400/40" aria-hidden="true"></div>
                     @else
                         <div>
                             <button type="button" @click="alternarGrupo(@js($grupo))" :aria-expanded="grupo === @js($grupo)"
@@ -154,7 +160,8 @@
                                     ['Próximamente', 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', $modulos->filter(fn ($m) => !$esReporte($m) && !$listo($m))],
                                 ];
                                 $enlace = fn ($m, $nombre) => $listo($m)
-                                    ? '<a href="' . e(url($m->mod_url)) . '" class="block px-3 py-1.5 rounded-lg text-[13px] transition ' . ($esActual($m) ? 'bg-white text-indigo-900 font-semibold' : 'text-indigo-200 hover:bg-indigo-800 hover:text-white') . '">' . e($nombre) . '</a>'
+                                    ? '<a href="' . e(url($m->mod_url)) . '" class="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-[13px] transition ' . ($esActual($m) ? 'bg-white text-indigo-900 font-semibold' : 'text-indigo-200 hover:bg-indigo-800 hover:text-white') . '">' . e($nombre)
+                                        . ($esActual($m) ? '<span class="w-1.5 h-1.5 rotate-45 bg-indigo-500 shrink-0" aria-hidden="true"></span>' : '') . '</a>'
                                     : '<span class="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-[13px] text-indigo-200/45 cursor-default" title="Aún en desarrollo">' . e($nombre)
                                         . '<span class="shrink-0 text-[9px] font-semibold uppercase bg-indigo-800 text-indigo-300/80 px-1.5 py-0.5 rounded">Pronto</span></span>';
                             @endphp
@@ -229,6 +236,7 @@
                 </form>
             </div>
         </header>
+        <div class="kene kene-franja h-3 shrink-0 text-indigo-300/60" aria-hidden="true"></div>
 
         <main class="flex-1 overflow-y-auto p-4 sm:p-6">
             @yield('content')

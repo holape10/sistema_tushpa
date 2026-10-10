@@ -12,7 +12,8 @@
 
     <div class="min-h-screen flex flex-col">
         <!-- Header -->
-        <header class="bg-gradient-to-r from-indigo-600 to-blue-600 py-6 px-4 sm:px-8 shadow-md">
+        <header class="bg-gradient-to-r from-indigo-600 to-blue-600 py-6 px-4 sm:px-8 shadow-md relative isolate overflow-hidden">
+            <x-kene-adorno patron="meandro" />
             <div class="max-w-4xl mx-auto">
                 <h1 class="text-white text-xl sm:text-2xl font-bold">Configuración inicial</h1>
                 <p class="text-indigo-100 text-sm mt-1">Registra los datos de tu empresa para comenzar a usar el sistema</p>

@@ -12,7 +12,8 @@
 <div class="max-w-6xl mx-auto space-y-5 pb-24" x-data="preparados(@js($filas), @js($catalogo))">
     @include('empresas.partials.alert')
 
-    <section class="rounded-3xl bg-gradient-to-br from-orange-500 to-rose-500 text-white p-5 sm:p-6 shadow-lg">
+    <section class="rounded-3xl bg-gradient-to-br from-orange-500 to-rose-500 text-white p-5 sm:p-6 shadow-lg relative isolate overflow-hidden">
+        <x-kene-adorno patron="escalera" />
         <h1 class="text-2xl font-black">🍲 Gestión de Preparados · hoy {{ now()->format('d/m') }}</h1>
         <p class="mt-1 text-orange-50 text-sm">Platos que preparas por cantidad cada día (juanes, tamales, sopa del día, postres…). Cada día empieza en cero.
             Lo enviado a cocina se reserva, lo vendido se resta y cuando se acaba la comanda muestra <b>"AGOTADO HOY"</b>.</p>

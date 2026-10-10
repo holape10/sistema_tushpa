@@ -19,6 +19,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\EntradaController;
 use App\Http\Controllers\EntrenadorController;
+use App\Http\Controllers\EstacionamientoController;
 use App\Http\Controllers\FidelizacionController;
 use App\Http\Controllers\GastoController;
 use App\Http\Controllers\GimnasioController;
@@ -474,6 +475,31 @@ Route::middleware('auth')->prefix('recetas')->name('recetas.')->controller(Recet
     Route::get('/{id}/receta', 'receta')->whereNumber('id')->name('receta');
     Route::post('/{id}', 'guardar')->whereNumber('id')->name('guardar');
 });
+
+// Estacionamiento / valet parking: operación, configuración, abonados y reporte
+Route::middleware('auth')->prefix('estacionamiento')->name('estacionamiento.')->controller(EstacionamientoController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/estado', 'estado')->name('estado');
+    Route::post('/entrada', 'entrada')->name('entrada');
+    Route::get('/buscar', 'buscar')->name('buscar');
+    Route::get('/tickets/{id}', 'detalle')->whereNumber('id')->name('detalle');
+    Route::get('/tickets/{id}/imprimir', 'imprimir')->whereNumber('id')->name('imprimir');
+    Route::post('/tickets/{id}/cobrar', 'cobrar')->whereNumber('id')->name('cobrar');
+    Route::post('/tickets/{id}/solicitar', 'solicitar')->whereNumber('id')->name('solicitar');
+    Route::post('/tickets/{id}/espacio', 'moverEspacio')->whereNumber('id')->name('espacio');
+    Route::post('/tickets/{id}/anular', 'anular')->whereNumber('id')->name('anular');
+    Route::post('/tarifas', 'guardarTarifa')->name('tarifa');
+    Route::post('/espacios', 'generarEspacios')->name('espacios.generar');
+    Route::post('/espacios/{id}', 'guardarEspacio')->whereNumber('id')->name('espacios.guardar');
+    Route::post('/espacios/{id}/quitar', 'quitarEspacio')->whereNumber('id')->name('espacios.quitar');
+    Route::get('/abonados', 'abonados')->name('abonados');
+    Route::post('/abonados', 'venderPension')->name('abonados.vender');
+    Route::post('/abonados/{id}', 'editarAbonado')->whereNumber('id')->name('abonados.editar');
+    Route::get('/reporte', 'reporte')->name('reporte');
+});
+// El cliente escanea el QR de su ticket: ve su tiempo y pide su auto (sin sesión)
+Route::get('/valet/{codigo}', [EstacionamientoController::class, 'publico'])->where('codigo', '[A-Za-z0-9]{10}')->middleware('throttle:60,1')->name('valet.ver');
+Route::post('/valet/{codigo}', [EstacionamientoController::class, 'pedir'])->where('codigo', '[A-Za-z0-9]{10}')->middleware('throttle:10,1')->name('valet.pedir');
 
 // Carta digital con QR: configuración (Administrador) y la carta pública que ven los clientes (sin sesión)
 Route::middleware('auth')->prefix('carta')->name('carta.')->controller(CartaController::class)->group(function () {

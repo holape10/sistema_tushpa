@@ -18,8 +18,8 @@
 
     <div x-data="{ q: '', todos: @js($grupos->flatten(1)->map(fn ($a) => $a['nombre'].' '.$a['grupo'])->merge($reportes->map(fn ($r) => 'reporte '.$r['nombre']))->values()), ver(t) { const n = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); return !this.q.trim() || n(t).includes(n(this.q.trim())); } }">
         {{-- Bienvenida --}}
-        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-600 text-white p-6 md:p-8 mb-6 shadow-lg">
-            <i class="fas fa-house absolute -right-6 -bottom-8 text-[11rem] opacity-10"></i>
+        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-600 text-white p-6 md:p-8 mb-6 shadow-lg isolate">
+            <x-kene-adorno />
             <div class="relative flex flex-wrap items-end justify-between gap-5">
                 <div>
                     <p class="text-indigo-200 text-sm font-medium" x-data="{ t: '' }" x-init="const f = () => t = new Date().toLocaleString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); f(); setInterval(f, 30000)" x-text="t"></p>
@@ -79,12 +79,13 @@
             <section class="mb-7" x-data="{ lista: @js($accesos->map(fn ($a) => $a['nombre'].' '.$a['grupo'])) }" x-show="lista.some(t => ver(t))">
                 <h2 class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
                     {{ $principal ? 'Accesos principales' : $grupo }}
-                    <span class="flex-1 h-px bg-slate-200"></span>
+                    <span class="kene kene-franja flex-1 h-3 text-slate-300" aria-hidden="true"></span>
                 </h2>
                 <div class="grid gap-4 {{ $principal ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6' }}">
                     @foreach ($accesos as $a)
                         <a href="{{ $a['url'] }}" x-show="ver(@js($a['nombre'] . ' ' . $a['grupo']))" style="--c: {{ $a['color'] }}"
-                           class="acceso group relative overflow-hidden rounded-2xl text-white shadow-md transition duration-300 flex flex-col {{ $principal ? 'h-40' : 'h-32' }}">
+                           class="acceso group relative isolate overflow-hidden rounded-2xl text-white shadow-md transition duration-300 flex flex-col {{ $principal ? 'h-40' : 'h-32' }}">
+                            <x-kene-esquina />
                             <i class="acceso-fondo fas {{ $a['icono'] }} absolute -right-3 -bottom-4 transition duration-500 {{ $principal ? 'text-8xl' : 'text-7xl' }}" style="opacity:.14"></i>
                             <div class="relative flex-1 flex flex-col items-center justify-center gap-2 px-3 text-center">
                                 <span class="{{ $principal ? 'w-16 h-16 text-3xl' : 'w-12 h-12 text-xl' }} rounded-2xl bg-white/20 ring-1 ring-white/30 flex items-center justify-center shadow-inner">
@@ -109,7 +110,7 @@
         @if ($reportes->isNotEmpty())
             <section class="mb-7" x-data="{ lista: @js($reportes->map(fn ($r) => 'reporte '.$r['nombre'])) }" x-show="lista.some(t => ver(t))">
                 <h2 class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-                    Reportes <span class="flex-1 h-px bg-slate-200"></span>
+                    Reportes <span class="kene kene-franja flex-1 h-3 text-slate-300" aria-hidden="true"></span>
                 </h2>
                 <div class="flex flex-wrap gap-2">
                     @foreach ($reportes as $r)

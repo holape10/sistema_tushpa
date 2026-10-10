@@ -13,7 +13,8 @@
 <body class="bg-slate-100 min-h-screen" x-data="kiosko(@js($tarjetas), @js($motivos))" x-init="iniciar()" @keydown.window="tecla($event)">
 
     {{-- Encabezado: reloj, lector y resumen --}}
-    <header class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-violet-800 text-white">
+    <header class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-violet-800 text-white relative isolate overflow-hidden">
+        <x-kene-adorno patron="laberinto" />
         <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-5 grid lg:grid-cols-3 gap-5 items-center">
             <div class="flex items-center gap-4">
                 <a href="{{ route('dashboard') }}" title="Volver al sistema" class="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"><i class="fas fa-arrow-left"></i></a>

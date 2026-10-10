@@ -16,7 +16,7 @@
         $linkVentas = fn($extra = []) => route('ventas.index', ['sucursal' => $sucursal, 'desde' => $desde, 'hasta' => $hasta, 'estado' => 'vigentes'] + $extra);
         $puedeVerVentas = auth()->user()->esAdminOCaja();
         // Nombre visible del tipo de pedido (ped_tip)
-        $nombrePedido = ['Salon' => 'Salón', 'Llevar' => 'Para llevar', 'Delivery' => 'Delivery', 'PV' => 'Punto de venta', 'FARMACIA' => 'PV Farmacia', 'POS' => 'POS', 'Directa' => 'Venta directa'];
+        $nombrePedido = ['Salon' => 'Salón', 'Llevar' => 'Para llevar', 'Delivery' => 'Delivery', 'PV' => 'Punto de venta', 'FARMACIA' => 'PV Farmacia', 'POS' => 'POS', 'Directa' => 'Venta directa', 'PARKING' => 'Estacionamiento'];
     @endphp
 
     {{-- Filtros --}}
@@ -73,7 +73,8 @@
             ['Facturas', $kpi['facturas'], 'from-emerald-400 to-teal-400', 'fa-file-invoice', ['tipo' => '01']],
             ['Boletas', $kpi['boletas'], 'from-pink-500 to-amber-400', 'fa-receipt', ['tipo' => '03']],
         ] as [$titulo, $valor, $gradiente, $icono, $filtro])
-            <a href="{{ $puedeVerVentas ? $linkVentas($filtro) : '#' }}" class="relative overflow-hidden rounded-2xl p-5 text-white bg-gradient-to-br {{ $gradiente }} shadow-lg hover:-translate-y-1 transition">
+            <a href="{{ $puedeVerVentas ? $linkVentas($filtro) : '#' }}" class="relative isolate overflow-hidden rounded-2xl p-5 text-white bg-gradient-to-br {{ $gradiente }} shadow-lg hover:-translate-y-1 transition">
+                <x-kene-esquina />
                 <p class="text-[11px] font-bold uppercase tracking-wider opacity-90">{{ $titulo }}</p>
                 <p class="text-2xl font-extrabold mt-1">{{ $soles($valor) }}</p>
                 <p class="text-xs opacity-80 mt-1">{{ $kpi['total'] > 0 ? round($valor / $kpi['total'] * 100) : 0 }}% del total</p>
@@ -81,7 +82,8 @@
             </a>
         @endforeach
 
-        <a href="{{ $puedeVerVentas ? $linkVentas() : '#' }}" class="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg hover:-translate-y-1 transition md:col-span-1 xl:col-span-1">
+        <a href="{{ $puedeVerVentas ? $linkVentas() : '#' }}" class="relative isolate overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg hover:-translate-y-1 transition md:col-span-1 xl:col-span-1">
+            <x-kene-esquina />
             <p class="text-[11px] font-bold uppercase tracking-wider opacity-90">Total ventas</p>
             <p class="text-2xl font-extrabold mt-1">{{ $soles($kpi['total']) }}</p>
             @if ($kpi['variacion'] !== null)
@@ -93,14 +95,16 @@
             <i class="fas fa-cart-shopping absolute right-4 bottom-3 text-4xl opacity-25"></i>
         </a>
 
-        <div class="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg">
+        <div class="relative isolate overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg">
+            <x-kene-esquina />
             <p class="text-[11px] font-bold uppercase tracking-wider opacity-90">Utilidad</p>
             <p class="text-2xl font-extrabold mt-1">{{ $soles($kpi['utilidad']) }}</p>
             <p class="text-xs opacity-80 mt-1">{{ $kpi['sinCosto'] ? 'Productos sin costo registrado' : 'Margen ' . $kpi['margen'] . '%' }}</p>
             <i class="fas fa-chart-line absolute right-4 bottom-3 text-4xl opacity-25"></i>
         </div>
 
-        <div class="relative overflow-hidden rounded-2xl p-5 bg-white shadow-lg">
+        <div class="relative isolate overflow-hidden rounded-2xl p-5 bg-white shadow-lg">
+            <x-kene-esquina color="text-indigo-100" />
             <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Ticket promedio</p>
             <p class="text-2xl font-extrabold mt-1 text-gray-800">{{ $soles($kpi['ticket']) }}</p>
             <p class="text-xs text-gray-500 mt-1">{{ $kpi['cantidad'] }} comprobantes</p>

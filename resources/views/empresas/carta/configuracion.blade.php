@@ -11,7 +11,8 @@
 <div class="max-w-5xl mx-auto space-y-5">
     @include('empresas.partials.alert')
 
-    <section class="rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-600 text-white p-5 sm:p-7 shadow-lg">
+    <section class="rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-600 text-white p-5 sm:p-7 shadow-lg relative isolate overflow-hidden">
+        <x-kene-adorno />
         <div class="flex flex-col md:flex-row md:items-center gap-6">
             <div class="bg-white rounded-2xl p-3 shadow-xl self-center shrink-0 [&_svg]:w-44 [&_svg]:h-44">{!! $qr !!}</div>
             <div class="flex-1 min-w-0">

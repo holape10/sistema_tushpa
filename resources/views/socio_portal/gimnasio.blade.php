@@ -45,7 +45,8 @@
     @endif
 
     {{-- Estado --}}
-    <section class="rounded-3xl text-white p-6 shadow-lg bg-gradient-to-br" :class="fondo">
+    <section class="rounded-3xl text-white p-6 shadow-lg bg-gradient-to-br relative isolate overflow-hidden" :class="fondo">
+        <x-kene-adorno patron="escalera" />
         <div class="flex items-center gap-4">
             @if ($socio->foto && is_file(public_path($socio->foto)))
                 <img src="{{ asset($socio->foto) }}" alt="" class="w-16 h-16 rounded-2xl object-cover ring-4 ring-white/30">

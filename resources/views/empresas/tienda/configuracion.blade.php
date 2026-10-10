@@ -12,7 +12,8 @@
         </div>
     @endunless
 
-    <section class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white p-5 sm:p-6 shadow-sm">
+    <section class="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white p-5 sm:p-6 shadow-sm relative isolate overflow-hidden">
+        <x-kene-adorno />
         <div class="flex flex-wrap items-center gap-4">
             <span class="text-4xl">🛍️</span>
             <div class="flex-1 min-w-0">

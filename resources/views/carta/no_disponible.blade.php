@@ -6,7 +6,8 @@
     <title>Carta no disponible</title>
     @vite(['resources/css/app.css'])
 </head>
-<body class="min-h-screen bg-gradient-to-br from-indigo-700 to-violet-700 flex items-center justify-center p-6 text-center text-white">
+<body class="min-h-screen bg-gradient-to-br from-indigo-700 to-violet-700 flex items-center justify-center p-6 text-center text-white relative isolate overflow-hidden">
+    <x-kene-adorno patron="rombos" :franja="false" />
     <div>
         <div class="text-6xl mb-4">🍽️</div>
         <h1 class="text-2xl font-black">Carta no disponible</h1>

@@ -5,7 +5,8 @@
 <div class="max-w-6xl mx-auto space-y-5">
     @include('empresas.partials.alert')
 
-    <section class="rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white p-5 sm:p-6 shadow-lg">
+    <section class="rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white p-5 sm:p-6 shadow-lg relative isolate overflow-hidden">
+        <x-kene-adorno patron="escalera" />
         <h1 class="text-2xl font-black">🥗 Entradas del menú</h1>
         <p class="mt-1 text-emerald-50 text-sm">Así funciona, en 3 pasos:</p>
         <div class="grid sm:grid-cols-3 gap-3 mt-3 text-sm">

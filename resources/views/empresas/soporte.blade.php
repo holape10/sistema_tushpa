@@ -14,7 +14,8 @@
 @section('content')
 <div class="max-w-4xl mx-auto space-y-4" x-data="{ copiado: false }">
 
-    <section class="rounded-3xl overflow-hidden shadow-sm bg-gradient-to-br from-indigo-700 to-indigo-900 text-white">
+    <section class="rounded-3xl overflow-hidden shadow-sm bg-gradient-to-br from-indigo-700 to-indigo-900 text-white relative isolate">
+        <x-kene-adorno patron="laberinto" />
         <div class="p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-5">
             <img src="{{ asset('imagenes/512.png') }}" alt="" class="w-16 h-16 rounded-2xl bg-white p-2 shrink-0">
             <div class="flex-1">

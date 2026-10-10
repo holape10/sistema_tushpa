@@ -40,7 +40,8 @@
     @endif
 
     {{-- Estado --}}
-    <section class="rounded-3xl text-white p-6 shadow-lg bg-gradient-to-br" :class="color">
+    <section class="rounded-3xl text-white p-6 shadow-lg bg-gradient-to-br relative isolate overflow-hidden" :class="color">
+        <x-kene-adorno />
         <p class="text-sm opacity-90">Hola, {{ \Illuminate\Support\Str::of($socio->clinom)->title() }}</p>
         <p class="text-4xl font-black tracking-wide mt-1" x-text="d.estado"></p>
         <div class="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-sm opacity-95">

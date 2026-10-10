@@ -44,6 +44,9 @@ class Rubros
         'GIMNASIO' => ['nombre' => 'Gimnasio', 'ejemplos' => 'Gimnasio, academia (membresías y control de ingreso)', 'modulos' => [
             '/gimnasio', '/gimnasio/acceso', '/gimnasio/entrenador', '/pv',
         ]],
+        'ESTACIONAMIENTO' => ['nombre' => 'Estacionamiento', 'ejemplos' => 'Playa de estacionamiento, valet parking, cochera', 'modulos' => [
+            '/estacionamiento', '/estacionamiento/abonados', '/estacionamiento/reporte',
+        ]],
         'CLUB' => ['nombre' => 'Club / asociación', 'ejemplos' => 'Club, asociación (socios y cuotas)', 'modulos' => [
             '/socios', '/punto-venta', '/comandas', '/pv',
         ]],

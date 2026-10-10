@@ -15,7 +15,8 @@
     <div class="min-h-screen flex flex-col lg:flex-row">
 
         <!-- Panel izquierdo: marca + rubros -->
-        <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-indigo-950 via-indigo-800 to-blue-700 flex-col items-center justify-center overflow-hidden px-10 py-12">
+        <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-indigo-950 via-indigo-800 to-blue-700 flex-col items-center justify-center overflow-hidden px-10 py-12 isolate">
+            <x-kene-adorno patron="laberinto" color="text-white/[0.07]" :franja="false" />
             <!-- Decoración de fondo -->
             <div class="absolute -top-24 -left-24 w-80 h-80 bg-white/5 rounded-full"></div>
             <div class="absolute bottom-0 right-0 w-96 h-96 bg-white/5 rounded-full"></div>

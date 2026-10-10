@@ -26,8 +26,8 @@
 <div class="max-w-7xl mx-auto space-y-5">
 
     {{-- Cabecera y periodo --}}
-    <section class="rounded-3xl bg-gradient-to-br from-purple-800 via-fuchsia-700 to-rose-600 text-white p-5 sm:p-7 shadow-xl relative overflow-hidden">
-        <i class="fas fa-hotel absolute -right-6 -bottom-8 text-[10rem] opacity-10"></i>
+    <section class="rounded-3xl bg-gradient-to-br from-purple-800 via-fuchsia-700 to-rose-600 text-white p-5 sm:p-7 shadow-xl relative overflow-hidden isolate">
+        <x-kene-adorno patron="cruces" />
         <div class="relative flex flex-wrap items-end gap-4">
             <div class="flex-1 min-w-60">
                 <a href="{{ route('hotel.index') }}" class="text-xs text-fuchsia-200 hover:text-white print:hidden">← Volver al hotel</a>
