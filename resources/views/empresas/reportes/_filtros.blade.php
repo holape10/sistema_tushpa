@@ -57,6 +57,12 @@
             @foreach (['producto' => 'Producto', 'categoria' => 'Categoría', 'dia' => 'Día', 'mes' => 'Mes'] as $v => $n)<option value="{{ $v }}" @selected(request('agrupar', 'producto') === $v)>{{ $n }}</option>@endforeach
         </select></label>
 @endif
+@if (in_array('agrupar_consumo', $usa, true))
+    <label class="text-sm">Ver por
+        <select name="agrupar" class="block rounded-lg border-gray-300 text-sm">
+            @foreach (['insumo' => 'Insumo (cuánto se gastó)', 'plato' => 'Plato vendido', 'dia' => 'Día (costo)'] as $v => $n)<option value="{{ $v }}" @selected(request('agrupar', 'insumo') === $v)>{{ $n }}</option>@endforeach
+        </select></label>
+@endif
 @if (in_array('orden', $usa, true))
     <label class="text-sm">Mostrar
         <select name="orden" class="block rounded-lg border-gray-300 text-sm">

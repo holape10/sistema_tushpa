@@ -170,6 +170,7 @@
                                 @isset($r['presentaciones'])<span><strong class="text-violet-600 text-lg">{{ number_format($r['presentaciones']) }}</strong> presentaciones</span>@endisset
                                 @isset($r['ventas'])<span><strong class="text-emerald-700 text-lg">{{ number_format($r['ventas']) }}</strong> ventas</span>
                                     <span><strong class="text-emerald-700 text-lg">{{ number_format($r['compras']) }}</strong> compras</span>@endisset
+                                @isset($r['recetas'])<span><strong class="text-amber-600 text-lg">{{ number_format($r['recetas']) }}</strong> recetas</span>@endisset
                                 @isset($r['precios_dinamicos'])<span><strong class="text-orange-600 text-lg">{{ number_format($r['precios_dinamicos']) }}</strong> precios dinámicos</span>@endisset
                             </div>
                         @endif

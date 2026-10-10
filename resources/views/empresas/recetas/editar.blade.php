@@ -2,11 +2,12 @@
 @section('title', 'Receta · '.$plato->pronom)
 
 @section('content')
+@php $esEntrada = (int) $plato->promocion === \App\Models\Producto::OPCION; @endphp
 <div class="max-w-6xl mx-auto" x-data="receta()" x-init="iniciar()">
     <div class="flex flex-wrap items-center gap-3 mb-4">
-        <a href="{{ route('recetas.index') }}" class="h-10 w-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-gray-500 hover:text-indigo-600" title="Volver">←</a>
+        <a href="{{ $esEntrada ? route('entradas.index') : route('recetas.index') }}" class="h-10 w-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-gray-500 hover:text-indigo-600" title="Volver">←</a>
         <div class="flex-1 min-w-0">
-            <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">Receta de</p>
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ $esEntrada ? 'Insumos de la entrada' : 'Receta de' }}</p>
             <h1 class="text-xl sm:text-2xl font-black text-gray-800 truncate">{{ $plato->pronom }}</h1>
         </div>
         @if ($otros->isNotEmpty())
@@ -87,6 +88,14 @@
 
         {{-- Resultado --}}
         <aside class="lg:sticky lg:top-4 space-y-4">
+            @if ($esEntrada)
+                <div class="bg-white rounded-2xl shadow-sm p-5 text-center">
+                    <p class="text-sm text-gray-500">Cada porción de esta entrada cuesta</p>
+                    <p class="text-4xl font-black text-emerald-700 mt-1" x-text="soles(total)"></p>
+                    <p class="text-xs text-gray-400 mt-2">Se suma al costo del plato de menú que la lleva, y sus insumos salen del almacén cuando se cobra.</p>
+                    <p x-show="sinCosto" class="mt-3 rounded-xl bg-rose-50 text-rose-800 text-xs p-3 text-left">⚠ Hay insumos <b>sin costo</b> (en rojo): escribe a cuánto los compras.</p>
+                </div>
+            @else
             <div class="bg-white rounded-2xl shadow-sm p-5 text-center">
                 <div class="mx-auto w-44 h-44 rounded-full flex items-center justify-center"
                      :style="'background: conic-gradient(' + estado.color + ' ' + Math.min(100, fc || 0) + '%, #eef2f7 0)'">
@@ -111,11 +120,12 @@
                     ⚠ Hay ingredientes <b>sin costo</b> (en rojo): escribe a cuánto los compras para que el cálculo sea real.
                 </p>
             </div>
+            @endif
 
             <button type="button" @click="guardar()" :disabled="guardando"
                     class="w-full h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-black shadow-lg shadow-indigo-200"
                     x-text="guardando ? 'Guardando…' : '💾 Guardar receta'"></button>
-            @if ($siguiente)
+            @if ($siguiente && ! $esEntrada)
                 <a href="{{ route('recetas.editar', $siguiente->IdProducto) }}" class="block text-center text-sm text-indigo-600 font-semibold">Siguiente sin receta: {{ $siguiente->pronom }} →</a>
             @endif
             <p class="text-xs text-gray-400 text-center px-2">Al vender este plato se descuentan sus ingredientes del almacén. Si anulas la venta, regresan.</p>

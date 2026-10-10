@@ -48,6 +48,21 @@
         .pres-opcion { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 10px; border: 2px solid #e2e8f0; background: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; font-weight: 700; font-size: 1em; color: #1e293b; cursor: pointer; }
         .pres-opcion:hover { border-color: #4f46e5; background: #eef2ff; }
         .pres-opcion span:last-child { color: #4f46e5; white-space: nowrap; }
+        .cart-opciones { display: block; font-size: .78em; font-weight: 600; color: #92400e; background: #fef3c7; border-radius: 6px; padding: 2px 6px; margin-top: 3px; }
+        .op-grupo { margin-bottom: 14px; }
+        .op-grupo-titulo { display: flex; justify-content: space-between; align-items: center; font-weight: 800; color: #1e293b; margin-bottom: 6px; }
+        .op-contador { font-size: .8em; padding: 2px 8px; border-radius: 999px; background: #fee2e2; color: #b91c1c; }
+        .op-contador.ok { background: #dcfce7; color: #166534; }
+        .op-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+        .op-item { position: relative; border: 2px solid #e2e8f0; background: #fff; border-radius: 12px; padding: 10px; font-weight: 700; font-size: .88em; color: #334155; cursor: pointer; text-align: left; }
+        .op-item.sel { border-color: #4f46e5; background: #eef2ff; color: #3730a3; }
+        .op-item small { display: block; color: #059669; font-weight: 700; }
+        .op-item .op-veces { position: absolute; top: -8px; right: -6px; background: #4f46e5; color: #fff; border-radius: 999px; min-width: 22px; height: 22px; font-size: .8em; display: flex; align-items: center; justify-content: center; }
+        .op-limpiar { font-size: .78em; color: #64748b; background: none; border: 0; cursor: pointer; text-decoration: underline; }
+        .op-pie { display: flex; gap: 8px; align-items: center; margin-top: 8px; position: sticky; bottom: -18px; background: #fff; padding: 10px 0 2px; }
+        .op-agregar { flex: 1; border: 0; border-radius: 12px; padding: 12px; font-weight: 800; color: #fff; background: #4f46e5; cursor: pointer; }
+        .op-agregar:disabled { background: #a5b4fc; cursor: not-allowed; }
+        .pres-caja.grande { max-width: 560px; max-height: 88vh; overflow-y: auto; }
         .pres-cancelar { width: 100%; border: 0; background: #f1f5f9; border-radius: 12px; padding: 10px; font-weight: 700; color: #475569; cursor: pointer; }
 
         .cart-header { font-size: 1.4em; font-weight: bold; color: #333; margin-bottom: 15px; text-align: center; }
@@ -251,11 +266,64 @@
             });
         }
 
-        function agregarProducto(idProducto, presentacion = null) {
-            return post("{{ route('comandas.add_to_cart') }}", { id: idProducto, presentacion: presentacion }).then(res => {
+        function agregarProducto(idProducto, presentacion = null, opciones = null) {
+            return post("{{ route('comandas.add_to_cart') }}", { id: idProducto, presentacion: presentacion, opciones: opciones }).then(res => {
                 if (!res.success) alert(res.message || 'No se pudo agregar.');
                 return recargarCarrito();
             });
+        }
+
+        // Plato con opciones (entrada del menú, arma tu trío): el mozo elige en un modal
+        let modalOp = null;
+        function abrirOpciones(id) {
+            fetch("{{ url('/comandas/opciones') }}/" + id, { headers: { Accept: 'application/json' } }).then(r => r.json()).then(d => {
+                modalOp = { d, pres: null, sel: Object.fromEntries(d.grupos.map(g => [g.grupo_id, []])) };
+                document.getElementById('pres_modal')?.remove();
+                document.body.insertAdjacentHTML('beforeend', '<div class="pres-fondo" id="pres_modal"><div class="pres-caja grande" id="op_caja"></div></div>');
+                pintarOpciones();
+            });
+        }
+        function tocarOpcion(grupoId, id) {
+            const g = modalOp.d.grupos.find(x => String(x.grupo_id) === String(grupoId));
+            const sel = modalOp.sel[g.grupo_id];
+            const ya = sel.includes(id);
+            if (ya && !g.repetir) sel.splice(sel.indexOf(id), 1);
+            else if (sel.length < g.cantidad) sel.push(id);
+            else if (g.cantidad === 1) { sel.length = 0; sel.push(id); }
+            pintarOpciones();
+        }
+        function pintarOpciones() {
+            const { d, sel } = modalOp;
+            const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            const soles = (n) => 'S/ ' + Number(n).toFixed(2);
+            const presElegida = (d.presentaciones || []).find(p => String(p.id) === String(modalOp.pres));
+            const base = presElegida ? (presElegida.precio > 0 ? presElegida.precio : d.precio * presElegida.factor) : d.precio;
+            let extra = 0, completo = true;
+            let html = '<h3>' + esc(d.nombre) + '</h3><p>Elige las opciones del cliente</p>';
+            if ((d.presentaciones || []).length) {
+                html += '<div class="op-grupo"><div class="op-grupo-titulo">Presentación</div><div class="op-lista">'
+                    + [{ id: '', nombre: 'UNIDAD', precio: d.precio }].concat(d.presentaciones).map(p => '<button type="button" class="op-item op-pres ' + (String(p.id || '') === String(modalOp.pres || '') ? 'sel' : '')
+                        + '" data-pres="' + (p.id || '') + '">' + esc(p.nombre) + '<small>' + soles(p.precio > 0 ? p.precio : d.precio * (p.factor || 1)) + '</small></button>').join('') + '</div></div>';
+            }
+            d.grupos.forEach(g => {
+                const s = sel[g.grupo_id];
+                const ok = g.obligatorio ? s.length === g.cantidad : true;
+                if (!ok) completo = false;
+                html += '<div class="op-grupo"><div class="op-grupo-titulo"><span>' + esc(g.nombre) + ' <span style="font-weight:600;color:#64748b;font-size:.85em">· '
+                    + (g.obligatorio ? 'elige ' + g.cantidad : 'opcional, hasta ' + g.cantidad) + '</span></span><span>'
+                    + (s.length ? '<button type="button" class="op-limpiar" data-grupo="' + g.grupo_id + '">limpiar</button> ' : '')
+                    + '<span class="op-contador ' + (ok ? 'ok' : '') + '">' + s.length + '/' + g.cantidad + '</span></span></div><div class="op-lista">';
+                g.items.forEach(it => {
+                    const veces = s.filter(x => x === it.id).length;
+                    extra += veces * it.precio_extra;
+                    html += '<button type="button" class="op-item ' + (veces ? 'sel' : '') + '" data-grupo="' + g.grupo_id + '" data-id="' + it.id + '">' + esc(it.nombre)
+                        + (it.precio_extra > 0 ? '<small>+ ' + soles(it.precio_extra) + '</small>' : '') + (veces > 1 ? '<span class="op-veces">' + veces + '</span>' : '') + '</button>';
+                });
+                html += '</div></div>';
+            });
+            html += '<div class="op-pie"><button type="button" class="pres-cancelar" style="width:auto;padding:12px 16px">Cancelar</button>'
+                + '<button type="button" class="op-agregar" ' + (completo ? '' : 'disabled') + '>Agregar · ' + soles(base + extra) + '</button></div>';
+            document.getElementById('op_caja').innerHTML = html;
         }
 
         // Producto con presentaciones (TAJADA / ENTERA, VASO / JARRA): el mozo elige cuál
@@ -281,7 +349,24 @@
         document.addEventListener('click', function (e) {
             const card = e.target.closest('.product-item-kiosko');
             if (card) {
-                if (card.dataset.presentaciones) elegirPresentacion(card); else agregarProducto(card.dataset.id);
+                if (card.dataset.opciones) abrirOpciones(card.dataset.id);
+                else if (card.dataset.presentaciones) elegirPresentacion(card);
+                else agregarProducto(card.dataset.id);
+                return;
+            }
+            const op = e.target.closest('.op-item');
+            if (op) { tocarOpcion(op.dataset.grupo, parseInt(op.dataset.id, 10)); return; }
+            const limpiar = e.target.closest('.op-limpiar');
+            if (limpiar) { modalOp.sel[limpiar.dataset.grupo] = []; pintarOpciones(); return; }
+            const presOp = e.target.closest('.op-pres');
+            if (presOp) { modalOp.pres = presOp.dataset.pres || null; pintarOpciones(); return; }
+            if (e.target.closest('.op-agregar')) {
+                // Si algo falla (ej. no hay stock) el modal sigue abierto para cambiar la elección
+                post("{{ route('comandas.add_to_cart') }}", { id: modalOp.d.id, presentacion: modalOp.pres, opciones: modalOp.sel }).then(res => {
+                    if (!res.success) { alert(res.message || 'No se pudo agregar.'); return; }
+                    document.getElementById('pres_modal')?.remove();
+                    recargarCarrito();
+                });
                 return;
             }
             const opcion = e.target.closest('.pres-opcion');

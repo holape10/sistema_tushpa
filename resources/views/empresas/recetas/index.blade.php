@@ -53,6 +53,27 @@
         </div>
     </section>
 
+    @if ($subidas->isNotEmpty())
+        <section class="rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-4 sm:p-5">
+            <h2 class="font-black text-amber-900">📈 Subieron de costo en los últimos 15 días</h2>
+            <div class="mt-2 space-y-2">
+                @foreach ($subidas as $s)
+                    <div class="text-sm text-amber-900">
+                        <b>{{ $s->insumo }}</b>: S/ {{ number_format($s->antes, 2) }} → <b>S/ {{ number_format($s->ahora, 2) }}</b>
+                        <span class="text-amber-700">(+{{ number_format(($s->ahora - $s->antes) / max($s->antes, 0.01) * 100, 0) }}%)</span>
+                        @if ($s->platos->isNotEmpty())
+                            · lo usan:
+                            @foreach ($s->platos as $pl)
+                                <a href="{{ route('recetas.editar', $pl->IdProducto) }}" class="inline-block rounded-lg bg-white px-2 py-0.5 mr-1 mt-1 ring-1 ring-amber-200 hover:ring-amber-400">
+                                    {{ $pl->pronom }} <b style="color: {{ $pl->estado['color'] }}">{{ $pl->food_cost }}%</b></a>
+                            @endforeach
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
     @if ($resumen['total'] === 0)
         <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-gray-500">
             Aún no tienes platos. Las recetas son para los productos de tipo <b>Preparado</b> (los platos y bebidas que se preparan).

@@ -29,16 +29,22 @@
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Editando {{ strtolower($p->tipo_nombre) }}</p>
                     <h2 class="text-lg font-bold text-gray-800 truncate">{{ $p->pronom }}</h2>
                 </div>
-                @if ((int) $p->promocion === 2 && auth()->user()->esAdmin())
+                @if (in_array((int) $p->promocion, [2, 8], true) && auth()->user()->esAdmin())
                     <a href="{{ route('recetas.editar', $p->IdProducto) }}" class="h-10 px-4 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-sm font-bold flex items-center gap-1.5">🍳 Receta y costo</a>
                 @endif
-                <span class="text-xs text-gray-400 max-w-xs">El tipo no se cambia una vez creado. Si te equivocaste, elimínalo y créalo de nuevo.</span>
+                <label class="text-xs text-gray-500">¿Te equivocaste de tipo?
+                    <select name="promocion" x-model="tipo" class="block mt-1 h-10 rounded-xl border-gray-300 text-sm font-semibold">
+                        @foreach ($tipos as $valor => [$icono, $nombre])<option value="{{ $valor }}">{{ $icono }} {{ $nombre }}</option>@endforeach
+                        @if ((int) $p->promocion === 8)<option value="8">🥗 Entrada</option>@endif
+                    </select>
+                    @error('promocion')<span class="block mt-1 text-rose-600 font-semibold max-w-xs">{{ $message }}</span>@enderror
+                </label>
             </div>
         @else
             <p class="text-sm font-semibold text-gray-700 mb-3">¿Qué vas a registrar?</p>
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 @foreach ($tipos as $valor => [$icono, $nombre, $ayuda])
-                    <label class="cursor-pointer">
+                    <label class="relative cursor-pointer">
                         <input type="radio" name="promocion" value="{{ $valor }}" x-model="tipo" class="peer sr-only">
                         <div class="h-full border-2 rounded-xl p-3 flex items-start gap-3 border-gray-200 transition
                                     peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300 hover:border-gray-300">
@@ -130,10 +136,15 @@
                     <h3 class="font-bold text-gray-800">¿Qué incluye este combo?</h3>
                     <p class="text-xs text-gray-400">Escribe la cantidad de cada uno; deja en 0 los que no van.</p>
                 </header>
-                <div class="p-5">
+                <div class="p-5" x-data="{ q: '', soloElegidos: false, norm(t) { return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); } }">
+                    <div class="flex flex-wrap items-center gap-3 mb-3">
+                        <input type="search" x-model="q" placeholder="🔍 Buscar producto o plato…" class="flex-1 min-w-48 h-10 rounded-xl border-gray-300 text-sm">
+                        <label class="text-sm text-gray-600 flex items-center gap-1.5"><input type="checkbox" x-model="soloElegidos" class="rounded"> Ver solo los elegidos</label>
+                    </div>
                     <div class="grid sm:grid-cols-2 gap-2 max-h-96 overflow-y-auto">
                         @foreach ($itemsParaCombo as $item)
-                            <label class="flex items-center justify-between gap-3 text-sm rounded-xl border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                            <label class="flex items-center justify-between gap-3 text-sm rounded-xl border border-gray-100 px-3 py-2 hover:bg-gray-50"
+                                   x-data="{ n: @js($item->pronom) }" x-show="(!q.trim() || norm(n).includes(norm(q.trim()))) && (!soloElegidos || Number($el.querySelector('input').value) > 0)">
                                 <span class="text-gray-700 min-w-0">{{ $item->pronom }}
                                     <span class="block text-xs text-gray-400">{{ $item->promocion == 2 ? 'Preparado' : 'Producto' }}</span>
                                 </span>
@@ -148,6 +159,8 @@
                     @endif
                 </div>
             </section>
+
+            @include('empresas.productos.partials.menu_trio')
         </div>
 
         {{-- ================= Columna lateral ================= --}}

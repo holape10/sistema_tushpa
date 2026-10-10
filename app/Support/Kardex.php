@@ -61,6 +61,13 @@ class Kardex
                 : Lotes::retirar($idProducto, $idAlmacen, $cantidad, $stockAntes, ($doc['lote_preferido'] ?? null) ?: null);
         }
 
+        // Sucursal que vende solo con stock: no deja salir más de lo que hay
+        if ($movTip === 'E' && ! empty($doc['exigir_stock']) && $stockAntes + 0.0001 < $cantidad) {
+            $nombre = DB::table('productos')->where('IdProducto', $idProducto)->value('pronom');
+            throw new \RuntimeException('No hay stock suficiente de '.$nombre.': hay '.ControlStock::numero($stockAntes)
+                .' y se necesitan '.ControlStock::numero($cantidad).'. Registra la compra o el ingreso, o cambia la venta.');
+        }
+
         $stockDespues = $movTip === 'I' ? $stockAntes + $cantidad : $stockAntes - $cantidad;
 
         DB::table('producto_stock')
@@ -99,6 +106,7 @@ class Kardex
             'mov_cab_id' => $doc['mov_cab_id'] ?? null,
             'com_cab_id' => $doc['com_cab_id'] ?? null,
             'inv_cab_id' => $doc['inv_cab_id'] ?? null,
+            'merma_id' => $doc['merma_id'] ?? null,
             'id_almacen_origen' => $doc['id_almacen_origen'] ?? null,
             'id_almacen_destino' => $doc['id_almacen_destino'] ?? null,
             'mov_lote' => $doc['lote'] ?? null,
@@ -126,8 +134,8 @@ class Kardex
             return self::registrar($producto->IdProducto, $idAlmacen, $cantidad, 'E', $doc + ['costo' => $producto->costo]);
         }
 
-        // Plato preparado: salen los insumos de su receta (si tiene)
-        if ($tipo === 2) {
+        // Plato preparado u opción (entrada): salen los insumos de su receta (si tiene)
+        if ($tipo === 2 || $tipo === Producto::OPCION) {
             self::salidaPorReceta($producto->IdProducto, $idAlmacen, $cantidad, $doc);
         }
 
@@ -138,7 +146,7 @@ class Kardex
                 if ($item && (int) $item->promocion === 0) {
                     self::registrar($c->IdProducto_comb, $idAlmacen, $cantidad * (float) $c->prod_comb_cant, 'E',
                         $doc + ['IdProducto_rel' => $producto->IdProducto, 'costo' => $item->costo, 'precio' => 0]);
-                } elseif ($item && (int) $item->promocion === 2) {
+                } elseif ($item && in_array((int) $item->promocion, [2, Producto::OPCION], true)) {
                     self::salidaPorReceta($item->IdProducto, $idAlmacen, $cantidad * (float) $c->prod_comb_cant, $doc);
                 }
             }
@@ -154,7 +162,7 @@ class Kardex
             $cantidad = round($platos * $r->cantidad_base, 4);
             if ($cantidad > 0) {
                 self::registrar($r->IdInsumo, $idAlmacen, $cantidad, 'E',
-                    $doc + ['IdProducto_rel' => $idPlato, 'costo' => $r->costo_unitario, 'precio' => 0]);
+                    ['exigir_stock' => ! empty($doc['exigir_insumos'])] + $doc + ['IdProducto_rel' => $idPlato, 'costo' => $r->costo_unitario, 'precio' => 0]);
             }
         }
     }
@@ -175,6 +183,21 @@ class Kardex
                 'costo' => $s->costo, 'precio' => $s->precio, 'tdocod' => $s->tdocod, 'serie' => $s->serie, 'numero' => $s->numero,
                 'id_empresa_negocio' => $s->id_empresa_negocio,
                 // Regresa al mismo lote del que salió
+                'lote' => $s->mov_lote, 'vencimiento' => $s->mov_vencimiento,
+            ]);
+        }
+
+        return $salidas->count();
+    }
+
+    /** Anula una merma: devuelve al stock lo que salió con ella */
+    public static function revertirMerma(int $mermaId): int
+    {
+        $salidas = DB::table('movimientos_productos')->where('merma_id', $mermaId)->where('mov_tip', 'E')->orderBy('mov_pro_id')->get();
+        foreach ($salidas as $s) {
+            self::registrar((int) $s->IdProducto, (int) $s->id_almacen, (float) $s->cantidad, 'I', [
+                'cod_tip_ope' => '13', 'merma_id' => $mermaId, 'IdProducto_rel' => $s->IdProducto_rel, 'costo' => $s->costo,
+                'descripcion' => 'ANULACIÓN DE MERMA', 'id_empresa_negocio' => $s->id_empresa_negocio,
                 'lote' => $s->mov_lote, 'vencimiento' => $s->mov_vencimiento,
             ]);
         }

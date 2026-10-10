@@ -1,5 +1,6 @@
 {{--
-    Avisos del sistema: tarjetas grandes arriba al centro, con ícono, título y botón para cerrar; se apilan si llegan varios.
+    Avisos del sistema. Los de "Listo" son discretos: pequeños, abajo a la derecha, se van solos y no bloquean clics.
+    Los errores y advertencias van arriba al centro, grandes, porque hay que leerlos.
     Uso desde cualquier pantalla:  tushpaAviso('Venta registrada')            → verde "Listo"
                                    tushpaAviso('No hay stock', false)          → rojo "No se pudo"
                                    tushpaAviso('Revisa el RUC', 'aviso')       → ámbar "Atención"
@@ -8,6 +9,7 @@
 --}}
 @once
 <div id="tushpa-avisos" aria-live="polite" style="position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483000;display:flex;flex-direction:column;gap:10px;width:min(460px,calc(100vw - 24px));pointer-events:none"></div>
+<div id="tushpa-listo" aria-live="polite" style="position:fixed;right:16px;bottom:88px;z-index:2147483000;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:calc(100vw - 32px);pointer-events:none"></div>
 <style>
     .tav { pointer-events:auto; display:flex; align-items:flex-start; gap:12px; padding:14px 16px 16px; border-radius:16px; background:#fff; color:#0f172a;
            box-shadow:0 18px 40px -12px rgba(15,23,42,.45), 0 0 0 1px rgba(15,23,42,.06); border-left:6px solid var(--c); position:relative; overflow:hidden;
@@ -22,6 +24,12 @@
     @keyframes tav-entra { from { opacity:0; transform:translateY(-18px) scale(.96); } to { opacity:1; transform:none; } }
     @keyframes tav-sale { to { opacity:0; transform:translateY(-12px) scale(.97); } }
     @keyframes tav-barra { from { width:100%; } to { width:0; } }
+    /* "Listo": píldora pequeña que no tapa nada y deja hacer clic a través */
+    .tav-ok { pointer-events:none; display:flex; align-items:center; gap:8px; max-width:380px; padding:8px 14px; border-radius:999px; background:#065f46; color:#fff;
+              font:600 13.5px/1.3 system-ui,-apple-system,'Segoe UI',sans-serif; box-shadow:0 10px 24px -10px rgba(6,95,70,.6); animation:tav-sube .2s ease-out both; }
+    .tav-ok.sale { animation:tav-baja .25s ease-in both; }
+    @keyframes tav-sube { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+    @keyframes tav-baja { to { opacity:0; transform:translateY(8px); } }
 </style>
 <script>
     (function () {
@@ -36,6 +44,19 @@
             if (!texto) return;
             const k = tipo === true ? 'ok' : (tipo === false ? 'error' : (TIPOS[tipo] ? tipo : 'info'));
             const d = TIPOS[k];
+            if (k === 'ok') {
+                const pila = document.getElementById('tushpa-listo');
+                if (pila) {
+                    const p = document.createElement('div');
+                    p.className = 'tav-ok';
+                    p.setAttribute('role', 'status');
+                    p.textContent = '✓ ' + texto;
+                    pila.appendChild(p);
+                    while (pila.children.length > 3) pila.firstElementChild.remove();
+                    setTimeout(() => { p.classList.add('sale'); setTimeout(() => p.remove(), 250); }, 2500);
+                    return;
+                }
+            }
             const caja = document.getElementById('tushpa-avisos');
             if (!caja) return alert(texto);
             // El mismo mensaje dos veces seguidas no se repite
@@ -87,6 +108,9 @@
             @endif
             @if (is_array(session('puntos')))
                 tushpaAviso(@json(session('puntos')['mensaje']), 'puntos', @json('★ '.session('puntos')['cliente']));
+            @endif
+            @if (session('costos'))
+                tushpaAviso(@json((string) session('costos')), 'aviso', '📈 Subieron tus costos');
             @endif
             @if (session('error'))
                 tushpaAviso(@json((string) session('error')), 'error');

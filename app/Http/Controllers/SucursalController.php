@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EmpresaNegocio;
 use App\Models\Turno;
+use App\Support\ControlStock;
 use App\Support\SucursalNueva;
 use App\Support\Ubigeo;
 use Illuminate\Http\Request;
@@ -106,9 +107,10 @@ class SucursalController extends Controller
             'tip_igv_pred' => 'required|in:10,20',
             'tdocod_pred' => 'required|in:01,03,13',
             'formato_impresion' => 'required|in:TICKET,A4',
+            'control_stock' => 'required|in:'.implode(',', array_keys(ControlStock::NIVELES)),
         ];
         $nombres = ['nombre_comercial' => 'Nombre comercial', 'codigofiscal' => 'Código de establecimiento',
-            'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión'];
+            'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión', 'control_stock' => 'Venta con o sin stock'];
 
         foreach (self::SERIES as $c) {
             $reglas[$c['serie']] = ['required', 'regex:'.$c['regex']];

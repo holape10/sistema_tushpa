@@ -3,7 +3,7 @@
     $p = $producto ?? null;
     $hora = fn($h) => $h ? substr($h, 0, 5) : '';
     $inicial = [
-        'tipo' => (string) old('promocion', $p ? (int) $p->promocion : 0),
+        'tipo' => (string) old('promocion', $p ? (int) $p->promocion : (in_array((int) request('tipo'), [0, 2, 4, 6, 8], true) ? (int) request('tipo') : 0)),
         'umecod' => old('umecod', $p->umecod ?? 'NIU'),
         'precio' => old('propun', $p ? (float) $p->propun : ''),
         'costo' => old('costo', $p ? (float) $p->costo : 0),

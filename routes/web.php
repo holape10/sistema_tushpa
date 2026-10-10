@@ -17,6 +17,7 @@ use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmpresaController;
+use App\Http\Controllers\EntradaController;
 use App\Http\Controllers\EntrenadorController;
 use App\Http\Controllers\FidelizacionController;
 use App\Http\Controllers\GastoController;
@@ -30,12 +31,14 @@ use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\KardexController;
 use App\Http\Controllers\LoteController;
 use App\Http\Controllers\MedioPagoController;
+use App\Http\Controllers\MermaController;
 use App\Http\Controllers\MesaController;
 use App\Http\Controllers\MotorizadoController;
 use App\Http\Controllers\NotaController;
 use App\Http\Controllers\PisoController;
 use App\Http\Controllers\PlanillaController;
 use App\Http\Controllers\PosMovilController;
+use App\Http\Controllers\PreparadoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProformaController;
 use App\Http\Controllers\PuntoVentaController;
@@ -75,6 +78,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/comandas/menu', [ComandasController::class, 'menuPedido'])->name('comandas.menu');
     Route::get('/comandas/productos', [ComandasController::class, 'searchProducts'])->name('comandas.search_products');
     Route::post('/comandas/carrito/agregar', [ComandasController::class, 'addToCart'])->name('comandas.add_to_cart');
+    Route::get('/comandas/opciones/{id}', [ComandasController::class, 'opcionesProducto'])->whereNumber('id')->name('comandas.opciones');
     Route::post('/comandas/carrito/actualizar', [ComandasController::class, 'updateCartItem'])->name('comandas.update_cart_item');
     Route::post('/comandas/carrito/quitar', [ComandasController::class, 'removeCartItem'])->name('comandas.remove_cart_item');
     Route::get('/comandas/carrito', [ComandasController::class, 'getCartDetails'])->name('comandas.get_cart_details');
@@ -231,6 +235,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/hotel/consumo', [HotelController::class, 'consumo'])->name('hotel.consumo');
     Route::post('/hotel/salida', [HotelController::class, 'salida'])->name('hotel.salida');
     Route::post('/hotel/anular', [HotelController::class, 'anular'])->name('hotel.anular');
+    Route::post('/hotel/exceso', [HotelController::class, 'cobrarExceso'])->name('hotel.exceso');
+    Route::post('/hotel/quitar', [HotelController::class, 'quitarItem'])->name('hotel.quitar');
+    Route::post('/hotel/cambiar', [HotelController::class, 'cambiarHabitacion'])->name('hotel.cambiar');
+    Route::get('/hotel/reservas', [HotelController::class, 'reservas'])->name('hotel.reservas');
+    Route::post('/hotel/reservas', [HotelController::class, 'guardarReserva'])->name('hotel.reserva');
+    Route::post('/hotel/reservas/cancelar', [HotelController::class, 'cancelarReserva'])->name('hotel.reserva.cancelar');
+    Route::post('/hotel/configurar', [HotelController::class, 'configurar'])->name('hotel.configurar');
+    Route::get('/hotel/reporte', [HotelController::class, 'reporte'])->name('hotel.reporte');
     Route::post('/hotel/estado-habitacion', [HotelController::class, 'cambiarEstado'])->name('hotel.cambiar_estado');
     Route::post('/hotel/habitaciones', [HotelController::class, 'guardarHabitacion'])->name('hotel.habitacion');
     Route::delete('/hotel/habitaciones/{id}', [HotelController::class, 'eliminarHabitacion'])->whereNumber('id');
@@ -427,6 +439,30 @@ Route::prefix('socio')->name('socio.portal')->controller(SocioPortalController::
     Route::get('/estado', 'estado')->middleware('throttle:30,1')->name('.estado');
     Route::get('/comprobante/{id}', 'comprobante')->whereNumber('id')->middleware('throttle:30,1')->name('.comprobante');
     Route::post('/congelar', 'congelar')->middleware('throttle:10,1')->name('.congelar');
+});
+
+// Gestión de preparados: porciones del día
+Route::middleware('auth')->prefix('preparados')->name('preparados.')->controller(PreparadoController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::post('/controlar', 'controlar')->name('controlar');
+    Route::post('/anotar', 'anotar')->name('anotar');
+    Route::post('/guardar', 'guardarTodo')->name('guardar');
+});
+
+// Entradas del menú y platos que llevan entrada
+Route::middleware('auth')->prefix('entradas')->name('entradas.')->controller(EntradaController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::post('/', 'guardar')->name('guardar');
+    Route::post('/platos', 'platos')->name('platos');
+    Route::post('/{id}', 'actualizar')->whereNumber('id')->name('actualizar');
+});
+
+// Mermas: lo que se pierde sin venderse
+Route::middleware('auth')->prefix('mermas')->name('mermas.')->controller(MermaController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/productos', 'productos')->name('productos');
+    Route::post('/', 'guardar')->name('guardar');
+    Route::post('/{id}/anular', 'anular')->whereNumber('id')->name('anular');
 });
 
 // Recetas y food cost de los platos (Administrador)

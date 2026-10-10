@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\EmpresaNegocio;
+use App\Models\Producto;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
@@ -34,7 +35,7 @@ class Carta
     {
         $filas = DB::table('productos as p')
             ->join('categorias as c', 'c.cat_id', '=', 'p.cat_id')
-            ->where('p.id_empresa_negocio', $sucursal)->where('p.proest', 'Activo')->where('p.promocion', '!=', 4)
+            ->where('p.id_empresa_negocio', $sucursal)->where('p.proest', 'Activo')->whereNotIn('p.promocion', Producto::NO_VENDIBLES)
             ->where('c.visible', 1)
             ->orderBy('c.cat_id')->orderBy('p.IdProducto')
             ->get(['p.IdProducto', 'p.pronom', 'p.descripcion', 'p.propun', 'p.imagenproducto', 'p.cat_id', 'c.cat_nom']);

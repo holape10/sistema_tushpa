@@ -1,7 +1,11 @@
 <?php
+
 namespace App\Support;
 
-use App\Models\{Almacen, Producto, UnidadMedida, User};
+use App\Models\Almacen;
+use App\Models\Producto;
+use App\Models\UnidadMedida;
+use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -28,17 +32,17 @@ class CatalogoVenta
         }
 
         $productos = self::consulta($sucursal, $almacenId)
-            ->when($codigo !== '', fn($w) => $w->where(fn($x) => $x->where('productos.procod', $codigo)
+            ->when($codigo !== '', fn ($w) => $w->where(fn ($x) => $x->where('productos.procod', $codigo)
                 ->orWhere('productos.codigo_barra', $codigo)
-                ->when($presentacion, fn($y) => $y->orWhere('productos.IdProducto', $presentacion->IdProducto))))
+                ->when($presentacion, fn ($y) => $y->orWhere('productos.IdProducto', $presentacion->IdProducto))))
             ->when($codigo === '', function ($w) use ($q) {
                 // Cada palabra debe aparecer en el nombre (sirve para la voz: "inca kola 500")
                 foreach (preg_split('/\s+/', $q) as $palabra) {
-                    $w->where(fn($x) => $x->where('productos.pronom', 'like', '%' . $palabra . '%')
-                        ->orWhere('productos.procod', 'like', $palabra . '%')
+                    $w->where(fn ($x) => $x->where('productos.pronom', 'like', '%'.$palabra.'%')
+                        ->orWhere('productos.procod', 'like', $palabra.'%')
                         ->orWhere('productos.codigo_barra', $palabra));
                 }
-                $w->orderByRaw('productos.procod = ? DESC, productos.pronom LIKE ? DESC', [$q, $q . '%']);
+                $w->orderByRaw('productos.procod = ? DESC, productos.pronom LIKE ? DESC', [$q, $q.'%']);
             })
             ->orderBy('productos.pronom')
             ->limit($codigo !== '' ? 1 : 20)
@@ -52,6 +56,7 @@ class CatalogoVenta
     {
         $almacenId = self::almacen($user->id_empresa_negocio);
         $productos = self::consulta($user->id_empresa_negocio, $almacenId)->whereIn('productos.IdProducto', $ids ?: [0])->get();
+
         return collect(self::formatear($productos, $almacenId))->keyBy('id');
     }
 
@@ -63,14 +68,14 @@ class CatalogoVenta
     private static function consulta($sucursal, ?int $almacenId)
     {
         return Producto::leftJoin('producto_stock', function ($join) use ($almacenId) {
-                $join->on('productos.IdProducto', '=', 'producto_stock.IdProducto')
-                     ->where('producto_stock.id_almacen', $almacenId);
-            })
+            $join->on('productos.IdProducto', '=', 'producto_stock.IdProducto')
+                ->where('producto_stock.id_almacen', $almacenId);
+        })
             ->where('productos.id_empresa_negocio', $sucursal)
             ->where('productos.proest', 'Activo')
-            ->where('productos.promocion', '!=', 4) // los insumos no se venden
+            ->whereNotIn('productos.promocion', Producto::NO_VENDIBLES) // los insumos no se venden
             ->select(['productos.IdProducto', 'productos.procod', 'productos.codigo_barra', 'productos.pronom', 'productos.propun',
-                      'productos.umecod', 'productos.promocion', 'productos.control_lote', 'productos.imagenproducto', 'producto_stock.stock']);
+                'productos.umecod', 'productos.promocion', 'productos.control_lote', 'productos.imagenproducto', 'producto_stock.stock']);
     }
 
     private static function formatear(Collection $productos, ?int $almacenId, ?int $presentacionElegida = null, ?int $deProducto = null): array
@@ -88,6 +93,7 @@ class CatalogoVenta
             $suyos = Lotes::ordenar($lotes[$p->IdProducto] ?? collect());
             $stock = (int) $p->promocion === 0 ? (float) ($p->stock ?? 0) : null;
             $precio = $precios[$p->IdProducto] ?? (float) $p->propun;
+
             return [
                 'id' => $p->IdProducto,
                 'codigo' => $p->procod,
@@ -105,7 +111,7 @@ class CatalogoVenta
                 // Preparados y combos no llevan stock propio
                 'stock' => $stock,
                 'control_lote' => (bool) $p->control_lote,
-                'lotes' => $suyos->map(fn($l) => [
+                'lotes' => $suyos->map(fn ($l) => [
                     'lote' => $l->lote, 'vence' => $l->vencimiento, 'stock' => (float) $l->stock,
                     'dias' => $l->vencimiento ? (int) now()->startOfDay()->diffInDays($l->vencimiento, false) : null,
                     'vencido' => $l->vencimiento && $l->vencimiento < $hoy,

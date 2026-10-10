@@ -10,6 +10,7 @@ use App\Models\ProductoPrecioDinamico;
 use App\Models\ProductoPresentacion;
 use App\Models\Subcategoria;
 use App\Models\UnidadMedida;
+use App\Support\Buscar;
 use App\Support\Excel;
 use App\Support\ExcelLector;
 use App\Support\Kardex;
@@ -23,13 +24,15 @@ class ProductoController extends Controller
     {
         $sucursal = Auth::user()->id_empresa_negocio;
         $q = trim($request->get('q'));
-        $tipo = $request->get('tipo', '');
+        // (string): el formulario manda "tipo=" vacío y Laravel lo vuelve null; sin esto se filtraba promocion IS NULL
+        $tipo = (string) $request->get('tipo', '');
 
-        $productos = Producto::where('id_empresa_negocio', $sucursal)
-            ->when($q, fn ($query) => $query->where(fn ($w) => $w->where('pronom', 'like', "%{$q}%")
-                ->orWhere('procod', $q)->orWhere('codigo_barra', $q)))
-            ->when($tipo !== '', fn ($query) => $query->where('promocion', $tipo))
-            ->orderBy('pronom')
+        $productos = Producto::where('productos.id_empresa_negocio', $sucursal)
+            ->leftJoin('categorias as cb', 'cb.cat_id', '=', 'productos.cat_id')->select('productos.*')
+            // Por palabras, sin tildes: "cafe leche" encuentra CAFÉ CON LECHE; también por categoría o código
+            ->tap(fn ($query) => Buscar::palabras($query, $q, ['productos.pronom', 'cb.cat_nom'], ['productos.procod', 'productos.codigo_barra']))
+            ->when($tipo !== '', fn ($query) => $query->where('productos.promocion', $tipo))
+            ->orderBy('productos.pronom')
             ->paginate(100)
             ->withQueryString();
 
@@ -157,6 +160,15 @@ class ProductoController extends Controller
     {
         $tipo = (int) $producto->promocion;
 
+        // Platos: lleva entrada, puede ir en un trío, o es un "arma tu trío" (el cliente elige N platos)
+        if ($tipo === 2) {
+            $producto->update([
+                'lleva_entrada' => $request->boolean('lleva_entrada'),
+                'en_trio' => $request->boolean('en_trio'),
+                'trio_cantidad' => $request->boolean('es_trio') ? max(2, min(5, (int) $request->input('trio_cantidad', 3))) : null,
+            ]);
+        }
+
         $vigentes = [];
         if ($tipo === 0) {
             $unidades = UnidadMedida::pluck('umenom', 'umecod');
@@ -218,7 +230,7 @@ class ProductoController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['promocion' => 'required|in:0,2,4,6'] + $this->reglas((int) $request->promocion === 4), [], self::NOMBRES);
+        $request->validate(['promocion' => 'required|in:0,2,4,6,8'] + $this->reglas(in_array((int) $request->promocion, [4, 8], true)), [], self::NOMBRES);
 
         if ($request->promocion == 6 && empty(array_filter((array) $request->combo_items))) {
             return back()->withInput()->withErrors(['combo_items' => 'Un combo debe tener al menos un producto o preparado dentro.']);
@@ -236,7 +248,7 @@ class ProductoController extends Controller
                 'descripcion' => trim((string) $request->descripcion) ?: null,
                 'umecod' => $request->umecod ?: 'NIU',
                 'costo' => $request->costo ?: 0,
-                'propun' => $tipo === 4 ? ($request->propun ?: 0) : $request->propun,
+                'propun' => in_array($tipo, [4, 8], true) ? ($request->propun ?: 0) : $request->propun,
                 'promocion' => $tipo,
                 'cat_id' => $request->cat_id,
                 'subcat_id' => $request->subcat_id,
@@ -289,16 +301,28 @@ class ProductoController extends Controller
     public function update(Request $request, Producto $producto)
     {
         $this->esDeMiSucursal($producto);
-        $tipo = (int) $producto->promocion;
-        $request->validate($this->reglas($tipo === 4), [], self::NOMBRES);
+        $anterior = (int) $producto->promocion;
+        // El tipo se puede corregir (ej. un plato que se registró como Producto)
+        $tipo = $request->filled('promocion') ? (int) $request->promocion : $anterior;
+        $request->validate(['promocion' => 'nullable|in:0,2,4,6,8'] + $this->reglas(in_array($tipo, [4, 8], true)), [], self::NOMBRES);
+        if ($tipo !== $anterior && ($error = $this->errorCambioTipo($producto, $tipo))) {
+            return back()->withInput()->withErrors(['promocion' => $error]);
+        }
+        if ($tipo === 6 && empty(array_filter((array) $request->combo_items))) {
+            return back()->withInput()->withErrors(['combo_items' => 'Un combo debe tener al menos un producto o preparado dentro.']);
+        }
+        $aviso = '';
 
         if ($error = $this->errorCodigos($request, $producto, $tipo === 0)) {
             return back()->withInput()->withErrors(['codigo_barra' => $error]);
         }
 
-        DB::transaction(function () use ($request, $producto, $tipo) {
+        DB::transaction(function () use ($request, $producto, $tipo, $anterior, &$aviso) {
+            if ($tipo !== $anterior) {
+                $aviso = $this->cambiarTipo($producto, $anterior, $tipo);
+            }
             $producto->update($request->only(['pronom', 'umecod', 'costo', 'cat_id', 'subcat_id', 'stock_min', 'proest'])
-                + ['propun' => $tipo === 4 ? ($request->propun ?: 0) : $request->propun,
+                + ['propun' => in_array($tipo, [4, 8], true) ? ($request->propun ?: 0) : $request->propun,
                     'codigo_barra' => trim((string) $request->codigo_barra) ?: null,
                     'descripcion' => trim((string) $request->descripcion) ?: null,
                     'debe' => trim((string) $request->debe) ?: null, 'haber' => trim((string) $request->haber) ?: null,
@@ -323,7 +347,47 @@ class ProductoController extends Controller
             $this->guardarImagen($request, $producto);
         });
 
-        return redirect()->route('productos.index')->with('success', 'Actualizado correctamente.');
+        return redirect()->route('productos.index')->with('success', 'Actualizado correctamente.'.$aviso);
+    }
+
+    /** Qué impide cambiar el tipo (null si se puede) */
+    private function errorCambioTipo(Producto $producto, int $nuevo): ?string
+    {
+        $recetas = DB::table('producto_receta')->where('IdInsumo', $producto->IdProducto)->count();
+        if ($recetas && ! in_array($nuevo, [0, 4], true)) {
+            return "Se usa como ingrediente en {$recetas} receta(s): solo puede ser Producto o Insumo. Quítalo de esas recetas primero.";
+        }
+        $combos = Combo::where('IdProducto_comb', $producto->IdProducto)->count();
+        if ($combos && ! in_array($nuevo, [0, 2], true)) {
+            return "Está dentro de {$combos} combo(s): solo puede ser Producto o Preparado. Quítalo de esos combos primero.";
+        }
+
+        return null;
+    }
+
+    /** Ajustes al cambiar de tipo; devuelve un aviso para el usuario */
+    private function cambiarTipo(Producto $producto, int $anterior, int $nuevo): string
+    {
+        $nombres = self::TIPOS;
+        if ($anterior === 6) {
+            $producto->itemsCombo()->delete();
+        }
+        // Solo los platos y entradas tienen receta; solo los platos llevan entrada o van en tríos
+        if (! in_array($nuevo, [2, Producto::OPCION], true)) {
+            DB::table('producto_receta')->where('IdProducto', $producto->IdProducto)->delete();
+        }
+        if ($nuevo !== 2) {
+            $producto->update(['lleva_entrada' => false, 'en_trio' => false, 'trio_cantidad' => null]);
+        }
+        $producto->update(['promocion' => $nuevo]);
+
+        $stock = (float) DB::table('producto_stock')->where('IdProducto', $producto->IdProducto)->sum('stock');
+        $aviso = ' Ahora es '.($nombres[$nuevo] ?? 'otro tipo').' (antes '.($nombres[$anterior] ?? '').').';
+        if (in_array($anterior, [0, 4], true) && ! in_array($nuevo, [0, 4], true) && abs($stock) > 0.0001) {
+            $aviso .= ' Tenía stock '.rtrim(rtrim(number_format($stock, 3), '0'), '.').': los platos y combos no usan stock propio, revisa el almacén.';
+        }
+
+        return $aviso;
     }
 
     public function destroy(Producto $producto)
@@ -344,7 +408,7 @@ class ProductoController extends Controller
     // Excel: plantilla, exportación e importación de productos
     // ------------------------------------------------------------------
 
-    private const TIPOS = [0 => 'Producto', 4 => 'Insumo', 2 => 'Preparado', 6 => 'Combo'];
+    private const TIPOS = [0 => 'Producto', 4 => 'Insumo', 2 => 'Preparado', 6 => 'Combo', 8 => 'Opción'];
 
     private const COLUMNAS = ['Código', 'Nombre', 'Tipo', 'Categoría', 'Unidad', 'Costo', 'Precio venta', 'Stock mínimo', 'Estado', 'Stock inicial', 'Control lote', 'Descripción'];
 
@@ -484,7 +548,7 @@ class ProductoController extends Controller
             return back()->withErrors(['archivo' => 'El Excel no tiene productos.']);
         }
 
-        $tipos = ['producto' => 0, 'insumo' => 4, 'preparado' => 2];
+        $tipos = ['producto' => 0, 'insumo' => 4, 'preparado' => 2, 'opcion' => 8];
         $unidades = UnidadMedida::get(['umecod', 'umenom']);
         $porCodUme = $unidades->keyBy(fn ($u) => mb_strtoupper($u->umecod));
         $porNomUme = $unidades->keyBy(fn ($u) => mb_strtoupper($u->umenom));

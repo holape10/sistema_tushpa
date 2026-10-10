@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Models\Producto;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -26,6 +28,7 @@ class Reportes
         'compras' => ['Reporte de Compras', 'Compras', 'Todas las compras registradas.', 'fa-cart-shopping'],
         'compras-proveedor' => ['Compras por Proveedor', 'Compras', 'Cuánto le compraste a cada proveedor.', 'fa-truck'],
         'compras-producto' => ['Compras por Producto', 'Compras', 'Cantidades y costos por producto comprado.', 'fa-boxes-stacked'],
+        'consumo-insumos' => ['Consumo de Insumos', 'Restaurante', 'Cuánto se gastó de cada insumo según lo vendido (recetas) y las mermas, y para cuántos días te alcanza.', 'fa-bowl-food'],
     ];
 
     private const TIPOS = ['01' => 'FACTURA', '03' => 'BOLETA', '07' => 'N. CRÉDITO', '08' => 'N. DÉBITO', '13' => 'N. VENTA', '12' => 'TICKET', '00' => 'OTRO'];
@@ -49,6 +52,7 @@ class Reportes
             'compras' => self::compras($f),
             'compras-proveedor' => self::comprasProveedor($f),
             'compras-producto' => self::comprasProducto($f),
+            'consumo-insumos' => self::consumoInsumos($f),
         };
         [$r['titulo'], $r['grupo'], $r['descripcion'], $r['icono']] = self::CATALOGO[$clave];
         $r['totales'] ??= self::sumar($r['columnas'], $r['filas']);
@@ -254,7 +258,7 @@ class Reportes
         // Todos los productos que se venden (activos), con o sin ventas en el periodo
         $rows = DB::table('productos as p')->leftJoinSub($vendidos, 'v', 'v.IdProducto', '=', 'p.IdProducto')
             ->leftJoin('categorias as cat', 'cat.cat_id', '=', 'p.cat_id')
-            ->where('p.id_empresa_negocio', $f['sucursal'])->where('p.proest', 'Activo')->where('p.promocion', '!=', 4)
+            ->where('p.id_empresa_negocio', $f['sucursal'])->where('p.proest', 'Activo')->whereNotIn('p.promocion', Producto::NO_VENDIBLES)
             ->when(! empty($f['categoria']), fn ($w) => $w->where('p.cat_id', $f['categoria']))
             ->orderBy(DB::raw('COALESCE(v.cantidad, 0)'), $orden)->orderBy('p.pronom')->limit($limite)
             ->get(['p.procod', 'p.pronom', 'cat.cat_nom', 'p.propun', DB::raw('COALESCE(v.cantidad, 0) as cantidad'), DB::raw('COALESCE(v.total, 0) as total')]);
@@ -356,5 +360,84 @@ class Reportes
         return ['columnas' => ['codigo' => ['Código', 'text'], 'producto' => ['Producto', 'text'], 'unidad' => ['Und.', 'text'], 'cantidad' => ['Cantidad', 'num'],
             'promedio' => ['Costo prom.', 'money'], 'minimo' => ['Costo mín.', 'money'], 'maximo' => ['Costo máx.', 'money'], 'total' => ['Total S/', 'money'],
             'compras' => ['Compras', 'num'], 'ultima' => ['Última compra', 'date']], 'filas' => $filas, 'grafico' => ['etiqueta' => 'producto', 'valor' => 'total']];
+    }
+
+    /**
+     * Consumo de insumos: lo que salió del almacén por las recetas de lo vendido y por las mermas
+     * (las anulaciones lo devuelven). Se compara con el stock de hoy para saber para cuántos días alcanza.
+     */
+    private static function consumoInsumos(array $f): array
+    {
+        $agrupar = in_array($f['agrupar'] ?? '', ['insumo', 'plato', 'dia'], true) ? $f['agrupar'] : 'insumo';
+        $signo = "CASE WHEN m.mov_tip = 'E' THEN m.cantidad ELSE -m.cantidad END";
+        $base = DB::table('movimientos_productos as m')->join('productos as i', 'i.IdProducto', '=', 'm.IdProducto')
+            ->where('m.id_empresa_negocio', $f['sucursal'])->whereBetween('m.fecha_mov', [$f['desde'], $f['hasta']])
+            ->where(fn ($w) => $w->whereNotNull('m.merma_id')
+                ->orWhere(fn ($v) => $v->whereNotNull('m.IdProducto_rel')->whereColumn('m.IdProducto_rel', '!=', 'm.IdProducto')
+                    ->whereIn('m.cod_tip_ope', ['01', '05'])->whereNotNull('m.IdCpe_cabecera')));
+        $unidad = fn ($u) => Recetas::nombreUnidad($u ?: 'NIU');
+
+        if ($agrupar === 'plato') {
+            $rows = (clone $base)->whereNull('m.merma_id')->join('productos as pl', 'pl.IdProducto', '=', 'm.IdProducto_rel')
+                ->groupBy('pl.IdProducto', 'pl.pronom', 'i.IdProducto', 'i.pronom', 'i.umecod', 'i.costo')
+                ->select('pl.pronom as plato', 'i.pronom as insumo', 'i.umecod', 'i.costo', DB::raw("SUM($signo) as cantidad"))
+                ->orderBy('pl.pronom')->orderBy('i.pronom')->get();
+            $filas = $rows->filter(fn ($r) => abs((float) $r->cantidad) > 0.00001)->map(fn ($r) => ['plato' => $r->plato, 'insumo' => $r->insumo,
+                'unidad' => $unidad($r->umecod), 'cantidad' => round((float) $r->cantidad, 3), 'costo' => round((float) $r->cantidad * (float) $r->costo, 2)])->values()->all();
+
+            return ['columnas' => ['plato' => ['Plato vendido', 'text'], 'insumo' => ['Insumo', 'text'], 'unidad' => ['Und.', 'text'],
+                'cantidad' => ['Consumido', 'num'], 'costo' => ['Costo S/', 'money']], 'filas' => $filas, 'usa' => ['agrupar_consumo'],
+                'grafico' => ['etiqueta' => 'insumo', 'valor' => 'costo'],
+                'totales' => ['costo' => round(array_sum(array_column($filas, 'costo')), 2)]];
+        }
+
+        if ($agrupar === 'dia') {
+            $rows = (clone $base)->groupBy('m.fecha_mov')
+                ->select('m.fecha_mov', DB::raw("SUM(CASE WHEN m.merma_id IS NULL THEN ($signo) * i.costo ELSE 0 END) as ventas"),
+                    DB::raw("SUM(CASE WHEN m.merma_id IS NOT NULL THEN ($signo) * i.costo ELSE 0 END) as mermas"))
+                ->orderBy('m.fecha_mov')->get();
+            $filas = $rows->map(fn ($r) => ['fecha' => $r->fecha_mov, 'ventas' => round((float) $r->ventas, 2), 'mermas' => round((float) $r->mermas, 2),
+                'total' => round((float) $r->ventas + (float) $r->mermas, 2)])->all();
+
+            return ['columnas' => ['fecha' => ['Día', 'date'], 'ventas' => ['Por ventas S/', 'money'], 'mermas' => ['Por mermas S/', 'money'], 'total' => ['Total S/', 'money']],
+                'filas' => $filas, 'usa' => ['agrupar_consumo'], 'grafico' => ['etiqueta' => 'fecha', 'valor' => 'total']];
+        }
+
+        $almacen = Kardex::almacenPredeterminado((int) $f['sucursal']);
+        $rows = (clone $base)->leftJoin('producto_stock as ps', fn ($j) => $j->on('ps.IdProducto', '=', 'i.IdProducto')->where('ps.id_almacen', $almacen?->id_almacen ?? 0))
+            ->groupBy('i.IdProducto', 'i.pronom', 'i.umecod', 'i.costo', 'ps.stock')
+            ->select('i.pronom', 'i.umecod', 'i.costo', 'ps.stock',
+                DB::raw("SUM(CASE WHEN m.merma_id IS NULL THEN $signo ELSE 0 END) as ventas"),
+                DB::raw("SUM(CASE WHEN m.merma_id IS NOT NULL THEN $signo ELSE 0 END) as mermas"))
+            ->get();
+        $dias = max(1, (int) Carbon::parse($f['desde'])->diffInDays(Carbon::parse($f['hasta'])) + 1);
+        $filas = $rows->map(function ($r) use ($unidad, $dias) {
+            $total = (float) $r->ventas + (float) $r->mermas;
+            $porDia = $total / $dias;
+            $stock = (float) ($r->stock ?? 0);
+
+            return ['insumo' => $r->pronom, 'unidad' => $unidad($r->umecod), 'ventas' => round((float) $r->ventas, 3), 'mermas' => round((float) $r->mermas, 3),
+                'total' => round($total, 3), 'costo' => round($total * (float) $r->costo, 2), 'stock' => round($stock, 3),
+                'alcanza' => $porDia > 0 ? self::alcanza($stock, $porDia) : '—'];
+        })->filter(fn ($r) => abs($r['total']) > 0.00001)->sortByDesc('costo')->values()->all();
+
+        return ['columnas' => ['insumo' => ['Insumo', 'text'], 'unidad' => ['Und.', 'text'], 'ventas' => ['Por ventas', 'num'], 'mermas' => ['Por mermas', 'num'],
+            'total' => ['Total consumido', 'num'], 'costo' => ['Costo S/', 'money'], 'stock' => ['Stock hoy', 'num'], 'alcanza' => ['Te alcanza para', 'text']],
+            'filas' => $filas, 'usa' => ['agrupar_consumo'], 'grafico' => ['etiqueta' => 'insumo', 'valor' => 'costo'],
+            // Las cantidades son de insumos distintos (kg, L, unid.): solo se suma el costo
+            'totales' => ['costo' => round(array_sum(array_column($filas, 'costo')), 2)]];
+    }
+
+    /** Para cuántos días alcanza el stock al ritmo de consumo */
+    private static function alcanza(float $stock, float $porDia): string
+    {
+        $dias = (int) floor($stock / $porDia);
+
+        return match (true) {
+            $stock <= 0 => 'Se acabó',
+            $dias < 1 => 'Menos de 1 día',
+            $dias === 1 => '1 día',
+            default => $dias.' días',
+        };
     }
 }

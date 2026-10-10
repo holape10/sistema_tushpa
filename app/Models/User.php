@@ -58,6 +58,12 @@ class User extends Authenticatable
         return $this->tieneRol([2]);
     }
 
+    /** ¿Tiene asignada esta opción del menú? (el administrador tiene todo) */
+    public function tieneModulo(string $url): bool
+    {
+        return $this->esAdmin() || $this->modulos()->where('mod_url', $url)->exists();
+    }
+
     public function esAdminOCaja(): bool
     {
         return $this->tieneRol([2, 4]);

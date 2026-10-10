@@ -214,6 +214,7 @@ class Notas
                 Socios::revertirComprobante((int) $ref->IdCpe_cabecera);   // cuotas de socio pagadas con él vuelven a deberse
                 Gimnasio::revertirComprobante((int) $ref->IdCpe_cabecera); // la membresía de gimnasio que pagó queda anulada
                 Fidelizacion::revertir((int) $ref->IdCpe_cabecera);        // y se descuentan los puntos que ganó
+                Porciones::revertir((int) $ref->IdCpe_cabecera);           // y vuelven las porciones del día
             }
 
             EnvioAutomatico::programar($notaId);

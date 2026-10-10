@@ -1,10 +1,14 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Mesa, Pedido};
+use App\Models\Mesa;
+use App\Models\Pedido;
+use App\Models\Producto;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -25,6 +29,7 @@ class ReservaController extends Controller
     {
         $r = DB::table('reservas')->where('res_id', $id)->where('id_empresa_negocio', $this->sucursal())->first();
         abort_unless($r, 404);
+
         return $r;
     }
 
@@ -52,7 +57,7 @@ class ReservaController extends Controller
             'pisos' => DB::table('pisos')->where('id_empresa_negocio', $sucursal)->orderBy('pis_nom')->get(['pis_id', 'pis_nom']),
             'mesas' => DB::table('mesas')->where('id_empresa_negocio', $sucursal)->orderBy('mes_nom')->get(['mes_id', 'mes_nom', 'pis_id']),
             'productos' => DB::table('productos')->where('id_empresa_negocio', $sucursal)->where('proest', 'Activo')
-                ->where('promocion', '!=', 4)->orderBy('pronom')->get(['IdProducto', 'pronom', 'propun']),
+                ->whereNotIn('promocion', Producto::NO_VENDIBLES)->orderBy('pronom')->get(['IdProducto', 'pronom', 'propun']),
         ]);
     }
 
@@ -62,43 +67,43 @@ class ReservaController extends Controller
         $actual = $id ? $this->reserva($id) : null;
 
         $d = $request->validate([
-            'nombre_cliente'    => 'required|string|max:150',
-            'telefono'          => 'nullable|string|max:20',
+            'nombre_cliente' => 'required|string|max:150',
+            'telefono' => 'nullable|string|max:20',
             'cantidad_personas' => 'required|integer|min:1|max:500',
-            'fecha_reserva'     => ['required', 'date', $actual ? 'nullable' : 'after_or_equal:today'],
-            'hora_inicio'       => 'required|date_format:H:i',
-            'hora_fin'          => 'required|date_format:H:i|after:hora_inicio',
-            'pis_id'            => ['nullable', Rule::exists('pisos', 'pis_id')->where('id_empresa_negocio', $sucursal)],
-            'mes_id'            => ['nullable', Rule::exists('mesas', 'mes_id')->where('id_empresa_negocio', $sucursal)],
-            'observacion'       => 'nullable|string|max:500',
-            'items'             => 'nullable|array',
-            'items.*.IdProducto'=> ['required', Rule::exists('productos', 'IdProducto')->where('id_empresa_negocio', $sucursal)],
-            'items.*.cantidad'  => 'required|numeric|min:0.5|max:999',
-            'items.*.nota'      => 'nullable|string|max:100',
+            'fecha_reserva' => ['required', 'date', $actual ? 'nullable' : 'after_or_equal:today'],
+            'hora_inicio' => 'required|date_format:H:i',
+            'hora_fin' => 'required|date_format:H:i|after:hora_inicio',
+            'pis_id' => ['nullable', Rule::exists('pisos', 'pis_id')->where('id_empresa_negocio', $sucursal)],
+            'mes_id' => ['nullable', Rule::exists('mesas', 'mes_id')->where('id_empresa_negocio', $sucursal)],
+            'observacion' => 'nullable|string|max:500',
+            'items' => 'nullable|array',
+            'items.*.IdProducto' => ['required', Rule::exists('productos', 'IdProducto')->where('id_empresa_negocio', $sucursal)],
+            'items.*.cantidad' => 'required|numeric|min:0.5|max:999',
+            'items.*.nota' => 'nullable|string|max:100',
         ], ['hora_fin.after' => 'La hora de salida debe ser después de la hora de llegada.',
             'fecha_reserva.after_or_equal' => 'La fecha de la reserva no puede ser anterior a hoy.'],
             ['nombre_cliente' => 'Nombre', 'cantidad_personas' => 'Personas', 'fecha_reserva' => 'Fecha', 'hora_inicio' => 'Hora de llegada',
-             'hora_fin' => 'Hora de salida', 'mes_id' => 'Mesa', 'items.*.IdProducto' => 'Plato']);
+                'hora_fin' => 'Hora de salida', 'mes_id' => 'Mesa', 'items.*.IdProducto' => 'Plato']);
 
         // La mesa elegida no puede estar reservada a la misma hora (salvo que se confirme igual)
-        if (!empty($d['mes_id']) && !$request->boolean('forzar')) {
+        if (! empty($d['mes_id']) && ! $request->boolean('forzar')) {
             $choque = DB::table('reservas')->where('id_empresa_negocio', $sucursal)->where('mes_id', $d['mes_id'])
                 ->where('fecha_reserva', $d['fecha_reserva'])->whereIn('estado', self::ACTIVAS)
-                ->when($id, fn($q) => $q->where('res_id', '!=', $id))
-                ->where('hora_inicio', '<', $d['hora_fin'] . ':00')->where('hora_fin', '>', $d['hora_inicio'] . ':00')
+                ->when($id, fn ($q) => $q->where('res_id', '!=', $id))
+                ->where('hora_inicio', '<', $d['hora_fin'].':00')->where('hora_fin', '>', $d['hora_inicio'].':00')
                 ->first(['nombre_cliente', 'hora_inicio', 'hora_fin']);
             if ($choque) {
                 return response()->json(['success' => false, 'choque' => true,
-                    'message' => "Esa mesa ya está reservada por {$choque->nombre_cliente} de " . substr($choque->hora_inicio, 0, 5)
-                        . ' a ' . substr($choque->hora_fin, 0, 5) . '. ¿Guardar igual?']);
+                    'message' => "Esa mesa ya está reservada por {$choque->nombre_cliente} de ".substr($choque->hora_inicio, 0, 5)
+                        .' a '.substr($choque->hora_fin, 0, 5).'. ¿Guardar igual?']);
             }
         }
-        if (!empty($d['mes_id'])) {
+        if (! empty($d['mes_id'])) {
             $d['pis_id'] = DB::table('mesas')->where('mes_id', $d['mes_id'])->value('pis_id');
         }
 
         $precios = DB::table('productos')->whereIn('IdProducto', collect($d['items'] ?? [])->pluck('IdProducto'))->pluck('propun', 'IdProducto');
-        $items = collect($d['items'] ?? [])->map(fn($i) => [
+        $items = collect($d['items'] ?? [])->map(fn ($i) => [
             'IdProducto' => (int) $i['IdProducto'], 'cantidad' => (float) $i['cantidad'], 'precio' => (float) $precios[$i['IdProducto']],
             'subtotal' => round((float) $i['cantidad'] * (float) $precios[$i['IdProducto']], 2), 'nota' => $i['nota'] ?? null,
         ]);
@@ -141,6 +146,7 @@ class ReservaController extends Controller
             return response()->json(['success' => false, 'message' => 'La reserva ya fue atendida.']);
         }
         DB::table('reservas')->where('res_id', $id)->update(['estado' => $request->estado, 'updated_at' => now()]);
+
         return response()->json(['success' => true]);
     }
 
@@ -159,9 +165,9 @@ class ReservaController extends Controller
         $platos = DB::table('reserva_detalle as d')->leftJoin('productos as pr', 'pr.IdProducto', '=', 'd.IdProducto')
             ->whereIn('d.res_id', $reservas->pluck('res_id'))->get(['d.res_id', 'd.cantidad', 'pr.pronom'])->groupBy('res_id');
 
-        return response()->json(['reservas' => $reservas->map(fn($r) => (array) $r + [
-            'mesa_libre' => $r->mes_id ? !in_array($r->mes_id, $ocupadas) : null,
-            'platos' => ($platos[$r->res_id] ?? collect())->map(fn($p) => (float) $p->cantidad . ' ' . $p->pronom)->values(),
+        return response()->json(['reservas' => $reservas->map(fn ($r) => (array) $r + [
+            'mesa_libre' => $r->mes_id ? ! in_array($r->mes_id, $ocupadas) : null,
+            'platos' => ($platos[$r->res_id] ?? collect())->map(fn ($p) => (float) $p->cantidad.' '.$p->pronom)->values(),
         ])]);
     }
 
@@ -173,12 +179,12 @@ class ReservaController extends Controller
     {
         $r = $this->reserva($id);
         $request->validate(['mes_id' => 'required|integer']);
-        if (!in_array($r->estado, self::ACTIVAS, true)) {
+        if (! in_array($r->estado, self::ACTIVAS, true)) {
             return response()->json(['success' => false, 'message' => 'La reserva ya no está activa.']);
         }
 
         $mesa = Mesa::where('mes_id', $request->mes_id)->where('id_empresa_negocio', $this->sucursal())->first();
-        if (!$mesa) {
+        if (! $mesa) {
             return response()->json(['success' => false, 'message' => 'Mesa no válida.']);
         }
         if (Pedido::where('mes_id', $mesa->mes_id)->where('ped_est', 'Aperturado')->exists()) {
@@ -197,6 +203,7 @@ class ReservaController extends Controller
             $key = (string) $d->IdProducto;
             if (isset($cart[$key])) {
                 $cart[$key]['cantidad'] += (float) $d->cantidad;
+
                 continue;
             }
             $cart[$key] = [

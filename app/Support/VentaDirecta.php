@@ -93,7 +93,7 @@ class VentaDirecta
     {
         $productos = Producto::whereIn('IdProducto', $items->pluck('id')->filter())
             ->where('id_empresa_negocio', $user->id_empresa_negocio)
-            ->where('proest', 'Activo')->where('promocion', '!=', 4)
+            ->where('proest', 'Activo')->whereNotIn('promocion', Producto::NO_VENDIBLES)
             ->get()->keyBy('IdProducto');
         $presentaciones = ProductoPresentacion::whereIn('id_presentacion', $items->pluck('presentacion')->filter())
             ->where('estado', 1)->get()->keyBy('id_presentacion');

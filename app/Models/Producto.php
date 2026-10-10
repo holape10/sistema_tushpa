@@ -1,16 +1,34 @@
 <?php
+
 // app/Models/Producto.php
+
 namespace App\Models;
+
 use Illuminate\Database\Eloquent\Model;
 
 class Producto extends Model
 {
     protected $table = 'productos';
+
     protected $primaryKey = 'IdProducto';
+
     protected $guarded = [];
 
-    public function categoria() { return $this->belongsTo(Categoria::class, 'cat_id', 'cat_id'); }
-    public function subcategoria() { return $this->belongsTo(Subcategoria::class, 'subcat_id', 'subcat_id'); }
+    /** Entrada del menú (SOPA, TEQUEÑOS...): no se vende sola, el mozo la elige en un plato que "lleva entrada" */
+    public const OPCION = 8;
+
+    /** Tipos que no aparecen en las pantallas de venta: insumos y opciones */
+    public const NO_VENDIBLES = [4, self::OPCION];
+
+    public function categoria()
+    {
+        return $this->belongsTo(Categoria::class, 'cat_id', 'cat_id');
+    }
+
+    public function subcategoria()
+    {
+        return $this->belongsTo(Subcategoria::class, 'subcat_id', 'subcat_id');
+    }
 
     public function itemsCombo()
     {
@@ -39,6 +57,7 @@ class Producto extends Model
             4 => 'Insumo',
             2 => 'Preparado',
             6 => 'Combo',
+            self::OPCION => 'Entrada',
             default => 'Producto',
         };
     }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Buscar;
 use App\Support\ConsultaPeru;
 use App\Support\Sunat\GuiaRemision;
 use App\Support\Ubigeo;
@@ -134,7 +135,7 @@ class GuiaController extends Controller
         }
 
         return response()->json(DB::table('productos')->where('id_empresa_negocio', $this->sucursal())->where('proest', 'Activo')
-            ->where(fn ($w) => $w->where('pronom', 'like', "%{$q}%")->orWhere('procod', $q)->orWhere('codigo_barra', $q))
+            ->tap(fn ($w) => Buscar::palabras($w, $q, ['pronom'], ['procod', 'codigo_barra']))
             ->orderBy('pronom')->limit(15)->get(['IdProducto', 'procod', 'pronom', 'umecod']));
     }
 

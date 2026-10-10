@@ -17,6 +17,7 @@ use App\Support\Comprobante;
 use App\Support\ConsultaPeru;
 use App\Support\Fidelizacion;
 use App\Support\Impresion\Impresion;
+use App\Support\OpcionesPlato;
 use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -46,7 +47,7 @@ class CobroController extends Controller
      */
     private function agrupar($items)
     {
-        return $items->groupBy(fn ($d) => $d->IdProducto.'|'.$d->id_presentacion.'|'.number_format((float) $d->ped_det_pre, 2, '.', ''))
+        return $items->groupBy(fn ($d) => $d->IdProducto.'|'.$d->id_presentacion.'|'.substr(md5((string) $d->opciones), 0, 8).'|'.number_format((float) $d->ped_det_pre, 2, '.', ''))
             ->map(function ($lineas, $clave) {
                 $primera = $lineas->first();
 
@@ -54,6 +55,8 @@ class CobroController extends Controller
                     'clave' => $clave,
                     'IdProducto' => $primera->IdProducto,
                     'id_presentacion' => $primera->id_presentacion,
+                    'opciones' => $primera->opciones,
+                    'opciones_texto' => OpcionesPlato::texto($primera->opciones),
                     'descripcion' => $primera->descripcion,
                     'ped_det_pre' => (float) $primera->ped_det_pre,
                     'item_obs' => $lineas->pluck('item_obs')->filter()->unique()->implode(' / '),
@@ -316,6 +319,7 @@ class CobroController extends Controller
                     'cantidad' => (float) $g->cantidad_cobrar, 'precio' => (float) $g->ped_det_pre,
                     'factor' => (float) ($presentaciones[$g->id_presentacion]->factor ?? 1),
                     'umecod' => $presentaciones[$g->id_presentacion]->umecod ?? null,
+                    'opciones' => OpcionesPlato::kardexDe($g->opciones),
                 ])->values()->all();
 
                 $cabId = Comprobante::emitir($user, $turno, $request->all(), $lineas, [

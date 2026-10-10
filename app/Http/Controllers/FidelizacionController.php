@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Buscar;
 use App\Support\Fidelizacion;
 use App\Support\Kardex;
 use Illuminate\Http\Request;
@@ -151,7 +152,7 @@ class FidelizacionController extends Controller
         $q = trim((string) $request->get('q'));
 
         return response()->json(mb_strlen($q) < 2 ? [] : DB::table('productos')->where('id_empresa_negocio', $this->sucursal())->where('proest', 'Activo')
-            ->whereIn('promocion', [0, 6])->where(fn ($w) => $w->where('pronom', 'like', "%{$q}%")->orWhere('procod', $q)->orWhere('codigo_barra', $q))
+            ->whereIn('promocion', [0, 6])->tap(fn ($w) => Buscar::palabras($w, $q, ['pronom'], ['procod', 'codigo_barra']))
             ->orderBy('pronom')->limit(12)->get(['IdProducto', 'pronom', 'procod']));
     }
 

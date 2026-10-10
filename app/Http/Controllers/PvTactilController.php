@@ -1,10 +1,17 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Almacen, EmpresaNegocio, MedioPago, Turno};
-use App\Support\{Precios, VentaDirecta};
+use App\Models\Almacen;
+use App\Models\EmpresaNegocio;
+use App\Models\MedioPago;
+use App\Models\Producto;
+use App\Models\Turno;
+use App\Support\Precios;
+use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * PV táctil (el "PV Mall" del sistema antiguo): pantalla completa para pantallas táctiles.
@@ -24,7 +31,7 @@ class PvTactilController extends Controller
         $user = Auth::user();
 
         $turno = Turno::abiertoDe($user);
-        if (!$turno) {
+        if (! $turno) {
             return redirect()->route('turnos.index')->with('error', 'Debes aperturar tu turno antes de vender.');
         }
 
@@ -35,14 +42,14 @@ class PvTactilController extends Controller
             ->orderBy('cat_nom')->get(['cat_id', 'cat_nom', 'color']);
 
         $filas = DB::table('productos as p')
-            ->leftJoin('producto_stock as s', fn($j) => $j->on('s.IdProducto', '=', 'p.IdProducto')->where('s.id_almacen', $almacen))
-            ->where('p.id_empresa_negocio', $suc)->where('p.proest', 'Activo')->where('p.promocion', '!=', 4)
+            ->leftJoin('producto_stock as s', fn ($j) => $j->on('s.IdProducto', '=', 'p.IdProducto')->where('s.id_almacen', $almacen))
+            ->where('p.id_empresa_negocio', $suc)->where('p.proest', 'Activo')->whereNotIn('p.promocion', Producto::NO_VENDIBLES)
             ->orderBy('p.pronom')
             ->get(['p.IdProducto', 'p.pronom', 'p.propun', 'p.procod', 'p.codigo_barra', 'p.cat_id', 'p.promocion', 'p.imagenproducto', 's.stock']);
         // Precio vigente (precio dinámico) y presentaciones (SACO x 50, CAJA x 12…)
         $precios = Precios::vigentes($filas);
         $presentaciones = Precios::presentaciones($filas->pluck('IdProducto'));
-        $productos = $filas->map(fn($p) => [
+        $productos = $filas->map(fn ($p) => [
             'id' => $p->IdProducto, 'nombre' => $p->pronom, 'precio' => $precios[$p->IdProducto], 'codigo' => $p->procod,
             'barra' => $p->codigo_barra, 'cat' => $p->cat_id, 'stock' => (int) $p->promocion === 0 ? (float) ($p->stock ?? 0) : null,
             'img' => $p->imagenproducto ? asset($p->imagenproducto) : null,
@@ -57,7 +64,7 @@ class PvTactilController extends Controller
             'comprobantes' => DB::table('tipo_documento')->where('caja', 1)->get(['tdocod', 'tdodes']),
             'contado' => DB::table('credito_dias')->where('id_empresa_negocio', $suc)->where('cre_dia_tip', 'CONTADO')->value('cre_dia_id'),
             'medios' => MedioPago::where('id_empresa_negocio', $suc)->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag', 'comision'])
-                ->map(fn($m) => ['id' => $m->id_med_pag, 'nombre' => $m->nom_med_pag, 'comision' => (float) ($m->comision ?? 0)]),
+                ->map(fn ($m) => ['id' => $m->id_med_pag, 'nombre' => $m->nom_med_pag, 'comision' => (float) ($m->comision ?? 0)]),
         ]);
     }
 
@@ -66,7 +73,8 @@ class PvTactilController extends Controller
     {
         $this->autorizar();
         $filas = DB::table('productos')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)
-            ->where('proest', 'Activo')->where('promocion', '!=', 4)->get(['IdProducto', 'propun']);
+            ->where('proest', 'Activo')->whereNotIn('promocion', Producto::NO_VENDIBLES)->get(['IdProducto', 'propun']);
+
         return response()->json(Precios::vigentes($filas));
     }
 
@@ -81,6 +89,7 @@ class PvTactilController extends Controller
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json(['estado' => 'error', 'mensaje' => config('app.debug') ? $e->getMessage() : 'Error al registrar la venta.']);
         }
 

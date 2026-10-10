@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Categoria;
 use App\Models\Producto;
+use App\Support\Buscar;
 use App\Support\Precios;
 use App\Support\Recetas;
 use Illuminate\Http\JsonResponse;
@@ -27,7 +28,7 @@ class RecetaController extends Controller
 
     public function index(Request $request): View
     {
-        $platos = Recetas::platos($this->sucursal());
+        $platos = Recetas::platos($this->sucursal())->where('promocion', 2)->values();
         $conReceta = $platos->where('tiene_receta', true);
 
         return view('empresas.recetas.index', [
@@ -38,6 +39,7 @@ class RecetaController extends Controller
                 'promedio' => $conReceta->whereNotNull('food_cost')->avg('food_cost'),
                 'altos' => $conReceta->where('estado.nivel', 'alto')->count(),
             ],
+            'subidas' => Recetas::subidas($this->sucursal()),
             'filtro' => in_array($request->get('ver'), ['sin', 'alto', 'con'], true) ? $request->get('ver') : '',
         ]);
     }
@@ -66,7 +68,7 @@ class RecetaController extends Controller
     {
         $q = trim((string) $request->get('q'));
         $filas = Producto::where('id_empresa_negocio', $this->sucursal())->where('proest', 'Activo')->whereIn('promocion', [0, 4])
-            ->when($q !== '', fn ($w) => $w->where('pronom', 'like', '%'.$q.'%'))
+            ->tap(fn ($w) => Buscar::palabras($w, $q, ['pronom'], ['procod', 'codigo_barra']))
             ->orderByDesc('promocion')->orderBy('pronom')->limit(15)->get(['IdProducto', 'pronom', 'umecod', 'costo']);
 
         return response()->json($filas->map(fn ($p) => $this->insumo($p)));
@@ -139,6 +141,7 @@ class RecetaController extends Controller
         // El costo escrito en la receta actualiza el costo del insumo (vale para todos los platos que lo usan)
         foreach ($lineas as $l) {
             if (isset($l['costo']) && round((float) $l['costo'], 2) !== round((float) $insumos[$l['insumo']]->costo, 2)) {
+                Recetas::registrarCambioCosto((int) $l['insumo'], (float) $insumos[$l['insumo']]->costo, round((float) $l['costo'], 2), 'RECETA', null, $plato->id_empresa_negocio);
                 $insumos[$l['insumo']]->update(['costo' => round((float) $l['costo'], 2)]);
             }
         }
@@ -153,7 +156,7 @@ class RecetaController extends Controller
 
     private function plato(int $id): Producto
     {
-        return Producto::where('IdProducto', $id)->where('id_empresa_negocio', $this->sucursal())->where('promocion', 2)->firstOrFail();
+        return Producto::where('IdProducto', $id)->where('id_empresa_negocio', $this->sucursal())->whereIn('promocion', [2, Producto::OPCION])->firstOrFail();
     }
 
     /**

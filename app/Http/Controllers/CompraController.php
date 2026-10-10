@@ -1,10 +1,17 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Almacen, Producto};
+use App\Models\Almacen;
+use App\Models\Producto;
+use App\Models\UnidadMedida;
 use App\Support\Compras;
+use App\Support\ConsultaPeru;
+use App\Support\Precios;
+use App\Support\Recetas;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB, Http};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class CompraController extends Controller
 {
@@ -27,8 +34,8 @@ class CompraController extends Controller
             ->leftJoin('proveedor as p', 'p.prov_id', '=', 'c.prov_id')
             ->where('c.id_empresa_negocio', $sucursal)
             ->whereBetween('c.com_fec', [$desde, $hasta])
-            ->when($estado !== 'todos', fn($w) => $w->where('c.est_compra', $estado))
-            ->when($q !== '', fn($w) => $w->where(fn($x) => $x->where('p.prov_raz', 'like', "%{$q}%")
+            ->when($estado !== 'todos', fn ($w) => $w->where('c.est_compra', $estado))
+            ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('p.prov_raz', 'like', "%{$q}%")
                 ->orWhere('p.prov_ruc', 'like', "{$q}%")
                 ->orWhere(DB::raw("CONCAT(c.com_doc_ser, '-', c.com_doc_num)"), 'like', "%{$q}%")));
 
@@ -50,6 +57,7 @@ class CompraController extends Controller
     public function create()
     {
         $this->autorizar();
+
         return view('empresas.compras.form', $this->datosFormulario(null));
     }
 
@@ -77,34 +85,34 @@ class CompraController extends Controller
     {
         $this->autorizar();
         $d = $request->validate([
-            'tdocod'          => 'required|in:' . implode(',', array_keys(Compras::DOCUMENTOS)),
-            'serie'           => 'required|string|max:4',
-            'numero'          => 'required|string|max:8|regex:/^\d+$/',
-            'fecEmi'          => 'required|date',
-            'fecVen'          => 'nullable|date',
-            'fecIng'          => 'required|date',
-            'estadopago'      => 'required|integer',
-            'moneda'          => 'required|in:PEN,USD',
-            'tip_cam'         => 'nullable|numeric|min:0',
-            'id_almacen'      => 'required|integer',
-            'prov_tdicod'     => 'required|string|size:1',
-            'prov_num'        => 'required|string|max:11',
-            'prov_nom'        => 'required|string|max:255',
-            'prov_dir'        => 'nullable|string|max:255',
-            'observaciones'   => 'nullable|string|max:255',
+            'tdocod' => 'required|in:'.implode(',', array_keys(Compras::DOCUMENTOS)),
+            'serie' => 'required|string|max:4',
+            'numero' => 'required|string|max:8|regex:/^\d+$/',
+            'fecEmi' => 'required|date',
+            'fecVen' => 'nullable|date',
+            'fecIng' => 'required|date',
+            'estadopago' => 'required|integer',
+            'moneda' => 'required|in:PEN,USD',
+            'tip_cam' => 'nullable|numeric|min:0',
+            'id_almacen' => 'required|integer',
+            'prov_tdicod' => 'required|string|size:1',
+            'prov_num' => 'required|string|max:11',
+            'prov_nom' => 'required|string|max:255',
+            'prov_dir' => 'nullable|string|max:255',
+            'observaciones' => 'nullable|string|max:255',
             'actualizar_costo' => 'boolean',
-            'items'           => 'required|array|min:1|max:300',
-            'items.*.id'      => 'required|integer',
+            'items' => 'required|array|min:1|max:300',
+            'items.*.id' => 'required|integer',
             'items.*.tip_igv' => 'required|in:10,20,30',
             'items.*.cantidad' => 'required|numeric|min:0.01|max:9999999',
-            'items.*.costo'   => 'required|numeric|min:0|max:9999999',
-            'items.*.flete'   => 'nullable|numeric|min:0',
+            'items.*.costo' => 'required|numeric|min:0|max:9999999',
+            'items.*.flete' => 'nullable|numeric|min:0',
             'items.*.presentacion' => 'nullable|integer',
-            'items.*.lote'    => 'nullable|string|max:50',
+            'items.*.lote' => 'nullable|string|max:50',
             'items.*.vencimiento' => 'nullable|date',
         ], [
             'items.required' => 'Agrega al menos un producto.',
-            'numero.regex'   => 'El número del documento solo lleva dígitos.',
+            'numero.regex' => 'El número del documento solo lleva dígitos.',
         ], [
             'tdocod' => 'documento', 'fecEmi' => 'fecha de emisión', 'fecIng' => 'fecha de ingreso',
             'prov_num' => 'documento del proveedor', 'prov_nom' => 'nombre del proveedor',
@@ -116,11 +124,15 @@ class CompraController extends Controller
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json(['estado' => 'error', 'mensaje' => config('app.debug') ? $e->getMessage() : 'No se pudo guardar la compra.']);
         }
 
         $cab = DB::table('compras_cabecera')->where('com_cab_id', $comId)->first(['com_doc_ser', 'com_doc_num']);
-        session()->flash('success', ($id ? 'Se actualizó' : 'Se registró') . " la compra {$cab->com_doc_ser}-{$cab->com_doc_num}.");
+        session()->flash('success', ($id ? 'Se actualizó' : 'Se registró')." la compra {$cab->com_doc_ser}-{$cab->com_doc_num}.");
+        if ($aviso = Recetas::avisoDeCompra((int) Auth::user()->id_empresa_negocio, $comId)) {
+            session()->flash('costos', $aviso);
+        }
 
         return response()->json(['estado' => 'success', 'redirect' => route('compras.index')]);
     }
@@ -133,6 +145,7 @@ class CompraController extends Controller
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
+
         return back()->with('success', 'Compra anulada: su mercadería salió del stock.');
     }
 
@@ -153,26 +166,26 @@ class CompraController extends Controller
             ->where('p.id_empresa_negocio', $user->id_empresa_negocio)->where('pp.estado', 1)->where('pp.codigo_barra', $codigo)
             ->first(['pp.id_presentacion', 'pp.IdProducto']);
         $productos = Producto::leftJoin('producto_stock', function ($j) use ($almacen) {
-                $j->on('productos.IdProducto', '=', 'producto_stock.IdProducto')->where('producto_stock.id_almacen', $almacen);
-            })
+            $j->on('productos.IdProducto', '=', 'producto_stock.IdProducto')->where('producto_stock.id_almacen', $almacen);
+        })
             ->where('productos.id_empresa_negocio', $user->id_empresa_negocio)
             ->where('productos.proest', 'Activo')
             ->whereIn('productos.promocion', Compras::TIPOS_CON_STOCK)
-            ->when($codigo !== '', fn($w) => $w->where(fn($x) => $x->where('productos.procod', $codigo)->orWhere('productos.codigo_barra', $codigo)
-                ->when($presCodigo, fn($y) => $y->orWhere('productos.IdProducto', $presCodigo->IdProducto))))
+            ->when($codigo !== '', fn ($w) => $w->where(fn ($x) => $x->where('productos.procod', $codigo)->orWhere('productos.codigo_barra', $codigo)
+                ->when($presCodigo, fn ($y) => $y->orWhere('productos.IdProducto', $presCodigo->IdProducto))))
             ->when($codigo === '', function ($w) use ($q) {
                 foreach (preg_split('/\s+/', $q) as $p) {
-                    $w->where(fn($x) => $x->where('productos.pronom', 'like', "%{$p}%")->orWhere('productos.procod', 'like', "{$p}%")
+                    $w->where(fn ($x) => $x->where('productos.pronom', 'like', "%{$p}%")->orWhere('productos.procod', 'like', "{$p}%")
                         ->orWhere('productos.codigo_barra', $p));
                 }
-                $w->orderByRaw('productos.procod = ? DESC, productos.pronom LIKE ? DESC', [$q, $q . '%']);
+                $w->orderByRaw('productos.procod = ? DESC, productos.pronom LIKE ? DESC', [$q, $q.'%']);
             })
             ->orderBy('productos.pronom')->limit($codigo !== '' ? 1 : 20)
             ->get(['productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod', 'productos.costo', 'productos.promocion', 'productos.control_lote', 'producto_stock.stock']);
-        $presentaciones = \App\Support\Precios::presentaciones($productos->pluck('IdProducto'));
-        $unidades = \App\Models\UnidadMedida::pluck('umenom', 'umecod');
+        $presentaciones = Precios::presentaciones($productos->pluck('IdProducto'));
+        $unidades = UnidadMedida::pluck('umenom', 'umecod');
 
-        return response()->json($productos->map(fn($p) => [
+        return response()->json($productos->map(fn ($p) => [
             'id' => $p->IdProducto, 'codigo' => $p->procod, 'nombre' => $p->pronom,
             'costo' => (float) $p->costo, 'stock' => (float) ($p->stock ?? 0), 'insumo' => (int) $p->promocion === 4,
             'control_lote' => (bool) $p->control_lote, 'unidad' => $unidades[$p->umecod] ?? $p->umecod,
@@ -189,8 +202,9 @@ class CompraController extends Controller
         if (mb_strlen($q) < 2) {
             return response()->json([]);
         }
+
         return response()->json(DB::table('proveedor')->where('IdEmpresa', Auth::user()->IdEmpresa)
-            ->where(fn($w) => $w->where('prov_raz', 'like', "%{$q}%")->orWhere('prov_ruc', 'like', "{$q}%"))
+            ->where(fn ($w) => $w->where('prov_raz', 'like', "%{$q}%")->orWhere('prov_ruc', 'like', "{$q}%"))
             ->orderBy('prov_raz')->limit(10)
             ->get(['prov_ruc as num', 'prov_raz as nom', 'prov_dir as dir', 'tdicod']));
     }
@@ -205,12 +219,13 @@ class CompraController extends Controller
             return response()->json(['nom' => $p->prov_raz, 'dir' => $p->prov_dir, 'tdicod' => $p->tdicod]);
         }
 
-        if ($r = \App\Support\ConsultaPeru::ruc($doc)) {
+        if ($r = ConsultaPeru::ruc($doc)) {
             return response()->json(['nom' => $r['nombre'], 'dir' => $r['direccion'], 'tdicod' => '6']);
         }
-        if ($r = \App\Support\ConsultaPeru::dni($doc)) {
+        if ($r = ConsultaPeru::dni($doc)) {
             return response()->json(['nom' => $r['nombre'], 'dir' => '', 'tdicod' => '1']);
         }
+
         return response()->json(['error' => 'No se encontró. Escribe el nombre del proveedor.']);
     }
 
@@ -232,7 +247,7 @@ class CompraController extends Controller
                 'estadopago' => $cab->cre_dia_id, 'moneda' => $cab->mon_id, 'tip_cam' => $cab->tip_cam,
                 'id_almacen' => $cab->id_almacen, 'observaciones' => $cab->comp_obs,
                 'proveedor' => ['tdicod' => $prov->tdicod ?? '6', 'num' => $prov->prov_ruc ?? '', 'nom' => $prov->prov_raz ?? '', 'dir' => $prov->prov_dir ?? ''],
-                'items' => $items->map(fn($i) => [
+                'items' => $items->map(fn ($i) => [
                     'id' => $i->pro_id, 'codigo' => $i->procod, 'nombre' => $i->pronom, 'tip_igv' => $i->tip_igv,
                     'presentacion' => $i->id_presentacion ? (int) $i->id_presentacion : null, 'factor' => (float) ($i->factor ?: 1),
                     'presentacion_nombre' => $i->id_presentacion ? DB::table('producto_presentacion')->where('id_presentacion', $i->id_presentacion)->value('nombre') : null,

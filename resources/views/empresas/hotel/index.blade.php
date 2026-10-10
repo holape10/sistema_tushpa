@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Hotel - Sistema Tushpa</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -41,6 +42,12 @@
         .hab.vencido { background: #e74c3c; animation: parpadeo 1s infinite; }
         .hab.limpieza { background: #95a5a6; }
         .hab.mantenimiento { background: #34495e; }
+        .hab .reserva { position: absolute; left: 6px; right: 6px; bottom: 6px; font-size: .68em; font-weight: bold; background: rgba(0,0,0,.25); border-radius: 6px; padding: 2px 4px;
+                        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .hab.libre.reservada { box-shadow: 0 0 0 4px #a569bd, 0 4px 8px rgba(0,0,0,.15); }
+        .btn-quitar-item { border: 0; background: none; color: #c0392b; font-weight: bold; font-size: 1.1em; padding: 0 4px; }
+        .reserva-aviso { background: #f4ecf7; border: 1px solid #d2b4de; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; color: #6c3483; }
+        .tabla-reservas td { vertical-align: middle !important; }
         @keyframes parpadeo { 50% { opacity: .6; } }
 
         .alertas { max-width: 900px; margin: 0 auto 10px; }
@@ -62,6 +69,7 @@
         .product-price-kiosko { font-weight: bold; color: #8e44ad; }
         .product-stock-kiosko { color: #999; font-size: .85em; }
         .btns-hab { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .btns-hab .btn-ancho { grid-column: 1 / -1; }
         .btns-hab .btn { font-weight: 600; padding: 10px 6px; border: none; color: #fff; }
         .tabla-items { font-size: .9em; margin-bottom: 0; }
         .cobrado { color: #27ae60; font-size: .8em; }
@@ -82,6 +90,10 @@
         <img src="{{ asset('imagenes/logo.png') }}" alt="Logo">
         <h2><i class="fas fa-bed"></i> Hotel · Habitaciones <span class="reloj" id="reloj"></span></h2>
         <div class="acciones">
+            <button type="button" class="btn btn-default" onclick="abrirReservas()" style="border-color:#8e44ad; color:#8e44ad;"><i class="fas fa-calendar-check"></i> Reservas <span class="badge" id="n_reservas" style="background:#8e44ad;"></span></button>
+            @if ($verReporte)
+                <a href="{{ route('hotel.reporte') }}" class="btn btn-default" style="border-color:#c0392b; color:#c0392b;"><i class="fas fa-chart-pie"></i> Reporte</a>
+            @endif
             @if ($esAdmin)
                 <button type="button" class="btn btn-default" onclick="abrirConfig()"><i class="fas fa-gear"></i> Configurar</button>
             @endif
@@ -128,6 +140,7 @@
                 <h4 class="modal-title"><i class="fas fa-door-open"></i> Ingreso · Habitación <span id="ing_hab"></span></h4>
             </div>
             <div class="modal-body">
+                <div class="reserva-aviso" id="ing_reserva" style="display:none;"></div>
                 <div class="row">
                     <div class="col-xs-12 col-sm-7 form-group">
                         <label>Servicio</label>
@@ -139,7 +152,7 @@
                     </div>
                     <div class="col-xs-6 col-sm-3 form-group">
                         <label>Precio S/</label>
-                        <input type="number" id="ing_precio" class="form-control" min="0" step="0.10">
+                        <input type="number" id="ing_precio" class="form-control" min="0" step="0.10" @unless ($esAdmin) readonly title="Solo el administrador cambia el precio" @endunless>
                     </div>
                 </div>
                 <div class="alert alert-info" style="padding:8px 12px;" id="ing_resumen"></div>
@@ -166,6 +179,7 @@
                 @if ($puedeCobrar)
                     <label class="pull-left" style="margin-top:8px;"><input type="checkbox" id="ing_cobrar"> Cobrar ahora</label>
                 @endif
+                <button type="button" class="btn btn-default" id="ing_mantenimiento" title="Sacarla de servicio (no se podrá usar hasta marcarla como disponible)"><i class="fas fa-screwdriver-wrench"></i> Mantenimiento</button>
                 <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-success" id="ing_guardar" style="font-weight:bold;"><i class="fas fa-key"></i> REGISTRAR INGRESO</button>
             </div>
@@ -193,7 +207,7 @@
                     <div class="row">
                         <div class="col-xs-12 col-sm-6"><select id="ext_servicio" class="form-control input-sm"></select></div>
                         <div class="col-xs-4 col-sm-2"><input type="number" id="ext_cantidad" class="form-control input-sm" value="1" min="1" step="1"></div>
-                        <div class="col-xs-4 col-sm-2"><input type="number" id="ext_precio" class="form-control input-sm" min="0" step="0.10"></div>
+                        <div class="col-xs-4 col-sm-2"><input type="number" id="ext_precio" class="form-control input-sm" min="0" step="0.10" @unless ($esAdmin) readonly title="Solo el administrador cambia el precio" @endunless></div>
                         <div class="col-xs-4 col-sm-2"><button type="button" class="btn btn-warning btn-sm btn-block" id="ext_guardar" style="font-weight:bold;">+ Tiempo</button></div>
                     </div>
                 </div>
@@ -219,8 +233,8 @@
                     @if ($puedeCobrar)
                         <a class="btn" style="background:#e74c3c;" id="det_cobrar"><i class="fas fa-money-bill"></i> Cobrar</a>
                     @endif
-                    <button type="button" class="btn" style="background:#3498db;" id="det_precuenta"><i class="fas fa-file-invoice"></i> Precuenta</button>
                     <button type="button" class="btn" style="background:#8e44ad;" id="det_salida"><i class="fas fa-door-closed"></i> Dar salida</button>
+                    <button type="button" class="btn" style="background:#16a085;" id="det_cambiar"><i class="fas fa-right-left"></i> Cambiar habitación</button>
                     @if ($esAdmin)
                         <button type="button" class="btn" style="background:#7f8c8d;" id="det_anular"><i class="fas fa-ban"></i> Anular ingreso</button>
                     @endif
@@ -243,6 +257,86 @@
                 <button type="button" class="btn btn-success btn-block" data-estado="Libre" style="font-weight:bold;"><i class="fas fa-check"></i> Lista / Disponible</button>
                 <button type="button" class="btn btn-default btn-block" data-estado="Limpieza"><i class="fas fa-broom"></i> En limpieza</button>
                 <button type="button" class="btn btn-default btn-block" data-estado="Mantenimiento"><i class="fas fa-screwdriver-wrench"></i> Mantenimiento</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ============ Autorización del administrador (quitar consumo) ============ --}}
+<div class="modal fade" id="m_autoriza" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#c0392b; color:#fff;">
+                <button type="button" class="close" data-dismiss="modal" style="color:#fff; opacity:1;">&times;</button>
+                <h4 class="modal-title"><i class="fas fa-user-shield"></i> Quitar consumo</h4>
+            </div>
+            <div class="modal-body">
+                <p id="aut_texto" style="font-weight:bold;"></p>
+                <div class="form-group"><label>Motivo</label><input id="aut_motivo" class="form-control" maxlength="100" placeholder="Se cargó por error"></div>
+                @unless ($esAdmin)
+                    <p class="text-muted" style="font-size:.85em;">Necesita la autorización de un administrador:</p>
+                    <div class="form-group"><input id="aut_user" class="form-control" placeholder="Correo del administrador" autocomplete="off"></div>
+                    <div class="form-group"><input id="aut_pass" type="password" class="form-control" placeholder="Contraseña" autocomplete="new-password"></div>
+                @endunless
+                <small id="aut_msg" class="text-danger"></small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="aut_ok" style="font-weight:bold;">Quitar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ============ Cambiar de habitación ============ --}}
+<div class="modal fade" id="m_cambiar" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#16a085; color:#fff;">
+                <button type="button" class="close" data-dismiss="modal" style="color:#fff; opacity:1;">&times;</button>
+                <h4 class="modal-title"><i class="fas fa-right-left"></i> Cambiar de habitación</h4>
+            </div>
+            <div class="modal-body">
+                <p>Pasar a <b id="cam_cliente"></b> de la habitación <b id="cam_origen"></b> a:</p>
+                <select id="cam_destino" class="form-control" style="margin-bottom:10px;"></select>
+                <input id="cam_motivo" class="form-control" maxlength="100" placeholder="Motivo (opcional): no funciona el aire…">
+                <small class="text-muted">El tiempo y lo cobrado se mantienen. La habitación anterior queda en limpieza.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="cam_ok" style="font-weight:bold;">Cambiar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ============ Reservas ============ --}}
+<div class="modal fade" id="m_reservas" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#8e44ad; color:#fff;">
+                <button type="button" class="close" data-dismiss="modal" style="color:#fff; opacity:1;">&times;</button>
+                <h4 class="modal-title"><i class="fas fa-calendar-check"></i> Reservas</h4>
+            </div>
+            <div class="modal-body">
+                <form id="f_reserva" class="row" autocomplete="off" style="background:#f8f4fa; border-radius:8px; padding:10px 4px; margin:0 0 12px;">
+                    <input type="hidden" name="res_id">
+                    <div class="col-sm-3 form-group"><label>Habitación</label><select name="hab_id" class="form-control input-sm" required></select></div>
+                    <div class="col-sm-4 form-group"><label>Llega el</label><input name="llegada" type="datetime-local" class="form-control input-sm" required></div>
+                    <div class="col-sm-3 form-group"><label>Servicio</label><select name="servicio" class="form-control input-sm" required></select></div>
+                    <div class="col-sm-2 form-group"><label>Cant.</label><input name="cantidad" type="number" min="1" value="1" class="form-control input-sm" required></div>
+                    <div class="col-sm-4 form-group"><label>Huésped</label><input name="cliente" class="form-control input-sm" required maxlength="150"></div>
+                    <div class="col-sm-2 form-group"><label>DNI/RUC</label><input name="documento" class="form-control input-sm" maxlength="15"></div>
+                    <div class="col-sm-2 form-group"><label>Teléfono</label><input name="telefono" class="form-control input-sm" maxlength="20"></div>
+                    <div class="col-sm-1 form-group"><label>Pers.</label><input name="personas" type="number" min="1" max="20" value="1" class="form-control input-sm"></div>
+                    <div class="col-sm-3 form-group"><label>Nota</label><input name="nota" class="form-control input-sm" maxlength="200" placeholder="Llega tarde, cama extra…"></div>
+                    <div class="col-xs-12 text-right"><button type="button" class="btn btn-default btn-sm" id="res_limpiar">Nueva</button>
+                        <button class="btn btn-sm" style="background:#8e44ad; color:#fff; font-weight:bold;">Guardar reserva</button></div>
+                </form>
+                <table class="table table-condensed table-striped tabla-reservas">
+                    <thead><tr><th>Llega</th><th>Hab.</th><th>Huésped</th><th>Servicio</th><th></th></tr></thead>
+                    <tbody id="res_lista"><tr><td colspan="5" class="text-muted">Cargando…</td></tr></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -295,6 +389,15 @@
                             <small class="text-muted">Se guarda en este equipo. La tarjeta se pone naranja y suena un aviso.</small>
                         </div>
                         <label><input type="checkbox" id="cfg_sonido"> Sonar alerta</label>
+                        <hr>
+                        <div class="form-group" style="max-width:320px;">
+                            <label>Tolerancia después de la hora de salida (minutos)</label>
+                            <div class="input-group">
+                                <input type="number" id="cfg_tolerancia" class="form-control" min="0" max="180" value="{{ $tolerancia }}">
+                                <span class="input-group-btn"><button type="button" class="btn btn-primary" id="cfg_tol_guardar">Guardar</button></span>
+                            </div>
+                            <small class="text-muted">Pasado este tiempo, no se puede dar salida sin cobrar las horas extra. Vale para todos los equipos.</small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -306,6 +409,7 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/js/bootstrap.min.js"></script>
 <script>
+    const ES_ADMIN = @js($esAdmin);
     const URL = {
         estado: "{{ route('hotel.estado') }}", detalle: "{{ url('hotel/estadia') }}/", ingresar: "{{ route('hotel.ingresar') }}",
         extender: "{{ route('hotel.extender') }}", consumo: "{{ route('hotel.consumo') }}", salida: "{{ route('hotel.salida') }}",
@@ -313,6 +417,9 @@
         habitaciones: "{{ url('hotel/habitaciones') }}/", servicio: "{{ route('hotel.servicio') }}", servicios: "{{ url('hotel/servicios') }}/",
         cobrar: "{{ url('cobrarmesa') }}/", precuenta: "{{ url('comandas/precuenta') }}/", precuentaImp: "{{ url('impresion/precuenta') }}/",
         cliente: "{{ url('cobros/cliente') }}/", productos: "{{ route('comandas.search_products') }}",
+        exceso: "{{ route('hotel.exceso') }}", quitar: "{{ route('hotel.quitar') }}", cambiar: "{{ route('hotel.cambiar') }}",
+        reservas: "{{ route('hotel.reservas') }}", reserva: "{{ route('hotel.reserva') }}", cancelarReserva: "{{ route('hotel.reserva.cancelar') }}",
+        configurar: "{{ route('hotel.configurar') }}",
     };
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
 
@@ -346,7 +453,8 @@
     const textoMin = min => min % 1440 === 0 ? (min / 1440) + ' día(s)' : (min >= 60 ? (Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + (min % 60) + ' min' : '')) : min + ' min');
 
     function toast(texto, ms = 3500) {
-        if (window.tushpaAviso) return window.tushpaAviso(texto, /no se|error|falta|debe|no hay|inv[aá]lid|ya est/i.test(texto) ? 'aviso' : 'ok');
+        // Alertas de tiempo (⏰ ⚠) y errores: grandes y visibles; lo que salió bien: aviso discreto
+        if (window.tushpaAviso) return window.tushpaAviso(texto, /^[⏰⚠]|no se|error|falta|debe|no hay|inv[aá]lid|ya est|se pas[oó]|reservad|solo /i.test(texto) ? 'aviso' : 'ok');
         const t = el('toast'); t.textContent = texto; t.style.display = 'block';
         clearTimeout(t._timer); t._timer = setTimeout(() => t.style.display = 'none', ms);
     }
@@ -383,6 +491,7 @@
         return fetch(URL.estado, { headers: { 'Accept': 'application/json' } }).then(r => r.json()).then(d => {
             desfase = fecha(d.ahora).getTime() - Date.now();
             datos = d;
+            el('n_reservas').textContent = d.reservas_hoy ? d.reservas_hoy + ' hoy' : '';
             pintarPisos();
             pintar();
             if (actual && el('m_hab').classList.contains('in')) {
@@ -426,8 +535,9 @@
                     cuerpo = `<div style="margin-top:6px;"><i class="fas ${icono}"></i> ${esc(h.hab_est.toUpperCase())}</div>`;
                 }
                 const pago = e ? (e.pendiente > 0.009 ? `<span class="pago" style="color:#e74c3c;">${money(e.pendiente)}</span>` : `<span class="pago" style="color:#27ae60;">PAGADO</span>`) : '';
-                return `<button type="button" class="hab ${claseDe(h)}" data-id="${h.hab_id}">${pago}
-                    <div class="nom">${esc(h.hab_nom)}</div><div class="tip">${esc(h.hab_tip || '')}</div>${cuerpo}</button>`;
+                const res = h.reserva ? `<div class="reserva">📅 ${cuando(fecha(h.reserva.llegada))} ${esc(h.reserva.cliente)}</div>` : '';
+                return `<button type="button" class="hab ${claseDe(h)} ${h.reserva ? 'reservada' : ''}" data-id="${h.hab_id}" style="${h.reserva ? 'padding-bottom:24px;' : ''}">${pago}
+                    <div class="nom">${esc(h.hab_nom)}</div><div class="tip">${esc(h.hab_tip || '')}</div>${cuerpo}${res}</button>`;
             }).join('') || '<p class="text-muted">Sin habitaciones en este piso.</p>';
             el('grid').querySelectorAll('.hab').forEach(b => b.onclick = () => abrirHabitacion(Number(b.dataset.id)));
         }
@@ -512,6 +622,11 @@
         opcionesServicios(el('ing_servicio'), x => !/extra/i.test(x.pronom));
         el('ing_cantidad').value = 1; el('ing_doc').value = ''; el('ing_cliente').value = ''; el('ing_personas').value = 1; el('ing_msg').textContent = '';
         precioIngreso();
+        // Reservada: se puede registrar el ingreso de la reserva con un clic
+        const r = h.reserva;
+        el('ing_reserva').style.display = r ? 'block' : 'none';
+        el('ing_reserva').innerHTML = r ? `📅 Reservada para <b>${esc(r.cliente)}</b> · llega ${cuando(fecha(r.llegada))}${r.telefono ? ' · ☎ ' + esc(r.telefono) : ''}
+            <button type="button" class="btn btn-xs" style="background:#8e44ad; color:#fff; margin-left:6px;" onclick="ingresarReserva(${r.res_id})">Es él/ella: registrar su ingreso</button>` : '';
         $('#m_ingreso').modal('show');
     }
     function precioIngreso() { const s = servicioSel('ing_servicio'); el('ing_precio').value = s ? Number(s.propun).toFixed(2) : ''; resumenIngreso(); }
@@ -542,16 +657,38 @@
         const btn = el('ing_guardar');
         if (!servicioSel('ing_servicio')) return toast('Primero crea los servicios de tiempo.');
         btn.disabled = true;
-        post(URL.ingresar, {
+        const datosIngreso = {
             hab_id: actual.hab_id, servicio: el('ing_servicio').value, cantidad: el('ing_cantidad').value, precio: el('ing_precio').value,
             documento: el('ing_doc').value.trim(), cliente: el('ing_cliente').value.trim(), personas: el('ing_personas').value,
-        }).then(r => {
+        };
+        const enviar = (extra = {}) => post(URL.ingresar, Object.assign({}, datosIngreso, extra)).then(r => {
             btn.disabled = false;
+            if (!r.ok && r.reserva) {
+                if (confirm(r.mensaje + '\n\nAceptar = registrar igual en esta habitación · Cancelar = elegir otra')) { btn.disabled = true; return enviar({ forzar: 1 }); }
+                return;
+            }
             if (!r.ok) return toast(r.mensaje);
             if (el('ing_cobrar') && el('ing_cobrar').checked) { window.location.href = URL.cobrar + r.ped_id; return; }
             $('#m_ingreso').modal('hide'); toast('✔ Ingreso registrado: empieza a correr el tiempo'); cargar();
         });
+        enviar();
     };
+    // Una habitación libre también se puede sacar de servicio (se malogró algo)
+    el('ing_mantenimiento').onclick = () => {
+        if (!confirm(`¿Poner la habitación ${actual.hab_nom} en mantenimiento? No se podrá usar hasta marcarla como disponible.`)) return;
+        post(URL.cambiarEstado, { hab_id: actual.hab_id, estado: 'Mantenimiento' }).then(r => {
+            toast(r.ok ? '✔ ' + r.mensaje : r.mensaje);
+            if (r.ok) { $('#m_ingreso').modal('hide'); cargar(); }
+        });
+    };
+    function ingresarReserva(resId) {
+        post(URL.ingresar, { res_id: resId }).then(r => {
+            if (!r.ok) return toast(r.mensaje);
+            $('#m_ingreso').modal('hide'); $('#m_reservas').modal('hide');
+            if (el('ing_cobrar') && el('ing_cobrar').checked) { window.location.href = URL.cobrar + r.ped_id; return; }
+            toast('✔ Llegó la reserva: empieza a correr el tiempo'); cargar();
+        });
+    }
 
     // ---------------- Habitación ocupada ----------------
     function abrirOcupada(h) {
@@ -581,10 +718,18 @@
             el('det_items').innerHTML = d.items.map(i => {
                 const imp = i.ped_det_can * i.ped_det_pre; total += imp; pend += (i.ped_det_can - i.item_facturado) * i.ped_det_pre;
                 const cob = Number(i.item_facturado) >= Number(i.ped_det_can) ? ' <span class="cobrado">✔ cobrado</span>' : '';
-                return `<tr><td>${Number(i.ped_det_can)}</td><td>${esc(i.descripcion)}${cob}</td><td class="text-right">${money(imp)}</td></tr>`;
+                const quitar = i.se_quita ? ` <button type="button" class="btn-quitar-item" title="Quitar (cargado por error)" data-quitar="${i.ped_det_id}" data-texto="${esc(Number(i.ped_det_can) + ' x ' + i.descripcion)}">×</button>` : '';
+                return `<tr><td>${Number(i.ped_det_can)}</td><td>${esc(i.descripcion)}${cob}</td><td class="text-right">${money(imp)}${quitar}</td></tr>`;
             }).join('');
             el('det_total').textContent = money(total);
             el('det_pendiente').textContent = money(pend);
+            el('det_items').querySelectorAll('[data-quitar]').forEach(b => b.onclick = () => abrirQuitar(b.dataset.quitar, b.dataset.texto));
+            // No se anula si ya pagó algo o si ya cumplió su tiempo
+            const anular = el('det_anular');
+            if (anular) {
+                const pagado = total - pend > 0.009, cumplio = fecha(actual.estadia.fin).getTime() <= ahora();
+                anular.style.display = pagado || cumplio ? 'none' : '';
+            }
         });
     }
 
@@ -628,19 +773,29 @@
         });
     }
 
-    el('det_precuenta').onclick = () => {
-        const id = actual.estadia.ped_id;
-        post(URL.precuentaImp + id, {}).then(r => {
-            if (r.directa) { toast('🖨 ' + r.mensaje); return; }
-            window.open(URL.precuenta + id, '_blank');
-        });
-    };
     el('det_salida').onclick = () => {
         if (!confirm(`¿Dar salida a la habitación ${actual.hab_nom}? Quedará en limpieza.`)) return;
-        post(URL.salida, { hos_id: actual.estadia.hos_id }).then(r => {
-            toast(r.ok ? '✔ ' + r.mensaje : r.mensaje, 5000);
+        const salir = (extra = {}) => post(URL.salida, Object.assign({ hos_id: actual.estadia.hos_id }, extra)).then(r => {
+            // Se pasó de la hora: con un clic se agregan las horas extra y se va a cobrarlas
+            if (!r.ok && r.exceso) {
+                const oferta = r.horas_extra ? `\n\n¿Agregar ${r.horas_extra} x ${r.servicio_extra} (${money(r.monto_extra)}) e ir a cobrar?` : '';
+                if (oferta && confirm(r.mensaje + oferta)) {
+                    return post(URL.exceso, { hos_id: actual.estadia.hos_id }).then(x => {
+                        if (!x.ok) return toast(x.mensaje);
+                        toast('✔ ' + x.mensaje);
+                        @if ($puedeCobrar) window.location.href = URL.cobrar + x.ped_id; @else cargarDetalle(); cargar(); @endif
+                    });
+                }
+                if (ES_ADMIN) {
+                    const motivo = prompt('¿Dar salida SIN cobrar ese tiempo? Escribe el motivo (queda en la bitácora del reporte):');
+                    if (motivo) return salir({ sin_exceso: 1, motivo });
+                }
+                return;
+            }
+            toast(r.ok ? '✔ ' + r.mensaje : r.mensaje, 6000);
             if (r.ok) { $('#m_hab').modal('hide'); cargar(); }
         });
+        salir();
     };
     if (el('det_anular')) el('det_anular').onclick = () => {
         const motivo = prompt('Motivo de la anulación del ingreso:');
@@ -648,6 +803,98 @@
         post(URL.anular, { hos_id: actual.estadia.hos_id, motivo }).then(r => {
             toast(r.ok ? '✔ ' + r.mensaje : r.mensaje, 5000);
             if (r.ok) { $('#m_hab').modal('hide'); cargar(); }
+        });
+    };
+
+    // ---------------- Quitar un consumo (autoriza el administrador) ----------------
+    let quitando = null;
+    function abrirQuitar(id, texto) {
+        quitando = id;
+        el('aut_texto').textContent = '¿Quitar ' + texto + '?';
+        el('aut_motivo').value = ''; el('aut_msg').textContent = '';
+        if (el('aut_user')) { el('aut_user').value = ''; el('aut_pass').value = ''; }
+        $('#m_autoriza').modal('show');
+        setTimeout(() => el('aut_motivo').focus(), 400);
+    }
+    el('aut_ok').onclick = () => {
+        const motivo = el('aut_motivo').value.trim();
+        if (!motivo) { el('aut_msg').textContent = 'Escribe el motivo.'; return; }
+        const datos = { ped_det_id: quitando, motivo };
+        if (el('aut_user')) { datos.auth_user = el('aut_user').value.trim(); datos.auth_password = el('aut_pass').value; }
+        el('aut_ok').disabled = true;
+        post(URL.quitar, datos).then(r => {
+            el('aut_ok').disabled = false;
+            if (!r.ok) { el('aut_msg').textContent = r.mensaje; return; }
+            $('#m_autoriza').modal('hide'); toast('✔ ' + r.mensaje); cargarDetalle(); cargar();
+        });
+    };
+
+    // ---------------- Cambiar de habitación ----------------
+    el('det_cambiar').onclick = () => {
+        const libres = datos.habitaciones.filter(h => h.hab_est === 'Libre');
+        if (!libres.length) return toast('No hay habitaciones libres.');
+        el('cam_cliente').textContent = actual.estadia.cliente; el('cam_origen').textContent = actual.hab_nom; el('cam_motivo').value = '';
+        el('cam_destino').innerHTML = libres.map(h => `<option value="${h.hab_id}">${esc(h.hab_nom)} ${h.hab_tip ? '· ' + esc(h.hab_tip) : ''} · ${esc(h.hab_piso)}${h.reserva ? ' · 📅 reservada ' + cuando(fecha(h.reserva.llegada)) : ''}</option>`).join('');
+        $('#m_cambiar').modal('show');
+    };
+    el('cam_ok').onclick = () => {
+        el('cam_ok').disabled = true;
+        post(URL.cambiar, { hos_id: actual.estadia.hos_id, hab_id: el('cam_destino').value, motivo: el('cam_motivo').value.trim() }).then(r => {
+            el('cam_ok').disabled = false;
+            toast(r.ok ? '✔ ' + r.mensaje : r.mensaje, 5000);
+            if (r.ok) { $('#m_cambiar').modal('hide'); $('#m_hab').modal('hide'); cargar(); }
+        });
+    };
+
+    // ---------------- Reservas ----------------
+    const fRes = el('f_reserva');
+    function opcionesReserva() {
+        fRes.elements.hab_id.innerHTML = datos.habitaciones.map(h => `<option value="${h.hab_id}">${esc(h.hab_nom)}${h.hab_tip ? ' · ' + esc(h.hab_tip) : ''}</option>`).join('');
+        opcionesServicios(fRes.elements.servicio, x => !/extra/i.test(x.pronom));
+    }
+    function limpiarReserva() {
+        fRes.reset(); fRes.elements.res_id.value = '';
+        const d = new Date(ahora() + 3600000); d.setMinutes(0, 0, 0);
+        fRes.elements.llegada.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+    function abrirReservas() {
+        opcionesReserva(); limpiarReserva(); cargarReservas();
+        $('#m_reservas').modal('show');
+    }
+    function cargarReservas() {
+        fetch(URL.reservas, { headers: { 'Accept': 'application/json' } }).then(r => r.json()).then(lista => {
+            el('res_lista').innerHTML = lista.map(r => {
+                const llega = fecha(r.llegada), tarde = llega.getTime() < ahora() - 30 * 60000;
+                return `<tr${tarde ? ' class="warning"' : ''}><td><b>${cuando(llega)}</b>${tarde ? '<br><small class="text-danger">no llegó aún</small>' : ''}</td>
+                    <td><b>${esc(r.hab_nom)}</b><br><small class="text-muted">${esc(r.hab_est)}</small></td>
+                    <td>${esc(r.cliente)}${r.telefono ? '<br><small>☎ ' + esc(r.telefono) + '</small>' : ''}${r.nota ? '<br><small class="text-muted">' + esc(r.nota) + '</small>' : ''}</td>
+                    <td>${Number(r.cantidad)} x ${esc(r.servicio)}<br><small>${money(r.propun * r.cantidad)}</small></td>
+                    <td class="text-right" style="white-space:nowrap;">
+                        <button class="btn btn-xs btn-success" data-ingresar="${r.res_id}" ${r.hab_est !== 'Libre' ? 'disabled title="La habitación no está libre"' : ''}><i class="fas fa-key"></i> Llegó</button>
+                        <button class="btn btn-xs btn-default" data-editar="${r.res_id}"><i class="fas fa-pen"></i></button>
+                        <button class="btn btn-xs btn-danger" data-cancelar="${r.res_id}"><i class="fas fa-times"></i></button></td></tr>`;
+            }).join('') || '<tr><td colspan="5" class="text-muted text-center">No hay reservas pendientes.</td></tr>';
+            el('res_lista').querySelectorAll('[data-ingresar]').forEach(b => b.onclick = () => ingresarReserva(b.dataset.ingresar));
+            el('res_lista').querySelectorAll('[data-cancelar]').forEach(b => b.onclick = () => {
+                const motivo = prompt('¿Cancelar la reserva? Motivo (opcional):', '');
+                if (motivo === null) return;
+                post(URL.cancelarReserva, { res_id: b.dataset.cancelar, motivo }).then(r => { toast(r.ok ? '✔ ' + r.mensaje : r.mensaje); cargarReservas(); cargar(); });
+            });
+            el('res_lista').querySelectorAll('[data-editar]').forEach(b => b.onclick = () => {
+                const r = lista.find(x => String(x.res_id) === b.dataset.editar);
+                ['res_id', 'hab_id', 'cliente', 'documento', 'telefono', 'personas', 'nota'].forEach(k => fRes.elements[k].value = r[k] ?? '');
+                fRes.elements.servicio.value = r.IdProducto; fRes.elements.cantidad.value = Number(r.cantidad);
+                fRes.elements.llegada.value = r.llegada.replace(' ', 'T').slice(0, 16);
+                fRes.elements.cliente.focus();
+            });
+        });
+    }
+    el('res_limpiar').onclick = limpiarReserva;
+    fRes.onsubmit = ev => {
+        ev.preventDefault();
+        post(URL.reserva, Object.fromEntries(new FormData(fRes))).then(r => {
+            toast(r.ok ? '✔ ' + r.mensaje : r.mensaje, 5000);
+            if (r.ok) { limpiarReserva(); cargarReservas(); cargar(); }
         });
     };
 
@@ -707,6 +954,7 @@
         enviarForm(el('f_serv'), URL.servicio);
         el('cfg_aviso').onchange = () => { AVISO_MIN = Math.max(1, Number(el('cfg_aviso').value) || 15); guardarPref('aviso', AVISO_MIN); el('lbl_aviso').textContent = AVISO_MIN; tick(); };
         el('cfg_sonido').onchange = () => { SONIDO = el('cfg_sonido').checked; guardarPref('sonido', SONIDO); if (SONIDO) beep(1); };
+        el('cfg_tol_guardar').onclick = () => post(URL.configurar, { tolerancia: el('cfg_tolerancia').value }).then(r => toast(r.ok ? '✔ ' + r.mensaje : r.mensaje));
     }
 
     cargar();

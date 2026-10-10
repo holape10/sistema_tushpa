@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
+use App\Models\Producto;
 use App\Support\Carta;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,7 +45,7 @@ class CartaController extends Controller
             'mesas' => $this->mesas($negocio->id_empresa_negocio),
             'categorias' => Carta::categorias($negocio->id_empresa_negocio),
             'sinCategoria' => DB::table('productos')->where('id_empresa_negocio', $negocio->id_empresa_negocio)
-                ->where('proest', 'Activo')->where('promocion', '!=', 4)->whereNull('cat_id')->count(),
+                ->where('proest', 'Activo')->whereNotIn('promocion', Producto::NO_VENDIBLES)->whereNull('cat_id')->count(),
         ]);
     }
 

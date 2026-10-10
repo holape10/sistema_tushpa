@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Producto;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -127,9 +128,9 @@ class Recetas
     public static function platos(int $sucursal): Collection
     {
         $platos = DB::table('productos as p')->leftJoin('categorias as c', 'c.cat_id', '=', 'p.cat_id')
-            ->where('p.id_empresa_negocio', $sucursal)->where('p.proest', 'Activo')->where('p.promocion', 2)
+            ->where('p.id_empresa_negocio', $sucursal)->where('p.proest', 'Activo')->whereIn('p.promocion', [2, Producto::OPCION])
             ->orderBy('c.cat_nom')->orderBy('p.pronom')
-            ->get(['p.IdProducto', 'p.pronom', 'p.propun', 'p.cat_id', 'c.cat_nom']);
+            ->get(['p.IdProducto', 'p.pronom', 'p.propun', 'p.cat_id', 'c.cat_nom', 'p.promocion']);
         $precios = Precios::vigentes($platos);
         $costos = self::costos($platos->pluck('IdProducto'));
         $ingredientes = DB::table('producto_receta')->whereIn('IdProducto', $platos->pluck('IdProducto'))
@@ -146,6 +147,65 @@ class Recetas
 
             return $p;
         });
+    }
+
+    /** Anota un cambio de costo de un insumo o producto (compra o receta) para avisar qué platos cambian */
+    public static function registrarCambioCosto(int $idProducto, float $antes, float $nuevo, string $origen, ?int $comCabId, int $sucursal): void
+    {
+        if (abs($nuevo - $antes) < 0.01) {
+            return;
+        }
+        DB::table('costo_historial')->insert([
+            'IdProducto' => $idProducto, 'costo_anterior' => $antes, 'costo_nuevo' => $nuevo, 'origen' => $origen,
+            'com_cab_id' => $comCabId, 'id_empresa_negocio' => $sucursal, 'created_at' => now(),
+        ]);
+    }
+
+    /**
+     * Insumos que subieron de costo (desde una fecha o en una compra) y los platos que ahora ganan menos.
+     *
+     * @return Collection<int, object{insumo: string, antes: float, ahora: float, platos: Collection<int, object>}>
+     */
+    public static function subidas(int $sucursal, ?int $comCabId = null, int $dias = 15): Collection
+    {
+        $cambios = DB::table('costo_historial as h')->join('productos as p', 'p.IdProducto', '=', 'h.IdProducto')
+            ->where('h.id_empresa_negocio', $sucursal)
+            ->when($comCabId, fn ($q) => $q->where('h.com_cab_id', $comCabId), fn ($q) => $q->where('h.created_at', '>=', now()->subDays($dias)))
+            ->whereExists(fn ($e) => $e->from('producto_receta as r')->whereColumn('r.IdInsumo', 'h.IdProducto'))
+            ->orderBy('h.id')->get(['h.IdProducto', 'p.pronom', 'h.costo_anterior', 'h.costo_nuevo'])
+            // Si cambió varias veces, cuenta desde el primer costo hasta el último
+            ->groupBy('IdProducto')->map(fn ($g) => (object) [
+                'id' => (int) $g->first()->IdProducto, 'insumo' => $g->first()->pronom,
+                'antes' => (float) $g->first()->costo_anterior, 'ahora' => (float) $g->last()->costo_nuevo,
+            ])->filter(fn ($c) => $c->ahora > $c->antes)->values();
+        if ($cambios->isEmpty()) {
+            return $cambios;
+        }
+
+        $usos = DB::table('producto_receta')->whereIn('IdInsumo', $cambios->pluck('id'))->get(['IdProducto', 'IdInsumo'])->groupBy('IdInsumo');
+        $platos = self::platos($sucursal)->keyBy('IdProducto');
+
+        return $cambios->map(function ($c) use ($usos, $platos) {
+            $c->platos = collect($usos[$c->id] ?? [])->map(fn ($u) => $platos[$u->IdProducto] ?? null)->filter()->values();
+
+            return $c;
+        });
+    }
+
+    /** Aviso en palabras simples para después de una compra (null si no subió nada que esté en recetas) */
+    public static function avisoDeCompra(int $sucursal, int $comCabId): ?string
+    {
+        $subidas = self::subidas($sucursal, $comCabId);
+        if ($subidas->isEmpty()) {
+            return null;
+        }
+        $partes = $subidas->map(fn ($s) => "Subió {$s->insumo} (S/ ".number_format($s->antes, 2).' → S/ '.number_format($s->ahora, 2).')');
+        $platos = $subidas->flatMap(fn ($s) => $s->platos)->unique('IdProducto');
+        $altos = $platos->where('estado.nivel', 'alto');
+
+        return $partes->implode(' · ').'. '.($platos->count() === 1 ? '1 plato ahora gana menos' : $platos->count().' platos ahora ganan menos')
+            .($altos->isNotEmpty() ? '; ojo con: '.$altos->pluck('pronom')->take(4)->implode(', ').' (food cost alto)' : '')
+            .'. Revisa sus precios en Recetas y Food Cost.';
     }
 
     /**

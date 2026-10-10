@@ -13,6 +13,7 @@ use App\Models\ProductoPresentacion;
 use App\Models\Subcategoria;
 use App\Models\User;
 use App\Support\Kardex;
+use App\Support\Recetas;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -380,6 +381,7 @@ class Importador
         $this->presentaciones($presentacionesFila, $barraLibre, $unidades);
         $this->preciosDinamicos($suc, $opc['dia0'] ?? 'domingo');
         $this->combos();
+        $this->recetas($suc);
     }
 
     /** Presentaciones antiguas: filas tipo = 2 de productos (pro_rel + factor) y la tabla presentaciones */
@@ -467,7 +469,10 @@ class Importador
                 continue;
             }
             if ((int) $padre->promocion !== 6) {
-                $omitidos += $items->count();   // en el sistema antiguo también eran recetas de preparados
+                // En el sistema antiguo también eran recetas de preparados: se importan como receta (ver recetas())
+                if ((int) $padre->promocion !== 2) {
+                    $omitidos += $items->count();
+                }
 
                 continue;
             }
@@ -482,6 +487,60 @@ class Importador
         if ($omitidos) {
             $this->aviso("{$omitidos} filas de combos pertenecían a productos que no son combo (recetas del sistema antiguo); no se importaron.");
         }
+    }
+
+    /**
+     * Recetas de los preparados: la tabla recetas del sistema antiguo (plato, insumo, cantidad y unidad) y las filas
+     * de combos que pertenecían a un preparado. Un plato que ya tiene receta en TUSHPA no se toca.
+     */
+    private function recetas(int $suc): void
+    {
+        $lineas = [];
+        if ($this->hay('recetas')) {
+            foreach ($this->src('recetas')->get() as $r) {
+                $plato = $this->mapa[self::v($r, 'prod_id')] ?? null;
+                $insumo = $this->mapa[self::v($r, 'prod_insu')] ?? null;
+                $cantidad = (float) self::v($r, 'rec_cant', 0);
+                if ($plato && $insumo && (int) $plato->promocion === 2 && in_array((int) $insumo->promocion, [0, 4], true) && $cantidad > 0) {
+                    $lineas[$plato->IdProducto][$insumo->IdProducto] = [$cantidad, self::unidadAntigua(self::v($r, 'unidadmedida'), $insumo->umecod ?: 'NIU')];
+                }
+            }
+        }
+        if ($this->hay('combos')) {
+            foreach ($this->src('combos')->get() as $c) {
+                $plato = $this->mapa[$c->IdProducto_rel] ?? null;
+                $insumo = $this->mapa[$c->IdProducto_comb] ?? null;
+                if ($plato && $insumo && (int) $plato->promocion === 2 && in_array((int) $insumo->promocion, [0, 4], true)
+                    && (float) $c->prod_comb_cant > 0 && ! isset($lineas[$plato->IdProducto][$insumo->IdProducto])) {
+                    $lineas[$plato->IdProducto][$insumo->IdProducto] = [(float) $c->prod_comb_cant, $insumo->umecod ?: 'NIU'];
+                }
+            }
+        }
+
+        foreach ($lineas as $idPlato => $items) {
+            if (DB::table('producto_receta')->where('IdProducto', $idPlato)->exists()) {
+                $this->sumar('productos', 'recetas_omitidas');
+
+                continue;
+            }
+            Recetas::guardar($idPlato, $suc, collect($items)->map(fn ($v, $idInsumo) => ['insumo' => $idInsumo, 'cantidad' => $v[0], 'umecod' => $v[1]])->values()->all());
+            $this->sumar('productos', 'recetas');
+        }
+    }
+
+    /** Unidad escrita en el sistema antiguo (GR, KG, ML, LT...) si corresponde al insumo; si no, la del insumo */
+    private static function unidadAntigua(?string $texto, string $umeInsumo): string
+    {
+        $t = self::clave(str_replace('.', '', (string) $texto));
+        $ume = match (true) {
+            in_array($t, ['G', 'GR', 'GRS', 'GRM', 'GRAMO', 'GRAMOS'], true) => 'GRM',
+            in_array($t, ['KG', 'KGS', 'KGM', 'KILO', 'KILOS', 'KILOGRAMO', 'KILOGRAMOS'], true) => 'KGM',
+            in_array($t, ['ML', 'MLT', 'MILILITRO', 'MILILITROS'], true) => 'MLT',
+            in_array($t, ['L', 'LT', 'LTS', 'LTR', 'LITRO', 'LITROS'], true) => 'LTR',
+            default => $umeInsumo,
+        };
+
+        return array_key_exists($ume, Recetas::unidadesPara($umeInsumo)) ? $ume : $umeInsumo;
     }
 
     // ---------- Stock ----------

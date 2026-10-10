@@ -14,6 +14,7 @@
             @if ($esViejo)<small class="badge-enviado">ENVIADO</small>@endif
             @if ($agregado > 0)<small class="badge-nuevo">+{{ $fmt($agregado) }} nuevo</small>@endif
             @if ($facturado > 0)<small class="badge-cobrado">{{ $fmt($facturado) }} cobrado</small>@endif
+            @if (!empty($item['opciones_texto']))<small class="cart-opciones">{{ $item['opciones_texto'] }}</small>@endif
         </span>
         <div class="cart-item-qty-control">
             <button class="btn-qty btn-minus" title="{{ $esViejo ? 'Reducir (requiere autorización si baja de lo enviado)' : 'Restar' }}">−</button>

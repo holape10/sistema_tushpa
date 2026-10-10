@@ -28,7 +28,7 @@
     @endphp
 
     <form method="POST" action="{{ route('sucursales.update', $sucursal->id_empresa_negocio) }}" class="max-w-6xl mx-auto pb-24"
-          x-data="{ formato: @js($campo('formato_impresion') ?: 'TICKET'), igv: @js((string) $campo('tip_igv_pred')), pred: @js((string) $campo('tdocod_pred')) }">
+          x-data="{ formato: @js($campo('formato_impresion') ?: 'TICKET'), igv: @js((string) $campo('tip_igv_pred')), pred: @js((string) $campo('tdocod_pred')), stock: @js((string) ($campo('control_stock') ?: 'libre')) }">
         @csrf @method('PATCH')
 
         {{-- Encabezado --}}
@@ -188,9 +188,20 @@
                             <p class="text-sm font-medium text-gray-600 mb-2">Afectación del IGV de los productos</p>
                             <div class="grid sm:grid-cols-2 gap-3">
                                 @foreach (['10' => ['Gravado', 'Cobra IGV (18%)'], '20' => ['Exonerado', 'Sin IGV (Amazonía, etc.)']] as $v => [$t, $d])
-                                    <label class="cursor-pointer rounded-xl border-2 px-4 py-3 transition" :class="igv === '{{ $v }}' ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-200 hover:border-gray-300'">
+                                    <label class="relative cursor-pointer rounded-xl border-2 px-4 py-3 transition" :class="igv === '{{ $v }}' ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-200 hover:border-gray-300'">
                                         <input type="radio" name="tip_igv_pred" value="{{ $v }}" x-model="igv" class="sr-only">
                                         <span class="font-bold text-gray-800">{{ $v }} · {{ $t }}</span><span class="block text-xs text-gray-500">{{ $d }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-600 mb-2">¿Se puede vender sin stock?</p>
+                            <div class="grid sm:grid-cols-3 gap-3">
+                                @foreach (\App\Support\ControlStock::NIVELES as $v => [$t, $d])
+                                    <label class="relative cursor-pointer rounded-xl border-2 px-4 py-3 transition" :class="stock === '{{ $v }}' ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-200 hover:border-gray-300'">
+                                        <input type="radio" name="control_stock" value="{{ $v }}" x-model="stock" class="sr-only">
+                                        <span class="font-bold text-gray-800">{{ $v === 'libre' ? '🟡' : ($v === 'productos' ? '🟢' : '✅') }} {{ $t }}</span><span class="block text-xs text-gray-500 mt-0.5">{{ $d }}</span>
                                     </label>
                                 @endforeach
                             </div>
@@ -199,7 +210,7 @@
                             <p class="text-sm font-medium text-gray-600 mb-2">Comprobante que sale seleccionado al cobrar</p>
                             <div class="grid grid-cols-3 gap-3">
                                 @foreach (['13' => ['Nota de venta', 'fa-file-lines'], '03' => ['Boleta', 'fa-file-invoice'], '01' => ['Factura', 'fa-file-invoice-dollar']] as $v => [$t, $i])
-                                    <label class="cursor-pointer rounded-xl border-2 px-3 py-3 text-center transition" :class="pred === '{{ $v }}' ? 'border-indigo-500 bg-indigo-50/50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'">
+                                    <label class="relative cursor-pointer rounded-xl border-2 px-3 py-3 text-center transition" :class="pred === '{{ $v }}' ? 'border-indigo-500 bg-indigo-50/50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'">
                                         <input type="radio" name="tdocod_pred" value="{{ $v }}" x-model="pred" class="sr-only">
                                         <i class="fas {{ $i }} text-xl"></i><span class="block text-sm font-bold mt-1">{{ $t }}</span>
                                     </label>

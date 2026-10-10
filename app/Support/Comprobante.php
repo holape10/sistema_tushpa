@@ -50,7 +50,8 @@ class Comprobante
      * @param  array  $datos  tdocod, estadopago (cre_dia_id), fecEmi, fecVen, tdicod, clinum, clinom, clidir, clicor,
      *                        telefono, observaciones, consumo, paga, id_med_pag[], mon_med_pag[]
      * @param  array  $lineas  [['IdProducto' => ?int, 'descripcion' => string, 'cantidad' => float, 'precio' => float, 'lote' => ?string,
-     *                         'factor' => ?float (presentación: unidades base por unidad vendida), 'umecod' => ?string], ...]
+     *                         'factor' => ?float (presentación: unidades base por unidad vendida), 'umecod' => ?string,
+     *                         'opciones' => ?array<int, float> (opciones elegidas en la comanda: IdProducto => cantidad por plato)], ...]
      * @param  array  $extra  columnas propias del origen para cpe_cabecera (ped_id, mes_id, mozo, IdUsuario_ven...)
      * @return int IdCpe_cabecera
      */
@@ -163,10 +164,16 @@ class Comprobante
 
         // ---- Detalle: una línea por producto, con su salida de stock ----
         // Las líneas libres (sin producto, ej. un servicio escrito a mano o un recargo) no mueven stock
-        $productos = Producto::whereIn('IdProducto', array_filter(array_column($lineas, 'IdProducto')))->get()->keyBy('IdProducto');
-        // Platos con receta: su costo es el de sus ingredientes al precio de hoy (para la rentabilidad)
-        $costosReceta = Recetas::costos($productos->where('promocion', 2)->keys());
+        // Opciones elegidas en la comanda (entrada del menú, platos del trío): [IdProducto => cantidad por plato]
+        $idsOpciones = collect($lineas)->flatMap(fn ($it) => array_keys($it['opciones'] ?? []))->all();
+        $productos = Producto::whereIn('IdProducto', array_merge(array_filter(array_column($lineas, 'IdProducto')), $idsOpciones))->get()->keyBy('IdProducto');
+        // Platos y opciones con receta: su costo es el de sus ingredientes al precio de hoy (para la rentabilidad)
+        $costosReceta = Recetas::costos($productos->whereIn('promocion', [2, Producto::OPCION])->keys());
+        $costoDe = fn ($id) => (float) ($costosReceta[$id] ?? $productos[$id]->costo ?? 0);
+        // Sucursal que vende solo con stock
+        $banderas = ControlStock::banderas((int) $user->id_empresa_negocio);
 
+        $porciones = []; // platos que controlan porciones del día: IdProducto => porciones vendidas
         foreach ($lineas as $it) {
             $prod = $it['IdProducto'] ? ($productos[$it['IdProducto']] ?? null) : null;
             $cant = (float) $it['cantidad'];
@@ -178,13 +185,22 @@ class Comprobante
             $subtotal = $gravado ? round($totalLinea / $factorIgv, 2) : $totalLinea;
             $valorUni = $gravado ? round($precio / $factorIgv, 2) : $precio;
 
+            if ($it['IdProducto']) {
+                $porciones[$it['IdProducto']] = ($porciones[$it['IdProducto']] ?? 0) + $cant * $factor;
+            }
+            foreach ($it['opciones'] ?? [] as $idOpcion => $porPlato) {
+                $porciones[$idOpcion] = ($porciones[$idOpcion] ?? 0) + $cant * (float) $porPlato;
+            }
+
             $detId = DB::table('cpe_detalle')->insertGetId([
                 'IdCpe_cabecera' => $cabId, 'IdProducto' => $it['IdProducto'], 'IdProducto_rel' => $it['IdProducto'],
                 'procod' => $prod->procod ?? '', 'umecod' => ($it['umecod'] ?? null) ?: ($prod->umecod ?? 'NIU'),
                 'cdecan' => $cant, 'cdedes' => $it['descripcion'],
                 'cdevun' => $valorUni, 'cdepuni' => $precio, 'cdepve' => $subtotal,
                 'cdeigv' => round($totalLinea - $subtotal, 2), 'cdevve' => $totalLinea,
-                'tigcod' => $sucursal->tip_igv_pred, 'costo' => round(($costosReceta[$it['IdProducto']] ?? $prod->costo ?? 0) * $factor, 2),
+                'tigcod' => $sucursal->tip_igv_pred,
+                'costo' => round(($it['IdProducto'] ? $costoDe($it['IdProducto']) : 0) * $factor
+                    + collect($it['opciones'] ?? [])->sum(fn ($porPlato, $id) => $costoDe($id) * $porPlato), 2),
                 'cpe_det_factor' => $factor, 'id_almacen_pro' => $almacen?->id_almacen,
                 // Cuentas contables del producto al momento de la venta (CONCAR)
                 'debe' => $prod->debe ?? null, 'haber' => $prod->haber ?? null,
@@ -193,17 +209,28 @@ class Comprobante
             // Stock + kardex: productos simples descuentan directo y los combos descuentan sus componentes
             // Con lotes (farmacia) sale primero el que vence antes, o el que eligió el cajero; queda anotado para el ticket
             if ($prod && $almacen) {
-                $partes = Kardex::salidaPorVenta($prod, $almacen->id_almacen, round($cant * $factor, 3), [
+                $doc = [
                     'cod_tip_ope' => '01', 'tdocod' => $tdocod, 'serie' => $serie, 'numero' => (string) $numero,
-                    'IdCpe_cabecera' => $cabId, 'cliente' => $clinom,
-                    'precio' => round($precio / $factor, 2), 'fecha_mov' => $fecEmi, 'lote_preferido' => $it['lote'] ?? null,
+                    'IdCpe_cabecera' => $cabId, 'cliente' => $clinom, 'fecha_mov' => $fecEmi,
+                ] + $banderas;
+                $partes = Kardex::salidaPorVenta($prod, $almacen->id_almacen, round($cant * $factor, 3), $doc + [
+                    'precio' => round($precio / $factor, 2), 'lote_preferido' => $it['lote'] ?? null,
                 ]);
                 if ($lotes = Lotes::texto($partes)) {
                     DB::table('cpe_detalle')->where('IdCpe_detalle', $detId)->update(['lotes' => $lotes]);
                 }
+                // Las opciones elegidas (la sopa del menú, los platos del trío) también salen del almacén
+                foreach ($it['opciones'] ?? [] as $idOpcion => $porPlato) {
+                    if ($opcion = $productos[$idOpcion] ?? null) {
+                        Kardex::salidaPorVenta($opcion, $almacen->id_almacen, round($cant * (float) $porPlato, 3),
+                            $doc + ['IdProducto_rel' => $prod->IdProducto, 'precio' => 0]);
+                    }
+                }
             }
         }
 
+        // Porciones del día (juanes, sopa del día...): se restan; en venta directa también se revisa que alcancen
+        Porciones::vender((int) $user->id_empresa_negocio, $cabId, $porciones, ! empty($extra['ped_id']));
         Fidelizacion::acumular($cabId);       // puntos del cliente (si la sucursal tiene fidelización)
         EnvioAutomatico::programar($cabId);   // si la empresa tiene envío automático
 

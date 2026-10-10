@@ -1,7 +1,12 @@
 <?php
+
 namespace App\Support;
 
-use App\Models\{Almacen, Producto, Turno, User};
+use App\Models\Almacen;
+use App\Models\Producto;
+use App\Models\ProductoPresentacion;
+use App\Models\Turno;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -12,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 class Compras
 {
     public const DOCUMENTOS = ['01' => 'FACTURA', '03' => 'BOLETA', '12' => 'TICKET', '13' => 'NOTA DE VENTA', '00' => 'OTROS'];
+
     public const TIPOS_IGV = ['10' => 'Gravado', '20' => 'Exonerado', '30' => 'Inafecto'];
 
     // Solo productos simples (0) e insumos (4) tienen stock propio
@@ -27,7 +33,7 @@ class Compras
             if ($id) {
                 $anterior = DB::table('compras_cabecera')->where('com_cab_id', $id)
                     ->where('id_empresa_negocio', $sucursal)->lockForUpdate()->first();
-                if (!$anterior) {
+                if (! $anterior) {
                     throw new \RuntimeException('La compra no existe.');
                 }
                 if ($anterior->est_compra !== 'Registrado') {
@@ -37,12 +43,12 @@ class Compras
 
             // ---- Forma de pago ----
             $cre = DB::table('credito_dias')->where('cre_dia_id', $d['estadopago'])->where('id_empresa_negocio', $sucursal)->first();
-            if (!$cre) {
+            if (! $cre) {
                 throw new \RuntimeException('Forma de pago no válida.');
             }
             $contado = $cre->cre_dia_tip === 'CONTADO';
             $fecVen = $contado ? $d['fecEmi'] : ($d['fecVen'] ?? null);
-            if (!$contado && (!$fecVen || $fecVen < $d['fecEmi'])) {
+            if (! $contado && (! $fecVen || $fecVen < $d['fecEmi'])) {
                 throw new \RuntimeException('La fecha de vencimiento no puede ser anterior a la de emisión.');
             }
 
@@ -54,7 +60,7 @@ class Compras
             }
 
             $almacen = Almacen::where('id_almacen', $d['id_almacen'])->where('id_empresa_negocio', $sucursal)->first();
-            if (!$almacen) {
+            if (! $almacen) {
                 throw new \RuntimeException('Almacén no válido.');
             }
 
@@ -67,7 +73,7 @@ class Compras
                 ->where('id_empresa_negocio', $sucursal)->where('prov_id', $proveedor->prov_id)
                 ->where('tdocod', $d['tdocod'])->where('com_doc_ser', $serie)->where('com_doc_num', $numero)
                 ->where('est_compra', 'Registrado')
-                ->when($id, fn($q) => $q->where('com_cab_id', '!=', $id))
+                ->when($id, fn ($q) => $q->where('com_cab_id', '!=', $id))
                 ->exists();
             if ($repetida) {
                 throw new \RuntimeException("La compra {$serie}-{$numero} de este proveedor ya está registrada.");
@@ -76,9 +82,9 @@ class Compras
             $lineas = self::lineas($user, $d['items'], $tc, $d['fecIng']);
             $tot = [
                 'grav' => round($lineas->where('tip_igv', '10')->sum('com_det_subtot'), 2),
-                'exo'  => round($lineas->where('tip_igv', '20')->sum('com_det_subtot'), 2),
+                'exo' => round($lineas->where('tip_igv', '20')->sum('com_det_subtot'), 2),
                 'inaf' => round($lineas->where('tip_igv', '30')->sum('com_det_subtot'), 2),
-                'igv'  => round($lineas->sum('com_det_igv'), 2),
+                'igv' => round($lineas->sum('com_det_igv'), 2),
                 'total' => round($lineas->sum('total'), 2),
             ];
 
@@ -125,8 +131,12 @@ class Compras
                     'lote' => $l['lote'], 'vencimiento' => $l['vencimiento'],
                 ]);
 
-                if (!empty($d['actualizar_costo'])) {
-                    Producto::where('IdProducto', $l['pro_id'])->update(['costo' => round($l['precio_costo'] / $factor, 2)]);
+                if (! empty($d['actualizar_costo'])) {
+                    $antes = (float) Producto::where('IdProducto', $l['pro_id'])->value('costo');
+                    $nuevo = round($l['precio_costo'] / $factor, 2);
+                    Producto::where('IdProducto', $l['pro_id'])->update(['costo' => $nuevo]);
+                    // Para avisar qué platos ganan menos si subió un insumo de sus recetas
+                    Recetas::registrarCambioCosto((int) $l['pro_id'], $antes, $nuevo, 'COMPRA', $comId, (int) $user->id_empresa_negocio);
                 }
             }
 
@@ -143,7 +153,7 @@ class Compras
         DB::transaction(function () use ($user, $id) {
             $cab = DB::table('compras_cabecera')->where('com_cab_id', $id)
                 ->where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
-            if (!$cab) {
+            if (! $cab) {
                 throw new \RuntimeException('La compra no existe.');
             }
             if ($cab->est_compra !== 'Registrado') {
@@ -182,20 +192,20 @@ class Compras
             ->where('id_empresa_negocio', $user->id_empresa_negocio)
             ->whereIn('promocion', self::TIPOS_CON_STOCK)
             ->get()->keyBy('IdProducto');
-        $presentaciones = \App\Models\ProductoPresentacion::whereIn('id_presentacion', array_filter(array_column($items, 'presentacion')))
+        $presentaciones = ProductoPresentacion::whereIn('id_presentacion', array_filter(array_column($items, 'presentacion')))
             ->where('estado', 1)->get()->keyBy('id_presentacion');
         $factor = Comprobante::FACTOR_IGV;
 
         return collect($items)->map(function ($i) use ($productos, $presentaciones, $factor, $tc, $fecIng) {
             $prod = $productos[$i['id']] ?? null;
-            if (!$prod) {
+            if (! $prod) {
                 throw new \RuntimeException('Un producto del detalle no existe o no maneja stock (combos y preparados no se compran).');
             }
 
             $pres = null;
-            if (!empty($i['presentacion'])) {
+            if (! empty($i['presentacion'])) {
                 $pres = $presentaciones[$i['presentacion']] ?? null;
-                if (!$pres || (int) $pres->IdProducto !== (int) $prod->IdProducto) {
+                if (! $pres || (int) $pres->IdProducto !== (int) $prod->IdProducto) {
                     throw new \RuntimeException("La presentación elegida de {$prod->pronom} ya no existe. Quita la línea y agrégala de nuevo.");
                 }
             }
@@ -212,13 +222,13 @@ class Compras
             // Farmacia: los productos con control de lote exigen lote y vencimiento, y no se compra mercadería ya vencida
             $lote = trim((string) ($i['lote'] ?? '')) ?: null;
             $vence = ($i['vencimiento'] ?? null) ?: null;
-            if ($prod->control_lote && (!$lote || !$vence)) {
+            if ($prod->control_lote && (! $lote || ! $vence)) {
                 throw new \RuntimeException("Ingresa el lote y la fecha de vencimiento de {$prod->pronom}.");
             }
             if ($vence && $vence < $fecIng) {
                 throw new \RuntimeException("El lote {$lote} de {$prod->pronom} ya estaba vencido al ingresar ({$vence}).");
             }
-            if ($vence && !$lote) {
+            if ($vence && ! $lote) {
                 throw new \RuntimeException("Ingresa el número de lote de {$prod->pronom} (tiene fecha de vencimiento).");
             }
 
@@ -250,10 +260,12 @@ class Compras
         $existe = DB::table('proveedor')->where('IdEmpresa', $user->IdEmpresa)->where('prov_ruc', $num)->first();
         if ($existe) {
             DB::table('proveedor')->where('prov_id', $existe->prov_id)->update($datos);
+
             return DB::table('proveedor')->where('prov_id', $existe->prov_id)->first();
         }
 
         $id = DB::table('proveedor')->insertGetId($datos + ['IdEmpresa' => $user->IdEmpresa, 'prov_ruc' => $num]);
+
         return DB::table('proveedor')->where('prov_id', $id)->first();
     }
 }

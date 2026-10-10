@@ -1,10 +1,14 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Almacen, Producto};
+use App\Models\Almacen;
+use App\Models\Producto;
+use App\Support\Buscar;
 use App\Support\Kardex;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class KardexController extends Controller
 {
@@ -82,7 +86,7 @@ class KardexController extends Controller
             ->leftJoin('producto_stock as ps', function ($j) use ($idAlmacen) {
                 $j->on('ps.IdProducto', '=', 'productos.IdProducto')->where('ps.id_almacen', $idAlmacen);
             })
-            ->when($q, fn($qq) => $qq->where('productos.pronom', 'like', "%{$q}%"))
+            ->tap(fn ($qq) => Buscar::palabras($qq, $q, ['productos.pronom'], ['productos.procod', 'productos.codigo_barra']))
             ->select('productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod',
                 'productos.promocion', 'productos.stock_min', 'productos.costo', DB::raw('COALESCE(ps.stock, 0) as stock'))
             ->paginate(30)->withQueryString();
@@ -117,15 +121,15 @@ class KardexController extends Controller
         $tipo = $request->input('mov_tip') === 'E' ? 'E' : 'I';
 
         $request->validate([
-            'id_almacen'          => 'required|integer',
-            'cod_tip_ope'         => 'required|in:' . implode(',', self::OPERACIONES[$tipo]),
-            'fecha'               => 'required|date|before_or_equal:today',
-            'observaciones'       => 'nullable|string|max:255',
-            'items'               => 'required|array|min:1',
-            'items.*.IdProducto'  => 'required|integer',
-            'items.*.cantidad'    => 'required|numeric|min:0.01',
-            'items.*.costo'       => 'nullable|numeric|min:0',
-            'items.*.lote'        => 'nullable|string|max:50',
+            'id_almacen' => 'required|integer',
+            'cod_tip_ope' => 'required|in:'.implode(',', self::OPERACIONES[$tipo]),
+            'fecha' => 'required|date|before_or_equal:today',
+            'observaciones' => 'nullable|string|max:255',
+            'items' => 'required|array|min:1',
+            'items.*.IdProducto' => 'required|integer',
+            'items.*.cantidad' => 'required|numeric|min:0.01',
+            'items.*.costo' => 'nullable|numeric|min:0',
+            'items.*.lote' => 'nullable|string|max:50',
             'items.*.vencimiento' => 'nullable|date',
         ], [], [
             'cod_tip_ope' => 'Tipo de operación', 'items' => 'Productos',
@@ -133,7 +137,7 @@ class KardexController extends Controller
         ]);
 
         $almacen = Almacen::where('id_almacen', $request->id_almacen)->where('id_empresa_negocio', $user->id_empresa_negocio)->first();
-        if (!$almacen) {
+        if (! $almacen) {
             return back()->withInput()->withErrors(['id_almacen' => 'Almacén no válido.']);
         }
 
@@ -183,6 +187,6 @@ class KardexController extends Controller
         });
 
         return redirect()->route('kardex.movimiento', ['tipo' => $tipo])
-            ->with('success', ($tipo === 'I' ? 'Ingreso' : 'Salida') . ' registrado y kardex actualizado.');
+            ->with('success', ($tipo === 'I' ? 'Ingreso' : 'Salida').' registrado y kardex actualizado.');
     }
 }

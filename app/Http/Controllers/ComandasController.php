@@ -12,8 +12,12 @@ use App\Models\Piso;
 use App\Models\Producto;
 use App\Models\ProductoPresentacion;
 use App\Models\User;
+use App\Support\Buscar;
 use App\Support\Cocina;
+use App\Support\ControlStock;
 use App\Support\Impresion\Impresion;
+use App\Support\OpcionesPlato;
+use App\Support\Porciones;
 use App\Support\Precios;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -65,8 +69,8 @@ class ComandasController extends Controller
         $pedido = $this->pedidoAbierto($ped_id);
         $lineas = PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')->get();
 
-        $items = $lineas->groupBy(fn ($d) => $d->IdProducto.'|'.$d->id_presentacion.'|'.$d->ped_det_pre)->map(fn ($g) => (object) [
-            'descripcion' => $g->first()->descripcion,
+        $items = $lineas->groupBy(fn ($d) => $d->IdProducto.'|'.$d->id_presentacion.'|'.md5((string) $d->opciones).'|'.$d->ped_det_pre)->map(fn ($g) => (object) [
+            'descripcion' => $g->first()->descripcion.(($t = OpcionesPlato::texto($g->first()->opciones)) !== '' ? ' ('.$t.')' : ''),
             'precio' => (float) $g->first()->ped_det_pre,
             'cantidad' => (float) $g->sum('ped_det_can'),
             'pagado' => (float) $g->sum('item_facturado'),
@@ -303,16 +307,19 @@ class ComandasController extends Controller
                 ->get();
 
             // Las líneas repetidas del mismo producto se muestran juntas en una sola
-            foreach ($detalles->groupBy(fn ($d) => $d->IdProducto.'|'.$d->id_presentacion) as $lineas) {
+            foreach ($detalles->groupBy(fn ($d) => $d->IdProducto.'|'.$d->id_presentacion.'|'.md5((string) $d->opciones)) as $lineas) {
                 $idProducto = $lineas->first()->IdProducto;
                 $presentacion = $lineas->first()->id_presentacion;
-                $key = $presentacion ? $idProducto.'-p'.$presentacion : (string) $idProducto;
+                $opciones = json_decode((string) $lineas->first()->opciones, true) ?: null;
+                $key = ($presentacion ? $idProducto.'-p'.$presentacion : (string) $idProducto).($opciones ? '-o'.($opciones['firma'] ?? substr(md5($lineas->first()->opciones), 0, 8)) : '');
                 $enviado = (float) $lineas->sum('ped_det_can');
                 $obs = $lineas->pluck('item_obs')->filter()->unique()->implode(' / ');
                 $cart[$key] = [
                     'id' => $key,
                     'IdProducto' => (int) $idProducto,
                     'presentacion' => $presentacion ? (int) $presentacion : null,
+                    'opciones' => $opciones,
+                    'opciones_texto' => OpcionesPlato::texto($opciones['grupos'] ?? []),
                     'ped_det_ids' => $lineas->pluck('ped_det_id')->map(fn ($v) => (int) $v)->all(),
                     'nombre' => $lineas->first()->descripcion,
                     'precio' => (float) $lineas->first()->ped_det_pre,
@@ -353,8 +360,8 @@ class ComandasController extends Controller
         })
             ->where('productos.id_empresa_negocio', $id_empresa_negocio)
             ->where('productos.proest', 'Activo')
-            ->where('productos.promocion', '!=', 4)
-            ->when($request->search_text, fn ($q) => $q->where('productos.pronom', 'like', '%'.$request->search_text.'%'))
+            ->whereNotIn('productos.promocion', Producto::NO_VENDIBLES)
+            ->tap(fn ($q) => Buscar::palabras($q, $request->search_text, ['productos.pronom'], ['productos.procod']))
             ->when($request->category_id && ! $request->search_text, fn ($q) => $q->where('productos.cat_id', $request->category_id))
             ->select('productos.*', 'producto_stock.stock as stock_disponible')
             ->orderBy('productos.pronom')
@@ -362,9 +369,40 @@ class ComandasController extends Controller
         // Precio dinámico (happy hour, fin de semana…) vigente en este momento
         $precios = Precios::vigentes($productos);
         $presentaciones = Precios::presentaciones($productos->pluck('IdProducto'));
+        $conOpciones = OpcionesPlato::conOpciones($productos->pluck('IdProducto'));
+        $controlados = array_keys(Porciones::controlados($productos->pluck('IdProducto')));
+        $saldo = Porciones::saldo((int) $id_empresa_negocio, $controlados);
+        $reservado = Porciones::reservado((int) $id_empresa_negocio, $controlados);
+        $quedan = collect($controlados)->mapWithKeys(fn ($id) => [$id => ($saldo[$id] ?? 0) - ($reservado[$id] ?? 0)])->all();
 
         return response()->json([
-            'vista' => view('empresas.comandas.partials.productos_grid', compact('productos', 'precios', 'presentaciones'))->render(),
+            'vista' => view('empresas.comandas.partials.productos_grid', compact('productos', 'precios', 'presentaciones', 'conOpciones', 'quedan'))->render(),
+        ]);
+    }
+
+    /** Porciones aún no enviadas de una entrada en el carrito */
+    private function opcionEnCarrito(array $cart, int $idOpcion): float
+    {
+        return (float) collect($cart)->sum(fn ($i) => (float) ($i['opciones']['kardex'][$idOpcion] ?? 0)
+            * max(0, (float) $i['cantidad'] - (! empty($i['is_old_item']) ? (float) ($i['cantidad_original'] ?? $i['cantidad']) : 0)));
+    }
+
+    /** Cantidad aún no enviada a cocina de un producto en el carrito (lo enviado ya está reservado) */
+    private function nuevoEnCarrito(array $cart, int $idProducto): float
+    {
+        return (float) collect($cart)->where('IdProducto', $idProducto)
+            ->sum(fn ($i) => max(0, (float) $i['cantidad'] - (! empty($i['is_old_item']) ? (float) ($i['cantidad_original'] ?? $i['cantidad']) : 0)));
+    }
+
+    /** Opciones y presentaciones de un plato, para el modal de la comanda */
+    public function opcionesProducto(int $id)
+    {
+        $producto = Producto::where('IdProducto', $id)->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->firstOrFail();
+
+        return response()->json([
+            'id' => $producto->IdProducto, 'nombre' => $producto->pronom, 'precio' => Precios::de($producto),
+            'presentaciones' => Precios::presentaciones([$producto->IdProducto])[$producto->IdProducto] ?? [],
+            'grupos' => OpcionesPlato::de($producto->IdProducto),
         ]);
     }
 
@@ -397,7 +435,7 @@ class ComandasController extends Controller
         $producto = Producto::where('IdProducto', $request->id)
             ->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)
             ->where('proest', 'Activo')
-            ->where('promocion', '!=', 4)
+            ->whereNotIn('promocion', Producto::NO_VENDIBLES)
             ->first();
 
         if (! $producto) {
@@ -413,8 +451,35 @@ class ComandasController extends Controller
             }
         }
 
+        // Plato con opciones (entrada del menú, arma tu trío): se valida lo elegido
+        $opciones = null;
+        if (OpcionesPlato::conOpciones([$producto->IdProducto])) {
+            try {
+                $opciones = OpcionesPlato::elegir($producto->IdProducto, (array) $request->input('opciones', []));
+            } catch (\RuntimeException $e) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+            }
+        }
+
         $cart = session('comanda_cart', []);
-        $id = $presentacion ? $producto->IdProducto.'-p'.$presentacion->id_presentacion : (string) $producto->IdProducto;
+        $id = ($presentacion ? $producto->IdProducto.'-p'.$presentacion->id_presentacion : (string) $producto->IdProducto)
+            .($opciones && $opciones['firma'] !== '' ? '-o'.$opciones['firma'] : '');
+
+        // Sucursal que vende solo con stock: avisa antes de mandarlo a cocina
+        $yaEnCarrito = $this->nuevoEnCarrito($cart, $producto->IdProducto);
+        if ($falta = ControlStock::faltante($producto, $yaEnCarrito + 1, (int) Auth::user()->id_empresa_negocio,
+            (float) ($presentacion?->factor ?? 1), $opciones['kardex'] ?? [])) {
+            return response()->json(['success' => false, 'message' => $falta], 422);
+        }
+
+        // Platos con porciones del día (juanes, sopa del día...): avisa si ya no hay
+        $porciones = [$producto->IdProducto => ($yaEnCarrito + 1) * (float) ($presentacion?->factor ?? 1)];
+        foreach ($opciones['kardex'] ?? [] as $idOp => $porPlato) {
+            $porciones[$idOp] = ($porciones[$idOp] ?? 0) + $this->opcionEnCarrito($cart, (int) $idOp) + $porPlato;
+        }
+        if ($falta = Porciones::faltante((int) Auth::user()->id_empresa_negocio, $porciones)) {
+            return response()->json(['success' => false, 'message' => $falta], 422);
+        }
 
         if (isset($cart[$id])) {
             $cart[$id]['cantidad']++;
@@ -423,10 +488,13 @@ class ComandasController extends Controller
                 'id' => $id,
                 'IdProducto' => (int) $producto->IdProducto,
                 'presentacion' => $presentacion?->id_presentacion,
+                'opciones' => $opciones && $opciones['grupos'] ? ['grupos' => $opciones['grupos'], 'kardex' => $opciones['kardex'], 'firma' => $opciones['firma']] : null,
+                'opciones_texto' => $opciones['texto'] ?? '',
                 'nombre' => $presentacion ? mb_substr($producto->pronom.' - '.$presentacion->nombre, 0, 150) : $producto->pronom,
-                'precio' => $presentacion
+                // Precio del plato (o de su presentación) + lo que cuestan de más las opciones elegidas
+                'precio' => ($presentacion
                     ? ((float) $presentacion->precio > 0 ? (float) $presentacion->precio : round(Precios::de($producto) * (float) $presentacion->factor, 2))
-                    : Precios::de($producto),
+                    : Precios::de($producto)) + ($opciones['extra'] ?? 0),
                 'cantidad' => 1,
                 'observaciones' => '',
                 'is_old_item' => false,
@@ -457,6 +525,13 @@ class ComandasController extends Controller
             // Bajar un ítem ya comandado por debajo de lo autorizado requiere Admin/Caja
             if (! empty($cart[$id]['is_old_item']) && $nueva < ($cart[$id]['cantidad_minima'] ?? $cart[$id]['cantidad_original'])) {
                 return response()->json(['success' => false, 'requiere_autorizacion' => true]);
+            }
+            if ($nueva > $cart[$id]['cantidad'] && ($producto = Producto::find($cart[$id]['IdProducto'] ?? $id))) {
+                $total = $this->nuevoEnCarrito($cart, $producto->IdProducto) + ($nueva - $cart[$id]['cantidad']);
+                $factor = ! empty($cart[$id]['presentacion']) ? (float) ProductoPresentacion::where('id_presentacion', $cart[$id]['presentacion'])->value('factor') : 1;
+                if ($falta = ControlStock::faltante($producto, $total, (int) Auth::user()->id_empresa_negocio, $factor ?: 1, $cart[$id]['opciones']['kardex'] ?? [])) {
+                    return response()->json(['success' => false, 'message' => $falta]);
+                }
             }
             $cart[$id]['cantidad'] = $nueva;
         }
@@ -686,6 +761,30 @@ class ComandasController extends Controller
                     ]);
                 }
 
+                // Solo con stock: lo nuevo (o el aumento) se reserva con bloqueo; si otro mozo manda lo mismo, espera
+                $productos = Producto::whereIn('IdProducto', collect($cart)->pluck('IdProducto')->filter()->unique())->get()->keyBy('IdProducto');
+                $factores = ProductoPresentacion::whereIn('id_presentacion', collect($cart)->pluck('presentacion')->filter()->unique())->pluck('factor', 'id_presentacion');
+                $porciones = [];
+                foreach ($cart as $item) {
+                    $nuevo = (float) $item['cantidad'] - (! empty($item['is_old_item']) ? (float) ($item['cantidad_original'] ?? $item['cantidad']) : 0);
+                    if ($nuevo > 0 && ! empty($item['IdProducto'])) {
+                        $porciones[$item['IdProducto']] = ($porciones[$item['IdProducto']] ?? 0) + $nuevo * (float) ($factores[$item['presentacion'] ?? 0] ?? 1);
+                        foreach ($item['opciones']['kardex'] ?? [] as $idOp => $porPlato) {
+                            $porciones[$idOp] = ($porciones[$idOp] ?? 0) + $nuevo * (float) $porPlato;
+                        }
+                    }
+                }
+                if ($falta = Porciones::faltante((int) $usuario->id_empresa_negocio, $porciones, true)) {
+                    throw new \RuntimeException($falta);
+                }
+                ControlStock::asegurar((int) $usuario->id_empresa_negocio, collect($cart)->map(function ($item) use ($productos, $factores) {
+                    $nuevo = (float) $item['cantidad'] - (! empty($item['is_old_item']) ? (float) ($item['cantidad_original'] ?? $item['cantidad']) : 0);
+                    $producto = $productos[$item['IdProducto'] ?? 0] ?? null;
+
+                    return $producto && $nuevo > 0 ? ['producto' => $producto, 'cantidad' => $nuevo,
+                        'factor' => (float) ($factores[$item['presentacion'] ?? 0] ?? 1), 'opciones' => $item['opciones']['kardex'] ?? []] : null;
+                })->filter()->values()->all());
+
                 // 2) Ítems ya comandados: quedan en UNA sola línea por producto y 3) ítems nuevos
                 foreach ($cart as $item) {
                     if (! empty($item['is_old_item'])) {
@@ -714,7 +813,7 @@ class ComandasController extends Controller
                             $cambios['impreso'] = 'imprimir';
                             $cambios['estadoitem'] = 'Ingresado';
                             $cocina[] = ['IdProducto' => $item['IdProducto'], 'nombre' => $item['nombre'],
-                                'cantidad' => $item['cantidad'] - $original, 'observacion' => '(adicional)'];
+                                'cantidad' => $item['cantidad'] - $original, 'observacion' => trim(($item['opciones_texto'] ?? '').' (adicional)')];
                         } elseif ($item['cantidad'] < $original) {
                             $anulaciones[] = ['IdProducto' => $item['IdProducto'], 'nombre' => $item['nombre'],
                                 'cantidad' => $original - $item['cantidad'], 'observacion' => $item['motivo_reduccion'] ?? ''];
@@ -725,12 +824,13 @@ class ComandasController extends Controller
                         PedidoDetalle::where('ped_det_id', $principal->ped_det_id)->update($cambios);
                         PedidoDetalle::whereIn('ped_det_id', $lineas->skip(1)->pluck('ped_det_id'))->delete();
                     } else {
-                        $cocina[] = ['IdProducto' => $item['IdProducto'] ?? $item['id'], 'nombre' => $item['nombre'],
-                            'cantidad' => $item['cantidad'], 'observacion' => $item['observaciones'] ?? ''];
+                        $cocina[] = ['IdProducto' => $item['IdProducto'] ?? $item['id'], 'nombre' => $item['nombre'], 'cantidad' => $item['cantidad'],
+                            'observacion' => collect([$item['opciones_texto'] ?? '', $item['observaciones'] ?? ''])->filter()->implode(' · ')];
                         PedidoDetalle::create([
                             'ped_id' => $pedido->ped_id,
                             'IdProducto' => $item['IdProducto'] ?? $item['id'],
                             'id_presentacion' => $item['presentacion'] ?? null,
+                            'opciones' => ! empty($item['opciones']) ? json_encode($item['opciones'], JSON_UNESCAPED_UNICODE) : null,
                             'IdEmpresa' => $usuario->IdEmpresa,
                             'descripcion' => $item['nombre'],
                             'detalle' => $item['nombre'],

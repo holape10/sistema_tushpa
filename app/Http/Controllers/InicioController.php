@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Kardex;
 use App\Support\Notas;
+use App\Support\Recetas;
 use App\View\Composers\MenuComposer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -107,6 +109,7 @@ class InicioController extends Controller
             'grupos' => $grupos,
             'reportes' => $reportes,
             'resumen' => $user->esAdminOCaja() ? $this->resumenDeHoy((int) $user->id_empresa_negocio) : null,
+            'porAcabarse' => $user->esAdminOCaja() ? $this->porAcabarse((int) $user->id_empresa_negocio) : null,
         ]);
     }
 
@@ -130,6 +133,31 @@ class InicioController extends Controller
     /**
      * @return array{total: float, comprobantes: int, pendientes: int}
      */
+    /**
+     * Insumos y productos por acabarse: los que llegaron a su stock mínimo y los insumos de recetas que ya no tienen stock.
+     *
+     * @return array{total: int, items: Collection<int, object>}
+     */
+    private function porAcabarse(int $sucursal): array
+    {
+        $almacen = Kardex::almacenPredeterminado($sucursal);
+        if (! $almacen) {
+            return ['total' => 0, 'items' => collect()];
+        }
+        $q = DB::table('productos as p')->join('producto_stock as ps', fn ($j) => $j->on('ps.IdProducto', '=', 'p.IdProducto')->where('ps.id_almacen', $almacen->id_almacen))
+            ->where('p.id_empresa_negocio', $sucursal)->where('p.proest', 'Activo')->whereIn('p.promocion', [0, 4])
+            ->where(fn ($w) => $w->where(fn ($v) => $v->where('p.stock_min', '>', 0)->whereColumn('ps.stock', '<=', 'p.stock_min'))
+                ->orWhere(fn ($v) => $v->where('p.promocion', 4)->where('ps.stock', '<=', 0)
+                    ->whereExists(fn ($e) => $e->from('producto_receta as r')->whereColumn('r.IdInsumo', 'p.IdProducto'))));
+
+        return [
+            'total' => (clone $q)->count(),
+            'items' => $q->orderByRaw('ps.stock - p.stock_min')->limit(8)->get(['p.pronom', 'p.umecod', 'p.stock_min', 'ps.stock'])
+                ->map(fn ($p) => (object) ['nombre' => $p->pronom, 'stock' => (float) $p->stock, 'minimo' => (float) $p->stock_min,
+                    'unidad' => Recetas::nombreUnidad($p->umecod ?: 'NIU')]),
+        ];
+    }
+
     private function resumenDeHoy(int $sucursal): array
     {
         $hoy = DB::table('cpe_cabecera as c')->where('c.id_empresa_negocio', $sucursal)->whereNull('c.ccabaj')
