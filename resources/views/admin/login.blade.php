@@ -6,7 +6,7 @@
     <form method="POST" action="{{ route('admin.login') }}" class="w-full max-w-sm bg-white rounded-2xl shadow-sm p-6 space-y-4">
         @csrf
         <div class="text-center">
-            <img src="{{ asset('imagenes/512.png') }}" alt="" class="w-12 h-12 mx-auto rounded-xl">
+            <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-12 h-12 mx-auto rounded-xl">
             <h1 class="font-bold text-lg mt-2">Panel de clientes</h1>
             <p class="text-sm text-slate-500">Acceso solo para el administrador del sistema</p>
         </div>

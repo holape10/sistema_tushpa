@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#312e81">
     <title>PV Móvil - Sistema Tushpa</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <style>[x-cloak]{display:none!important}</style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script>

@@ -17,7 +17,7 @@
     <section class="rounded-3xl overflow-hidden shadow-sm bg-gradient-to-br from-indigo-700 to-indigo-900 text-white relative isolate">
         <x-kene-adorno patron="laberinto" />
         <div class="p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-5">
-            <img src="{{ asset('imagenes/512.png') }}" alt="" class="w-16 h-16 rounded-2xl bg-white p-2 shrink-0">
+            <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-16 h-16 rounded-2xl bg-white p-2 shrink-0">
             <div class="flex-1">
                 <h1 class="text-2xl font-extrabold">¿Necesitas ayuda?</h1>
                 <p class="text-indigo-200 text-sm mt-1">Soporte de TUSHPA · {{ $s['nombre'] }}. Escríbenos y te ayudamos con tu sistema, SUNAT, el SIRE o tus reportes.</p>

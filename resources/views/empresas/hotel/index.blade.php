@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Hotel - Sistema Tushpa</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -87,7 +87,7 @@
 <body>
 <div class="container-fluid">
     <div class="cabecera">
-        <img src="{{ asset('imagenes/logo.png') }}" alt="Logo">
+        <img src="{{ asset('imagenes/logo.webp') }}" alt="Logo">
         <h2><i class="fas fa-bed"></i> Hotel · Habitaciones <span class="reloj" id="reloj"></span></h2>
         <div class="acciones">
             <button type="button" class="btn btn-default" onclick="abrirReservas()" style="border-color:#8e44ad; color:#8e44ad;"><i class="fas fa-calendar-check"></i> Reservas <span class="badge" id="n_reservas" style="background:#8e44ad;"></span></button>

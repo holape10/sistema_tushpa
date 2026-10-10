@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Pantalla de Cocina</title>
-    <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         [x-cloak] { display: none !important; }

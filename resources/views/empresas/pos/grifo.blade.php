@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <title>PV Grifo - Sistema Tushpa</title>
-    <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <style>
         [x-cloak]{display:none!important}
         html, body { height: 100%; overscroll-behavior: none; }

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Iniciar Sesión - Mozos</title>
-    <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -44,7 +44,7 @@
 </head>
 <body>
 <div class="card">
-    <img src="{{ asset('imagenes/512.png') }}" alt="Logo" class="logo">
+    <img src="{{ asset('imagenes/192.png') }}" alt="Logo" class="logo">
     <h1>INICIAR SESIÓN</h1>
 
     @if (!$sucursal)

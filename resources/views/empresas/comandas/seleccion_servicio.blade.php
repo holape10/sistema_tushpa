@@ -157,7 +157,7 @@
 <body>
     <div class="container-fluid">
         <div class="header-kiosko-container">
-            <div class="logo-container-kiosko"><img src="{{ asset('imagenes/logo.png') }}" alt="Logo"></div>
+            <div class="logo-container-kiosko"><img src="{{ asset('imagenes/logo.webp') }}" alt="Logo"></div>
             <div class="header-kiosko-content"><h2>Selecciona tu Mesa o Tipo de Pedido</h2></div>
             <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
             <button type="button" id="btn_reservas" class="btn btn-default" style="font-weight:bold; border-radius:20px; color:#8e44ad;">

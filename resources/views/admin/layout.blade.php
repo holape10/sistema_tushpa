@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>@yield('title', 'Panel') · TUSHPA</title>
-    <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <style>[x-cloak]{display:none!important}</style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -13,7 +13,7 @@
     @auth('superadmin')
         <header class="bg-slate-900 text-white">
             <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-                <img src="{{ asset('imagenes/512.png') }}" alt="" class="w-8 h-8 rounded-lg bg-white p-1">
+                <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-8 h-8 rounded-lg bg-white p-1">
                 <a href="{{ route('admin.clientes.index') }}" class="font-bold">TUSHPA <span class="font-normal text-slate-400">· Panel de clientes</span></a>
                 <nav class="ml-4 flex gap-1 text-sm">
                     <a href="{{ route('admin.clientes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.clientes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Clientes</a>

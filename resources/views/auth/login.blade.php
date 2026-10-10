@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Iniciar Sesión - Sistema Tushpa</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
+    {{-- Íconos sin frenar la pantalla: se cargan en paralelo y se aplican al llegar --}}
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.pwa')
 </head>
@@ -23,7 +26,7 @@
             <div class="absolute top-1/3 right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-xl"></div>
 
             <div class="relative text-center max-w-md">
-                <img src="{{ asset('imagenes/logo.png') }}" alt="Sistema Tushpa" class="w-80 h-28 mx-auto drop-shadow-2xl mb-4">
+                <img src="{{ asset('imagenes/logo.webp') }}" alt="Sistema Tushpa" width="320" height="128" fetchpriority="high" class="w-80 h-28 object-contain mx-auto drop-shadow-2xl mb-4">
                 <!--<h1 class="text-white text-3xl font-bold tracking-wide">TUSHPA</h1>
                 <p class="text-indigo-200 text-sm mt-1 mb-2 tracking-wider uppercase">Facturación Electrónica</p>-->
                 <p class="text-indigo-100/80 text-sm mb-8">Un solo sistema para gestionar y facturar cualquier tipo de negocio</p>
@@ -61,7 +64,7 @@
 
                 <!-- Logo visible solo en móvil -->
                 <div class="flex lg:hidden flex-col items-center mb-8">
-                    <img src="{{ asset('imagenes/512.png') }}" alt="Logo" class="w-16 h-16 mb-2">
+                    <img src="{{ asset('imagenes/icono.png') }}" alt="Logo" class="w-16 h-16 mb-2">
                     <span class="font-bold text-gray-700 tracking-wide">TUSHPA</span>
                 </div>
 

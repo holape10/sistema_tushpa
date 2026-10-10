@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#1e1b4b">
     <meta name="mobile-web-app-capable" content="yes">
     <title>PV - Sistema Tushpa</title>
-    <link rel="icon" href="{{ asset('imagenes/512.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <style>
         [x-cloak]{display:none!important}
         html, body { height: 100%; overscroll-behavior: none; }
@@ -42,7 +42,7 @@
     {{-- ===== Categorías (columna en pantallas grandes) ===== --}}
     <aside class="hidden lg:flex flex-col bg-white rounded-2xl shadow-sm overflow-hidden">
         <div class="px-3 pt-3 pb-2 flex items-center gap-2">
-            <img src="{{ asset('imagenes/512.png') }}" alt="" class="w-8 h-8 rounded-lg">
+            <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-8 h-8 rounded-lg">
             <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Categorías</span>
         </div>
         <div class="flex-1 overflow-y-auto scroll-fino px-2.5 pb-3 space-y-2">
