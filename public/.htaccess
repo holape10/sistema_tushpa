@@ -38,6 +38,10 @@
     <ElseIf "%{REQUEST_URI} =~ m#/imagenes/#">
         Header set Cache-Control "public, max-age=604800"
     </ElseIf>
+    # JS de cada pantalla (public/js): siempre se enlaza con ?v=fecha del archivo, así que también puede guardarse un año
+    <ElseIf "%{REQUEST_URI} =~ m#/js/[^/]+\.js$# && %{QUERY_STRING} =~ /(^|&)v=/">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </ElseIf>
     <FilesMatch "\.(ico|png|jpe?g|gif|webp|svg|woff2?)$">
         Header setifempty Cache-Control "public, max-age=604800"
     </FilesMatch>

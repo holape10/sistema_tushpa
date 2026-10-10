@@ -12,7 +12,7 @@
 <script>
     (function () {
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => navigator.serviceWorker.register(@json(asset('sw.js')), { scope: @json(url('/').'/') }).catch(() => {}));
+            window.addEventListener('load', () => navigator.serviceWorker.register(@json(asset('sw.js')), { scope: @json(url('/').'/'), updateViaCache: 'none' }).catch(() => {}));
         }
         let aviso = null;
         window.addEventListener('beforeinstallprompt', (e) => {
