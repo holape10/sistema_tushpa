@@ -17,6 +17,7 @@ use App\Support\Comprobante;
 use App\Support\ConsultaPeru;
 use App\Support\Fidelizacion;
 use App\Support\Impresion\Impresion;
+use App\Support\MesasUnidas;
 use App\Support\OpcionesPlato;
 use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
@@ -350,6 +351,7 @@ class CobroController extends Controller
                     if ($pedido->mes_id) {
                         Mesa::where('mes_id', $pedido->mes_id)->update(['mes_est' => 'Libre']);
                     }
+                    MesasUnidas::liberar($pedido->ped_id);
                 } else {
                     $pedido->update(['fecha_hora_modificacion' => now()]);
                 }

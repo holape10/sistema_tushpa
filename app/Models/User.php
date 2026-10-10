@@ -47,10 +47,17 @@ class User extends Authenticatable
     // IDs de la tabla roles: 2 = admin, 4 = caja, 8 = mozo
     public function tieneRol(array $roleIds): bool
     {
-        return DB::table('role_user')
-            ->where('user_IdUsuario', $this->IdUsuario)
-            ->whereIn('role_id', $roleIds)
-            ->exists();
+        return (bool) array_intersect($this->rolesIds(), array_map('intval', $roleIds));
+    }
+
+    /** @var array<int, int>|null Roles leídos una sola vez por petición (el menú y los permisos los consultan varias veces) */
+    private ?array $rolesCache = null;
+
+    /** @return array<int, int> */
+    private function rolesIds(): array
+    {
+        return $this->rolesCache ??= DB::table('role_user')->where('user_IdUsuario', $this->IdUsuario)
+            ->pluck('role_id')->map(fn ($id) => (int) $id)->all();
     }
 
     public function esAdmin(): bool

@@ -3,12 +3,152 @@
 @section('content')
     @include('empresas.partials.alert')
     
+    <div x-data="mesasLote()" @keydown.escape.window="abierto = false">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h2 class="text-2xl font-bold text-gray-800">Gestión de Mesas</h2>
-        <a href="{{ route('mesas.create') }}" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">
-            + Nueva Mesa
-        </a>
+        <div class="flex flex-wrap gap-2">
+            <button type="button" @click="abrir()" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition">
+                ⚡ Crear varias mesas
+            </button>
+            <a href="{{ route('mesas.create') }}" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">
+                + Nueva Mesa
+            </a>
+        </div>
     </div>
+
+    {{-- Crear varias mesas de una vez: "MESA 01" … "MESA 20" en el piso elegido --}}
+    <div x-show="abierto" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="abierto = false">
+        <form method="POST" action="{{ route('mesas.lote') }}" class="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" @submit="enviando = true">
+            @csrf
+            <div class="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 text-white">
+                <h3 class="text-lg font-bold">⚡ Crear varias mesas</h3>
+                <p class="text-sm text-emerald-50">Elige el piso y el rango de números. Se crean todas de una vez.</p>
+            </div>
+
+            @if ($pisos->isEmpty())
+                <div class="p-6 text-sm text-gray-600">
+                    Primero crea los pisos o zonas (ej. PISO 01, TERRAZA).
+                    <a href="{{ route('pisos.index') }}" class="font-semibold text-indigo-600 hover:underline">Ir a Pisos →</a>
+                </div>
+            @else
+                <div class="p-6 space-y-4">
+                    <label class="block">
+                        <span class="text-sm font-semibold text-gray-700">Piso / zona</span>
+                        <select name="pis_id" x-model="piso" @change="sugerir()" required class="mt-1 w-full rounded-xl border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
+                            @foreach ($pisos as $p)
+                                <option value="{{ $p->pis_id }}">{{ $p->pis_nom }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <label class="block col-span-3 sm:col-span-1">
+                            <span class="text-sm font-semibold text-gray-700">Nombre</span>
+                            <input name="prefijo" x-model="prefijo" @input="sugerir()" maxlength="30" required class="mt-1 w-full rounded-xl border-gray-300 uppercase focus:border-emerald-500 focus:ring-emerald-500">
+                        </label>
+                        <label class="block">
+                            <span class="text-sm font-semibold text-gray-700">Desde el N°</span>
+                            <input name="desde" type="number" min="0" max="9999" x-model.number="desde" required class="mt-1 w-full rounded-xl border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
+                        </label>
+                        <label class="block">
+                            <span class="text-sm font-semibold text-gray-700">Hasta el N°</span>
+                            <input name="hasta" type="number" min="0" max="9999" x-model.number="hasta" required class="mt-1 w-full rounded-xl border-gray-300 focus:border-emerald-500 focus:ring-emerald-500">
+                        </label>
+                    </div>
+
+                    {{-- Vista previa --}}
+                    <div class="rounded-xl bg-gray-50 border border-gray-200 p-3">
+                        <template x-if="error">
+                            <p class="text-sm text-amber-700" x-text="error"></p>
+                        </template>
+                        <template x-if="!error">
+                            <div>
+                                <p class="text-sm text-gray-700">
+                                    Se crearán <b class="text-emerald-700" x-text="nuevas().length"></b> mesas en <b x-text="nombrePiso()"></b>
+                                    <span x-show="repetidas().length" class="text-gray-500">(se saltan <b x-text="repetidas().length"></b> que ya existen en este piso)</span>
+                                </p>
+                                <div class="mt-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                                    <template x-for="n in lista()" :key="n">
+                                        <span class="rounded-lg px-2 py-1 text-xs font-bold"
+                                              :class="existe(n) ? 'bg-gray-200 text-gray-400 line-through' : (enOtroPiso(n) ? 'bg-amber-400 text-amber-950' : 'bg-emerald-500 text-white')" x-text="n"></span>
+                                    </template>
+                                </div>
+                                {{-- Mismo número en otro piso: se permite (PISO 01 - MESA 03 y PISO 02 - MESA 03) si el usuario confirma --}}
+                                <div x-show="enOtros().length" class="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+                                    <p>⚠ <b x-text="enOtros().length"></b> de estos nombres ya existen en otro piso (en amarillo).
+                                        En la comanda y la precuenta saldrá el piso delante, por ejemplo <b x-text="nombrePiso() + ' / ' + enOtros()[0]"></b>.</p>
+                                    <label class="mt-2 flex items-center gap-2 font-semibold">
+                                        <input type="checkbox" name="repetir_en_otro_piso" value="1" x-model="confirmaRepetir" class="rounded border-amber-400 text-amber-600 focus:ring-amber-500">
+                                        Sí, crear igual con esos nombres
+                                    </label>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            @endif
+
+            <div class="flex justify-end gap-2 border-t border-gray-100 bg-gray-50 px-6 py-3">
+                <button type="button" @click="abierto = false" class="px-4 py-2 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-white">Cancelar</button>
+                @if ($pisos->isNotEmpty())
+                    <button type="submit" :disabled="enviando || !!error || !nuevas().length || (enOtros().length > 0 && !confirmaRepetir)"
+                            class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                        <span x-text="enviando ? 'Creando…' : 'Crear ' + nuevas().length + ' mesas'"></span>
+                    </button>
+                @endif
+            </div>
+        </form>
+    </div>
+    </div>
+
+    <script>
+        function mesasLote() {
+            const porPiso = @json((object) $nombres);
+            const pisos = @json($pisos->pluck('pis_nom', 'pis_id'));
+            return {
+                abierto: {{ $errors->hasAny(['hasta', 'desde', 'prefijo', 'repetir_en_otro_piso']) ? 'true' : 'false' }},
+                enviando: false,
+                confirmaRepetir: false,
+                piso: @json((string) old('pis_id', $pisos->first()->pis_id ?? '')),
+                prefijo: @json(old('prefijo', 'MESA')),
+                desde: {{ (int) old('desde', 1) }},
+                hasta: {{ (int) old('hasta', 10) }},
+                abrir() { this.abierto = true; this.enviando = false; this.sugerir(); },
+                nombrePiso() { return pisos[this.piso] || ''; },
+                delPiso() { return new Set(porPiso[this.piso] || []); },
+                // Empieza después del número más alto de ESE piso (PISO 01 con MESA 20 → desde 21; PISO 02 vacío → desde 1)
+                sugerir() {
+                    const pre = this.prefijo.trim().toUpperCase();
+                    let max = 0;
+                    this.confirmaRepetir = false;
+                    this.delPiso().forEach(n => {
+                        const m = n.match(/^(.*?)\s*(\d+)$/);
+                        if (m && m[1].trim() === pre) max = Math.max(max, Number(m[2]));
+                    });
+                    const cuantas = Math.max(1, (this.hasta || 0) - (this.desde || 0) + 1);
+                    this.desde = max + 1;
+                    this.hasta = max + Math.min(cuantas, 200);
+                },
+                get error() {
+                    if (!this.prefijo.trim()) return 'Escribe el nombre (ej. MESA).';
+                    if (this.desde === '' || this.hasta === '' || this.hasta < this.desde) return 'El número final debe ser mayor o igual al inicial.';
+                    if (this.hasta - this.desde + 1 > 200) return 'Puedes crear hasta 200 mesas a la vez.';
+                    return '';
+                },
+                nombre(n) { return this.prefijo.trim().toUpperCase() + ' ' + String(n).padStart(Math.max(2, String(this.hasta).length), '0'); },
+                lista() {
+                    if (this.error) return [];
+                    const r = [];
+                    for (let n = this.desde; n <= this.hasta; n++) r.push(this.nombre(n));
+                    return r;
+                },
+                existe(n) { return this.delPiso().has(n); },
+                enOtroPiso(n) { return Object.entries(porPiso).some(([id, nombres]) => String(id) !== String(this.piso) && nombres.includes(n)); },
+                enOtros() { return this.nuevas().filter(n => this.enOtroPiso(n)); },
+                nuevas() { return this.lista().filter(n => !this.existe(n)); },
+                repetidas() { return this.lista().filter(n => this.existe(n)); },
+            };
+        }
+    </script>
 
     <!-- Buscador -->
     <div class="mb-6">

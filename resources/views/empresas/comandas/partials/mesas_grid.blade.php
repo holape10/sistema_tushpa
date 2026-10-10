@@ -1,13 +1,21 @@
 @forelse ($mesas as $m)
     {{-- El estado sale del pedido abierto real, no del campo mes_est (que puede quedar desfasado) --}}
-    @php $estado = $m->pedido_id ? 'Ocupado' : 'Libre'; @endphp
+    @php
+        $estado = $m->pedido_id ? 'Ocupado' : 'Libre';
+        // Mesa junta a otra (grupo grande): al tocarla se trabaja con la mesa principal del grupo
+        $principal = $m->principal ?? null;
+    @endphp
     <button type="button"
-        class="btn-mesa-comanda btn-mesa-kiosko {{ $estado == 'Libre' ? 'libre' : 'ocupado' }}"
-        data-id="{{ $m->mes_id }}" data-nombre="{{ $m->mes_nom }}" data-estado="{{ $estado }}"
+        class="btn-mesa-comanda btn-mesa-kiosko {{ $principal ? 'junta' : ($estado == 'Libre' ? 'libre' : 'ocupado') }}"
+        data-id="{{ $principal['mes_id'] ?? $m->mes_id }}" data-nombre="{{ $principal['nombre'] ?? $m->etiqueta }}" data-estado="{{ $estado }}"
         data-pedido-id="{{ $m->pedido_id }}" data-listos="{{ $m->listos ?? 0 }}" style="position:relative;">
         {{ $m->mes_nom }}<br>
         <span style="font-size: 0.75em; font-weight: normal;">
-            {{ $estado }}@if ($m->pedido_id) · S/ {{ number_format($m->ped_tot, 2) }}@endif
+            @if ($principal)
+                🔗 Junta con {{ $principal['nombre'] }}
+            @else
+                {{ $estado }}@if ($m->pedido_id) · S/ {{ number_format($m->ped_tot, 2) }}@endif
+            @endif
         </span>
         @if ($m->pedido_id && $m->pedido_fecha_hora)
             <span class="mesa-timer" data-inicio="{{ \Carbon\Carbon::parse($m->pedido_fecha_hora)->toIso8601String() }}">00:00:00</span>

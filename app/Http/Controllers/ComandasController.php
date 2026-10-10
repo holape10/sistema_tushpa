@@ -16,9 +16,11 @@ use App\Support\Buscar;
 use App\Support\Cocina;
 use App\Support\ControlStock;
 use App\Support\Impresion\Impresion;
+use App\Support\MesasUnidas;
 use App\Support\OpcionesPlato;
 use App\Support\Porciones;
 use App\Support\Precios;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -88,24 +90,39 @@ class ComandasController extends Controller
         ]);
     }
 
-    /** Mesas para cambiar (libres) o unir (ocupadas, menos la actual) */
+    /**
+     * Mesas para elegir al pasar o juntar. tipo: 'libres' (pasar a otra mesa) o 'juntar' (ocupadas para juntar
+     * cuentas + libres para sumar al grupo). La mesa actual y las que ya son de su grupo no aparecen.
+     */
     public function mesasDisponibles(Request $request)
     {
-        $sucursal = Auth::user()->id_empresa_negocio;
+        $sucursal = (int) Auth::user()->id_empresa_negocio;
+        $enUso = MesasUnidas::ocupadas($sucursal);
+        // Pedido abierto de cada mesa principal, con su total y hora de inicio (para que el mozo reconozca la mesa)
         $abiertos = Pedido::where('id_empresa_negocio', $sucursal)->where('ped_est', 'Aperturado')
-            ->whereNotNull('mes_id')->pluck('ped_id', 'mes_id');
+            ->whereNotNull('mes_id')->get(['ped_id', 'mes_id', 'ped_tot', 'fecha_hora'])->keyBy('mes_id');
 
         $mesas = Mesa::leftJoin('pisos', 'pisos.pis_id', '=', 'mesas.pis_id')
             ->where('mesas.id_empresa_negocio', $sucursal)
             ->orderBy('pisos.pis_nom')->orderBy('mesas.mes_nom')
             ->get(['mesas.mes_id', 'mesas.mes_nom', 'pisos.pis_nom'])
-            ->filter(fn ($m) => $request->tipo === 'ocupadas'
-                ? isset($abiertos[$m->mes_id]) && (int) $abiertos[$m->mes_id] !== (int) $request->ped_id
-                : ! isset($abiertos[$m->mes_id]))
-            ->map(fn ($m) => ['mes_id' => $m->mes_id, 'nombre' => $m->mes_nom, 'piso' => $m->pis_nom, 'ped_id' => $abiertos[$m->mes_id] ?? null])
+            ->map(function ($m) use ($enUso, $abiertos) {
+                $propio = $abiertos[$m->mes_id] ?? null;
+
+                return ['mes_id' => $m->mes_id, 'nombre' => $m->mes_nom, 'piso' => $m->pis_nom, 'etiqueta' => Mesa::etiqueta($m->pis_nom, $m->mes_nom),
+                    'estado' => $propio ? 'ocupada' : (isset($enUso[$m->mes_id]) ? 'en_grupo' : 'libre'),
+                    'ped_id' => $propio?->ped_id, 'total' => $propio ? (float) $propio->ped_tot : null,
+                    'desde' => $propio?->fecha_hora ? Carbon::parse($propio->fecha_hora)->format('H:i') : null];
+            })
+            ->filter(fn ($m) => $request->tipo === 'juntar'
+                ? $m['estado'] === 'libre' || ($m['estado'] === 'ocupada' && (int) $m['ped_id'] !== (int) $request->ped_id)
+                : $m['estado'] === 'libre')
             ->values();
 
-        return response()->json(['success' => true, 'mesas' => $mesas]);
+        $actual = Pedido::where('ped_id', $request->ped_id)->where('id_empresa_negocio', $sucursal)->value('ped_tot');
+
+        return response()->json(['success' => true, 'mesas' => $mesas, 'total_actual' => (float) $actual,
+            'unidas' => MesasUnidas::delPedido((int) $request->ped_id)->pluck('etiqueta')]);
     }
 
     public function cambiarMesa(Request $request)
@@ -124,8 +141,8 @@ class ComandasController extends Controller
                 if (! $destino) {
                     throw new \RuntimeException('Mesa no válida.');
                 }
-                if (Pedido::where('mes_id', $destino->mes_id)->where('ped_est', 'Aperturado')->exists()) {
-                    throw new \RuntimeException("La {$destino->mes_nom} ya está ocupada. Usa Unir mesa.");
+                if (MesasUnidas::pedidoDe($destino->mes_id)) {
+                    throw new \RuntimeException("La {$destino->mes_nom} ya está ocupada. Usa Juntar mesas.");
                 }
 
                 $origen = $pedido->mes_id;
@@ -140,7 +157,10 @@ class ComandasController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /** Une el pedido de otra mesa (origen) dentro del pedido actual (destino) y libera la mesa origen */
+    /**
+     * Junta las cuentas de dos mesas ocupadas: el pedido de la otra mesa (origen) pasa al pedido destino.
+     * Las dos mesas siguen ocupadas como un solo grupo; la que se desocupe se libera desde la mesa.
+     */
     public function unirMesa(Request $request)
     {
         $request->validate(['ped_id' => 'required|integer', 'ped_id_origen' => 'required|integer|different:ped_id']);
@@ -157,7 +177,7 @@ class ComandasController extends Controller
                     throw new \RuntimeException('Alguno de los pedidos ya no está abierto.');
                 }
                 if (PedidoDetalle::where('ped_id', $origen->ped_id)->where('item_facturado', '>', 0)->exists()) {
-                    throw new \RuntimeException('La otra mesa ya tiene cuentas separadas cobradas; termina de cobrarla antes de unirla.');
+                    throw new \RuntimeException('La otra mesa ya tiene cuentas separadas cobradas; termina de cobrarla antes de juntarla.');
                 }
 
                 PedidoDetalle::where('ped_id', $origen->ped_id)->update(['ped_id' => $destino->ped_id]);
@@ -168,8 +188,10 @@ class ComandasController extends Controller
 
                 $origen->update(['ped_est' => 'Unido', 'ped_tot' => 0, 'fecha_hora_modificacion' => now(),
                     'ped_obs' => mb_substr("Unido al pedido {$destino->ped_id}", 0, 255)]);
-                if ($origen->mes_id) {
-                    Mesa::where('mes_id', $origen->mes_id)->update(['mes_est' => 'Libre']);
+                // La mesa de origen y las que ya estaban en su grupo pasan al grupo del destino
+                Mesa::where('unida_ped_id', $origen->ped_id)->update(['unida_ped_id' => $destino->ped_id]);
+                if ($origen->mes_id && (int) $origen->mes_id !== (int) $destino->mes_id) {
+                    Mesa::where('mes_id', $origen->mes_id)->update(['unida_ped_id' => $destino->ped_id, 'mes_est' => 'Ocupado']);
                 }
             });
         } catch (\RuntimeException $e) {
@@ -177,6 +199,52 @@ class ComandasController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /** Suma mesas libres al pedido de una mesa (grupo grande): quedan ocupadas con la misma cuenta */
+    public function juntarLibres(Request $request)
+    {
+        $request->validate(['ped_id' => 'required|integer', 'mesas' => 'required|array|min:1|max:50', 'mesas.*' => 'integer']);
+        $sucursal = Auth::user()->id_empresa_negocio;
+
+        try {
+            DB::transaction(function () use ($request, $sucursal) {
+                $pedido = Pedido::where('ped_id', $request->ped_id)->where('id_empresa_negocio', $sucursal)
+                    ->where('ped_est', 'Aperturado')->whereNotNull('mes_id')->lockForUpdate()->first();
+                if (! $pedido) {
+                    throw new \RuntimeException('El pedido ya no está abierto.');
+                }
+                $ids = array_unique(array_map('intval', $request->mesas));
+                $mesas = Mesa::whereIn('mes_id', $ids)->where('id_empresa_negocio', $sucursal)->lockForUpdate()->get();
+                if ($mesas->count() !== count($ids)) {
+                    throw new \RuntimeException('Alguna mesa no es válida.');
+                }
+                foreach ($mesas as $mesa) {
+                    if (MesasUnidas::pedidoDe($mesa->mes_id)) {
+                        throw new \RuntimeException("La {$mesa->mes_nom} acaba de ocuparse. Vuelve a elegir.");
+                    }
+                }
+                Mesa::whereIn('mes_id', $ids)->update(['unida_ped_id' => $pedido->ped_id, 'mes_est' => 'Ocupado']);
+                $pedido->update(['fecha_hora_modificacion' => now()]);
+            });
+        } catch (\RuntimeException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /** Quita una mesa del grupo (ya se desocupó): queda libre y la cuenta sigue en la mesa principal */
+    public function separarMesa(Request $request)
+    {
+        $request->validate(['ped_id' => 'required|integer', 'mes_id' => 'required|integer']);
+        $actualizadas = Mesa::where('mes_id', $request->mes_id)->where('unida_ped_id', $request->ped_id)
+            ->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)
+            ->update(['unida_ped_id' => null, 'mes_est' => 'Libre']);
+
+        return response()->json($actualizadas
+            ? ['success' => true]
+            : ['success' => false, 'message' => 'Esa mesa ya no está en el grupo.']);
     }
 
     private function mesasDelPiso($piso_id, $id_empresa_negocio)
@@ -190,6 +258,7 @@ class ComandasController extends Controller
             ->groupBy('mesas.mes_id')
             ->orderBy('mesas.mes_nom')
             ->get();
+        $nombrePiso = Piso::where('pis_id', $piso_id)->value('pis_nom');
 
         // Cocina terminó y falta llevarlo a la mesa (pantalla de cocina)
         $listos = DB::table('cocina_tickets')->whereIn('ped_id', $mesas->pluck('pedido_id')->filter())
@@ -207,7 +276,22 @@ class ComandasController extends Controller
             ])
             ->orderBy('hora_inicio')->get(['mes_id', 'hora_inicio', 'nombre_cliente'])->unique('mes_id')->keyBy('mes_id');
 
-        return $mesas->each(function ($m) use ($listos, $reservas) {
+        // Mesas juntas a un grupo: se ven ocupadas y al tocarlas se abre la mesa principal del grupo
+        $grupos = Pedido::join('mesas', 'mesas.mes_id', '=', 'pedidos.mes_id')
+            ->leftJoin('pisos', 'pisos.pis_id', '=', 'mesas.pis_id')
+            ->whereIn('pedidos.ped_id', $mesas->whereNull('pedido_id')->pluck('unida_ped_id')->filter())
+            ->where('pedidos.ped_est', 'Aperturado')
+            ->get(['pedidos.ped_id', 'pedidos.ped_tot', 'pedidos.fecha_hora', 'mesas.mes_id', 'mesas.mes_nom', 'pisos.pis_nom'])->keyBy('ped_id');
+
+        return $mesas->each(function ($m) use ($listos, $reservas, $grupos, $nombrePiso) {
+            $m->etiqueta = Mesa::etiqueta($nombrePiso, $m->mes_nom);
+            $grupo = ! $m->pedido_id && $m->unida_ped_id ? ($grupos[$m->unida_ped_id] ?? null) : null;
+            $m->principal = $grupo ? ['mes_id' => $grupo->mes_id, 'nombre' => Mesa::etiqueta($grupo->pis_nom, $grupo->mes_nom)] : null;
+            if ($grupo) {
+                $m->pedido_id = $grupo->ped_id;
+                $m->ped_tot = $grupo->ped_tot;
+                $m->pedido_fecha_hora = $grupo->fecha_hora;
+            }
             $m->listos = (int) ($listos[$m->pedido_id] ?? 0);
             $m->reserva = $reservas[$m->mes_id] ?? null;
         });
@@ -238,9 +322,15 @@ class ComandasController extends Controller
             if (! $mesa) {
                 return response()->json(['success' => false, 'message' => 'Mesa no válida.'], 403);
             }
-            // Si la pantalla estaba desactualizada y la mesa ya tiene pedido abierto, se continúa ese pedido
+            // Si la pantalla estaba desactualizada y la mesa ya tiene pedido abierto (propio o de su grupo), se continúa ese pedido
             if (! $pedidoId) {
-                $pedidoId = Pedido::where('mes_id', $mesa->mes_id)->where('ped_est', 'Aperturado')->value('ped_id');
+                $pedidoId = MesasUnidas::pedidoDe($mesa->mes_id);
+            }
+            // Una mesa del grupo trabaja con la mesa principal del pedido
+            $principal = $pedidoId ? Pedido::where('ped_id', $pedidoId)->value('mes_id') : null;
+            if ($principal && (int) $principal !== (int) $mesa->mes_id) {
+                $mesa = Mesa::with('piso')->find($principal);
+                $request->merge(['mesa_id' => $mesa->mes_id, 'mesa_nombre' => Mesa::etiqueta($mesa->piso?->pis_nom, $mesa->mes_nom)]);
             }
         }
 
@@ -267,7 +357,9 @@ class ComandasController extends Controller
         $detalles = PedidoDetalle::where('ped_id', $ped_id)->where('estadoitem', '!=', 'Eliminado')->get();
         $total = $detalles->sum(fn ($d) => $d->ped_det_can * $d->ped_det_pre);
 
-        return response()->json(['success' => true, 'pedido' => $pedido, 'detalles' => $detalles, 'total' => $total]);
+        $unidas = MesasUnidas::delPedido((int) $pedido->ped_id)->map(fn ($m) => ['mes_id' => $m->mes_id, 'nombre' => $m->etiqueta])->values();
+
+        return response()->json(['success' => true, 'pedido' => $pedido, 'detalles' => $detalles, 'total' => $total, 'unidas' => $unidas]);
     }
 
     public function activosLlevarDelivery()
@@ -719,8 +811,8 @@ class ComandasController extends Controller
                         throw new \RuntimeException('Este pedido ya fue cobrado o anulado. No se guardaron los cambios.');
                     }
                 } else {
-                    if ($order_type == 'salon' && Pedido::where('mes_id', $mesa_id)->where('ped_est', 'Aperturado')->exists()) {
-                        throw new \RuntimeException('Otro usuario acaba de abrir un pedido en esta mesa. Vuelve a seleccionarla.');
+                    if ($order_type == 'salon' && MesasUnidas::pedidoDe((int) $mesa_id)) {
+                        throw new \RuntimeException('Esta mesa ya está ocupada (o está junta con otra mesa). Vuelve a seleccionarla.');
                     }
 
                     $pedido = Pedido::create([
@@ -855,6 +947,7 @@ class ComandasController extends Controller
                     if ($pedido->mes_id) {
                         Mesa::where('mes_id', $pedido->mes_id)->update(['mes_est' => 'Libre']);
                     }
+                    MesasUnidas::liberar($pedido->ped_id);
 
                     return ['pedido_id' => $pedido->ped_id, 'anulado' => true, 'mesa' => (bool) $pedido->mes_id];
                 }

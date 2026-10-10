@@ -959,7 +959,9 @@
 
     cargar();
     setInterval(tick, 1000);
-    setInterval(cargar, 30000);
+    // Con la pestaña oculta no se recarga (el reloj y las alarmas siguen); al volver se pone al día
+    setInterval(() => { if (!document.hidden) cargar(); }, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) cargar(); });
 </script>
 @include('partials.avisos')
 @include('partials.aviso_servicio')

@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Selecciona tu Mesa - Sistema Tushpa</title>
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -112,8 +114,53 @@
         .btn-mesa-precuenta { background: #3498db; color: #fff; }
         .btn-mesa-separadas { background: #8e44ad; color: #fff; }
         .btn-mesa-cobrar { background: #e74c3c; color: #fff; }
-        .btn-mesa-cambiar { background: #95a5a6; color: #fff; }
-        .btn-mesa-unir { background: #5dade2; color: #fff; }
+        .btn-mesa-cambiar { background: #f59e0b; color: #fff; }
+        .btn-mesa-unir { background: #0ea5e9; color: #fff; }
+
+        /* Pasar / juntar mesas: paso 1 elegir, paso 2 confirmar con resumen */
+        #modal_mover .modal-content { border-radius: 14px; overflow: hidden; border: none; }
+        #modal_mover .mover-cabecera { padding: 14px 18px; color: #fff; position: relative; }
+        #modal_mover .mover-cabecera.pasar { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        #modal_mover .mover-cabecera.juntar { background: linear-gradient(135deg, #0ea5e9, #0369a1); }
+        #modal_mover .mover-cabecera h4 { margin: 0; font-weight: bold; font-size: 1.25em; }
+        #modal_mover .mover-cabecera p { margin: 4px 0 0; opacity: .9; font-size: .92em; }
+        #modal_mover .mover-cabecera .close { position: absolute; right: 14px; top: 10px; color: #fff; opacity: .9; font-size: 28px; }
+        .mover-pasos { display: flex; gap: 6px; margin-bottom: 12px; font-size: .8em; font-weight: bold; color: #94a3b8; }
+        .mover-pasos span { flex: 1; text-align: center; padding: 4px; border-bottom: 3px solid #e2e8f0; }
+        .mover-pasos span.activo { color: #0f172a; border-color: currentColor; }
+        .mover-zonas { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 10px; }
+        .mover-zonas button { flex-shrink: 0; border: 2px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 5px 14px; font-weight: bold; color: #475569; }
+        .mover-zonas button.activa { background: #1e293b; border-color: #1e293b; color: #fff; }
+        .mover-lista { max-height: 50vh; overflow-y: auto; padding: 2px; }
+        .mover-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+        .mover-seccion + .mover-seccion { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #cbd5e1; }
+        .mover-seccion-titulo { font-weight: bold; color: #1e293b; }
+        .mover-seccion-ayuda { font-size: .85em; color: #64748b; margin-bottom: 8px; }
+        .mover-ya { background: #ede9fe; color: #5b21b6; border-radius: 8px; padding: 8px 10px; font-size: .9em; margin-bottom: 10px; }
+        .mover-mesa.libre.elegida { background: #15803d; box-shadow: 0 0 0 4px #facc15; }
+        .btn-mesa-kiosko.junta { background-color: #8e44ad; }
+        .modal-mesa-unidas { background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 8px 10px; margin-top: 10px; color: #5b21b6; font-size: .9em; }
+        .mesa-unida-chip { display: inline-flex; align-items: center; gap: 6px; background: #8e44ad; color: #fff; border-radius: 999px; padding: 4px 4px 4px 12px; margin: 0 6px 6px 0; font-weight: bold; }
+        .mesa-unida-chip button { border: none; border-radius: 999px; background: rgba(255,255,255,.25); color: #fff; font-size: .85em; padding: 2px 10px; }
+        .mesa-unida-chip button.seguro { background: #facc15; color: #1e293b; }
+        .mover-mesa { border: none; border-radius: 12px; padding: 14px 6px; color: #fff; font-weight: bold; font-size: 1.1em; line-height: 1.2;
+            box-shadow: 0 3px 6px rgba(0,0,0,.15); transition: transform .1s; }
+        .mover-mesa:active { transform: scale(.96); }
+        .mover-mesa.libre { background: #52BE80; }
+        .mover-mesa.ocupada { background: #E74C3C; }
+        .mover-mesa small { display: block; font-weight: normal; font-size: .75em; opacity: .95; margin-top: 3px; }
+        .mover-resumen { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 6px 0 14px; flex-wrap: wrap; }
+        .mover-ficha { min-width: 110px; border-radius: 12px; padding: 12px 10px; text-align: center; color: #fff; font-weight: bold; font-size: 1.1em; line-height: 1.25; }
+        .mover-ficha small { display: block; font-weight: normal; font-size: .75em; }
+        .mover-ficha.ocupada { background: #E74C3C; } .mover-ficha.libre { background: #52BE80; } .mover-ficha.total { background: #1e293b; }
+        .mover-ficha.queda { box-shadow: 0 0 0 4px #facc15; }
+        .mover-signo { font-size: 1.8em; font-weight: bold; color: #64748b; }
+        .mover-texto { background: #f1f5f9; border-radius: 10px; padding: 10px 12px; font-size: .95em; color: #334155; text-align: center; }
+        .mover-quedar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 10px; }
+        .mover-quedar button { border: 2px solid #cbd5e1; background: #fff; border-radius: 10px; padding: 10px 6px; font-weight: bold; color: #334155; white-space: normal; }
+        .mover-quedar button.activa { border-color: #0ea5e9; background: #e0f2fe; color: #0369a1; }
+        .mover-acciones { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 14px; }
+        .mover-acciones .btn { padding: 12px; font-weight: bold; border-radius: 10px; font-size: 1em; white-space: normal; }
         .btn-mesa-cerrar { background: #f39c12; color: #fff; }
 
         /* Modal más compacto */
@@ -229,6 +276,7 @@
                         <button type="button" class="btn btn-warning btn-sm" id="btn_modal_entregado" style="margin-top:6px; font-weight:bold;">✔ Ya lo llevé a la mesa</button>
                     </div>
                     <div id="modal_mesa_detalle" class="modal-mesa-content">Cargando...</div>
+                    <div id="modal_mesa_unidas" class="modal-mesa-unidas" style="display:none;"></div>
                     <div class="modal-mesa-btns">
                         <button type="button" class="btn btn-mesa-editar" id="btn_modal_editar">
                             <i class="fas fa-edit"></i> EDITAR
@@ -245,10 +293,10 @@
                         </button>
                         @endif
                         <button type="button" class="btn btn-mesa-cambiar" id="btn_modal_cambiar">
-                            <i class="fas fa-exchange-alt"></i> Cambiar Mesa
+                            <i class="fas fa-arrow-right-arrow-left"></i> Pasar a otra mesa
                         </button>
                         <button type="button" class="btn btn-mesa-unir" id="btn_modal_unir">
-                            <i class="fas fa-link"></i> Unir Mesa
+                            <i class="fas fa-object-group"></i> Juntar mesas
                         </button>
                         <button type="button" class="btn btn-mesa-cerrar" data-dismiss="modal">
                             <i class="fas fa-times"></i> Cerrar
@@ -272,6 +320,39 @@
                 <div class="modal-footer">
                     <a href="{{ route('reservas.index') }}" class="btn btn-default"><i class="fas fa-plus"></i> Nueva reserva / ver todas</a>
                     <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Pasar el pedido a otra mesa / juntar dos mesas: 1) elegir la mesa 2) ver el resumen y confirmar --}}
+    <div class="modal fade" id="modal_mover" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document" style="max-width:520px; width:95%; margin:30px auto;">
+            <div class="modal-content">
+                <div class="mover-cabecera" id="mover_cabecera">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 id="mover_titulo"></h4>
+                    <p id="mover_sub"></p>
+                </div>
+                <div class="modal-body" style="padding:14px 16px;">
+                    <div class="mover-pasos"><span id="mover_paso1">1. Elige la mesa</span><span id="mover_paso2">2. Confirma</span></div>
+                    <div id="mover_elegir">
+                        <div class="mover-zonas" id="mover_zonas"></div>
+                        <div class="mover-lista" id="mover_lista"></div>
+                        <button type="button" class="btn btn-primary btn-block" id="mover_siguiente" style="display:none; margin-top:12px; padding:12px; font-weight:bold; border-radius:10px;"></button>
+                    </div>
+                    <div id="mover_confirmar" style="display:none;">
+                        <div class="mover-resumen" id="mover_resumen"></div>
+                        <div id="mover_quedar_caja" style="display:none;">
+                            <div style="font-weight:bold; text-align:center; color:#334155;">¿A nombre de qué mesa queda la cuenta?</div>
+                            <div class="mover-quedar" id="mover_quedar"></div>
+                        </div>
+                        <div class="mover-texto" id="mover_texto"></div>
+                        <div class="mover-acciones">
+                            <button type="button" class="btn btn-default" id="mover_volver"><i class="fas fa-arrow-left"></i> Otra mesa</button>
+                            <button type="button" class="btn btn-success" id="mover_ok"></button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -301,6 +382,13 @@
         const URL_PEDIDO = "{{ url('comandas/pedido') }}/";
         const URL_PRECUENTA = "{{ url('comandas/precuenta') }}/";
         const PUEDE_COBRAR = {{ $puedeCobrar ? 'true' : 'false' }};
+
+        // Recargas automáticas: se pausan con la pestaña oculta o la tablet bloqueada (no gastan servidor ni batería)
+        // y se ponen al día apenas el usuario vuelve
+        function cadaSiVisible(fn, ms) {
+            setInterval(() => { if (!document.hidden) fn(); }, ms);
+            document.addEventListener('visibilitychange', () => { if (!document.hidden) fn(); });
+        }
 
         function postJson(url, data) {
             return fetch(url, {
@@ -404,19 +492,215 @@
             cargarActivos();
         }
 
-        // Cambiar mesa (a una libre) o unir mesa (traer el pedido de otra mesa ocupada)
+        // Pasar el pedido a una mesa libre ('libres') o juntar mesas ('juntar'):
+        //  - mesas libres: el grupo grande ocupa varias mesas con una sola cuenta (se pueden elegir varias)
+        //  - mesa ocupada: se juntan las dos cuentas en una
+        const soles = n => 'S/ ' + Number(n || 0).toFixed(2);
         function elegirMesa(tipo, pedidoId, mesaNombre) {
-            selectorMesas({
-                tipo, pedidoId, desde: '#modal_mesa',
-                titulo: tipo === 'libres' ? `Cambiar ${mesaNombre} a...` : `Unir a ${mesaNombre}`,
-                ayuda: tipo === 'libres' ? 'Elige la zona y la mesa libre a la que se pasa el pedido.'
-                                         : `Elige la mesa cuyo pedido se juntará en ${mesaNombre}. Esa mesa quedará libre.`,
-                confirmar: (m, z) => tipo === 'libres' ? `¿Pasar el pedido de ${mesaNombre} a ${m.nombre} (${z})?`
-                                                       : `¿Juntar el pedido de ${m.nombre} (${z}) en ${mesaNombre}?`,
-                alElegir: m => (tipo === 'libres'
-                        ? postJson("{{ route('comandas.cambiar_mesa') }}", { ped_id: pedidoId, mes_id: m.mes_id })
-                        : postJson("{{ route('comandas.unir_mesa') }}", { ped_id: pedidoId, ped_id_origen: m.ped_id }))
-                    .then(res => { if (res.success) { toast(tipo === 'libres' ? `✔ Pedido pasado a ${m.nombre}` : `✔ ${m.nombre} unida a ${mesaNombre}`); refrescarTodo(); } return res; }),
+            const pasar = tipo === 'libres';
+            const el = id => document.getElementById(id);
+            const actual = { nombre: mesaNombre, ped_id: pedidoId, total: 0 };
+            const elegidas = new Map(); // mesas libres marcadas para el grupo
+            el('mover_cabecera').className = 'mover-cabecera ' + (pasar ? 'pasar' : 'juntar');
+            el('mover_titulo').innerHTML = pasar ? '<i class="fas fa-arrow-right-arrow-left"></i> Pasar a otra mesa' : '<i class="fas fa-object-group"></i> Juntar mesas';
+            el('mover_sub').textContent = pasar ? `Los clientes de ${mesaNombre} se cambian a una mesa libre y se llevan todo su pedido.`
+                                                : `¿Un grupo grande o un cumpleaños? Suma mesas a ${mesaNombre}: todo va en una sola cuenta.`;
+            el('mover_lista').innerHTML = '<p class="text-muted">Cargando mesas...</p>';
+            el('mover_zonas').innerHTML = '';
+            el('mover_siguiente').style.display = 'none';
+            paso(1);
+            cambiarModal('#modal_mesa', '#modal_mover');
+
+            function paso(n) {
+                el('mover_elegir').style.display = n === 1 ? '' : 'none';
+                el('mover_confirmar').style.display = n === 2 ? '' : 'none';
+                el('mover_paso1').className = n === 1 ? 'activo' : '';
+                el('mover_paso2').className = n === 2 ? 'activo' : '';
+            }
+
+            function boton(m, clase, detalle, alTocar) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'mover-mesa ' + clase;
+                b.innerHTML = `${esc(m.nombre)}<small>${detalle}</small>`;
+                b.onclick = alTocar;
+                return b;
+            }
+
+            function seccion(titulo, ayuda) {
+                const d = document.createElement('div');
+                d.className = 'mover-seccion';
+                d.innerHTML = `<div class="mover-seccion-titulo">${titulo}</div><div class="mover-seccion-ayuda">${ayuda}</div>`;
+                const lista = document.createElement('div');
+                lista.className = 'mover-grilla';
+                d.appendChild(lista);
+                el('mover_lista').appendChild(d);
+                return lista;
+            }
+
+            function pintarSiguiente() {
+                const n = elegidas.size;
+                el('mover_siguiente').style.display = n ? '' : 'none';
+                el('mover_siguiente').innerHTML = `Siguiente: juntar ${n} mesa${n > 1 ? 's' : ''} a ${esc(actual.nombre)} <i class="fas fa-arrow-right"></i>`;
+            }
+            el('mover_siguiente').onclick = () => confirmarLibres();
+
+            fetch(`{{ route('comandas.mesas_disponibles') }}?tipo=${tipo}&ped_id=${pedidoId}`)
+                .then(r => r.json())
+                .then(data => {
+                    actual.total = data.total_actual;
+                    actual.unidas = data.unidas || [];
+                    if (!data.mesas.length) {
+                        el('mover_lista').innerHTML = `<p class="text-muted" style="text-align:center; padding:20px;">${pasar ? 'No hay mesas libres en este momento.' : 'No hay otras mesas para juntar.'}</p>`;
+                        return;
+                    }
+                    const zonaDe = m => m.piso || 'SIN ZONA';
+                    const zonas = [...new Set(data.mesas.map(zonaDe))];
+                    let zona = zonas[0];
+                    const pintar = () => {
+                        el('mover_zonas').innerHTML = '';
+                        if (zonas.length > 1) zonas.forEach(z => {
+                            const b = document.createElement('button');
+                            b.type = 'button';
+                            b.className = z === zona ? 'activa' : '';
+                            b.textContent = `${z} (${data.mesas.filter(m => zonaDe(m) === z).length})`;
+                            b.onclick = () => { zona = z; pintar(); };
+                            el('mover_zonas').appendChild(b);
+                        });
+                        el('mover_lista').innerHTML = '';
+                        const enZona = data.mesas.filter(m => zonaDe(m) === zona);
+                        if (pasar) {
+                            const lista = seccion('', '');
+                            enZona.forEach(m => lista.appendChild(boton(m, 'libre', 'Libre', () => confirmarPasar(m))));
+                            return;
+                        }
+                        if (actual.unidas.length) {
+                            el('mover_lista').insertAdjacentHTML('beforeend', `<div class="mover-ya">🔗 Ya juntas con ${esc(actual.nombre)}: <b>${actual.unidas.map(esc).join(', ')}</b></div>`);
+                        }
+                        const libres = enZona.filter(m => m.estado === 'libre');
+                        const ocupadas = enZona.filter(m => m.estado === 'ocupada');
+                        if (libres.length) {
+                            const lista = seccion('🟢 Mesas libres para el grupo', 'Toca todas las mesas que va a ocupar el grupo (puedes marcar varias).');
+                            libres.forEach(m => {
+                                const marcada = elegidas.has(m.mes_id);
+                                lista.appendChild(boton(m, 'libre' + (marcada ? ' elegida' : ''), marcada ? '✔ Elegida' : 'Libre', () => {
+                                    marcada ? elegidas.delete(m.mes_id) : elegidas.set(m.mes_id, m);
+                                    pintar();
+                                    pintarSiguiente();
+                                }));
+                            });
+                        }
+                        if (ocupadas.length) {
+                            const lista = seccion('🔴 Mesas ocupadas: juntar su cuenta', 'Si otra mesa ya está consumiendo y pagará junto con esta.');
+                            ocupadas.forEach(m => lista.appendChild(boton(m, 'ocupada', soles(m.total) + (m.desde ? ' · desde ' + m.desde : ''), () => confirmarCuenta(m))));
+                        }
+                        if (!libres.length && !ocupadas.length) {
+                            el('mover_lista').insertAdjacentHTML('beforeend', '<p class="text-muted" style="text-align:center;">No hay mesas en esta zona.</p>');
+                        }
+                    };
+                    pintar();
+                });
+
+            function ficha(clase, nombre, detalle) {
+                return `<div class="mover-ficha ${clase}">${esc(nombre)}<small>${detalle}</small></div>`;
+            }
+
+            function confirmarPasar(m) {
+                paso(2);
+                el('mover_volver').onclick = () => paso(1);
+                el('mover_quedar_caja').style.display = 'none';
+                el('mover_resumen').innerHTML = ficha('ocupada', actual.nombre, soles(actual.total))
+                    + '<div class="mover-signo">➜</div>' + ficha('libre queda', m.etiqueta, 'nueva mesa');
+                el('mover_texto').innerHTML = `Todo el pedido (<b>${soles(actual.total)}</b>) pasa a <b>${esc(m.etiqueta)}</b>.<br><b>${esc(actual.nombre)}</b> quedará libre.`;
+                el('mover_ok').innerHTML = `<i class="fas fa-check"></i> Sí, pasar a ${esc(m.etiqueta)}`;
+                el('mover_ok').onclick = () => ejecutar(
+                    postJson("{{ route('comandas.cambiar_mesa') }}", { ped_id: actual.ped_id, mes_id: m.mes_id }),
+                    `✔ Listo: el pedido ahora está en ${m.etiqueta}`);
+            }
+
+            // Grupo grande: las mesas libres elegidas se suman a la cuenta de esta mesa
+            function confirmarLibres() {
+                const mesas = [...elegidas.values()];
+                paso(2);
+                el('mover_volver').onclick = () => paso(1);
+                el('mover_quedar_caja').style.display = 'none';
+                el('mover_resumen').innerHTML = ficha('ocupada queda', actual.nombre, soles(actual.total))
+                    + mesas.map(m => '<div class="mover-signo">+</div>' + ficha('libre', m.etiqueta, 'se junta')).join('');
+                const total = mesas.length + 1 + actual.unidas.length;
+                el('mover_texto').innerHTML = `El grupo ocupará <b>${total} mesas</b> con <b>una sola cuenta</b> en <b>${esc(actual.nombre)}</b>.<br>`
+                    + `Al cobrar, todas quedan libres solas. Si una se desocupa antes, la liberas desde la mesa.`;
+                el('mover_ok').innerHTML = `<i class="fas fa-check"></i> Sí, juntar ${mesas.length} mesa${mesas.length > 1 ? 's' : ''}`;
+                el('mover_ok').onclick = () => ejecutar(
+                    postJson("{{ route('comandas.juntar_libres') }}", { ped_id: actual.ped_id, mesas: mesas.map(m => m.mes_id) }),
+                    `✔ Listo: ${mesas.map(m => m.etiqueta).join(', ')} juntas con ${actual.nombre}`);
+            }
+
+            // Dos mesas ocupadas: se juntan las cuentas; las dos siguen ocupadas como un solo grupo
+            function confirmarCuenta(m) {
+                paso(2);
+                el('mover_volver').onclick = () => paso(1);
+                const otra = { nombre: m.etiqueta, ped_id: m.ped_id, total: m.total };
+                let queda = actual;
+                const pintarJuntar = () => {
+                    const sale = queda === actual ? otra : actual;
+                    el('mover_resumen').innerHTML = ficha('ocupada' + (queda === actual ? ' queda' : ''), actual.nombre, soles(actual.total))
+                        + '<div class="mover-signo">+</div>' + ficha('ocupada' + (queda === otra ? ' queda' : ''), otra.nombre, soles(otra.total))
+                        + '<div class="mover-signo">=</div>' + ficha('total', soles(Number(actual.total) + Number(otra.total)), 'una sola cuenta');
+                    el('mover_quedar').innerHTML = '';
+                    [actual, otra].forEach(op => {
+                        const b = document.createElement('button');
+                        b.type = 'button';
+                        b.className = op === queda ? 'activa' : '';
+                        b.innerHTML = `${op === queda ? '✔ ' : ''}${esc(op.nombre)}`;
+                        b.onclick = () => { queda = op; pintarJuntar(); };
+                        el('mover_quedar').appendChild(b);
+                    });
+                    el('mover_texto').innerHTML = `Lo pedido en las dos mesas queda en <b>una sola cuenta</b> a nombre de <b>${esc(queda.nombre)}</b>.<br>`
+                        + `<b>${esc(sale.nombre)}</b> sigue ocupada como parte del grupo; si se desocupa, la liberas desde la mesa.`;
+                    el('mover_ok').innerHTML = `<i class="fas fa-check"></i> Sí, juntar cuentas en ${esc(queda.nombre)}`;
+                    el('mover_ok').onclick = () => ejecutar(
+                        postJson("{{ route('comandas.unir_mesa') }}", { ped_id: queda.ped_id, ped_id_origen: sale.ped_id }),
+                        `✔ Listo: cuentas de ${actual.nombre} y ${otra.nombre} juntas en ${queda.nombre}`);
+                };
+                el('mover_quedar_caja').style.display = '';
+                pintarJuntar();
+            }
+
+            function ejecutar(promesa, mensaje) {
+                const ok = el('mover_ok');
+                ok.disabled = true;
+                promesa.then(res => {
+                    ok.disabled = false;
+                    if (!res.success) { alert(res.message || 'No se pudo completar.'); return; }
+                    $('#modal_mover').modal('hide');
+                    toast(mensaje);
+                    refrescarTodo();
+                }).catch(() => { ok.disabled = false; alert('Sin conexión. Intenta de nuevo.'); });
+            }
+        }
+
+        // Mesas juntas en el modal de la mesa: se liberan con dos toques (por si se desocupan antes de cobrar)
+        function pintarUnidas(pedidoId, unidas) {
+            const cont = document.getElementById('modal_mesa_unidas');
+            if (!unidas.length) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+            cont.style.display = '';
+            cont.innerHTML = '<div style="font-weight:bold; margin-bottom:6px;">🔗 Mesas juntas en esta cuenta</div>';
+            unidas.forEach(m => {
+                const chip = document.createElement('span');
+                chip.className = 'mesa-unida-chip';
+                chip.innerHTML = `${esc(m.nombre)} <button type="button" title="Liberar">Liberar</button>`;
+                const b = chip.querySelector('button');
+                b.onclick = () => {
+                    if (!b.classList.contains('seguro')) { b.classList.add('seguro'); b.textContent = '¿Seguro? Toca otra vez'; return; }
+                    b.disabled = true;
+                    postJson("{{ route('comandas.separar_mesa') }}", { ped_id: pedidoId, mes_id: m.mes_id }).then(res => {
+                        if (!res.success) { alert(res.message); b.disabled = false; return; }
+                        toast(`✔ ${m.nombre} quedó libre`);
+                        pintarUnidas(pedidoId, unidas.filter(x => x.mes_id !== m.mes_id));
+                        refrescarTodo();
+                    });
+                };
+                cont.appendChild(chip);
             });
         }
 
@@ -483,7 +767,7 @@
 
         document.getElementById('btn_reservas').addEventListener('click', () => { cargarReservas(); $('#modal_reservas').modal('show'); });
         cargarReservas();
-        setInterval(cargarReservas, 60000);
+        cadaSiVisible(cargarReservas, 60000);
 
         function irAServicio(orderType, mesaId, mesaNombre, pedidoId) {
             fetch("{{ route('comandas.set_servicio') }}", {
@@ -519,19 +803,28 @@
         }
         activarPisos();
 
+        // Solo se redibuja si algo cambió: así no se pierde el toque del mozo justo cuando llega la recarga
+        let ultimaVistaMesas = null;
         function refrescarMesas(pisoId) {
             fetch(URL_MESAS + pisoId)
                 .then(r => r.json())
-                .then(data => document.getElementById('mesas_container').innerHTML = data.vista);
+                .then(data => {
+                    const clave = pisoId + '|' + data.vista;
+                    if (clave === ultimaVistaMesas) return;
+                    ultimaVistaMesas = clave;
+                    document.getElementById('mesas_container').innerHTML = data.vista;
+                    actualizarTimers();
+                });
         }
 
-        setInterval(function () {
+        cadaSiVisible(function () {
             const activo = document.querySelector('.piso-btn.active');
             if (activo) refrescarMesas(activo.dataset.pisoId);
         }, 10000);
 
         // TIMER en vivo de cada mesa ocupada (no se reinicia con el refresh de 10s, corre en el navegador)
-        setInterval(function () {
+        setInterval(actualizarTimers, 1000);
+        function actualizarTimers() {
             document.querySelectorAll('.mesa-timer').forEach(function (el) {
                 const inicio = new Date(el.dataset.inicio).getTime();
                 if (!inicio) return;
@@ -541,7 +834,7 @@
                 const s = String(diff % 60).padStart(2, '0');
                 el.textContent = `${h}:${m}:${s}`;
             });
-        }, 1000);
+        }
 
         // Click en mesa
         document.addEventListener('click', function (e) {
@@ -560,8 +853,10 @@
                 return;
             }
 
-            document.getElementById('modal_mesa_titulo').textContent = `Mesa ${mesaNombre}`;
+            const tituloMesa = mesaNombre;
+            document.getElementById('modal_mesa_titulo').textContent = tituloMesa;
             document.getElementById('modal_mesa_detalle').innerHTML = 'Cargando detalles...';
+            pintarUnidas(pedidoId, []);
             $('#modal_mesa').modal('show');
 
             document.getElementById('btn_modal_editar').onclick = function () {
@@ -582,7 +877,7 @@
                 refrescarTodo();
             });
             document.getElementById('btn_modal_cambiar').onclick = () => elegirMesa('libres', pedidoId, mesaNombre);
-            document.getElementById('btn_modal_unir').onclick = () => elegirMesa('ocupadas', pedidoId, mesaNombre);
+            document.getElementById('btn_modal_unir').onclick = () => elegirMesa('juntar', pedidoId, mesaNombre);
 
             fetch(URL_PEDIDO + pedidoId)
                 .then(r => r.json())
@@ -594,7 +889,8 @@
                     });
                     html += `<div style="text-align:right; margin-top:10px; font-size:1.1em; font-weight:bold; color:#3498db;">Total: S/ ${data.total.toFixed(2)}</div>`;
                     document.getElementById('modal_mesa_detalle').innerHTML = html || '<p class="text-muted">Sin ítems</p>';
-                    document.getElementById('modal_mesa_titulo').textContent = `Mesa ${mesaNombre} (S/ ${data.total.toFixed(2)})`;
+                    document.getElementById('modal_mesa_titulo').textContent = `${tituloMesa} (S/ ${data.total.toFixed(2)})`;
+                    pintarUnidas(pedidoId, data.unidas || []);
                 });
         });
 
@@ -633,7 +929,7 @@
                 });
         }
         cargarActivos();
-        setInterval(cargarActivos, 15000);
+        cadaSiVisible(cargarActivos, 15000);
     </script>
 @include('partials.avisos')
 @include('partials.aviso_servicio')

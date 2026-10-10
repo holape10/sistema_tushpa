@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comanda - Sistema Tushpa</title>
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -226,12 +228,17 @@
         });
 
         // --- Productos ---
+        // Si el mozo escribe o cambia de categoría rápido, se cancela la búsqueda anterior: nunca pisa a la nueva
+        let busquedaEnCurso = null;
         function cargarProductos(catId = null, texto = '') {
             const params = new URLSearchParams();
             if (texto) params.set('search_text', texto); else if (catId) params.set('category_id', catId);
-            fetch(`{{ route('comandas.search_products') }}?${params}`)
+            busquedaEnCurso?.abort();
+            busquedaEnCurso = new AbortController();
+            fetch(`{{ route('comandas.search_products') }}?${params}`, { signal: busquedaEnCurso.signal })
                 .then(r => r.json())
-                .then(data => document.getElementById('productos_grid').innerHTML = data.vista);
+                .then(data => document.getElementById('productos_grid').innerHTML = data.vista)
+                .catch(e => { if (e.name !== 'AbortError') console.error(e); });
         }
         cargarProductos({{ $cat_default_id ?? 'null' }});
 
@@ -239,14 +246,18 @@
             document.querySelectorAll('.btn-category-kiosko').forEach(x => x.classList.remove('active'));
             this.classList.add('active');
             document.getElementById('buscar_producto').value = '';
+            ultimoTexto = '';
             cargarProductos(this.dataset.catId);
         }));
 
-        let timer;
+        // Flechas, Shift, etc. no cambian el texto: no se vuelve a buscar
+        let timer, ultimoTexto = '';
         document.getElementById('buscar_producto').addEventListener('keyup', function () {
+            const val = this.value.trim();
+            if (val === ultimoTexto) return;
+            ultimoTexto = val;
             clearTimeout(timer);
-            const val = this.value;
-            timer = setTimeout(() => cargarProductos(null, val), 400);
+            timer = setTimeout(() => cargarProductos(null, val), 300);
         });
 
         // --- Carrito ---

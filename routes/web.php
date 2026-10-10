@@ -94,6 +94,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/comandas/mesas-disponibles', [ComandasController::class, 'mesasDisponibles'])->name('comandas.mesas_disponibles');
     Route::post('/comandas/cambiar-mesa', [ComandasController::class, 'cambiarMesa'])->name('comandas.cambiar_mesa');
     Route::post('/comandas/unir-mesa', [ComandasController::class, 'unirMesa'])->name('comandas.unir_mesa');
+    Route::post('/comandas/juntar-libres', [ComandasController::class, 'juntarLibres'])->name('comandas.juntar_libres');
+    Route::post('/comandas/separar-mesa', [ComandasController::class, 'separarMesa'])->name('comandas.separar_mesa');
 });
 
 Route::middleware('auth')->group(function () {
@@ -647,6 +649,7 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('productos', ProductoController::class)->except('show');
     Route::resource('categorias', CategoriaController::class)->except('show');
+    Route::post('mesas/lote', [MesaController::class, 'lote'])->name('mesas.lote');
     Route::resource('mesas', MesaController::class)->except('show');
     Route::resource('pisos', PisoController::class)->except('show');
     Route::resource('mediospagos', MedioPagoController::class)->except('show')->parameters(['mediospagos' => 'medioPago']);

@@ -2,6 +2,7 @@
 
 namespace App\Support\Impresion;
 
+use App\Models\Mesa;
 use App\Support\ConsultaCpe;
 use App\Support\Fidelizacion;
 use App\Support\Sunat\CodigoQr;
@@ -121,8 +122,9 @@ class Impresion
             ->where('v.IdCpe_cabecera', $idCpe)->get(['m.nom_med_pag', 'v.monto']);
         $tdodes = DB::table('tipo_documento')->where('tdocod', $cab->tdocod)->value('tdodes');
         $pedido = $cab->ped_id ? DB::table('pedidos as p')->leftJoin('mesas as m', 'm.mes_id', '=', 'p.mes_id')
+            ->leftJoin('pisos as pi', 'pi.pis_id', '=', 'm.pis_id')
             ->leftJoin('users as u', 'u.IdUsuario', '=', 'p.mozo')->where('p.ped_id', $cab->ped_id)
-            ->first(['m.mes_nom', 'u.apeusu as mozo']) : null;
+            ->first(['m.mes_nom', 'pi.pis_nom', 'u.apeusu as mozo']) : null;
         $numero = $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT);
 
         $p = new Escpos((int) $imp->columnas);
@@ -137,7 +139,7 @@ class Impresion
             $p->parrafo('Dir.  : '.$cab->direccion);
         }
         if ($pedido?->mes_nom) {
-            $p->texto('Mesa  : '.$pedido->mes_nom);
+            $p->texto('Mesa  : '.Mesa::etiqueta($pedido->pis_nom, $pedido->mes_nom));
         }
         if ($pedido?->mozo) {
             $p->texto('Mozo  : '.$pedido->mozo);

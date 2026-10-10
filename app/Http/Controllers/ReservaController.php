@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Mesa;
-use App\Models\Pedido;
 use App\Models\Producto;
+use App\Support\MesasUnidas;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -154,7 +154,7 @@ class ReservaController extends Controller
     public function delDia()
     {
         $sucursal = $this->sucursal();
-        $ocupadas = Pedido::where('id_empresa_negocio', $sucursal)->where('ped_est', 'Aperturado')->whereNotNull('mes_id')->pluck('mes_id')->all();
+        $ocupadas = array_keys(MesasUnidas::ocupadas((int) $sucursal));
 
         $reservas = DB::table('reservas as r')
             ->leftJoin('mesas as m', 'm.mes_id', '=', 'r.mes_id')->leftJoin('pisos as p', 'p.pis_id', '=', 'r.pis_id')
@@ -187,7 +187,7 @@ class ReservaController extends Controller
         if (! $mesa) {
             return response()->json(['success' => false, 'message' => 'Mesa no válida.']);
         }
-        if (Pedido::where('mes_id', $mesa->mes_id)->where('ped_est', 'Aperturado')->exists()) {
+        if (MesasUnidas::pedidoDe($mesa->mes_id)) {
             return response()->json(['success' => false, 'message' => "La {$mesa->mes_nom} está ocupada. Elige otra mesa."]);
         }
 
@@ -214,7 +214,7 @@ class ReservaController extends Controller
 
         session()->forget(['comanda_cart', 'comanda_order_type', 'comanda_mesa_id', 'comanda_mesa_nombre', 'comanda_pedido_id', 'comanda_eliminados']);
         session()->put([
-            'comanda_order_type' => 'salon', 'comanda_mesa_id' => $mesa->mes_id, 'comanda_mesa_nombre' => $mesa->mes_nom,
+            'comanda_order_type' => 'salon', 'comanda_mesa_id' => $mesa->mes_id, 'comanda_mesa_nombre' => Mesa::etiqueta($mesa->piso?->pis_nom, $mesa->mes_nom),
             'comanda_cart' => $cart, 'comanda_reserva_id' => (int) $id,
         ]);
 
