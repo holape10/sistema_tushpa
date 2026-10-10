@@ -2,6 +2,7 @@
 
 namespace App\Support\Impresion;
 
+use App\Support\ConsultaCpe;
 use App\Support\Fidelizacion;
 use App\Support\Sunat\CodigoQr;
 use App\Support\Sunat\NumeroLetras;
@@ -194,7 +195,8 @@ class Impresion
         // QR de SUNAT para comprobantes electrónicos
         if (in_array($cab->tdocod, ['01', '03', '07', '08'], true)) {
             $p->avanzar()->alinear('centro')->qr(CodigoQr::texto($cab));
-            $p->texto('Representación impresa de la '.mb_strtolower((string) $tdodes));
+            $p->texto('Representación impresa de la '.mb_strtolower((string) $tdodes))
+                ->texto('Consulta tu comprobante en:')->texto(ConsultaCpe::direccion());
         }
         $p->alinear('centro')->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA')
             ->texto('¡Gracias por su preferencia!')->avanzar(3)->cortar();

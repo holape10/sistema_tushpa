@@ -32,6 +32,22 @@ class ConsultaPeru
         }
     }
 
+    /**
+     * Estado de un comprobante en SUNAT (apiperu.dev /cpe). Gasta 1 consulta del plan.
+     *
+     * @return array{estado: string, codigo: string, empresa_estado: ?string, empresa_condicion: ?string}|null null = sin token o sin respuesta
+     */
+    public static function estadoCpe(string $ruc, string $tipo, string $serie, string $numero, string $fecha, float $total): ?array
+    {
+        $d = self::apiperu('cpe', ['ruc_emisor' => $ruc, 'codigo_tipo_documento' => $tipo, 'serie_documento' => $serie,
+            'numero_documento' => $numero, 'fecha_de_emision' => $fecha, 'total' => round($total, 2)]);
+
+        return $d && isset($d['comprobante_estado_descripcion']) ? [
+            'estado' => mb_strtoupper((string) $d['comprobante_estado_descripcion']), 'codigo' => (string) ($d['comprobante_estado_codigo'] ?? ''),
+            'empresa_estado' => $d['empresa_estado_descripcion'] ?? null, 'empresa_condicion' => $d['empresa_condicion_descripcion'] ?? null,
+        ] : null;
+    }
+
     private static function holape(string $ruta): ?array
     {
         try {

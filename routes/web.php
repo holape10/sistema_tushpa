@@ -12,6 +12,7 @@ use App\Http\Controllers\CocinaController;
 use App\Http\Controllers\ComandasController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ConcarController;
+use App\Http\Controllers\ConsultaCpeController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\CuentaController;
@@ -418,6 +419,12 @@ Route::get('/asistencia/m/{emp}/{accion}', [AsistenciaController::class, 'celula
 
 // App instalable (PWA): manifiesto por empresa (sin sesión)
 Route::get('/manifest.webmanifest', [PwaController::class, 'manifest'])->name('pwa.manifest');
+
+// Consulta pública de comprobantes: {subdominio}/cpe (sin sesión). La validación en SUNAT gasta consultas: con límite
+Route::get('/cpe', [ConsultaCpeController::class, 'index'])->name('cpe.consulta');
+Route::post('/cpe', [ConsultaCpeController::class, 'consultar'])->middleware('throttle:10,1')->name('cpe.consultar');
+Route::get('/cpe/archivo/{id}/{tipo}', [ConsultaCpeController::class, 'archivo'])->whereNumber('id')->whereIn('tipo', ['xml', 'cdr'])
+    ->middleware(['signed', 'throttle:30,1'])->name('cpe.archivo');
 
 // PDF A4 del comprobante que se envía por WhatsApp (enlace firmado, sin sesión)
 Route::get('/cpe/pdf/{id}', [VentaController::class, 'pdfPublico'])->whereNumber('id')
