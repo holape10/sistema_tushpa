@@ -23,6 +23,7 @@
                         <a href="{{ route('admin.mensajes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.mensajes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">
                             Mensajes web @if ($mensajesNuevos)<span class="ml-1 px-1.5 rounded-full bg-rose-500 text-[11px] font-bold">{{ $mensajesNuevos }}</span>@endif
                         </a>
+                        <a href="{{ route('admin.logos.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.logos.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Logos web</a>
                     @endif
                 </nav>
                 <span class="ml-auto text-sm text-slate-400 hidden sm:inline">{{ auth('superadmin')->user()->nombre }}</span>

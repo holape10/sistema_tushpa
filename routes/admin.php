@@ -26,6 +26,9 @@ Route::middleware('auth:superadmin')->group(function () {
     Route::post('/clientes/{cliente}/pagado', [ClienteController::class, 'pagado'])->whereNumber('cliente')->name('clientes.pagado');
     Route::post('/clientes/{cliente}/eliminar', [ClienteController::class, 'eliminar'])->whereNumber('cliente')->name('clientes.eliminar');
     Route::get('/mensajes', [ClienteController::class, 'mensajesWeb'])->name('mensajes.index');
+    Route::get('/logos', [ClienteController::class, 'logos'])->name('logos.index');
+    Route::post('/logos', [ClienteController::class, 'logosSubir'])->name('logos.subir');
+    Route::post('/logos/eliminar', [ClienteController::class, 'logoEliminar'])->name('logos.eliminar');
     Route::post('/mensajes/{id}/atendido', [ClienteController::class, 'mensajeWebAtendido'])->whereNumber('id')->name('mensajes.atendido');
     Route::get('/planes', [ClienteController::class, 'planesIndex'])->name('planes.index');
     Route::post('/planes/{plan?}', [ClienteController::class, 'planesGuardar'])->whereNumber('plan')->name('planes.guardar');

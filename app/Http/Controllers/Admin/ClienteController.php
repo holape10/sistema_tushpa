@@ -7,6 +7,7 @@ use App\Models\Central\Cliente;
 use App\Models\Central\Plan;
 use App\Models\Central\Superadmin;
 use App\Models\User;
+use App\Support\LogosClientes;
 use App\Support\Rubros;
 use App\Support\Tenancy\Eliminador;
 use App\Support\Tenancy\Provisionador;
@@ -305,6 +306,42 @@ class ClienteController extends Controller
         Cache::store('file')->forget("panel-cpe-{$cliente->id}");
 
         return back()->with('ok', "Se eliminó {$cliente->razon_social}. Respaldo guardado en storage/app/respaldos/".basename($respaldo).'.');
+    }
+
+    // ------------------------------------------------------------------ logos de clientes de la web
+
+    public function logos()
+    {
+        abort_unless($this->esDueno(), 403);
+
+        return view('admin.logos', ['logos' => LogosClientes::todos()]);
+    }
+
+    public function logosSubir(Request $request)
+    {
+        abort_unless($this->esDueno(), 403);
+        $request->validate(['logos' => 'required|array|max:30', 'logos.*' => 'image|mimes:png,jpg,jpeg,webp|max:5120'],
+            ['logos.*.image' => 'Solo imágenes PNG, JPG o WEBP.', 'logos.*.max' => 'Cada imagen puede pesar hasta 5 MB.'], ['logos' => 'logos']);
+        $subidos = 0;
+        foreach ($request->file('logos') as $imagen) {
+            try {
+                LogosClientes::subir($imagen);
+                $subidos++;
+            } catch (\RuntimeException $e) {
+                return back()->with('error', $e->getMessage().($subidos ? " (se subieron {$subidos} antes)" : ''));
+            }
+        }
+
+        return back()->with('ok', $subidos === 1 ? 'Se subió 1 logo.' : "Se subieron {$subidos} logos.");
+    }
+
+    public function logoEliminar(Request $request)
+    {
+        abort_unless($this->esDueno(), 403);
+
+        return LogosClientes::eliminar((string) $request->input('archivo'))
+            ? back()->with('ok', 'Logo quitado de la web.')
+            : back()->with('error', 'No se encontró ese logo.');
     }
 
     // ------------------------------------------------------------------ mensajes de la web
