@@ -1,44 +1,33 @@
 {{-- Planes: los crea y edita el dueño en admin.tushpa.app › Planes (solo se muestran los activos) --}}
 @if ($planes->isNotEmpty())
-    <section id="planes" class="py-5" style="background:linear-gradient(180deg,#f8fafc 0%,#eef2ff 100%)">
-        <div class="container py-5">
-            <div class="text-center mb-5" data-aos="fade-up">
-                <h6 class="text-primary text-uppercase mb-2">Planes</h6>
-                <h2 class="display-5 fw-bold">Elige el plan para tu negocio</h2>
-                <p class="lead text-muted mt-3">
-                    Todos incluyen <b>{{ config('sitio.dias_prueba') }} días gratis</b>, sin tarjeta. Tu sistema queda listo en segundos.
-                </p>
+    <section id="planes" class="seccion seccion-arena">
+        <div class="container">
+            <div class="seccion-titulo revelar">
+                <span class="etiqueta">Planes</span>
+                <h2>Elige el plan para tu negocio</h2>
+                <p>Todos incluyen <b>{{ config('sitio.dias_prueba') }} días gratis</b>, sin tarjeta. Tu sistema queda listo en segundos.</p>
             </div>
-
-            <div class="row g-4 justify-content-center">
+            <div class="row g-4 justify-content-center align-items-stretch pt-2">
                 @foreach ($planes as $plan)
-                    <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="{{ $loop->index * 100 }}">
-                        <div class="h-100 bg-white rounded-4 p-4 d-flex flex-column position-relative {{ $plan->destacado ? 'shadow-lg border border-2 border-primary' : 'shadow-sm' }}">
-                            @if ($plan->destacado)
-                                <span class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-primary px-3 py-2">⭐ Más popular</span>
-                            @endif
-                            <h4 class="fw-bold mb-1 text-center mt-2">{{ $plan->nombre }}</h4>
-                            @if ($plan->descripcion)
-                                <p class="text-muted text-center small mb-3">{{ $plan->descripcion }}</p>
-                            @endif
-                            <div class="text-center mb-4">
-                                <span class="display-5 fw-bold text-primary">S/ {{ rtrim(rtrim(number_format($plan->precio, 2), '0'), '.') }}</span>
-                                <span class="text-muted">/ mes</span>
-                            </div>
-                            <ul class="list-unstyled mb-4 flex-grow-1">
+                    <div class="col-md-6 col-lg-4 revelar">
+                        <div class="plan {{ $plan->destacado ? 'destacado' : '' }}">
+                            @if ($plan->destacado)<span class="cinta">⭐ El más elegido</span>@endif
+                            <h3 class="fs-4 mb-1">{{ $plan->nombre }}</h3>
+                            @if ($plan->descripcion)<p class="texto-gris small mb-3">{{ $plan->descripcion }}</p>@endif
+                            <div class="precio mb-4">S/ {{ rtrim(rtrim(number_format($plan->precio, 2), '0'), '.') }} <small>/ mes</small></div>
+                            <ul class="lista-check mb-4 flex-grow-1">
                                 @foreach ($plan->listaCaracteristicas() as $caracteristica)
-                                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>{{ $caracteristica }}</li>
+                                    <li><i class="fas fa-circle-check"></i><span>{{ $caracteristica }}</span></li>
                                 @endforeach
                             </ul>
-                            <a href="{{ route('sitio.registro', ['plan' => $plan->id]) }}"
-                               class="btn {{ $plan->destacado ? 'btn-primary' : 'btn-outline-primary' }} btn-lg w-100 rounded-pill fw-semibold">
+                            <a href="{{ route('sitio.registro', ['plan' => $plan->id]) }}" class="btn {{ $plan->destacado ? 'btn-achiote' : 'btn-selva' }} btn-lg w-100">
                                 Probar gratis {{ config('sitio.dias_prueba') }} días
                             </a>
                         </div>
                     </div>
                 @endforeach
             </div>
-            <p class="text-center text-muted small mt-4 mb-0">
+            <p class="text-center texto-gris small mt-4 mb-0">
                 ¿Necesitas algo a medida? <a href="https://wa.me/{{ config('soporte.whatsapp') }}" target="_blank" rel="noopener">Escríbenos por WhatsApp</a>.
             </p>
         </div>

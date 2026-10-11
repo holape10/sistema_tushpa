@@ -4,7 +4,7 @@
     $filas = $logos ? array_chunk($logos, (int) ceil(count($logos) / max(1, (int) ceil(count($logos) / 10)))) : [];
 @endphp
 @foreach ($filas as $fila)
-    <div class="clients-row" data-aos="fade-up" @if ($loop->index) data-aos-delay="{{ $loop->index * 100 }}" @endif>
+    <div class="clients-row">
         <div class="clients-marquee">
             {{-- La fila va dos veces seguidas para que el desplazamiento no tenga cortes --}}
             @foreach ([1, 2] as $copia)
