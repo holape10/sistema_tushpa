@@ -18,6 +18,12 @@
                 <nav class="ml-4 flex gap-1 text-sm">
                     <a href="{{ route('admin.clientes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.clientes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Clientes</a>
                     <a href="{{ route('admin.planes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.planes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Planes</a>
+                    @if (auth('superadmin')->user()->es_dueno)
+                        @php $mensajesNuevos = \Illuminate\Support\Facades\DB::connection('central')->table('web_contactos')->where('atendido', false)->count(); @endphp
+                        <a href="{{ route('admin.mensajes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.mensajes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">
+                            Mensajes web @if ($mensajesNuevos)<span class="ml-1 px-1.5 rounded-full bg-rose-500 text-[11px] font-bold">{{ $mensajesNuevos }}</span>@endif
+                        </a>
+                    @endif
                 </nav>
                 <span class="ml-auto text-sm text-slate-400 hidden sm:inline">{{ auth('superadmin')->user()->nombre }}</span>
                 <form method="POST" action="{{ route('admin.logout') }}">

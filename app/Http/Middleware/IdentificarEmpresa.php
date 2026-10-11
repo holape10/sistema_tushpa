@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Middleware;
 
 use App\Models\Central\Cliente;
@@ -17,15 +18,27 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class IdentificarEmpresa
 {
+    /** Páginas de la web pública que responde el dominio principal (routes/sitio.php) */
+    private const SITIO = '~^(/|tutorial|contacto|ingresar|registro(/.*)?|up)$~';
+
     public function handle(Request $request, Closure $next): Response
     {
-        if (!Tenancy::activa()) {
+        if (! Tenancy::activa()) {
             return $next($request);
         }
 
-        $sufijo = '.' . strtolower(config('tenancy.dominio'));
+        $dominio = strtolower(config('tenancy.dominio'));
+        $sufijo = '.'.$dominio;
         $host = strtolower($request->getHost());
-        if (!str_ends_with($host, $sufijo)) {
+        // www.tushpa.app => tushpa.app
+        if ($host === 'www.'.$dominio) {
+            return redirect()->away(config('tenancy.esquema').'://'.$dominio.$request->getRequestUri(), 301);
+        }
+        // tushpa.app: solo la web pública; cualquier pantalla del sistema lleva a "Ingresar" (cada empresa entra por su subdominio)
+        if ($host === $dominio) {
+            return preg_match(self::SITIO, $request->path()) ? $next($request) : redirect('/ingresar');
+        }
+        if (! str_ends_with($host, $sufijo)) {
             return $next($request);
         }
         $subdominio = substr($host, 0, -strlen($sufijo));
@@ -44,7 +57,7 @@ class IdentificarEmpresa
             : Cliente::where('subdominio', $subdominio)->first();
         abort_unless($cliente, 404);
 
-        if (!$cliente->activo()) {
+        if (! $cliente->activo()) {
             return response()->view('tenancy.suspendido', ['cliente' => $cliente], 503);
         }
 
@@ -59,8 +72,8 @@ class IdentificarEmpresa
         // Fuera de la ruta del panel o desde una IP no permitida, el subdominio admin "no existe"
         $ruta = config('tenancy.ruta_admin');
         $ips = config('tenancy.admin_ips');
-        $enRuta = $request->path() === $ruta || str_starts_with($request->path(), $ruta . '/');
-        abort_unless($enRuta && (!$ips || in_array($request->ip(), $ips, true)), 404);
+        $enRuta = $request->path() === $ruta || str_starts_with($request->path(), $ruta.'/');
+        abort_unless($enRuta && (! $ips || in_array($request->ip(), $ips, true)), 404);
 
         Tenancy::conectar(Tenancy::baseCentral());
         $request->attributes->set('panel_admin', true);

@@ -24,7 +24,7 @@ class Provisionador
         $base = Tenancy::nombreBase($ruc);
         $central = DB::connection('central');
 
-        if (Cliente::where('ruc', $ruc)->exists()) {
+        if (Cliente::where('ruc', $ruc)->where('estado', '!=', 'ELIMINADO')->exists()) {
             throw new \RuntimeException("Ya existe un cliente con el RUC {$ruc}.");
         }
         if ($central->selectOne('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [$base])) {
@@ -41,6 +41,9 @@ class Provisionador
                 }
                 DB::transaction(fn () => EmpresaInicial::crear($d));
             });
+
+            // Una empresa eliminada antes (su base ya no existe) se vuelve a crear desde cero
+            Cliente::where('ruc', $ruc)->where('estado', 'ELIMINADO')->delete();
 
             return Cliente::create([
                 'ruc' => $ruc,

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models\Central;
 
 use App\Support\Tenancy\Tenancy;
@@ -11,9 +12,12 @@ use Illuminate\Database\Eloquent\Model;
 class Cliente extends Model
 {
     protected $connection = 'central';
+
     protected $table = 'clientes';
+
     protected $guarded = [];
-    protected $casts = ['vence_el' => 'date'];
+
+    protected $casts = ['vence_el' => 'date', 'prueba_hasta' => 'date', 'suspendido_el' => 'date'];
 
     /** (la columna `plan` guarda el nombre como texto; la relación tiene otro nombre para no chocar) */
     public function planContratado()
@@ -26,6 +30,18 @@ class Cliente extends Model
         return $this->estado === 'ACTIVO';
     }
 
+    /** Se registró en la web y todavía no paga (prueba gratis, vigente o vencida) */
+    public function enPrueba(): bool
+    {
+        return $this->prueba_hasta !== null;
+    }
+
+    /** Días que le quedan de prueba (0 = hoy es el último día; negativo = ya venció) */
+    public function diasPrueba(): ?int
+    {
+        return $this->prueba_hasta ? (int) now()->startOfDay()->diffInDays($this->prueba_hasta, false) : null;
+    }
+
     /** Subdominio con el que entra: el propio (demo) o el RUC */
     public function subdominioAcceso(): string
     {
@@ -34,7 +50,7 @@ class Cliente extends Model
 
     public function host(): string
     {
-        return $this->subdominioAcceso() . '.' . config('tenancy.dominio');
+        return $this->subdominioAcceso().'.'.config('tenancy.dominio');
     }
 
     public function url(): string
@@ -45,6 +61,6 @@ class Cliente extends Model
     /** ¿Ya tiene certificado https? (lo crea deploy/ssl-clientes.sh en el servidor) */
     public function tieneHttps(): bool
     {
-        return is_file('/etc/httpd/conf.d/tushpa-ssl-' . $this->host() . '.conf');
+        return is_file('/etc/httpd/conf.d/tushpa-ssl-'.$this->host().'.conf');
     }
 }

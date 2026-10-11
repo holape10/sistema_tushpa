@@ -65,6 +65,11 @@ use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\VentaController;
 use App\Http\Controllers\VentaMasivaController;
 
+// Web pública del dominio principal (tushpa.app): va primero para que "/" de ese dominio sea la web y no el login
+if ($dominioSitio = config('tenancy.dominio')) {
+    Route::domain($dominioSitio)->name('sitio.')->group(base_path('routes/sitio.php'));
+}
+
 Route::get('/', function () {
     if (auth()->check()) {
         return redirect()->route('home.usuario');

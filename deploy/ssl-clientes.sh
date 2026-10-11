@@ -24,7 +24,8 @@ HOST_BD="$(env_de DB_HOST)"; HOST_BD="${HOST_BD:-localhost}"   # localhost = soc
 
 HOSTS=("${PRINCIPAL}")
 if [ -n "${DOMINIO}" ]; then
-    HOSTS+=("${ADMIN}.${DOMINIO}")
+    # La web pública (tushpa.app y www.tushpa.app) y el panel
+    HOSTS+=("${DOMINIO}" "www.${DOMINIO}" "${ADMIN}.${DOMINIO}")
     # Empresas activas: su subdominio propio (demo) o su RUC. Solo letras, números y guiones llegan al shell
     while read -r sub; do
         [[ "${sub}" =~ ^[a-z0-9-]{1,40}$ ]] && HOSTS+=("${sub}.${DOMINIO}")

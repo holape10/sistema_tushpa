@@ -29,8 +29,17 @@
             @if ($totales['por_vencer'])<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">{{ $totales['por_vencer'] }} vencen en 7 días</span>@endif
             <span class="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700">Ingreso mensual S/ {{ number_format($totales['ingreso'], 2) }}</span>
         </div>
+        {{-- Filtros: prueba gratis (registro desde la web) y las suspendidas hace tiempo, para eliminar --}}
+        <div class="w-full flex flex-wrap gap-2 text-xs font-semibold">
+            @foreach (['' => 'Todos', 'prueba' => '🎁 En prueba ('.$totales['en_prueba'].')', 'web' => '🌐 Desde la web',
+                'eliminar' => '🗑 Para eliminar ('.$totales['para_eliminar'].')', 'eliminados' => 'Eliminados'] as $valor => $texto)
+                <a href="{{ route('admin.clientes.index', array_filter(['filtro' => $valor, 'q' => $q])) }}"
+                   class="px-3 py-1.5 rounded-full border {{ $filtro === $valor ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400' }}">{{ $texto }}</a>
+            @endforeach
+        </div>
         <form class="ml-auto flex gap-2" method="GET">
             <input type="search" name="q" value="{{ $q }}" placeholder="RUC o nombre" class="rounded-xl border-slate-300 text-sm w-48">
+            @if ($filtro)<input type="hidden" name="filtro" value="{{ $filtro }}">@endif
         </form>
         <a href="{{ route('admin.clientes.create') }}" class="px-4 h-10 inline-flex items-center rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Nuevo cliente</a>
     </div>
@@ -80,11 +89,23 @@
                             @else — @endif
                         </td>
                         <td class="px-4 py-3">
-                            @if ($cl->activo())
+                            @if ($cl->estado === 'ELIMINADO')
+                                <span class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold" title="{{ $cl->motivo_suspension }}">Eliminado</span>
+                            @elseif ($cl->activo() && $cl->enPrueba())
+                                @php $diasPrueba = $cl->diasPrueba(); @endphp
+                                <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $diasPrueba <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700' }}"
+                                      title="Prueba gratis hasta el {{ $cl->prueba_hasta->format('d/m/Y') }}">🎁 Prueba · {{ max(0, $diasPrueba) }} {{ $diasPrueba === 1 ? 'día' : 'días' }}</span>
+                            @elseif ($cl->activo())
                                 <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">Activo</span>
                             @else
                                 <span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold" title="{{ $cl->motivo_suspension }}">Suspendido</span>
+                                @if ($cl->suspendido_el && $cl->suspendido_el->toDateString() <= $limiteEliminar)
+                                    <span class="block mt-1 text-[11px] font-semibold text-rose-600">desde {{ $cl->suspendido_el->format('d/m/Y') }} · para eliminar</span>
+                                @elseif ($cl->suspendido_el)
+                                    <span class="block mt-1 text-[11px] text-slate-400">desde {{ $cl->suspendido_el->format('d/m/Y') }}</span>
+                                @endif
                             @endif
+                            @if ($cl->origen === 'web')<span class="block mt-1 text-[11px] text-slate-400">🌐 registro web</span>@endif
                         </td>
                         <td class="px-4 py-3">
                             @php $cp = $comprobantes[$cl->id] ?? ['tipos' => [], 'total' => 0, 'mes' => 0]; @endphp
@@ -97,6 +118,19 @@
                             @if ($usuarios->isNotEmpty() && $cl->creado_por)<p class="text-[11px] text-slate-400 mt-0.5">De: {{ $usuarios[$cl->creado_por] ?? '—' }}</p>@endif
                         </td>
                         <td class="px-4 py-3 whitespace-nowrap text-right">
+                            @if ($cl->contacto_telefono && $cl->estado !== 'ELIMINADO')
+                                <a href="https://wa.me/51{{ preg_replace('/\D/', '', $cl->contacto_telefono) }}?text={{ rawurlencode('Hola '.($cl->contacto_nombre ?: '').', te saludamos de TUSHPA por tu sistema '.($cl->nombre_comercial ?: $cl->razon_social).'.') }}"
+                                   target="_blank" rel="noopener" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700 mr-2" title="Escribirle por WhatsApp">💬</a>
+                            @endif
+                            @if ($cl->activo() && $cl->enPrueba())
+                                <form method="POST" action="{{ route('admin.clientes.pagado', $cl) }}" class="inline" onsubmit="return confirm('¿Ya pagó? Sale de la prueba y vence en un mes.')">
+                                    @csrf
+                                    <button class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 mr-2">Ya pagó</button>
+                                </form>
+                            @endif
+                            @if ($cl->estado === 'ELIMINADO')
+                                <span class="text-xs text-slate-400">Eliminado</span>
+                            @else
                             <a href="{{ route('admin.clientes.edit', $cl) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2">Editar</a>
                             @if ($cl->activo())
                                 <button type="button" x-data class="text-xs font-semibold text-amber-600 hover:text-amber-700 mr-2"
@@ -110,6 +144,17 @@
                                 <input type="hidden" name="motivo">
                                 <button class="text-xs font-semibold {{ $cl->activo() ? 'text-rose-600' : 'text-emerald-600' }}">{{ $cl->activo() ? 'Suspender' : 'Reactivar' }}</button>
                             </form>
+                            {{-- Eliminar (solo el dueño, solo suspendidas): se saca un respaldo antes de borrar la base --}}
+                            @if (! $cl->activo() && auth('superadmin')->user()->es_dueno)
+                                <form method="POST" action="{{ route('admin.clientes.eliminar', $cl) }}" class="inline"
+                                      data-aviso="{{ 'Se borrará la base de datos de '.$cl->razon_social.' (antes se guarda un respaldo). Para confirmar escribe su RUC: '.$cl->ruc }}"
+                                      onsubmit="const r = prompt(this.dataset.aviso); if (r === null) return false; this.confirmacion.value = r;">
+                                    @csrf
+                                    <input type="hidden" name="confirmacion">
+                                    <button class="ml-2 text-xs font-semibold text-slate-500 hover:text-rose-700">Eliminar</button>
+                                </form>
+                            @endif
+                            @endif
                         </td>
                     </tr>
                 @empty

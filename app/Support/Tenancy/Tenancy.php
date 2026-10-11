@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
+use App\Models\Central\Plan;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -28,7 +30,7 @@ class Tenancy
 
     public static function baseActual(): string
     {
-        return config('database.connections.' . config('database.default') . '.database');
+        return config('database.connections.'.config('database.default').'.database');
     }
 
     public static function baseCentral(): string
@@ -38,18 +40,19 @@ class Tenancy
 
     public static function nombreBase(string $ruc): string
     {
-        $nombre = config('tenancy.prefijo_bd') . $ruc;
+        $nombre = config('tenancy.prefijo_bd').$ruc;
         // Solo letras, números y guion bajo: el nombre va dentro de CREATE/DROP DATABASE
-        if (!preg_match('/^\d{11}$/', $ruc) || !preg_match('/^[a-z0-9_]{1,64}$/i', $nombre)) {
+        if (! preg_match('/^\d{11}$/', $ruc) || ! preg_match('/^[a-z0-9_]{1,64}$/i', $nombre)) {
             throw new \InvalidArgumentException('Nombre de base de datos no válido.');
         }
+
         return $nombre;
     }
 
     /** @param string $subdominio el RUC o el subdominio propio del cliente (demo) */
     public static function urlCliente(string $subdominio): string
     {
-        return config('tenancy.esquema') . '://' . $subdominio . '.' . config('tenancy.dominio');
+        return config('tenancy.esquema').'://'.$subdominio.'.'.config('tenancy.dominio');
     }
 
     /** Subdominios que nunca puede usar un cliente */
@@ -59,10 +62,33 @@ class Tenancy
             config('tenancy.principales', []));
     }
 
+    /**
+     * Subdominio propio: letras, números y guiones; no puede ser un RUC, uno reservado ni el de otro cliente.
+     * Devuelve el error o null si se puede usar.
+     */
+    public static function errorSubdominio(?string $sub, ?Cliente $actual = null): ?string
+    {
+        if (! $sub) {
+            return null;
+        }
+        if (! preg_match('/^(?!\d+$)[a-z0-9][a-z0-9-]*[a-z0-9]$/', $sub) || strlen($sub) > 40) {
+            return 'El subdominio solo lleva letras minúsculas, números y guiones (ej. demo, mi-tienda), y no puede ser solo números.';
+        }
+        if (in_array($sub, self::subdominiosReservados(), true)) {
+            return "El subdominio {$sub} está reservado.";
+        }
+        if (Cliente::where('subdominio', $sub)->when($actual, fn ($q) => $q->where('id', '!=', $actual->id))->exists()) {
+            return "El subdominio {$sub} ya lo usa otra empresa.";
+        }
+
+        return null;
+    }
+
     /** Plan del cliente del subdominio actual (null = sin límites: empresa principal o modo de una sola empresa) */
-    public static function plan(): ?\App\Models\Central\Plan
+    public static function plan(): ?Plan
     {
         $cliente = self::cliente();
+
         return $cliente && $cliente->plan_id ? $cliente->planContratado : null;
     }
 

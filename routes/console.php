@@ -148,10 +148,19 @@ Artisan::command('clientes:suspender-vencidos', function () {
     $vencidos = Cliente::where('estado', 'ACTIVO')->where('aviso_suspender', 1)
         ->whereNotNull('aviso_fecha')->where('aviso_fecha', '<', now()->toDateString())->get();
     foreach ($vencidos as $c) {
-        $c->update(['estado' => 'SUSPENDIDO', 'motivo_suspension' => 'Falta de pago (venció el '.Carbon::parse($c->aviso_fecha)->format('d/m/Y').')']);
+        $c->update(['estado' => 'SUSPENDIDO', 'suspendido_el' => now()->toDateString(),
+            'motivo_suspension' => 'Falta de pago (venció el '.Carbon::parse($c->aviso_fecha)->format('d/m/Y').')']);
         $this->info("Suspendido: {$c->ruc} {$c->razon_social}");
     }
-    $this->info($vencidos->count().' empresa(s) suspendida(s).');
-})->purpose('Suspende las empresas cuya advertencia de pago venció');
+
+    // Registro desde la web: terminó la prueba gratis y no activó un plan
+    $pruebas = Cliente::where('estado', 'ACTIVO')->whereNotNull('prueba_hasta')->where('prueba_hasta', '<', now()->toDateString())->get();
+    foreach ($pruebas as $c) {
+        $c->update(['estado' => 'SUSPENDIDO', 'suspendido_el' => now()->toDateString(),
+            'motivo_suspension' => 'Terminó la prueba gratis ('.$c->prueba_hasta->format('d/m/Y').')']);
+        $this->info("Prueba terminada: {$c->ruc} {$c->razon_social}");
+    }
+    $this->info(($vencidos->count() + $pruebas->count()).' empresa(s) suspendida(s).');
+})->purpose('Suspende las empresas cuya advertencia de pago o prueba gratis venció');
 
 Schedule::command('clientes:suspender-vencidos')->dailyAt('00:15');

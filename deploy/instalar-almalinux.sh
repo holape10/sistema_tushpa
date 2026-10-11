@@ -196,7 +196,7 @@ cat > "${CONF_APACHE}" <<CONF
 
 <VirtualHost *:80>
     ServerName ${SERVIDOR}
-    ${BASE:+ServerAlias *.${BASE}}
+    ${BASE:+ServerAlias ${BASE} www.${BASE} *.${BASE}}
     DocumentRoot ${DIR}/public
     # Pasa a https solo los sitios que ya tienen certificado (deploy/ssl-clientes.sh crea su archivo)
     RewriteEngine On

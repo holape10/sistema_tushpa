@@ -7,7 +7,37 @@
     $pago = config('soporte.pago');
     $soporteWa = config('soporte.whatsapp');
 @endphp
-@if ($clienteTenancy && $clienteTenancy->aviso_mensaje)
+@php
+    // Prueba gratis (registro desde la web): aviso propio mientras no haya una advertencia de pago del panel
+    $enPrueba = $clienteTenancy && $clienteTenancy->enPrueba() && ! $clienteTenancy->aviso_mensaje;
+@endphp
+@if ($enPrueba)
+    @php
+        $diasPrueba = $clienteTenancy->diasPrueba();
+        $precioPlan = $clienteTenancy->planContratado?->precio;
+    @endphp
+    <div id="aviso-servicio" style="position:fixed;left:12px;right:12px;bottom:12px;z-index:2147481000;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
+        <div style="max-width:880px;margin:0 auto;background:{{ $diasPrueba <= 3 ? '#7c2d12' : '#312e81' }};color:#fff;border-radius:18px;box-shadow:0 18px 40px -10px rgba(0,0,0,.45);padding:12px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+            <div style="flex:0 0 42px;height:42px;border-radius:50%;background:#818cf8;display:flex;align-items:center;justify-content:center;font-size:20px">🎁</div>
+            <div style="flex:1;min-width:220px">
+                <p style="margin:0;font-weight:800;font-size:15px">
+                    @if ($diasPrueba > 1) Prueba gratis: te quedan {{ $diasPrueba }} días
+                    @elseif ($diasPrueba === 1) Prueba gratis: te queda 1 día
+                    @else Prueba gratis: hoy es tu último día
+                    @endif
+                </p>
+                <p style="margin:2px 0 0;font-size:13px;color:#c7d2fe">
+                    Hasta el {{ $clienteTenancy->prueba_hasta->format('d/m/Y') }}{{ $clienteTenancy->plan ? ' · plan '.$clienteTenancy->plan.($precioPlan ? ' S/ '.rtrim(rtrim(number_format($precioPlan, 2), '0'), '.').' al mes' : '') : '' }}.
+                    Los comprobantes van a SUNAT en modo de prueba.
+                </p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+                <button type="button" onclick="document.getElementById('pago-servicio').style.display='flex'" style="border:0;border-radius:12px;background:#fff;color:#312e81;font-weight:800;padding:10px 14px;cursor:pointer">Activar mi plan</button>
+                <button type="button" onclick="document.getElementById('aviso-servicio').style.display='none'" title="Ocultar" style="border:0;background:transparent;color:#c7d2fe;font-size:24px;cursor:pointer;line-height:1">&times;</button>
+            </div>
+        </div>
+    </div>
+@elseif ($clienteTenancy && $clienteTenancy->aviso_mensaje)
     @php
         $limite = $clienteTenancy->aviso_fecha ? \Illuminate\Support\Carbon::parse($clienteTenancy->aviso_fecha) : null;
         $dias = $limite ? (int) now()->startOfDay()->diffInDays($limite, false) : null;
@@ -32,6 +62,8 @@
             </div>
         </div>
     </div>
+@endif
+@if ($enPrueba || ($clienteTenancy && $clienteTenancy->aviso_mensaje))
     <div id="pago-servicio" onclick="if (event.target === this) this.style.display='none'" style="display:none;position:fixed;inset:0;z-index:2147481500;background:rgba(15,23,42,.65);align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
         <div style="background:#fff;border-radius:22px;max-width:380px;width:100%;padding:20px;text-align:center;max-height:92vh;overflow:auto">
             <p style="margin:0 0 4px;font-weight:800;font-size:18px;color:#0f172a">Paga tu servicio TUSHPA</p>

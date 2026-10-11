@@ -8,6 +8,7 @@ use App\Models\Central\Plan;
 use App\Models\Central\Superadmin;
 use App\Models\User;
 use App\Support\Rubros;
+use App\Support\Tenancy\Eliminador;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\Request;
@@ -65,7 +66,14 @@ class ClienteController extends Controller
     public function index(Request $request)
     {
         $q = trim((string) $request->get('q'));
+        $filtro = (string) $request->get('filtro');
+        $limiteEliminar = now()->subDays(config('sitio.dias_para_eliminar'))->toDateString();
         $clientes = $this->mios()->with('planContratado')
+            ->when($filtro === '', fn ($w) => $w->where('estado', '!=', 'ELIMINADO'))
+            ->when($filtro === 'prueba', fn ($w) => $w->where('estado', 'ACTIVO')->whereNotNull('prueba_hasta'))
+            ->when($filtro === 'web', fn ($w) => $w->where('origen', 'web')->where('estado', '!=', 'ELIMINADO'))
+            ->when($filtro === 'eliminar', fn ($w) => $w->where('estado', 'SUSPENDIDO')->where('suspendido_el', '<=', $limiteEliminar))
+            ->when($filtro === 'eliminados', fn ($w) => $w->where('estado', 'ELIMINADO'))
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('ruc', 'like', $q.'%')
                 ->orWhere('subdominio', 'like', $q.'%')
                 ->orWhere('razon_social', 'like', '%'.$q.'%')
@@ -79,12 +87,15 @@ class ClienteController extends Controller
             'por_vencer' => $this->mios()->where('estado', 'ACTIVO')->whereNotNull('vence_el')
                 ->where('vence_el', '<=', now()->addDays(7)->toDateString())->count(),
             // Ingreso mensual de los clientes activos según su plan
-            'ingreso' => (float) $this->mios()->where('clientes.estado', 'ACTIVO')->join('planes', 'planes.id', '=', 'clientes.plan_id')->sum('planes.precio'),
+            'ingreso' => (float) $this->mios()->where('clientes.estado', 'ACTIVO')->whereNull('clientes.prueba_hasta')
+                ->join('planes', 'planes.id', '=', 'clientes.plan_id')->sum('planes.precio'),
+            'en_prueba' => $this->mios()->where('estado', 'ACTIVO')->whereNotNull('prueba_hasta')->count(),
+            'para_eliminar' => $this->mios()->where('estado', 'SUSPENDIDO')->where('suspendido_el', '<=', $limiteEliminar)->count(),
         ];
         $comprobantes = $clientes->getCollection()->mapWithKeys(fn ($cl) => [$cl->id => $this->comprobantes($cl)]);
         $usuarios = $this->esDueno() ? Superadmin::orderBy('nombre')->pluck('nombre', 'id') : collect();
 
-        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'comprobantes', 'usuarios'));
+        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'filtro', 'comprobantes', 'usuarios', 'limiteEliminar'));
     }
 
     public function create()
@@ -97,7 +108,7 @@ class ClienteController extends Controller
     {
         $d = $request->validate($this->reglas() + [
             // 99999999999 = empresa de demostración (para que prueben el sistema)
-            'ruc' => ['required', 'regex:/^((10|15|17|20)\d{9}|99999999999)$/', 'unique:central.clientes,ruc'],
+            'ruc' => ['required', 'regex:/^((10|15|17|20)\d{9}|99999999999)$/', Rule::unique('central.clientes', 'ruc')->where(fn ($q) => $q->where('estado', '!=', 'ELIMINADO'))],
             'direccion' => 'required|string|max:255',
             'ubigeo' => 'nullable|digits:6',
             'usuario' => 'nullable|string|max:60',
@@ -250,15 +261,68 @@ class ClienteController extends Controller
         $this->autorizar($cliente);
         if ($cliente->activo()) {
             $d = $request->validate(['motivo' => 'nullable|string|max:150']);
-            $cliente->update(['estado' => 'SUSPENDIDO', 'motivo_suspension' => $d['motivo'] ?? null]);
+            $cliente->update(['estado' => 'SUSPENDIDO', 'motivo_suspension' => $d['motivo'] ?? null, 'suspendido_el' => now()->toDateString()]);
 
             return back()->with('ok', "Se suspendió {$cliente->razon_social}.");
         }
 
-        // Al reactivar (ya pagó) se quita también la advertencia
-        $cliente->update(['estado' => 'ACTIVO', 'motivo_suspension' => null, 'aviso_mensaje' => null, 'aviso_fecha' => null, 'aviso_suspender' => 0]);
+        if ($cliente->estado === 'ELIMINADO') {
+            return back()->with('error', 'Esta empresa fue eliminada: vuelve a crearla con "Nuevo cliente".');
+        }
+        // Al reactivar (ya pagó) se quitan la advertencia y la prueba gratis
+        $cliente->update(['estado' => 'ACTIVO', 'motivo_suspension' => null, 'aviso_mensaje' => null, 'aviso_fecha' => null, 'aviso_suspender' => 0,
+            'prueba_hasta' => null, 'suspendido_el' => null]);
 
         return back()->with('ok', "Se reactivó {$cliente->razon_social}.");
+    }
+
+    /** Pagó durante la prueba gratis: deja de estar en prueba y vence en un mes (se puede cambiar en Editar) */
+    public function pagado(Cliente $cliente)
+    {
+        $this->autorizar($cliente);
+        abort_unless($cliente->activo(), 422);
+        $cliente->update(['prueba_hasta' => null, 'vence_el' => now()->addMonth()->toDateString(),
+            'notas' => trim($cliente->notas.PHP_EOL.'Pagó y salió de la prueba el '.now()->format('d/m/Y').'.')]);
+
+        return back()->with('ok', "{$cliente->razon_social} ya no está en prueba. Vence el ".now()->addMonth()->format('d/m/Y').'. Recuerda pasarlo a SUNAT producción cuando suba su certificado.');
+    }
+
+    /**
+     * Elimina la base de una empresa suspendida (p. ej. no pagó al terminar la prueba). Solo el dueño, escribiendo el RUC.
+     * Antes se saca un respaldo; si el respaldo falla no se borra nada.
+     */
+    public function eliminar(Request $request, Cliente $cliente)
+    {
+        abort_unless($this->esDueno(), 403, 'Solo el dueño del sistema elimina empresas.');
+        if (trim((string) $request->input('confirmacion')) !== $cliente->ruc) {
+            return back()->with('error', 'No se eliminó: el RUC escrito no coincide.');
+        }
+        try {
+            $respaldo = Eliminador::eliminar($cliente);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+        Cache::store('file')->forget("panel-cpe-{$cliente->id}");
+
+        return back()->with('ok', "Se eliminó {$cliente->razon_social}. Respaldo guardado en storage/app/respaldos/".basename($respaldo).'.');
+    }
+
+    // ------------------------------------------------------------------ mensajes de la web
+
+    public function mensajesWeb()
+    {
+        abort_unless($this->esDueno(), 403);
+        $mensajes = DB::connection('central')->table('web_contactos')->orderBy('atendido')->orderByDesc('id')->paginate(30);
+
+        return view('admin.mensajes', compact('mensajes'));
+    }
+
+    public function mensajeWebAtendido(int $id)
+    {
+        abort_unless($this->esDueno(), 403);
+        DB::connection('central')->table('web_contactos')->where('id', $id)->update(['atendido' => true, 'updated_at' => now()]);
+
+        return back()->with('ok', 'Mensaje marcado como atendido.');
     }
 
     /**
@@ -315,20 +379,9 @@ class ClienteController extends Controller
         return Plan::where('activo', true)->orderBy('orden')->orderBy('precio')->get();
     }
 
-    /** Subdominio propio: letras, números y guiones; no puede ser un RUC, uno reservado ni el de otro cliente */
     private function errorSubdominio(?string $sub, ?Cliente $actual = null): ?string
     {
-        if (! $sub) {
-            return null;
-        }
-        if (in_array($sub, Tenancy::subdominiosReservados(), true)) {
-            return "El subdominio {$sub} está reservado.";
-        }
-        if (Cliente::where('subdominio', $sub)->when($actual, fn ($q) => $q->where('id', '!=', $actual->id))->exists()) {
-            return "El subdominio {$sub} ya lo usa otro cliente.";
-        }
-
-        return null;
+        return Tenancy::errorSubdominio($sub, $actual);
     }
 
     public function consultarRuc(string $ruc)
