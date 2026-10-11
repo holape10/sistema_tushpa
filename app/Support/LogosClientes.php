@@ -6,39 +6,46 @@ use Illuminate\Http\UploadedFile;
 
 /**
  * Logos de clientes de la web pública (sección "Empresas que confían en nosotros"). El dueño los sube y quita desde
- * admin.tushpa.app › Logos web. Se guardan livianos (webp, máx. 320×180) en public/web/img/logos, carpeta que no va
- * a git para que actualizar.sh no los borre. La primera vez se copian los logos que venían en el proyecto.
+ * admin.tushpa.app › Logos web. Se guardan livianos (webp, máx. 320×180) en public/imagenes/web-clientes: dentro de
+ * public/imagenes, que es donde el servidor puede escribir (permisos y SELinux) y que no va a git.
+ * La primera vez se copian los logos que vienen en el proyecto; si la carpeta no se puede crear, la web muestra esos.
  */
 class LogosClientes
 {
-    private const CARPETA = 'web/img/logos';
+    private const CARPETA = 'imagenes/web-clientes';
 
     private const INICIALES = 'web/img/clientes';
 
-    /** @return array<int, string> nombres de archivo, en orden */
+    /** @return array<int, string> rutas dentro de public/, en orden */
     public static function todos(): array
     {
-        $dir = self::carpeta();
-        if (! is_dir($dir)) {
-            @mkdir($dir, 0775, true);
+        $dir = public_path(self::CARPETA);
+        if (! is_dir($dir) && @mkdir($dir, 0775, true)) {
             foreach (glob(public_path(self::INICIALES).'/*.webp') ?: [] as $logo) {
                 @copy($logo, $dir.'/'.basename($logo));
             }
         }
-        $archivos = array_map('basename', glob($dir.'/*.webp') ?: []);
+        $carpeta = is_dir($dir) ? self::CARPETA : self::INICIALES;
+        $archivos = array_map('basename', glob(public_path($carpeta).'/*.{webp,png}', GLOB_BRACE) ?: []);
         natsort($archivos);
 
-        return array_values($archivos);
+        return array_map(fn ($a) => $carpeta.'/'.$a, array_values($archivos));
     }
 
-    public static function url(string $archivo): string
+    public static function url(string $ruta): string
     {
-        return asset(self::CARPETA.'/'.$archivo).'?v='.@filemtime(self::carpeta().'/'.$archivo);
+        return asset($ruta).'?v='.@filemtime(public_path($ruta));
     }
 
-    /** Guarda la imagen como webp liviana; devuelve el nombre del archivo */
+    /** Guarda la imagen achicada (webp, o png si el servidor no tiene webp); devuelve su ruta */
     public static function subir(UploadedFile $imagen): string
     {
+        self::todos();   // crea la carpeta (y copia los iniciales) si aún no existe
+        $dir = public_path(self::CARPETA);
+        if (! is_dir($dir) || ! is_writable($dir)) {
+            throw new \RuntimeException('El servidor no permite guardar en public/'.self::CARPETA.'. Revisa los permisos de esa carpeta.');
+        }
+
         $origen = @imagecreatefromstring((string) file_get_contents($imagen->getRealPath()));
         if (! $origen) {
             throw new \RuntimeException("No se pudo leer la imagen {$imagen->getClientOriginalName()}.");
@@ -53,26 +60,25 @@ class LogosClientes
         imagefill($lienzo, 0, 0, imagecolorallocatealpha($lienzo, 0, 0, 0, 127));
         imagecopyresampled($lienzo, $origen, 0, 0, 0, 0, $nuevoAncho, $nuevoAlto, $ancho, $alto);
 
-        self::todos();   // crea la carpeta (y copia los iniciales) si aún no existe
         $base = trim(preg_replace('/[^a-z0-9]+/', '-', mb_strtolower(pathinfo($imagen->getClientOriginalName(), PATHINFO_FILENAME))), '-') ?: 'logo';
-        $nombre = substr($base, 0, 40).'-'.substr(md5(uniqid('', true)), 0, 6).'.webp';
-        imagewebp($lienzo, self::carpeta().'/'.$nombre, 85);
+        $webp = function_exists('imagewebp');
+        $nombre = substr($base, 0, 40).'-'.substr(md5(uniqid('', true)), 0, 6).($webp ? '.webp' : '.png');
+        $guardado = $webp ? @imagewebp($lienzo, $dir.'/'.$nombre, 85) : @imagepng($lienzo, $dir.'/'.$nombre, 9);
+        if (! $guardado) {
+            throw new \RuntimeException("No se pudo guardar {$imagen->getClientOriginalName()} en el servidor.");
+        }
 
-        return $nombre;
+        return self::CARPETA.'/'.$nombre;
     }
 
-    public static function eliminar(string $archivo): bool
+    /** Quita un logo subido (solo archivos de la carpeta de logos, nada de rutas) */
+    public static function eliminar(string $ruta): bool
     {
-        // Solo nombres simples de esta carpeta (nada de rutas)
-        if (! preg_match('/^[a-z0-9-]+\.webp$/', $archivo)) {
+        $archivo = basename($ruta);
+        if ($ruta !== self::CARPETA.'/'.$archivo || ! preg_match('/^[a-z0-9-]+\.(webp|png)$/', $archivo)) {
             return false;
         }
 
-        return @unlink(self::carpeta().'/'.$archivo);
-    }
-
-    private static function carpeta(): string
-    {
-        return public_path(self::CARPETA);
+        return @unlink(public_path($ruta));
     }
 }

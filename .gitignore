@@ -39,4 +39,4 @@ Thumbs.db
 !/public/imagenes/productos/.gitkeep
 
 # Logos de clientes de la web pública (se suben desde el panel admin)
-/public/web/img/logos
+/public/imagenes/web-clientes
