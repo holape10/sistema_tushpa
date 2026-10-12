@@ -152,6 +152,9 @@ class Impresion
         } else {
             foreach ($detalle as $d) {
                 $p->item($d->cdedes, (float) $d->cdecan, (float) $d->cdepuni, (float) $d->cdevve);
+                if (! empty($d->series)) {
+                    $p->parrafo('  S/N: '.$d->series);
+                }
             }
         }
         $p->linea();

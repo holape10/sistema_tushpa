@@ -146,7 +146,7 @@ document.addEventListener('alpine:init', () => {
             // Con lote, el mismo producto puede venir en varias líneas; sin lote se suma a la existente
             // Farmacia: los productos con control de lote abren las columnas de lote y vencimiento
             if (p.control_lote) this.conLote = true;
-            let it = this.conLote ? null : this.items.find(x => x.id === p.id && (x.presentacion || null) === (pres?.id ?? null));
+            let it = this.conLote || p.control_serie ? null : this.items.find(x => x.id === p.id && (x.presentacion || null) === (pres?.id ?? null));
             if (it) {
                 it.cantidad = r2(it.cantidad + 1);
             } else {
@@ -154,13 +154,23 @@ document.addEventListener('alpine:init', () => {
                 this.items.push({ key: this._key++, id: p.id, codigo: p.codigo, nombre: p.nombre, tip_igv: CFG.tipIgvPred,
                     presentacion: pres?.id ?? null, factor: pres?.factor ?? 1,
                     presentacion_nombre: pres ? pres.nombre + ' x' + this.num(pres.factor) + ' ' + (p.unidad || '') : null,
-                    cantidad: 1, costo: r4(p.costo * (pres?.factor ?? 1)), flete: 0, lote: '', vencimiento: '', control_lote: !!p.control_lote, flash: false });
+                    cantidad: 1, costo: r4(p.costo * (pres?.factor ?? 1)), flete: 0, lote: '', vencimiento: '', control_lote: !!p.control_lote,
+                    control_serie: !!p.control_serie, series: '', flash: false });
                 it = this.items[this.items.length - 1];
             }
             it.flash = true;
             setTimeout(() => { it.flash = false; }, 600);
             this.busqueda = ''; this.resultados = []; this.resultadosAbiertos = false;
-            this.enfocar('cant-' + it.key);
+            this.enfocar((it.control_serie ? 'series-' : 'cant-') + it.key);
+        },
+
+        /** Series escritas o escaneadas (una por línea); la cantidad es la cantidad de series */
+        seriesDe(it) {
+            return String(it.series || '').split(/[\r\n,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+        },
+        contarSeries(it) {
+            const n = this.seriesDe(it).length;
+            if (n > 0) it.cantidad = r2(n / (it.factor || 1));
         },
 
         // ---------- Proveedor ----------
@@ -211,6 +221,10 @@ document.addEventListener('alpine:init', () => {
             if (this.doc.moneda === 'USD' && !(this.doc.tip_cam > 0)) return 'Ingresa el tipo de cambio.';
             if (!this.items.length) return 'Agrega al menos un producto.';
             if (this.items.some(it => !(it.cantidad > 0))) return 'Todas las cantidades deben ser mayores a 0.';
+            const conSerie = this.items.find(it => it.control_serie && this.seriesDe(it).length !== Math.round(it.cantidad * (it.factor || 1)));
+            if (conSerie) return `${conSerie.nombre}: escribe o escanea una serie por cada unidad (${Math.round(conSerie.cantidad * (conSerie.factor || 1))}).`;
+            const repetida = this.items.find(it => it.control_serie && new Set(this.seriesDe(it)).size !== this.seriesDe(it).length);
+            if (repetida) return `${repetida.nombre}: hay una serie repetida.`;
             if (this.items.some(it => !(it.costo >= 0))) return 'Revisa los costos.';
             if (!this.esContado && this.doc.fecVen < this.doc.fecEmi) return 'El vencimiento no puede ser antes de la emisión.';
             const sinLote = this.items.find(it => it.control_lote && (!String(it.lote || '').trim() || !it.vencimiento));
@@ -236,6 +250,7 @@ document.addEventListener('alpine:init', () => {
                 items: this.items.map(it => ({
                     id: it.id, presentacion: it.presentacion || null, tip_igv: it.tip_igv, cantidad: it.cantidad, costo: it.costo, flete: Number(it.flete) || 0,
                     lote: this.conLote ? it.lote : null, vencimiento: this.conLote ? (it.vencimiento || null) : null,
+                    ...(it.control_serie ? { series: this.seriesDe(it).join('\n') } : {}),
                 })),
             };
 

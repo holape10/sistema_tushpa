@@ -50,6 +50,8 @@ use App\Http\Controllers\PwaController;
 use App\Http\Controllers\RecetaController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ReservaController;
+use App\Http\Controllers\RespaldoEmpresaController;
+use App\Http\Controllers\SerieController;
 use App\Http\Controllers\SireController;
 use App\Http\Controllers\SocioController;
 use App\Http\Controllers\SocioPortalController;
@@ -272,6 +274,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/impresoras', [ImpresionController::class, 'guardarImpresora'])->name('impresion.guardar');
     Route::post('/impresoras/asignaciones', [ImpresionController::class, 'asignaciones'])->name('impresion.asignaciones');
     Route::post('/impresoras/agente', [ImpresionController::class, 'descargarAgente'])->name('impresion.agente');
+    Route::post('/impresoras/agente/codigo', [ImpresionController::class, 'codigoAgente'])->name('impresion.agente.codigo');
     Route::post('/impresoras/cola/{id}/reintentar', [ImpresionController::class, 'reintentar'])->whereNumber('id')->name('impresion.reintentar');
     Route::post('/impresoras/{id}', [ImpresionController::class, 'guardarImpresora'])->whereNumber('id')->name('impresion.actualizar');
     Route::post('/impresoras/{id}/prueba', [ImpresionController::class, 'prueba'])->whereNumber('id')->name('impresion.prueba');
@@ -319,6 +322,12 @@ Route::middleware('auth')->group(function () {
     // Kardex y stock
     Route::get('/kardex', [KardexController::class, 'index'])->name('kardex.index');
     Route::get('/kardex/stock', [KardexController::class, 'stock'])->name('kardex.stock');
+    Route::get('/kardex/excel', [KardexController::class, 'excel'])->name('kardex.excel');
+    Route::get('/respaldo', [RespaldoEmpresaController::class, 'index'])->name('respaldo.index');
+    Route::post('/respaldo/descargar', [RespaldoEmpresaController::class, 'descargar'])->middleware('throttle:3,10')->name('respaldo.descargar');
+    Route::get('/kardex/inventario', [KardexController::class, 'inventario'])->name('kardex.inventario');
+    Route::get('/series', [SerieController::class, 'index'])->name('series.index');
+    Route::get('/kardex/inventario/excel', [KardexController::class, 'inventarioExcel'])->name('kardex.inventario.excel');
     Route::get('/kardex/movimiento', [KardexController::class, 'movimiento'])->name('kardex.movimiento');
     Route::post('/kardex/movimiento', [KardexController::class, 'guardarMovimiento'])->name('kardex.guardar_movimiento');
 });

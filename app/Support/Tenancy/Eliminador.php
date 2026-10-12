@@ -4,7 +4,6 @@ namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Process;
 
 /**
  * Elimina la base de una empresa (p. ej. no pagó al terminar la prueba). Antes saca un respaldo comprimido con
@@ -33,30 +32,10 @@ class Eliminador
     /** Respaldo .sql.gz de la base; devuelve la ruta. Lanza excepción si no se pudo */
     public static function respaldar(string $base): string
     {
-        $carpeta = config('sitio.respaldos');
-        @mkdir($carpeta, 0750, true);
-        $sql = $carpeta.DIRECTORY_SEPARATOR.$base.'-'.now()->format('Ymd-His').'.sql';
-        $con = config('database.connections.central');
-
-        $resultado = Process::env(['MYSQL_PWD' => (string) $con['password']])->timeout(600)->run([
-            config('sitio.mysqldump'), '-h', (string) $con['host'], '-P', (string) $con['port'], '-u', (string) $con['username'],
-            '--single-transaction', '--routines', '--triggers', '--default-character-set=utf8mb4', '--result-file='.$sql, $base,
-        ]);
-        if (! $resultado->successful() || ! is_file($sql) || filesize($sql) < 100 || ! str_contains((string) file_get_contents($sql, false, null, 0, 20000), 'CREATE TABLE')) {
-            @unlink($sql);
-            throw new \RuntimeException('No se pudo sacar el respaldo, así que no se eliminó nada: '.trim($resultado->errorOutput() ?: 'mysqldump no generó el archivo.'));
+        try {
+            return Respaldos::crear($base, 'eliminada');
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException('No se pudo sacar el respaldo, así que no se eliminó nada. '.$e->getMessage());
         }
-
-        // Comprimir por partes (las bases pueden pesar cientos de MB)
-        $gz = gzopen($sql.'.gz', 'wb6');
-        $entrada = fopen($sql, 'rb');
-        while (! feof($entrada)) {
-            gzwrite($gz, (string) fread($entrada, 1024 * 1024));
-        }
-        fclose($entrada);
-        gzclose($gz);
-        unlink($sql);
-
-        return $sql.'.gz';
     }
 }

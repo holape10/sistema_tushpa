@@ -33,7 +33,7 @@
             <input list="lista_productos" id="buscar_prod" placeholder="Buscar producto o insumo y presiona Enter..." autocomplete="off" class="flex-1 rounded-lg border-gray-300 text-sm">
             <datalist id="lista_productos">
                 @foreach ($productos as $p)
-                    <option data-id="{{ $p->IdProducto }}" data-costo="{{ $p->costo }}" data-lote="{{ $p->control_lote ? 1 : 0 }}" value="{{ $p->pronom }}">{{ $p->procod }}</option>
+                    <option data-id="{{ $p->IdProducto }}" data-costo="{{ $p->costo }}" data-lote="{{ $p->control_lote ? 1 : 0 }}" data-serie="{{ $p->control_serie ? 1 : 0 }}" value="{{ $p->pronom }}">{{ $p->procod }}</option>
                 @endforeach
             </datalist>
             <button type="button" id="btn_agregar" class="px-4 rounded-lg bg-indigo-600 text-white text-sm font-semibold">Agregar</button>
@@ -76,7 +76,8 @@
             const op = [...document.querySelectorAll('#lista_productos option')].find(o => o.value === txt.value);
             if (!op) { alert('Elige un producto de la lista.'); return; }
 
-            const existente = CON_LOTE && op.dataset.lote === '1' ? null : tbody.querySelector(`tr[data-id="${op.dataset.id}"] .cant`);
+            const conSerie = op.dataset.serie === '1';
+            const existente = (CON_LOTE && op.dataset.lote === '1') || conSerie ? null : tbody.querySelector(`tr[data-id="${op.dataset.id}"] .cant`);
             if (existente) { existente.value = (parseFloat(existente.value) || 0) + 1; txt.value = ''; return; }
 
             const i = fila++;
@@ -84,14 +85,24 @@
             tr.dataset.id = op.dataset.id;
             tr.className = 'border-t border-gray-100';
             tr.innerHTML = `
-                <td class="px-3 py-2"></td>
+                <td class="px-3 py-2"><span class="nombre"></span>
+                    ${conSerie ? `<textarea name="items[${i}][series]" rows="2" required placeholder="Series, una por línea (escanea o escribe)"
+                        class="series mt-1 w-full rounded-lg border-sky-300 bg-sky-50 text-xs uppercase font-mono"></textarea>` : ''}</td>
                 <td class="px-3 py-2"><input type="hidden" name="items[${i}][IdProducto]" value="${op.dataset.id}">
                     <input type="number" step="0.01" min="0.01" required name="items[${i}][cantidad]" value="1" class="cant w-full rounded-lg border-gray-300 text-sm"></td>
                 <td class="px-3 py-2"><input type="number" step="0.01" min="0" name="items[${i}][costo]" value="${parseFloat(op.dataset.costo || 0).toFixed(2)}" class="w-full rounded-lg border-gray-300 text-sm"></td>
                 ${CON_LOTE ? `<td class="px-3 py-2"><input name="items[${i}][lote]" maxlength="50" ${op.dataset.lote === '1' ? 'required placeholder="Obligatorio"' : ''} class="w-full rounded-lg border-gray-300 text-sm uppercase"></td>
                 <td class="px-3 py-2"><input type="date" name="items[${i}][vencimiento]" ${op.dataset.lote === '1' ? 'required' : ''} class="w-full rounded-lg border-gray-300 text-sm"></td>` : ''}
                 <td class="px-3 py-2 text-center"><button type="button" class="quitar text-red-600 font-bold">✕</button></td>`;
-            tr.firstElementChild.textContent = op.value; // texto plano, sin inyectar HTML
+            tr.querySelector('.nombre').textContent = op.value; // texto plano, sin inyectar HTML
+            // Con número de serie: la cantidad es la cantidad de series escritas
+            const series = tr.querySelector('.series');
+            if (series) {
+                const cant = tr.querySelector('.cant');
+                cant.readOnly = true;
+                cant.value = 0;
+                series.addEventListener('input', () => { cant.value = series.value.split(/[\r\n,;]+/).filter(s => s.trim()).length; });
+            }
             tbody.appendChild(tr);
             txt.value = '';
             refrescar();

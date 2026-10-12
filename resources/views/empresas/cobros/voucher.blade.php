@@ -94,7 +94,7 @@
         @else
             @foreach ($detalle as $d)
                 <tr>
-                    <td>{{ $d->cdedes }}@if (!empty($d->lotes))<br><small>Lote: {{ $d->lotes }}</small>@endif</td>
+                    <td>{{ $d->cdedes }}@if (!empty($d->lotes))<br><small>Lote: {{ $d->lotes }}</small>@endif @if (!empty($d->series))<br><small>S/N: {{ $d->series }}</small>@endif</td>
                     <td class="um">{{ mb_strtoupper($unidades[$d->umecod] ?? $d->umecod) }}</td>
                     <td class="r">{{ number_format($d->cdecan, 2) }}</td>
                     <td class="r">{{ number_format($d->cdepuni, 2) }}</td>

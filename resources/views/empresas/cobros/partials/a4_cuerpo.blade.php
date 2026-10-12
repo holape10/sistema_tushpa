@@ -143,7 +143,7 @@
             @foreach ($detalle as $i => $d)
                 <tr class="{{ $i % 2 ? 'par' : '' }}">
                     <td class="c">{{ $cant($d->cdecan) }}</td>
-                    <td>{{ $d->cdedes }}@if (!empty($d->lotes))<br><span style="color:#0f766e">Lote: {{ $d->lotes }}</span>@endif</td>
+                    <td>{{ $d->cdedes }}@if (!empty($d->lotes))<br><span style="color:#0f766e">Lote: {{ $d->lotes }}</span>@endif @if (!empty($d->series))<br><span style="color:#0369a1">S/N: {{ $d->series }}</span>@endif</td>
                     <td class="c">{{ $d->umecod }}</td>
                     <td class="r">{{ number_format($d->cdepuni, 2) }}</td>
                     <td class="r">{{ number_format($d->cdevve, 2) }}</td>

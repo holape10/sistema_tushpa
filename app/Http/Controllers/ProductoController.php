@@ -256,6 +256,8 @@ class ProductoController extends Controller
                 'debe' => trim((string) $request->debe) ?: null,
                 'haber' => trim((string) $request->haber) ?: null,
                 'control_lote' => in_array($tipo, [0, 4]) && $request->boolean('control_lote'),
+                'control_serie' => $tipo === 0 && $request->boolean('control_serie'),
+                'garantia_meses' => $tipo === 0 && $request->boolean('control_serie') ? (min(120, max(0, (int) $request->garantia_meses)) ?: null) : null,
                 'es_combustible' => $tipo === 0 && $request->boolean('es_combustible'),
                 'proest' => 'Activo',
                 'IdEmpresa' => Auth::user()->IdEmpresa,
@@ -327,6 +329,8 @@ class ProductoController extends Controller
                     'descripcion' => trim((string) $request->descripcion) ?: null,
                     'debe' => trim((string) $request->debe) ?: null, 'haber' => trim((string) $request->haber) ?: null,
                     'control_lote' => in_array($tipo, [0, 4]) && $request->boolean('control_lote'),
+                    'control_serie' => $tipo === 0 && $request->boolean('control_serie'),
+                    'garantia_meses' => $tipo === 0 && $request->boolean('control_serie') ? (min(120, max(0, (int) $request->garantia_meses)) ?: null) : null,
                     'es_combustible' => $tipo === 0 && $request->boolean('es_combustible')]
                 + $this->equivalencia($request, $tipo));
 

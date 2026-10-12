@@ -110,6 +110,7 @@ class CompraController extends Controller
             'items.*.presentacion' => 'nullable|integer',
             'items.*.lote' => 'nullable|string|max:50',
             'items.*.vencimiento' => 'nullable|date',
+            'items.*.series' => 'nullable|string|max:20000',
         ], [
             'items.required' => 'Agrega al menos un producto.',
             'numero.regex' => 'El número del documento solo lleva dígitos.',
@@ -181,14 +182,14 @@ class CompraController extends Controller
                 $w->orderByRaw('productos.procod = ? DESC, productos.pronom LIKE ? DESC', [$q, $q.'%']);
             })
             ->orderBy('productos.pronom')->limit($codigo !== '' ? 1 : 20)
-            ->get(['productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod', 'productos.costo', 'productos.promocion', 'productos.control_lote', 'producto_stock.stock']);
+            ->get(['productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod', 'productos.costo', 'productos.promocion', 'productos.control_lote', 'productos.control_serie', 'producto_stock.stock']);
         $presentaciones = Precios::presentaciones($productos->pluck('IdProducto'));
         $unidades = UnidadMedida::pluck('umenom', 'umecod');
 
         return response()->json($productos->map(fn ($p) => [
             'id' => $p->IdProducto, 'codigo' => $p->procod, 'nombre' => $p->pronom,
             'costo' => (float) $p->costo, 'stock' => (float) ($p->stock ?? 0), 'insumo' => (int) $p->promocion === 4,
-            'control_lote' => (bool) $p->control_lote, 'unidad' => $unidades[$p->umecod] ?? $p->umecod,
+            'control_lote' => (bool) $p->control_lote, 'control_serie' => (bool) $p->control_serie, 'unidad' => $unidades[$p->umecod] ?? $p->umecod,
             'presentaciones' => $presentaciones[$p->IdProducto] ?? [],
             'presentacion' => $presCodigo && (int) $presCodigo->IdProducto === (int) $p->IdProducto ? (int) $presCodigo->id_presentacion : null,
         ]));
@@ -238,7 +239,7 @@ class CompraController extends Controller
             $prov = DB::table('proveedor')->where('prov_id', $cab->prov_id)->first();
             $items = DB::table('compras_detalle as d')->leftJoin('productos as p', 'p.IdProducto', '=', 'd.pro_id')
                 ->where('d.com_cab_id', $cab->com_cab_id)->orderBy('d.com_det_id')
-                ->get(['d.*', 'p.pronom', 'p.procod', 'p.control_lote']);
+                ->get(['d.*', 'p.pronom', 'p.procod', 'p.control_lote', 'p.control_serie']);
 
             $compra = [
                 'id' => $cab->com_cab_id, 'estado' => $cab->est_compra,
@@ -253,6 +254,7 @@ class CompraController extends Controller
                     'presentacion_nombre' => $i->id_presentacion ? DB::table('producto_presentacion')->where('id_presentacion', $i->id_presentacion)->value('nombre') : null,
                     'cantidad' => (float) $i->cantidad, 'costo' => (float) $i->pre_uni, 'flete' => (float) $i->flete,
                     'lote' => $i->lote, 'vencimiento' => $i->vencimiento, 'control_lote' => (bool) $i->control_lote,
+                    'control_serie' => (bool) $i->control_serie, 'series' => (string) $i->series,
                 ])->values(),
             ];
         }

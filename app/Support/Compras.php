@@ -117,6 +117,7 @@ class Compras
             }
 
             // ---- Detalle + ingreso al kardex + costo del producto ----
+            $productosConSerie = Producto::whereIn('IdProducto', $lineas->pluck('pro_id'))->where('control_serie', true)->get()->keyBy('IdProducto');
             foreach ($lineas as $l) {
                 DB::table('compras_detalle')->insert(collect($l)->except('producto')->all() + [
                     'com_cab_id' => $comId, 'id_almacen_pro' => $almacen->id_almacen, 'IdEmpresa' => $user->IdEmpresa,
@@ -130,6 +131,11 @@ class Compras
                     'costo' => round($l['precio_costo'] / $factor, 4), 'fecha_mov' => $d['fecIng'],
                     'lote' => $l['lote'], 'vencimiento' => $l['vencimiento'],
                 ]);
+                // Electrodomésticos: la serie de cada unidad que entra
+                if ($l['series'] !== null) {
+                    Series::ingresar($productosConSerie[$l['pro_id']], $almacen->id_almacen, Series::lista($l['series']),
+                        round((float) $l['cantidad'] * $factor, 3), ['com_cab_id' => $comId, 'fecha' => $d['fecIng'], 'id_empresa_negocio' => $sucursal]);
+                }
 
                 if (! empty($d['actualizar_costo'])) {
                     $antes = (float) Producto::where('IdProducto', $l['pro_id'])->value('costo');
@@ -171,6 +177,9 @@ class Compras
     /** Salida en el kardex de todo lo que ingresó con la compra (queda la huella de la corrección) */
     private static function revertirStock(object $cab, string $motivo): void
     {
+        // Las series de la compra se quitan (si alguna ya se vendió, no se deja editar ni anular)
+        Series::retirarCompra((int) $cab->com_cab_id);
+
         $proveedor = DB::table('proveedor')->where('prov_id', $cab->prov_id)->value('prov_raz');
         $detalle = DB::table('compras_detalle')->where('com_cab_id', $cab->com_cab_id)->whereNotNull('pro_id')->get();
 
@@ -231,6 +240,11 @@ class Compras
             if ($vence && ! $lote) {
                 throw new \RuntimeException("Ingresa el número de lote de {$prod->pronom} (tiene fecha de vencimiento).");
             }
+            // Electrodomésticos: una serie por unidad (se revisa de nuevo al ingresar, con el factor de la presentación)
+            $series = $prod->control_serie ? Series::lista($i['series'] ?? '') : null;
+            if ($prod->control_serie && ! $series) {
+                throw new \RuntimeException("Escribe o escanea las series de {$prod->pronom} (una por cada unidad).");
+            }
 
             return [
                 'pro_id' => $prod->IdProducto, 'ume_cod' => $pres->umecod ?? $prod->umecod, 'tip_igv' => $tipIgv,
@@ -241,6 +255,7 @@ class Compras
                 'flete' => $flete, 'flete_und' => $fleteUnd, 'precio_costo' => $costoFinal,
                 'lote' => $lote ? mb_strtoupper(mb_substr($lote, 0, 50)) : null,
                 'vencimiento' => $vence,
+                'series' => $series !== null ? implode("\n", $series) : null,
             ];
         });
     }

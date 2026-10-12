@@ -75,7 +75,8 @@ class CatalogoVenta
             ->where('productos.proest', 'Activo')
             ->whereNotIn('productos.promocion', Producto::NO_VENDIBLES) // los insumos no se venden
             ->select(['productos.IdProducto', 'productos.procod', 'productos.codigo_barra', 'productos.pronom', 'productos.propun',
-                'productos.umecod', 'productos.promocion', 'productos.control_lote', 'productos.imagenproducto', 'producto_stock.stock']);
+                'productos.umecod', 'productos.promocion', 'productos.control_lote', 'productos.control_serie', 'productos.garantia_meses',
+                'productos.imagenproducto', 'producto_stock.stock']);
     }
 
     private static function formatear(Collection $productos, ?int $almacenId, ?int $presentacionElegida = null, ?int $deProducto = null): array
@@ -89,7 +90,10 @@ class CatalogoVenta
         $lotes = DB::table('producto_lote')->whereIn('IdProducto', $productos->pluck('IdProducto'))
             ->where('id_almacen', $almacenId)->where('stock', '>', 0)->get()->groupBy('IdProducto');
 
-        return $productos->map(function ($p) use ($precios, $presentaciones, $unidades, $lotes, $hoy, $presentacionElegida, $deProducto) {
+        // Electrodomésticos: series disponibles para elegir al vender
+        $series = Series::disponibles($productos->where('control_serie', true)->pluck('IdProducto')->all());
+
+        return $productos->map(function ($p) use ($precios, $presentaciones, $unidades, $lotes, $hoy, $presentacionElegida, $deProducto, $series) {
             $suyos = Lotes::ordenar($lotes[$p->IdProducto] ?? collect());
             $stock = (int) $p->promocion === 0 ? (float) ($p->stock ?? 0) : null;
             $precio = $precios[$p->IdProducto] ?? (float) $p->propun;
@@ -117,6 +121,9 @@ class CatalogoVenta
                     'vencido' => $l->vencimiento && $l->vencimiento < $hoy,
                 ])->values(),
                 'sin_lote' => $stock !== null ? max(0, round($stock - $suyos->sum('stock'), 3)) : 0,
+                'control_serie' => (bool) $p->control_serie,
+                'garantia' => (int) $p->garantia_meses,
+                'series' => $p->control_serie ? ($series[$p->IdProducto] ?? collect())->all() : [],
             ];
         })->values()->all();
     }

@@ -31,6 +31,7 @@ class AnulacionVenta
             Estacionamiento::revertirComprobante($cabId); // pensión o cobro de estacionamiento
             Fidelizacion::revertir($cabId);        // los puntos que ganó con esta compra
             Porciones::revertir($cabId);           // las porciones del día que se vendieron
+            Series::revertirVenta($cabId);         // los equipos vendidos (número de serie) vuelven a estar disponibles
 
             // El stock que salió con esta venta vuelve al almacén
             return Kardex::revertirVenta($cabId, [

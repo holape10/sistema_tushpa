@@ -113,6 +113,25 @@
                                         <template x-if="it.presentaciones && it.presentaciones.length">
                                             <span class="mt-1 inline-block px-2 py-0.5 rounded-lg bg-indigo-50 text-[11px] font-bold text-indigo-800" x-text="'📦 ' + nombrePresentacion(it)"></span>
                                         </template>
+                                        {{-- Electrodomésticos: la serie (o IMEI) de cada unidad; se escanea o se elige de las disponibles --}}
+                                        <template x-if="it.control_serie">
+                                            <div class="mt-1.5 rounded-lg bg-sky-50 border border-sky-200 px-2 py-1.5">
+                                                <div class="flex flex-wrap items-center gap-1.5">
+                                                    <span class="text-[11px] font-bold text-sky-800">🔢 Series</span>
+                                                    <template x-for="s in it.series" :key="s">
+                                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-600 text-white text-[11px] font-semibold">
+                                                            <span x-text="s"></span><button type="button" @click="quitarSerie(it, s)" class="opacity-80 hover:opacity-100" aria-label="Quitar serie">✕</button>
+                                                        </span>
+                                                    </template>
+                                                    <input type="text" x-model="it.serieTexto" :id="'serie-' + it.key" :list="'series-' + it.key" autocomplete="off"
+                                                           @keydown.enter.prevent="agregarSerie(it)" @change="agregarSerie(it)"
+                                                           placeholder="Escanea o elige la serie…" class="h-7 w-48 rounded-lg border-sky-300 text-[11px] uppercase">
+                                                    <datalist :id="'series-' + it.key"><template x-for="s in seriesLibres(it)" :key="s"><option :value="s"></option></template></datalist>
+                                                </div>
+                                                <p class="text-[10px] mt-0.5" :class="it.series.length ? 'text-sky-700' : 'text-rose-600 font-semibold'"
+                                                   x-text="(it.series.length ? it.series.length + ' unidad(es)' : 'Falta la serie') + ' · ' + seriesLibres(it).length + ' disponible(s)' + (it.garantia ? ' · garantía ' + it.garantia + ' meses' : '')"></p>
+                                            </div>
+                                        </template>
                                         {{-- Farmacia: lote a vender (automático = el que vence antes) y de qué lotes sale --}}
                                         <template x-if="cfg.farmacia && it.lotes && it.lotes.length">
                                             <div class="mt-1 flex flex-wrap items-center gap-1.5">
@@ -133,7 +152,9 @@
                                     </td>
                                     <td class="px-1 sm:px-2 py-1.5">
                                         <input type="number" step="any" min="0.01" x-model.number="it.cantidad" :id="'cant-' + it.key"
-                                               @keydown.enter.prevent="enfocar('pre-' + it.key)" @change="normalizar(it)"
+                                               @keydown.enter.prevent="enfocar('pre-' + it.key)" @change="normalizar(it)" :readonly="it.control_serie"
+                                               :title="it.control_serie ? 'La cantidad es la cantidad de series elegidas' : ''"
+                                               :class="it.control_serie ? 'bg-slate-100 cursor-not-allowed' : ''"
                                                class="w-full rounded-lg border-slate-200 text-center font-bold focus:ring-indigo-300 focus:border-indigo-400">
                                     </td>
                                     <td class="px-1 sm:px-2 py-1.5">

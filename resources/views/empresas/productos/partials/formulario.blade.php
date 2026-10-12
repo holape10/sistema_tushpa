@@ -212,6 +212,20 @@
                         <span class="text-sm"><span class="font-semibold text-teal-800">Controlar lote y vencimiento</span>
                             <span class="block text-xs text-teal-700">Farmacias: al comprar pide lote y vencimiento; al vender sale primero el que vence antes.</span></span>
                     </label>
+
+                    {{-- Electrodomésticos, celulares: cada unidad con su serie (o IMEI) --}}
+                    <div x-show="tipo == '0'" x-cloak x-data="{ serie: @js((bool) old('control_serie', $p->control_serie ?? false)) }"
+                         class="p-3 rounded-xl border border-sky-200 bg-sky-50">
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="checkbox" name="control_serie" value="1" x-model="serie" class="mt-0.5 rounded border-gray-300 text-sky-600 focus:ring-sky-500">
+                            <span class="text-sm"><span class="font-semibold text-sky-800">Vender con número de serie (IMEI)</span>
+                                <span class="block text-xs text-sky-700">Electrodomésticos y celulares: al comprar se registra la serie de cada unidad y al vender se elige cuál sale. Sale en el comprobante.</span></span>
+                        </label>
+                        <label x-show="serie" class="mt-2 flex items-center gap-2 text-sm text-sky-800">Garantía
+                            <input type="number" name="garantia_meses" min="0" max="120" value="{{ old('garantia_meses', $p->garantia_meses ?? '') }}" placeholder="12"
+                                   class="w-20 rounded-lg border-sky-300 text-sm"> meses
+                        </label>
+                    </div>
                 </div>
             </section>
 

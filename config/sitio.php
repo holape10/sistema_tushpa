@@ -29,4 +29,7 @@ return [
 
     // Programa para sacar el respaldo (en el VPS basta "mysqldump"; en Windows/Laragon la ruta completa)
     'mysqldump' => env('MYSQLDUMP_BIN', 'mysqldump'),
+
+    // Programa para restaurar una copia (en el VPS basta "mysql")
+    'mysql' => env('MYSQL_BIN', 'mysql'),
 ];

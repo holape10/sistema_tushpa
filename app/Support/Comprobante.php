@@ -50,6 +50,7 @@ class Comprobante
      * @param  array  $datos  tdocod, estadopago (cre_dia_id), fecEmi, fecVen, tdicod, clinum, clinom, clidir, clicor,
      *                        telefono, observaciones, consumo, paga, id_med_pag[], mon_med_pag[]
      * @param  array  $lineas  [['IdProducto' => ?int, 'descripcion' => string, 'cantidad' => float, 'precio' => float, 'lote' => ?string,
+     *                         'series' => ?array<int, string> (productos con número de serie: una por unidad),
      *                         'factor' => ?float (presentación: unidades base por unidad vendida), 'umecod' => ?string,
      *                         'opciones' => ?array<int, float> (opciones elegidas en la comanda: IdProducto => cantidad por plato)], ...]
      * @param  array  $extra  columnas propias del origen para cpe_cabecera (ped_id, mes_id, mozo, IdUsuario_ven...)
@@ -218,6 +219,11 @@ class Comprobante
                 ]);
                 if ($lotes = Lotes::texto($partes)) {
                     DB::table('cpe_detalle')->where('IdCpe_detalle', $detId)->update(['lotes' => $lotes]);
+                }
+                // Electrodomésticos, celulares: las series que se llevan quedan vendidas (y salen en el comprobante)
+                if ($prod->control_serie ?? false) {
+                    $series = Series::vender($prod, Series::lista($it['series'] ?? []), round($cant * $factor, 3), $cabId, $clinom, $fecEmi);
+                    DB::table('cpe_detalle')->where('IdCpe_detalle', $detId)->update(['series' => $series]);
                 }
                 // Las opciones elegidas (la sopa del menú, los platos del trío) también salen del almacén
                 foreach ($it['opciones'] ?? [] as $idOpcion => $porPlato) {

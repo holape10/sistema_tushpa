@@ -2,8 +2,10 @@
 
 // Panel multi-empresa (base central). Se carga desde bootstrap/app.php con dominio admin.{dominio} y prefijo TENANCY_ADMIN_RUTA.
 
+use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\LoginController;
+use App\Http\Controllers\Admin\RespaldoController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('admin.clientes.index'));
@@ -27,6 +29,13 @@ Route::middleware('auth:superadmin')->group(function () {
     Route::post('/clientes/{cliente}/eliminar', [ClienteController::class, 'eliminar'])->whereNumber('cliente')->name('clientes.eliminar');
     Route::get('/mensajes', [ClienteController::class, 'mensajesWeb'])->name('mensajes.index');
     Route::get('/logos', [ClienteController::class, 'logos'])->name('logos.index');
+    Route::get('/agente', [AgenteController::class, 'index'])->name('agente.index');
+    Route::post('/agente', [AgenteController::class, 'subir'])->name('agente.subir');
+    Route::get('/respaldos', [RespaldoController::class, 'index'])->name('respaldos.index');
+    Route::post('/respaldos/crear', [RespaldoController::class, 'crear'])->name('respaldos.crear');
+    Route::get('/respaldos/descargar', [RespaldoController::class, 'descargar'])->name('respaldos.descargar');
+    Route::post('/respaldos/eliminar', [RespaldoController::class, 'eliminar'])->name('respaldos.eliminar');
+    Route::post('/respaldos/restaurar', [RespaldoController::class, 'restaurar'])->name('respaldos.restaurar');
     Route::post('/logos', [ClienteController::class, 'logosSubir'])->name('logos.subir');
     Route::post('/logos/eliminar', [ClienteController::class, 'logoEliminar'])->name('logos.eliminar');
     Route::post('/mensajes/{id}/atendido', [ClienteController::class, 'mensajeWebAtendido'])->whereNumber('id')->name('mensajes.atendido');

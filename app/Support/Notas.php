@@ -198,6 +198,7 @@ class Notas
                 if ($total) {
                     Kardex::revertirVenta($ref->IdCpe_cabecera, ['cliente' => $ref->ccanom, 'descripcion' => $glosa,
                         'fecha_mov' => now()->toDateString(), 'tdocod' => '07', 'serie' => $serie, 'numero' => (string) $numero]);
+                    Series::revertirVenta((int) $ref->IdCpe_cabecera);   // devolución total: sus equipos vuelven a estar disponibles
                 } else {
                     foreach ($lineas as $l) {
                         if ($l['stock'] && $l['ref']) {

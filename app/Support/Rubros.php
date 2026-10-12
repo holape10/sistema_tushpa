@@ -19,7 +19,8 @@ class Rubros
         '/inicio', '/dashboard', '/turnos', '/turnos/listado', '/ventas', '/notas', '/sunat/envios', '/sunat/resumenes',
         '/reportes/ventas', '/reportes/sunat', '/reportes/ventas-cliente', '/reportes/ventas-producto', '/reportes/productos-ranking',
         '/clientes', '/proveedores', '/usuarios', '/empresas', '/sucursales', '/mediospagos', '/categorias', '/productos',
-        '/impresoras', '/compras', '/gastos', '/almacenes', '/kardex', '/kardex/stock', '/cuentas/cobrar', '/cuentas/pagar', '/soporte',
+        '/impresoras', '/compras', '/gastos', '/almacenes', '/kardex', '/kardex/stock', '/kardex/inventario', '/cuentas/cobrar', '/cuentas/pagar', '/soporte',
+        '/respaldo',
     ];
 
     public const RUBROS = [
@@ -30,6 +31,7 @@ class Rubros
         'GENERAL' => ['nombre' => 'Comercio general', 'ejemplos' => 'Comercio, ferretería, construcción, lavandería', 'modulos' => [
             '/punto-venta', '/pv-movil', '/proformas', '/guias', '/inventarios', '/transferencias', '/kardex/movimiento?tipo=I',
             '/kardex/movimiento?tipo=E', '/productos?tipo=6', '/reportes/rentabilidad', '/reportes/compras', '/cuentas/cobrar/reporte',
+            '/series',
         ]],
         'FARMACIA' => ['nombre' => 'Farmacia / botica', 'ejemplos' => 'Farmacia, botica (PV Farmacia con lotes y vencimientos)', 'modulos' => [
             '/pv-farmacia', '/lotes', '/inventarios', '/transferencias', '/kardex/movimiento?tipo=I', '/kardex/movimiento?tipo=E',

@@ -221,6 +221,11 @@ document.addEventListener('alpine:init', () => {
             const precio = pres ? pres.precio : p.precio;
             let it = this.carrito.find(x => x.id === p.id && (x.presentacion || null) === (pres?.id ?? null)
                 && redondear(x.precio) === redondear(precio) && !x.lote);
+            // Con número de serie: una sola línea por producto; la cantidad es la cantidad de series elegidas
+            if (it && it.control_serie) {
+                this.enfocar('serie-' + it.key);
+                return;
+            }
             if (it) {
                 it.cantidad = redondear(it.cantidad + 1);
             } else {
@@ -240,7 +245,8 @@ document.addEventListener('alpine:init', () => {
             this.busqueda = '';
             this.resultados = [];
             this.resultadosAbiertos = false;
-            if (editar) this.enfocar('cant-' + it.key);
+            if (it.control_serie) this.enfocar('serie-' + it.key);
+            else if (editar) this.enfocar('cant-' + it.key);
             else this.$refs.buscador.focus();
         },
 
@@ -251,7 +257,29 @@ document.addEventListener('alpine:init', () => {
                      dinamico: !!p.dinamico, unidad: p.unidad || 'Unidad', presentaciones: p.presentaciones || [],
                      presentacion: pres?.id ?? null, factor: pres?.factor ?? 1,
                      stock: p.stock, flash: false,
-                     lotes: p.lotes || [], sin_lote: p.sin_lote || 0, control_lote: !!p.control_lote, lote: '', ...extra };
+                     lotes: p.lotes || [], sin_lote: p.sin_lote || 0, control_lote: !!p.control_lote, lote: '',
+                     control_serie: !!p.control_serie, seriesDisponibles: p.series || [], series: [], serieTexto: '', garantia: p.garantia || 0,
+                     ...(p.control_serie ? { cantidad: 0 } : {}), ...extra };
+        },
+
+        // ---------- Números de serie (electrodomésticos, celulares) ----------
+        /** Agrega la serie escrita o escaneada (Enter) a la línea; la cantidad es la cantidad de series */
+        agregarSerie(it, texto) {
+            const serie = String(texto ?? it.serieTexto ?? '').trim().toUpperCase();
+            it.serieTexto = '';
+            if (!serie) return;
+            if (this.carrito.some(x => x.id === it.id && (x.series || []).includes(serie))) { this.aviso(`La serie ${serie} ya está en la venta`, 'error'); return; }
+            if (!it.seriesDisponibles.includes(serie)) { this.sonido(false); this.aviso(`La serie ${serie} no está disponible para ${it.descripcion} (no se registró su ingreso o ya se vendió)`, 'error'); return; }
+            it.series.push(serie);
+            it.cantidad = it.series.length;
+            this.sonido(true);
+        },
+        quitarSerie(it, serie) {
+            it.series = it.series.filter(s => s !== serie);
+            it.cantidad = it.series.length;
+        },
+        seriesLibres(it) {
+            return it.seriesDisponibles.filter(s => !this.carrito.some(x => x.id === it.id && (x.series || []).includes(s)));
         },
 
         /** Código leído (lector o cámara): si era el de una presentación va esa; si era el del producto, la unidad base */
@@ -292,7 +320,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         normalizar(it) {
-            if (!(Number(it.cantidad) > 0)) it.cantidad = 1;
+            if (it.control_serie) it.cantidad = it.series.length;
+            else if (!(Number(it.cantidad) > 0)) it.cantidad = 1;
             if (!(Number(it.precio) >= 0)) it.precio = it.precioBase;
             it.cantidad = redondear(it.cantidad);
             it.precio = redondear(it.precio);
@@ -437,6 +466,8 @@ document.addEventListener('alpine:init', () => {
         validar() {
             if (!this.carrito.length) return 'Agrega al menos un producto.';
             if (this.carrito.some(it => !it.descripcion.trim())) return 'Escribe la descripción de todas las líneas.';
+            const sinSerie = this.carrito.find(it => it.control_serie && (!it.series.length || it.series.length !== it.cantidad));
+            if (sinSerie) return `Elige o escanea la serie de cada unidad de ${sinSerie.descripcion}.`;
             if (this.carrito.some(it => !(it.cantidad > 0) || !(it.precio > 0))) return 'Revisa las cantidades y precios (deben ser mayores a 0).';
             const num = this.cliente.num.trim();
             if (!num || !this.cliente.nom.trim()) return 'Completa el documento y el nombre del cliente.';
@@ -538,7 +569,7 @@ document.addEventListener('alpine:init', () => {
         // ---------- Proformas ----------
         itemsParaEnviar() {
             return this.carrito.map(it => ({ id: it.id, presentacion: it.presentacion || null, descripcion: it.descripcion.trim(),
-                cantidad: it.cantidad, precio: it.precio, lote: it.lote || null }));
+                cantidad: it.cantidad, precio: it.precio, lote: it.lote || null, ...(it.control_serie ? { series: it.series } : {}) }));
         },
 
         cargarProforma(pf) {

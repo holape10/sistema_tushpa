@@ -174,7 +174,16 @@
                                 <td class="px-2 py-1">
                                     <span class="block font-semibold leading-tight" x-text="it.nombre"></span>
                                     <span x-show="it.presentacion_nombre" class="inline-block mt-0.5 px-2 py-0.5 rounded-lg bg-indigo-50 text-[11px] font-bold text-indigo-800" x-text="'📦 ' + it.presentacion_nombre + ' (entran ' + num(it.cantidad * it.factor) + ')'"></span>
-                                    <span class="block text-[11px] text-slate-400"><span x-text="it.codigo"></span><span x-show="it.control_lote" class="ml-1 px-1.5 rounded bg-teal-100 text-teal-700 font-semibold">LOTE</span></span>
+                                    <span class="block text-[11px] text-slate-400"><span x-text="it.codigo"></span><span x-show="it.control_lote" class="ml-1 px-1.5 rounded bg-teal-100 text-teal-700 font-semibold">LOTE</span><span x-show="it.control_serie" class="ml-1 px-1.5 rounded bg-sky-100 text-sky-700 font-semibold">SERIE</span></span>
+                                    {{-- Electrodomésticos: una serie por línea (el lector de código de barras escribe y salta de línea) --}}
+                                    <template x-if="it.control_serie">
+                                        <div class="mt-1">
+                                            <textarea x-model="it.series" :id="'series-' + it.key" @input="contarSeries(it)" rows="2" placeholder="Escanea o escribe las series, una por línea"
+                                                      class="w-full rounded-lg border-sky-300 bg-sky-50 text-xs uppercase font-mono"></textarea>
+                                            <span class="text-[10px]" :class="seriesDe(it).length === Math.round(it.cantidad * (it.factor || 1)) ? 'text-sky-700' : 'text-rose-600 font-semibold'"
+                                                  x-text="seriesDe(it).length + ' de ' + Math.round(it.cantidad * (it.factor || 1)) + ' series'"></span>
+                                        </div>
+                                    </template>
                                 </td>
                                 <td class="px-2 py-1"><input type="number" step="any" min="0.01" :id="'cant-' + it.key" x-model.number="it.cantidad" @keydown.enter.prevent="enfocar('costo-' + it.key)"
                                                              class="w-full h-9 rounded-lg border-slate-200 text-center font-bold"></td>

@@ -31,6 +31,8 @@ class VentaDirecta
         'items.*.importe' => 'nullable|numeric|min:0.01|max:999999',
         'items.*.precio' => 'required|numeric|min:0.01|max:999999',
         'items.*.lote' => 'nullable|string|max:50',
+        'items.*.series' => 'nullable|array|max:500',
+        'items.*.series.*' => 'string|max:80',
         'items.*.presentacion' => 'nullable|integer',
         'proforma_id' => 'nullable|integer',
         'placa' => 'nullable|string|max:10',
@@ -143,6 +145,10 @@ class VentaDirecta
             $lineas[$clave] ??= ['IdProducto' => $idProducto, 'descripcion' => $descripcion, 'cantidad' => 0, 'precio' => $precio, 'lote' => $lote,
                 'presentacion' => $pres?->id_presentacion, 'factor' => $pres ? (float) $pres->factor : 1, 'umecod' => $pres?->umecod];
             $lineas[$clave]['cantidad'] = round($lineas[$clave]['cantidad'] + (float) $i['cantidad'], 3);
+            // Electrodomésticos: las series elegidas de cada unidad (si el mismo producto va en dos líneas, se juntan)
+            if ($idProducto && ! empty($i['series'])) {
+                $lineas[$clave]['series'] = array_merge($lineas[$clave]['series'] ?? [], Series::lista($i['series']));
+            }
             if ($importe !== null) {
                 $lineas[$clave]['importe'] = $importe;
             }

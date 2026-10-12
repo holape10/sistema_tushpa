@@ -31,17 +31,42 @@
                         Mientras esté desconectado, los comprobantes y precuentas se imprimen con el navegador (con vista previa).
                     </p>
                 </div>
-                <form method="POST" action="{{ route('impresion.agente') }}" class="flex flex-wrap gap-2"
-                      onsubmit="return confirm('Se generará una clave nueva para esta sucursal. Si ya tienes el agente instalado, tendrás que poner la clave nueva en su config.ini. ¿Continuar?')">
-                    @csrf
-                    <button name="modo" value="completo" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
-                            title="ZIP con worker.php, config.ini, iniciar.bat, invisible.vbs y LEEME.txt"><i class="fas fa-download"></i> Descargar agente (ZIP)</button>
-                    <button name="modo" value="clave" class="px-4 py-2 rounded-xl bg-white border border-indigo-300 text-indigo-700 text-sm font-semibold hover:bg-indigo-50"
-                            title="Para una PC que ya tiene el agente: el bloque que se agrega a su config.ini"><i class="fas fa-key"></i> Solo la clave</button>
-                </form>
+                @php $hayInstalador = is_file(\App\Http\Controllers\ImpresionController::rutaInstalador()); @endphp
+                <div class="flex flex-col items-stretch sm:items-end gap-2">
+                    @if ($hayInstalador)
+                        {{-- Instalador: el cliente solo hace doble clic (el código de un solo uso va en el nombre del archivo) --}}
+                        <form method="POST" action="{{ route('impresion.agente') }}" class="flex flex-wrap gap-2 justify-end" x-data="{ codigo: '' }">
+                            @csrf
+                            <button name="modo" value="instalador" class="px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 shadow"
+                                    title="Instala todo en C:\sistema, lo deja en el inicio de Windows y lo conecta con este sistema"><i class="fas fa-download"></i> Descargar instalador (recomendado)</button>
+                            <button type="button" class="px-4 py-2 rounded-xl bg-white border border-green-300 text-green-700 text-sm font-semibold hover:bg-green-50"
+                                    title="Si el instalador pide un código (por ejemplo, porque se cambió el nombre del archivo)"
+                                    @click="fetch(@js(route('impresion.agente.codigo')), { method: 'POST', headers: { 'X-CSRF-TOKEN': @js(csrf_token()), 'Accept': 'application/json' } })
+                                        .then(r => r.json()).then(d => { codigo = d.codigo; navigator.clipboard?.writeText(d.codigo); })"><i class="fas fa-copy"></i> Copiar código</button>
+                            <p x-show="codigo" x-cloak class="w-full text-right text-xs text-gray-600">Código copiado: <b class="font-mono" x-text="codigo"></b> (vale 3 días, una vez)</p>
+                        </form>
+                    @endif
+                    <form method="POST" action="{{ route('impresion.agente') }}" class="flex flex-wrap gap-2 justify-end"
+                          onsubmit="return confirm('Se generará una clave nueva para esta sucursal. Si ya tienes el agente instalado, tendrás que poner la clave nueva en su config.ini. ¿Continuar?')">
+                        @csrf
+                        <button name="modo" value="completo" class="px-4 py-2 rounded-xl {{ $hayInstalador ? 'bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50' : 'bg-indigo-600 text-white hover:bg-indigo-700' }} text-sm font-semibold"
+                                title="ZIP con worker.php, config.ini, iniciar.bat, invisible.vbs y LEEME.txt (para técnicos)"><i class="fas fa-file-zipper"></i> Agente (ZIP)</button>
+                        <button name="modo" value="clave" class="px-4 py-2 rounded-xl bg-white border border-indigo-300 text-indigo-700 text-sm font-semibold hover:bg-indigo-50"
+                                title="Para una PC que ya tiene el agente: el bloque que se agrega a su config.ini"><i class="fas fa-key"></i> Solo la clave</button>
+                    </form>
+                </div>
             </div>
             <details class="mt-4 text-sm text-gray-600">
                 <summary class="cursor-pointer font-semibold text-indigo-700">¿Cómo instalarlo en la PC de las impresoras?</summary>
+                @if ($hayInstalador)
+                    <p class="mt-2 font-semibold text-gray-800">Con el instalador (lo más fácil):</p>
+                    <ol class="list-decimal list-inside mt-1 space-y-1">
+                        <li>En la PC de las impresoras, entra a este sistema y toca <strong>Descargar instalador</strong>.</li>
+                        <li>Abre el archivo descargado y acepta. Se instala en <code class="bg-gray-100 px-1 rounded">C:\sistema</code>, se conecta solo y queda en el inicio de Windows.</li>
+                        <li>Listo: arriba debe decir <strong class="text-green-600">CONECTADO</strong> en unos segundos. Si la PC ya tenía el agente, se actualiza y conserva sus otras empresas.</li>
+                    </ol>
+                    <p class="mt-3 font-semibold text-gray-800">A mano (técnicos):</p>
+                @endif
                 <ol class="list-decimal list-inside mt-2 space-y-1">
                     <li>Descarga el <strong>ZIP</strong> y descomprímelo en una carpeta, por ejemplo <code class="bg-gray-100 px-1 rounded">C:\sistema</code>.</li>
                     <li>En esa carpeta debe estar <code class="bg-gray-100 px-1 rounded">php.exe</code> (PHP 7 u 8) y, para comprobantes A4, <code class="bg-gray-100 px-1 rounded">sumatrapdf.exe</code>
