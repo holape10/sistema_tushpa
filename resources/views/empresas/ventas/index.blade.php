@@ -140,6 +140,7 @@
                             <td class="px-3 py-2">
                                 <div class="flex items-center justify-center gap-1">
                                     <a href="{{ route('cobros.voucher', $v->IdCpe_cabecera) }}" target="_blank" title="Ticket" class="btn-ico text-red-600"><i class="fas fa-file-pdf"></i></a>
+                                    <button type="button" @click="imprimirTicketera({{ $v->IdCpe_cabecera }}, $event.currentTarget)" title="Imprimir directo en la ticketera" class="btn-ico text-slate-700"><i class="fas fa-print"></i></button>
                                     <button type="button" onclick="TushpaWhatsApp.abrir({{ $v->IdCpe_cabecera }})" title="Enviar el comprobante por WhatsApp" class="btn-ico text-green-600"><i class="fab fa-whatsapp"></i></button>
                                     @if ($electronico)
                                         <a href="{{ route('sunat.descargar', [$v->IdCpe_cabecera, 'xml']) }}" title="XML" class="btn-ico text-sky-700"><i class="fas fa-file-code"></i></a>
@@ -407,6 +408,26 @@
                 nota: { datos: null, tdocod: '07', tipnot: '01', motivo: '', items: [] },
 
                 cerrar() { this.modal = null; this.error = ''; },
+
+                // Reimprime el comprobante en la ticketera de caja (por el agente de impresión, con el diseño de la ticketera)
+                imprimirTicketera(id, boton) {
+                    if (boton.disabled) return;
+                    boton.disabled = true;
+                    const icono = boton.innerHTML;
+                    boton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    post("{{ url('impresion/comprobante') }}/" + id, {})
+                        .then(r => {
+                            if (r.directa) {
+                                boton.innerHTML = '<i class="fas fa-check text-emerald-600"></i>';
+                                if ((r.mensaje || '').startsWith('En cola')) alert(r.mensaje);
+                            } else {
+                                boton.innerHTML = icono;
+                                alert('No hay una ticketera de caja configurada (menú Impresoras). Mientras tanto usa el botón rojo del ticket.');
+                            }
+                        })
+                        .catch(() => { boton.innerHTML = icono; alert('Sin conexión con el servidor.'); })
+                        .finally(() => setTimeout(() => { boton.disabled = false; boton.innerHTML = icono; }, 2500));
+                },
 
                 // ---------- Menú de opciones ----------
                 abrirMenu(e, venta) {
