@@ -414,12 +414,36 @@ class ProductoController extends Controller
 
     private const TIPOS = [0 => 'Producto', 4 => 'Insumo', 2 => 'Preparado', 6 => 'Combo', 8 => 'Opción'];
 
-    private const COLUMNAS = ['Código', 'Nombre', 'Tipo', 'Categoría', 'Unidad', 'Costo', 'Precio venta', 'Stock mínimo', 'Estado', 'Stock inicial', 'Control lote', 'Descripción'];
+    /**
+     * Columnas del Excel de productos, en el orden en que se llenan: primero lo obligatorio. El título lleva una
+     * pista debajo; al importar solo cuenta lo que va antes del salto de línea, el paréntesis o el asterisco.
+     */
+    private const COLUMNAS = [
+        "Nombre del producto *\n(ej.: SALCHIPAPA CLASICA)",
+        "Precio de venta S/ *\n(ej.: 8.50)",
+        "Categoría\n(ej.: BEBIDAS)",
+        "Tipo\n(Preparado / Producto / Insumo)",
+        "Descripción para la carta\n(opcional)",
+        "Unidad\n(NIU = unidad, KGM = kilo)",
+        "Costo S/\n(opcional)",
+        "Stock inicial\n(solo Producto e Insumo)",
+        "Stock mínimo\n(aviso de stock bajo)",
+        "Estado\n(Activo / Inactivo)",
+        "Control lote\n(Sí / No)",
+        "Código\n(vacío = lo pone el sistema)",
+    ];
 
     private function descargar(string $ruta, string $nombre)
     {
         return response()->download($ruta, $nombre, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
             ->deleteFileAfterSend();
+    }
+
+    /** Fila del Excel en el orden de COLUMNAS */
+    private static function filaExcel(string $nombre, float $precio, string $categoria, string $tipo, string $descripcion = '', string $unidad = 'NIU',
+        float|string $costo = '', float|string $stock = '', float|string $minimo = '', string $estado = 'Activo', string $lote = 'No', string $codigo = ''): array
+    {
+        return [$nombre, $precio, $categoria, $tipo, $descripcion, $unidad, $costo, $stock, $minimo, $estado, $lote, $codigo];
     }
 
     /** Hojas de ayuda comunes a la plantilla y la exportación */
@@ -428,21 +452,35 @@ class ProductoController extends Controller
         $sucursal = Auth::user()->id_empresa_negocio;
 
         return $x
-            ->hoja('Instrucciones', ['Columna', 'Obligatorio', 'Detalle'], [
-                ['Código', 'No', 'Si ya existe un producto con ese código se ACTUALIZA; si no, se crea. Vacío: se busca por nombre o se genera un código.'],
-                ['Nombre', 'Sí', 'Nombre del producto (máx. 150 caracteres).'],
-                ['Tipo', 'No', 'Producto, Insumo o Preparado (por defecto Producto). Los combos se crean desde el sistema.'],
-                ['Categoría', 'No', 'Nombre de la categoría. Si no existe, se crea.'],
-                ['Unidad', 'No', 'Código SUNAT (NIU, KGM, LTR...) o nombre de la unidad. Ver hoja Unidades. Por defecto NIU.'],
-                ['Costo', 'No', 'Costo unitario de compra.'],
-                ['Precio venta', 'Sí', 'Precio de venta con IGV. Obligatorio (mayor a 0) para Producto y Preparado.'],
-                ['Stock mínimo', 'No', 'Cantidad para la alerta de stock bajo.'],
-                ['Estado', 'No', 'Activo o Inactivo (por defecto Activo).'],
-                ['Control lote', 'No', 'Sí = farmacia: al comprar pide lote y vencimiento y al vender sale primero el que vence antes. Vacío = no cambia.'],
-                ['Stock inicial', 'No', 'Solo Producto e Insumo, y solo si el producto aún no tiene movimientos en el almacén elegido al importar. Para corregir stock existente usa Almacén > Inventarios.'],
-                ['Descripción', 'No', 'Texto corto que sale en la carta digital (ej.: Ron, menta, limón, soda). Si no traes la columna, no cambia.'],
+            ->hoja('Cómo llenarlo', ['Paso', 'Qué hacer'], [
+                ['1', 'En la hoja "Productos" escribe UN producto por fila, desde la fila 2. No cambies ni borres la fila 1 (los títulos).'],
+                ['2', 'Solo son obligatorias las 2 primeras columnas: el NOMBRE y el PRECIO DE VENTA. Lo demás puedes dejarlo vacío.'],
+                ['3', 'Categoría: escribe el grupo donde va (BEBIDAS, SALCHIPAPAS, CERVEZAS...). Si no existe, el sistema la crea sola.'],
+                ['4', 'Tipo: PREPARADO = lo que se cocina o prepara (platos, hamburguesas, jugos). PRODUCTO = lo que compras y vendes igual (gaseosas, cervezas en botella); a este se le controla el stock. INSUMO = ingrediente que no se vende solo (papa, aceite, carne). Vacío = Producto.'],
+                ['5', 'Precio: solo el número, con punto para los céntimos (8.50). Sin "S/".'],
+                ['6', 'Guarda el archivo y en el sistema entra a Productos > Importar Excel y súbelo. Te dirá cuántos se crearon y si alguna fila tiene un error.'],
+                ['7', 'Para CAMBIAR precios: usa Exportar Excel, cambia lo que necesites y vuelve a importarlo. Los productos se reconocen por el código (o por el nombre).'],
+                ['', ''],
+                ['Columna', 'Detalle'],
+                ['Nombre del producto *', 'Obligatorio. Máximo 150 letras. Si ya existe un producto con ese nombre, se actualiza.'],
+                ['Precio de venta S/ *', 'Obligatorio para Producto y Preparado (mayor a 0). Precio final al cliente, con impuestos.'],
+                ['Categoría', 'Opcional. Agrupa los productos en el punto de venta y en la carta digital.'],
+                ['Tipo', 'Preparado, Producto o Insumo (explicado en el paso 4). Los combos se crean desde el sistema.'],
+                ['Descripción para la carta', 'Opcional. Texto corto que ve el cliente en la carta digital (ej.: Salchicha + papas + ensalada).'],
+                ['Unidad', 'Opcional. NIU = unidad (por defecto), KGM = kilo, LTR = litro. Más en la hoja "Unidades".'],
+                ['Costo S/', 'Opcional. Cuánto te cuesta (para ver tu ganancia).'],
+                ['Stock inicial', 'Opcional. Solo para Producto e Insumo, y solo la primera vez. Para corregir stock usa Almacén > Inventarios.'],
+                ['Stock mínimo', 'Opcional. Cuando el stock baja de este número, el sistema te avisa.'],
+                ['Estado', 'Activo (se vende) o Inactivo (se oculta). Por defecto Activo.'],
+                ['Control lote', 'Sí = farmacia: pide lote y vencimiento al comprar. Para un restaurante déjalo en No.'],
+                ['Código', 'Déjalo vacío y el sistema pone uno. Si escribes un código que ya existe, ese producto se actualiza.'],
             ])
-            ->hoja('Categorías', ['Categorías registradas'],
+            ->hoja('Ejemplo', array_map(fn ($t) => strtok($t, "\n"), self::COLUMNAS), [
+                self::filaExcel('SALCHIPAPA CLASICA', 8, 'SALCHIPAPAS', 'Preparado', 'Salchicha frankfurt + papas + ensalada'),
+                self::filaExcel('INCA KOLA 500ML', 5, 'BEBIDAS', 'Producto', '', 'NIU', 3.2, 24, 6),
+                self::filaExcel('PAPA AMARILLA', 0, 'INSUMOS', 'Insumo', '', 'KGM', 3.5, 20, 5),
+            ])
+            ->hoja('Categorías', ['Categorías que ya tienes'],
                 Categoria::where('id_empresa_negocio', $sucursal)->orderBy('cat_nom')->pluck('cat_nom')->map(fn ($c) => [$c])->all())
             ->hoja('Unidades', ['Código', 'Unidad'],
                 UnidadMedida::orderBy('umenom')->get(['umecod', 'umenom'])->map(fn ($u) => [$u->umecod, $u->umenom])->all());
@@ -450,11 +488,8 @@ class ProductoController extends Controller
 
     public function plantilla()
     {
-        $x = (new Excel)->hoja('Productos', self::COLUMNAS, [
-            ['P0001', 'PARACETAMOL 500MG X 100 TAB', 'Producto', 'ANALGESICOS', 'NIU', 6.50, 12.00, 5, 'Activo', 24, 'Sí'],
-            ['', 'GASEOSA INCA KOLA 500ML', 'Producto', 'BEBIDAS', 'NIU', 1.80, 3.50, 5, 'Activo', 24, 'No'],
-            ['', 'POLLO ENTERO', 'Insumo', 'INSUMOS', 'KGM', 9.50, 0, 2, 'Activo', 10, ''],
-        ]);
+        // La hoja Productos va vacía: los ejemplos están en su propia hoja para que no se importen por error
+        $x = (new Excel)->hoja('Productos', self::COLUMNAS, []);
 
         return $this->descargar($this->hojasAyuda($x)->guardar(), 'plantilla_productos.xlsx');
     }
@@ -474,16 +509,15 @@ class ProductoController extends Controller
             ->when($tipo !== '', fn ($q) => $q->where('productos.promocion', $tipo))
             ->orderBy('productos.pronom')
             ->get(['productos.*', 'c.cat_nom', DB::raw('ps.stock as stock_actual')])
-            ->map(fn ($p) => [
-                (string) $p->procod, $p->pronom, self::TIPOS[(int) $p->promocion] ?? 'Producto', $p->cat_nom ?? '', $p->umecod,
-                (float) $p->costo, (float) $p->propun, (float) $p->stock_min, $p->proest,
-                in_array((int) $p->promocion, [0, 4]) ? (float) ($p->stock_actual ?? 0) : '',
-                $p->control_lote ? 'Sí' : 'No', (string) $p->descripcion,
-            ])->all();
+            ->map(fn ($p) => self::filaExcel($p->pronom, (float) $p->propun, (string) ($p->cat_nom ?? ''), self::TIPOS[(int) $p->promocion] ?? 'Producto',
+                (string) $p->descripcion, (string) $p->umecod, (float) $p->costo,
+                in_array((int) $p->promocion, [0, 4]) ? (float) ($p->stock_actual ?? 0) : '', (float) $p->stock_min, (string) $p->proest,
+                $p->control_lote ? 'Sí' : 'No', (string) $p->procod))
+            ->all();
 
-        // La última columna trae el stock actual del almacén predeterminado
+        // Con productos ya registrados, la columna de stock muestra el stock actual del almacén predeterminado
         $columnas = self::COLUMNAS;
-        $columnas[9] = 'Stock '.($almacen?->descripcion ?? '');
+        $columnas[7] = "Stock actual\n(".($almacen?->descripcion ?? 'almacén').')';
         $x = (new Excel)->hoja('Productos', $columnas, $filas);
 
         return $this->descargar($this->hojasAyuda($x)->guardar(), 'productos_'.now()->format('Ymd_His').'.xlsx');
@@ -524,7 +558,8 @@ class ProductoController extends Controller
         }
 
         // Ubica cada columna por su título (el orden no importa; "Stock ALMACEN PRINCIPAL" de la exportación cuenta como stock)
-        $cab = array_map(fn ($t) => self::normalizar($t), $filas[0] ?? []);
+        // Del título solo cuenta lo que va antes de la pista: "Precio de venta S/ *\n(ej.: 8.50)" → "precio de venta s/"
+        $cab = array_map(fn ($t) => trim(preg_replace('/\s+/u', ' ', preg_split('/[(*\n]/u', self::normalizar((string) $t))[0])), $filas[0] ?? []);
         $col = function (array $nombres) use ($cab) {
             foreach ($nombres as $n) {
                 foreach ($cab as $i => $t) {
@@ -542,7 +577,7 @@ class ProductoController extends Controller
             'precio' => $col(['precio venta', 'precio']), 'min' => $col(['stock minimo']), 'est' => $col(['estado']),
             'lote' => $col(['control lote']), 'desc' => $col(['descripcion']),
             // "Stock inicial" de la plantilla o "Stock <almacén>" de la exportación (nunca "Stock mínimo")
-            'stock' => $col(['stock inicial']) ?? collect($cab)->search(fn ($t) => str_starts_with($t, 'stock') && $t !== 'stock minimo'),
+            'stock' => $col(['stock inicial']) ?? collect($cab)->search(fn ($t) => str_starts_with($t, 'stock') && ! str_starts_with($t, 'stock minimo')),
         ];
         $c['stock'] = $c['stock'] === false ? null : $c['stock'];
         if ($c['nom'] === null || $c['precio'] === null) {

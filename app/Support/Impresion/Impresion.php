@@ -207,7 +207,7 @@ class Impresion
 
         // QR de SUNAT para comprobantes electrónicos
         if (in_array($cab->tdocod, ['01', '03', '07', '08'], true)) {
-            $p->avanzar()->alinear('centro')->qr(CodigoQr::texto($cab));
+            $p->avanzar()->alinear('centro')->qr(CodigoQr::texto($cab))->avanzar();
             $p->texto('Representación impresa de la '.mb_strtolower((string) $tdodes))
                 ->texto('Consulta tu comprobante en:')->texto(ConsultaCpe::direccion());
         }
@@ -323,7 +323,7 @@ class Impresion
         $chico = $p->columnasFuenteB();
         $p->alinear('centro')->fuente('b');
         if (in_array($cab->tdocod, ['01', '03', '07', '08'], true)) {
-            $p->parrafo('REPRESENTACION IMPRESA DE LA '.mb_strtoupper($tdodes), $chico)->fuente()->qr(CodigoQr::texto($cab))->fuente('b')
+            $p->parrafo('REPRESENTACION IMPRESA DE LA '.mb_strtoupper($tdodes), $chico)->fuente()->qr(CodigoQr::texto($cab))->avanzar()->fuente('b')
                 ->parrafo('Consulta tu comprobante en: '.ConsultaCpe::direccion(), $chico);
         }
         $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico)

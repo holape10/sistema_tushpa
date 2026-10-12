@@ -45,7 +45,7 @@
                     <ol class="text-sm text-gray-600 list-decimal list-inside space-y-1">
                         <li>Descarga la <a href="{{ route('productos.plantilla') }}" class="text-indigo-600 font-semibold hover:underline">plantilla Excel</a>
                             (o usa <em>Exportar Excel</em> para editar tus productos actuales).</li>
-                        <li>Llena una fila por producto. Si el <strong>código</strong> ya existe, el producto se actualiza.</li>
+                        <li>Llena una fila por producto: solo son obligatorios el <strong>nombre</strong> y el <strong>precio</strong>. La hoja <em>Cómo llenarlo</em> explica cada columna y la hoja <em>Ejemplo</em> muestra filas llenas.</li>
                         <li>Sube el archivo. Las filas con errores se omiten y se listan al terminar.</li>
                     </ol>
                     <label class="block text-sm">Archivo (.xlsx o .csv)
