@@ -128,6 +128,13 @@ class Impresion
             ->first(['m.mes_nom', 'pi.pis_nom', 'u.apeusu as mozo']) : null;
         $numero = $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT);
 
+        if (($imp->diseno ?? 'CLASICO') !== 'MODERNO') {
+            $p = self::ticketClasico($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido);
+            self::encolar($imp, $p->bytes(), 'COMPROBANTE', $numero);
+
+            return true;
+        }
+
         $p = new Escpos((int) $imp->columnas);
         self::encabezado($p, (int) $cab->id_empresa_negocio);
         $p->linea('=')->negrita()->texto(mb_strtoupper((string) $tdodes))->tamano(1, 2)->texto($numero)->tamano()->negrita(false)->linea('=');
@@ -213,6 +220,119 @@ class Impresion
         self::encolar($imp, $p->bytes(), 'COMPROBANTE', $numero);
 
         return true;
+    }
+
+    /**
+     * Diseño clásico (el del sistema anterior): razón social en letra grande, datos del cliente en columnas,
+     * cada producto con su nombre completo y debajo Cant. / UDM / P.U. / Total, y SUBTOTAL / TOTAL.
+     */
+    private static function ticketClasico(object $cab, object $imp, $detalle, $medios, string $tdodes, ?object $pedido): Escpos
+    {
+        $p = new Escpos((int) $imp->columnas);
+        $ancho = $p->columnas();
+        $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $cab->id_empresa_negocio)->first();
+        $empresa = DB::table('empresa')->where('IdEmpresa', $negocio->IdEmpresa)->first();
+        $soles = fn ($n) => number_format((float) $n, 2);
+
+        // Encabezado: logo, razón social grande, dirección, ubigeo, teléfono y RUC
+        $logo = $negocio->logo_suc ?: $empresa->LogEmpresa;
+        $p->logo($logo ? public_path($logo) : null);
+        $p->alinear('centro')->negrita()->tamano(2, 2)->parrafo(trim((string) $empresa->NomEmpresa), intdiv($ancho, 2))->tamano()->negrita(false);
+        if ($negocio->nombre_comercial && mb_strtoupper(preg_replace('/\s+/', ' ', $negocio->nombre_comercial)) !== mb_strtoupper(preg_replace('/\s+/', ' ', $empresa->NomEmpresa))) {
+            $p->negrita()->parrafo($negocio->nombre_comercial)->negrita(false);
+        }
+        $p->parrafo((string) $negocio->direccion);
+        if ($negocio->distrito && ! str_contains(mb_strtoupper((string) $negocio->direccion), mb_strtoupper($negocio->distrito))) {
+            $p->texto(trim($negocio->departamento.'-'.$negocio->provincia.'-'.$negocio->distrito, '-'));
+        }
+        $p->texto();
+        if ($negocio->telefono) {
+            $p->texto('Telf: '.$negocio->telefono);
+        }
+        $p->texto('RUC:'.$empresa->IdEmpresa)
+            ->texto(mb_strtoupper($tdodes))
+            ->negrita()->texto($cab->serdoc.'-'.(ltrim((string) $cab->numdoc, '0') ?: '0'))->negrita(false)->texto();
+
+        // Cliente
+        $dato = fn (string $etiqueta, string $valor) => $p->parrafo(mb_str_pad($etiqueta, 13).$valor);
+        $p->alinear('izq');
+        $dato('Fecha:', Carbon::parse($cab->fecha_hora)->format('Y-m-d H:i:s'));
+        $dato('RUC/DNI:', (string) $cab->ccandi);
+        $dato('Cliente:', (string) $cab->ccanom);
+        $dato('Dirección:', (string) ($cab->direccion ?: '--'));
+        if ($pedido?->mes_nom) {
+            $dato('Mesa:', Mesa::etiqueta($pedido->pis_nom, $pedido->mes_nom));
+        }
+        if ($pedido?->mozo) {
+            $dato('Mozo:', $pedido->mozo);
+        }
+        $p->texto('Condición de Pago:   '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''))->texto();
+
+        // Productos: nombre completo y debajo las columnas alineadas a la derecha
+        $w = $ancho >= 42 ? [7, 5, 9, 9] : [6, 4, 8, 8];
+        $columnas = fn (string $cant, string $udm, string $pu, string $total) => str_pad($cant, $w[0], ' ', STR_PAD_LEFT).str_pad($udm, $w[1], ' ', STR_PAD_LEFT)
+            .str_pad($pu, $w[2], ' ', STR_PAD_LEFT).str_pad($total, $w[3], ' ', STR_PAD_LEFT);
+        $resto = max(0, $ancho - array_sum($w));
+        $fila = fn (string $cant, string $udm, string $pu, string $total) => str_repeat(' ', $resto).$columnas($cant, $udm, $pu, $total);
+        $p->texto(($resto >= 11 ? mb_str_pad('Descripción', $resto) : 'Desc.'.str_repeat(' ', max(0, $resto - 5))).$columnas('Cant.', 'UDM.', 'P.U.', 'Total'))->linea('_');
+        if ($cab->consumo) {
+            $p->texto('POR CONSUMO')->texto($fila('1.00', 'NIU', $soles($cab->ccaitv), $soles($cab->ccaitv)));
+        } else {
+            foreach ($detalle as $d) {
+                $p->parrafo((string) $d->cdedes);
+                $p->texto($fila(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), $soles($d->cdepuni), $soles($d->cdevve)));
+                if (! empty($d->series)) {
+                    $p->parrafo('  S/N: '.$d->series);
+                }
+            }
+        }
+        $p->linea('_');
+
+        // Totales
+        $p->dosColumnas('SUBTOTAL: S/', $soles((float) $cab->ccatvg + (float) $cab->ccatexo + (float) $cab->ccatinaf));
+        if ($cab->ccaigv > 0) {
+            $p->dosColumnas('IGV: S/', $soles($cab->ccaigv));
+        }
+        $p->dosColumnas('ICBPER: S/', $soles($cab->icbper ?? 0));
+        $p->negrita()->dosColumnas('TOTAL: S/', $soles($cab->ccaitv))->negrita(false);
+        foreach ($medios as $m) {
+            $p->dosColumnas(($m->nom_med_pag ?? 'PAGO').': S/', $soles($m->monto));
+        }
+        if ($cab->paga > 0) {
+            $p->dosColumnas('PAGA CON: S/', $soles($cab->paga));
+        }
+        if ($cab->vuelto > 0) {
+            $p->dosColumnas('VUELTO: S/', $soles($cab->vuelto));
+        }
+        $p->texto()->parrafo('Son: '.preg_replace('/^SON\s+/i', '', NumeroLetras::convertir((float) $cab->ccaitv)));
+
+        if ($fid = Fidelizacion::delComprobante((int) $cab->IdCpe_cabecera)) {
+            $p->linea()->alinear('centro')->negrita()->texto('*** TUS PUNTOS ***')->negrita(false)->alinear('izq')
+                ->dosColumnas('Tenias', (string) $fid['antes']);
+            if ($fid['ganados']) {
+                $p->dosColumnas('Ganaste con esta compra', '+'.$fid['ganados']);
+            }
+            if ($fid['premio']) {
+                $p->dosColumnas('Canjeaste', '-'.$fid['canjeados'])
+                    ->negrita()->texto('PREMIO: '.($fid['cantidad'] ? rtrim(rtrim(number_format($fid['cantidad'], 3), '0'), '.').' x ' : '').$fid['premio'])->negrita(false);
+            }
+            $p->negrita()->dosColumnas('Te quedan', (string) $fid['saldo'])->negrita(false)->linea();
+        }
+
+        // Pie en letra pequeña: representación impresa, QR, consulta y Amazonía
+        $chico = $p->columnasFuenteB();
+        $p->alinear('centro')->fuente('b');
+        if (in_array($cab->tdocod, ['01', '03', '07', '08'], true)) {
+            $p->parrafo('REPRESENTACION IMPRESA DE LA '.mb_strtoupper($tdodes), $chico)->fuente()->qr(CodigoQr::texto($cab))->fuente('b')
+                ->parrafo('Consulta tu comprobante en: '.ConsultaCpe::direccion(), $chico);
+        }
+        $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico)
+            ->fuente()->avanzar(3)->cortar();
+        if ($imp->abrir_cajon) {
+            $p->abrirCajon();
+        }
+
+        return $p;
     }
 
     // ------------------------------------------------------------------ cocina / bar

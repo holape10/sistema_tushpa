@@ -79,6 +79,7 @@ class ImpresionController extends Controller
             'ruta' => ['required', 'string', 'max:100', $request->tip_conex_imp === 'RED'
                 ? 'regex:/^[\w.\-]+(:\d{2,5})?$/' : 'regex:/^[^"<>|*?]+$/'],
             'columnas' => 'required|integer|in:32,42,48',
+            'diseno' => 'nullable|in:CLASICO,MODERNO',
             'predeterminado' => 'nullable|boolean',
             'abrir_cajon' => 'nullable|boolean',
             'activo' => 'nullable|boolean',
@@ -87,7 +88,7 @@ class ImpresionController extends Controller
 
         return [
             'descripcion' => mb_strtoupper(trim($d['descripcion'])), 'tip_conex_imp' => $d['tip_conex_imp'], 'ruta' => trim($d['ruta']),
-            'columnas' => (int) $d['columnas'], 'predeterminado' => (int) $request->boolean('predeterminado'),
+            'columnas' => (int) $d['columnas'], 'diseno' => $d['diseno'] ?? 'CLASICO', 'predeterminado' => (int) $request->boolean('predeterminado'),
             'abrir_cajon' => (int) $request->boolean('abrir_cajon'), 'activo' => (int) $request->boolean('activo', true),
         ];
     }

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Support\Impresion;
 
 /**
@@ -9,6 +10,7 @@ namespace App\Support\Impresion;
 class Escpos
 {
     private const ESC = "\x1B";
+
     private const GS = "\x1D";
 
     private string $buffer = '';
@@ -16,7 +18,7 @@ class Escpos
     public function __construct(private int $columnas = 42)
     {
         // Inicializa y elige la página de códigos PC850 (á é í ó ú ñ Ñ ° ...)
-        $this->buffer = self::ESC . '@' . self::ESC . 't' . "\x02";
+        $this->buffer = self::ESC.'@'.self::ESC.'t'."\x02";
     }
 
     public function columnas(): int
@@ -27,31 +29,50 @@ class Escpos
     private function codificar(string $texto): string
     {
         $t = @iconv('UTF-8', 'CP850//TRANSLIT//IGNORE', $texto);
+
         return $t === false ? $texto : $t;
     }
 
     public function alinear(string $a): self
     {
-        $this->buffer .= self::ESC . 'a' . chr(['izq' => 0, 'centro' => 1, 'der' => 2][$a] ?? 0);
+        $this->buffer .= self::ESC.'a'.chr(['izq' => 0, 'centro' => 1, 'der' => 2][$a] ?? 0);
+
         return $this;
     }
 
     public function negrita(bool $on = true): self
     {
-        $this->buffer .= self::ESC . 'E' . chr($on ? 1 : 0);
+        $this->buffer .= self::ESC.'E'.chr($on ? 1 : 0);
+
         return $this;
     }
 
     /** Tamaño 1..8 de ancho y alto */
     public function tamano(int $ancho = 1, int $alto = 1): self
     {
-        $this->buffer .= self::GS . '!' . chr((($ancho - 1) << 4) | ($alto - 1));
+        $this->buffer .= self::GS.'!'.chr((($ancho - 1) << 4) | ($alto - 1));
+
         return $this;
+    }
+
+    /** Fuente A (normal) o B (pequeña, entran más letras por línea) */
+    public function fuente(string $f = 'a'): self
+    {
+        $this->buffer .= self::ESC.'M'.chr($f === 'b' ? 1 : 0);
+
+        return $this;
+    }
+
+    /** Caracteres por línea con la fuente B (más angosta) */
+    public function columnasFuenteB(): int
+    {
+        return (int) round($this->columnas * 4 / 3);
     }
 
     public function texto(string $texto = ''): self
     {
-        $this->buffer .= $this->codificar($texto) . "\n";
+        $this->buffer .= $this->codificar($texto)."\n";
+
         return $this;
     }
 
@@ -61,6 +82,7 @@ class Escpos
         foreach (explode("\n", wordwrap($texto, $ancho ?? $this->columnas, "\n", true)) as $l) {
             $this->texto($l);
         }
+
         return $this;
     }
 
@@ -74,7 +96,8 @@ class Escpos
     {
         $espacio = $this->columnas - mb_strlen($der) - 1;
         $izq = mb_strlen($izq) > $espacio ? mb_substr($izq, 0, $espacio) : $izq;
-        return $this->texto($izq . str_repeat(' ', max(1, $this->columnas - mb_strlen($izq) - mb_strlen($der))) . $der);
+
+        return $this->texto($izq.str_repeat(' ', max(1, $this->columnas - mb_strlen($izq) - mb_strlen($der))).$der);
     }
 
     /** Fila de producto: descripción (partida si es larga) y debajo cantidad x precio = total */
@@ -82,12 +105,14 @@ class Escpos
     {
         $this->parrafo($descripcion);
         $cant = rtrim(rtrim(number_format($cantidad, 2, '.', ''), '0'), '.');
-        return $this->dosColumnas('  ' . $cant . ' x ' . number_format($precio, 2), number_format($total, 2));
+
+        return $this->dosColumnas('  '.$cant.' x '.number_format($precio, 2), number_format($total, 2));
     }
 
     public function avanzar(int $lineas = 1): self
     {
-        $this->buffer .= self::ESC . 'd' . chr(max(0, min(255, $lineas)));
+        $this->buffer .= self::ESC.'d'.chr(max(0, min(255, $lineas)));
+
         return $this;
     }
 
@@ -96,22 +121,23 @@ class Escpos
     {
         $datos = $this->codificar($datos);
         $len = strlen($datos) + 3;
-        $this->buffer .= self::GS . "(k\x04\x00\x31\x41\x32\x00"                       // modelo 2
-            . self::GS . "(k\x03\x00\x31\x43" . chr(max(1, min(16, $tamano)))            // tamaño del módulo
-            . self::GS . "(k\x03\x00\x31\x45\x31"                                        // corrección de error M
-            . self::GS . '(k' . chr($len % 256) . chr(intdiv($len, 256)) . "\x31\x50\x30" . $datos // datos
-            . self::GS . "(k\x03\x00\x31\x51\x30";                                       // imprimir
+        $this->buffer .= self::GS."(k\x04\x00\x31\x41\x32\x00"                       // modelo 2
+            .self::GS."(k\x03\x00\x31\x43".chr(max(1, min(16, $tamano)))            // tamaño del módulo
+            .self::GS."(k\x03\x00\x31\x45\x31"                                        // corrección de error M
+            .self::GS.'(k'.chr($len % 256).chr(intdiv($len, 256))."\x31\x50\x30".$datos // datos
+            .self::GS."(k\x03\x00\x31\x51\x30";                                       // imprimir
+
         return $this;
     }
 
     /** Logo PNG/JPG convertido a raster de 1 bit (GS v 0). Se ignora si no se puede leer. */
     public function logo(?string $ruta, int $anchoMax = 384): self
     {
-        if (!$ruta || !is_file($ruta) || !function_exists('imagecreatefromstring')) {
+        if (! $ruta || ! is_file($ruta) || ! function_exists('imagecreatefromstring')) {
             return $this;
         }
         $img = @imagecreatefromstring((string) file_get_contents($ruta));
-        if (!$img) {
+        if (! $img) {
             return $this;
         }
         $w = imagesx($img);
@@ -144,20 +170,23 @@ class Escpos
             }
         }
         $this->alinear('centro');
-        $this->buffer .= self::GS . "v0\x00" . chr($bytesFila % 256) . chr(intdiv($bytesFila, 256)) . chr($h % 256) . chr(intdiv($h, 256)) . $datos;
+        $this->buffer .= self::GS."v0\x00".chr($bytesFila % 256).chr(intdiv($bytesFila, 256)).chr($h % 256).chr(intdiv($h, 256)).$datos;
+
         return $this;
     }
 
     public function cortar(): self
     {
-        $this->buffer .= self::GS . 'V' . "\x42\x00"; // avanza y corta
+        $this->buffer .= self::GS.'V'."\x42\x00"; // avanza y corta
+
         return $this;
     }
 
     /** Pulso al cajón de dinero */
     public function abrirCajon(): self
     {
-        $this->buffer .= self::ESC . 'p' . "\x00\x19\xFA";
+        $this->buffer .= self::ESC.'p'."\x00\x19\xFA";
+
         return $this;
     }
 

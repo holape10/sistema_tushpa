@@ -10,8 +10,8 @@
                     2 => ['IMPRESO', 'bg-green-100 text-green-700'], 9 => ['ERROR', 'bg-red-100 text-red-700']];
     @endphp
 
-    <div x-data="{ form: null, nueva() { this.form = { id: null, descripcion: '', tip_conex_imp: 'COMPARTIDO', ruta: '', columnas: 42, predeterminado: false, abrir_cajon: false, activo: true }; },
-                   editar(i) { this.form = Object.assign({}, i, { predeterminado: !!+i.predeterminado, abrir_cajon: !!+i.abrir_cajon, activo: !!+i.activo }); } }">
+    <div x-data="{ form: null, nueva() { this.form = { id: null, descripcion: '', tip_conex_imp: 'COMPARTIDO', ruta: '', columnas: 42, diseno: 'CLASICO', predeterminado: false, abrir_cajon: false, activo: true }; },
+                   editar(i) { this.form = Object.assign({}, i, { predeterminado: !!+i.predeterminado, abrir_cajon: !!+i.abrir_cajon, activo: !!+i.activo, diseno: i.diseno || 'CLASICO' }); } }">
 
         {{-- Agente --}}
         <div class="bg-white rounded-2xl shadow-sm p-5 mb-5">
@@ -209,6 +209,11 @@
                         <option value="42">80 mm (42 caracteres)</option>
                         <option value="48">80 mm (48 caracteres, letra pequeña)</option>
                         <option value="32">58 mm (32 caracteres)</option>
+                    </select></label>
+                <label class="block text-sm" x-show="form.tip_conex_imp !== 'WINDOWS'">Diseño del comprobante
+                    <select name="diseno" x-model="form.diseno" class="{{ $in }}">
+                        <option value="CLASICO">Clásico: nombre de la empresa grande y columnas Cant. / UDM / P.U. / Total</option>
+                        <option value="MODERNO">Moderno: compacto, "1 x 9.00" debajo de cada producto</option>
                     </select></label>
                 <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="predeterminado" value="1" x-model="form.predeterminado" class="rounded"> Impresora de caja por defecto</label>
                 <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="abrir_cajon" value="1" x-model="form.abrir_cajon" class="rounded"> Abrir el cajón de dinero al imprimir comprobantes</label>
