@@ -1,10 +1,15 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Empresa;
-use App\Support\Sunat\{Sire, SireCuadre};
+use App\Support\Excel;
+use App\Support\Sunat\Sire;
+use App\Support\Sunat\SireCuadre;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB, Storage};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * SIRE: credenciales del API SUNAT, descarga de la propuesta RVIE (ventas) / RCE (compras)
@@ -17,12 +22,14 @@ class SireController extends Controller
     private function autorizar(): Empresa
     {
         abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador puede usar el SIRE.');
+
         return Empresa::findOrFail(Auth::user()->IdEmpresa);
     }
 
     public function credenciales()
     {
         $empresa = $this->autorizar();
+
         return view('empresas.sire.credenciales', compact('empresa'));
     }
 
@@ -30,35 +37,37 @@ class SireController extends Controller
     {
         $empresa = $this->autorizar();
         $d = $request->validate([
-            'client_id'     => 'required|string|max:100',
+            'client_id' => 'required|string|max:100',
             'client_secret' => 'nullable|string|max:255',
-            'sire_usuario'  => 'nullable|string|max:30',
-            'sire_clave'    => 'nullable|string|max:100',
+            'sire_usuario' => 'nullable|string|max:30',
+            'sire_clave' => 'nullable|string|max:100',
         ], [], ['client_id' => 'ID', 'client_secret' => 'CLAVE', 'sire_usuario' => 'usuario SOL', 'sire_clave' => 'clave SOL']);
 
         $empresa->client_id = trim($d['client_id']);
         $empresa->sire_usuario = trim((string) ($d['sire_usuario'] ?? '')) ?: null;
         // Los secretos solo se cambian si se escriben (el formulario nunca los muestra)
-        if (!empty($d['client_secret'])) {
+        if (! empty($d['client_secret'])) {
             $empresa->client_secret = trim($d['client_secret']);
         }
-        if (!empty($d['sire_clave'])) {
+        if (! empty($d['sire_clave'])) {
             $empresa->sire_clave = $d['sire_clave'];
         }
-        if (!$empresa->client_secret) {
+        if (! $empresa->client_secret) {
             return back()->withInput()->with('error', 'Ingresa la CLAVE (client_secret) del API SUNAT.');
         }
         $empresa->save();
-        cache()->forget('sire_token_' . $empresa->IdEmpresa);
+        cache()->forget('sire_token_'.$empresa->IdEmpresa);
 
         // Se prueba la conexión al guardar
         try {
             $periodos = (new Sire($empresa))->periodos(Sire::VENTAS);
-            return back()->with('success', '✔ Conexión con el SIRE correcta. ' . count($periodos) . ' periodos habilitados en el Registro de Ventas.');
+
+            return back()->with('success', '✔ Conexión con el SIRE correcta. '.count($periodos).' periodos habilitados en el Registro de Ventas.');
         } catch (\RuntimeException $e) {
-            return back()->with('error', 'Se guardaron las credenciales, pero la prueba falló: ' . $e->getMessage());
+            return back()->with('error', 'Se guardaron las credenciales, pero la prueba falló: '.$e->getMessage());
         } catch (\Throwable $e) {
             report($e);
+
             return back()->with('error', 'Se guardaron las credenciales, pero no se pudo conectar con SUNAT. Intenta más tarde.');
         }
     }
@@ -74,7 +83,7 @@ class SireController extends Controller
         if (Sire::configurado($empresa)) {
             try {
                 $periodos = cache()->remember("sire_periodos_{$empresa->IdEmpresa}_{$codLibro}", 3600,
-                    fn() => (new Sire($empresa))->periodos($codLibro));
+                    fn () => (new Sire($empresa))->periodos($codLibro));
             } catch (\Throwable $e) {
                 $errorSunat = $e instanceof \RuntimeException ? $e->getMessage() : 'No se pudo conectar con SUNAT.';
             }
@@ -87,7 +96,7 @@ class SireController extends Controller
         if ($solicitud && $solicitud->archivo && Storage::exists($solicitud->archivo)) {
             try {
                 $propuesta = Sire::leerZip(Storage::path($solicitud->archivo));
-                $cuadre = SireCuadre::comparar($codLibro, $periodo, $propuesta, $empresa->IdEmpresa);
+                $cuadre = SireCuadre::diagnosticar(SireCuadre::comparar($codLibro, $periodo, $propuesta, $empresa->IdEmpresa), $codLibro, $empresa->IdEmpresa);
             } catch (\RuntimeException $e) {
                 $errorSunat = $e->getMessage();
             }
@@ -116,6 +125,7 @@ class SireController extends Controller
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json(['estado' => 'error', 'mensaje' => 'No se pudo conectar con SUNAT. Intenta en unos minutos.']);
         }
 
@@ -143,7 +153,7 @@ class SireController extends Controller
         try {
             $sire = new Sire($empresa);
             $registro = $sire->estadoTicket($codLibro, $s->periodo, $s->num_ticket);
-            if (!$registro) {
+            if (! $registro) {
                 return response()->json(['estado' => 'proceso', 'descripcion' => 'SUNAT aún está registrando el pedido…']);
             }
 
@@ -152,9 +162,9 @@ class SireController extends Controller
             DB::table('sire_solicitudes')->where('id', $id)->update(['cod_estado' => $cod, 'des_estado' => mb_substr($des, 0, 60), 'updated_at' => now()]);
 
             if ($cod === '03') {
-                return response()->json(['estado' => 'error', 'mensaje' => 'SUNAT procesó el pedido con errores: ' . $des]);
+                return response()->json(['estado' => 'error', 'mensaje' => 'SUNAT procesó el pedido con errores: '.$des]);
             }
-            if (!in_array($cod, ['04', '06'], true)) {
+            if (! in_array($cod, ['04', '06'], true)) {
                 return response()->json(['estado' => 'proceso', 'descripcion' => $des]);
             }
 
@@ -167,9 +177,11 @@ class SireController extends Controller
             return response()->json(['estado' => 'listo', 'filas' => $filas]);
         } catch (\RuntimeException $e) {
             DB::table('sire_solicitudes')->where('id', $id)->update(['mensaje' => mb_substr($e->getMessage(), 0, 250), 'updated_at' => now()]);
+
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json(['estado' => 'error', 'mensaje' => 'No se pudo consultar a SUNAT. Intenta en unos minutos.']);
         }
     }
@@ -183,31 +195,32 @@ class SireController extends Controller
         abort_unless($s && $s->archivo && Storage::exists($s->archivo), 404);
 
         $propuesta = Sire::leerZip(Storage::path($s->archivo));
-        $cuadre = SireCuadre::comparar($codLibro, $s->periodo, $propuesta, $empresa->IdEmpresa);
+        $cuadre = SireCuadre::diagnosticar(SireCuadre::comparar($codLibro, $s->periodo, $propuesta, $empresa->IdEmpresa), $codLibro, $empresa->IdEmpresa);
 
         $filasCuadre = [];
-        $agregar = function (string $estado, array $c, $totSunat, $totSistema) use (&$filasCuadre) {
+        $agregar = function (string $estado, array $c, $totSunat, $totSistema, array $diagnostico = []) use (&$filasCuadre) {
             $filasCuadre[] = [$estado, $c['tipo'], $c['serie'], $c['numero'], $c['fecha'], $c['doc'], $c['nombre'],
-                $totSunat, $totSistema, $totSunat !== null && $totSistema !== null ? round($totSunat - $totSistema, 2) : null];
+                $totSunat, $totSistema, $totSunat !== null && $totSistema !== null ? round($totSunat - $totSistema, 2) : null,
+                $diagnostico['causa'] ?? '', $diagnostico['solucion'] ?? ''];
         };
         foreach ($cuadre['diferencias'] as $d) {
-            $agregar('Total distinto', $d['sunat'], $d['sunat']['total'], $d['sistema']['total']);
+            $agregar('Total distinto', $d['sunat'], $d['sunat']['total'], $d['sistema']['total'], $d);
         }
         foreach ($cuadre['soloSunat'] as $c) {
-            $agregar('Solo en SUNAT', $c, $c['total'], null);
+            $agregar('Solo en SUNAT', $c, $c['total'], null, $c);
         }
         foreach ($cuadre['soloSistema'] as $c) {
-            $agregar('Solo en el sistema', $c, null, $c['total']);
+            $agregar('Solo en el sistema', $c, null, $c['total'], $c);
         }
         foreach ($cuadre['coinciden'] as $c) {
             $agregar('Coincide', $c, $c['total'], $c['total']);
         }
 
         $nombreLibro = $codLibro === Sire::VENTAS ? 'RVIE' : 'RCE';
-        $ruta = (new \App\Support\Excel())
+        $ruta = (new Excel)
             ->hoja("Propuesta SUNAT {$s->periodo}", $propuesta['cabecera'], $propuesta['filas'], SireCuadre::columnasMonto($propuesta['cabecera']))
             ->hoja('Cuadre con el sistema', ['Estado', 'Tipo', 'Serie', 'Número', 'Fecha', $libro === 'ventas' ? 'Doc. cliente' : 'Doc. proveedor',
-                $libro === 'ventas' ? 'Cliente' : 'Proveedor', 'Total SUNAT', 'Total sistema', 'Diferencia'], $filasCuadre)
+                $libro === 'ventas' ? 'Cliente' : 'Proveedor', 'Total SUNAT', 'Total sistema', 'Diferencia', 'Causa', 'Qué hacer'], $filasCuadre)
             ->guardar();
 
         return response()->download($ruta, "SIRE_{$nombreLibro}_{$empresa->IdEmpresa}_{$s->periodo}.xlsx", [
@@ -221,6 +234,7 @@ class SireController extends Controller
         $empresa = $this->autorizar();
         $s = DB::table('sire_solicitudes')->where('id', $id)->where('IdEmpresa', $empresa->IdEmpresa)->first();
         abort_unless($s && $s->archivo && Storage::exists($s->archivo), 404);
+
         return Storage::download($s->archivo, basename($s->archivo));
     }
 }

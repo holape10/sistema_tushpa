@@ -22,6 +22,7 @@ use App\Support\OpcionesPlato;
 use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class CobroController extends Controller
@@ -153,6 +154,25 @@ class CobroController extends Controller
         ]);
     }
 
+    /**
+     * Cada intento de cobro trae una clave única (la pantalla la crea al abrirse y después de cada venta).
+     * Si la misma clave llega dos veces (doble clic, doble toque, reintento de la red), la segunda no se registra.
+     */
+    private function claveCobroRepetida(Request $request): bool
+    {
+        $clave = (string) $request->input('clave_cobro');
+        if (! preg_match('/^[A-Za-z0-9-]{8,64}$/', $clave)) {
+            return false;
+        }
+
+        return ! Cache::add('cobro:'.Auth::id().':'.$clave, 1, now()->addMinutes(10));
+    }
+
+    private function liberarClaveCobro(Request $request): void
+    {
+        Cache::forget('cobro:'.Auth::id().':'.(string) $request->input('clave_cobro'));
+    }
+
     public function registrarDirecta(Request $request)
     {
         $this->autorizar();
@@ -162,12 +182,18 @@ class CobroController extends Controller
             'enviar_cocina' => 'nullable|boolean',
             'imprimir' => 'nullable|boolean',
         ], VentaDirecta::MENSAJES, VentaDirecta::NOMBRES);
+        if ($this->claveCobroRepetida($request)) {
+            return response()->json(['estado' => 'duplicado', 'mensaje' => 'Esta venta ya se está registrando (doble clic). No se registró otra vez.']);
+        }
 
         try {
             $cabId = VentaDirecta::registrar($user, $datos, 'PVCOMANDA');
         } catch (\RuntimeException $e) {
+            $this->liberarClaveCobro($request);
+
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
+            $this->liberarClaveCobro($request);
             report($e);
 
             return response()->json(['estado' => 'error', 'mensaje' => config('app.debug') ? $e->getMessage() : 'Error al registrar la venta.']);
@@ -267,6 +293,9 @@ class CobroController extends Controller
         ]);
 
         $user = Auth::user();
+        if ($this->claveCobroRepetida($request)) {
+            return response()->json(['estado' => 'duplicado', 'mensaje' => 'Este cobro ya se está registrando (doble clic). No se registró otra vez.']);
+        }
 
         try {
             $cabId = DB::transaction(function () use ($request, $user) {
@@ -322,6 +351,10 @@ class CobroController extends Controller
                     'umecod' => $presentaciones[$g->id_presentacion]->umecod ?? null,
                     'opciones' => OpcionesPlato::kardexDe($g->opciones),
                 ])->values()->all();
+                // Nunca un comprobante en cero
+                if (round(collect($lineas)->sum(fn ($l) => $l['cantidad'] * $l['precio']), 2) <= 0) {
+                    throw new \RuntimeException('El total a cobrar es S/ 0.00: no se emite un comprobante en cero. Revisa los precios del pedido.');
+                }
 
                 $cabId = Comprobante::emitir($user, $turno, $request->all(), $lineas, [
                     'ped_id' => $pedido->ped_id, 'ped_tip' => $pedido->ped_tip,
@@ -359,8 +392,11 @@ class CobroController extends Controller
                 return $cabId;
             });
         } catch (\RuntimeException $e) {
+            $this->liberarClaveCobro($request);
+
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
+            $this->liberarClaveCobro($request);
             report($e);
 
             return response()->json([

@@ -22,6 +22,7 @@ class InicioController extends Controller
         '/punto-venta' => ['fa-cash-register', '#0891b2'],
         '/pv-movil' => ['fa-mobile-screen-button', '#6366f1'],
         '/comandas' => ['fa-utensils', '#16a34a'],
+        '/comandas/punto-venta' => ['fa-cash-register', '#ea580c'],
         '/turnos' => ['fa-money-bill-wave', '#2563eb'],
         '/turnos/listado' => ['fa-clock-rotate-left', '#14b8a6'],
         '/pv' => ['fa-rocket', '#dc2626'],

@@ -603,6 +603,11 @@
             .then(r => r.json()).then(d => el('productos_grid').innerHTML = d.vista);
     }
 
+    // Clave única de cada cobro: si el mismo cobro llega dos veces al servidor (doble clic o doble toque), el segundo se descarta
+    const nuevaClave = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+    let claveCobro = nuevaClave();
+    let cobrando = false;
+
     async function registrarDirecta(body, contado, restaurar) {
         const datos = Object.assign({}, body, {
             items: carrito.map(it => ({ id: it.id, cantidad: it.cantidad, precio: it.precio, observacion: it.observacion || null })),
@@ -618,7 +623,9 @@
             });
             const d = await res.json();
             if (res.status === 422) { alert(Object.values(d.errors)[0][0]); restaurar(); return; }
+            if (d.estado === 'duplicado') { alert(d.mensaje + ' Revisa en Ventas si ya salió el comprobante.'); restaurar(); return; }
             if (d.estado !== 'success') { alert(d.mensaje || 'No se pudo registrar la venta.'); restaurar(); return; }
+            claveCobro = nuevaClave();
 
             // Sin agente de impresión: el ticket se imprime con el navegador sin salir de la pantalla
             if (el('imprimir').checked && !d.impreso) el('marco_impresion').src = d.ticket + '&imprimir=1&t=' + Date.now();
@@ -672,6 +679,7 @@
     // Registrar
     el('btnRegistrar').addEventListener('click', async function () {
         const btn = this;
+        if (cobrando || btn.disabled) return;
         const contado = el('estadopago').selectedOptions[0].dataset.tipo === 'CONTADO';
 
         if (contado && medios.length) {
@@ -684,12 +692,14 @@
 
         if (SEPARADAS && TOTAL <= 0) { alert('Elige qué productos se cobran en esta cuenta.'); return; }
         if (DIRECTA && !carrito.length) { alert('Agrega al menos un producto.'); return; }
+        cobrando = true;
         btn.disabled = true;
         btn.textContent = 'PROCESANDO...';
-        const restaurar = () => { btn.disabled = false; btn.textContent = DIRECTA ? 'REGISTRAR VENTA' : (SEPARADAS ? 'COBRAR ESTA CUENTA' : 'REGISTRAR Y COBRAR'); };
+        const restaurar = () => { cobrando = false; btn.disabled = false; btn.textContent = DIRECTA ? 'REGISTRAR VENTA' : (SEPARADAS ? 'COBRAR ESTA CUENTA' : 'REGISTRAR Y COBRAR'); };
 
         const body = {
             ped_id: PED_ID,
+            clave_cobro: claveCobro,
             tdocod: el('tdocod').value,
             estadopago: el('estadopago').value,
             fecEmi: el('fecEmi').value,
@@ -730,6 +740,7 @@
 
             if (res.status === 422) { alert(Object.values(data.errors)[0][0]); restaurar(); return; }
             if (data.estado === 'success') { window.location.href = data.redirect; return; }
+            if (data.estado === 'duplicado') { alert(data.mensaje + ' Actualiza la pantalla para ver si ya quedó cobrado.'); restaurar(); return; }
             alert(data.mensaje || 'No se pudo registrar el cobro.');
             restaurar();
         } catch (e) {

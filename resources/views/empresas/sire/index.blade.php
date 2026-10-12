@@ -144,6 +144,18 @@
             </div>
         </div>
 
+        @if (! empty($cuadre['causas']))
+            <section class="bg-white rounded-2xl shadow-sm p-4">
+                <p class="font-bold text-slate-800">🛠️ ¿Por qué hay diferencias y cómo solucionarlas?</p>
+                <p class="text-xs text-slate-500">Cada comprobante de abajo tiene su causa y qué hacer. Resumen:</p>
+                <div class="flex flex-wrap gap-2 mt-2">
+                    @foreach ($cuadre['causas'] as $causa => $cantidad)
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{{ $causa }} <b class="text-slate-900">{{ $cantidad }}</b></span>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         @foreach ([
             ['diferencias', 'Total distinto', 'Están en ambos lados pero el importe no coincide.', 'bg-rose-500'],
             ['soloSunat', 'Solo en SUNAT', $libro === 'ventas' ? 'SUNAT los tiene y tu sistema no (¿emitidos desde otro sistema o anulados aquí?).' : 'Tus proveedores los emitieron a tu RUC y no los registraste en Compras.', 'bg-amber-500'],
@@ -171,10 +183,10 @@
                                 @endif
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-50">
+                        <tbody>
                             @foreach ($cuadre[$clave] as $fila)
                                 @php $c = $clave === 'diferencias' ? $fila['sunat'] : $fila; @endphp
-                                <tr>
+                                <tr class="border-t border-slate-100">
                                     <td class="px-4 py-2 whitespace-nowrap"><span class="font-semibold">{{ $c['serie'] }}-{{ $c['numero'] }}</span>
                                         <span class="text-xs text-slate-400">{{ $tipos[$c['tipo']] ?? $c['tipo'] }}</span></td>
                                     <td class="px-4 py-2 whitespace-nowrap">{{ $c['fecha'] }}</td>
@@ -189,6 +201,28 @@
                                         <td class="px-4 py-2 text-right font-semibold">{{ number_format($c['total'], 2) }}</td>
                                     @endif
                                 </tr>
+                                @if (! empty($fila['causa']))
+                                    <tr class="!border-t-0">
+                                        <td colspan="{{ $clave === 'diferencias' ? 6 : 4 }}" class="px-4 pb-3 pt-0">
+                                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-slate-50 px-3 py-2 text-xs" x-data="{ resultado: '', enviando: false }">
+                                                <span class="font-bold text-slate-800">{{ $fila['causa'] }}:</span>
+                                                <span class="text-slate-600 flex-1 min-w-[240px]">{{ $fila['solucion'] }}</span>
+                                                @if ($fila['accion'])
+                                                    @if (! empty($fila['accion']['enviar']))
+                                                        <button type="button" :disabled="enviando || resultado" class="rounded-lg bg-indigo-600 text-white font-semibold px-3 py-1.5 disabled:opacity-60"
+                                                                @click="enviando = true; fetch(@js($fila['accion']['url']), { method: 'POST', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) } })
+                                                                    .then(r => r.json()).then(d => resultado = (d.success ? '✓ ' : '✗ ') + (d.estado || '') + (d.mensaje ? ': ' + d.mensaje : ''))
+                                                                    .catch(() => resultado = '✗ No se pudo enviar').finally(() => enviando = false)"
+                                                                x-text="enviando ? 'Enviando…' : @js($fila['accion']['texto'])"></button>
+                                                        <span x-show="resultado" x-text="resultado" class="font-semibold" :class="resultado.startsWith('✓') ? 'text-emerald-700' : 'text-rose-600'"></span>
+                                                    @else
+                                                        <a href="{{ $fila['accion']['url'] }}" target="_blank" class="rounded-lg bg-white ring-1 ring-slate-300 font-semibold text-indigo-700 px-3 py-1.5">{{ $fila['accion']['texto'] }} ↗</a>
+                                                    @endif
+                                                @endif
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endif
                             @endforeach
                         </tbody>
                     </table>

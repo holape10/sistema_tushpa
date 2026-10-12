@@ -25,7 +25,7 @@ class Rubros
 
     public const RUBROS = [
         'RESTOBAR' => ['nombre' => 'Restobar', 'ejemplos' => 'Restaurante, cafetería, discoteca, bar', 'modulos' => [
-            '/comandas', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/reservas', '/motorizados', '/delivery', '/delivery/liquidacion', '/delivery/reporte', '/carta/configuracion', '/recetas', '/entradas', '/preparados', '/mermas', '/reportes/consumo-insumos', '/productos?tipo=4', '/productos?tipo=6',
+            '/comandas', '/comandas/punto-venta', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/reservas', '/motorizados', '/delivery', '/delivery/liquidacion', '/delivery/reporte', '/carta/configuracion', '/recetas', '/entradas', '/preparados', '/mermas', '/reportes/consumo-insumos', '/productos?tipo=4', '/productos?tipo=6',
             '/reportes/ventas-vendedor', '/reportes/ventas-delivery',
         ]],
         'GENERAL' => ['nombre' => 'Comercio general', 'ejemplos' => 'Comercio, ferretería, construcción, lavandería', 'modulos' => [
@@ -41,7 +41,7 @@ class Rubros
             '/pv-grifo', '/punto-venta', '/inventarios', '/kardex/movimiento?tipo=I', '/kardex/movimiento?tipo=E', '/cuentas/cobrar/reporte', '/guias',
         ]],
         'HOTELERIA' => ['nombre' => 'Hotelería', 'ejemplos' => 'Hotel, hospedaje con restaurante', 'modulos' => [
-            '/hotel', '/hotel/reporte', '/reservas', '/comandas', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/productos?tipo=4',
+            '/hotel', '/hotel/reporte', '/reservas', '/comandas', '/comandas/punto-venta', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/productos?tipo=4',
         ]],
         'GIMNASIO' => ['nombre' => 'Gimnasio', 'ejemplos' => 'Gimnasio, academia (membresías y control de ingreso)', 'modulos' => [
             '/gimnasio', '/gimnasio/acceso', '/gimnasio/entrenador', '/pv',
