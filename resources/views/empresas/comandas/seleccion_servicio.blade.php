@@ -382,6 +382,7 @@
         const URL_PEDIDO = "{{ url('comandas/pedido') }}/";
         const URL_PRECUENTA = "{{ url('comandas/precuenta') }}/";
         const PUEDE_COBRAR = {{ $puedeCobrar ? 'true' : 'false' }};
+        const URL_DELIVERY = "{{ route('delivery.index') }}?pedido=";
 
         // Recargas automáticas: se pausan con la pestaña oculta o la tablet bloqueada (no gastan servidor ni batería)
         // y se ponen al día apenas el usuario vuelve
@@ -921,6 +922,7 @@
                                 <button class="btn-editar-directo" onclick="irAServicio('${tipoClase}', null, '${p.ped_tip.toUpperCase()}', ${p.ped_id})"><i class="fas fa-edit"></i> Editar</button>
                                 ${PUEDE_COBRAR ? `<button class="btn-cobrar-directo" onclick="window.location.href=URL_COBRAR + ${p.ped_id}"><i class="fas fa-money-bill"></i> Cobrar</button>` : ''}
                                 <button class="btn-editar-directo" style="background:#3498db;" onclick="imprimirPrecuenta(${p.ped_id})"><i class="fas fa-file-invoice"></i> Precuenta</button>
+                                ${PUEDE_COBRAR && p.ped_tip === 'Delivery' ? `<button class="btn-editar-directo" style="background:#7c3aed;" onclick="window.location.href=URL_DELIVERY + ${p.ped_id}"><i class="fas fa-location-dot"></i> Seguimiento</button>` : ''}
                             </td>
                         </tr>`;
                     });

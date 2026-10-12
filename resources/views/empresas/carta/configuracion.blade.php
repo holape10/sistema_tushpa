@@ -67,6 +67,17 @@
                 <span><span class="font-bold text-indigo-900">Publicar la carta digital</span>
                     <span class="block text-sm text-indigo-700">Muestra las categorías visibles con sus productos y precios vigentes. Para ocultar una categoría, desmárcala como visible en Categorías.</span></span>
             </label>
+            <div class="p-4 rounded-xl border border-emerald-200 bg-emerald-50 space-y-3">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" name="carta_delivery" value="1" @checked($negocio->carta_delivery) class="mt-0.5 rounded text-emerald-600">
+                    <span><span class="font-bold text-emerald-900">🛵 Recibir pedidos delivery desde la carta</span>
+                        <span class="block text-sm text-emerald-700">El cliente arma su pedido, pone su dirección, WhatsApp y cómo pagará. La comanda sale sola en la ticketera de cada categoría y el pedido aparece en
+                            <a href="{{ route('delivery.index') }}" class="underline font-semibold">Delivery en vivo</a>. Los costos de envío por distancia se configuran ahí.</span></span>
+                </label>
+                <label class="block text-sm text-emerald-900">Pedido mínimo para delivery (opcional)
+                    <input type="number" name="delivery_minimo" min="0" step="0.10" value="{{ old('delivery_minimo', $negocio->delivery_minimo) }}" placeholder="0.00"
+                           class="mt-1 w-40 rounded-xl border-gray-300 text-sm"></label>
+            </div>
             <label class="block text-sm font-medium text-gray-700">Mensaje en la portada (opcional)
                 <textarea name="carta_mensaje" rows="3" maxlength="300" placeholder="Atendemos de 7:00 a.m. a 11:00 p.m. · WiFi: ABBYCAFE / clave 12345"
                           class="mt-1 w-full rounded-xl border-gray-300 text-sm">{{ old('carta_mensaje', $negocio->carta_mensaje) }}</textarea>

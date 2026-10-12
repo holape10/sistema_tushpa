@@ -17,6 +17,8 @@ use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeliveryController;
+use App\Http\Controllers\DeliveryLiquidacionController;
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\EntradaController;
 use App\Http\Controllers\EntrenadorController;
@@ -48,9 +50,11 @@ use App\Http\Controllers\PvGrifoController;
 use App\Http\Controllers\PvTactilController;
 use App\Http\Controllers\PwaController;
 use App\Http\Controllers\RecetaController;
+use App\Http\Controllers\RepartidorController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\RespaldoEmpresaController;
+use App\Http\Controllers\SeguimientoController;
 use App\Http\Controllers\SerieController;
 use App\Http\Controllers\SireController;
 use App\Http\Controllers\SocioController;
@@ -175,6 +179,26 @@ Route::middleware('auth')->group(function () {
     Route::post('/motorizados', [MotorizadoController::class, 'guardar'])->name('motorizados.guardar');
     Route::post('/motorizados/asignar', [MotorizadoController::class, 'asignar'])->name('motorizados.asignar');
     Route::post('/motorizados/{id}/eliminar', [MotorizadoController::class, 'eliminar'])->whereNumber('id')->name('motorizados.eliminar');
+    Route::post('/motorizados/{id}/enlace', [DeliveryController::class, 'enlaceMotorizado'])->whereNumber('id')->name('motorizados.enlace');
+
+    // Delivery en vivo: mapa con los motorizados, estado y tiempos de cada pedido, enlace de seguimiento del cliente
+    Route::controller(DeliveryController::class)->prefix('delivery')->name('delivery.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/estado', 'estado')->name('estado');
+        Route::post('/local', 'local')->name('local');
+        Route::post('/ubicacion', 'ubicacion')->middleware('throttle:30,1,delivery-ubicacion')->name('ubicacion');
+        Route::post('/{id}/datos', 'datos')->whereNumber('id')->name('datos');
+        Route::post('/{id}/estado', 'cambiarEstado')->whereNumber('id')->name('cambiar_estado');
+        Route::get('/{id}/recorrido', 'recorrido')->whereNumber('id')->name('recorrido');
+        Route::get('/{id}/sugerir', 'sugerir')->whereNumber('id')->name('sugerir');
+        Route::post('/{id}/asignar', 'asignar')->whereNumber('id')->name('asignar');
+        Route::post('/envio', 'envio')->name('envio');
+        Route::post('/tarifas', 'tarifas')->name('tarifas');
+        Route::get('/reporte', 'reporte')->name('reporte');
+    });
+    Route::get('/mis-repartos', [RepartidorController::class, 'mio'])->name('repartidor.mio');
+    Route::get('/delivery/liquidacion', [DeliveryLiquidacionController::class, 'index'])->name('delivery.liquidacion');
+    Route::post('/delivery/liquidacion', [DeliveryLiquidacionController::class, 'liquidar'])->name('delivery.liquidar');
 
     // Fidelización: puntos y premios
     Route::controller(FidelizacionController::class)->prefix('fidelizacion')->name('fidelizacion.')->group(function () {
@@ -524,6 +548,16 @@ Route::middleware('auth')->prefix('estacionamiento')->name('estacionamiento.')->
 Route::get('/valet/{codigo}', [EstacionamientoController::class, 'publico'])->where('codigo', '[A-Za-z0-9]{10}')->middleware('throttle:60,1')->name('valet.ver');
 Route::post('/valet/{codigo}', [EstacionamientoController::class, 'pedir'])->where('codigo', '[A-Za-z0-9]{10}')->middleware('throttle:10,1')->name('valet.pedir');
 
+// Delivery: el motorizado entra con su enlace personal y el cliente sigue su pedido con el código que le llega por WhatsApp (sin sesión)
+Route::prefix('repartidor/{token}')->where(['token' => '[A-Za-z0-9]{32}'])->name('repartidor.')->controller(RepartidorController::class)->group(function () {
+    Route::get('/', 'index')->middleware('throttle:60,1,repartidor')->name('index');
+    Route::get('/pedidos', 'pedidos')->middleware('throttle:60,1,repartidor-pedidos')->name('pedidos');
+    Route::post('/estado', 'cambiarEstado')->middleware('throttle:30,1,repartidor-estado')->name('estado');
+    Route::post('/posicion', 'posicion')->middleware('throttle:30,1,repartidor-posicion')->name('posicion');
+});
+Route::get('/pedido/{token}', [SeguimientoController::class, 'index'])->where('token', '[A-Za-z0-9]{10}')->middleware('throttle:60,1,seguimiento')->name('pedido.seguimiento');
+Route::get('/pedido/{token}/estado', [SeguimientoController::class, 'estado'])->where('token', '[A-Za-z0-9]{10}')->middleware('throttle:60,1,seguimiento-estado')->name('pedido.seguimiento.estado');
+
 // Carta digital con QR: configuración (Administrador) y la carta pública que ven los clientes (sin sesión)
 Route::middleware('auth')->prefix('carta')->name('carta.')->controller(CartaController::class)->group(function () {
     Route::get('/configuracion', 'configuracion')->name('config');
@@ -531,6 +565,8 @@ Route::middleware('auth')->prefix('carta')->name('carta.')->controller(CartaCont
     Route::get('/imprimir', 'imprimir')->name('imprimir');
 });
 Route::get('/carta/{sucursal?}', [CartaController::class, 'ver'])->whereNumber('sucursal')->middleware('throttle:120,1')->name('carta.ver');
+Route::post('/carta/{sucursal}/envio', [CartaController::class, 'envio'])->whereNumber('sucursal')->middleware('throttle:30,1,carta-envio')->name('carta.envio');
+Route::post('/carta/{sucursal}/pedido', [CartaController::class, 'pedir'])->whereNumber('sucursal')->middleware('throttle:10,10,carta-pedido')->name('carta.pedir');
 
 // Tienda virtual pública de la empresa: {subdominio}/tiendavirtual (sin sesión del sistema)
 Route::prefix('tiendavirtual')->name('tienda.')->controller(TiendaController::class)->group(function () {

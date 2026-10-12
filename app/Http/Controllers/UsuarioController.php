@@ -6,6 +6,7 @@ use App\Models\Empleado;
 use App\Models\EmpresaNegocio;
 use App\Models\Modulo;
 use App\Models\User;
+use App\Support\Delivery;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,10 +17,13 @@ class UsuarioController extends Controller
 {
     private const ROL_MOZO = 8;
 
+    private const ROL_MOTORIZADO = 12;
+
     // Módulos que se marcan solos al elegir el rol (el admin puede cambiarlos después)
     public const PRESETS = [
         8 => ['Comandas'],
         11 => ['Inicio', 'Entrenador'],
+        12 => [],
         10 => ['Inicio', 'Historias Clínicas', 'Agenda de Citas'],
         4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Envío de Comprobantes', 'Resumen Diario',
             'Kardex', 'Stock Productos', 'Clientes'],
@@ -204,6 +208,7 @@ class UsuarioController extends Controller
             return $empleado;
         });
         $this->guardarFoto($request, $empleado);
+        $this->sincronizarMotorizado((int) User::where('emp_id', $empleado->emp_id)->value('IdUsuario'), (int) $d['role_id']);
 
         return redirect()->route('usuarios.index')->with('success', 'Usuario '.$this->nombreCompleto($d).' registrado.');
     }
@@ -257,8 +262,19 @@ class UsuarioController extends Controller
             $usuario->modulos()->sync(array_values(array_intersect(array_map('intval', $d['modulos'] ?? []), $this->modulosPermitidos())));
         });
         $this->guardarFoto($request, Empleado::find($usuario->emp_id));
+        $this->sincronizarMotorizado((int) $usuario->IdUsuario, (int) $d['role_id']);
 
         return redirect()->route('usuarios.index')->with('success', 'Usuario actualizado.');
+    }
+
+    /** Rol Motorizado: su ficha de motorizado (para asignarle pedidos) queda enlazada; si deja de serlo, se desactiva */
+    private function sincronizarMotorizado(int $usuarioId, int $rol): void
+    {
+        if ($rol === self::ROL_MOTORIZADO) {
+            Delivery::motorizadoDeUsuario($usuarioId);
+        } else {
+            DB::table('motorizados')->where('IdUsuario', $usuarioId)->update(['activo' => 0]);
+        }
     }
 
     public function destroy(User $usuario)
@@ -268,6 +284,9 @@ class UsuarioController extends Controller
         if ((int) $usuario->IdUsuario === (int) Auth::id()) {
             return back()->withErrors(['usuario' => 'No puedes eliminar tu propio usuario.']);
         }
+
+        // Si era motorizado, su ficha queda inactiva (conserva sus entregas)
+        DB::table('motorizados')->where('IdUsuario', $usuario->IdUsuario)->update(['activo' => 0]);
 
         // Si ya tiene ventas o pedidos se desactiva en vez de borrarse, para no perder el historial
         $tieneHistorial = DB::table('cpe_cabecera')->where('IdUsuario', $usuario->IdUsuario)->exists()

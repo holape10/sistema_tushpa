@@ -10,6 +10,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="{{ $color }}">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    @if ($delivery)<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">@endif
     <title>Carta · {{ $nombre }}</title>
     <meta name="description" content="Carta digital de {{ $nombre }}: platos, bebidas y precios.">
     @if ($logo)<link rel="icon" href="{{ asset($logo) }}">@endif
@@ -97,11 +99,20 @@
                                     @endforeach
                                 </div>
                             </div>
-                            @if ($p['img'])
-                                <img src="{{ $p['img'] }}" alt="" loading="lazy" class="w-24 h-24 rounded-xl object-cover shrink-0 bg-slate-100">
-                            @else
-                                <span class="precio self-start rounded-lg px-2.5 py-1 text-sm font-black shrink-0">{{ $soles($p['precio']) }}</span>
-                            @endif
+                            <div class="shrink-0 flex flex-col items-end gap-2">
+                                @if ($p['img'])
+                                    <img src="{{ $p['img'] }}" alt="" loading="lazy" class="w-24 h-24 rounded-xl object-cover bg-slate-100">
+                                @else
+                                    <span class="precio rounded-lg px-2.5 py-1 text-sm font-black">{{ $soles($p['precio']) }}</span>
+                                @endif
+                                @if ($delivery)
+                                    <button type="button" @click.stop="agregar({{ $p['id'] }})"
+                                            class="h-9 px-3 rounded-xl bg-acento text-white text-sm font-black shadow active:scale-95 transition">
+                                        <span x-show="!cantidadDe({{ $p['id'] }})">+ Agregar</span>
+                                        <span x-show="cantidadDe({{ $p['id'] }})" x-cloak x-text="'+ Otro (' + cantidadDe({{ $p['id'] }}) + ')'"></span>
+                                    </button>
+                                @endif
+                            </div>
                         </article>
                     @endforeach
                 </div>
@@ -115,7 +126,7 @@
         </p>
     </main>
 
-    <footer class="text-center text-xs text-slate-400 pb-8 px-4 space-y-1">
+    <footer class="text-center text-xs text-slate-400 {{ $delivery ? 'pb-28' : 'pb-8' }} px-4 space-y-1">
         @if ($negocio->direccion)<p>📍 {{ $negocio->direccion }}</p>@endif
         @if ($negocio->telefono)<p>📞 <a href="tel:{{ preg_replace('/\D/', '', $negocio->telefono) }}" class="underline">{{ $negocio->telefono }}</a></p>@endif
         <p class="pt-2">Precios en soles, incluyen impuestos · Carta digital por <b class="text-slate-500">TUSHPA</b></p>
@@ -137,10 +148,211 @@
         </div>
     </div>
 
+    @if ($delivery)
+        {{-- Barra del pedido --}}
+        <div x-show="carrito.length && !abierto" x-cloak x-transition class="fixed bottom-0 inset-x-0 z-30 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
+            <button type="button" @click="abrirPedido()" class="max-w-3xl mx-auto w-full h-14 rounded-2xl bg-acento text-white shadow-2xl flex items-center px-5 font-black">
+                <span class="w-8 h-8 rounded-full bg-white/25 flex items-center justify-center text-sm" x-text="unidades()"></span>
+                <span class="flex-1 text-left ml-3">🛵 Ver mi pedido delivery</span>
+                <span x-text="soles(subtotal())"></span>
+            </button>
+        </div>
+
+        {{-- Elegir presentación --}}
+        <div x-show="eligiendo" x-cloak @click="eligiendo = null" class="fixed inset-0 z-40 bg-slate-900/60 flex items-end sm:items-center justify-center p-4">
+            <div @click.stop class="bg-white rounded-3xl w-full max-w-md p-5 space-y-2">
+                <p class="font-black text-slate-800" x-text="eligiendo && eligiendo.nombre"></p>
+                <template x-for="op in (eligiendo ? eligiendo.opciones : [])" :key="op.id ?? 0">
+                    <button type="button" @click="sumar(eligiendo.id, op.id); eligiendo = null" class="w-full flex justify-between items-center h-12 px-4 rounded-xl ring-1 ring-slate-200 font-bold text-slate-700">
+                        <span x-text="op.nombre"></span><span class="acento" x-text="soles(op.precio)"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        {{-- Mi pedido: productos y datos de entrega --}}
+        <div x-show="abierto" x-cloak class="fixed inset-0 z-40 bg-slate-900/60 flex items-end sm:items-center justify-center sm:p-4" @keydown.escape.window="abierto = false">
+            <div class="bg-slate-50 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[94vh] overflow-y-auto">
+                <div class="sticky top-0 z-10 bg-white px-5 py-4 flex items-center border-b">
+                    <h2 class="flex-1 text-lg font-black text-slate-800">🛵 Mi pedido delivery</h2>
+                    <button type="button" @click="abierto = false" class="text-3xl leading-none text-slate-400">&times;</button>
+                </div>
+                <form @submit.prevent="enviar()" class="p-4 space-y-3">
+                    <div class="bg-white rounded-2xl ring-1 ring-slate-200 divide-y">
+                        <template x-for="(it, i) in carrito" :key="it.clave">
+                            <div class="p-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-bold text-slate-800 leading-tight" x-text="it.nombre"></p>
+                                        <p class="text-xs text-slate-500" x-text="soles(it.precio) + ' c/u'"></p>
+                                    </div>
+                                    <button type="button" @click="cambiar(i, -1)" class="w-8 h-8 rounded-full bg-slate-100 font-black">−</button>
+                                    <span class="w-6 text-center font-black" x-text="it.cantidad"></span>
+                                    <button type="button" @click="cambiar(i, 1)" class="w-8 h-8 rounded-full bg-slate-100 font-black">+</button>
+                                </div>
+                                <input x-model="it.nota" maxlength="80" placeholder="Indicación (ej.: sin cebolla)" class="mt-2 w-full h-9 rounded-lg border-slate-200 text-sm">
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="bg-white rounded-2xl ring-1 ring-slate-200 p-4 space-y-3 text-sm">
+                        <p class="font-black text-slate-800">¿A dónde te lo llevamos?</p>
+                        <input x-model="datos.cliente" required minlength="2" maxlength="100" placeholder="Tu nombre" class="w-full h-11 rounded-xl border-slate-300" autocomplete="name">
+                        <input x-model="datos.telefono" required inputmode="tel" maxlength="15" placeholder="Tu WhatsApp (ej.: 987654321)" class="w-full h-11 rounded-xl border-slate-300" autocomplete="tel">
+                        <input x-model="datos.direccion" required minlength="5" maxlength="200" placeholder="Dirección (calle, número, distrito)" class="w-full h-11 rounded-xl border-slate-300" autocomplete="street-address">
+                        <input x-model="datos.referencia" maxlength="200" placeholder="Referencia (ej.: frente al parque, puerta verde)" class="w-full h-11 rounded-xl border-slate-300">
+                        <div class="space-y-2">
+                            <button type="button" @click="miUbicacion()" class="w-full h-11 rounded-xl ring-2 font-bold" :class="datos.lat ? 'ring-emerald-500 text-emerald-700 bg-emerald-50' : 'ring-slate-300 text-slate-700'"
+                                    x-text="ubicando ? 'Buscando tu ubicación…' : (datos.lat ? '✓ Ubicación marcada (puedes mover el pin)' : '📍 Marcar mi ubicación en el mapa')"></button>
+                            <div x-show="mapaVisible" id="mapa-cliente" class="h-56 rounded-xl overflow-hidden"></div>
+                            <p x-show="mapaVisible" class="text-xs text-slate-500">Toca el mapa o arrastra el pin hasta tu puerta.</p>
+                            <p x-show="errorUbicacion" x-text="errorUbicacion" class="text-xs text-rose-600"></p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl ring-1 ring-slate-200 p-4 space-y-2 text-sm">
+                        <p class="font-black text-slate-800">¿Cómo pagarás al recibir?</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            @foreach ($mediosPago as $clave => $nombreMedio)
+                                <label class="flex items-center gap-2 h-11 px-3 rounded-xl ring-1 cursor-pointer" :class="datos.pago === @js($clave) ? 'ring-2 ring-[color:var(--acento)] bg-white font-bold' : 'ring-slate-200'">
+                                    <input type="radio" value="{{ $clave }}" x-model="datos.pago" class="text-[color:var(--acento)]"> {{ $nombreMedio }}
+                                </label>
+                            @endforeach
+                        </div>
+                        <label x-show="datos.pago === 'EFECTIVO'" class="block">¿Con cuánto pagas? (para llevarte el vuelto)
+                            <input type="number" x-model="datos.paga_con" min="0" step="0.10" placeholder="Ej.: 100" class="mt-1 w-full h-11 rounded-xl border-slate-300"></label>
+                        <textarea x-model="datos.nota" maxlength="150" rows="2" placeholder="Nota para el local (opcional)" class="w-full rounded-xl border-slate-300"></textarea>
+                    </div>
+
+                    <div class="bg-white rounded-2xl ring-1 ring-slate-200 p-4 text-sm space-y-1">
+                        <div class="flex justify-between"><span>Productos</span><span x-text="soles(subtotal())"></span></div>
+                        <div class="flex justify-between"><span>Envío</span>
+                            <span x-text="envio.costo !== null ? soles(envio.costo) + (envio.km !== null ? ' (' + envio.km.toFixed(1) + ' km)' : '') : (conTarifas ? 'Marca tu ubicación' : 'Por confirmar')"></span></div>
+                        <div class="flex justify-between text-lg font-black text-slate-900 pt-1 border-t"><span>Total</span><span x-text="soles(subtotal() + (envio.costo || 0))"></span></div>
+                        @if ((float) $negocio->delivery_minimo > 0)
+                            <p class="text-xs text-slate-500">Pedido mínimo: {{ $soles($negocio->delivery_minimo) }}</p>
+                        @endif
+                        <p x-show="envio.fuera" class="text-rose-600 font-semibold">Tu ubicación está fuera de nuestra zona de reparto.</p>
+                    </div>
+
+                    <p x-show="error" x-text="error" class="text-sm text-rose-600 font-semibold"></p>
+                    <button :disabled="enviando || envio.fuera" class="w-full h-14 rounded-2xl bg-acento text-white text-lg font-black shadow-lg disabled:opacity-50"
+                            x-text="enviando ? 'Enviando tu pedido…' : 'Pedir delivery · ' + soles(subtotal() + (envio.costo || 0))"></button>
+                </form>
+            </div>
+        </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    @endif
+
     <script>
         function carta() {
             const n = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+            const PRODUCTOS = @js($delivery ? collect($categorias)->flatMap(fn ($c) => $c['productos'])->mapWithKeys(fn ($p) => [$p['id'] => ['nombre' => $p['nombre'], 'precio' => $p['precio'], 'presentaciones' => $p['presentaciones']]]) : []);
+            const LOCAL = @js($local ?? null);
+            const CLAVE = 'carta-pedido-{{ $negocio->id_empresa_negocio }}';
+            const leer = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+            const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+            let mapa = null, pin = null;
             return {
+                // Pedido delivery
+                carrito: (leer(CLAVE) || []).filter(i => PRODUCTOS[i.id]), abierto: false, eligiendo: null, enviando: false, error: '', ubicando: false, errorUbicacion: '', mapaVisible: false,
+                conTarifas: @js((bool) ($conTarifas ?? false)), envio: { costo: null, km: null, fuera: false },
+                datos: Object.assign({ cliente: '', telefono: '', direccion: '', referencia: '', lat: null, lng: null, pago: 'EFECTIVO', paga_con: '', nota: '' }, leer(CLAVE + '-datos') || {}, { nota: '', paga_con: '' }),
+                soles(n) { return 'S/ ' + Number(n || 0).toFixed(2); },
+                unidades() { return this.carrito.reduce((s, i) => s + i.cantidad, 0); },
+                subtotal() { return Math.round(this.carrito.reduce((s, i) => s + i.precio * i.cantidad, 0) * 100) / 100; },
+                cantidadDe(id) { return this.carrito.filter(i => i.id === id).reduce((s, i) => s + i.cantidad, 0); },
+                agregar(id) {
+                    const p = PRODUCTOS[id];
+                    if (p.presentaciones.length) {
+                        this.eligiendo = { id, nombre: p.nombre, opciones: [{ id: null, nombre: 'Normal', precio: p.precio }, ...p.presentaciones] };
+                        return;
+                    }
+                    this.sumar(id, null);
+                },
+                sumar(id, presentacion) {
+                    const p = PRODUCTOS[id];
+                    const pr = presentacion ? p.presentaciones.find(x => x.id === presentacion) : null;
+                    const clave = id + '-' + (presentacion || 0);
+                    const fila = this.carrito.find(i => i.clave === clave);
+                    if (fila) fila.cantidad++;
+                    else this.carrito.push({ clave, id, presentacion, nombre: p.nombre + (pr ? ' (' + pr.nombre + ')' : ''), precio: pr ? pr.precio : p.precio, cantidad: 1, nota: '' });
+                    guardar(CLAVE, this.carrito);
+                },
+                cambiar(i, n) {
+                    this.carrito[i].cantidad += n;
+                    if (this.carrito[i].cantidad <= 0) this.carrito.splice(i, 1);
+                    if (!this.carrito.length) this.abierto = false;
+                    guardar(CLAVE, this.carrito);
+                },
+                abrirPedido() {
+                    this.abierto = true;
+                    this.error = '';
+                    if (this.datos.lat) this.$nextTick(() => this.mostrarMapa(this.datos.lat, this.datos.lng));
+                },
+                miUbicacion() {
+                    this.errorUbicacion = '';
+                    if (!navigator.geolocation) { this.mostrarMapa(null, null); return; }
+                    this.ubicando = true;
+                    navigator.geolocation.getCurrentPosition(
+                        pos => { this.ubicando = false; this.mostrarMapa(pos.coords.latitude, pos.coords.longitude); },
+                        () => { this.ubicando = false; this.errorUbicacion = 'No pudimos leer tu ubicación. Marca tu puerta tocando el mapa.'; this.mostrarMapa(null, null); },
+                        { enableHighAccuracy: true, timeout: 15000 }
+                    );
+                },
+                mostrarMapa(lat, lng) {
+                    this.mapaVisible = true;
+                    setTimeout(() => {
+                        const centro = lat !== null ? [lat, lng] : (LOCAL ? [LOCAL.lat, LOCAL.lng] : [-9.19, -75.02]);
+                        if (!mapa) {
+                            mapa = L.map('mapa-cliente').setView(centro, lat !== null || LOCAL ? 16 : 5);
+                            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapa);
+                            mapa.on('click', e => this.ponerPin(e.latlng.lat, e.latlng.lng));
+                        } else {
+                            mapa.invalidateSize();
+                            mapa.setView(centro, 16);
+                        }
+                        if (lat !== null) this.ponerPin(lat, lng);
+                    }, 80);
+                },
+                ponerPin(lat, lng) {
+                    if (!pin) {
+                        pin = L.marker([lat, lng], { draggable: true }).addTo(mapa);
+                        pin.on('dragend', () => { const c = pin.getLatLng(); this.ponerPin(c.lat, c.lng); });
+                    } else {
+                        pin.setLatLng([lat, lng]);
+                    }
+                    this.datos.lat = lat;
+                    this.datos.lng = lng;
+                    this.calcularEnvio();
+                },
+                calcularEnvio() {
+                    fetch(@js(route('carta.envio', $negocio->id_empresa_negocio)), { method: 'POST', headers: this.cabeceras(), body: JSON.stringify({ lat: this.datos.lat, lng: this.datos.lng }) })
+                        .then(r => r.json()).then(d => this.envio = d).catch(() => {});
+                },
+                cabeceras() {
+                    return { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content };
+                },
+                enviar() {
+                    this.error = '';
+                    if (this.conTarifas && !this.datos.lat) { this.error = 'Marca tu ubicación en el mapa para calcular el envío.'; return; }
+                    this.enviando = true;
+                    const cuerpo = Object.assign({}, this.datos, { items: this.carrito.map(i => ({ id: i.id, cantidad: i.cantidad, presentacion: i.presentacion, nota: i.nota })) });
+                    if (cuerpo.paga_con === '') delete cuerpo.paga_con;
+                    fetch(@js(route('carta.pedir', $negocio->id_empresa_negocio)), { method: 'POST', headers: this.cabeceras(), body: JSON.stringify(cuerpo) })
+                        .then(async r => {
+                            const d = await r.json().catch(() => ({}));
+                            if (r.status === 419) { this.error = 'La página estuvo abierta mucho tiempo. Recárgala y vuelve a enviar (tu pedido sigue guardado).'; return; }
+                            if (r.status === 429) { this.error = 'Muchos intentos seguidos. Espera unos minutos.'; return; }
+                            if (!r.ok) { this.error = d.message || 'No se pudo enviar el pedido.'; return; }
+                            guardar(CLAVE, []);
+                            guardar(CLAVE + '-datos', { cliente: this.datos.cliente, telefono: this.datos.telefono, direccion: this.datos.direccion, referencia: this.datos.referencia, lat: this.datos.lat, lng: this.datos.lng, pago: this.datos.pago });
+                            location.href = d.seguimiento;
+                        })
+                        .catch(() => this.error = 'Sin conexión. Revisa tu internet e intenta de nuevo.')
+                        .finally(() => this.enviando = false);
+                },
+
                 q: '', activa: null, foto: null,
                 todo: @js(collect($categorias)->flatMap(fn ($c) => collect($c['productos'])->map(fn ($p) => $p['nombre'].' '.$p['descripcion'].' '.$c['nombre']))->values()),
                 ver(t) { return !this.q.trim() || n(t).includes(n(this.q.trim())); },

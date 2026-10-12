@@ -29,7 +29,7 @@ class Carta
     /**
      * Categorías visibles con sus productos de venta (sin insumos), en el orden en que se crearon.
      *
-     * @return array<int, array{id: int, nombre: string, productos: array<int, array{id: int, nombre: string, descripcion: ?string, precio: float, normal: float, img: ?string, presentaciones: array<int, array{nombre: string, precio: float}>}>}>
+     * @return array<int, array{id: int, nombre: string, productos: array<int, array{id: int, nombre: string, descripcion: ?string, precio: float, normal: float, img: ?string, presentaciones: array<int, array{id: int, nombre: string, precio: float, factor: float}>}>}>
      */
     public static function categorias(int $sucursal): array
     {
@@ -41,7 +41,7 @@ class Carta
             ->get(['p.IdProducto', 'p.pronom', 'p.descripcion', 'p.propun', 'p.imagenproducto', 'p.cat_id', 'c.cat_nom']);
         $precios = Precios::vigentes($filas);
         $presentaciones = DB::table('producto_presentacion')->whereIn('IdProducto', $filas->pluck('IdProducto'))
-            ->where('estado', 1)->where('precio', '>', 0)->orderBy('precio')->get(['IdProducto', 'nombre', 'precio'])->groupBy('IdProducto');
+            ->where('estado', 1)->where('precio', '>', 0)->orderBy('precio')->get(['id_presentacion', 'IdProducto', 'nombre', 'precio', 'factor'])->groupBy('IdProducto');
 
         return $filas->filter(fn ($p) => $precios[$p->IdProducto] > 0)
             ->groupBy('cat_id')
@@ -56,7 +56,7 @@ class Carta
                     'normal' => (float) $p->propun,
                     'img' => $p->imagenproducto && is_file(public_path($p->imagenproducto)) ? asset($p->imagenproducto) : null,
                     'presentaciones' => ($presentaciones[$p->IdProducto] ?? collect())
-                        ->map(fn ($x) => ['nombre' => $x->nombre, 'precio' => (float) $x->precio])->values()->all(),
+                        ->map(fn ($x) => ['id' => (int) $x->id_presentacion, 'nombre' => $x->nombre, 'precio' => (float) $x->precio, 'factor' => (float) $x->factor])->values()->all(),
                 ])->values()->all(),
             ])->values()->all();
     }

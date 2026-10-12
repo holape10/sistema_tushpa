@@ -117,7 +117,8 @@
                     <input name="codigo_movil" value="{{ old('codigo_movil', $usuario->codigo_movil ?? '') }}" inputmode="numeric" maxlength="6"
                            :required="rol === 8" placeholder="Solo números" oninput="this.value = this.value.replace(/\D/g, '')"
                            :class="rol === 8 ? 'bg-sky-50 border-sky-400' : ''" class="{{ $in }}">
-                    <span class="text-xs text-gray-400" x-show="rol === 8">Con este código el mozo entra desde la tablet o celular.</span></label>
+                    <span class="text-xs text-gray-400" x-show="rol === 8">Con este código el mozo entra desde la tablet o celular.</span>
+                    <span class="text-xs text-emerald-700" x-show="rol === 12" x-cloak>🛵 Al entrar con su usuario va directo a su pantalla de repartos. Queda en la lista de Motorizados (con su celular) para asignarle pedidos.</span></label>
                 <label class="text-sm">Contraseña {{ $usuario ? '' : '*' }}
                     <div class="relative" x-data="{ ver: false }">
                         <input :type="ver ? 'text' : 'password'" name="password" {{ $usuario ? '' : 'required' }} minlength="4" autocomplete="new-password"

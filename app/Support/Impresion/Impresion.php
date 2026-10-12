@@ -4,6 +4,7 @@ namespace App\Support\Impresion;
 
 use App\Models\Mesa;
 use App\Support\ConsultaCpe;
+use App\Support\Delivery;
 use App\Support\Fidelizacion;
 use App\Support\Sunat\CodigoQr;
 use App\Support\Sunat\NumeroLetras;
@@ -235,14 +236,19 @@ class Impresion
         $destino = $pedido->ped_tip === 'Hotel' ? (string) $pedido->ped_obs
             : ($pedido->mes_nom ? ($pedido->pis_nom ? $pedido->pis_nom.' / ' : '').$pedido->mes_nom : mb_strtoupper((string) $pedido->ped_tip));
 
-        return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° '.$pedido->ped_id, $lineas, $anulacion, $motivo);
+        // Delivery: los datos de entrega van en la comanda (cliente, dirección, referencia, WhatsApp y cómo paga)
+        $entrega = $pedido->ped_tip === 'Delivery' && ! $anulacion ? Delivery::lineasComanda($pedido) : [];
+        $atiende = $pedido->entrega_origen === 'CARTA' ? 'PEDIDO WEB (CARTA QR)' : null;
+
+        return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° '.$pedido->ped_id, $lineas, $anulacion, $motivo, $entrega, $atiende);
     }
 
     /**
      * Imprime la comanda en la impresora de la categoría de cada producto.
      * Sirve para pedidos de mesa/llevar y para ventas directas (sin pedido).
      */
-    public static function comandaPara(int $sucursal, string $destino, string $referencia, array $lineas, bool $anulacion = false, string $motivo = ''): int
+    public static function comandaPara(int $sucursal, string $destino, string $referencia, array $lineas, bool $anulacion = false, string $motivo = '',
+        array $entrega = [], ?string $atiende = null): int
     {
         if (! $lineas) {
             return 0;
@@ -260,7 +266,7 @@ class Impresion
             }
         }
 
-        $usuario = Auth::user()?->apeusu;
+        $usuario = $atiende ?? Auth::user()?->apeusu;
         $enviados = 0;
 
         foreach ($grupos as $idImp => $items) {
@@ -279,6 +285,12 @@ class Impresion
                 ->texto($referencia.' · '.now()->format('d/m/Y H:i'))
                 ->texto('Atiende: '.($usuario ?? ''))
                 ->alinear('izq')->linea('=');
+            if ($entrega) {
+                foreach ($entrega as $dato) {
+                    $p->negrita()->parrafo($dato)->negrita(false);
+                }
+                $p->linea('=');
+            }
 
             foreach ($items as $it) {
                 $cant = rtrim(rtrim(number_format($it['cantidad'], 2, '.', ''), '0'), '.');

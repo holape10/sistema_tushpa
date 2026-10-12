@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Support\Buscar;
 use App\Support\Cocina;
 use App\Support\ControlStock;
+use App\Support\Delivery;
 use App\Support\Impresion\Impresion;
 use App\Support\MesasUnidas;
 use App\Support\OpcionesPlato;
@@ -832,6 +833,9 @@ class ComandasController extends Controller
                         'mot_id' => $order_type === 'delivery' ? session('comanda_mot_id') : null,
                         'ped_tot' => 0,
                     ]);
+                    if ($order_type === 'delivery') {
+                        Delivery::iniciar($pedido->ped_id);
+                    }
                 }
 
                 // 1) Eliminados con autorización (solo líneas sin nada cobrado)

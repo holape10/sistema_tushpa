@@ -6,6 +6,9 @@ use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Models\Producto;
 use App\Support\Carta;
+use App\Support\Delivery;
+use App\Support\PedidoCarta;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -29,10 +32,60 @@ class CartaController extends Controller
             ? DB::table('mesas')->where('mes_id', $request->integer('mesa'))->where('id_empresa_negocio', $negocio->id_empresa_negocio)->value('mes_nom')
             : null;
 
+        // Pedido delivery desde la carta (no en el QR de una mesa: ahí el cliente ya está en el local)
+        $delivery = $negocio->carta_delivery && ! $mesa;
+
         return view('carta.ver', $this->datos($negocio) + [
             'categorias' => Carta::categorias($negocio->id_empresa_negocio),
             'mesa' => $mesa,
+            'delivery' => $delivery,
+            'mediosPago' => array_diff_key(Delivery::MEDIOS_PAGO, ['PAGADO' => 1]),
+            'conTarifas' => $delivery && Delivery::tarifas($negocio->id_empresa_negocio),
+            'local' => $negocio->local_lat !== null ? ['lat' => (float) $negocio->local_lat, 'lng' => (float) $negocio->local_lng] : null,
         ]);
+    }
+
+    /** Costo de envío a la ubicación del cliente (antes de enviar el pedido) */
+    public function envio(Request $request, int $sucursal): JsonResponse
+    {
+        $negocio = Carta::sucursal($sucursal);
+        abort_unless($negocio && $negocio->carta_delivery, 404);
+        $d = $request->validate(['lat' => 'required|numeric|between:-90,90', 'lng' => 'required|numeric|between:-180,180']);
+
+        return response()->json(Delivery::costoEnvio($sucursal, (float) $d['lat'], (float) $d['lng']));
+    }
+
+    /** El cliente envía su pedido delivery desde la carta */
+    public function pedir(Request $request, int $sucursal): JsonResponse
+    {
+        $negocio = Carta::sucursal($sucursal);
+        abort_unless($negocio, 404);
+        $d = $request->validate([
+            'items' => 'required|array|min:1|max:60',
+            'items.*.id' => 'required|integer',
+            'items.*.cantidad' => 'required|integer|min:1|max:99',
+            'items.*.presentacion' => 'nullable|integer',
+            'items.*.nota' => 'nullable|string|max:80',
+            'cliente' => 'required|string|min:2|max:100',
+            'telefono' => ['required', 'regex:/^\+?[\d\s]{9,15}$/'],
+            'direccion' => 'required|string|min:5|max:200',
+            'referencia' => 'nullable|string|max:200',
+            'lat' => 'nullable|numeric|between:-90,90',
+            'lng' => 'nullable|numeric|between:-180,180|required_with:lat',
+            'pago' => 'required|in:'.implode(',', array_diff(array_keys(Delivery::MEDIOS_PAGO), ['PAGADO'])),
+            'paga_con' => 'nullable|numeric|min:0|max:9999',
+            'nota' => 'nullable|string|max:150',
+        ], ['telefono.regex' => 'Escribe tu número de WhatsApp (9 dígitos).'], [
+            'cliente' => 'nombre', 'telefono' => 'WhatsApp', 'direccion' => 'dirección', 'pago' => 'medio de pago', 'paga_con' => 'monto con el que pagas',
+        ]);
+
+        try {
+            $pedido = PedidoCarta::registrar($negocio, $d['items'], $d);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($pedido);
     }
 
     public function configuracion(): View
@@ -55,8 +108,9 @@ class CartaController extends Controller
         $datos = $request->validate([
             'carta_mensaje' => 'nullable|string|max:300',
             'carta_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
-        ], [], ['carta_mensaje' => 'mensaje', 'carta_color' => 'color']);
-        $negocio->update($datos + ['carta_activa' => $request->boolean('carta_activa')]);
+            'delivery_minimo' => 'nullable|numeric|min:0|max:99999',
+        ], [], ['carta_mensaje' => 'mensaje', 'carta_color' => 'color', 'delivery_minimo' => 'pedido mínimo']);
+        $negocio->update($datos + ['carta_activa' => $request->boolean('carta_activa'), 'carta_delivery' => $request->boolean('carta_delivery')]);
 
         return back()->with('success', $request->boolean('carta_activa') ? 'Carta digital publicada.' : 'Carta digital desactivada.');
     }
