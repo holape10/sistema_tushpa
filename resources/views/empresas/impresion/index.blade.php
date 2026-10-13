@@ -30,6 +30,18 @@
                         @endif
                         Mientras esté desconectado, los comprobantes y precuentas se imprimen con el navegador (con vista previa).
                     </p>
+                    @if ($agentes->isNotEmpty())
+                        {{-- Una caja por PC: cada PC con su agente imprime en sus propias impresoras --}}
+                        <div class="flex flex-wrap gap-1.5 mt-2">
+                            @foreach ($agentes as $a)
+                                @php $vivo = \Carbon\Carbon::parse($a->contacto)->gt(now()->subSeconds(90)); @endphp
+                                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold {{ $vivo ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500' }}"
+                                      title="Último contacto: {{ \Carbon\Carbon::parse($a->contacto)->locale('es')->diffForHumans() }}">
+                                    <span class="w-2 h-2 rounded-full {{ $vivo ? 'bg-green-500' : 'bg-gray-400' }}"></span> PC {{ $a->pc }}
+                                </span>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
                 @php $hayInstalador = is_file(\App\Http\Controllers\ImpresionController::rutaInstalador()); @endphp
                 <div class="flex flex-col items-stretch sm:items-end gap-2">
@@ -37,6 +49,9 @@
                         {{-- Instalador: el cliente solo hace doble clic (el código de un solo uso va en el nombre del archivo) --}}
                         <form method="POST" action="{{ route('impresion.agente') }}" class="flex flex-wrap gap-2 justify-end" x-data="{ codigo: '' }">
                             @csrf
+                            <label class="flex items-center gap-1.5 text-xs text-gray-500 mr-auto" title="Solo si se perdió o cambió una PC: las demás PCs tendrán que reinstalar">
+                                <input type="checkbox" name="nueva" value="1" class="rounded" onchange="this.form.onsubmit = this.checked ? () => confirm('Se generará una clave NUEVA: las PCs que ya tienen el agente dejarán de imprimir hasta reinstalarlo. ¿Continuar?') : null"> Clave nueva
+                            </label>
                             <button name="modo" value="instalador" class="px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 shadow"
                                     title="Instala todo en C:\sistema, lo deja en el inicio de Windows y lo conecta con este sistema"><i class="fas fa-download"></i> Descargar instalador (recomendado)</button>
                             <button type="button" class="px-4 py-2 rounded-xl bg-white border border-green-300 text-green-700 text-sm font-semibold hover:bg-green-50"
@@ -47,7 +62,7 @@
                         </form>
                     @endif
                     <form method="POST" action="{{ route('impresion.agente') }}" class="flex flex-wrap gap-2 justify-end"
-                          onsubmit="return confirm('Se generará una clave nueva para esta sucursal. Si ya tienes el agente instalado, tendrás que poner la clave nueva en su config.ini. ¿Continuar?')">
+                          >
                         @csrf
                         <button name="modo" value="completo" class="px-4 py-2 rounded-xl {{ $hayInstalador ? 'bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50' : 'bg-indigo-600 text-white hover:bg-indigo-700' }} text-sm font-semibold"
                                 title="ZIP con worker.php, config.ini, iniciar.bat, invisible.vbs y LEEME.txt (para técnicos)"><i class="fas fa-file-zipper"></i> Agente (ZIP)</button>

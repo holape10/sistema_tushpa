@@ -32,3 +32,11 @@ PROBLEMAS
 - Todo queda anotado en agente.log (en esta carpeta).
 - "CLAVE NO VALIDA": se genero una clave nueva en el sistema; descarga otra vez "Solo la clave"
   y reemplaza ese bloque en config.ini.
+
+VARIAS CAJAS (UNA PC POR CAJA)
+1. Instala el agente en CADA PC que tenga una ticketera (el mismo instalador o descargas
+   uno nuevo: todas las PCs usan la misma clave).
+2. En el sistema, en Impresoras, la ruta de cada ticketera lleva el nombre de SU PC:
+     CAJA01/CPE    CAJA02/CPE2    CAJA03/CPE3
+3. Cada agente imprime lo de las impresoras de su propia PC (sin compartir por red ni
+   pedir contraseñas). Si el agente de una PC está apagado, otro agente intenta por red.

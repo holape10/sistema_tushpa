@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Support\Impresion\Impresion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -65,6 +66,7 @@ class ImpresionController extends Controller
             'impresoras' => DB::table('configuracion_impresoras')->where('id_empresa_negocio', $sucursal)->orderByDesc('predeterminado')->orderBy('Id')->get(),
             'negocio' => DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->first(),
             'conectado' => Impresion::agenteConectado($sucursal),
+            'agentes' => DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)->where('contacto', '>=', now()->subDays(7))->orderBy('pc')->get(),
             'cola' => DB::table('cola_impresion')->where('id_empresa_negocio', $sucursal)->orderByDesc('id')->limit(25)
                 ->get(['id', 'impresora', 'tipo', 'referencia', 'estado', 'intentos', 'error', 'creado', 'impreso']),
             'categorias' => DB::table('categorias')->where('id_empresa_negocio', $sucursal)->orderBy('cat_nom')->get(['cat_id', 'cat_nom', 'impresora', 'impresora2']),
@@ -199,10 +201,15 @@ class ImpresionController extends Controller
      * Genera una clave nueva para la sucursal (la anterior deja de servir) y devuelve el bloque que va en config.ini.
      * Así cada instalación o descarga deja una sola clave válida.
      */
-    private function bloqueClave(int $sucursal): array
+    private function bloqueClave(int $sucursal, bool $nueva = false): array
     {
-        $token = Str::random(48);
-        DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->update(['token_impresion' => hash('sha256', $token)]);
+        $token = $nueva ? null : self::claveVigente($sucursal);
+        if (! $token) {
+            $token = Str::random(48);
+            DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->update([
+                'token_impresion' => hash('sha256', $token), 'token_impresion_cifrado' => Crypt::encryptString($token),
+            ]);
+        }
 
         $negocio = DB::table('empresa_negocios as n')->join('empresa as e', 'e.IdEmpresa', '=', 'n.IdEmpresa')
             ->where('n.id_empresa_negocio', $sucursal)->first(['n.nombre_comercial', 'e.NomEmpresa', 'e.IdEmpresa']);
@@ -213,10 +220,27 @@ class ImpresionController extends Controller
         return [$seccion, $bloque];
     }
 
+    /** La clave actual de la sucursal (para instalar otra PC con la misma); null si no hay o no se puede leer */
+    private static function claveVigente(int $sucursal): ?string
+    {
+        $n = DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->first(['token_impresion', 'token_impresion_cifrado']);
+        try {
+            $token = $n && $n->token_impresion_cifrado ? Crypt::decryptString($n->token_impresion_cifrado) : null;
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $token && hash_equals((string) $n->token_impresion, hash('sha256', $token)) ? $token : null;
+    }
+
     public function descargarAgente(Request $request)
     {
         $this->soloAdmin();
         $sucursal = $this->sucursal();
+        // "Clave nueva": las PCs con la clave anterior dejan de imprimir (por ejemplo, si se perdió una PC)
+        if ($request->boolean('nueva')) {
+            $this->bloqueClave($sucursal, true);
+        }
 
         // Instalador: el nombre del .exe lleva esta dirección y un código de un solo uso; al instalarse lo canjea por la clave
         if ($request->input('modo') === 'instalador') {
@@ -295,6 +319,21 @@ class ImpresionController extends Controller
 
     // ------------------------------------------------------------------ API del agente (sin sesión, con token)
 
+    /** Segundos sin consultar tras los que un agente se considera desconectado */
+    private const AGENTE_VIVO = 90;
+
+    /** PC de una impresora compartida ("CAJA02/CPE2", "\\\\CAJA02\\CPE2"); null si es de red, A4 local o sin PC */
+    public static function pcDeRuta(string $ruta, string $conexion): ?string
+    {
+        if ($conexion === 'RED') {
+            return null;
+        }
+        $r = trim(str_replace('/', '\\', preg_replace('#^smb://#i', '', trim($ruta))), '\\');
+        $partes = explode('\\', $r, 2);
+
+        return count($partes) === 2 && $partes[0] !== '' && $partes[1] !== '' ? strtoupper($partes[0]) : null;
+    }
+
     private function sucursalDelToken(Request $request): int
     {
         $token = (string) $request->header('X-Token', '');
@@ -318,6 +357,18 @@ class ImpresionController extends Controller
 
         // "Agente conectado": basta marcarlo una vez por consulta (llega cada <= 25 s; se considera caído a los 90 s)
         DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->update(['impresion_contacto' => now()]);
+        $miPc = strtoupper(mb_substr(trim((string) $request->query('pc', '')), 0, 60));
+        if ($miPc !== '') {
+            DB::table('impresion_agentes')->updateOrInsert(['id_empresa_negocio' => $sucursal, 'pc' => $miPc], ['contacto' => now()]);
+        }
+        // PCs con agente conectado: lo de sus impresoras compartidas solo lo imprime ese agente (en su misma PC)
+        $pcsConAgente = DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)
+            ->where('contacto', '>=', now()->subSeconds(self::AGENTE_VIVO))->pluck('pc')->all();
+        $esMio = function (object $t) use ($miPc, $pcsConAgente) {
+            $pc = self::pcDeRuta((string) $t->ruta, (string) $t->tip_conex_imp);
+
+            return $pc === null || ! in_array($pc, $pcsConAgente, true) || $pc === $miPc;
+        };
 
         // Lo que se le puede entregar: pendiente, o entregado hace más de 90 s sin confirmación (el agente se cayó a medio camino)
         $porEntregar = fn ($q) => $q->where('id_empresa_negocio', $sucursal)
@@ -336,8 +387,11 @@ class ImpresionController extends Controller
                 continue;
             }
 
-            $ids = DB::transaction(function () use ($porEntregar) {
-                $ids = DB::table('cola_impresion')->where($porEntregar)->orderBy('id')->limit(10)->lockForUpdate()->pluck('id');
+            $ids = DB::transaction(function () use ($porEntregar, $esMio) {
+                $candidatos = DB::table('cola_impresion')->where($porEntregar)->orderBy('id')->limit(40)->lockForUpdate()->pluck('id');
+                $ids = DB::table('cola_impresion as c')->leftJoin('configuracion_impresoras as i', 'i.Id', '=', 'c.id_impresora')
+                    ->whereIn('c.id', $candidatos)->orderBy('c.id')->get(['c.id', 'i.ruta', 'i.tip_conex_imp'])
+                    ->filter($esMio)->take(10)->pluck('id');
                 if ($ids->isNotEmpty()) {
                     DB::table('cola_impresion')->whereIn('id', $ids)->update(['estado' => 1, 'entregado' => now(), 'intentos' => DB::raw('intentos + 1')]);
                 }
@@ -352,6 +406,10 @@ class ImpresionController extends Controller
                     ->get(['c.id', 'c.tipo', 'c.referencia', 'c.contenido', 'i.descripcion', 'i.ruta', 'i.tip_conex_imp']);
 
                 return response()->json(['trabajos' => $trabajos]);
+            }
+            // Hay trabajos pero son de las impresoras de otra PC (su agente los imprime)
+            if (microtime(true) + 0.7 < $limite) {
+                usleep(700000);
             }
         } while (microtime(true) < $limite);
 

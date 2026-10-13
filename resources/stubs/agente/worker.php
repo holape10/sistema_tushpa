@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AGENTE DE IMPRESIÓN MULTI-SISTEMA (TUSHPA)
  * ------------------------------------------
@@ -14,21 +15,20 @@
  *
  * Funciona con PHP 7 u 8 (extensión openssl activa para https).
  */
-
 date_default_timezone_set('America/Lima');
 set_time_limit(0);
 
 define('CARPETA', __DIR__);
-define('CONFIG', CARPETA . DIRECTORY_SEPARATOR . 'config.ini');
-define('LOG', CARPETA . DIRECTORY_SEPARATOR . 'agente.log');
+define('CONFIG', CARPETA.DIRECTORY_SEPARATOR.'config.ini');
+define('LOG', CARPETA.DIRECTORY_SEPARATOR.'agente.log');
 
 function registro($mensaje)
 {
-    $linea = '[' . date('d/m/Y H:i:s') . '] ' . $mensaje . PHP_EOL;
+    $linea = '['.date('d/m/Y H:i:s').'] '.$mensaje.PHP_EOL;
     echo $linea;
     // agente.log: para revisar qué pasó cuando corre oculto (se reinicia al pasar 1 MB)
     if (@filesize(LOG) > 1048576) {
-        @rename(LOG, LOG . '.anterior');
+        @rename(LOG, LOG.'.anterior');
     }
     @file_put_contents(LOG, $linea, FILE_APPEND);
 }
@@ -52,31 +52,34 @@ function partirRuta($ruta)
     $r = trim(str_replace('/', '\\', $r), '\\');
     $partes = explode('\\', $r, 2);
     if (count($partes) === 2 && $partes[0] !== '' && $partes[1] !== '') {
-        return array($partes[0], $partes[1]);
+        return [$partes[0], $partes[1]];
     }
-    return array('', $r);
+
+    return ['', $r];
 }
 
 /** ¿Ese nombre de PC es esta misma PC? */
 function esEstaPc($pc)
 {
     $pc = strtolower(trim($pc));
+
     return $pc === '' || $pc === 'localhost' || $pc === '127.0.0.1' || $pc === strtolower(gethostname())
         || $pc === strtolower((string) getenv('COMPUTERNAME'));
 }
 
 // ------------------------------------------------------------------ configuración
 
-$GLOBALS['ajustes'] = array('intervalo' => 2, 'sumatra' => CARPETA . DIRECTORY_SEPARATOR . 'sumatrapdf.exe', 'verificar_ssl' => 0);
-$GLOBALS['sistemas'] = array();
+$GLOBALS['ajustes'] = ['intervalo' => 2, 'sumatra' => CARPETA.DIRECTORY_SEPARATOR.'sumatrapdf.exe', 'verificar_ssl' => 0];
+$GLOBALS['sistemas'] = [];
 $GLOBALS['config_fecha'] = 0;
 
 function leerConfig()
 {
     clearstatcache(true, CONFIG);
     $fecha = @filemtime(CONFIG);
-    if (!$fecha) {
-        registro('ERROR: no se encontró config.ini en ' . CARPETA);
+    if (! $fecha) {
+        registro('ERROR: no se encontró config.ini en '.CARPETA);
+
         return;
     }
     if ($fecha === $GLOBALS['config_fecha']) {
@@ -86,19 +89,21 @@ function leerConfig()
     if ($datos === false) {
         registro('ERROR: config.ini tiene un error de escritura. Revisa comillas y corchetes.');
         $GLOBALS['config_fecha'] = $fecha;
+
         return;
     }
     $GLOBALS['config_fecha'] = $fecha;
 
-    $sistemas = array();
+    $sistemas = [];
     foreach ($datos as $nombre => $c) {
-        if (!is_array($c)) {
+        if (! is_array($c)) {
             continue;
         }
         if (strtoupper($nombre) === 'AGENTE') {
             foreach ($c as $k => $v) {
                 $GLOBALS['ajustes'][$k] = $v;
             }
+
             continue;
         }
         if (empty($c['token'])) {
@@ -111,9 +116,9 @@ function leerConfig()
             continue;
         }
         if (strpos($base, '://') === false) {
-            $base = 'https://' . $base;
+            $base = 'https://'.$base;
         }
-        $sistemas[$nombre] = array('nombre' => $nombre, 'nuevo' => $nuevo, 'base' => rtrim($base, '/'), 'token' => trim($c['token']), 'errores' => 0);
+        $sistemas[$nombre] = ['nombre' => $nombre, 'nuevo' => $nuevo, 'base' => rtrim($base, '/'), 'token' => trim($c['token']), 'errores' => 0];
     }
 
     // Conserva el contador de errores de los que ya estaban
@@ -124,12 +129,12 @@ function leerConfig()
     }
     $GLOBALS['sistemas'] = $sistemas;
 
-    registro('Configuración cargada: ' . count($sistemas) . ' sistema(s).');
+    registro('Configuración cargada: '.count($sistemas).' sistema(s).');
     foreach ($sistemas as $s) {
-        registro('  -> ' . $s['nombre'] . ' (' . ($s['nuevo'] ? 'nuevo' : 'antiguo') . '): ' . $s['base']);
+        registro('  -> '.$s['nombre'].' ('.($s['nuevo'] ? 'nuevo' : 'antiguo').'): '.$s['base']);
     }
-    if (!is_file($GLOBALS['ajustes']['sumatra'])) {
-        registro('Aviso: no está sumatrapdf.exe (' . $GLOBALS['ajustes']['sumatra'] . '). Los PDF A4 no se podrán imprimir.');
+    if (! is_file($GLOBALS['ajustes']['sumatra'])) {
+        registro('Aviso: no está sumatrapdf.exe ('.$GLOBALS['ajustes']['sumatra'].'). Los PDF A4 no se podrán imprimir.');
     }
 }
 
@@ -138,10 +143,11 @@ function leerConfig()
 function contexto($metodo = 'GET', $cabeceras = '', $contenido = '', $timeout = 10)
 {
     $verificar = (bool) (int) $GLOBALS['ajustes']['verificar_ssl'];
-    return stream_context_create(array(
-        'http' => array('method' => $metodo, 'header' => $cabeceras, 'content' => $contenido, 'timeout' => $timeout, 'ignore_errors' => true),
-        'ssl' => array('verify_peer' => $verificar, 'verify_peer_name' => $verificar),
-    ));
+
+    return stream_context_create([
+        'http' => ['method' => $metodo, 'header' => $cabeceras, 'content' => $contenido, 'timeout' => $timeout, 'ignore_errors' => true],
+        'ssl' => ['verify_peer' => $verificar, 'verify_peer_name' => $verificar],
+    ]);
 }
 
 /** Devuelve array(código HTTP, cuerpo) o null si no hubo conexión */
@@ -159,7 +165,8 @@ function pedir($url, $metodo = 'GET', $cabeceras = '', $contenido = '', $timeout
             }
         }
     }
-    return array($codigo, $cuerpo);
+
+    return [$codigo, $cuerpo];
 }
 
 // ------------------------------------------------------------------ impresión
@@ -177,12 +184,13 @@ function imprimirBruto($bytes, $ruta, $conexion = 'COMPARTIDO')
         $ip = $partes[0];
         $puerto = isset($partes[1]) ? (int) $partes[1] : 9100;
         $con = @fsockopen($ip, $puerto, $errno, $errstr, 5);
-        if (!$con) {
+        if (! $con) {
             return "No se pudo conectar a $ip:$puerto ($errstr)";
         }
         stream_set_timeout($con, 10);
         $escrito = fwrite($con, $bytes);
         fclose($con);
+
         return $escrito === strlen($bytes) ? '' : 'La impresora no recibió todo el ticket';
     }
 
@@ -190,36 +198,39 @@ function imprimirBruto($bytes, $ruta, $conexion = 'COMPARTIDO')
     if (preg_match('/^(LPT|COM)\d+$/i', $ruta)) {
         $destino = $ruta;
     } else {
-        list($pc, $compartida) = partirRuta($ruta);
-        $destino = '\\\\' . ($pc === '' ? 'localhost' : $pc) . '\\' . $compartida;
+        [$pc, $compartida] = partirRuta($ruta);
+        // Impresora de esta misma PC: se usa localhost (sin pedir usuario ni contraseña de red)
+        $destino = '\\\\'.(esEstaPc($pc) ? 'localhost' : $pc).'\\'.$compartida;
     }
 
     $tmp = tempnam(sys_get_temp_dir(), 'tsh');
     file_put_contents($tmp, $bytes);
-    $salida = array();
-    exec('copy /b ' . escapeshellarg($tmp) . ' ' . escapeshellarg($destino) . ' 2>&1', $salida, $codigo);
+    $salida = [];
+    exec('copy /b '.escapeshellarg($tmp).' '.escapeshellarg($destino).' 2>&1', $salida, $codigo);
     @unlink($tmp);
-    return $codigo === 0 ? '' : 'No se pudo imprimir en ' . $destino . ' (¿está compartida con ese nombre?): ' . trim(implode(' ', $salida));
+
+    return $codigo === 0 ? '' : 'No se pudo imprimir en '.$destino.' (¿está compartida con ese nombre?): '.trim(implode(' ', $salida));
 }
 
 /** PDF (A4) con SumatraPDF en la impresora de Windows con ese nombre (vacío = la predeterminada) */
 function imprimirPdf($bytes, $impresora)
 {
     $sumatra = $GLOBALS['ajustes']['sumatra'];
-    if (!is_file($sumatra)) {
-        return 'Falta sumatrapdf.exe en ' . $sumatra;
+    if (! is_file($sumatra)) {
+        return 'Falta sumatrapdf.exe en '.$sumatra;
     }
-    $pdf = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'tushpa_' . date('His') . '_' . mt_rand(1000, 9999) . '.pdf';
+    $pdf = sys_get_temp_dir().DIRECTORY_SEPARATOR.'tushpa_'.date('His').'_'.mt_rand(1000, 9999).'.pdf';
     file_put_contents($pdf, $bytes);
 
     // Sumatra usa el nombre como aparece en Windows: de esta PC "CAJA"; de otra PC "\\PC_CAJA\CAJA" (agregada en esta PC)
-    list($pc, $nombre) = partirRuta($impresora);
-    $impresora = esEstaPc($pc) ? $nombre : '\\\\' . $pc . '\\' . $nombre;
-    $destino = $impresora === '' ? '-print-to-default' : '-print-to "' . $impresora . '"';
-    $salida = array();
-    exec('"' . $sumatra . '" ' . $destino . ' -silent "' . $pdf . '" 2>&1', $salida, $codigo);
+    [$pc, $nombre] = partirRuta($impresora);
+    $impresora = esEstaPc($pc) ? $nombre : '\\\\'.$pc.'\\'.$nombre;
+    $destino = $impresora === '' ? '-print-to-default' : '-print-to "'.$impresora.'"';
+    $salida = [];
+    exec('"'.$sumatra.'" '.$destino.' -silent "'.$pdf.'" 2>&1', $salida, $codigo);
     @unlink($pdf);
-    return $codigo === 0 ? '' : 'SumatraPDF no pudo imprimir en "' . $impresora . '" (revisa el nombre exacto en Windows)';
+
+    return $codigo === 0 ? '' : 'SumatraPDF no pudo imprimir en "'.$impresora.'" (revisa el nombre exacto en Windows)';
 }
 
 // ------------------------------------------------------------------ sistemas
@@ -227,13 +238,14 @@ function imprimirPdf($bytes, $impresora)
 /** Sistema nuevo: trae hasta 10 trabajos, los imprime y avisa el resultado de cada uno */
 function atenderNuevo(&$s)
 {
-    $cab = 'X-Token: ' . $s['token'] . "\r\nAccept: application/json\r\n";
-    $r = pedir($s['base'] . '/api/impresion/trabajos?espera=0', 'GET', $cab);
-    if (!revisarConexion($s, $r)) {
+    $cab = 'X-Token: '.$s['token']."\r\nAccept: application/json\r\n";
+    // Con el nombre de esta PC el sistema le da lo de sus impresoras (una caja por PC, cada una con su agente)
+    $r = pedir($s['base'].'/api/impresion/trabajos?espera=0&pc='.rawurlencode((string) (getenv('COMPUTERNAME') ?: gethostname())), 'GET', $cab);
+    if (! revisarConexion($s, $r)) {
         return;
     }
     $json = json_decode($r[1], true);
-    $trabajos = isset($json['trabajos']) && is_array($json['trabajos']) ? $json['trabajos'] : array();
+    $trabajos = isset($json['trabajos']) && is_array($json['trabajos']) ? $json['trabajos'] : [];
 
     foreach ($trabajos as $t) {
         $bytes = base64_decode((string) $t['contenido']);
@@ -241,22 +253,22 @@ function atenderNuevo(&$s)
         $ruta = isset($t['ruta']) && $t['ruta'] !== '' ? $t['ruta'] : (isset($t['descripcion']) ? $t['descripcion'] : '');
 
         $error = empiezaCon($bytes, '%PDF') ? imprimirPdf($bytes, $ruta) : imprimirBruto($bytes, $ruta, $conexion);
-        registro(($error === '' ? 'OK  ' : 'ERR ') . $s['nombre'] . ' · ' . $t['tipo'] . ' ' . $t['referencia'] . ' -> ' . $ruta . ($error ? ' | ' . $error : ''));
+        registro(($error === '' ? 'OK  ' : 'ERR ').$s['nombre'].' · '.$t['tipo'].' '.$t['referencia'].' -> '.$ruta.($error ? ' | '.$error : ''));
 
-        pedir($s['base'] . '/api/impresion/resultado', 'POST', $cab . "Content-Type: application/json\r\n",
-            json_encode(array('id' => $t['id'], 'ok' => $error === '', 'error' => $error === '' ? null : substr($error, 0, 240))));
+        pedir($s['base'].'/api/impresion/resultado', 'POST', $cab."Content-Type: application/json\r\n",
+            json_encode(['id' => $t['id'], 'ok' => $error === '', 'error' => $error === '' ? null : substr($error, 0, 240)]));
     }
 }
 
 /** Sistema antiguo: mismo funcionamiento del worker.php anterior (un trabajo por vuelta) */
 function atenderAntiguo(&$s)
 {
-    $r = pedir($s['base'] . '/api/impresion/pendiente?token=' . urlencode($s['token']));
-    if (!revisarConexion($s, $r)) {
+    $r = pedir($s['base'].'/api/impresion/pendiente?token='.urlencode($s['token']));
+    if (! revisarConexion($s, $r)) {
         return;
     }
     $pedido = json_decode($r[1], true);
-    if (!$pedido || !isset($pedido['id'])) {
+    if (! $pedido || ! isset($pedido['id'])) {
         return;
     }
 
@@ -271,10 +283,12 @@ function atenderAntiguo(&$s)
         $error = imprimirBruto(base64_decode($contenido), $impresora);
         $tipo = 'Ticket';
     }
-    registro(($error === '' ? 'OK  ' : 'ERR ') . $s['nombre'] . ' · ' . $tipo . ' -> ' . $impresora . ($error ? ' | ' . $error : ''));
+    registro(($error === '' ? 'OK  ' : 'ERR ').$s['nombre'].' · '.$tipo.' -> '.$impresora.($error ? ' | '.$error : ''));
 
     // Igual que el worker anterior: solo se marca si se imprimió (si falló, se reintenta en la siguiente vuelta)
-    if ($error === '') pedir($s['base'] . '/api/impresion/marcar-impreso/' . $pedido['id'] . '?token=' . urlencode($s['token']));
+    if ($error === '') {
+        pedir($s['base'].'/api/impresion/marcar-impreso/'.$pedido['id'].'?token='.urlencode($s['token']));
+    }
 }
 
 /** Avisa una sola vez cuando un sistema se cae y cuando vuelve */
@@ -283,27 +297,30 @@ function revisarConexion(&$s, $r)
     if ($r === null || $r[0] >= 500 || $r[0] === 0) {
         $s['errores']++;
         if ($s['errores'] === 1 || $s['errores'] % 150 === 0) {
-            registro('Sin conexión con ' . $s['nombre'] . ' (' . $s['base'] . '), reintentando...');
+            registro('Sin conexión con '.$s['nombre'].' ('.$s['base'].'), reintentando...');
         }
+
         return false;
     }
     if ($r[0] === 401 || $r[0] === 403) {
         $s['errores']++;
         if ($s['errores'] === 1 || $s['errores'] % 150 === 0) {
-            registro('CLAVE NO VÁLIDA en ' . $s['nombre'] . ': descarga de nuevo la clave desde el sistema (Impresoras).');
+            registro('CLAVE NO VÁLIDA en '.$s['nombre'].': descarga de nuevo la clave desde el sistema (Impresoras).');
         }
+
         return false;
     }
     if ($s['errores']) {
-        registro('Conectado otra vez con ' . $s['nombre'] . '.');
+        registro('Conectado otra vez con '.$s['nombre'].'.');
         $s['errores'] = 0;
     }
+
     return $r[0] < 400;
 }
 
 // ------------------------------------------------------------------ bucle
 
-registro('Agente de impresión iniciado (PHP ' . PHP_VERSION . ').');
+registro('Agente de impresión iniciado (PHP '.PHP_VERSION.').');
 while (true) {
     leerConfig();
     foreach (array_keys($GLOBALS['sistemas']) as $n) {
@@ -314,7 +331,7 @@ while (true) {
                 atenderAntiguo($GLOBALS['sistemas'][$n]);
             }
         } catch (Throwable $e) {
-            registro('Error en ' . $n . ': ' . $e->getMessage());
+            registro('Error en '.$n.': '.$e->getMessage());
         }
     }
     sleep(max(1, (int) $GLOBALS['ajustes']['intervalo']));

@@ -418,6 +418,7 @@
         if (medios.some(m => m.id == sel.value)) { alert('EL MEDIO DE PAGO YA SE ENCUENTRA AGREGADO'); return; }
         const op = EXIGE_OP ? el('op_med_pag').value.trim() : '';
         if (EXIGE_OP && !esEfectivo(sel.selectedOptions[0]) && !op) { alert('Escribe el número de operación del pago con ' + sel.selectedOptions[0].dataset.nom + '.'); el('op_med_pag').focus(); return; }
+        if (op && medios.some(m => (m.op || '').toUpperCase() === op.toUpperCase())) { alert('El N° de operación ' + op + ' ya está en este cobro.'); el('op_med_pag').focus(); return; }
         medios.push({ id: sel.value, nom: sel.selectedOptions[0].dataset.nom, monto: monto, op: op });
         if (EXIGE_OP) el('op_med_pag').value = '';
         renderMedios();

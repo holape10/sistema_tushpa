@@ -10,6 +10,7 @@ use App\Models\Producto;
 use App\Models\Turno;
 use App\Models\User;
 use App\Support\Sunat\EnvioAutomatico;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -288,6 +289,26 @@ class Comprobante
         }
         foreach ($ids as $k => $idMedio) {
             $revisar($idMedio, $operaciones[$k] ?? null);
+        }
+        // El N° de operación no se repite: ni en este cobro ni en otra venta vigente de la empresa
+        $usados = [];
+        foreach ($ids as $k => $idMedio) {
+            $op = mb_strtoupper(trim((string) ($operaciones[$k] ?? '')));
+            if ($op === '') {
+                continue;
+            }
+            if (isset($usados[$op])) {
+                throw new \RuntimeException("El N° de operación {$op} está repetido en este cobro.");
+            }
+            $usados[$op] = true;
+            $previo = DB::table('venta_medio_pago as v')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'v.IdCpe_cabecera')
+                ->where('c.IdEmpresa', $user->IdEmpresa)->whereNull('c.ccabaj')->where('v.num_operacion', $op)
+                ->first(['c.serdoc', 'c.numdoc', 'c.fecha_hora']);
+            if ($previo) {
+                throw new \RuntimeException("El N° de operación {$op} ya se usó en {$previo->serdoc}-{$previo->numdoc} ("
+                    .Carbon::parse($previo->fecha_hora)->format('d/m/Y H:i').'). Revisa el número.');
+            }
+            $operaciones[$k] = $op;
         }
         foreach ($ids as $k => $idMedio) {
             DB::table('venta_medio_pago')->insert($fila($idMedio, $montos[$k], $operaciones[$k] ?? null));
