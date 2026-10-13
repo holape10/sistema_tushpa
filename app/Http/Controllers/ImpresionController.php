@@ -80,7 +80,7 @@ class ImpresionController extends Controller
             'ruta' => ['required', 'string', 'max:100', $request->tip_conex_imp === 'RED'
                 ? 'regex:/^[\w.\-]+(:\d{2,5})?$/' : 'regex:/^[^"<>|*?]+$/'],
             'columnas' => 'required|integer|in:32,42,48',
-            'diseno' => 'nullable|in:CLASICO,MODERNO',
+            'diseno' => 'nullable|in:CLASICO,MODERNO,COMPACTO',
             'predeterminado' => 'nullable|boolean',
             'abrir_cajon' => 'nullable|boolean',
             'activo' => 'nullable|boolean',
