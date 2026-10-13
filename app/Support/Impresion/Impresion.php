@@ -436,14 +436,15 @@ class Impresion
             return 0;
         }
 
-        // Impresora de cada producto según su categoría
-        $impresoraDe = DB::table('productos as pr')->leftJoin('categorias as c', 'c.cat_id', '=', 'pr.cat_id')
-            ->whereIn('pr.IdProducto', array_filter(array_column($lineas, 'IdProducto')))->pluck('c.impresora', 'pr.IdProducto');
+        // Impresora(s) de cada producto según su categoría: la principal y, si tiene, la segunda (copia en otra ticketera)
+        $impresorasDe = DB::table('productos as pr')->leftJoin('categorias as c', 'c.cat_id', '=', 'pr.cat_id')
+            ->whereIn('pr.IdProducto', array_filter(array_column($lineas, 'IdProducto')))
+            ->get(['pr.IdProducto', 'c.impresora', 'c.impresora2'])->keyBy('IdProducto');
 
         $grupos = [];
         foreach ($lineas as $l) {
-            $idImp = (int) ($impresoraDe[$l['IdProducto']] ?? 0);
-            if ($idImp) {
+            $cat = $impresorasDe[$l['IdProducto']] ?? null;
+            foreach (array_unique(array_filter([(int) ($cat->impresora ?? 0), (int) ($cat->impresora2 ?? 0)])) as $idImp) {
                 $grupos[$idImp][] = $l;
             }
         }

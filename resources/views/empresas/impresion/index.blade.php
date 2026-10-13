@@ -148,16 +148,32 @@
                 @csrf
                 <div class="bg-white rounded-2xl shadow-sm p-5">
                     <h3 class="font-bold text-gray-800">Cocina / bar: ¿dónde sale cada categoría?</h3>
-                    <p class="text-xs text-gray-400 mb-3">Al enviar una comanda, cada producto se imprime en la impresora de su categoría. Sin impresora = no se imprime.</p>
+                    <p class="text-xs text-gray-400 mb-3">Al enviar una comanda, cada producto se imprime en la impresora de su categoría. Con <b>"También en"</b> sale una copia en otra ticketera (ej.: barra y caja). Sin impresora = no se imprime.</p>
+                    {{-- Atajo: la misma impresora para todas las categorías --}}
+                    <div class="flex items-center justify-end gap-2 text-xs mb-2 pb-2 border-b">
+                        <span class="text-gray-500 mr-auto">Poner en todas:</span>
+                        <select onchange="document.querySelectorAll('.sel-imp1').forEach(s => s.value = this.value); this.value = '__'" class="w-40 rounded-lg border-gray-300 text-xs">
+                            <option value="__">Impresora…</option><option value="">— No imprimir —</option>
+                            @foreach ($impresoras as $i)<option value="{{ $i->Id }}">{{ $i->descripcion }}</option>@endforeach
+                        </select>
+                        <select onchange="document.querySelectorAll('.sel-imp2').forEach(s => s.value = this.value); this.value = '__'" class="w-40 rounded-lg border-gray-300 text-xs">
+                            <option value="__">También en…</option><option value="">— Ninguna —</option>
+                            @foreach ($impresoras as $i)<option value="{{ $i->Id }}">{{ $i->descripcion }}</option>@endforeach
+                        </select>
+                    </div>
                     <div class="space-y-2 max-h-80 overflow-y-auto">
                         @foreach ($categorias as $c)
-                            <label class="flex items-center justify-between gap-3 text-sm">
-                                <span class="text-gray-700">{{ $c->cat_nom }}</span>
-                                <select name="categoria[{{ $c->cat_id }}]" class="w-48 rounded-lg border-gray-300 text-sm">
+                            <div class="flex items-center justify-between gap-2 text-sm">
+                                <span class="text-gray-700 flex-1 min-w-0 truncate">{{ $c->cat_nom }}</span>
+                                <select name="categoria[{{ $c->cat_id }}]" class="sel-imp1 w-40 rounded-lg border-gray-300 text-sm">
                                     <option value="">— No imprimir —</option>
                                     @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($c->impresora == $i->Id)>{{ $i->descripcion }}</option>@endforeach
                                 </select>
-                            </label>
+                                <select name="categoria2[{{ $c->cat_id }}]" title="También en" class="sel-imp2 w-40 rounded-lg border-gray-300 text-sm">
+                                    <option value="">También en: —</option>
+                                    @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($c->impresora2 == $i->Id)>+ {{ $i->descripcion }}</option>@endforeach
+                                </select>
+                            </div>
                         @endforeach
                     </div>
                 </div>

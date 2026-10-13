@@ -67,7 +67,7 @@ class ImpresionController extends Controller
             'conectado' => Impresion::agenteConectado($sucursal),
             'cola' => DB::table('cola_impresion')->where('id_empresa_negocio', $sucursal)->orderByDesc('id')->limit(25)
                 ->get(['id', 'impresora', 'tipo', 'referencia', 'estado', 'intentos', 'error', 'creado', 'impreso']),
-            'categorias' => DB::table('categorias')->where('id_empresa_negocio', $sucursal)->orderBy('cat_nom')->get(['cat_id', 'cat_nom', 'impresora']),
+            'categorias' => DB::table('categorias')->where('id_empresa_negocio', $sucursal)->orderBy('cat_nom')->get(['cat_id', 'cat_nom', 'impresora', 'impresora2']),
             'usuarios' => DB::table('users')->where('id_empresa_negocio', $sucursal)->where('estusu', 1)->orderBy('apeusu')->get(['IdUsuario', 'apeusu', 'terminal']),
         ]);
     }
@@ -121,6 +121,7 @@ class ImpresionController extends Controller
         $sucursal = $this->sucursal();
         DB::table('configuracion_impresoras')->where('Id', $id)->where('id_empresa_negocio', $sucursal)->delete();
         DB::table('categorias')->where('id_empresa_negocio', $sucursal)->where('impresora', $id)->update(['impresora' => null]);
+        DB::table('categorias')->where('id_empresa_negocio', $sucursal)->where('impresora2', $id)->update(['impresora2' => null]);
         DB::table('users')->where('id_empresa_negocio', $sucursal)->where('terminal', $id)->update(['terminal' => null]);
 
         return back()->with('success', 'Impresora eliminada.');
@@ -157,8 +158,13 @@ class ImpresionController extends Controller
         $validas = DB::table('configuracion_impresoras')->where('id_empresa_negocio', $sucursal)->pluck('Id')->map(fn ($v) => (int) $v)->all();
         $limpiar = fn ($v) => in_array((int) $v, $validas, true) ? (int) $v : null;
 
+        $copias = (array) $request->input('categoria2', []);
         foreach ((array) $request->input('categoria', []) as $cat => $imp) {
-            DB::table('categorias')->where('cat_id', $cat)->where('id_empresa_negocio', $sucursal)->update(['impresora' => $limpiar($imp)]);
+            $principal = $limpiar($imp);
+            $segunda = $limpiar($copias[$cat] ?? null);
+            DB::table('categorias')->where('cat_id', $cat)->where('id_empresa_negocio', $sucursal)->update([
+                'impresora' => $principal, 'impresora2' => $principal && $segunda !== $principal ? $segunda : null,
+            ]);
         }
         foreach ((array) $request->input('usuario', []) as $usu => $imp) {
             DB::table('users')->where('IdUsuario', $usu)->where('id_empresa_negocio', $sucursal)->update(['terminal' => $limpiar($imp)]);
