@@ -66,7 +66,7 @@
                 </div>
             </div>
             <div class="col-lg-5">
-                <div class="tarjeta p-4" style="height:auto">
+                <div class="tarjeta p-4" style="height:auto;color:var(--tinta)">
                     <h2 class="h5 fw-bold mb-3">Qué incluye tu sistema</h2>
                     <ul class="lista-check mb-0">
                         <li><i class="fas fa-circle-check"></i><span><b>Boletas, facturas, notas de crédito y débito</b> y notas de venta.</span></li>
