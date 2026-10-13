@@ -6,11 +6,13 @@ use App\Models\Central\Cliente;
 use App\Models\Central\Plan;
 use App\Support\ConsultaPeru;
 use App\Support\Rubros;
+use App\Support\SeoSitio;
 use App\Support\Tenancy\RegistroWeb;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -34,6 +36,24 @@ class SitioController extends Controller
     public function tutorial(): View
     {
         return view('sitio.tutorial');
+    }
+
+    /** Página de SEO local de una ciudad (se define en config/ciudades.php) */
+    public function ciudad(string $ciudad): View
+    {
+        $datos = SeoSitio::ciudad($ciudad);
+        abort_unless($datos, 404);
+
+        return view('sitio.ciudad', ['c' => $datos]);
+    }
+
+    /** sitemap.xml para Google y Bing: portada, tutoriales y una página por ciudad */
+    public function sitemap(): Response
+    {
+        return response(SeoSitio::sitemapXml(), 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
+            'Cache-Control' => 'public, max-age=3600',
+        ]);
     }
 
     /** Formulario de contacto: queda en el panel admin y, si se configuró, también llega por correo */

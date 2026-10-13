@@ -81,17 +81,34 @@
             ]],
     ];
     $whatsapp = 'https://wa.me/'.config('soporte.whatsapp').'?text='.rawurlencode('Hola, quiero información sobre el sistema TUSHPA.');
+
+    // Preguntas frecuentes: se muestran abajo y también salen en los datos estructurados (mismo texto en ambos)
+    $preguntas = [
+        ['¿Tengo que instalar algo?', 'No. TUSHPA funciona desde el navegador en tu PC, tablet o celular, con tu propia dirección (por ejemplo, tunegocio.'.config('tenancy.dominio').'). Si quieres, lo instalas como app con un clic.'],
+        ['¿Qué pasa al terminar los '.config('sitio.dias_prueba').' días gratis?', 'Te avisamos antes de que termine. Para seguir usándolo activas tu plan; tus datos se mantienen. Si no lo activas, el sistema se suspende.'],
+        ['¿Puedo emitir boletas y facturas reales durante la prueba?', 'Durante la prueba los comprobantes van a SUNAT en modo de prueba, para que aprendas sin riesgo. Al activar tu plan y subir tu certificado digital pasas a producción.'],
+        ['¿Mis datos están separados de los de otras empresas?', 'Sí. Cada empresa tiene su propia base de datos y sus propios usuarios, cada uno con los permisos que tú le des.'],
+        ['¿Necesito internet?', 'Sí, el sistema trabaja en línea para enviar tus comprobantes a SUNAT y tener tus datos al día en todos tus equipos.'],
+        ['¿Me ayudan a configurarlo?', 'Sí. Te acompañamos por WhatsApp para cargar tus productos, configurar tus impresoras y empezar a facturar.'],
+    ];
+
+    // SEO: título (hasta ~60 caracteres), descripción (hasta ~155), dirección canónica y datos estructurados
+    $seoTitulo = 'Sistema de Facturación Electrónica SUNAT | TUSHPA';
+    $seoDescripcion = 'Sistema de facturación electrónica SUNAT, punto de venta, inventario y caja para restaurantes, hoteles y comercios. Hecho en Iquitos. Prueba gratis '.config('sitio.dias_prueba').' días.';
+    $seoUrl = \App\Support\SeoSitio::url('/');
+    $seoJson = \App\Support\SeoSitio::json([
+        \App\Support\SeoSitio::organizacion(),
+        \App\Support\SeoSitio::sitioWeb(),
+        \App\Support\SeoSitio::aplicacion($planes, $seoDescripcion),
+        \App\Support\SeoSitio::preguntas($preguntas),
+    ]);
 @endphp
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TUSHPA · Sistema de facturación electrónica y gestión para tu negocio | Hecho en la Amazonía</title>
-    <meta name="description" content="Sistema de facturación electrónica SUNAT y gestión para restaurantes, hoteles, comercios, farmacias, grifos, gimnasios, estacionamientos, clubes y clínicas. Pruébalo gratis {{ config('sitio.dias_prueba') }} días.">
-    <meta property="og:title" content="TUSHPA · Facturación electrónica y gestión para tu negocio">
-    <meta property="og:description" content="Comandas, punto de venta, hotel, inventario y boletas SUNAT en un solo sistema. Prueba gratis {{ config('sitio.dias_prueba') }} días.">
-    <meta property="og:image" content="{{ asset('web/img/logo_tushpa.webp') }}">
+    @include('sitio.partials.seo')
     <meta name="theme-color" content="#1e40af">
     <link rel="icon" href="{{ asset('web/img/favicon.ico') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -111,29 +128,7 @@
 </svg>
 
 {{-- Menú --}}
-<header class="menu">
-    <nav class="navbar navbar-expand-lg">
-        <div class="container">
-            <a class="navbar-brand" href="#inicio"><img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" height="44"></a>
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#menuPrincipal" aria-label="Abrir menú">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="menuPrincipal">
-                <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
-                    <li class="nav-item"><a class="nav-link" href="#rubros">Rubros</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#facturacion">Facturación</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#funciones">Funciones</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#planes">Planes</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#clientes">Clientes</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#contacto">Contacto</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('sitio.tutorial') }}"><i class="fas fa-graduation-cap me-1"></i>Tutoriales</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('sitio.ingresar') }}"><i class="fas fa-right-to-bracket me-1"></i>Ingresar</a></li>
-                    <li class="nav-item ms-lg-2 mt-2 mt-lg-0"><a class="btn btn-selva" href="{{ route('sitio.registro') }}">Prueba gratis</a></li>
-                </ul>
-            </div>
-        </div>
-    </nav>
-</header>
+@include('sitio.partials.menu')
 
 {{-- Portada --}}
 <section id="inicio" class="portada">
@@ -367,14 +362,7 @@
             <h2>¿Tienes dudas?</h2>
         </div>
         <div class="accordion revelar" id="preguntas">
-            @foreach ([
-                ['¿Tengo que instalar algo?', 'No. TUSHPA funciona desde el navegador en tu PC, tablet o celular, con tu propia dirección (por ejemplo, tunegocio.'.config('tenancy.dominio').'). Si quieres, lo instalas como app con un clic.'],
-                ['¿Qué pasa al terminar los '.config('sitio.dias_prueba').' días gratis?', 'Te avisamos antes de que termine. Para seguir usándolo activas tu plan; tus datos se mantienen. Si no lo activas, el sistema se suspende.'],
-                ['¿Puedo emitir boletas y facturas reales durante la prueba?', 'Durante la prueba los comprobantes van a SUNAT en modo de prueba, para que aprendas sin riesgo. Al activar tu plan y subir tu certificado digital pasas a producción.'],
-                ['¿Mis datos están separados de los de otras empresas?', 'Sí. Cada empresa tiene su propia base de datos y sus propios usuarios, cada uno con los permisos que tú le des.'],
-                ['¿Necesito internet?', 'Sí, el sistema trabaja en línea para enviar tus comprobantes a SUNAT y tener tus datos al día en todos tus equipos.'],
-                ['¿Me ayudan a configurarlo?', 'Sí. Te acompañamos por WhatsApp para cargar tus productos, configurar tus impresoras y empezar a facturar.'],
-            ] as [$pregunta, $respuesta])
+            @foreach ($preguntas as [$pregunta, $respuesta])
                 <div class="accordion-item">
                     <h3 class="accordion-header">
                         <button class="accordion-button {{ $loop->first ? '' : 'collapsed' }}" type="button" data-bs-toggle="collapse" data-bs-target="#pregunta{{ $loop->index }}">{{ $pregunta }}</button>
@@ -447,45 +435,8 @@
     </div>
 </section>
 
-{{-- Pie --}}
-<footer class="pie">
-    <div class="kene kene-franja franja position-absolute top-0 start-0" style="color:rgba(165,180,252,.35)"></div>
-    <div class="container">
-        <div class="row g-4">
-            <div class="col-lg-4">
-                <div class="bg-white d-inline-block rounded-3 px-3 py-2 mb-3"><img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" height="38"></div>
-                <p class="small mb-0">Sistema de facturación electrónica y gestión para negocios del Perú. Hecho con orgullo en la Amazonía.</p>
-            </div>
-            <div class="col-6 col-lg-2">
-                <h5>Sistema</h5>
-                <ul class="list-unstyled small">
-                    <li class="mb-2"><a href="#rubros">Rubros</a></li>
-                    <li class="mb-2"><a href="#funciones">Funciones</a></li>
-                    <li class="mb-2"><a href="#planes">Planes</a></li>
-                    <li class="mb-2"><a href="{{ route('sitio.tutorial') }}">Tutoriales</a></li>
-                </ul>
-            </div>
-            <div class="col-6 col-lg-3">
-                <h5>Clientes</h5>
-                <ul class="list-unstyled small">
-                    <li class="mb-2"><a href="{{ route('sitio.ingresar') }}">Ingresar a mi sistema</a></li>
-                    <li class="mb-2"><a href="{{ route('sitio.registro') }}">Prueba gratis</a></li>
-                    <li class="mb-2"><a href="{{ $whatsapp }}" target="_blank" rel="noopener">Soporte por WhatsApp</a></li>
-                </ul>
-            </div>
-            <div class="col-lg-3">
-                <h5>Contacto</h5>
-                <p class="small mb-1">+51 928 396 147</p>
-                <p class="small mb-1">{{ config('soporte.correo') }}</p>
-                <p class="small mb-0">Iquitos, Loreto · Perú</p>
-            </div>
-        </div>
-        <hr class="my-4" style="border-color:rgba(255,255,255,.12)">
-        <p class="small text-center mb-0">&copy; {{ date('Y') }} TUSHPA · {{ config('soporte.nombre') }}. Todos los derechos reservados.</p>
-    </div>
-</footer>
-
-<a href="{{ $whatsapp }}" target="_blank" rel="noopener" class="whatsapp-flotante" aria-label="Escríbenos por WhatsApp"><i class="fab fa-whatsapp"></i></a>
+{{-- Pie y botón de WhatsApp (incluye los enlaces a las páginas por ciudad) --}}
+@include('sitio.partials.pie')
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{{ asset('web/js/sitio.js') }}?v={{ filemtime(public_path('web/js/sitio.js')) }}"></script>
