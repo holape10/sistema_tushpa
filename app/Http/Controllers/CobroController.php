@@ -121,9 +121,11 @@ class CobroController extends Controller
         $mesa = $pedido->mes_id ? Mesa::find($pedido->mes_id) : null;
         $piso = $pedido->pis_id ? Piso::find($pedido->pis_id) : null;
 
+        $promotores = ComandasController::promotores((int) $user->id_empresa_negocio);
+
         return view('empresas.cobros.cobrar', compact(
             'pedido', 'detalle', 'total', 'comprobantes', 'documentos',
-            'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso', 'turno', 'separadas', 'cuentasPrevias', 'volver'
+            'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso', 'turno', 'separadas', 'cuentasPrevias', 'volver', 'promotores'
         ));
     }
 
@@ -145,6 +147,7 @@ class CobroController extends Controller
             'directa' => true, 'separadas' => false,
             'volver' => request('desde') === 'hotel' ? route('hotel.index') : route('comandas.seleccion'), 'pedido' => null, 'detalle' => collect(), 'total' => 0,
             'cuentasPrevias' => collect(), 'mesa' => null, 'piso' => null, 'turno' => $turno,
+            'promotores' => ComandasController::promotores((int) $user->id_empresa_negocio),
             'comprobantes' => DB::table('tipo_documento')->where('caja', 1)->get(),
             'documentos' => DB::table('tipo_documento_identidad')->orderBy('orden')->get(),
             'estadopagos' => DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)->get(),
@@ -168,6 +171,14 @@ class CobroController extends Controller
         return ! Cache::add('cobro:'.Auth::id().':'.$clave, 1, now()->addMinutes(10));
     }
 
+    /** Promotor que eligió el cajero (solo usuarios con rol Promotor de la sucursal); null = ninguno */
+    private function promotorElegido(Request $request): ?int
+    {
+        $id = (int) $request->input('promotor_id');
+
+        return $id && ComandasController::promotores((int) Auth::user()->id_empresa_negocio)->contains('IdUsuario', $id) ? $id : null;
+    }
+
     private function liberarClaveCobro(Request $request): void
     {
         Cache::forget('cobro:'.Auth::id().':'.(string) $request->input('clave_cobro'));
@@ -188,6 +199,9 @@ class CobroController extends Controller
 
         try {
             $cabId = VentaDirecta::registrar($user, $datos, 'PVCOMANDA');
+            if ($promotor = $this->promotorElegido($request)) {
+                DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->update(['promotor_id' => $promotor]);
+            }
         } catch (\RuntimeException $e) {
             $this->liberarClaveCobro($request);
 
@@ -318,6 +332,11 @@ class CobroController extends Controller
                     throw new \RuntimeException('El pedido ya fue cobrado o no existe.');
                 }
 
+                $promotor = $request->has('promotor_id') ? $this->promotorElegido($request) : ($pedido->promotor_id ? (int) $pedido->promotor_id : null);
+                if ($request->has('promotor_id') && (int) $pedido->promotor_id !== (int) $promotor) {
+                    $pedido->update(['promotor_id' => $promotor]);
+                }
+
                 $items = $this->itemsPendientes($pedido->ped_id);
                 if ($items->isEmpty()) {
                     throw new \RuntimeException('El pedido no tiene ítems pendientes de cobro.');
@@ -359,7 +378,7 @@ class CobroController extends Controller
                 $cabId = Comprobante::emitir($user, $turno, $request->all(), $lineas, [
                     'ped_id' => $pedido->ped_id, 'ped_tip' => $pedido->ped_tip,
                     'pis_id' => $pedido->pis_id, 'mes_id' => $pedido->mes_id, 'mozo' => $pedido->mozo,
-                    'IdUsuario_ven' => $pedido->mozo, 'promotor_id' => $pedido->promotor_id,
+                    'IdUsuario_ven' => $pedido->mozo, 'promotor_id' => $promotor,
                 ]);
 
                 // Lo cobrado se reparte entre las líneas originales de cada producto

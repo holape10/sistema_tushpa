@@ -113,7 +113,6 @@
         </div>
 
         {{-- Copias: cuántas veces sale cada comanda y cada comprobante --}}
-        @if ($impresoras->isNotEmpty())
             <form method="POST" action="{{ route('impresion.copias') }}" class="bg-white rounded-2xl shadow-sm p-5 mb-5 flex flex-wrap items-end gap-5">
                 @csrf
                 <div class="flex-1 min-w-[220px]">
@@ -130,7 +129,6 @@
                     </select></label>
                 <button class="h-10 px-5 rounded-lg bg-indigo-600 text-white font-semibold text-sm">Guardar</button>
             </form>
-        @endif
 
         {{-- Asignaciones --}}
         @if ($impresoras->isNotEmpty())

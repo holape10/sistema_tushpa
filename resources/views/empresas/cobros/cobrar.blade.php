@@ -185,6 +185,15 @@
                     @endif
 
                     <div data-fidelizacion data-doc-input="#clinum" data-total-input="#total_comp"></div>
+                    @if ($promotores->isNotEmpty())
+                        <div class="form-group">
+                            <label><i class="fas fa-star"></i> Promotor (opcional)</label>
+                            <select id="promotor_id" class="form-control input-sm">
+                                <option value="">— Sin promotor —</option>
+                                @foreach ($promotores as $pr)<option value="{{ $pr->IdUsuario }}" @selected((int) ($pedido->promotor_id ?? 0) === (int) $pr->IdUsuario)>{{ $pr->nombre }}</option>@endforeach
+                            </select>
+                        </div>
+                    @endif
                     <div class="form-group">
                         <label>Observaciones</label>
                         <textarea id="observaciones" rows="2" class="form-control" maxlength="100"></textarea>
@@ -700,6 +709,7 @@
         const body = {
             ped_id: PED_ID,
             clave_cobro: claveCobro,
+            ...(el('promotor_id') ? { promotor_id: el('promotor_id').value || null } : {}),
             tdocod: el('tdocod').value,
             estadopago: el('estadopago').value,
             fecEmi: el('fecEmi').value,

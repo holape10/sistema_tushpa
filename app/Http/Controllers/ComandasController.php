@@ -442,6 +442,11 @@ class ComandasController extends Controller
         // Promotor del pedido (opcional; solo si la sucursal tiene usuarios con rol Promotor)
         $promotores = self::promotores((int) $id_empresa_negocio);
         $promActual = $promotores->isEmpty() ? null : ($pedidoId ? Pedido::where('ped_id', $pedidoId)->value('promotor_id') : session('comanda_prom_id'));
+        // Si quien toma el pedido es un promotor, el pedido es suyo
+        if (! $promActual && Auth::user()->tieneRol([13])) {
+            $promActual = (int) Auth::id();
+            session()->put('comanda_prom_id', $promActual);
+        }
 
         return view('empresas.comandas.menu_pedido', compact('categorias', 'cat_default_id', 'cart', 'order_type', 'mesa_info', 'esAdmin', 'motorizados', 'motActual',
             'promotores', 'promActual'));
@@ -859,7 +864,7 @@ class ComandasController extends Controller
                             'salon' => 'CONSUMO EN SALON', 'delivery' => 'DELIVERY', default => 'PARA LLEVAR'
                         },
                         'mot_id' => $order_type === 'delivery' ? session('comanda_mot_id') : null,
-                        'promotor_id' => session('comanda_prom_id'),
+                        'promotor_id' => session('comanda_prom_id') ?: ($usuario->tieneRol([13]) ? $usuario->IdUsuario : null),
                         'ped_tot' => 0,
                     ]);
                     if ($order_type === 'delivery') {

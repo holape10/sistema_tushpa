@@ -92,6 +92,7 @@ class User extends Authenticatable
             'mozo' => 'comandas.seleccion', // el mozo entra directo a las mesas
             'entrenador' => 'entrenador.index', // el entrenador entra a su panel
             'motorizado' => 'repartidor.mio', // el motorizado entra a sus repartos
+            'promotor' => 'comandas.seleccion', // el promotor toma pedidos como un mozo
             'caja' => 'inicio', // accesos del menú del usuario
             default => 'inicio', // admin y cualquier otro caso
         };

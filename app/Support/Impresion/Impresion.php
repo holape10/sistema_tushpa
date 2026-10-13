@@ -368,8 +368,9 @@ class Impresion
         // Delivery: los datos de entrega van en la comanda (cliente, dirección, referencia, WhatsApp y cómo paga)
         $entrega = $pedido->ped_tip === 'Delivery' && ! $anulacion ? Delivery::lineasComanda($pedido) : [];
         $atiende = $pedido->entrega_origen === 'CARTA' ? 'PEDIDO WEB (CARTA QR)' : null;
+        $promotor = $pedido->promotor_id ? DB::table('users')->where('IdUsuario', $pedido->promotor_id)->value(DB::raw("COALESCE(NULLIF(apeusu, ''), name)")) : null;
 
-        return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° '.$pedido->ped_id, $lineas, $anulacion, $motivo, $entrega, $atiende);
+        return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° '.$pedido->ped_id, $lineas, $anulacion, $motivo, $entrega, $atiende, $promotor);
     }
 
     /**
@@ -377,7 +378,7 @@ class Impresion
      * Sirve para pedidos de mesa/llevar y para ventas directas (sin pedido).
      */
     public static function comandaPara(int $sucursal, string $destino, string $referencia, array $lineas, bool $anulacion = false, string $motivo = '',
-        array $entrega = [], ?string $atiende = null): int
+        array $entrega = [], ?string $atiende = null, ?string $promotor = null): int
     {
         if (! $lineas) {
             return 0;
@@ -412,8 +413,11 @@ class Impresion
             }
             $p->tamano(2, 2)->negrita()->texto($destino)->negrita(false)->tamano()
                 ->texto($referencia.' · '.now()->format('d/m/Y H:i'))
-                ->texto('Atiende: '.($usuario ?? ''))
-                ->alinear('izq')->linea('=');
+                ->texto('Atiende: '.($usuario ?? ''));
+            if ($promotor) {
+                $p->negrita()->texto('Promotor: '.$promotor)->negrita(false);
+            }
+            $p->alinear('izq')->linea('=');
             if ($entrega) {
                 foreach ($entrega as $dato) {
                     $p->negrita()->parrafo($dato)->negrita(false);

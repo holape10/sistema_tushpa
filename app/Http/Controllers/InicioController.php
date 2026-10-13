@@ -23,6 +23,7 @@ class InicioController extends Controller
         '/pv-movil' => ['fa-mobile-screen-button', '#6366f1'],
         '/comandas' => ['fa-utensils', '#16a34a'],
         '/comandas/punto-venta' => ['fa-cash-register', '#ea580c'],
+        '/promotores' => ['fa-star', '#c026d3'],
         '/turnos' => ['fa-money-bill-wave', '#2563eb'],
         '/turnos/listado' => ['fa-clock-rotate-left', '#14b8a6'],
         '/pv' => ['fa-rocket', '#dc2626'],

@@ -45,6 +45,7 @@ use App\Http\Controllers\PosMovilController;
 use App\Http\Controllers\PreparadoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProformaController;
+use App\Http\Controllers\PromotorController;
 use App\Http\Controllers\PuntoVentaController;
 use App\Http\Controllers\PvGrifoController;
 use App\Http\Controllers\PvTactilController;
@@ -97,6 +98,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/comandas/carrito', [ComandasController::class, 'getCartDetails'])->name('comandas.get_cart_details');
     Route::post('/comandas/enviar', [ComandasController::class, 'enviarComanda'])->name('comandas.enviar');
     Route::post('/comandas/promotor', [ComandasController::class, 'asignarPromotor'])->name('comandas.promotor');
+    Route::get('/promotores', [PromotorController::class, 'index'])->name('promotores.index');
     Route::post('/comandas/carrito/vaciar', [ComandasController::class, 'clearCart'])->name('comandas.clear_cart');
     Route::get('/comandas/pedido/{ped_id}', [ComandasController::class, 'getPedidoDetails'])->name('comandas.pedido_details');
     Route::get('/comandas/activos-llevar-delivery', [ComandasController::class, 'activosLlevarDelivery'])->name('comandas.activos_llevar_delivery');
