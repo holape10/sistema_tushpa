@@ -23,6 +23,7 @@ use App\Support\Porciones;
 use App\Support\Precios;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -37,7 +38,7 @@ use Illuminate\Support\Facades\RateLimiter;
  */
 class ComandasController extends Controller
 {
-    private const SESION = ['comanda_cart', 'comanda_order_type', 'comanda_mesa_id', 'comanda_mesa_nombre', 'comanda_pedido_id', 'comanda_eliminados', 'comanda_reserva_id', 'comanda_mot_id'];
+    private const SESION = ['comanda_cart', 'comanda_order_type', 'comanda_mesa_id', 'comanda_mesa_nombre', 'comanda_pedido_id', 'comanda_eliminados', 'comanda_reserva_id', 'comanda_mot_id', 'comanda_prom_id'];
 
     public function seleccionServicio()
     {
@@ -438,7 +439,34 @@ class ComandasController extends Controller
         $motorizados = $order_type === 'delivery' ? MotorizadoController::activos($id_empresa_negocio) : collect();
         $motActual = $order_type === 'delivery' ? ($pedidoId ? Pedido::where('ped_id', $pedidoId)->value('mot_id') : session('comanda_mot_id')) : null;
 
-        return view('empresas.comandas.menu_pedido', compact('categorias', 'cat_default_id', 'cart', 'order_type', 'mesa_info', 'esAdmin', 'motorizados', 'motActual'));
+        // Promotor del pedido (opcional; solo si la sucursal tiene usuarios con rol Promotor)
+        $promotores = self::promotores((int) $id_empresa_negocio);
+        $promActual = $promotores->isEmpty() ? null : ($pedidoId ? Pedido::where('ped_id', $pedidoId)->value('promotor_id') : session('comanda_prom_id'));
+
+        return view('empresas.comandas.menu_pedido', compact('categorias', 'cat_default_id', 'cart', 'order_type', 'mesa_info', 'esAdmin', 'motorizados', 'motActual',
+            'promotores', 'promActual'));
+    }
+
+    /** Usuarios activos con rol Promotor de la sucursal */
+    public static function promotores(int $sucursal): Collection
+    {
+        return DB::table('users as u')->join('role_user as r', 'r.user_IdUsuario', '=', 'u.IdUsuario')->where('r.role_id', 13)
+            ->where('u.id_empresa_negocio', $sucursal)->where('u.estusu', 1)->orderBy('u.apeusu')
+            ->get(['u.IdUsuario', DB::raw("COALESCE(NULLIF(u.apeusu, ''), u.name) as nombre")]);
+    }
+
+    /** El mozo elige el promotor: queda en el pedido (o en la comanda que aún no se envía) */
+    public function asignarPromotor(Request $request)
+    {
+        $d = $request->validate(['promotor_id' => 'nullable|integer']);
+        $suc = (int) Auth::user()->id_empresa_negocio;
+        $promotor = ! empty($d['promotor_id']) && self::promotores($suc)->contains('IdUsuario', (int) $d['promotor_id']) ? (int) $d['promotor_id'] : null;
+        session()->put('comanda_prom_id', $promotor);
+        if ($pedId = (int) session('comanda_pedido_id')) {
+            DB::table('pedidos')->where('ped_id', $pedId)->where('id_empresa_negocio', $suc)->where('ped_est', 'Aperturado')->update(['promotor_id' => $promotor]);
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     public function searchProducts(Request $request)
@@ -831,6 +859,7 @@ class ComandasController extends Controller
                             'salon' => 'CONSUMO EN SALON', 'delivery' => 'DELIVERY', default => 'PARA LLEVAR'
                         },
                         'mot_id' => $order_type === 'delivery' ? session('comanda_mot_id') : null,
+                        'promotor_id' => session('comanda_prom_id'),
                         'ped_tot' => 0,
                     ]);
                     if ($order_type === 'delivery') {

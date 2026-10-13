@@ -112,6 +112,26 @@
             </table>
         </div>
 
+        {{-- Copias: cuántas veces sale cada comanda y cada comprobante --}}
+        @if ($impresoras->isNotEmpty())
+            <form method="POST" action="{{ route('impresion.copias') }}" class="bg-white rounded-2xl shadow-sm p-5 mb-5 flex flex-wrap items-end gap-5">
+                @csrf
+                <div class="flex-1 min-w-[220px]">
+                    <h3 class="font-bold text-gray-800">Copias por impresión</h3>
+                    <p class="text-xs text-gray-400">Cuántos tickets salen cada vez. Al reimprimir desde el Panel de Ventas sale 1.</p>
+                </div>
+                <label class="text-sm">Comandas (cocina / bar)
+                    <select name="copias_comanda" class="block rounded-lg border-gray-300 text-sm mt-1">
+                        @for ($n = 1; $n <= 5; $n++)<option value="{{ $n }}" @selected((int) ($negocio->copias_comanda ?? 1) === $n)>{{ $n }} {{ $n === 1 ? 'copia' : 'copias' }}</option>@endfor
+                    </select></label>
+                <label class="text-sm">Comprobantes (caja)
+                    <select name="copias_comprobante" class="block rounded-lg border-gray-300 text-sm mt-1">
+                        @for ($n = 1; $n <= 5; $n++)<option value="{{ $n }}" @selected((int) ($negocio->copias_comprobante ?? 1) === $n)>{{ $n }} {{ $n === 1 ? 'copia' : 'copias' }}</option>@endfor
+                    </select></label>
+                <button class="h-10 px-5 rounded-lg bg-indigo-600 text-white font-semibold text-sm">Guardar</button>
+            </form>
+        @endif
+
         {{-- Asignaciones --}}
         @if ($impresoras->isNotEmpty())
             <form method="POST" action="{{ route('impresion.asignaciones') }}" class="grid lg:grid-cols-2 gap-5 mb-5">

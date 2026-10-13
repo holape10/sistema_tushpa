@@ -96,6 +96,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/comandas/carrito/quitar', [ComandasController::class, 'removeCartItem'])->name('comandas.remove_cart_item');
     Route::get('/comandas/carrito', [ComandasController::class, 'getCartDetails'])->name('comandas.get_cart_details');
     Route::post('/comandas/enviar', [ComandasController::class, 'enviarComanda'])->name('comandas.enviar');
+    Route::post('/comandas/promotor', [ComandasController::class, 'asignarPromotor'])->name('comandas.promotor');
     Route::post('/comandas/carrito/vaciar', [ComandasController::class, 'clearCart'])->name('comandas.clear_cart');
     Route::get('/comandas/pedido/{ped_id}', [ComandasController::class, 'getPedidoDetails'])->name('comandas.pedido_details');
     Route::get('/comandas/activos-llevar-delivery', [ComandasController::class, 'activosLlevarDelivery'])->name('comandas.activos_llevar_delivery');
@@ -297,6 +298,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/impresoras', [ImpresionController::class, 'index'])->name('impresion.index');
     Route::post('/impresoras', [ImpresionController::class, 'guardarImpresora'])->name('impresion.guardar');
     Route::post('/impresoras/asignaciones', [ImpresionController::class, 'asignaciones'])->name('impresion.asignaciones');
+    Route::post('/impresoras/copias', [ImpresionController::class, 'copias'])->name('impresion.copias');
     Route::post('/impresoras/agente', [ImpresionController::class, 'descargarAgente'])->name('impresion.agente');
     Route::post('/impresoras/agente/codigo', [ImpresionController::class, 'codigoAgente'])->name('impresion.agente.codigo');
     Route::post('/impresoras/cola/{id}/reintentar', [ImpresionController::class, 'reintentar'])->whereNumber('id')->name('impresion.reintentar');

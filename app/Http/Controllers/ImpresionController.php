@@ -23,12 +23,13 @@ class ImpresionController extends Controller
     // ------------------------------------------------------------------ impresión desde las pantallas
 
     /** Comprobante: imprime directo si el agente está conectado; si no, la pantalla usa la impresión del navegador */
-    public function comprobante($id)
+    public function comprobante(Request $request, $id)
     {
         $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->where('id_empresa_negocio', $this->sucursal())->first();
         abort_unless($cab, 404);
 
-        $ok = Impresion::comprobante((int) $id);
+        // Reimpresión (Panel de Ventas): una sola copia
+        $ok = Impresion::comprobante((int) $id, false, $request->boolean('reimpresion') ? 1 : null);
 
         return response()->json(['directa' => $ok, 'mensaje' => $ok ? $this->enviado() : $this->motivoNoDirecta()]);
     }
@@ -134,6 +135,16 @@ class ImpresionController extends Controller
         $aviso = Impresion::agenteConectado($this->sucursal()) ? '' : ' (el agente no está conectado: se imprimirá cuando se conecte)';
 
         return back()->with('success', 'Prueba enviada a '.$imp->descripcion.$aviso.'.');
+    }
+
+    /** Cuántas copias salen de cada comanda y de cada comprobante */
+    public function copias(Request $request)
+    {
+        $this->soloAdmin();
+        $d = $request->validate(['copias_comanda' => 'required|integer|between:1,5', 'copias_comprobante' => 'required|integer|between:1,5']);
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal())->update($d);
+
+        return back()->with('success', "Copias guardadas: comandas {$d['copias_comanda']}, comprobantes {$d['copias_comprobante']}.");
     }
 
     /** Qué impresora usa cada categoría (cocina/bar) y cada usuario (caja) */

@@ -359,7 +359,7 @@ class CobroController extends Controller
                 $cabId = Comprobante::emitir($user, $turno, $request->all(), $lineas, [
                     'ped_id' => $pedido->ped_id, 'ped_tip' => $pedido->ped_tip,
                     'pis_id' => $pedido->pis_id, 'mes_id' => $pedido->mes_id, 'mozo' => $pedido->mozo,
-                    'IdUsuario_ven' => $pedido->mozo,
+                    'IdUsuario_ven' => $pedido->mozo, 'promotor_id' => $pedido->promotor_id,
                 ]);
 
                 // Lo cobrado se reparte entre las líneas originales de cada producto

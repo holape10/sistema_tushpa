@@ -18,7 +18,7 @@ class Reportes
     /** clave => [título, grupo, descripción, ícono] */
     public const CATALOGO = [
         'ventas' => ['Reporte de Ventas', 'Ventas', 'Todos los comprobantes del periodo con sus importes.', 'fa-receipt'],
-        'ventas-vendedor' => ['Ventas por Vendedor', 'Ventas', 'Cuánto vendió cada cajero o mozo.', 'fa-user-tie'],
+        'ventas-vendedor' => ['Ventas por Vendedor', 'Ventas', 'Cuánto vendió cada cajero, mozo o promotor.', 'fa-user-tie'],
         'ventas-delivery' => ['Ventas Delivery', 'Ventas', 'Pedidos delivery con dirección, teléfono y motorizado.', 'fa-motorcycle'],
         'sunat' => ['Reporte SUNAT', 'Ventas', 'Solo comprobantes tributarios (facturas, boletas y notas), sin notas de venta, con su estado en SUNAT.', 'fa-landmark'],
         'ventas-cliente' => ['Ventas por Cliente', 'Ventas', 'Tus mejores clientes y su frecuencia.', 'fa-users'],
@@ -147,10 +147,13 @@ class Reportes
 
     private static function porVendedor(array $f): array
     {
-        $porMozo = ($f['agrupar'] ?? 'vendedor') === 'mozo';
-        $campo = $porMozo ? 'c.mozo' : 'COALESCE(c.IdUsuario_ven, c.IdUsuario)';
+        $agrupar = $f['agrupar'] ?? 'vendedor';
+        $porMozo = $agrupar === 'mozo';
+        $porPromotor = $agrupar === 'promotor';
+        $campo = $porMozo ? 'c.mozo' : ($porPromotor ? 'c.promotor_id' : 'COALESCE(c.IdUsuario_ven, c.IdUsuario)');
         $rows = self::cpe($f)->leftJoin('users as u', 'u.IdUsuario', '=', DB::raw($campo))
             ->when($porMozo, fn ($w) => $w->whereNotNull('c.mozo'))
+            ->when($porPromotor, fn ($w) => $w->whereNotNull('c.promotor_id'))
             ->groupBy(DB::raw($campo), 'u.name', 'u.apeusu')
             ->select('u.name', 'u.apeusu', DB::raw("SUM(c.tdocod NOT IN ('07','08')) as docs"), DB::raw('SUM('.self::SIGNO.' * c.ccaitv) as total'),
                 DB::raw('MIN(c.ccafem) as primera'), DB::raw('MAX(c.ccafem) as ultima'))
@@ -159,7 +162,7 @@ class Reportes
         $filas = $rows->map(fn ($r) => ['vendedor' => ($r->apeusu ?: $r->name) ?: 'SIN ASIGNAR', 'docs' => (int) $r->docs,
             'total' => (float) $r->total, 'ticket' => $r->docs ? (float) $r->total / $r->docs : 0, 'participacion' => (float) $r->total / $total * 100])->all();
 
-        return ['columnas' => ['vendedor' => [$porMozo ? 'Mozo' : 'Vendedor / cajero', 'text'], 'docs' => ['Ventas', 'num'], 'total' => ['Total vendido', 'money'],
+        return ['columnas' => ['vendedor' => [$porMozo ? 'Mozo' : ($porPromotor ? 'Promotor' : 'Vendedor / cajero'), 'text'], 'docs' => ['Ventas', 'num'], 'total' => ['Total vendido', 'money'],
             'ticket' => ['Ticket promedio', 'money'], 'participacion' => ['% del total', 'pct']], 'filas' => $filas, 'usa' => ['agrupar'],
             'grafico' => ['etiqueta' => 'vendedor', 'valor' => 'total']];
     }

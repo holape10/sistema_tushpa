@@ -99,7 +99,20 @@ class Impresion
      * Encola el comprobante en la impresora de caja. Con impresora configurada siempre va al agente (si está apagado,
      * sale apenas se conecte) y la pantalla no muestra la impresión del navegador. false = no hay impresora configurada.
      */
-    public static function comprobante(int $idCpe, bool $exigirAgente = false): bool
+    /** Copias configuradas en la sucursal (copias_comanda o copias_comprobante), de 1 a 5 */
+    public static function copias(int $sucursal, string $campo): int
+    {
+        return max(1, min(5, (int) (DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->value($campo) ?: 1)));
+    }
+
+    /** Los bytes del ticket repetidos tantas copias como se pidan; el cajón se abre una sola vez al final */
+    private static function conCopias(object $imp, string $bytes, int $copias, bool $cajon): string
+    {
+        return str_repeat($bytes, max(1, $copias)).($cajon && $imp->abrir_cajon ? (new Escpos((int) $imp->columnas))->abrirCajon()->bytes() : '');
+    }
+
+    /** $copias: null = las configuradas en la sucursal (una reimpresión manda 1) */
+    public static function comprobante(int $idCpe, bool $exigirAgente = false, ?int $copias = null): bool
     {
         $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $idCpe)->first();
         if (! $cab || ($exigirAgente && ! self::agenteConectado((int) $cab->id_empresa_negocio))) {
@@ -109,11 +122,14 @@ class Impresion
         if (! $imp) {
             return false;
         }
+        $copias ??= self::copias((int) $cab->id_empresa_negocio, 'copias_comprobante');
 
         // Impresora A4 (instalada en Windows): va el PDF y el agente lo imprime con SumatraPDF
         if ($imp->tip_conex_imp === 'WINDOWS') {
             [, $pdf] = ComprobantePdf::generar($idCpe);
-            self::encolar($imp, $pdf, 'COMPROBANTE A4', $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT));
+            for ($i = 0; $i < $copias; $i++) {
+                self::encolar($imp, $pdf, 'COMPROBANTE A4', $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT));
+            }
 
             return true;
         }
@@ -130,7 +146,7 @@ class Impresion
 
         if (($imp->diseno ?? 'CLASICO') !== 'MODERNO') {
             $p = self::ticketClasico($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido);
-            self::encolar($imp, $p->bytes(), 'COMPROBANTE', $numero);
+            self::encolar($imp, self::conCopias($imp, $p->bytes(), $copias, true), 'COMPROBANTE', $numero);
 
             return true;
         }
@@ -213,11 +229,7 @@ class Impresion
         }
         $p->alinear('centro')->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA')
             ->texto('¡Gracias por su preferencia!')->avanzar(3)->cortar();
-        if ($imp->abrir_cajon) {
-            $p->abrirCajon();
-        }
-
-        self::encolar($imp, $p->bytes(), 'COMPROBANTE', $numero);
+        self::encolar($imp, self::conCopias($imp, $p->bytes(), $copias, true), 'COMPROBANTE', $numero);
 
         return true;
     }
@@ -328,9 +340,6 @@ class Impresion
         }
         $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico)
             ->fuente()->avanzar(3)->cortar();
-        if ($imp->abrir_cajon) {
-            $p->abrirCajon();
-        }
 
         return $p;
     }
@@ -424,7 +433,7 @@ class Impresion
             }
             $p->linea('=')->avanzar(3)->cortar();
 
-            self::encolar($imp, $p->bytes(), $anulacion ? 'ANULACION' : 'COMANDA', $referencia.' '.$destino);
+            self::encolar($imp, self::conCopias($imp, $p->bytes(), self::copias($sucursal, 'copias_comanda'), false), $anulacion ? 'ANULACION' : 'COMANDA', $referencia.' '.$destino);
             $enviados++;
         }
 

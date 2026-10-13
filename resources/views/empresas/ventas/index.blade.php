@@ -415,7 +415,7 @@
                     boton.disabled = true;
                     const icono = boton.innerHTML;
                     boton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                    post("{{ url('impresion/comprobante') }}/" + id, {})
+                    post("{{ url('impresion/comprobante') }}/" + id, { reimpresion: 1 })
                         .then(r => {
                             if (r.directa) {
                                 boton.innerHTML = '<i class="fas fa-check text-emerald-600"></i>';

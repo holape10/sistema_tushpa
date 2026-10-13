@@ -49,6 +49,7 @@
         <select name="agrupar" class="block rounded-lg border-gray-300 text-sm">
             <option value="vendedor" @selected(request('agrupar', 'vendedor') === 'vendedor')>Vendedor / cajero</option>
             <option value="mozo" @selected(request('agrupar') === 'mozo')>Mozo (ventas en mesa)</option>
+            <option value="promotor" @selected(request('agrupar') === 'promotor')>Promotor</option>
         </select></label>
 @endif
 @if (in_array('agrupar_rent', $usa, true))

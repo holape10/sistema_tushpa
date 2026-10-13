@@ -121,8 +121,18 @@
                 </select>
                 <button type="button" id="mot_nuevo" title="Nuevo motorizado" style="border:0; border-radius:6px; padding:4px 9px; background:#fff; color:#111; font-weight:bold;">+</button>
             </span>
-        @else
+        @elseif ($promotores->isEmpty())
             <span></span>
+        @endif
+        @if ($promotores->isNotEmpty())
+            {{-- Promotor que trajo al cliente (opcional): sale en el reporte Ventas por Vendedor › Promotor --}}
+            <span style="display:flex; align-items:center; gap:6px; font-size:14px;">
+                <i class="fas fa-star"></i>
+                <select id="promotor" title="Promotor (opcional)" style="color:#111; border-radius:6px; padding:4px 6px; font-size:14px; max-width:180px;">
+                    <option value="">Promotor…</option>
+                    @foreach ($promotores as $pr)<option value="{{ $pr->IdUsuario }}" @selected((int) $promActual === (int) $pr->IdUsuario)>{{ $pr->nombre }}</option>@endforeach
+                </select>
+            </span>
         @endif
     </div>
 
@@ -451,6 +461,12 @@
         });
 
         // --- Enviar / vaciar pedido ---
+        // Promotor: se guarda al elegirlo (si el pedido aún no existe, se aplica al enviar la comanda)
+        const selProm = document.getElementById('promotor');
+        if (selProm) {
+            selProm.addEventListener('change', () => post("{{ route('comandas.promotor') }}", { promotor_id: selProm.value || null }));
+        }
+
         // Delivery: el motorizado se guarda al elegirlo (si el pedido aún no existe, se aplica al enviar la comanda)
         const selMot = document.getElementById('motorizado');
         if (selMot) {
