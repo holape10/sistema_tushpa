@@ -1,5 +1,6 @@
 @extends('sitio.base')
 @section('titulo', 'Ingresar a mi sistema')
+@section('robots', 'noindex, follow')
 
 @section('contenido')
     <div class="row justify-content-center mt-4">

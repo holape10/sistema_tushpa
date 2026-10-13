@@ -3,10 +3,17 @@
 // Web pública del dominio principal (tushpa.app). Se carga desde routes/web.php solo con el multi-empresa activo.
 
 use App\Http\Controllers\SitioController;
+use App\Support\SeoSitio;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [SitioController::class, 'inicio'])->name('inicio');
 Route::get('/tutorial', [SitioController::class, 'tutorial'])->name('tutorial');
+
+// SEO: una página por ciudad (se agregan en config/ciudades.php) y el sitemap para Google
+Route::get('/sistema-de-facturacion-electronica-{ciudad}', [SitioController::class, 'ciudad'])
+    ->where('ciudad', implode('|', array_map('preg_quote', SeoSitio::slugsCiudades())) ?: 'sin-ciudades')
+    ->name('ciudad');
+Route::get('/sitemap.xml', [SitioController::class, 'sitemap'])->name('sitemap');
 Route::post('/contacto', [SitioController::class, 'contacto'])->middleware('throttle:5,10,sitio-contacto')->name('contacto');
 
 Route::get('/ingresar', [SitioController::class, 'ingresar'])->name('ingresar');
