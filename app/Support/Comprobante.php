@@ -158,7 +158,7 @@ class Comprobante
         // ---- Medios de pago (contado) o cuenta por cobrar (crédito) ----
         if ($esContado) {
             self::registrarMedios($user, $turno, $cabId, $total,
-                (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []));
+                (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []), (array) ($datos['op_med_pag'] ?? []));
         } else {
             Cuentas::abrirPorCobrar($cabId);
         }
@@ -243,19 +243,33 @@ class Comprobante
         return $cabId;
     }
 
-    /** Medios de pago de una venta al contado; sin medios elegidos se cobra todo con el predeterminado */
-    private static function registrarMedios(User $user, Turno $turno, int $cabId, float $total, array $ids, array $montos): void
+    /**
+     * Medios de pago de una venta al contado; sin medios elegidos se cobra todo con el predeterminado.
+     * $operaciones: número de operación de cada medio (tarjeta, Yape, transferencia...); obligatorio para los que no son
+     * EFECTIVO cuando la sucursal lo exige (empresa_negocios.exigir_operacion).
+     */
+    private static function registrarMedios(User $user, Turno $turno, int $cabId, float $total, array $ids, array $montos, array $operaciones = []): void
     {
-        $fila = fn ($idMedio, $monto) => [
+        $fila = fn ($idMedio, $monto, $operacion = null) => [
             'IdCpe_cabecera' => $cabId, 'id_med_pag' => $idMedio, 'monto' => $monto,
             'id_turno' => $turno->id_turno, 'id_empresa_negocio' => $user->id_empresa_negocio,
+            'num_operacion' => trim((string) $operacion) !== '' ? mb_substr(trim((string) $operacion), 0, 30) : null,
         ];
+        $exige = (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $user->id_empresa_negocio)->value('exigir_operacion');
+        $nombres = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->pluck('nom_med_pag', 'id_med_pag');
+        $revisar = function ($idMedio, $operacion) use ($exige, $nombres) {
+            $nombre = mb_strtoupper(trim((string) ($nombres[$idMedio] ?? '')));
+            if ($exige && $nombre !== 'EFECTIVO' && trim((string) $operacion) === '') {
+                throw new \RuntimeException("Escribe el número de operación del pago con {$nombre}.");
+            }
+        };
 
         if (! count($ids)) {
             $medio = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->orderByDesc('predeterminado')->first();
             if (! $medio) {
                 throw new \RuntimeException('No hay medios de pago configurados.');
             }
+            $revisar($medio->id_med_pag, null);
             DB::table('venta_medio_pago')->insert($fila($medio->id_med_pag, $total));
 
             return;
@@ -273,7 +287,10 @@ class Comprobante
                 .' y el total es S/ '.number_format($total, 2).'.');
         }
         foreach ($ids as $k => $idMedio) {
-            DB::table('venta_medio_pago')->insert($fila($idMedio, $montos[$k]));
+            $revisar($idMedio, $operaciones[$k] ?? null);
+        }
+        foreach ($ids as $k => $idMedio) {
+            DB::table('venta_medio_pago')->insert($fila($idMedio, $montos[$k], $operaciones[$k] ?? null));
         }
     }
 }

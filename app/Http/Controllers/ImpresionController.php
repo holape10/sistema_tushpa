@@ -142,9 +142,11 @@ class ImpresionController extends Controller
     {
         $this->soloAdmin();
         $d = $request->validate(['copias_comanda' => 'required|integer|between:1,5', 'copias_comprobante' => 'required|integer|between:1,5']);
-        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal())->update($d);
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal())->update($d + [
+            'comanda_al_cobrar' => $request->boolean('comanda_al_cobrar'), 'exigir_operacion' => $request->boolean('exigir_operacion'),
+        ]);
 
-        return back()->with('success', "Copias guardadas: comandas {$d['copias_comanda']}, comprobantes {$d['copias_comprobante']}.");
+        return back()->with('success', "Guardado: comandas {$d['copias_comanda']} copia(s), comprobantes {$d['copias_comprobante']} copia(s).");
     }
 
     /** Qué impresora usa cada categoría (cocina/bar) y cada usuario (caja) */

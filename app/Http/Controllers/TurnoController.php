@@ -1,9 +1,14 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Mesa, Pedido, Turno};
+use App\Models\Mesa;
+use App\Models\Pedido;
+use App\Models\Turno;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class TurnoController extends Controller
 {
@@ -18,6 +23,7 @@ class TurnoController extends Controller
         $user = Auth::user();
         $turno = Turno::where('id_turno', $id)->where('id_empresa_negocio', $user->id_empresa_negocio)->firstOrFail();
         abort_unless($user->esAdmin() || $turno->IdUsuario == $user->IdUsuario, 403);
+
         return $turno;
     }
 
@@ -67,7 +73,7 @@ class TurnoController extends Controller
         $ingresos = round((float) $activos->where('tipo', 'ENTRADA')->sum('importe'), 2);
         $egresos = round((float) $activos->where('tipo', 'SALIDA')->sum('importe'), 2);
 
-        $ventasEfectivo = round((float) $ventasPorMedio->filter(fn($v) => strtoupper((string) $v->nom_med_pag) === 'EFECTIVO')->sum('monto'), 2);
+        $ventasEfectivo = round((float) $ventasPorMedio->filter(fn ($v) => strtoupper((string) $v->nom_med_pag) === 'EFECTIVO')->sum('monto'), 2);
         $ventasTotal = round((float) $comprobantes->sum('total'), 2);
         $ventasCredito = round((float) $comprobantes->sum('credito'), 2);
         $efectivoEsperado = round((float) $turno->monto + $ventasEfectivo + $ingresos - $egresos, 2);
@@ -82,7 +88,7 @@ class TurnoController extends Controller
         $user = Auth::user();
         $turno = Turno::abiertoDe($user);
 
-        if (!$turno) {
+        if (! $turno) {
             return view('empresas.turnos.abrir', ['denominaciones' => Turno::DENOMINACIONES]);
         }
 
@@ -132,14 +138,14 @@ class TurnoController extends Controller
         $this->autorizar();
         $user = Auth::user();
         $turno = Turno::abiertoDe($user);
-        if (!$turno) {
+        if (! $turno) {
             return redirect()->route('turnos.index')->withErrors(['turno' => 'No tienes un turno abierto.']);
         }
 
         $request->validate([
             'tip_caj_id' => 'required|exists:tiposcaja,tip_caj_id',
-            'importe'    => 'required|numeric|min:0.01',
-            'mov_com'    => 'required|string|max:255',
+            'importe' => 'required|numeric|min:0.01',
+            'mov_com' => 'required|string|max:255',
         ], [], ['tip_caj_id' => 'Tipo', 'importe' => 'Importe', 'mov_com' => 'Descripción']);
 
         abort_if(in_array($request->tip_caj_id, ['001', '002']), 422, 'Ese tipo se registra automáticamente.');
@@ -179,7 +185,7 @@ class TurnoController extends Controller
             $turno = Turno::where('IdUsuario', $user->IdUsuario)
                 ->where('id_empresa_negocio', $user->id_empresa_negocio)
                 ->where('estado', 'ABIERTO')->lockForUpdate()->first();
-            if (!$turno) {
+            if (! $turno) {
                 return null;
             }
 
@@ -189,7 +195,7 @@ class TurnoController extends Controller
             $datos = [];
             $sumaArqueo = 0;
             foreach (Turno::DENOMINACIONES as $campo => $valor) {
-                $cant = max(0, (int) $request->input('cierre_' . $campo, 0));
+                $cant = max(0, (int) $request->input('cierre_'.$campo, 0));
                 $datos[$campo] = $cant;
                 $sumaArqueo += $cant * $valor;
             }
@@ -198,13 +204,13 @@ class TurnoController extends Controller
             $mesas = Mesa::where('id_empresa_negocio', $user->id_empresa_negocio)->get();
 
             $turno->update($datos + [
-                'estado'         => 'CERRADO',
-                'cierre'         => now(),
-                'montocierre'    => $montocierre,
+                'estado' => 'CERRADO',
+                'cierre' => now(),
+                'montocierre' => $montocierre,
                 'total_ingresos' => $r['ingresos'],
-                'total_gastos'   => $r['egresos'],
-                'totalocupados'  => $mesas->where('mes_est', '!=', 'Libre')->count(),
-                'totallibres'    => $mesas->where('mes_est', 'Libre')->count(),
+                'total_gastos' => $r['egresos'],
+                'totalocupados' => $mesas->where('mes_est', '!=', 'Libre')->count(),
+                'totallibres' => $mesas->where('mes_est', 'Libre')->count(),
             ]);
 
             DB::table('turno_medio_pago')->where('id_turno', $turno->id_turno)->delete();
@@ -218,7 +224,7 @@ class TurnoController extends Controller
             return $turno->id_turno;
         });
 
-        if (!$idTurno) {
+        if (! $idTurno) {
             return redirect()->route('turnos.index')->withErrors(['turno' => 'No tienes un turno abierto.']);
         }
 
@@ -234,13 +240,72 @@ class TurnoController extends Controller
 
         $turnos = Turno::with('usuario')
             ->where('id_empresa_negocio', $user->id_empresa_negocio)
-            ->when(!$user->esAdmin(), fn($q) => $q->where('IdUsuario', $user->IdUsuario))
+            ->when(! $user->esAdmin(), fn ($q) => $q->where('IdUsuario', $user->IdUsuario))
             ->whereDate('apertura', '>=', $desde)
             ->whereDate('apertura', '<=', $hasta)
             ->orderByDesc('id_turno')
             ->paginate(20)->withQueryString();
 
         return view('empresas.turnos.listado', compact('turnos', 'desde', 'hasta'));
+    }
+
+    /** Reporte de productos vendidos en el turno (ticket de 80 mm, como el sistema anterior) */
+    public function productos($id)
+    {
+        $this->autorizar();
+        $turno = $this->turnoVisible($id);
+        $productos = self::vendidos($turno);
+
+        return view('empresas.turnos.productos', $this->cabeceraReporte($turno) + [
+            'modo' => 'productos', 'productos' => $productos, 'total' => round($productos->sum('total'), 2),
+        ]);
+    }
+
+    /** Reporte por categoría y productos del turno */
+    public function categorias($id)
+    {
+        $this->autorizar();
+        $turno = $this->turnoVisible($id);
+        $productos = self::vendidos($turno);
+
+        return view('empresas.turnos.productos', $this->cabeceraReporte($turno) + [
+            'modo' => 'categorias',
+            'categorias' => $productos->groupBy('categoria')->sortKeys()
+                ->map(fn ($g) => ['productos' => $g->values(), 'cantidad' => round($g->sum('cantidad'), 2), 'total' => round($g->sum('total'), 2)]),
+            'total' => round($productos->sum('total'), 2),
+        ]);
+    }
+
+    private function cabeceraReporte(Turno $turno): array
+    {
+        $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $turno->id_empresa_negocio)->first();
+
+        return ['turno' => $turno, 'negocio' => $negocio, 'empresa' => DB::table('empresa')->where('IdEmpresa', $negocio->IdEmpresa)->first()];
+    }
+
+    /**
+     * Productos vendidos en el turno (comprobantes vigentes; las notas de crédito restan), agrupados por cómo se
+     * vendieron, con su categoría.
+     *
+     * @return Collection<int, object{nombre: string, categoria: string, cantidad: float, precio: float, total: float}>
+     */
+    public static function vendidos(Turno $turno): Collection
+    {
+        return DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
+            ->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
+            ->leftJoin('categorias as cat', 'cat.cat_id', '=', 'p.cat_id')
+            ->where('c.id_turno', $turno->id_turno)->whereNull('c.ccabaj')->where('c.tdocod', '!=', '08')
+            ->groupBy('d.cdedes', 'cat.cat_nom')
+            ->orderBy('d.cdedes')
+            ->get(['d.cdedes', 'cat.cat_nom',
+                DB::raw("SUM(CASE WHEN c.tdocod = '07' THEN -d.cdecan ELSE d.cdecan END) as cantidad"),
+                DB::raw("SUM(CASE WHEN c.tdocod = '07' THEN -d.cdevve ELSE d.cdevve END) as total")])
+            ->filter(fn ($r) => abs((float) $r->cantidad) > 0.0001 || abs((float) $r->total) > 0.001)
+            ->map(fn ($r) => (object) [
+                'nombre' => $r->cdedes, 'categoria' => $r->cat_nom ?: 'OTROS',
+                'cantidad' => round((float) $r->cantidad, 2), 'total' => round((float) $r->total, 2),
+                'precio' => (float) $r->cantidad != 0 ? round((float) $r->total / (float) $r->cantidad, 2) : 0,
+            ])->values();
     }
 
     public function show($id)

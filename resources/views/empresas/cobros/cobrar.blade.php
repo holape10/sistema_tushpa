@@ -318,6 +318,11 @@
                                         <option value="{{ $m->id_med_pag }}" data-nom="{{ $m->nom_med_pag }}" @selected($m->predeterminado == '1')>{{ $m->nom_med_pag }}</option>
                                     @endforeach
                                 </select>
+                                @if ($negocio->exigir_operacion ?? false)
+                                    {{-- Tarjeta, Yape, transferencia...: número de operación obligatorio --}}
+                                    <input type="text" id="op_med_pag" maxlength="30" class="form-control input-sm" style="margin-bottom:5px; display:none;"
+                                           placeholder="N° de operación (obligatorio)">
+                                @endif
                                 <div class="input-group input-group-sm">
                                     <input type="number" step="any" id="mon_med_pag" class="form-control" value="{{ number_format($separadas ? 0 : $total, 2, '.', '') }}">
                                     <span class="input-group-btn">
@@ -350,6 +355,7 @@
     let TOTAL = {{ $separadas ? 0 : number_format($total, 2, '.', '') }};
     const PED_ID = {{ $pedido->ped_id ?? 'null' }};
     let medios = [];
+    const EXIGE_OP = {{ ($negocio->exigir_operacion ?? false) ? 'true' : 'false' }};
 
     const el = id => document.getElementById(id);
     const fmt = n => (Math.round(n * 100) / 100).toFixed(2);
@@ -380,13 +386,23 @@
         el('vuelto').value = fmt(Math.max(0, (parseFloat(this.value) || 0) - TOTAL));
     });
 
-    // Medios de pago
+    // Medios de pago. Con EXIGE_OP, los que no son EFECTIVO piden el número de operación
+    const esEfectivo = opt => (opt?.dataset.nom || '').trim().toUpperCase() === 'EFECTIVO';
+    function mostrarOperacion() {
+        if (!EXIGE_OP) return;
+        el('op_med_pag').style.display = esEfectivo(el('med_pag').selectedOptions[0]) ? 'none' : 'block';
+    }
+    if (EXIGE_OP) {
+        el('med_pag').addEventListener('change', mostrarOperacion);
+        mostrarOperacion();
+    }
+
     function renderMedios() {
         const tb = el('tbody_med_pag');
         tb.innerHTML = '';
         medios.forEach((m, i) => {
             tb.insertAdjacentHTML('beforeend',
-                `<tr><td><span class="label label-success">${m.nom}</span> S/ ${fmt(m.monto)}</td>
+                `<tr><td><span class="label label-success">${m.nom}</span> S/ ${fmt(m.monto)}${m.op ? ` <small class="text-muted">Op. ${m.op.replace(/[<>&"]/g, '')}</small>` : ''}</td>
                  <td style="width:30px"><button type="button" class="btn btn-danger btn-xs" onclick="quitarMedio(${i})">&times;</button></td></tr>`);
         });
         const suma = medios.reduce((a, m) => a + m.monto, 0);
@@ -400,7 +416,10 @@
         const monto = parseFloat(el('mon_med_pag').value) || 0;
         if (monto <= 0) return;
         if (medios.some(m => m.id == sel.value)) { alert('EL MEDIO DE PAGO YA SE ENCUENTRA AGREGADO'); return; }
-        medios.push({ id: sel.value, nom: sel.selectedOptions[0].dataset.nom, monto: monto });
+        const op = EXIGE_OP ? el('op_med_pag').value.trim() : '';
+        if (EXIGE_OP && !esEfectivo(sel.selectedOptions[0]) && !op) { alert('Escribe el número de operación del pago con ' + sel.selectedOptions[0].dataset.nom + '.'); el('op_med_pag').focus(); return; }
+        medios.push({ id: sel.value, nom: sel.selectedOptions[0].dataset.nom, monto: monto, op: op });
+        if (EXIGE_OP) el('op_med_pag').value = '';
         renderMedios();
     });
 
@@ -700,6 +719,11 @@
         }
 
         if (SEPARADAS && TOTAL <= 0) { alert('Elige qué productos se cobran en esta cuenta.'); return; }
+        if (EXIGE_OP && contado && !medios.length && !esEfectivo(el('med_pag').selectedOptions[0]) && !el('op_med_pag').value.trim()) {
+            alert('Escribe el número de operación del pago con ' + el('med_pag').selectedOptions[0].dataset.nom + '.');
+            el('op_med_pag').focus();
+            return;
+        }
         if (DIRECTA && !carrito.length) { alert('Agrega al menos un producto.'); return; }
         cobrando = true;
         btn.disabled = true;
@@ -727,6 +751,7 @@
             // Si no agregó medios, se cobra todo con el medio que está seleccionado en la lista (no con el predeterminado)
             id_med_pag: contado ? (medios.length ? medios.map(m => m.id) : [el('med_pag').value]) : [],
             mon_med_pag: contado ? (medios.length ? medios.map(m => m.monto) : [TOTAL]) : [],
+            op_med_pag: contado ? (medios.length ? medios.map(m => m.op || '') : [EXIGE_OP ? el('op_med_pag').value.trim() : '']) : [],
             // Cuentas separadas: { clave: cantidad } de lo que paga esta persona (null = todo lo pendiente)
             separadas: SEPARADAS ? seleccionSeparada() : null,
         };

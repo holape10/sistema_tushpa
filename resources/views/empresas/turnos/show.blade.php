@@ -24,6 +24,8 @@
 <body>
 <div class="btns">
     <button onclick="window.print()">Imprimir</button>
+    <a href="{{ route('turnos.productos', $turno->id_turno) }}">Productos</a>
+    <a href="{{ route('turnos.categorias', $turno->id_turno) }}">Categorías</a>
     <a href="{{ route('turnos.listado') }}">Listado de turnos</a>
     <a href="{{ route('turnos.index') }}">Caja</a>
 </div>

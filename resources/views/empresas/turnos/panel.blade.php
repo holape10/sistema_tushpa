@@ -11,6 +11,8 @@
         <div class="flex gap-2">
             <a href="{{ route('comandas.seleccion') }}" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Ir a Comandas</a>
             <a href="{{ route('turnos.show', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Ver reporte</a>
+            <a href="{{ route('turnos.productos', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 text-sm font-semibold hover:bg-sky-200">Productos</a>
+            <a href="{{ route('turnos.categorias', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 text-sm font-semibold hover:bg-sky-200">Categorías</a>
         </div>
     </div>
 

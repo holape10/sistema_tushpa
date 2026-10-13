@@ -429,6 +429,13 @@ class CobroController extends Controller
             session()->flash('puntos', $puntos);
         }
 
+        // Sucursal que imprime las comandas al cobrar: ahora salen a cocina/bar
+        try {
+            Impresion::imprimirComandaPendiente((int) $request->ped_id);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
         // Impresión directa (sin vista previa) si el agente de impresión está conectado
         $impreso = false;
         if ($request->imprimir) {

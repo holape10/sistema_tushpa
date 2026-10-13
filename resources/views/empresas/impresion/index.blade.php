@@ -116,7 +116,7 @@
             <form method="POST" action="{{ route('impresion.copias') }}" class="bg-white rounded-2xl shadow-sm p-5 mb-5 flex flex-wrap items-end gap-5">
                 @csrf
                 <div class="flex-1 min-w-[220px]">
-                    <h3 class="font-bold text-gray-800">Copias por impresión</h3>
+                    <h3 class="font-bold text-gray-800">Copias y opciones de impresión</h3>
                     <p class="text-xs text-gray-400">Cuántos tickets salen cada vez. Al reimprimir desde el Panel de Ventas sale 1.</p>
                 </div>
                 <label class="text-sm">Comandas (cocina / bar)
@@ -128,6 +128,18 @@
                         @for ($n = 1; $n <= 5; $n++)<option value="{{ $n }}" @selected((int) ($negocio->copias_comprobante ?? 1) === $n)>{{ $n }} {{ $n === 1 ? 'copia' : 'copias' }}</option>@endfor
                     </select></label>
                 <button class="h-10 px-5 rounded-lg bg-indigo-600 text-white font-semibold text-sm">Guardar</button>
+                <div class="w-full grid sm:grid-cols-2 gap-3 pt-3 border-t text-sm">
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" name="comanda_al_cobrar" value="1" @checked($negocio->comanda_al_cobrar ?? false) class="mt-0.5 rounded">
+                        <span><b class="text-gray-800">Imprimir las comandas recién al cobrar</b>
+                            <span class="block text-xs text-gray-500">El mozo envía el pedido y la comanda sale a cocina/bar cuando la caja cobra.</span></span>
+                    </label>
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" name="exigir_operacion" value="1" @checked($negocio->exigir_operacion ?? false) class="mt-0.5 rounded">
+                        <span><b class="text-gray-800">Pedir N° de operación al cobrar</b>
+                            <span class="block text-xs text-gray-500">Con tarjeta, Yape o cualquier medio que no sea EFECTIVO (cobrar mesa y PV Restaurante).</span></span>
+                    </label>
+                </div>
             </form>
 
         {{-- Asignaciones --}}

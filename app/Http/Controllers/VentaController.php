@@ -104,7 +104,7 @@ class VentaController extends Controller
         // Medios de pago de las ventas de la página
         $medios = DB::table('venta_medio_pago as v')->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'v.id_med_pag')
             ->whereIn('v.IdCpe_cabecera', $ventas->pluck('IdCpe_cabecera'))
-            ->get(['v.IdCpe_cabecera', 'mp.nom_med_pag', 'v.monto'])->groupBy('IdCpe_cabecera');
+            ->get(['v.IdCpe_cabecera', 'mp.nom_med_pag', 'v.monto', 'v.num_operacion'])->groupBy('IdCpe_cabecera');
 
         // Turnos abiertos: solo esas ventas se pueden anular o cambiar de medio de pago
         $turnosAbiertos = Turno::where('estado', 'ABIERTO')->pluck('id_turno')->all();

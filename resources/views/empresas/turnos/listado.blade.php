@@ -30,7 +30,11 @@
                         <td class="px-4 py-3 text-center">
                             <span class="px-2 py-1 rounded-full text-xs font-bold {{ $t->estado == 'ABIERTO' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">{{ $t->estado }}</span>
                         </td>
-                        <td class="px-4 py-3 text-right"><a href="{{ route('turnos.show', $t->id_turno) }}" class="text-indigo-600 hover:underline">Ver reporte</a></td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <a href="{{ route('turnos.show', $t->id_turno) }}" class="text-indigo-600 hover:underline">Reporte</a>
+                            <a href="{{ route('turnos.productos', $t->id_turno) }}" target="_blank" class="ml-3 text-sky-600 hover:underline">Productos</a>
+                            <a href="{{ route('turnos.categorias', $t->id_turno) }}" target="_blank" class="ml-3 text-sky-600 hover:underline">Categorías</a>
+                        </td>
                     </tr>
                 @empty
                     <tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">Sin turnos en el rango.</td></tr>

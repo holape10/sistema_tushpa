@@ -39,6 +39,8 @@ class VentaDirecta
         'guia_remision' => 'nullable|string|max:20',
         'id_med_pag' => 'nullable|array|max:10',
         'mon_med_pag' => 'nullable|array|max:10',
+        'op_med_pag' => 'nullable|array|max:10',
+        'op_med_pag.*' => 'nullable|string|max:30',
         'paga' => 'nullable|numeric|min:0',
     ];
 

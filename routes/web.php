@@ -121,6 +121,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/turnos/movimiento/{id}/anular', [TurnoController::class, 'anularMovimiento'])->name('turnos.anular_movimiento');
     Route::get('/turnos/listado', [TurnoController::class, 'listado'])->name('turnos.listado');
     Route::get('/turnos/{id}', [TurnoController::class, 'show'])->whereNumber('id')->name('turnos.show');
+    Route::get('/turnos/{id}/productos', [TurnoController::class, 'productos'])->whereNumber('id')->name('turnos.productos');
+    Route::get('/turnos/{id}/categorias', [TurnoController::class, 'categorias'])->whereNumber('id')->name('turnos.categorias');
 
     // Pantalla de cocina (KDS)
     Route::get('/cocina', [CocinaController::class, 'index'])->name('cocina.index');

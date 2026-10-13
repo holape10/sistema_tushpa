@@ -373,6 +373,58 @@ class Impresion
         return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° '.$pedido->ped_id, $lineas, $anulacion, $motivo, $entrega, $atiende, $promotor);
     }
 
+    /** ¿La sucursal imprime las comandas recién al cobrar? (empresa_negocios.comanda_al_cobrar) */
+    public static function comandaAlCobrar(int $sucursal): bool
+    {
+        return (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->value('comanda_al_cobrar');
+    }
+
+    /**
+     * Guarda lo enviado a cocina para imprimirlo al cobrar. Se acumula por producto e indicación; lo que se anula
+     * antes de cobrar se descuenta (no sale nunca en papel).
+     *
+     * @param  array<int, array{IdProducto: ?int, nombre: string, cantidad: float, observacion?: ?string}>  $nuevos
+     * @param  array<int, array{IdProducto: ?int, nombre: string, cantidad: float, observacion?: ?string}>  $anulaciones
+     */
+    public static function guardarComandaPendiente(int $pedId, array $nuevos, array $anulaciones): void
+    {
+        $pendiente = json_decode((string) DB::table('pedidos')->where('ped_id', $pedId)->value('comanda_pendiente'), true) ?: [];
+        foreach ($nuevos as $l) {
+            // Aún no salió nada a cocina: un "(adicional)" se suma a la misma línea
+            $obs = trim(str_replace('(adicional)', '', (string) ($l['observacion'] ?? '')));
+            $clave = ($l['IdProducto'] ?? '').'|'.$l['nombre'].'|'.$obs;
+            $pendiente[$clave] ??= ['IdProducto' => $l['IdProducto'] ?? null, 'nombre' => $l['nombre'], 'cantidad' => 0, 'observacion' => $obs];
+            $pendiente[$clave]['cantidad'] = round($pendiente[$clave]['cantidad'] + (float) $l['cantidad'], 3);
+        }
+        foreach ($anulaciones as $a) {
+            $resta = (float) $a['cantidad'];
+            foreach ($pendiente as $clave => $l) {
+                if ($resta <= 0 || (int) $l['IdProducto'] !== (int) ($a['IdProducto'] ?? 0)) {
+                    continue;
+                }
+                $quita = min($resta, (float) $l['cantidad']);
+                $pendiente[$clave]['cantidad'] = round($l['cantidad'] - $quita, 3);
+                $resta -= $quita;
+                if ($pendiente[$clave]['cantidad'] <= 0) {
+                    unset($pendiente[$clave]);
+                }
+            }
+        }
+        DB::table('pedidos')->where('ped_id', $pedId)->update(['comanda_pendiente' => $pendiente ? json_encode($pendiente, JSON_UNESCAPED_UNICODE) : null]);
+    }
+
+    /** Al cobrar: imprime lo que quedó guardado de la comanda y lo limpia. Devuelve cuántos tickets salieron. */
+    public static function imprimirComandaPendiente(int $pedId): int
+    {
+        $pendiente = json_decode((string) DB::table('pedidos')->where('ped_id', $pedId)->value('comanda_pendiente'), true);
+        if (! $pendiente) {
+            return 0;
+        }
+        DB::table('pedidos')->where('ped_id', $pedId)->update(['comanda_pendiente' => null]);
+
+        return self::comanda($pedId, array_values($pendiente));
+    }
+
     /**
      * Imprime la comanda en la impresora de la categoría de cada producto.
      * Sirve para pedidos de mesa/llevar y para ventas directas (sin pedido).

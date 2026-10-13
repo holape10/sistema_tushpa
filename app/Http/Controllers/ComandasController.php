@@ -1009,10 +1009,16 @@ class ComandasController extends Controller
         session()->forget(self::SESION);
 
         // Tickets de cocina/bar (directo a la impresora de cada categoría). Un fallo aquí no deshace la comanda.
+        // Si la sucursal imprime las comandas al cobrar, aquí solo se guardan
         $tickets = 0;
+        $alCobrar = Impresion::comandaAlCobrar((int) $usuario->id_empresa_negocio);
         try {
-            $tickets = Impresion::comanda($resultado['pedido_id'], $cocina)
-                + Impresion::comanda($resultado['pedido_id'], $anulaciones, true);
+            if ($alCobrar) {
+                Impresion::guardarComandaPendiente($resultado['pedido_id'], $cocina, $anulaciones);
+            } else {
+                $tickets = Impresion::comanda($resultado['pedido_id'], $cocina)
+                    + Impresion::comanda($resultado['pedido_id'], $anulaciones, true);
+            }
         } catch (\Throwable $e) {
             report($e);
         }
@@ -1029,7 +1035,7 @@ class ComandasController extends Controller
             'tickets' => $tickets,
             'message' => $resultado['anulado']
                 ? 'Se eliminaron todos los ítems: el pedido quedó ANULADO'.($resultado['mesa'] ? ' y la mesa libre.' : '.')
-                : 'Comanda enviada correctamente.',
+                : ($alCobrar ? 'Pedido guardado: la comanda se imprimirá al cobrar.' : 'Comanda enviada correctamente.'),
             'pedido_id' => $resultado['pedido_id'],
         ]);
     }

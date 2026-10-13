@@ -115,7 +115,7 @@
                             </td>
                             <td class="px-3 py-2 text-xs whitespace-nowrap">
                                 @forelse ($medios[$v->IdCpe_cabecera] ?? [] as $m)
-                                    <span class="block">{{ $m->nom_med_pag }}: {{ number_format($m->monto, 2) }}</span>
+                                    <span class="block">{{ $m->nom_med_pag }}: {{ number_format($m->monto, 2) }}@if ($m->num_operacion) <span class="text-gray-400">· Op. {{ $m->num_operacion }}</span>@endif</span>
                                 @empty
                                     <span class="text-gray-400">—</span>
                                 @endforelse
