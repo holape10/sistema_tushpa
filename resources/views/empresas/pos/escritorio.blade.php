@@ -21,7 +21,7 @@
         <div class="lg:col-span-7 space-y-4 min-w-0">
 
             {{-- Buscador: nombre, código o lector de barras --}}
-            <div class="relative" @click.outside="resultadosAbiertos = false" x-show="!edicion?.soloCabecera">
+            <div class="relative" @click.outside="resultadosAbiertos = false" x-show="!(edicion && edicion.soloCabecera)">
                 <div class="relative">
                     <svg class="w-7 h-7 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
                     <input x-ref="buscador" type="search" autocomplete="off" x-model="busqueda"
@@ -86,7 +86,7 @@
             </div>
 
             {{-- Detalle (en una venta de mesa que se corrige, los productos no cambian) --}}
-            <fieldset :disabled="edicion?.soloCabecera" class="min-w-0">
+            <fieldset :disabled="!!(edicion && edicion.soloCabecera)" class="min-w-0">
             <section class="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div class="flex flex-wrap items-center gap-2 px-3 sm:px-4 py-3 bg-slate-800 text-white">
                     <h2 class="font-bold tracking-wide flex-1">DETALLE <span x-show="carrito.length" x-cloak class="text-slate-300 font-normal" x-text="'· ' + carrito.length + (carrito.length === 1 ? ' línea' : ' líneas')"></span></h2>

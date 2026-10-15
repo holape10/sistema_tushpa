@@ -147,7 +147,7 @@ class Impresion
         if (($imp->diseno ?? 'CLASICO') !== 'MODERNO') {
             $p = ($imp->diseno ?? '') === 'COMPACTO'
                 ? self::ticketCompacto($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido)
-                : self::ticketClasico($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido);
+                : self::ticketClasico($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido, ($imp->diseno ?? '') === 'EN_LINEA');
             self::encolar($imp, self::conCopias($imp, $p->bytes(), $copias, true), 'COMPROBANTE', $numero);
 
             return true;
@@ -171,6 +171,9 @@ class Impresion
             $p->texto('Mozo  : '.$pedido->mozo);
         }
         $p->texto('Pago  : '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''));
+        if (trim((string) $cab->ccaobs) !== '') {
+            $p->parrafo('Obs.  : '.trim($cab->ccaobs));
+        }
 
         $p->linea();
         if ($cab->consumo) {
@@ -289,6 +292,9 @@ class Impresion
         if ($cab->estadopago === 'CREDITO' && $cab->ccafve) {
             $p->texto('Vence: '.Carbon::parse($cab->ccafve)->format('d/m/Y'));
         }
+        if (trim((string) $cab->ccaobs) !== '') {
+            $p->parrafo('Obs.: '.trim($cab->ccaobs));
+        }
 
         // Productos: nombre y debajo Cant. / UDM / P.U / Total
         $w = $ancho >= 42 ? [7, 5, 9, 9] : [6, 4, 8, 8];
@@ -336,7 +342,11 @@ class Impresion
             ->fuente()->avanzar(3)->cortar();
     }
 
-    private static function ticketClasico(object $cab, object $imp, $detalle, $medios, string $tdodes, ?object $pedido): Escpos
+    /**
+     * $enLinea: diseño "En una línea" (como los tickets del sistema anterior): Cant. U.M. Descrip. P.U. Total en la misma fila
+     * y la descripción larga sigue debajo, en su columna. El resto es igual al clásico.
+     */
+    private static function ticketClasico(object $cab, object $imp, $detalle, $medios, string $tdodes, ?object $pedido, bool $enLinea = false): Escpos
     {
         $p = new Escpos((int) $imp->columnas);
         $ancho = $p->columnas();
@@ -376,27 +386,17 @@ class Impresion
         if ($pedido?->mozo) {
             $dato('Mozo:', $pedido->mozo);
         }
-        $p->texto('Condición de Pago:   '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''))->texto();
-
-        // Productos: nombre completo y debajo las columnas alineadas a la derecha
-        $w = $ancho >= 42 ? [7, 5, 9, 9] : [6, 4, 8, 8];
-        $columnas = fn (string $cant, string $udm, string $pu, string $total) => str_pad($cant, $w[0], ' ', STR_PAD_LEFT).str_pad($udm, $w[1], ' ', STR_PAD_LEFT)
-            .str_pad($pu, $w[2], ' ', STR_PAD_LEFT).str_pad($total, $w[3], ' ', STR_PAD_LEFT);
-        $resto = max(0, $ancho - array_sum($w));
-        $fila = fn (string $cant, string $udm, string $pu, string $total) => str_repeat(' ', $resto).$columnas($cant, $udm, $pu, $total);
-        $p->texto(($resto >= 11 ? mb_str_pad('Descripción', $resto) : 'Desc.'.str_repeat(' ', max(0, $resto - 5))).$columnas('Cant.', 'UDM.', 'P.U.', 'Total'))->linea('_');
-        if ($cab->consumo) {
-            $p->texto('POR CONSUMO')->texto($fila('1.00', 'NIU', $soles($cab->ccaitv), $soles($cab->ccaitv)));
-        } else {
-            foreach ($detalle as $d) {
-                $p->parrafo((string) $d->cdedes);
-                $p->texto($fila(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), $soles($d->cdepuni), $soles($d->cdevve)));
-                if (! empty($d->series)) {
-                    $p->parrafo('  S/N: '.$d->series);
-                }
-            }
+        $p->texto('Condición de Pago:   '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''));
+        if (trim((string) $cab->ccaobs) !== '') {
+            $dato('Observación:', trim($cab->ccaobs));
         }
-        $p->linea('_');
+        $p->texto();
+
+        if ($enLinea) {
+            self::productosEnLinea($p, $cab, $detalle);
+        } else {
+            self::productosClasico($p, $cab, $detalle);
+        }
 
         // Totales
         $p->dosColumnas('SUBTOTAL: S/', $soles((float) $cab->ccatvg + (float) $cab->ccatexo + (float) $cab->ccatinaf));
@@ -440,6 +440,73 @@ class Impresion
             ->fuente()->avanzar(3)->cortar();
 
         return $p;
+    }
+
+    /** Productos del clásico: nombre completo y debajo Cant. / UDM / P.U. / Total alineados a la derecha */
+    private static function productosClasico(Escpos $p, object $cab, $detalle): void
+    {
+        $ancho = $p->columnas();
+        $soles = fn ($n) => number_format((float) $n, 2);
+        $w = $ancho >= 42 ? [7, 5, 9, 9] : [6, 4, 8, 8];
+        $columnas = fn (string $cant, string $udm, string $pu, string $total) => str_pad($cant, $w[0], ' ', STR_PAD_LEFT).str_pad($udm, $w[1], ' ', STR_PAD_LEFT)
+            .str_pad($pu, $w[2], ' ', STR_PAD_LEFT).str_pad($total, $w[3], ' ', STR_PAD_LEFT);
+        $resto = max(0, $ancho - array_sum($w));
+        $fila = fn (string $cant, string $udm, string $pu, string $total) => str_repeat(' ', $resto).$columnas($cant, $udm, $pu, $total);
+        $p->texto(($resto >= 11 ? mb_str_pad('Descripción', $resto) : 'Desc.'.str_repeat(' ', max(0, $resto - 5))).$columnas('Cant.', 'UDM.', 'P.U.', 'Total'))->linea('_');
+        if ($cab->consumo) {
+            $p->texto('POR CONSUMO')->texto($fila('1.00', 'NIU', $soles($cab->ccaitv), $soles($cab->ccaitv)));
+        } else {
+            foreach ($detalle as $d) {
+                $p->parrafo((string) $d->cdedes);
+                $p->texto($fila(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), $soles($d->cdepuni), $soles($d->cdevve)));
+                if (! empty($d->series)) {
+                    $p->parrafo('  S/N: '.$d->series);
+                }
+            }
+        }
+        $p->linea('_');
+    }
+
+    /** Productos en una línea: Cant. U.M. Descrip. P.U. Total; la descripción que no entra sigue debajo en su columna */
+    private static function productosEnLinea(Escpos $p, object $cab, $detalle): void
+    {
+        $ancho = $p->columnas();
+        // Anchos de Cant., U.M., P.U. y Total (con un espacio después de Cant. y de U.M.); la descripción usa el resto
+        [$wc, $wu, $wp, $wt] = $ancho >= 42 ? [6, 3, 7, 9] : [5, 3, 6, 7];
+        $wd = max(6, $ancho - $wc - $wu - $wp - $wt - 2);
+        $fila = fn (string $c, string $u, string $d, string $pu, string $t) => str_pad($c, $wc, ' ', STR_PAD_LEFT).' '.mb_str_pad(mb_substr($u, 0, $wu), $wu).' '
+            .mb_str_pad($d, $wd).str_pad($pu, $wp, ' ', STR_PAD_LEFT).str_pad($t, $wt, ' ', STR_PAD_LEFT);
+        $soles = fn ($n) => number_format((float) $n, 2, '.', '');
+
+        $filas = $cab->consumo ? [(object) ['cdedes' => 'POR CONSUMO', 'cdecan' => 1, 'umecod' => 'NIU', 'cdepuni' => $cab->ccaitv, 'cdevve' => $cab->ccaitv, 'series' => null]] : $detalle;
+
+        // Papel de 58 mm: no entran 5 columnas; Cant. U.M. y descripción en una línea, y debajo P.U. y Total a la derecha
+        if ($ancho < 42) {
+            $p->linea('_')->texto(mb_str_pad('Cant U.M Descrip', $ancho - 16).str_pad('P.U.', 7, ' ', STR_PAD_LEFT).str_pad('Total', 9, ' ', STR_PAD_LEFT))->linea('_');
+            foreach ($filas as $d) {
+                $p->parrafo(number_format((float) $d->cdecan, 2).' '.($d->umecod ?: 'NIU').' '.trim((string) $d->cdedes))
+                    ->texto(str_pad($soles($d->cdepuni), $ancho - 9, ' ', STR_PAD_LEFT).str_pad($soles($d->cdevve), 9, ' ', STR_PAD_LEFT));
+                if (! empty($d->series)) {
+                    $p->parrafo('  S/N: '.$d->series);
+                }
+            }
+            $p->linea('_');
+
+            return;
+        }
+
+        $p->linea('_')->texto($fila('Cant.', 'U.M', 'Descrip.', 'P.U.', 'Total'))->linea('_');
+        foreach ($filas as $d) {
+            $partes = explode("\n", wordwrap(trim((string) $d->cdedes), $wd - 1, "\n", true));
+            $p->texto($fila(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), array_shift($partes), $soles($d->cdepuni), $soles($d->cdevve)));
+            foreach ($partes as $resto) {
+                $p->texto(str_repeat(' ', $wc + $wu + 2).$resto);
+            }
+            if (! empty($d->series)) {
+                $p->parrafo('  S/N: '.$d->series);
+            }
+        }
+        $p->linea('_');
     }
 
     // ------------------------------------------------------------------ cocina / bar

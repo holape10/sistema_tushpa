@@ -110,7 +110,7 @@
                             <td class="px-4 py-2 font-semibold text-gray-700">{{ $i->descripcion }} @if ($i->abrir_cajon)<span class="text-xs text-gray-400">(abre cajón)</span>@endif</td>
                             <td class="px-4 py-2">{{ ['RED' => 'Red (IP)', 'WINDOWS' => 'A4 / PDF (Windows)'][$i->tip_conex_imp] ?? 'Compartida Windows' }}</td>
                             <td class="px-4 py-2 font-mono text-xs">{{ $i->ruta }}</td>
-                            <td class="px-4 py-2 text-center">@if ($i->tip_conex_imp === 'WINDOWS') A4 @else {{ $i->columnas == 32 ? '58 mm' : '80 mm' }} <span class="text-xs text-gray-400">({{ $i->columnas }} car.)</span><span class="block text-[11px] text-gray-400">{{ ['CLASICO' => 'Diseño clásico', 'COMPACTO' => 'Diseño compacto', 'MODERNO' => 'Diseño moderno'][$i->diseno ?? 'CLASICO'] ?? '' }}</span> @endif</td>
+                            <td class="px-4 py-2 text-center">@if ($i->tip_conex_imp === 'WINDOWS') A4 @else {{ $i->columnas == 32 ? '58 mm' : '80 mm' }} <span class="text-xs text-gray-400">({{ $i->columnas }} car.)</span><span class="block text-[11px] text-gray-400">{{ ['CLASICO' => 'Diseño clásico', 'COMPACTO' => 'Diseño compacto', 'EN_LINEA' => 'Diseño en una línea', 'MODERNO' => 'Diseño moderno'][$i->diseno ?? 'CLASICO'] ?? '' }}</span> @endif</td>
                             <td class="px-4 py-2 text-center">{{ $i->predeterminado ? '✅' : '' }}</td>
                             <td class="px-4 py-2 text-center">{{ $i->activo ? 'Activa' : 'Inactiva' }}</td>
                             <td class="px-4 py-2 text-right whitespace-nowrap space-x-2">
@@ -281,6 +281,7 @@
                     <select name="diseno" x-model="form.diseno" class="{{ $in }}">
                         <option value="CLASICO">Clásico: nombre de la empresa grande y columnas Cant. / UDM / P.U. / Total</option>
                         <option value="COMPACTO">Pequeño y compacto: ahorra papel (fecha y condición en una línea, TOTAL grande)</option>
+                        <option value="EN_LINEA">En una línea: Cant. / U.M. / Descrip. / P.U. / Total en la misma fila</option>
                         <option value="MODERNO">Moderno: "1 x 9.00" debajo de cada producto</option>
                     </select></label>
                 <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="predeterminado" value="1" x-model="form.predeterminado" class="rounded"> Impresora de caja por defecto</label>
