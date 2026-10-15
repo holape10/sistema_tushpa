@@ -11,6 +11,7 @@ use App\Support\LogosClientes;
 use App\Support\Rubros;
 use App\Support\Tenancy\Eliminador;
 use App\Support\Tenancy\Provisionador;
+use App\Support\Tenancy\Reiniciador;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -306,6 +307,36 @@ class ClienteController extends Controller
         Cache::store('file')->forget("panel-cpe-{$cliente->id}");
 
         return back()->with('ok', "Se eliminó {$cliente->razon_social}. Respaldo guardado en storage/app/respaldos/".basename($respaldo).'.');
+    }
+
+    // ------------------------------------------------------------------ dejar la empresa en cero
+
+    /** Qué se borrará al reiniciar (para revisar antes de confirmar) */
+    public function reiniciarPrevia(Cliente $cliente)
+    {
+        abort_unless($this->esDueno(), 403, 'Solo el dueño del sistema reinicia empresas.');
+
+        return view('admin.clientes.reiniciar', ['cliente' => $cliente, 'previa' => Reiniciador::previa($cliente)]);
+    }
+
+    /** Borra los movimientos, deja el stock en 0 y reinicia los correlativos (con respaldo antes) */
+    public function reiniciar(Request $request, Cliente $cliente)
+    {
+        abort_unless($this->esDueno(), 403, 'Solo el dueño del sistema reinicia empresas.');
+        if (trim((string) $request->input('confirmacion')) !== $cliente->ruc) {
+            return back()->with('error', 'No se reinició: el RUC escrito no coincide.');
+        }
+        @set_time_limit(600);
+        try {
+            $r = Reiniciador::reiniciar($cliente);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+        Cache::store('file')->forget("panel-cpe-{$cliente->id}");
+
+        return redirect()->route('admin.clientes.index')->with('ok', "{$cliente->razon_social} quedó en cero: se borraron {$r['borrados']} registros de movimientos, el stock está en 0"
+            .($r['reinicia_electronicos'] ? ' y todos los correlativos empiezan desde 1.' : '. Las series electrónicas siguen su numeración (ya hay comprobantes en SUNAT); notas de venta y proformas empiezan desde 1.')
+            .' Respaldo: '.basename($r['respaldo']));
     }
 
     // ------------------------------------------------------------------ logos de clientes de la web

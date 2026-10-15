@@ -27,6 +27,8 @@ Route::middleware('auth:superadmin')->group(function () {
     Route::post('/clientes/{cliente}/https', [ClienteController::class, 'https'])->whereNumber('cliente')->name('clientes.https');
     Route::post('/clientes/{cliente}/pagado', [ClienteController::class, 'pagado'])->whereNumber('cliente')->name('clientes.pagado');
     Route::post('/clientes/{cliente}/eliminar', [ClienteController::class, 'eliminar'])->whereNumber('cliente')->name('clientes.eliminar');
+    Route::get('/clientes/{cliente}/reiniciar', [ClienteController::class, 'reiniciarPrevia'])->whereNumber('cliente')->name('clientes.reiniciar');
+    Route::post('/clientes/{cliente}/reiniciar', [ClienteController::class, 'reiniciar'])->whereNumber('cliente')->name('clientes.reiniciar.confirmar');
     Route::get('/mensajes', [ClienteController::class, 'mensajesWeb'])->name('mensajes.index');
     Route::get('/logos', [ClienteController::class, 'logos'])->name('logos.index');
     Route::get('/agente', [AgenteController::class, 'index'])->name('agente.index');

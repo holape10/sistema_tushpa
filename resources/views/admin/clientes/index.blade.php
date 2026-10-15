@@ -144,6 +144,10 @@
                                 <input type="hidden" name="motivo">
                                 <button class="text-xs font-semibold {{ $cl->activo() ? 'text-rose-600' : 'text-emerald-600' }}">{{ $cl->activo() ? 'Suspender' : 'Reactivar' }}</button>
                             </form>
+                            {{-- Dejar en cero: borra los movimientos de prueba antes de empezar a trabajar (solo el dueño) --}}
+                            @if (auth('superadmin')->user()->es_dueno)
+                                <a href="{{ route('admin.clientes.reiniciar', $cl) }}" class="ml-2 text-xs font-semibold text-slate-500 hover:text-amber-700">Dejar en cero</a>
+                            @endif
                             {{-- Eliminar (solo el dueño, solo suspendidas): se saca un respaldo antes de borrar la base --}}
                             @if (! $cl->activo() && auth('superadmin')->user()->es_dueno)
                                 <form method="POST" action="{{ route('admin.clientes.eliminar', $cl) }}" class="inline"
