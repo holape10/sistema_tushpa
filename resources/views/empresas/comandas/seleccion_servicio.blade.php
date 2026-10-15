@@ -104,14 +104,6 @@
         @endif
     </div>
 
-    {{-- Abriendo el pedido (aviso inmediato al tocar la mesa) --}}
-    <div id="abriendo" class="fixed inset-0 z-[60] hidden items-center justify-center bg-white/60 backdrop-blur-[2px]">
-        <div class="flex items-center gap-3 rounded-2xl bg-white px-5 py-4 shadow-xl ring-1 ring-gray-200">
-            <span class="h-6 w-6 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600"></span>
-            <span id="abriendo_texto" class="font-bold text-gray-700">Abriendo…</span>
-        </div>
-    </div>
-
     {{-- ===================== Modales ===================== --}}
     {{-- Opciones de una mesa ocupada --}}
     <div id="modal_mesa" class="modal-t fixed inset-0 z-50 hidden items-end justify-center bg-black/50 sm:items-center sm:p-4">
@@ -543,16 +535,14 @@
     function irAServicio(orderType, mesaId, mesaNombre, pedidoId) {
         if (abriendo) return;
         abriendo = true;
-        document.getElementById('abriendo').classList.replace('hidden', 'flex');
-        document.getElementById('abriendo_texto').textContent = 'Abriendo ' + (mesaNombre || 'pedido') + '…';
         const params = new URLSearchParams({ tipo: orderType });
         if (mesaId) params.set('mesa', mesaId);
         if (mesaNombre) params.set('nombre', mesaNombre);
         if (pedidoId) params.set('pedido', pedidoId);
         window.location.href = @json(route('comandas.menu')) + '?' + params;
     }
-    // Al volver con el botón "atrás" del celular la página puede venir de la memoria: se quita el "Abriendo…"
-    window.addEventListener('pageshow', () => { abriendo = false; document.getElementById('abriendo').classList.replace('flex', 'hidden'); });
+    // Al volver con el botón "atrás" del celular la página puede venir de la memoria: se puede tocar otra mesa
+    window.addEventListener('pageshow', () => { abriendo = false; });
     document.getElementById('btn_llevar')?.addEventListener('click', () => irAServicio('llevar', null, 'PARA LLEVAR', null));
     document.getElementById('btn_delivery')?.addEventListener('click', () => irAServicio('delivery', null, 'DELIVERY', null));
 
