@@ -24,39 +24,62 @@ class Rubros
     ];
 
     public const RUBROS = [
-        'RESTOBAR' => ['nombre' => 'Restobar', 'ejemplos' => 'Restaurante, cafetería, discoteca, bar', 'modulos' => [
+        'RESTOBAR' => ['icono' => 'fa-utensils', 'nombre' => 'Restobar', 'ejemplos' => 'Restaurante, cafetería, discoteca, bar', 'modulos' => [
             '/comandas', '/comandas/punto-venta', '/promotores', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/reservas', '/motorizados', '/delivery', '/delivery/liquidacion', '/delivery/reporte', '/carta/configuracion', '/recetas', '/entradas', '/preparados', '/mermas', '/reportes/consumo-insumos', '/productos?tipo=4', '/productos?tipo=6',
             '/reportes/ventas-vendedor', '/reportes/ventas-delivery',
         ]],
-        'GENERAL' => ['nombre' => 'Comercio general', 'ejemplos' => 'Comercio, ferretería, construcción, lavandería', 'modulos' => [
+        'GENERAL' => ['icono' => 'fa-cart-shopping', 'nombre' => 'Comercio general', 'ejemplos' => 'Comercio, ferretería, construcción, lavandería', 'modulos' => [
             '/punto-venta', '/pv-movil', '/proformas', '/guias', '/inventarios', '/transferencias', '/kardex/movimiento?tipo=I',
             '/kardex/movimiento?tipo=E', '/productos?tipo=6', '/reportes/rentabilidad', '/reportes/compras', '/cuentas/cobrar/reporte',
             '/series',
         ]],
-        'FARMACIA' => ['nombre' => 'Farmacia / botica', 'ejemplos' => 'Farmacia, botica (PV Farmacia con lotes y vencimientos)', 'modulos' => [
+        'FARMACIA' => ['icono' => 'fa-briefcase-medical', 'nombre' => 'Farmacia / botica', 'ejemplos' => 'Farmacia, botica (PV Farmacia con lotes y vencimientos)', 'modulos' => [
             '/pv-farmacia', '/lotes', '/inventarios', '/transferencias', '/kardex/movimiento?tipo=I', '/kardex/movimiento?tipo=E',
             '/proformas', '/reportes/rentabilidad', '/reportes/compras',
         ]],
-        'GRIFO' => ['nombre' => 'Grifo', 'ejemplos' => 'Grifo, estación de servicio (PV Grifo)', 'modulos' => [
+        'GRIFO' => ['icono' => 'fa-gas-pump', 'nombre' => 'Grifo', 'ejemplos' => 'Grifo, estación de servicio (PV Grifo)', 'modulos' => [
             '/pv-grifo', '/punto-venta', '/inventarios', '/kardex/movimiento?tipo=I', '/kardex/movimiento?tipo=E', '/cuentas/cobrar/reporte', '/guias',
         ]],
-        'HOTELERIA' => ['nombre' => 'Hotelería', 'ejemplos' => 'Hotel, hospedaje con restaurante', 'modulos' => [
+        'HOTELERIA' => ['icono' => 'fa-bed', 'nombre' => 'Hotelería', 'ejemplos' => 'Hotel, hospedaje con restaurante', 'modulos' => [
             '/hotel', '/hotel/reporte', '/reservas', '/comandas', '/comandas/punto-venta', '/promotores', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/productos?tipo=4',
         ]],
-        'GIMNASIO' => ['nombre' => 'Gimnasio', 'ejemplos' => 'Gimnasio, academia (membresías y control de ingreso)', 'modulos' => [
+        'GIMNASIO' => ['icono' => 'fa-dumbbell', 'nombre' => 'Gimnasio', 'ejemplos' => 'Gimnasio, academia (membresías y control de ingreso)', 'modulos' => [
             '/gimnasio', '/gimnasio/acceso', '/gimnasio/entrenador', '/pv',
         ]],
-        'ESTACIONAMIENTO' => ['nombre' => 'Estacionamiento', 'ejemplos' => 'Playa de estacionamiento, valet parking, cochera', 'modulos' => [
+        'ESTACIONAMIENTO' => ['icono' => 'fa-square-parking', 'nombre' => 'Estacionamiento', 'ejemplos' => 'Playa de estacionamiento, valet parking, cochera', 'modulos' => [
             '/estacionamiento', '/estacionamiento/abonados', '/estacionamiento/reporte',
         ]],
-        'CLUB' => ['nombre' => 'Club / asociación', 'ejemplos' => 'Club, asociación (socios y cuotas)', 'modulos' => [
+        'CLUB' => ['icono' => 'fa-people-group', 'nombre' => 'Club / asociación', 'ejemplos' => 'Club, asociación (socios y cuotas)', 'modulos' => [
             '/socios', '/punto-venta', '/comandas', '/pv',
         ]],
-        'CLINICA' => ['nombre' => 'Clínica / consultorio', 'ejemplos' => 'Clínica, consultorio, odontología', 'modulos' => [
+        'CLINICA' => ['icono' => 'fa-stethoscope', 'nombre' => 'Clínica / consultorio', 'ejemplos' => 'Clínica, consultorio, odontología', 'modulos' => [
             '/clinica', '/clinica/agenda', '/punto-venta',
         ]],
-        'COMPLETO' => ['nombre' => 'Todo el menú', 'ejemplos' => 'Todas las opciones del sistema', 'modulos' => ['*']],
+        'COMPLETO' => ['icono' => 'fa-table-cells', 'nombre' => 'Todo el menú', 'ejemplos' => 'Todas las opciones del sistema', 'modulos' => ['*']],
     ];
+
+    /** Clave de sesión con el rubro elegido en el login (empresa demo sin rubro) */
+    public const SESION = 'rubro_elegido';
+
+    /** ¿El login pide primero el tipo de negocio? Solo en la empresa del subdominio que no tiene rubro (ej. la demo) */
+    public static function eligeEnLogin(): bool
+    {
+        $cliente = Tenancy::cliente();
+
+        return $cliente !== null && blank($cliente->rubro);
+    }
+
+    /** Deja solo las opciones del rubro elegido en el login; sin elección se ve todo el menú del usuario */
+    public static function filtrarMenu(Collection $modulos): Collection
+    {
+        $rubro = session(self::SESION);
+        if (! $rubro || ! isset(self::RUBROS[$rubro]) || ! self::eligeEnLogin()) {
+            return $modulos;
+        }
+        $urls = self::urls($rubro);
+
+        return $urls === ['*'] ? $modulos : $modulos->filter(fn ($m) => in_array($m->mod_url, $urls, true))->values();
+    }
 
     /** @return array<int, string> URLs del menú de un rubro */
     public static function urls(string $rubro): array

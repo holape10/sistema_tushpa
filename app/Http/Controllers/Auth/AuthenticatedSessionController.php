@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\Empresa;
+use App\Support\Rubros;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, Cookie};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\View\View;
-
-use App\Models\Empresa;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -26,11 +27,12 @@ class AuthenticatedSessionController extends Controller
         // (la preferencia se guarda en una cookie para que sobreviva al cerrar sesión)
         if ($request->boolean('escritorio')) {
             Cookie::queue('login_escritorio', '1', 60 * 24 * 30);
-        } elseif (LoginMovilController::esMovil($request) && !$request->cookie('login_escritorio')) {
+        } elseif (LoginMovilController::esMovil($request) && ! $request->cookie('login_escritorio') && ! Rubros::eligeEnLogin()) {
             return redirect()->route('login.movil');
         }
 
-        return view('auth.login');
+        // Empresa sin tipo de negocio (la demo): primero se elige el rubro y al entrar se ve solo su menú
+        return view('auth.login', ['rubros' => Rubros::eligeEnLogin() ? collect(Rubros::RUBROS)->except('COMPLETO') : null]);
     }
 
     /**
@@ -41,6 +43,11 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+
+        $rubro = (string) $request->input('rubro');
+        if (Rubros::eligeEnLogin() && isset(Rubros::RUBROS[$rubro])) {
+            $request->session()->put(Rubros::SESION, $rubro);
+        }
 
         // Este equipo queda asociado a la sucursal: el login móvil mostrará a sus mozos
         LoginMovilController::recordarSucursal($request->user());

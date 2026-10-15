@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Support\Kardex;
 use App\Support\Notas;
 use App\Support\Recetas;
+use App\Support\Rubros;
 use App\View\Composers\MenuComposer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -97,7 +98,7 @@ class InicioController extends Controller
     public function index(): View
     {
         $user = Auth::user();
-        $modulos = $user->modulos()->orderBy('mod_id')->get()
+        $modulos = Rubros::filtrarMenu($user->modulos()->orderBy('mod_id')->get())
             ->filter(fn ($m) => $m->mod_url && $m->mod_url !== '#' && $m->mod_url !== '/inicio');
 
         $esReporte = fn ($m) => str_starts_with($m->mod_nom, 'Reporte') || str_contains($m->mod_url, 'reporte');

@@ -2,6 +2,7 @@
 
 namespace App\View\Composers;
 
+use App\Support\Rubros;
 use App\Support\Sunat\SunatService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,7 @@ class MenuComposer
     {
         if (Auth::check()) {
             $user = Auth::user();
-            $view->with('menu', $user->modulos()->orderBy('mod_id')->get()->groupBy('mod_gen'));
+            $view->with('menu', Rubros::filtrarMenu($user->modulos()->orderBy('mod_id')->get())->groupBy('mod_gen'));
             $view->with('usuario', $user);
             $view->with('notifSunat', $user->esAdminOCaja() ? self::pendientesSunat($user) : null);
             // Nombre de la sucursal en la cabecera, solo si la empresa tiene más de una

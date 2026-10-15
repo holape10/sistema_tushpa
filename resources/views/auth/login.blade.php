@@ -1,3 +1,4 @@
+@php($rubros = $rubros ?? null)
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -60,7 +61,7 @@
 
         <!-- Panel derecho: formulario -->
         <div class="flex-1 flex items-center justify-center px-6 py-12 bg-gray-50">
-            <div class="w-full max-w-sm">
+            <div class="w-full {{ $rubros ? 'max-w-lg' : 'max-w-sm' }}" x-data="{ rubro: @js(old('rubro', '')), rubros: @js($rubros ? $rubros->map(fn ($r) => ['nombre' => $r['nombre'], 'icono' => $r['icono']]) : []) }">
 
                 <!-- Logo visible solo en móvil -->
                 <div class="flex lg:hidden flex-col items-center mb-8">
@@ -68,7 +69,32 @@
                     <span class="font-bold text-gray-700 tracking-wide">TUSHPA</span>
                 </div>
 
-                <div class="bg-white rounded-2xl shadow-xl shadow-gray-200/60 border border-gray-100 p-8">
+                @if ($rubros)
+                    {{-- Paso 1 (demo): el tipo de negocio decide qué menú se ve al entrar --}}
+                    <div x-show="! rubro" class="bg-white rounded-2xl shadow-xl shadow-gray-200/60 border border-gray-100 p-6 sm:p-8" @if (old('rubro')) style="display:none" @endif>
+                        <h2 class="text-xl font-bold text-gray-800 mb-1">¿Qué tipo de negocio tienes?</h2>
+                        <p class="text-gray-400 text-sm mb-5">Elige uno y te mostramos solo lo que necesitas</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            @foreach ($rubros as $clave => $r)
+                                <button type="button" @click="rubro = @js($clave); $nextTick(() => $root.querySelector('[name=email]')?.focus())"
+                                        class="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-gray-100 bg-gray-50 px-2 py-4 text-center hover:border-indigo-400 hover:bg-indigo-50 active:scale-[0.97] transition">
+                                    <i class="fas {{ $r['icono'] }} text-2xl text-indigo-600"></i>
+                                    <span class="text-sm font-semibold text-gray-800 leading-tight">{{ $r['nombre'] }}</span>
+                                    <span class="text-[11px] text-gray-400 leading-tight">{{ $r['ejemplos'] }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
+                <div class="bg-white rounded-2xl shadow-xl shadow-gray-200/60 border border-gray-100 p-8 {{ $rubros ? 'max-w-sm mx-auto' : '' }}"
+                     @if ($rubros) x-show="rubro" @if (! old('rubro')) style="display:none" @endif @endif>
+                    @if ($rubros)
+                        <button type="button" @click="rubro = ''" class="mb-4 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
+                            <i class="fas" :class="rubros[rubro]?.icono"></i> <span x-text="rubros[rubro]?.nombre"></span>
+                            <span class="text-xs font-normal text-indigo-400">· cambiar</span>
+                        </button>
+                    @endif
                     <h2 class="text-xl font-bold text-gray-800 mb-1">Bienvenido de nuevo</h2>
                     <p class="text-gray-400 text-sm mb-6">Ingresa tus credenciales para continuar</p>
 
@@ -86,6 +112,9 @@
 
                     <form method="POST" action="{{ route('login') }}" class="space-y-4">
                         @csrf
+                        @if ($rubros)
+                            <input type="hidden" name="rubro" :value="rubro">
+                        @endif
 
                         <div>
                             <label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Usuario</label>
