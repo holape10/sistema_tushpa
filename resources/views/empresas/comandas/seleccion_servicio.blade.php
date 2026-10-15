@@ -104,6 +104,14 @@
         @endif
     </div>
 
+    {{-- Abriendo el pedido (aviso inmediato al tocar la mesa) --}}
+    <div id="abriendo" class="fixed inset-0 z-[60] hidden items-center justify-center bg-white/60 backdrop-blur-[2px]">
+        <div class="flex items-center gap-3 rounded-2xl bg-white px-5 py-4 shadow-xl ring-1 ring-gray-200">
+            <span class="h-6 w-6 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600"></span>
+            <span id="abriendo_texto" class="font-bold text-gray-700">Abriendo…</span>
+        </div>
+    </div>
+
     {{-- ===================== Modales ===================== --}}
     {{-- Opciones de una mesa ocupada --}}
     <div id="modal_mesa" class="modal-t fixed inset-0 z-50 hidden items-end justify-center bg-black/50 sm:items-center sm:p-4">
@@ -530,15 +538,21 @@
     cargarReservas();
     cadaSiVisible(cargarReservas, 60000);
 
+    // Abre el pedido en una sola petición: la pantalla del pedido llega con todo listo (y con los productos)
     let abriendo = false;
     function irAServicio(orderType, mesaId, mesaNombre, pedidoId) {
         if (abriendo) return;
         abriendo = true;
-        postJson(@json(route('comandas.set_servicio')), { order_type: orderType, mesa_id: mesaId, mesa_nombre: mesaNombre, pedido_id: pedidoId }).then((res) => {
-            if (!res.success) { abriendo = false; toast(res.message || 'No se pudo abrir el pedido.'); refrescarTodo(); return; }
-            window.location.href = @json(route('comandas.menu'));
-        }).catch(() => { abriendo = false; toast('Error de conexión.'); });
+        document.getElementById('abriendo').classList.replace('hidden', 'flex');
+        document.getElementById('abriendo_texto').textContent = 'Abriendo ' + (mesaNombre || 'pedido') + '…';
+        const params = new URLSearchParams({ tipo: orderType });
+        if (mesaId) params.set('mesa', mesaId);
+        if (mesaNombre) params.set('nombre', mesaNombre);
+        if (pedidoId) params.set('pedido', pedidoId);
+        window.location.href = @json(route('comandas.menu')) + '?' + params;
     }
+    // Al volver con el botón "atrás" del celular la página puede venir de la memoria: se quita el "Abriendo…"
+    window.addEventListener('pageshow', () => { abriendo = false; document.getElementById('abriendo').classList.replace('flex', 'hidden'); });
     document.getElementById('btn_llevar')?.addEventListener('click', () => irAServicio('llevar', null, 'PARA LLEVAR', null));
     document.getElementById('btn_delivery')?.addEventListener('click', () => irAServicio('delivery', null, 'DELIVERY', null));
 
@@ -552,18 +566,35 @@
         refrescarMesas(this.dataset.pisoId);
     }));
 
+    // Cada zona se guarda en memoria: cambiar de zona es instantáneo y se pone al día por detrás.
     // Solo se redibuja si algo cambió: así no se pierde el toque del mozo justo cuando llega la recarga
-    let ultimaVistaMesas = null;
-    function refrescarMesas(pisoId) {
-        fetch(URL_MESAS + pisoId).then((r) => r.json()).then((data) => {
-            const clave = pisoId + '|' + data.vista;
-            if (clave === ultimaVistaMesas) return;
-            ultimaVistaMesas = clave;
-            document.getElementById('mesas_container').innerHTML = data.vista;
-            actualizarTimers();
-        });
+    const zonas = new Map();
+    let pisoVisible = document.querySelector('.piso-btn.activo')?.dataset.pisoId;
+    let ultimaVistaMesas = pisoVisible + '|' + document.getElementById('mesas_container').innerHTML;
+    if (pisoVisible) zonas.set(String(pisoVisible), document.getElementById('mesas_container').innerHTML);
+    function mostrarMesas(pisoId, vista) {
+        const clave = pisoId + '|' + vista;
+        if (clave === ultimaVistaMesas) return;
+        ultimaVistaMesas = clave;
+        document.getElementById('mesas_container').innerHTML = vista;
+        actualizarTimers();
     }
-    cadaSiVisible(() => { const a = document.querySelector('.piso-btn.activo'); if (a) refrescarMesas(a.dataset.pisoId); }, 10000);
+    function refrescarMesas(pisoId) {
+        pisoId = String(pisoId);
+        pisoVisible = pisoId;
+        if (zonas.has(pisoId)) mostrarMesas(pisoId, zonas.get(pisoId));
+        else document.getElementById('mesas_container').style.opacity = '.5';
+        return fetch(URL_MESAS + pisoId).then((r) => r.json()).then((data) => {
+            zonas.set(pisoId, data.vista);
+            if (pisoVisible === pisoId) { document.getElementById('mesas_container').style.opacity = ''; mostrarMesas(pisoId, data.vista); }
+        }).catch(() => { document.getElementById('mesas_container').style.opacity = ''; });
+    }
+    // Las demás zonas se traen de a una, sin apuro, para que al tocarlas aparezcan al instante
+    (function precargar() {
+        const pendientes = [...document.querySelectorAll('.piso-btn')].map((b) => String(b.dataset.pisoId)).filter((id) => !zonas.has(id));
+        pendientes.reduce((p, id) => p.then(() => zonas.has(id) ? null : fetch(URL_MESAS + id).then((r) => r.json()).then((d) => zonas.set(id, d.vista)).catch(() => {})), Promise.resolve());
+    })();
+    cadaSiVisible(() => { if (pisoVisible) refrescarMesas(pisoVisible); }, 10000);
 
     // Tiempo en vivo de cada mesa ocupada (corre en el navegador; solo con la pantalla visible)
     function actualizarTimers() {

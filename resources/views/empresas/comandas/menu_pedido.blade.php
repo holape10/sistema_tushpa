@@ -83,7 +83,7 @@
                     </div>
                 </div>
                 <div id="productos_grid" class="grid grid-cols-2 gap-2.5 px-4 pt-1 sm:grid-cols-3 xl:grid-cols-4 lg:px-0">
-                    <p class="col-span-full py-10 text-center text-gray-400">Cargando…</p>
+                    {!! $productosIniciales ?: '<p class="col-span-full py-10 text-center text-gray-400">Elige una categoría</p>' !!}
                 </div>
             </section>
 
@@ -270,8 +270,11 @@
         pintarCantidades();
     }
     let categoriaActiva = @json($cat_default_id);
-    cargarProductos(categoriaActiva);
+    // La primera categoría ya vino con la página: no se pide otra vez
+    memoria.set('c:' + categoriaActiva, { html: $('productos_grid').innerHTML, t: Date.now() });
     pintarCantidades();
+    // Se abrió con /comandas/menu?tipo=…: la dirección queda limpia (al recargar no se vuelve a abrir el pedido)
+    if (location.search) history.replaceState(null, '', location.pathname);
 
     $('categorias').addEventListener('click', (e) => {
         const b = e.target.closest('.btn-categoria');

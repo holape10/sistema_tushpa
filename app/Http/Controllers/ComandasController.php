@@ -328,23 +328,33 @@ class ComandasController extends Controller
 
     public function setServiceData(Request $request)
     {
+        [$ok, $mensaje, $estado] = $this->prepararServicio($request->order_type, $request->mesa_id, $request->mesa_nombre, $request->pedido_id);
+
+        return response()->json($ok ? ['success' => true] : ['success' => false, 'message' => $mensaje], $ok ? 200 : $estado);
+    }
+
+    /**
+     * Deja en la sesión el pedido que se va a tomar (mesa, para llevar o delivery, nuevo o uno abierto).
+     *
+     * @return array{0: bool, 1: string, 2: int} [listo, mensaje si no, código HTTP]
+     */
+    private function prepararServicio(?string $orderType, $mesaId, ?string $mesaNombre, $pedidoId): array
+    {
         $id_empresa_negocio = Auth::user()->id_empresa_negocio;
-        $orderType = $request->order_type;
-        $pedidoId = $request->pedido_id;
 
         if (! in_array($orderType, ['salon', 'llevar', 'delivery'], true)) {
-            return response()->json(['success' => false, 'message' => 'Tipo de pedido no válido.'], 422);
+            return [false, 'Tipo de pedido no válido.', 422];
         }
         // Para llevar / delivery nuevos solo si el usuario puede abrirlos (editar uno ya abierto sí puede)
         if ($orderType !== 'salon' && ! $pedidoId && ! (self::permisos()[$orderType] ?? false)) {
-            return response()->json(['success' => false, 'message' => 'Tu usuario solo atiende mesas.'], 403);
+            return [false, 'Tu usuario solo atiende mesas.', 403];
         }
 
         // La mesa y el pedido deben ser de la sucursal del usuario
         if ($orderType === 'salon') {
-            $mesa = Mesa::where('mes_id', $request->mesa_id)->where('id_empresa_negocio', $id_empresa_negocio)->first();
+            $mesa = Mesa::where('mes_id', $mesaId)->where('id_empresa_negocio', $id_empresa_negocio)->first();
             if (! $mesa) {
-                return response()->json(['success' => false, 'message' => 'Mesa no válida.'], 403);
+                return [false, 'Mesa no válida.', 403];
             }
             // Si la pantalla estaba desactualizada y la mesa ya tiene pedido abierto (propio o de su grupo), se continúa ese pedido
             if (! $pedidoId) {
@@ -354,23 +364,24 @@ class ComandasController extends Controller
             $principal = $pedidoId ? Pedido::where('ped_id', $pedidoId)->value('mes_id') : null;
             if ($principal && (int) $principal !== (int) $mesa->mes_id) {
                 $mesa = Mesa::with('piso')->find($principal);
-                $request->merge(['mesa_id' => $mesa->mes_id, 'mesa_nombre' => Mesa::etiqueta($mesa->piso?->pis_nom, $mesa->mes_nom)]);
+                $mesaId = $mesa->mes_id;
+                $mesaNombre = Mesa::etiqueta($mesa->piso?->pis_nom, $mesa->mes_nom);
             }
         }
 
         if ($pedidoId && ! Pedido::where('ped_id', $pedidoId)->where('id_empresa_negocio', $id_empresa_negocio)->where('ped_est', 'Aperturado')->exists()) {
-            return response()->json(['success' => false, 'message' => 'El pedido ya fue cobrado o no existe.'], 409);
+            return [false, 'El pedido ya fue cobrado o no existe.', 409];
         }
 
         session()->forget(self::SESION);
         session()->put('comanda_order_type', $orderType);
-        session()->put('comanda_mesa_id', $orderType === 'salon' ? (int) $request->mesa_id : null);
-        session()->put('comanda_mesa_nombre', $request->mesa_nombre);
+        session()->put('comanda_mesa_id', $orderType === 'salon' ? (int) $mesaId : null);
+        session()->put('comanda_mesa_nombre', $mesaNombre);
         if ($pedidoId) {
             session()->put('comanda_pedido_id', (int) $pedidoId);
         }
 
-        return response()->json(['success' => true]);
+        return [true, '', 200];
     }
 
     public function getPedidoDetails($ped_id)
@@ -399,9 +410,16 @@ class ComandasController extends Controller
         return response()->json(['success' => true, 'pedidos' => $pedidos]);
     }
 
-    public function menuPedido()
+    public function menuPedido(Request $request)
     {
         $id_empresa_negocio = Auth::user()->id_empresa_negocio;
+        // Abrir directo desde las mesas, sin un paso previo: una sola ida y vuelta al servidor
+        if ($request->filled('tipo')) {
+            [$ok, $mensaje] = $this->prepararServicio($request->tipo, $request->mesa, $request->nombre, $request->pedido);
+            if (! $ok) {
+                return redirect()->route('comandas.seleccion')->with('error', $mensaje);
+            }
+        }
         $order_type = session('comanda_order_type');
 
         if (empty($order_type)) {
@@ -472,9 +490,10 @@ class ComandasController extends Controller
 
         $esPromotor = Auth::user()->tieneRol([13]);
         $total = round(collect($cart)->sum(fn ($i) => $i['cantidad'] * $i['precio']), 2);
+        $productosIniciales = $cat_default_id ? $this->productosHtml($cat_default_id, null) : '';
 
         return view('empresas.comandas.menu_pedido', compact('categorias', 'cat_default_id', 'cart', 'order_type', 'mesa_info', 'esAdmin', 'motorizados', 'motActual',
-            'promotores', 'promActual', 'esPromotor', 'total'));
+            'promotores', 'promActual', 'esPromotor', 'total', 'productosIniciales'));
     }
 
     /** Usuarios activos con rol Promotor de la sucursal */
@@ -504,6 +523,13 @@ class ComandasController extends Controller
 
     public function searchProducts(Request $request)
     {
+        return response()->json(['vista' => $this->productosHtml($request->category_id, $request->search_text, $request->vista === 'pv')]);
+    }
+
+    /** Grilla de productos de una categoría o de una búsqueda (la de la comanda o la del PV Restaurante) */
+    private function productosHtml($categoria, ?string $texto, bool $pv = false): string
+    {
+        $request = new Request(['category_id' => $categoria, 'search_text' => $texto]);
         $id_empresa_negocio = Auth::user()->id_empresa_negocio;
         $almacen_id = Almacen::where('id_empresa_negocio', $id_empresa_negocio)
             ->where('predeterminado', 1)->value('id_almacen');
@@ -529,9 +555,7 @@ class ComandasController extends Controller
         $reservado = Porciones::reservado((int) $id_empresa_negocio, $controlados);
         $quedan = collect($controlados)->mapWithKeys(fn ($id) => [$id => ($saldo[$id] ?? 0) - ($reservado[$id] ?? 0)])->all();
 
-        return response()->json([
-            'vista' => view($request->vista === 'pv' ? 'empresas.comandas.partials.productos_grid_pv' : 'empresas.comandas.partials.productos_grid', compact('productos', 'precios', 'presentaciones', 'conOpciones', 'quedan'))->render(),
-        ]);
+        return view($pv ? 'empresas.comandas.partials.productos_grid_pv' : 'empresas.comandas.partials.productos_grid', compact('productos', 'precios', 'presentaciones', 'conOpciones', 'quedan'))->render();
     }
 
     /** Porciones aún no enviadas de una entrada en el carrito */
