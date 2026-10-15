@@ -118,7 +118,7 @@ document.addEventListener('alpine:init', () => {
                 try {
                     const r = await fetch(`${CFG.rutas.productos}?codigo=${encodeURIComponent(q)}&almacen=${this.doc.id_almacen}`, { headers: { Accept: 'application/json' } });
                     const exacto = (await r.json())[0];
-                    if (exacto) { this.agregar(exacto, exacto.presentacion ? (exacto.presentaciones.find(x => x.id === exacto.presentacion) || null) : null); return; }
+                    if (exacto) { this.agregar(exacto, exacto.presentacion ? (exacto.presentaciones.find(x => x.id === exacto.presentacion) || null) : null, true); return; }
                 } catch (e) { /* sigue con la búsqueda por nombre */ }
             }
             const lista = this.resultadosAbiertos && this.resultados.length ? this.resultados : await this.buscar();
@@ -132,8 +132,11 @@ document.addEventListener('alpine:init', () => {
             this.resultadoActivo = Math.min(Math.max(this.resultadoActivo + p, 0), this.resultados.length - 1);
         },
 
-        /** @param pres undefined = si tiene presentaciones se pregunta con el modal; null = unidad base; objeto = esa presentación */
-        agregar(p, pres) {
+        /**
+         * @param pres undefined = si tiene presentaciones se pregunta con el modal; null = unidad base; objeto = esa presentación
+         * @param directo true = lector de barras: suma 1 sin preguntar; false = se pide cantidad y costo en el modal
+         */
+        agregar(p, pres, directo = false, cantidad = 1, costoElegido = null) {
             if (pres === undefined) {
                 if ((p.presentaciones || []).length) {
                     this.elegir = p;
@@ -143,25 +146,51 @@ document.addEventListener('alpine:init', () => {
                 pres = null;
             }
             this.elegir = null;
+            if (!directo && !p.control_serie) { this.abrirPedir(p, pres); return; }
+            const confirmado = costoElegido !== null;
             // Con lote, el mismo producto puede venir en varias líneas; sin lote se suma a la existente
             // Farmacia: los productos con control de lote abren las columnas de lote y vencimiento
             if (p.control_lote) this.conLote = true;
             let it = this.conLote || p.control_serie ? null : this.items.find(x => x.id === p.id && (x.presentacion || null) === (pres?.id ?? null));
             if (it) {
-                it.cantidad = r2(it.cantidad + 1);
+                it.cantidad = r2(it.cantidad + cantidad);
+                if (confirmado) it.costo = r4(costoElegido);
             } else {
                 // El costo sugerido de una presentación es el costo unitario x factor
                 this.items.push({ key: this._key++, id: p.id, codigo: p.codigo, nombre: p.nombre, tip_igv: CFG.tipIgvPred,
                     presentacion: pres?.id ?? null, factor: pres?.factor ?? 1,
                     presentacion_nombre: pres ? pres.nombre + ' x' + this.num(pres.factor) + ' ' + (p.unidad || '') : null,
-                    cantidad: 1, costo: r4(p.costo * (pres?.factor ?? 1)), flete: 0, lote: '', vencimiento: '', control_lote: !!p.control_lote,
+                    cantidad: r2(cantidad), costo: confirmado ? r4(costoElegido) : r4(p.costo * (pres?.factor ?? 1)), flete: 0, lote: '', vencimiento: '', control_lote: !!p.control_lote,
                     control_serie: !!p.control_serie, series: '', flash: false });
                 it = this.items[this.items.length - 1];
             }
             it.flash = true;
             setTimeout(() => { it.flash = false; }, 600);
             this.busqueda = ''; this.resultados = []; this.resultadosAbiertos = false;
-            this.enfocar((it.control_serie ? 'series-' : 'cant-') + it.key);
+            if (it.control_serie) this.enfocar('series-' + it.key);
+            else this.$refs.buscador.focus();
+        },
+
+        // ---------- Modal: cantidad y costo antes de pasar al detalle ----------
+        pedir: null,
+        abrirPedir(p, pres) {
+            this.pedir = { p, pres, cantidad: 1, costo: r4(p.costo * (pres?.factor ?? 1)),
+                           detalle: pres ? pres.nombre + ' x' + this.num(pres.factor) + ' ' + (p.unidad || '') : (p.unidad || 'Unidad') };
+            this.busqueda = ''; this.resultados = []; this.resultadosAbiertos = false;
+            this.enfocar('pedir-cantidad');
+        },
+        confirmarPedir() {
+            if (!this.pedir) return;
+            const cantidad = r2(this.pedir.cantidad), costo = r4(this.pedir.costo);
+            if (!(cantidad > 0)) { this.aviso('Escribe una cantidad mayor a 0', 'error'); this.enfocar('pedir-cantidad'); return; }
+            if (!(costo >= 0)) { this.aviso('Escribe un costo válido', 'error'); this.enfocar('pedir-costo'); return; }
+            const { p, pres } = this.pedir;
+            this.pedir = null;
+            this.agregar(p, pres, true, cantidad, costo);
+        },
+        cerrarPedir() {
+            this.pedir = null;
+            this.$nextTick(() => this.$refs.buscador.focus());
         },
 
         /** Series escritas o escaneadas (una por línea); la cantidad es la cantidad de series */
@@ -280,6 +309,10 @@ document.addEventListener('alpine:init', () => {
                     const ops = [null, ...this.elegir.presentaciones];
                     if (Number(e.key) <= ops.length) { e.preventDefault(); this.agregar(this.elegir, ops[Number(e.key) - 1]); }
                 }
+                return;
+            }
+            if (this.pedir) {
+                if (e.key === 'Escape') { e.preventDefault(); this.cerrarPedir(); }
                 return;
             }
             if (e.key === 'F2') { e.preventDefault(); this.$refs.buscador.focus(); }

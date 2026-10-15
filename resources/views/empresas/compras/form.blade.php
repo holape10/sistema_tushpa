@@ -242,7 +242,6 @@
                  :class="t.tipo === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white'" x-text="t.texto"></div>
         </template>
     </div>
-</div>
     {{-- Modal: elegir presentación al seleccionar un producto que se compra de varias formas --}}
     <div x-show="elegir" x-cloak class="fixed inset-0 z-[70] bg-slate-900/60 flex items-center justify-center p-4" @click.self="elegir = null">
         <div x-show="elegir" x-transition class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5">
@@ -264,9 +263,42 @@
                     </button>
                 </template>
             </div>
-            <button type="button" @click="elegir = null" class="mt-3 w-full h-11 rounded-xl bg-slate-200 font-bold">Cancelar</button>
+            <button type="button" @click="elegir = null; $refs.buscador.focus()" class="mt-3 w-full h-11 rounded-xl bg-slate-200 font-bold">Cancelar</button>
         </div>
     </div>
+
+    {{-- Modal: cantidad y costo antes de pasar al detalle (Enter avanza; al agregar el cursor vuelve al buscador) --}}
+    <template x-if="pedir">
+        <div class="fixed inset-0 z-[70] bg-slate-900/60 flex items-center justify-center p-4" @click.self="cerrarPedir()">
+            <form @submit.prevent="confirmarPedir()" class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+                <div class="px-6 pt-5 pb-3 bg-indigo-600 text-white">
+                    <p class="text-xs font-bold uppercase tracking-wide text-indigo-200">Ingresar cantidad y costo</p>
+                    <p class="text-xl font-extrabold leading-tight" x-text="pedir.p.nombre"></p>
+                    <p class="text-sm text-indigo-100" x-text="pedir.detalle"></p>
+                </div>
+                <div class="p-6 grid grid-cols-2 gap-4">
+                    <label class="block">
+                        <span class="text-xs font-bold uppercase text-slate-500">Cantidad</span>
+                        <input id="pedir-cantidad" type="number" step="any" min="0.01" x-model.number="pedir.cantidad" @focus="$event.target.select()"
+                               @keydown.enter.prevent="enfocar('pedir-costo')"
+                               class="mt-1 w-full h-16 rounded-2xl border-2 border-indigo-300 text-center text-3xl font-extrabold text-slate-800 focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500">
+                    </label>
+                    <label class="block">
+                        <span class="text-xs font-bold uppercase text-slate-500">Costo unit. (con IGV)</span>
+                        <input id="pedir-costo" type="number" step="any" min="0" x-model.number="pedir.costo" @focus="$event.target.select()"
+                               @keydown.enter.prevent="confirmarPedir()"
+                               class="mt-1 w-full h-16 rounded-2xl border-2 border-amber-300 bg-amber-50 text-center text-3xl font-extrabold text-amber-900 focus:ring-4 focus:ring-amber-200">
+                    </label>
+                    <p class="col-span-2 text-right text-lg text-slate-500">Total <span class="text-2xl font-extrabold text-slate-800" x-text="'S/ ' + num2((Number(pedir.cantidad) || 0) * (Number(pedir.costo) || 0))"></span></p>
+                </div>
+                <div class="px-6 pb-6 grid grid-cols-2 gap-3">
+                    <button type="submit" class="h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-extrabold">✓ Agregar a la lista</button>
+                    <button type="button" @click="cerrarPedir()" class="h-14 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-lg font-extrabold">✕ Cancelar <span class="text-xs font-semibold opacity-80">Esc</span></button>
+                </div>
+            </form>
+        </div>
+    </template>
+</div>
 @endsection
 
 @push('scripts')

@@ -163,7 +163,7 @@ class VentaDirecta
      * Comisión por medio de pago (medios_pagos.comision, en %), calculada aquí y no en el navegador.
      * Los montos llegan sin comisión; cada recargo se suma a su medio y entra al comprobante como una línea.
      */
-    private static function aplicarRecargos(User $user, array $lineas, array $datos): array
+    public static function aplicarRecargos(User $user, array $lineas, array $datos): array
     {
         $ids = array_values((array) ($datos['id_med_pag'] ?? []));
         $montos = array_values((array) ($datos['mon_med_pag'] ?? []));

@@ -173,8 +173,12 @@ class Kardex
      */
     public static function revertirVenta(int $idCpeCabecera, array $doc): int
     {
+        // Solo las salidas vigentes: una venta editada ya devolvió las anteriores (entradas 05) y sacó las nuevas después
+        $ultimaDevolucion = DB::table('movimientos_productos')
+            ->where('IdCpe_cabecera', $idCpeCabecera)->where('mov_tip', 'I')->where('cod_tip_ope', '05')->max('mov_pro_id');
         $salidas = DB::table('movimientos_productos')
             ->where('IdCpe_cabecera', $idCpeCabecera)->where('mov_tip', 'E')
+            ->when($ultimaDevolucion, fn ($q) => $q->where('mov_pro_id', '>', $ultimaDevolucion))
             ->orderBy('mov_pro_id')->get();
 
         foreach ($salidas as $s) {

@@ -67,48 +67,9 @@ class Comprobante
             throw new \RuntimeException('No hay productos para cobrar.');
         }
 
-        $cre = DB::table('credito_dias')
-            ->where('cre_dia_id', $datos['estadopago'])
-            ->where('id_empresa_negocio', $user->id_empresa_negocio)->first();
-        if (! $cre) {
-            throw new \RuntimeException('Estado de pago no válido.');
-        }
+        $cre = self::credito($user, $datos['estadopago']);
         $esContado = $cre->cre_dia_tip === 'CONTADO';
-
-        // ---- Cliente ----
-        $clinum = trim($datos['clinum']);
-        $clinom = strtoupper(trim($datos['clinom']));
-        $tdicod = $datos['tdicod'];
-
-        if ($tdocod === '01') {
-            $okRuc = strlen($clinum) === 11
-                && in_array(substr($clinum, 0, 2), ['10', '20', '15', '17'])
-                && $tdicod === '6';
-            if (! $okRuc) {
-                throw new \RuntimeException('TIPO DE DOCUMENTO NO PERMITIDO PARA EMITIR UNA FACTURA (requiere RUC válido).');
-            }
-        }
-        if (! $esContado && $clinum === '00000000') {
-            throw new \RuntimeException('Para vender a crédito debes identificar al cliente.');
-        }
-
-        if ($clinum === '00000000') {
-            $cliente = Cliente::firstOrCreate(
-                ['clinum' => $clinum, 'rucemp' => $user->IdEmpresa],
-                ['clinom' => 'VENTA AL PORTADOR', 'tdicod' => '1', 'clidir' => '--']
-            );
-        } else {
-            $cliente = Cliente::updateOrCreate(
-                ['clinum' => $clinum, 'rucemp' => $user->IdEmpresa],
-                [
-                    'clinom' => $clinom,
-                    'clidir' => ($datos['clidir'] ?? null) ?: '--',
-                    'clicor' => $datos['clicor'] ?? null,
-                    'tdicod' => $tdicod,
-                    'telefono' => $datos['telefono'] ?? null,
-                ]
-            );
-        }
+        $cliente = self::cliente($user, $datos, $esContado);
 
         // ---- Serie y correlativo (bloqueado para que dos cajas no repitan número) ----
         [$colSerie, $colNum] = self::SERIES[$tdocod];
@@ -122,34 +83,16 @@ class Comprobante
         // ---- Totales ----
         $gravado = $sucursal->tip_igv_pred === '10';
         $factorIgv = self::factorPara($extra['ped_tip'] ?? null);
-        // Total de una línea: cantidad x precio, o el importe cobrado si se vendió por importe (S/ 20 de combustible)
-        $totalDe = fn (array $l) => isset($l['importe']) ? round((float) $l['importe'], 2) : round($l['cantidad'] * $l['precio'], 2);
-        $total = round(array_sum(array_map($totalDe, $lineas)), 2);
-
-        $ccatvg = $gravado ? round($total / $factorIgv, 2) : 0;
-        $ccaigv = $gravado ? round($total - $ccatvg, 2) : 0;
-        $ccatexo = $gravado ? 0 : $total;
+        $totales = self::totales($lineas, $gravado, $factorIgv);
+        $total = $totales['ccaitv'];
 
         $fecEmi = $datos['fecEmi'];
-        $fecVen = $esContado ? $fecEmi : ($datos['fecVen'] ?? null);
-        if (! $esContado && (! $fecVen || $fecVen <= $fecEmi)) {
-            throw new \RuntimeException('La fecha de vencimiento debe ser posterior a la de emisión.');
-        }
-
-        $paga = (float) ($datos['paga'] ?? 0);
+        $fecVen = self::vencimiento($datos, $fecEmi, $esContado);
         $almacen = Almacen::where('id_empresa_negocio', $user->id_empresa_negocio)->where('predeterminado', 1)->first();
 
-        $cabId = DB::table('cpe_cabecera')->insertGetId($extra + [
+        $cabId = DB::table('cpe_cabecera')->insertGetId($extra + self::cabecera($datos, $cliente, $cre, $totales, $gravado, $factorIgv) + [
             'tdocod' => $tdocod, 'serdoc' => $serie, 'numdoc' => $numero,
             'ccafem' => $fecEmi, 'ccafve' => $fecVen,
-            'tdicod' => $tdicod, 'ccandi' => $clinum, 'ccanom' => $clinom,
-            'direccion' => ($datos['clidir'] ?? null) ?: '--', 'clicod' => $cliente->clicod,
-            'clicorcli' => $datos['clicor'] ?? null, 'telefono_cliente' => $datos['telefono'] ?? null,
-            'ccatvg' => $ccatvg, 'ccaigv' => $ccaigv, 'por_igv' => $gravado ? round(($factorIgv - 1) * 100, 2) : null, 'ccatexo' => $ccatexo, 'ccaitv' => $total,
-            'totalcontado' => $esContado ? $total : 0, 'totalcredito' => $esContado ? 0 : $total,
-            'paga' => $paga, 'vuelto' => $esContado ? max(0, round($paga - $total, 2)) : 0,
-            'estadopago' => $esContado ? 'CONTADO' : 'CREDITO', 'cre_dia_id' => $cre->cre_dia_id,
-            'ccaobs' => $datos['observaciones'] ?? null, 'consumo' => (int) ($datos['consumo'] ?? 0),
             'IdUsuario' => $user->IdUsuario,
             'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $user->id_empresa_negocio,
             'id_almacen' => $almacen?->id_almacen, 'id_turno' => $turno->id_turno,
@@ -165,7 +108,207 @@ class Comprobante
         }
 
         // ---- Detalle: una línea por producto, con su salida de stock ----
-        // Las líneas libres (sin producto, ej. un servicio escrito a mano o un recargo) no mueven stock
+        self::registrarDetalle($user, $cabId, $lineas, $sucursal, $almacen, $gravado, $factorIgv, [
+            'tdocod' => $tdocod, 'serie' => $serie, 'numero' => (string) $numero, 'cliente' => strtoupper(trim($datos['clinom'])), 'fecha' => $fecEmi,
+        ], ! empty($extra['ped_id']));
+
+        Fidelizacion::acumular($cabId);       // puntos del cliente (si la sucursal tiene fidelización)
+        EnvioAutomatico::programar($cabId);   // si la empresa tiene envío automático
+
+        return $cabId;
+    }
+
+    /**
+     * Corrige una venta que aún no llegó a SUNAT (la edición la valida antes: ver EdicionVenta) sobre el mismo registro.
+     * Mismo tipo: conserva serie y número. Otro tipo (boleta → factura, nota de venta → boleta…): toma el siguiente número
+     * de la nueva serie y el suyo vuelve a quedar libre (por eso solo se permite con el último número de su serie).
+     *
+     * @param  array|null  $lineas  null = los productos no cambian (venta de mesa): solo cambian comprobante, cliente y pago
+     */
+    public static function reemitir(User $user, Turno $turno, object $cab, array $datos, ?array $lineas): void
+    {
+        $tdocod = $datos['tdocod'];
+        if (! isset(self::SERIES[$tdocod])) {
+            throw new \RuntimeException('Tipo de comprobante no válido.');
+        }
+        if ($lineas !== null && ! $lineas) {
+            throw new \RuntimeException('La venta debe tener al menos un producto.');
+        }
+        $cabId = (int) $cab->IdCpe_cabecera;
+
+        $cre = self::credito($user, $datos['estadopago']);
+        $esContado = $cre->cre_dia_tip === 'CONTADO';
+        $cliente = self::cliente($user, $datos, $esContado);
+
+        // ---- Serie y correlativo ----
+        $sucursal = EmpresaNegocio::where('id_empresa_negocio', $cab->id_empresa_negocio)->lockForUpdate()->first();
+        $serie = $cab->serdoc;
+        $numero = (int) $cab->numdoc;
+        if ($tdocod !== $cab->tdocod) {
+            [$colSerieAnt, $colNumAnt] = self::SERIES[$cab->tdocod];
+            if ($cab->serdoc !== $sucursal->$colSerieAnt || (int) $sucursal->$colNumAnt !== (int) $cab->numdoc) {
+                throw new \RuntimeException('Solo se puede cambiar el tipo del último comprobante de su serie (el último es '
+                    .$sucursal->$colSerieAnt.'-'.$sucursal->$colNumAnt.'). Para este, corrige solo los productos o el cliente, o anúlalo.');
+            }
+            $sucursal->$colNumAnt = (int) $cab->numdoc - 1;   // su número queda libre para la próxima venta
+            [$colSerie, $colNum] = self::SERIES[$tdocod];
+            $numero = $sucursal->$colNum + 1;
+            $serie = $sucursal->$colSerie;
+            $sucursal->$colNum = $numero;
+            $sucursal->save();
+        }
+
+        // ---- Lo que hizo la venta antes: cobros, puntos y, si cambian los productos, el stock ----
+        DB::table('venta_medio_pago')->where('IdCpe_cabecera', $cabId)->delete();
+        DB::table('cuentas_cobrar')->where('IdCpe_cabecera', $cabId)->delete();
+        Fidelizacion::quitarPuntosDeVenta($cabId);
+
+        $gravado = $sucursal->tip_igv_pred === '10';
+        $factorIgv = self::factorPara($cab->ped_tip);
+        $almacen = $cab->id_almacen ? Almacen::find($cab->id_almacen) : null;
+        $cliNom = strtoupper(trim($datos['clinom']));
+        if ($lineas !== null) {
+            Kardex::revertirVenta($cabId, ['cliente' => $cab->ccanom, 'descripcion' => 'EDICIÓN DE LA VENTA', 'fecha_mov' => now()->toDateString()]);
+            Series::revertirVenta($cabId);
+            DB::table('porciones_movimientos')->where('IdCpe_cabecera', $cabId)->delete();
+            DB::table('cpe_detalle')->where('IdCpe_cabecera', $cabId)->delete();
+            $totales = self::totales($lineas, $gravado, $factorIgv);
+        } else {
+            $totales = ['ccatvg' => (float) $cab->ccatvg, 'ccaigv' => (float) $cab->ccaigv, 'ccatexo' => (float) $cab->ccatexo, 'ccaitv' => (float) $cab->ccaitv];
+            // Los movimientos de kardex llevan el comprobante: se actualizan al nuevo
+            DB::table('movimientos_productos')->where('IdCpe_cabecera', $cabId)
+                ->update(['tdocod' => $tdocod, 'serie' => $serie, 'numero' => (string) $numero, 'cliente' => $cliNom]);
+        }
+        $total = $totales['ccaitv'];
+
+        $fecVen = self::vencimiento($datos, $cab->ccafem, $esContado);
+        DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->update(self::cabecera($datos, $cliente, $cre, $totales, $gravado, $factorIgv) + [
+            'tdocod' => $tdocod, 'serdoc' => $serie, 'numdoc' => $numero, 'ccafve' => $fecVen,
+            // Vuelve a quedar por enviar (si SUNAT lo rechazó o falló el envío, se manda corregido)
+            'est_sunat' => $tdocod === '13' ? null : 'PENDIENTE', 'ccasunrescod' => null, 'ccadessun' => null, 'ccaqr' => null, 'res_id' => null,
+        ]);
+
+        if ($esContado) {
+            self::registrarMedios($user, $turno, $cabId, $total,
+                (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []), (array) ($datos['op_med_pag'] ?? []));
+        } else {
+            Cuentas::abrirPorCobrar($cabId);
+        }
+
+        if ($lineas !== null) {
+            self::registrarDetalle($user, $cabId, $lineas, $sucursal, $almacen, $gravado, $factorIgv, [
+                'tdocod' => $tdocod, 'serie' => $serie, 'numero' => (string) $numero, 'cliente' => $cliNom, 'fecha' => $cab->ccafem,
+            ], ! empty($cab->ped_id));
+        }
+
+        Fidelizacion::acumular($cabId);
+        EnvioAutomatico::programar($cabId);
+    }
+
+    private static function credito(User $user, $creDiaId): object
+    {
+        $cre = DB::table('credito_dias')
+            ->where('cre_dia_id', $creDiaId)
+            ->where('id_empresa_negocio', $user->id_empresa_negocio)->first();
+        if (! $cre) {
+            throw new \RuntimeException('Estado de pago no válido.');
+        }
+
+        return $cre;
+    }
+
+    /** Valida el documento según el comprobante y guarda (o actualiza) al cliente */
+    private static function cliente(User $user, array $datos, bool $esContado): Cliente
+    {
+        $clinum = trim($datos['clinum']);
+        $clinom = strtoupper(trim($datos['clinom']));
+        $tdicod = $datos['tdicod'];
+
+        if ($datos['tdocod'] === '01') {
+            $okRuc = strlen($clinum) === 11
+                && in_array(substr($clinum, 0, 2), ['10', '20', '15', '17'])
+                && $tdicod === '6';
+            if (! $okRuc) {
+                throw new \RuntimeException('TIPO DE DOCUMENTO NO PERMITIDO PARA EMITIR UNA FACTURA (requiere RUC válido).');
+            }
+        }
+        if (! $esContado && $clinum === '00000000') {
+            throw new \RuntimeException('Para vender a crédito debes identificar al cliente.');
+        }
+
+        if ($clinum === '00000000') {
+            return Cliente::firstOrCreate(
+                ['clinum' => $clinum, 'rucemp' => $user->IdEmpresa],
+                ['clinom' => 'VENTA AL PORTADOR', 'tdicod' => '1', 'clidir' => '--']
+            );
+        }
+
+        return Cliente::updateOrCreate(
+            ['clinum' => $clinum, 'rucemp' => $user->IdEmpresa],
+            [
+                'clinom' => $clinom,
+                'clidir' => ($datos['clidir'] ?? null) ?: '--',
+                'clicor' => $datos['clicor'] ?? null,
+                'tdicod' => $tdicod,
+                'telefono' => $datos['telefono'] ?? null,
+            ]
+        );
+    }
+
+    /** Total de una línea: cantidad x precio, o el importe cobrado si se vendió por importe (S/ 20 de combustible) */
+    private static function totalLinea(array $l): float
+    {
+        return isset($l['importe']) ? round((float) $l['importe'], 2) : round($l['cantidad'] * $l['precio'], 2);
+    }
+
+    /** @return array{ccatvg: float, ccaigv: float, ccatexo: float, ccaitv: float} */
+    private static function totales(array $lineas, bool $gravado, float $factorIgv): array
+    {
+        $total = round(array_sum(array_map(fn ($l) => self::totalLinea($l), $lineas)), 2);
+        $ccatvg = $gravado ? round($total / $factorIgv, 2) : 0;
+
+        return ['ccatvg' => $ccatvg, 'ccaigv' => $gravado ? round($total - $ccatvg, 2) : 0, 'ccatexo' => $gravado ? 0 : $total, 'ccaitv' => $total];
+    }
+
+    private static function vencimiento(array $datos, string $fecEmi, bool $esContado): ?string
+    {
+        $fecVen = $esContado ? $fecEmi : ($datos['fecVen'] ?? null);
+        if (! $esContado && (! $fecVen || $fecVen <= $fecEmi)) {
+            throw new \RuntimeException('La fecha de vencimiento debe ser posterior a la de emisión.');
+        }
+
+        return $fecVen;
+    }
+
+    /** Columnas de cliente, totales y pago de cpe_cabecera (iguales al emitir y al corregir) */
+    private static function cabecera(array $datos, Cliente $cliente, object $cre, array $totales, bool $gravado, float $factorIgv): array
+    {
+        $esContado = $cre->cre_dia_tip === 'CONTADO';
+        $total = $totales['ccaitv'];
+        $paga = (float) ($datos['paga'] ?? 0);
+
+        return [
+            'tdicod' => $datos['tdicod'], 'ccandi' => trim($datos['clinum']), 'ccanom' => strtoupper(trim($datos['clinom'])),
+            'direccion' => ($datos['clidir'] ?? null) ?: '--', 'clicod' => $cliente->clicod,
+            'clicorcli' => $datos['clicor'] ?? null, 'telefono_cliente' => $datos['telefono'] ?? null,
+            'ccatvg' => $totales['ccatvg'], 'ccaigv' => $totales['ccaigv'], 'por_igv' => $gravado ? round(($factorIgv - 1) * 100, 2) : null,
+            'ccatexo' => $totales['ccatexo'], 'ccaitv' => $total,
+            'totalcontado' => $esContado ? $total : 0, 'totalcredito' => $esContado ? 0 : $total,
+            'paga' => $paga, 'vuelto' => $esContado ? max(0, round($paga - $total, 2)) : 0,
+            'estadopago' => $esContado ? 'CONTADO' : 'CREDITO', 'cre_dia_id' => $cre->cre_dia_id,
+            'ccaobs' => $datos['observaciones'] ?? null, 'consumo' => (int) ($datos['consumo'] ?? 0),
+        ];
+    }
+
+    /**
+     * Detalle del comprobante con su salida de stock, series, lotes y porciones.
+     * Las líneas libres (sin producto, ej. un servicio escrito a mano o un recargo) no mueven stock.
+     *
+     * @param  array{tdocod: string, serie: string, numero: string, cliente: string, fecha: string}  $comprobante
+     */
+    private static function registrarDetalle(User $user, int $cabId, array $lineas, EmpresaNegocio $sucursal, ?Almacen $almacen,
+        bool $gravado, float $factorIgv, array $comprobante, bool $desdeComanda): void
+    {
         // Opciones elegidas en la comanda (entrada del menú, platos del trío): [IdProducto => cantidad por plato]
         $idsOpciones = collect($lineas)->flatMap(fn ($it) => array_keys($it['opciones'] ?? []))->all();
         $productos = Producto::whereIn('IdProducto', array_merge(array_filter(array_column($lineas, 'IdProducto')), $idsOpciones))->get()->keyBy('IdProducto');
@@ -182,7 +325,7 @@ class Comprobante
             // Presentación (SACO x 50): se vende por saco pero del stock salen cantidad x factor unidades base
             $factor = (float) ($it['factor'] ?? 1) > 0 ? (float) ($it['factor'] ?? 1) : 1.0;
             $precio = (float) $it['precio'];
-            $totalLinea = $totalDe($it);
+            $totalLinea = self::totalLinea($it);
 
             $subtotal = $gravado ? round($totalLinea / $factorIgv, 2) : $totalLinea;
             $valorUni = $gravado ? round($precio / $factorIgv, 2) : $precio;
@@ -212,8 +355,8 @@ class Comprobante
             // Con lotes (farmacia) sale primero el que vence antes, o el que eligió el cajero; queda anotado para el ticket
             if ($prod && $almacen) {
                 $doc = [
-                    'cod_tip_ope' => '01', 'tdocod' => $tdocod, 'serie' => $serie, 'numero' => (string) $numero,
-                    'IdCpe_cabecera' => $cabId, 'cliente' => $clinom, 'fecha_mov' => $fecEmi,
+                    'cod_tip_ope' => '01', 'tdocod' => $comprobante['tdocod'], 'serie' => $comprobante['serie'], 'numero' => $comprobante['numero'],
+                    'IdCpe_cabecera' => $cabId, 'cliente' => $comprobante['cliente'], 'fecha_mov' => $comprobante['fecha'],
                 ] + $banderas;
                 $partes = Kardex::salidaPorVenta($prod, $almacen->id_almacen, round($cant * $factor, 3), $doc + [
                     'precio' => round($precio / $factor, 2), 'lote_preferido' => $it['lote'] ?? null,
@@ -223,7 +366,7 @@ class Comprobante
                 }
                 // Electrodomésticos, celulares: las series que se llevan quedan vendidas (y salen en el comprobante)
                 if ($prod->control_serie ?? false) {
-                    $series = Series::vender($prod, Series::lista($it['series'] ?? []), round($cant * $factor, 3), $cabId, $clinom, $fecEmi);
+                    $series = Series::vender($prod, Series::lista($it['series'] ?? []), round($cant * $factor, 3), $cabId, $comprobante['cliente'], $comprobante['fecha']);
                     DB::table('cpe_detalle')->where('IdCpe_detalle', $detId)->update(['series' => $series]);
                 }
                 // Las opciones elegidas (la sopa del menú, los platos del trío) también salen del almacén
@@ -237,11 +380,7 @@ class Comprobante
         }
 
         // Porciones del día (juanes, sopa del día...): se restan; en venta directa también se revisa que alcancen
-        Porciones::vender((int) $user->id_empresa_negocio, $cabId, $porciones, ! empty($extra['ped_id']));
-        Fidelizacion::acumular($cabId);       // puntos del cliente (si la sucursal tiene fidelización)
-        EnvioAutomatico::programar($cabId);   // si la empresa tiene envío automático
-
-        return $cabId;
+        Porciones::vender((int) $user->id_empresa_negocio, $cabId, $porciones, $desdeComanda);
     }
 
     /**

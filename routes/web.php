@@ -322,6 +322,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/ventas/{id}/detalle', [VentaController::class, 'detalle'])->whereNumber('id')->name('ventas.detalle');
     Route::post('/ventas/{id}/medios', [VentaController::class, 'actualizarMedios'])->whereNumber('id')->name('ventas.medios');
     Route::post('/ventas/{id}/anular', [VentaController::class, 'anular'])->whereNumber('id')->name('ventas.anular');
+    // Corregir una venta aún no enviada a SUNAT (productos, cliente, pago y tipo de comprobante) desde el Punto Venta
+    Route::get('/ventas/{id}/editar', [PuntoVentaController::class, 'editar'])->whereNumber('id')->name('ventas.editar');
+    Route::post('/ventas/{id}/editar', [PuntoVentaController::class, 'guardarEdicion'])->whereNumber('id')->name('ventas.editar.guardar');
     Route::get('/ventas/{id}/whatsapp', [VentaController::class, 'whatsapp'])->whereNumber('id')->name('ventas.whatsapp');
     Route::post('/ventas/{id}/telefono', [VentaController::class, 'telefono'])->whereNumber('id')->name('ventas.telefono');
 

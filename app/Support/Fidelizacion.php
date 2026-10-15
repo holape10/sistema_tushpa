@@ -145,6 +145,16 @@ class Fidelizacion
         ]);
     }
 
+    /** Venta editada: se quitan los puntos que ganó (se vuelven a calcular con el nuevo total y cliente); el canje se queda */
+    public static function quitarPuntosDeVenta(int $cabId): void
+    {
+        foreach (DB::table('fid_movimientos')->where('IdCpe_cabecera', $cabId)->where('tipo', 'VENTA')->get() as $m) {
+            $actual = (int) DB::table('cliente')->where('clicod', $m->clicod)->lockForUpdate()->value('puntos');
+            DB::table('cliente')->where('clicod', $m->clicod)->update(['puntos' => $actual - (int) $m->puntos]);
+            DB::table('fid_movimientos')->where('mov_id', $m->mov_id)->delete();
+        }
+    }
+
     /** Premios que hoy se pueden canjear (activos y sin vencer) */
     public static function premiosVigentes(int $suc)
     {

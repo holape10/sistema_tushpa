@@ -1,10 +1,17 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{EmpresaNegocio, MedioPago, Turno};
-use App\Support\{Lotes, Proformas, VentaDirecta};
+use App\Models\EmpresaNegocio;
+use App\Models\MedioPago;
+use App\Models\Turno;
+use App\Support\EdicionVenta;
+use App\Support\Lotes;
+use App\Support\Proformas;
+use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Punto de venta de escritorio: venta directa con teclado y lector de barras, líneas libres,
@@ -34,7 +41,7 @@ class PuntoVentaController extends Controller
         $user = Auth::user();
 
         $turno = Turno::abiertoDe($user);
-        if (!$turno) {
+        if (! $turno) {
             return redirect()->route('turnos.index')->with('error', 'Debes aperturar tu turno antes de vender.');
         }
 
@@ -44,7 +51,7 @@ class PuntoVentaController extends Controller
             ->get(['cre_dia_id', 'cre_dia_nom', 'cre_dia_tip', 'cre_dia_fac']);
         $mediospagos = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)
             ->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag', 'predeterminado', 'comision'])
-            ->map(fn($m) => [
+            ->map(fn ($m) => [
                 'id' => $m->id_med_pag, 'nombre' => $m->nom_med_pag,
                 'comision' => (float) ($m->comision ?? 0), 'predeterminado' => $m->predeterminado == '1',
             ]);
@@ -56,12 +63,73 @@ class PuntoVentaController extends Controller
         $proforma = null;
         if ($request->filled('proforma')) {
             $proforma = Proformas::paraCaja($user, (int) $request->proforma);
-            if (!$proforma) {
+            if (! $proforma) {
                 return redirect()->route('proformas.index')->with('error', 'La proforma no existe o ya fue cobrada.');
             }
         }
 
-        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma'));
+        // Venta abierta para corregirla (aún no enviada a SUNAT)
+        $edicion = null;
+        if ($request->filled('editar')) {
+            $edicion = $this->ventaEditable((int) $request->editar);
+            if (is_string($edicion)) {
+                return redirect()->route('ventas.index')->with('error', $edicion);
+            }
+        }
+
+        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion'));
+    }
+
+    /** Editar una venta del Panel de Ventas: se abre en el Punto Venta con sus productos, cliente y pago */
+    public function editar(int $id)
+    {
+        $this->autorizar();
+        $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first(['ped_tip']);
+
+        return redirect()->route(($cab->ped_tip ?? '') === 'FARMACIA' ? 'pv.farmacia' : 'pv.index', ['editar' => $id]);
+    }
+
+    public function guardarEdicion(Request $request, int $id)
+    {
+        $this->autorizar();
+        $request->validate(VentaDirecta::REGLAS, VentaDirecta::MENSAJES, VentaDirecta::NOMBRES);
+        if (is_string($error = $this->ventaEditable($id))) {
+            return response()->json(['estado' => 'error', 'mensaje' => $error]);
+        }
+
+        try {
+            EdicionVenta::editar(Auth::user(), $id, $request->all());
+        } catch (\RuntimeException $e) {
+            return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json(['estado' => 'error', 'mensaje' => config('app.debug') ? $e->getMessage() : 'Error al guardar la venta.']);
+        }
+
+        return response()->json(VentaDirecta::respuesta($id) + ['panel' => route('ventas.index')]);
+    }
+
+    /**
+     * La venta lista para editar, o el motivo por el que no se puede (el cajero solo corrige sus propias ventas).
+     *
+     * @return array<string, mixed>|string
+     */
+    private function ventaEditable(int $id): array|string
+    {
+        $user = Auth::user();
+        $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->where('id_empresa_negocio', $user->id_empresa_negocio)->first();
+        if (! $cab) {
+            return 'La venta no existe en esta sucursal.';
+        }
+        if (! $user->esAdmin() && (int) $cab->IdUsuario !== (int) $user->IdUsuario) {
+            return 'Solo el administrador puede editar ventas de otro cajero.';
+        }
+        if ($motivo = EdicionVenta::bloqueo($cab)) {
+            return 'No se puede editar '.$cab->serdoc.'-'.$cab->numdoc.': '.$motivo;
+        }
+
+        return EdicionVenta::paraEditar($user, $id);
     }
 
     public function registrar(Request $request)
@@ -85,6 +153,7 @@ class PuntoVentaController extends Controller
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json([
                 'estado' => 'error',
                 'mensaje' => config('app.debug') ? $e->getMessage() : 'Error al registrar la venta.',

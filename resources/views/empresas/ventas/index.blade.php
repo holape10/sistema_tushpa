@@ -147,6 +147,11 @@
                                         <a href="{{ route('sunat.descargar', [$v->IdCpe_cabecera, 'cdr']) }}" title="CDR (constancia SUNAT)" class="btn-ico text-amber-700"><i class="fas fa-file-zipper"></i></a>
                                     @endif
                                     <button type="button" @click="verDetalle({{ $v->IdCpe_cabecera }})" title="Detalle" class="btn-ico text-emerald-700"><i class="fas fa-eye"></i></button>
+                                    {{-- Corregir productos, cliente, pago o tipo de comprobante mientras no llegue a SUNAT --}}
+                                    @if (!$anulada && !$v->anulado_nc && $turnoAbierto && in_array($v->tdocod, ['01', '03', '13'], true)
+                                        && ($v->tdocod === '13' || in_array($v->est_sunat ?: 'PENDIENTE', \App\Support\Sunat\SunatService::ESTADOS_REENVIABLES, true)))
+                                        <a href="{{ route('ventas.editar', $v->IdCpe_cabecera) }}" title="Editar venta (aún no enviada a SUNAT)" class="btn-ico text-amber-600"><i class="fas fa-pen-to-square"></i></a>
+                                    @endif
                                     @if (!$anulada && $v->estadopago === 'CONTADO' && $turnoAbierto)
                                         <button type="button" @click="editarMedios({{ $v->IdCpe_cabecera }})" title="Editar medio de pago" class="btn-ico text-indigo-600"><i class="fas fa-money-bill-transfer"></i></button>
                                     @endif

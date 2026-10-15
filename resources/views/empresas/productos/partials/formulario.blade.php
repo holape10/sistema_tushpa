@@ -15,7 +15,9 @@
 @endphp
 
 <form action="{{ $p ? route('productos.update', $p->IdProducto) : route('productos.store') }}" method="POST" enctype="multipart/form-data"
-      x-data="productoForm()" @invalid.capture="if ($event.target.closest('[data-modal-precios]')) modalPrecios = true"
+      x-data="productoForm()"
+      @submit="$el.querySelectorAll('[data-combo-item]').forEach(i => i.disabled = tipo != '6' || !(Number(i.value) > 0))"
+      @invalid.capture="if ($event.target.closest('[data-modal-precios]')) modalPrecios = true"
       class="max-w-7xl mx-auto pb-28">
     @csrf
     @if ($p) @method('PUT') @endif
@@ -130,7 +132,8 @@
 
             @include('empresas.productos.partials.presentaciones')
 
-            {{-- Contenido del combo --}}
+            {{-- Contenido del combo. Al guardar solo se envían las cantidades usadas (ver @submit del formulario):
+                 con miles de productos se pasaría el límite de PHP (max_input_vars) y se perdería el precio de venta --}}
             <section class="bg-white rounded-2xl shadow-sm" x-show="tipo == '6'" x-cloak>
                 <header class="px-5 py-4 border-b border-gray-100">
                     <h3 class="font-bold text-gray-800">¿Qué incluye este combo?</h3>
@@ -148,7 +151,7 @@
                                 <span class="text-gray-700 min-w-0">{{ $item->pronom }}
                                     <span class="block text-xs text-gray-400">{{ $item->promocion == 2 ? 'Preparado' : 'Producto' }}</span>
                                 </span>
-                                <input type="number" min="0" step="1" placeholder="0" name="combo_items[{{ $item->IdProducto }}]"
+                                <input type="number" min="0" step="1" placeholder="0" name="combo_items[{{ $item->IdProducto }}]" data-combo-item
                                        value="{{ old('combo_items.' . $item->IdProducto, isset($comboActual) ? ($comboActual[$item->IdProducto] ?? '') : '') }}"
                                        class="w-20 h-10 rounded-lg border-gray-300 text-sm text-center focus:border-indigo-500 focus:ring-indigo-500">
                             </label>

@@ -48,18 +48,25 @@ document.addEventListener('alpine:init', () => {
         // Producto con presentaciones esperando que el cajero elija cómo venderlo (unidad, SACO, CAJA…)
         elegir: null,
         elegirActivo: 0,
+        // Producto esperando cantidad y precio antes de ir al detalle
+        pedir: null,
 
         // Proforma abierta (editar o cobrar) y la última guardada
         proformaId: null,
         proformaNumero: '',
         ultimaProforma: null,
 
+        // Venta del Panel de Ventas que se está corrigiendo (aún no enviada a SUNAT)
+        edicion: null,
+
         iniciar() {
             if (!CFG.comprobantes.some(c => c.tdocod === this.tdocod)) this.tdocod = CFG.comprobantes[0]?.tdocod;
             this.nuevoMedio = CFG.medios[0]?.id ?? null;
             this.reiniciarPago();
 
-            if (CFG.proforma) {
+            if (CFG.edicion) {
+                this.cargarEdicion(CFG.edicion);
+            } else if (CFG.proforma) {
                 this.cargarProforma(CFG.proforma);
             } else {
                 try {
@@ -75,6 +82,7 @@ document.addEventListener('alpine:init', () => {
             }
 
             const guardar = () => {
+                if (this.edicion) return; // la venta que se corrige no reemplaza el borrador de la venta en curso
                 try {
                     localStorage.setItem(CLAVE_BORRADOR, JSON.stringify({
                         carrito: this.carrito.map(({ flash, key, ...it }) => it), observaciones: this.observaciones,
@@ -209,16 +217,20 @@ document.addEventListener('alpine:init', () => {
         },
 
         // ---------- Detalle ----------
-        /** @param editar true = lleva el cursor a la cantidad (búsqueda); false = sigue escaneando (código de barras) */
+        /** @param editar true = pide cantidad y precio en el modal (búsqueda); false = suma directo y sigue escaneando (código de barras) */
         /**
          * @param pres undefined = si tiene presentaciones se pregunta con el modal; null = unidad base; objeto = esa presentación
          */
-        agregar(p, editar = true, pres) {
+        agregar(p, editar = true, pres, cantidad = 1, precioElegido = null) {
+            if (this.edicion?.soloCabecera) { this.aviso('En una venta de mesa los productos no cambian.', 'error'); return; }
             if (pres === undefined) {
                 if ((p.presentaciones || []).length) { this.abrirElegir(p, editar); return; }
                 pres = null;
             }
-            const precio = pres ? pres.precio : p.precio;
+            // Elegido en la búsqueda: primero se pide cantidad y precio (como el sistema anterior); el lector de barras suma directo
+            if (editar && !p.control_serie) { this.abrirPedir(p, pres); return; }
+            const confirmado = precioElegido !== null;
+            const precio = confirmado ? precioElegido : (pres ? pres.precio : p.precio);
             let it = this.carrito.find(x => x.id === p.id && (x.presentacion || null) === (pres?.id ?? null)
                 && redondear(x.precio) === redondear(precio) && !x.lote);
             // Con número de serie: una sola línea por producto; la cantidad es la cantidad de series elegidas
@@ -227,9 +239,9 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             if (it) {
-                it.cantidad = redondear(it.cantidad + 1);
+                it.cantidad = redondear(it.cantidad + cantidad);
             } else {
-                it = this.nuevoItem(p, pres);
+                it = this.nuevoItem(p, pres, confirmado ? { cantidad: redondear(cantidad), precio: redondear(precio) } : {});
                 this.carrito.push(it);
                 it = this.carrito[this.carrito.length - 1];
             }
@@ -285,6 +297,31 @@ document.addEventListener('alpine:init', () => {
         /** Código leído (lector o cámara): si era el de una presentación va esa; si era el del producto, la unidad base */
         presDeCodigo(p) {
             return p.presentacion ? ((p.presentaciones || []).find(x => x.id === p.presentacion) || null) : null;
+        },
+
+        // ---------- Modal: cantidad y precio (el precio solo lo cambia el administrador) ----------
+        abrirPedir(p, pres) {
+            const precio = pres ? pres.precio : p.precio;
+            this.pedir = { p, pres, cantidad: 1, precio: redondear(precio),
+                           detalle: pres ? this.nombrePresentacion({ presentacion: pres.id, presentaciones: p.presentaciones, unidad: p.unidad }) : (p.unidad || 'Unidad') };
+            this.busqueda = '';
+            this.resultados = [];
+            this.resultadosAbiertos = false;
+            this.enfocar('pedir-cantidad');
+        },
+        confirmarPedir() {
+            if (!this.pedir) return;
+            const cantidad = redondear(this.pedir.cantidad);
+            const precio = CFG.editarPrecio ? redondear(this.pedir.precio) : redondear(this.pedir.pres ? this.pedir.pres.precio : this.pedir.p.precio);
+            if (!(cantidad > 0)) { this.aviso('Escribe una cantidad mayor a 0', 'error'); this.enfocar('pedir-cantidad'); return; }
+            if (!(precio >= 0)) { this.aviso('Escribe un precio válido', 'error'); this.enfocar('pedir-precio'); return; }
+            const { p, pres } = this.pedir;
+            this.pedir = null;
+            this.agregar(p, false, pres, cantidad, precio);
+        },
+        cerrarPedir() {
+            this.pedir = null;
+            this.$nextTick(() => this.$refs.buscador.focus());
         },
 
         // ---------- Modal: elegir presentación ----------
@@ -514,11 +551,12 @@ document.addEventListener('alpine:init', () => {
                 // Montos sin comisión: el servidor calcula y suma la comisión de cada medio
                 id_med_pag: medios.map(m => m.id),
                 mon_med_pag: medios.map(m => this.montoDe(m)),
+                op_med_pag: medios.map(m => String(m.operacion || '').trim()),
             };
 
             this.procesando = true;
             try {
-                const r = await fetch(CFG.rutas.registrar, {
+                const r = await fetch(this.edicion ? CFG.rutas.editar : CFG.rutas.registrar, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CFG.csrf },
                     body: JSON.stringify(body),
@@ -531,6 +569,13 @@ document.addEventListener('alpine:init', () => {
 
                 this.ultima = d;
                 this.sonido(true);
+                if (this.edicion) {
+                    // Corregida: se imprime si se pidió y se vuelve al Panel de Ventas
+                    this.aviso(`✔ ${d.numero} corregida`, 'ok');
+                    if (imprimir) await this.imprimirUltima();
+                    setTimeout(() => { window.location.href = d.panel || CFG.rutas.panel; }, imprimir ? 2500 : 900);
+                    return;
+                }
                 this.aviso(`✔ ${d.numero} registrada` + (d.vuelto > 0 ? ` · Vuelto ${this.soles(d.vuelto)}` : ''), 'ok');
                 if (imprimir) this.imprimirUltima();
                 this.nuevaVenta();
@@ -562,6 +607,10 @@ document.addEventListener('alpine:init', () => {
         },
 
         cancelar() {
+            if (this.edicion) {
+                if (confirm('¿Salir sin guardar los cambios de ' + this.edicion.numero + '?')) window.location.href = CFG.rutas.panel;
+                return;
+            }
             if (this.carrito.length && !confirm('¿Cancelar esta venta? Se borrará el detalle.')) return;
             this.nuevaVenta();
         },
@@ -588,6 +637,31 @@ document.addEventListener('alpine:init', () => {
             this.proformaNumero = pf.numero;
             if (pf.cliente && pf.cliente.num) this.usarCliente(pf.cliente);
             this.aviso(`Proforma ${pf.numero} abierta: edítala o cóbrala`, 'ok');
+        },
+
+        /** Abre una venta del Panel de Ventas para corregirla: productos, cliente, comprobante y medios de pago */
+        cargarEdicion(v) {
+            this.edicion = v;
+            this.carrito = v.items.map(i => {
+                if (!i.producto) {
+                    return { key: this._sigKey++, id: null, codigo: '', descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio,
+                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1 };
+                }
+                const pres = i.presentacion ? (i.producto.presentaciones || []).find(x => x.id === i.presentacion) : null;
+                return this.nuevoItem(i.producto, pres, { descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio, precioBase: i.precio,
+                                                          ...(i.producto.control_serie ? { series: [...(i.series || [])] } : {}) });
+            });
+            if (v.items.some(i => i.no_disponible)) this.aviso('Algún producto de la venta ya no está activo: quedó como línea libre.', 'error');
+            this.observaciones = v.observaciones || '';
+            this.tdocod = v.tdocod;
+            this.estadopago = v.estadopago;
+            if (v.fecVen) this.fecVen = v.fecVen;
+            if (v.cliente && v.cliente.num) this.usarCliente(v.cliente);
+            // Medios como se cobraron; el último se ajusta solo si cambia el total
+            const medios = v.medios.map(m => ({ ...(CFG.medios.find(x => x.id === m.id) || { id: m.id, nombre: 'Medio', comision: 0 }),
+                                                monto: m.monto, operacion: m.operacion || '', auto: false }));
+            if (medios.length) { medios[medios.length - 1].auto = true; this.medios = medios; }
+            this.aviso(`Editando ${v.numero}: corrige y presiona REGISTRAR`, 'ok');
         },
 
         /** Deja de editar la proforma; el detalle queda como una venta nueva */
@@ -650,10 +724,14 @@ document.addEventListener('alpine:init', () => {
                 else if (/^[1-9]$/.test(e.key) && Number(e.key) <= n) { e.preventDefault(); this.elegirOpcion(Number(e.key) - 1); }
                 return;
             }
+            if (this.pedir) {
+                if (e.key === 'Escape') { e.preventDefault(); this.cerrarPedir(); }
+                return;
+            }
             if (e.key === 'F2') { e.preventDefault(); this.$refs.buscador.focus(); return; }
             if (e.key === 'F9') { e.preventDefault(); this.registrar(true); return; }
             if (e.key === 'F10') { e.preventDefault(); this.registrar(false); return; }
-            if (e.key === 'F8') { e.preventDefault(); this.guardarProforma(); return; }
+            if (e.key === 'F8') { e.preventDefault(); if (!this.edicion) this.guardarProforma(); return; }
 
             // Lector de barras con el foco fuera de los campos: teclas muy seguidas terminadas en Enter
             if (e.target.closest('input, textarea, select')) return;

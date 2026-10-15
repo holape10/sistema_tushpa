@@ -21,12 +21,12 @@
         <div class="lg:col-span-7 space-y-4 min-w-0">
 
             {{-- Buscador: nombre, código o lector de barras --}}
-            <div class="relative" @click.outside="resultadosAbiertos = false">
+            <div class="relative" @click.outside="resultadosAbiertos = false" x-show="!edicion?.soloCabecera">
                 <div class="relative">
                     <svg class="w-7 h-7 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
                     <input x-ref="buscador" type="search" autocomplete="off" x-model="busqueda"
                            @input="cantidadPendiente = 1" @input.debounce.200ms="buscar()" @focus="resultadosAbiertos = resultados.length > 0"
-                           @keydown.enter.prevent="enterBuscador()" @keydown.arrow-down.prevent="moverResultado(1)" @keydown.arrow-up.prevent="moverResultado(-1)"
+                           @keydown.enter.prevent.stop="enterBuscador()" @keydown.arrow-down.prevent="moverResultado(1)" @keydown.arrow-up.prevent="moverResultado(-1)"
                            @keydown.escape="resultadosAbiertos = false"
                            placeholder="Buscar producto o escanear código…  (F2)"
                            class="w-full h-16 pl-14 pr-12 rounded-2xl border-0 shadow-sm text-2xl font-bold text-slate-800 placeholder:text-slate-300 placeholder:font-normal focus:ring-4 focus:ring-indigo-300">
@@ -76,7 +76,17 @@
                 <button type="button" @click="soltarProforma()" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25">Desvincular</button>
             </div>
 
-            {{-- Detalle --}}
+            {{-- Venta abierta para corregirla --}}
+            <div x-show="edicion" x-cloak class="flex flex-wrap items-center gap-2 rounded-2xl bg-amber-500 text-white px-4 py-3 shadow-sm">
+                <span class="font-bold">✏️ Editando <span x-text="edicion?.numero"></span></span>
+                <span class="text-sm text-amber-50 flex-1"
+                      x-text="edicion?.soloCabecera ? 'Venta de mesa: cambia el comprobante, el cliente o el pago (los productos se quedan). REGISTRAR guarda.'
+                                                   : 'Corrige productos, cliente, pago o el tipo de comprobante. REGISTRAR guarda los cambios.'"></span>
+                <a href="{{ route('ventas.index') }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30">Salir sin guardar</a>
+            </div>
+
+            {{-- Detalle (en una venta de mesa que se corrige, los productos no cambian) --}}
+            <fieldset :disabled="edicion?.soloCabecera" class="min-w-0">
             <section class="bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div class="flex flex-wrap items-center gap-2 px-3 sm:px-4 py-3 bg-slate-800 text-white">
                     <h2 class="font-bold tracking-wide flex-1">DETALLE <span x-show="carrito.length" x-cloak class="text-slate-300 font-normal" x-text="'· ' + carrito.length + (carrito.length === 1 ? ' línea' : ' líneas')"></span></h2>
@@ -159,8 +169,9 @@
                                     </td>
                                     <td class="px-1 sm:px-2 py-1.5">
                                         <input type="number" step="any" min="0.01" x-model.number="it.precio" :id="'pre-' + it.key"
-                                               @keydown.enter.prevent="$refs.buscador.focus()" @change="normalizar(it)"
-                                               class="w-full rounded-lg border-dashed border-amber-300 bg-amber-50 text-right font-semibold text-amber-900 focus:ring-amber-200 focus:border-amber-400">
+                                               @keydown.enter.prevent="$refs.buscador.focus()" @change="normalizar(it)" :readonly="!cfg.editarPrecio && it.id"
+                                               :class="!cfg.editarPrecio && it.id ? 'border-slate-200 bg-slate-50 text-slate-700 cursor-not-allowed' : 'border-dashed border-amber-300 bg-amber-50 text-amber-900'"
+                                               class="w-full rounded-lg text-right font-semibold focus:ring-amber-200 focus:border-amber-400">
                                     </td>
                                     <td class="hidden sm:table-cell text-right px-4 py-1.5 font-bold text-slate-800 whitespace-nowrap" x-text="soles(redondear(it.cantidad * it.precio))"></td>
                                     <td class="pr-1 sm:pr-2">
@@ -182,6 +193,7 @@
                     <textarea x-model="observaciones" rows="1" maxlength="100" class="mt-1 w-full rounded-xl border-slate-200 text-sm focus:ring-indigo-300 focus:border-indigo-400"></textarea>
                 </div>
             </section>
+            </fieldset>
 
             {{-- Medios de pago (solo contado) --}}
             <section x-show="esContado" class="bg-white rounded-2xl shadow-sm p-4">
@@ -219,6 +231,8 @@
                                 <td class="py-1.5 font-semibold">
                                     <span x-text="m.nombre"></span>
                                     <span x-show="m.auto" class="ml-1 text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded" title="Se ajusta solo con el resto del total">AUTO</span>
+                                    <input x-show="String(m.nombre).toUpperCase() !== 'EFECTIVO'" type="text" maxlength="30" x-model="m.operacion" placeholder="N° operación"
+                                           class="mt-1 block w-full max-w-[11rem] h-8 rounded-lg border-slate-200 text-xs font-normal uppercase">
                                 </td>
                                 <td class="py-1.5">
                                     <input type="number" step="any" min="0" :value="montoDe(m).toFixed(2)" @change="editarMonto(m, $event.target.value)"
@@ -351,8 +365,7 @@
                             class="h-14 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
                         REGISTRAR<span class="block text-[10px] font-semibold opacity-80">F10</span>
                     </button>
-                    <div data-fidelizacion data-doc="cliente.num" data-total="total"></div>
-                    <button type="button" @click="guardarProforma()" :disabled="procesando" title="Guardar como proforma (no emite comprobante)"
+                    <button type="button" @click="guardarProforma()" :disabled="procesando || edicion" title="Guardar como proforma (no emite comprobante)"
                             class="h-14 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
                         <span x-text="proformaId ? 'GUARDAR PROF.' : 'PROFORMA'"></span><span class="block text-[10px] font-semibold opacity-80">F8</span>
                     </button>
@@ -361,6 +374,8 @@
                         CANCELAR
                     </button>
                 </div>
+                {{-- Puntos del cliente (fidelización): debajo de los botones para no dejar un hueco entre ellos --}}
+                <div data-fidelizacion data-doc="cliente.num" data-total="total" class="mt-3 empty:hidden"></div>
                 <p x-show="procesando" x-cloak class="text-center text-sm text-slate-500 mt-2">Registrando…</p>
 
                 {{-- Última proforma --}}
@@ -419,6 +434,39 @@
         </div>
     </div>
 
+    {{-- Modal: cantidad y precio antes de pasar al detalle (Enter avanza; al agregar el cursor vuelve al buscador) --}}
+    <template x-if="pedir">
+    <div class="fixed inset-0 z-[70] bg-slate-900/60 flex items-center justify-center p-4" @click.self="cerrarPedir()">
+        <form @submit.prevent="confirmarPedir()" class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div class="px-6 pt-5 pb-3 bg-indigo-600 text-white">
+                <p class="text-xs font-bold uppercase tracking-wide text-indigo-200">Ingresar cantidad y precio</p>
+                <p class="text-xl font-extrabold leading-tight" x-text="pedir?.p.nombre"></p>
+                <p class="text-sm text-indigo-100" x-text="pedir?.detalle + (pedir?.p.stock !== null && pedir?.p.stock !== undefined ? ' · Stock ' + num(pedir.p.stock / (pedir.pres ? pedir.pres.factor : 1)) : '')"></p>
+            </div>
+            <div class="p-6 grid grid-cols-2 gap-4">
+                <label class="block">
+                    <span class="text-xs font-bold uppercase text-slate-500">Cantidad</span>
+                    <input id="pedir-cantidad" type="number" step="any" min="0.01" x-model.number="pedir.cantidad" @focus="$event.target.select()"
+                           @keydown.enter.prevent="cfg.editarPrecio ? enfocar('pedir-precio') : confirmarPedir()"
+                           class="mt-1 w-full h-16 rounded-2xl border-2 border-indigo-300 text-center text-3xl font-extrabold text-slate-800 focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500">
+                </label>
+                <label class="block">
+                    <span class="text-xs font-bold uppercase text-slate-500">Precio <span x-show="!cfg.editarPrecio" class="normal-case font-normal">(solo administrador)</span></span>
+                    <input id="pedir-precio" type="number" step="any" min="0" x-model.number="pedir.precio" :readonly="!cfg.editarPrecio" @focus="$event.target.select()"
+                           @keydown.enter.prevent="confirmarPedir()"
+                           :class="cfg.editarPrecio ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'"
+                           class="mt-1 w-full h-16 rounded-2xl border-2 text-center text-3xl font-extrabold focus:ring-4 focus:ring-amber-200">
+                </label>
+                <p class="col-span-2 text-right text-lg text-slate-500">Total <span class="text-2xl font-extrabold text-slate-800" x-text="soles(redondear((Number(pedir?.cantidad) || 0) * (Number(pedir?.precio) || 0)))"></span></p>
+            </div>
+            <div class="px-6 pb-6 grid grid-cols-2 gap-3">
+                <button type="submit" class="h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-extrabold">✓ Agregar a la lista</button>
+                <button type="button" @click="cerrarPedir()" class="h-14 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-lg font-extrabold">✕ Cancelar <span class="text-xs font-semibold opacity-80">Esc</span></button>
+            </div>
+        </form>
+    </div>
+    </template>
+
     {{-- Impresión del ticket sin salir de la pantalla --}}
     <iframe x-ref="impresion" class="hidden" title="Impresión"></iframe>
 
@@ -438,6 +486,8 @@
 <script>
     window.PV = {
         usuario: @json(auth()->user()->IdUsuario),
+        // Solo el administrador cambia el precio de los productos (las líneas libres siempre se escriben)
+        editarPrecio: @json(auth()->user()->esAdmin()),
         csrf: @json(csrf_token()),
         comprobantes: @json($comprobantes),
         tdocodPred: @json($negocio->tdocod_pred ?? '13'),
@@ -448,10 +498,14 @@
         farmacia: @json($farmacia),
         diasAlerta: @json($diasAlerta),
         proforma: @json($proforma),
+        // Venta abierta para corregirla desde el Panel de Ventas
+        edicion: @json($edicion ?? null),
         rutas: {
             proforma: @json(route('proformas.guardar')),
             productos: @json(route('pos.productos')),
             registrar: @json($farmacia ? route('pv.farmacia.registrar') : route('pv.registrar')),
+            editar: @json(! empty($edicion) ? route('ventas.editar.guardar', $edicion['id']) : null),
+            panel: @json(route('ventas.index')),
             clientes: @json(route('cobros.clientes')),
             cliente: @json(url('cobros/cliente')),
         },
