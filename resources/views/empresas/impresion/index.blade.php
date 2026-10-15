@@ -194,16 +194,22 @@
                 </div>
                 <div class="bg-white rounded-2xl shadow-sm p-5">
                     <h3 class="font-bold text-gray-800">Caja: impresora de cada usuario</h3>
-                    <p class="text-xs text-gray-400 mb-3">Comprobantes y precuentas salen en la impresora del usuario que cobra; si no tiene, en la de "caja por defecto".</p>
+                    <p class="text-xs text-gray-400 mb-3">Comprobantes y precuentas salen en la impresora del usuario que cobra; si no tiene, en la de "caja por defecto". @if ($negocio->comanda_al_cobrar ?? false)Con <b>Barra</b>, al cobrar la comanda sale en su caja y en esa barra (para locales con varias barras).@endif</p>
                     <div class="space-y-2 max-h-80 overflow-y-auto">
                         @foreach ($usuarios as $u)
-                            <label class="flex items-center justify-between gap-3 text-sm">
-                                <span class="text-gray-700">{{ $u->apeusu }}</span>
-                                <select name="usuario[{{ $u->IdUsuario }}]" class="w-48 rounded-lg border-gray-300 text-sm">
+                            <div class="flex items-center justify-between gap-2 text-sm">
+                                <span class="text-gray-700 flex-1 min-w-0 truncate">{{ $u->apeusu }}</span>
+                                <select name="usuario[{{ $u->IdUsuario }}]" class="w-40 rounded-lg border-gray-300 text-sm" title="Su ticketera de caja">
                                     <option value="">— La de caja por defecto —</option>
                                     @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($u->terminal == $i->Id)>{{ $i->descripcion }}</option>@endforeach
                                 </select>
-                            </label>
+                                @if ($negocio->comanda_al_cobrar ?? false)
+                                    <select name="barra[{{ $u->IdUsuario }}]" class="w-40 rounded-lg border-gray-300 text-sm" title="Al cobrar, la comanda sale en su caja y en esta barra">
+                                        <option value="">Barra: por categoría</option>
+                                        @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($u->impresora_barra == $i->Id)>Barra: {{ $i->descripcion }}</option>@endforeach
+                                    </select>
+                                @endif
+                            </div>
                         @endforeach
                     </div>
                 </div>

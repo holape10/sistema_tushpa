@@ -21,10 +21,10 @@ class UsuarioController extends Controller
 
     // Módulos que se marcan solos al elegir el rol (el admin puede cambiarlos después)
     public const PRESETS = [
-        8 => ['Comandas'],
+        8 => ['Inicio', 'Comandas'],
         11 => ['Inicio', 'Entrenador'],
-        12 => [],
-        13 => ['Comandas', 'Ventas de Promotores'],
+        12 => ['Inicio'],
+        13 => ['Inicio', 'Comandas', 'Ventas de Promotores'],
         10 => ['Inicio', 'Historias Clínicas', 'Agenda de Citas'],
         4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Envío de Comprobantes', 'Resumen Diario',
             'Kardex', 'Stock Productos', 'Clientes'],
@@ -45,6 +45,17 @@ class UsuarioController extends Controller
     private function modulosPermitidos(): array
     {
         return array_map('intval', Auth::user()->modulos()->pluck('modulos.mod_id')->all());
+    }
+
+    /** Módulos elegidos (solo los que el administrador puede repartir) y siempre "Inicio": la bienvenida del sistema */
+    private function modulosConInicio(array $elegidos): array
+    {
+        $ids = array_intersect(array_map('intval', $elegidos), $this->modulosPermitidos());
+        if ($inicio = Modulo::where('mod_url', '/inicio')->value('mod_id')) {
+            $ids[] = (int) $inicio;
+        }
+
+        return array_values(array_unique($ids));
     }
 
     private function datosFormulario(): array
@@ -204,7 +215,7 @@ class UsuarioController extends Controller
             DB::table('role_user')->insert([
                 'role_id' => $d['role_id'], 'user_IdUsuario' => $usuario->IdUsuario, 'id_empresa_negocio' => $d['id_empresa_negocio'],
             ]);
-            $usuario->modulos()->sync(array_values(array_intersect(array_map('intval', $d['modulos'] ?? []), $this->modulosPermitidos())));
+            $usuario->modulos()->sync($this->modulosConInicio($d['modulos'] ?? []));
 
             return $empleado;
         });
@@ -260,7 +271,7 @@ class UsuarioController extends Controller
             DB::table('role_user')->insert([
                 'role_id' => $d['role_id'], 'user_IdUsuario' => $usuario->IdUsuario, 'id_empresa_negocio' => $d['id_empresa_negocio'],
             ]);
-            $usuario->modulos()->sync(array_values(array_intersect(array_map('intval', $d['modulos'] ?? []), $this->modulosPermitidos())));
+            $usuario->modulos()->sync($this->modulosConInicio($d['modulos'] ?? []));
         });
         $this->guardarFoto($request, Empleado::find($usuario->emp_id));
         $this->sincronizarMotorizado((int) $usuario->IdUsuario, (int) $d['role_id']);

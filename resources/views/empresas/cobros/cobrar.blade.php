@@ -626,7 +626,7 @@
     }
 
     function cargarProductos(catId = null, texto = '') {
-        const params = new URLSearchParams();
+        const params = new URLSearchParams({ vista: 'pv' });
         if (texto) params.set('search_text', texto); else if (catId) params.set('category_id', catId);
         fetch(`{{ route('comandas.search_products') }}?${params}`, { headers: { Accept: 'application/json' } })
             .then(r => r.json()).then(d => el('productos_grid').innerHTML = d.vista);

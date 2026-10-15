@@ -4,13 +4,14 @@
         $estado = $m->pedido_id ? 'Ocupado' : 'Libre';
         // Mesa junta a otra (grupo grande): al tocarla se trabaja con la mesa principal del grupo
         $principal = $m->principal ?? null;
+        $color = $principal ? 'bg-violet-600' : ($estado === 'Libre' ? 'bg-emerald-700' : 'bg-rose-600');
     @endphp
     <button type="button"
-        class="btn-mesa-comanda btn-mesa-kiosko {{ $principal ? 'junta' : ($estado == 'Libre' ? 'libre' : 'ocupado') }}"
+        class="btn-mesa-comanda relative min-h-[88px] rounded-2xl px-2 py-2.5 text-white shadow-sm ring-1 ring-black/5 active:scale-95 transition-transform select-none {{ $color }}"
         data-id="{{ $principal['mes_id'] ?? $m->mes_id }}" data-nombre="{{ $principal['nombre'] ?? $m->etiqueta }}" data-estado="{{ $estado }}"
-        data-pedido-id="{{ $m->pedido_id }}" data-listos="{{ $m->listos ?? 0 }}" style="position:relative;">
-        {{ $m->mes_nom }}<br>
-        <span style="font-size: 0.75em; font-weight: normal;">
+        data-pedido-id="{{ $m->pedido_id }}" data-listos="{{ $m->listos ?? 0 }}">
+        <span class="block text-base font-black leading-tight">{{ $m->mes_nom }}</span>
+        <span class="block text-xs font-semibold opacity-95 mt-0.5">
             @if ($principal)
                 🔗 Junta con {{ $principal['nombre'] }}
             @else
@@ -18,17 +19,18 @@
             @endif
         </span>
         @if ($m->pedido_id && $m->pedido_fecha_hora)
-            <span class="mesa-timer" data-inicio="{{ \Carbon\Carbon::parse($m->pedido_fecha_hora)->toIso8601String() }}">00:00:00</span>
+            <span class="mesa-timer block font-mono text-[11px] opacity-90" data-inicio="{{ \Carbon\Carbon::parse($m->pedido_fecha_hora)->toIso8601String() }}">00:00:00</span>
         @endif
         {{-- Cocina ya lo tiene listo: el mozo debe llevarlo --}}
         @if (($m->listos ?? 0) > 0)
-            <span class="mesa-listo" title="Listo en cocina para servir">🔔 LISTO</span>
+            <span class="absolute -top-2 -right-1.5 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-black shadow animate-pulse" title="Listo en cocina para servir">🔔 LISTO</span>
         @endif
         {{-- Reserva próxima --}}
         @if (!empty($m->reserva))
-            <span class="mesa-reserva" title="Reserva de {{ $m->reserva->nombre_cliente }}">📅 {{ substr($m->reserva->hora_inicio, 0, 5) }}</span>
+            <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-violet-600 bg-white px-2 text-[10px] font-black text-violet-700"
+                  title="Reserva de {{ $m->reserva->nombre_cliente }}">📅 {{ substr($m->reserva->hora_inicio, 0, 5) }}</span>
         @endif
     </button>
 @empty
-    <p style="width:100%; text-align:center; color:#888;">Sin mesas en este piso</p>
+    <p class="col-span-full py-8 text-center text-gray-400">Sin mesas en este piso</p>
 @endforelse

@@ -108,6 +108,7 @@ class SucursalController extends Controller
             'tdocod_pred' => 'required|in:01,03,13',
             'formato_impresion' => 'required|in:TICKET,A4',
             'control_stock' => 'required|in:'.implode(',', array_keys(ControlStock::NIVELES)),
+            'comandas_solo_mesas' => 'nullable|boolean',
         ];
         $nombres = ['nombre_comercial' => 'Nombre comercial', 'codigofiscal' => 'Código de establecimiento',
             'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión', 'control_stock' => 'Venta con o sin stock'];
@@ -159,6 +160,7 @@ class SucursalController extends Controller
         foreach (['departamento', 'provincia', 'distrito'] as $campo) {
             $datos[$campo] = mb_strtoupper(trim($datos[$campo]));
         }
+        $datos['comandas_solo_mesas'] = $request->boolean('comandas_solo_mesas');
 
         DB::transaction(function () use ($sucursal, $datos) {
             // Bloqueo: si en este momento alguien está cobrando, se espera a que termine

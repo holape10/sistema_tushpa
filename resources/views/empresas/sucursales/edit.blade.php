@@ -207,6 +207,11 @@
                                 @endforeach
                             </div>
                         </div>
+                        <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer hover:border-gray-300">
+                            <input type="checkbox" name="comandas_solo_mesas" value="1" @checked($campo('comandas_solo_mesas')) class="mt-0.5 rounded text-indigo-600">
+                            <span><span class="font-bold text-gray-800">🍽️ Mozos y promotores solo atienden mesas</span>
+                                <span class="block text-xs text-gray-500 mt-0.5">En Comandas no ven "Para llevar", "Delivery" ni "Punto de venta" (solo administrador y caja). Sin marcar, mozos y promotores tienen "Para llevar".</span></span>
+                        </label>
                         <div>
                             <p class="text-sm font-medium text-gray-600 mb-2">Comprobante que sale seleccionado al cobrar</p>
                             <div class="grid grid-cols-3 gap-3">

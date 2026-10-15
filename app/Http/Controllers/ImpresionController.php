@@ -70,7 +70,7 @@ class ImpresionController extends Controller
             'cola' => DB::table('cola_impresion')->where('id_empresa_negocio', $sucursal)->orderByDesc('id')->limit(25)
                 ->get(['id', 'impresora', 'tipo', 'referencia', 'estado', 'intentos', 'error', 'creado', 'impreso']),
             'categorias' => DB::table('categorias')->where('id_empresa_negocio', $sucursal)->orderBy('cat_nom')->get(['cat_id', 'cat_nom', 'impresora', 'impresora2']),
-            'usuarios' => DB::table('users')->where('id_empresa_negocio', $sucursal)->where('estusu', 1)->orderBy('apeusu')->get(['IdUsuario', 'apeusu', 'terminal']),
+            'usuarios' => DB::table('users')->where('id_empresa_negocio', $sucursal)->where('estusu', 1)->orderBy('apeusu')->get(['IdUsuario', 'apeusu', 'terminal', 'impresora_barra']),
         ]);
     }
 
@@ -125,6 +125,7 @@ class ImpresionController extends Controller
         DB::table('categorias')->where('id_empresa_negocio', $sucursal)->where('impresora', $id)->update(['impresora' => null]);
         DB::table('categorias')->where('id_empresa_negocio', $sucursal)->where('impresora2', $id)->update(['impresora2' => null]);
         DB::table('users')->where('id_empresa_negocio', $sucursal)->where('terminal', $id)->update(['terminal' => null]);
+        DB::table('users')->where('id_empresa_negocio', $sucursal)->where('impresora_barra', $id)->update(['impresora_barra' => null]);
 
         return back()->with('success', 'Impresora eliminada.');
     }
@@ -168,8 +169,10 @@ class ImpresionController extends Controller
                 'impresora' => $principal, 'impresora2' => $principal && $segunda !== $principal ? $segunda : null,
             ]);
         }
+        $barras = (array) $request->input('barra', []);
         foreach ((array) $request->input('usuario', []) as $usu => $imp) {
-            DB::table('users')->where('IdUsuario', $usu)->where('id_empresa_negocio', $sucursal)->update(['terminal' => $limpiar($imp)]);
+            DB::table('users')->where('IdUsuario', $usu)->where('id_empresa_negocio', $sucursal)
+                ->update(['terminal' => $limpiar($imp), 'impresora_barra' => $limpiar($barras[$usu] ?? null)]);
         }
 
         return back()->with('success', 'Asignaciones guardadas.');

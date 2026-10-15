@@ -55,8 +55,26 @@ class ComandasController extends Controller
 
         // El mozo solo toma pedidos: no ve los botones de cobro
         $puedeCobrar = Auth::user()->esAdminOCaja();
+        $permisos = self::permisos();
 
-        return view('empresas.comandas.seleccion_servicio', compact('pisos', 'mesas', 'primerPisoId', 'puedeCobrar'));
+        return view('empresas.comandas.seleccion_servicio', compact('pisos', 'mesas', 'primerPisoId', 'puedeCobrar', 'permisos'));
+    }
+
+    /**
+     * Qué tipos de pedido puede abrir el usuario. Administrador y caja: todos. Mozos, promotores y demás: solo Para
+     * llevar; y con "comandas solo mesas" en la sucursal, ni eso (solo mesas).
+     *
+     * @return array{llevar: bool, delivery: bool, pv: bool}
+     */
+    public static function permisos(): array
+    {
+        $usuario = Auth::user();
+        if ($usuario->esAdminOCaja()) {
+            return ['llevar' => true, 'delivery' => true, 'pv' => true];
+        }
+        $soloMesas = (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $usuario->id_empresa_negocio)->value('comandas_solo_mesas');
+
+        return ['llevar' => ! $soloMesas, 'delivery' => false, 'pv' => false];
     }
 
     private function pedidoAbierto($ped_id): Pedido
@@ -317,6 +335,10 @@ class ComandasController extends Controller
         if (! in_array($orderType, ['salon', 'llevar', 'delivery'], true)) {
             return response()->json(['success' => false, 'message' => 'Tipo de pedido no válido.'], 422);
         }
+        // Para llevar / delivery nuevos solo si el usuario puede abrirlos (editar uno ya abierto sí puede)
+        if ($orderType !== 'salon' && ! $pedidoId && ! (self::permisos()[$orderType] ?? false)) {
+            return response()->json(['success' => false, 'message' => 'Tu usuario solo atiende mesas.'], 403);
+        }
 
         // La mesa y el pedido deben ser de la sucursal del usuario
         if ($orderType === 'salon') {
@@ -448,8 +470,11 @@ class ComandasController extends Controller
             session()->put('comanda_prom_id', $promActual);
         }
 
+        $esPromotor = Auth::user()->tieneRol([13]);
+        $total = round(collect($cart)->sum(fn ($i) => $i['cantidad'] * $i['precio']), 2);
+
         return view('empresas.comandas.menu_pedido', compact('categorias', 'cat_default_id', 'cart', 'order_type', 'mesa_info', 'esAdmin', 'motorizados', 'motActual',
-            'promotores', 'promActual'));
+            'promotores', 'promActual', 'esPromotor', 'total'));
     }
 
     /** Usuarios activos con rol Promotor de la sucursal */
@@ -466,6 +491,9 @@ class ComandasController extends Controller
         $d = $request->validate(['promotor_id' => 'nullable|integer']);
         $suc = (int) Auth::user()->id_empresa_negocio;
         $promotor = ! empty($d['promotor_id']) && self::promotores($suc)->contains('IdUsuario', (int) $d['promotor_id']) ? (int) $d['promotor_id'] : null;
+        if (Auth::user()->tieneRol([13])) {
+            $promotor = (int) Auth::id();
+        }
         session()->put('comanda_prom_id', $promotor);
         if ($pedId = (int) session('comanda_pedido_id')) {
             DB::table('pedidos')->where('ped_id', $pedId)->where('id_empresa_negocio', $suc)->where('ped_est', 'Aperturado')->update(['promotor_id' => $promotor]);
@@ -502,7 +530,7 @@ class ComandasController extends Controller
         $quedan = collect($controlados)->mapWithKeys(fn ($id) => [$id => ($saldo[$id] ?? 0) - ($reservado[$id] ?? 0)])->all();
 
         return response()->json([
-            'vista' => view('empresas.comandas.partials.productos_grid', compact('productos', 'precios', 'presentaciones', 'conOpciones', 'quedan'))->render(),
+            'vista' => view($request->vista === 'pv' ? 'empresas.comandas.partials.productos_grid_pv' : 'empresas.comandas.partials.productos_grid', compact('productos', 'precios', 'presentaciones', 'conOpciones', 'quedan'))->render(),
         ]);
     }
 
@@ -552,7 +580,7 @@ class ComandasController extends Controller
 
         session()->put('comanda_cart', $newCart);
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true] + $this->carrito());
     }
 
     public function addToCart(Request $request)
@@ -629,7 +657,7 @@ class ComandasController extends Controller
 
         session()->put('comanda_cart', $cart);
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true] + $this->carrito());
     }
 
     public function updateCartItem(Request $request)
@@ -669,7 +697,7 @@ class ComandasController extends Controller
 
         session()->put('comanda_cart', $cart);
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true] + $this->carrito());
     }
 
     /** Reglas del pedido de autorización: el Administrador no necesita escribir usuario ni contraseña */
@@ -745,7 +773,7 @@ class ComandasController extends Controller
         $cart[$id]['motivo_reduccion'] = trim($request->reason).' - Autorizado por: '.$this->autorizadoPor($request);
         session()->put('comanda_cart', $cart);
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true] + $this->carrito());
     }
 
     public function eliminarItemAutorizado(Request $request)
@@ -777,7 +805,7 @@ class ComandasController extends Controller
         $eliminados[] = ['ped_det_ids' => $pedDetIds, 'motivo' => trim($request->reason), 'autorizado_por' => $this->autorizadoPor($request)];
         session()->put('comanda_eliminados', $eliminados);
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true] + $this->carrito());
     }
 
     public function removeCartItem(Request $request)
@@ -792,17 +820,29 @@ class ComandasController extends Controller
         unset($cart[$id]);
         session()->put('comanda_cart', $cart);
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true] + $this->carrito());
     }
 
     public function getCartDetails()
     {
+        return response()->json($this->carrito());
+    }
+
+    /**
+     * El carrito ya dibujado, su total y cuántas unidades lleva. Va en la misma respuesta de agregar, sumar, quitar o
+     * vaciar: la pantalla se actualiza con una sola petición (en celular con señal lenta se nota).
+     *
+     * @return array{vista: string, total: float, unidades: float}
+     */
+    private function carrito(): array
+    {
         $cart = session('comanda_cart', []);
 
-        return response()->json([
+        return [
             'vista' => view('empresas.comandas.partials.cart_details', compact('cart'))->render(),
             'total' => round(collect($cart)->sum(fn ($i) => $i['cantidad'] * $i['precio']), 2),
-        ]);
+            'unidades' => (float) collect($cart)->sum('cantidad'),
+        ];
     }
 
     public function enviarComanda(Request $request)

@@ -1,939 +1,645 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Selecciona tu Mesa - Sistema Tushpa</title>
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+@extends('layouts.app')
+@section('title', 'Comandas')
+@section('content')
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f8f9fa; }
-        .container-fluid { padding-top: 15px; padding-bottom: 15px; }
-
-        .header-kiosko-container { position: relative; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; }
-        .logo-container-kiosko img { height: 70px; object-fit: contain; }
-        .header-kiosko-content { flex: 1; text-align: center; padding: 0 20px; }
-        .header-kiosko-content h2 { text-align: center; color: #3498db; margin-bottom: 0; font-size: 2.0em; }
-
-        .pisos-selector { display: flex; overflow-x: auto; white-space: nowrap; padding: 10px 0; margin-bottom: 20px; background-color: #e9ecef; border-radius: 8px; }
-        .pisos-selector .btn { flex-shrink: 0; margin: 0 5px; font-size: 1.2em; padding: 12px 25px; border-radius: 8px; background-color: #6c757d; color: white; border: none; }
-        .pisos-selector .btn.active, .pisos-selector .btn:hover { background-color: #007bff; }
-
-        .mesas-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 10px; }
-        .btn-mesa-kiosko {
-            width: 150px; height: 100px; font-size: 1.3em; font-weight: bold; border-radius: 12px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            text-align: center; color: white; border: none; box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            cursor: pointer; white-space: normal; word-wrap: break-word; line-height: 1.15; padding: 5px;
-        }
-        .btn-mesa-kiosko.libre { background-color: #52BE80; }
-        .btn-mesa-kiosko.ocupado { background-color: #E74C3C; }
-        .btn-mesa-kiosko:hover { transform: translateY(-3px); }
-        .mesa-listo { position: absolute; top: -8px; right: -8px; background: #facc15; color: #000; font-size: .55em; font-weight: 900;
-                      padding: 3px 7px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,.3); animation: parpadeo 1.2s infinite; }
-        .mesa-reserva { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); background: #fff; color: #8e44ad;
-                        font-size: .55em; font-weight: 900; padding: 2px 7px; border-radius: 10px; border: 2px solid #8e44ad; white-space: nowrap; }
-        @keyframes parpadeo { 50% { opacity: .55; } }
-        .reserva-item { border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
-        .reserva-item.proxima { border-color: #8e44ad; background: #faf5ff; }
-        .mesa-timer { font-size: 0.7em; font-weight: normal; font-family: monospace; margin-top: 2px; }
-
-        .button-group-bottom { text-align: center; margin-top: 30px; margin-bottom: 30px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
-        .btn-llevar-kiosko, .btn-delivery-kiosko { color: white; font-size: 2.0em; padding: 20px 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); border: none; cursor: pointer; }
-        .btn-llevar-kiosko { background-color: #007bff; }
-        .btn-pv-kiosko { background-color: #e67e22; color: #fff; font-size: 2.0em; padding: 20px 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); border: none; }
-        .btn-pv-kiosko:hover, .btn-pv-kiosko:focus { color: #fff; background-color: #d35400; text-decoration: none; }
-        .btn-delivery-kiosko { background-color: #28a745; }
-
-        .takeaway-section { margin-top: 30px; background-color: #f2f2f2; padding: 20px; border-radius: 8px; }
-        .takeaway-section h3 { text-align: center; color: #333; margin-bottom: 20px; font-size: 1.6em; font-weight: bold; }
-        .takeaway-table { width: 100%; border-collapse: collapse; background: white; }
-        .takeaway-table th, .takeaway-table td { border: 1px solid #ddd; padding: 10px; text-align: center; vertical-align: middle; }
-        .takeaway-table th { background-color: #6c757d; color: white; }
-        .label-tipo { display: inline-block; padding: 3px 10px; border-radius: 4px; font-weight: bold; color: white; }
-        .label-tipo.llevar { background-color: #007bff; }
-        .label-tipo.delivery { background-color: #066d0a; }
-        .btn-editar-directo { background-color: #007bff; color: white; border: none; padding: 6px 12px; border-radius: 5px; font-size: 0.9em; margin-right: 5px; }
-        .btn-cobrar-directo { background-color: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 5px; font-size: 0.9em; }
-
-        /* MODAL MEJORADO - BOTONES EN GRID */
-        .modal-mesa-content { 
-            text-align: left; 
-            max-height: 200px; 
-            overflow-y: auto; 
-            margin-bottom: 15px;
-        }
-        .modal-mesa-item { 
-            padding: 6px 0; 
-            border-bottom: 1px solid #eee; 
-            display: flex; 
-            justify-content: space-between;
-            font-size: 0.95em;
-        }
-        
-        /* Grid de botones compacto */
-        .modal-mesa-btns {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-top: 10px;
-        }
-        
-        .modal-mesa-btns .btn {
-            width: 100%;
-            font-weight: 600;
-            font-size: 0.9em;
-            padding: 10px 8px;
-            border-radius: 6px;
-            border: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: all 0.2s;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        .modal-mesa-btns .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-        }
-        
-        .modal-mesa-btns .btn:active {
-            transform: translateY(0);
-        }
-        
-        /* Botón Cerrar ocupa toda la fila */
-        .modal-mesa-btns .btn-mesa-cerrar {
-            grid-column: 1 / -1;
-            margin-top: 5px;
-        }
-        
-        .btn-mesa-editar { background: #52BE80; color: #fff; }
-        .btn-mesa-precuenta { background: #3498db; color: #fff; }
-        .btn-mesa-separadas { background: #8e44ad; color: #fff; }
-        .btn-mesa-cobrar { background: #e74c3c; color: #fff; }
-        .btn-mesa-cambiar { background: #f59e0b; color: #fff; }
-        .btn-mesa-unir { background: #0ea5e9; color: #fff; }
-
-        /* Pasar / juntar mesas: paso 1 elegir, paso 2 confirmar con resumen */
-        #modal_mover .modal-content { border-radius: 14px; overflow: hidden; border: none; }
-        #modal_mover .mover-cabecera { padding: 14px 18px; color: #fff; position: relative; }
-        #modal_mover .mover-cabecera.pasar { background: linear-gradient(135deg, #f59e0b, #d97706); }
-        #modal_mover .mover-cabecera.juntar { background: linear-gradient(135deg, #0ea5e9, #0369a1); }
-        #modal_mover .mover-cabecera h4 { margin: 0; font-weight: bold; font-size: 1.25em; }
-        #modal_mover .mover-cabecera p { margin: 4px 0 0; opacity: .9; font-size: .92em; }
-        #modal_mover .mover-cabecera .close { position: absolute; right: 14px; top: 10px; color: #fff; opacity: .9; font-size: 28px; }
-        .mover-pasos { display: flex; gap: 6px; margin-bottom: 12px; font-size: .8em; font-weight: bold; color: #94a3b8; }
-        .mover-pasos span { flex: 1; text-align: center; padding: 4px; border-bottom: 3px solid #e2e8f0; }
-        .mover-pasos span.activo { color: #0f172a; border-color: currentColor; }
+        .no-scroll::-webkit-scrollbar { display: none; } .no-scroll { scrollbar-width: none; }
+        /* Elementos que arma el JavaScript (pasar / juntar mesas, reservas) */
         .mover-zonas { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 10px; }
-        .mover-zonas button { flex-shrink: 0; border: 2px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 5px 14px; font-weight: bold; color: #475569; }
+        .mover-zonas button { flex-shrink: 0; border: 2px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 14px; font-weight: 700; color: #475569; }
         .mover-zonas button.activa { background: #1e293b; border-color: #1e293b; color: #fff; }
-        .mover-lista { max-height: 50vh; overflow-y: auto; padding: 2px; }
-        .mover-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+        .mover-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
         .mover-seccion + .mover-seccion { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #cbd5e1; }
-        .mover-seccion-titulo { font-weight: bold; color: #1e293b; }
+        .mover-seccion-titulo { font-weight: 800; color: #1e293b; }
         .mover-seccion-ayuda { font-size: .85em; color: #64748b; margin-bottom: 8px; }
-        .mover-ya { background: #ede9fe; color: #5b21b6; border-radius: 8px; padding: 8px 10px; font-size: .9em; margin-bottom: 10px; }
-        .mover-mesa.libre.elegida { background: #15803d; box-shadow: 0 0 0 4px #facc15; }
-        .btn-mesa-kiosko.junta { background-color: #8e44ad; }
-        .modal-mesa-unidas { background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 8px 10px; margin-top: 10px; color: #5b21b6; font-size: .9em; }
-        .mesa-unida-chip { display: inline-flex; align-items: center; gap: 6px; background: #8e44ad; color: #fff; border-radius: 999px; padding: 4px 4px 4px 12px; margin: 0 6px 6px 0; font-weight: bold; }
-        .mesa-unida-chip button { border: none; border-radius: 999px; background: rgba(255,255,255,.25); color: #fff; font-size: .85em; padding: 2px 10px; }
-        .mesa-unida-chip button.seguro { background: #facc15; color: #1e293b; }
-        .mover-mesa { border: none; border-radius: 12px; padding: 14px 6px; color: #fff; font-weight: bold; font-size: 1.1em; line-height: 1.2;
-            box-shadow: 0 3px 6px rgba(0,0,0,.15); transition: transform .1s; }
+        .mover-ya { background: #ede9fe; color: #5b21b6; border-radius: 10px; padding: 8px 10px; font-size: .9em; margin-bottom: 10px; }
+        .mover-mesa { border: none; border-radius: 14px; padding: 14px 6px; color: #fff; font-weight: 800; font-size: 1rem; line-height: 1.2; box-shadow: 0 2px 5px rgba(0,0,0,.12); }
         .mover-mesa:active { transform: scale(.96); }
-        .mover-mesa.libre { background: #52BE80; }
-        .mover-mesa.ocupada { background: #E74C3C; }
-        .mover-mesa small { display: block; font-weight: normal; font-size: .75em; opacity: .95; margin-top: 3px; }
+        .mover-mesa.libre { background: #047857; } .mover-mesa.ocupada { background: #e11d48; }
+        .mover-mesa.libre.elegida { background: #065f46; box-shadow: 0 0 0 4px #facc15; }
+        .mover-mesa small { display: block; font-weight: 600; font-size: .75em; opacity: .95; margin-top: 3px; }
         .mover-resumen { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 6px 0 14px; flex-wrap: wrap; }
-        .mover-ficha { min-width: 110px; border-radius: 12px; padding: 12px 10px; text-align: center; color: #fff; font-weight: bold; font-size: 1.1em; line-height: 1.25; }
-        .mover-ficha small { display: block; font-weight: normal; font-size: .75em; }
-        .mover-ficha.ocupada { background: #E74C3C; } .mover-ficha.libre { background: #52BE80; } .mover-ficha.total { background: #1e293b; }
+        .mover-ficha { min-width: 104px; border-radius: 14px; padding: 12px 10px; text-align: center; color: #fff; font-weight: 800; line-height: 1.25; }
+        .mover-ficha small { display: block; font-weight: 600; font-size: .75em; }
+        .mover-ficha.ocupada { background: #e11d48; } .mover-ficha.libre { background: #047857; } .mover-ficha.total { background: #1e293b; }
         .mover-ficha.queda { box-shadow: 0 0 0 4px #facc15; }
-        .mover-signo { font-size: 1.8em; font-weight: bold; color: #64748b; }
-        .mover-texto { background: #f1f5f9; border-radius: 10px; padding: 10px 12px; font-size: .95em; color: #334155; text-align: center; }
+        .mover-signo { font-size: 1.6em; font-weight: 800; color: #64748b; }
         .mover-quedar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 10px; }
-        .mover-quedar button { border: 2px solid #cbd5e1; background: #fff; border-radius: 10px; padding: 10px 6px; font-weight: bold; color: #334155; white-space: normal; }
+        .mover-quedar button { border: 2px solid #cbd5e1; background: #fff; border-radius: 12px; padding: 10px 6px; font-weight: 700; color: #334155; }
         .mover-quedar button.activa { border-color: #0ea5e9; background: #e0f2fe; color: #0369a1; }
-        .mover-acciones { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 14px; }
-        .mover-acciones .btn { padding: 12px; font-weight: bold; border-radius: 10px; font-size: 1em; white-space: normal; }
-        .btn-mesa-cerrar { background: #f39c12; color: #fff; }
-
-        /* Modal más compacto */
-        .modal-dialog.modal-sm {
-            width: 350px;
-        }
-        
-        .modal-header {
-            padding: 15px;
-        }
-        
-        .modal-body {
-            padding: 15px;
-        }
-
-        @media (max-width: 768px) {
-            .header-kiosko-content h2 { font-size: 1.6em; }
-            .btn-mesa-kiosko { width: 110px; height: 80px; font-size: 1.05em; }
-            .button-group-bottom { flex-direction: column; }
-            .btn-llevar-kiosko, .btn-delivery-kiosko, .btn-pv-kiosko { width: 100%; font-size: 1.5em; }
-            .takeaway-table thead { display: none; }
-            .takeaway-table, .takeaway-table tbody, .takeaway-table tr, .takeaway-table td { display: block; width: 100%; }
-            .takeaway-table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; }
-            .takeaway-table td { text-align: right; padding-left: 50%; position: relative; }
-            .takeaway-table td::before { content: attr(data-label); position: absolute; left: 10px; font-weight: bold; text-align: left; color: #555; }
-            
-            /* En móviles el modal ocupa casi toda la pantalla */
-            .modal-dialog.modal-sm {
-                width: 95%;
-                margin: 10px auto;
-            }
-            
-            .modal-mesa-btns .btn {
-                font-size: 0.95em;
-                padding: 12px 8px;
-            }
-        }
+        .mesa-unida-chip { display: inline-flex; align-items: center; gap: 6px; background: #7c3aed; color: #fff; border-radius: 999px; padding: 4px 4px 4px 12px; margin: 0 6px 6px 0; font-weight: 700; }
+        .mesa-unida-chip button { border: none; border-radius: 999px; background: rgba(255,255,255,.25); color: #fff; font-size: .85em; padding: 3px 10px; }
+        .mesa-unida-chip button.seguro { background: #facc15; color: #1e293b; }
+        .reserva-item { border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; margin-bottom: 8px; }
+        .reserva-item.proxima { border-color: #7c3aed; background: #faf5ff; }
+        .elegir-mesa { border-radius: 12px; padding: 14px 6px; color: #fff; font-weight: 800; }
     </style>
-    @include('partials.pwa')
-</head>
-<body>
-    <div class="container-fluid">
-        <div class="header-kiosko-container">
-            <div class="logo-container-kiosko"><img src="{{ asset('imagenes/logo.webp') }}" alt="Logo"></div>
-            <div class="header-kiosko-content"><h2>Selecciona tu Mesa o Tipo de Pedido</h2></div>
-            <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
-            <button type="button" id="btn_reservas" class="btn btn-default" style="font-weight:bold; border-radius:20px; color:#8e44ad;">
-                <i class="fas fa-calendar-check"></i> Reservas <span class="badge" id="n_reservas" style="background:#8e44ad;">0</span>
+
+    @php
+        $hayPedidosSueltos = $permisos['llevar'] || $permisos['delivery'] || $puedeCobrar;
+        $btnModal = 'h-12 w-full rounded-2xl text-sm font-black text-white shadow-sm active:scale-[.98]';
+    @endphp
+
+    <div class="space-y-4">
+        {{-- Cabecera --}}
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="mr-auto">
+                <h2 class="text-xl font-black text-gray-800 sm:text-2xl">🍽️ Elige la mesa o el tipo de pedido</h2>
+                <p class="text-sm text-gray-500">{{ auth()->user()->apeusu }}</p>
+            </div>
+            <button type="button" id="btn_reservas" class="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-violet-700 shadow-sm ring-1 ring-gray-200">
+                📅 Reservas <span id="n_reservas" class="rounded-full bg-violet-600 px-2 text-xs text-white">0</span>
             </button>
             @if ($puedeCobrar)
-                <a href="{{ route('turnos.index') }}" class="btn btn-default" style="font-weight:bold; border-radius:20px;">
-                    <i class="fas fa-cash-register"></i> Caja
-                </a>
-                <a href="{{ route('dashboard') }}" class="btn btn-default" style="font-weight:bold; border-radius:20px;">
-                    <i class="fas fa-arrow-left"></i> Volver
-                </a>
+                <a href="{{ route('turnos.index') }}" class="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-gray-700 shadow-sm ring-1 ring-gray-200">💰 Caja</a>
             @endif
-            <form method="POST" action="{{ route('logout') }}" style="margin:0;">
-                @csrf
-                <button class="btn btn-danger" style="font-weight:bold; border-radius:20px;"><i class="fas fa-power-off"></i> Salir</button>
-            </form>
-            </div>
         </div>
 
         @if (session('error'))
-            <div class="alert alert-warning text-center">{{ session('error') }}</div>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-800">{{ session('error') }}</div>
         @endif
         @if (session('success'))
-            <div class="alert alert-success text-center aviso-temporal"><i class="fas fa-print"></i> {{ session('success') }}</div>
+            <div class="aviso-temporal rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-800">🖨 {{ session('success') }}</div>
         @endif
-        <div id="toast" style="display:none; position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:2000; background:#2c3e50; color:#fff; padding:12px 20px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,.25); font-weight:bold;"></div>
-        <p class="text-center" style="font-size: 1.1em; color: #555; margin-bottom: 20px;">
-            <strong>Usuario conectado:</strong> {{ auth()->user()->apeusu }}
-        </p>
 
-        <div class="pisos-selector">
-            @foreach ($pisos as $piso)
-                <button type="button" class="btn piso-btn {{ $piso->pis_id == $primerPisoId ? 'active' : '' }}" data-piso-id="{{ $piso->pis_id }}">
-                    <strong>{{ $piso->pis_nom }}</strong>
-                </button>
-            @endforeach
-        </div>
+        {{-- Pisos / zonas --}}
+        @if ($pisos->count() > 1)
+            <div class="no-scroll -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+                @foreach ($pisos as $piso)
+                    <button type="button" data-piso-id="{{ $piso->pis_id }}"
+                            class="piso-btn h-11 shrink-0 whitespace-nowrap rounded-full px-5 text-sm font-black ring-1 transition {{ $piso->pis_id == $primerPisoId ? 'activo bg-indigo-600 text-white ring-indigo-600' : 'bg-white text-gray-700 ring-gray-200' }}">
+                        {{ $piso->pis_nom }}
+                    </button>
+                @endforeach
+            </div>
+        @elseif ($pisos->count() === 1)
+            <button type="button" data-piso-id="{{ $pisos->first()->pis_id }}" class="piso-btn activo hidden"></button>
+        @endif
 
-        <div id="mesas_container" class="mesas-grid">
+        {{-- Mesas --}}
+        <div id="mesas_container" class="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(130px,1fr))] sm:gap-3">
             @include('empresas.comandas.partials.mesas_grid', ['mesas' => $mesas])
         </div>
 
-        <div class="button-group-bottom">
-            <button type="button" class="btn btn-llevar-kiosko" id="btn_llevar"><strong>PARA LLEVAR</strong></button>
-            <button type="button" class="btn btn-delivery-kiosko" id="btn_delivery"><strong>DELIVERY</strong></button>
-            @if ($puedeCobrar)
-                <a href="{{ route('cobros.directa') }}" class="btn btn-pv-kiosko"><strong>PUNTO DE VENTA</strong></a>
-            @endif
-        </div>
+        {{-- Otros tipos de pedido (según el usuario) --}}
+        @if ($permisos['llevar'] || $permisos['delivery'] || ($permisos['pv'] && $puedeCobrar))
+            <div class="grid gap-3 pt-2 sm:grid-cols-3">
+                @if ($permisos['llevar'])
+                    <button type="button" id="btn_llevar" class="h-16 rounded-2xl bg-indigo-600 text-lg font-black text-white shadow active:scale-[.98]">🥡 PARA LLEVAR</button>
+                @endif
+                @if ($permisos['delivery'])
+                    <button type="button" id="btn_delivery" class="h-16 rounded-2xl bg-emerald-600 text-lg font-black text-white shadow active:scale-[.98]">🛵 DELIVERY</button>
+                @endif
+                @if ($permisos['pv'] && $puedeCobrar)
+                    <a href="{{ route('cobros.directa') }}" class="flex h-16 items-center justify-center rounded-2xl bg-orange-500 text-lg font-black text-white shadow active:scale-[.98]">🧾 PUNTO DE VENTA</a>
+                @endif
+            </div>
+        @endif
 
-        <div class="takeaway-section">
-            <h3>Pedidos PARA LLEVAR y DELIVERY Activos</h3>
-            <div id="takeaway_container"><p class="text-center text-muted">Cargando...</p></div>
-        </div>
+        {{-- Para llevar y delivery activos --}}
+        @if ($hayPedidosSueltos)
+            <section class="rounded-2xl bg-white p-4 shadow-sm">
+                <h3 class="mb-3 font-black text-gray-800">Para llevar y delivery en curso</h3>
+                <div id="takeaway_container" class="space-y-2"><p class="py-4 text-center text-sm text-gray-400">Cargando…</p></div>
+            </section>
+        @endif
     </div>
 
-    <!-- Modal de opciones de mesa (Bootstrap 3) -->
-    <div class="modal fade" id="modal_mesa" tabindex="-1" role="dialog">
-        <div class="modal-dialog modal-sm" role="document">
-            <div class="modal-content">
-                <div class="modal-header text-center" style="padding: 12px 15px;">
-                    <button type="button" class="close" data-dismiss="modal" style="position: absolute; right: 10px; top: 10px;">&times;</button>
-                    <h4 class="modal-title" id="modal_mesa_titulo" style="margin: 0;">Mesa</h4>
-                </div>
-                <div class="modal-body" style="padding: 15px;">
-                    <div id="modal_mesa_listo" style="display:none; background:#fef9c3; border:2px solid #facc15; border-radius:8px; padding:8px; margin-bottom:10px; text-align:center;">
-                        <strong>🔔 Cocina tiene listo un pedido de esta mesa</strong><br>
-                        <button type="button" class="btn btn-warning btn-sm" id="btn_modal_entregado" style="margin-top:6px; font-weight:bold;">✔ Ya lo llevé a la mesa</button>
-                    </div>
-                    <div id="modal_mesa_detalle" class="modal-mesa-content">Cargando...</div>
-                    <div id="modal_mesa_unidas" class="modal-mesa-unidas" style="display:none;"></div>
-                    <div class="modal-mesa-btns">
-                        <button type="button" class="btn btn-mesa-editar" id="btn_modal_editar">
-                            <i class="fas fa-edit"></i> EDITAR
-                        </button>
-                        <button type="button" class="btn btn-mesa-precuenta" id="btn_modal_precuenta">
-                            <i class="fas fa-file-invoice"></i> PRECUENTA
-                        </button>
-                        @if ($puedeCobrar)
-                        <button type="button" class="btn btn-mesa-separadas" id="btn_modal_separadas">
-                            <i class="fas fa-users"></i> SEPARADAS
-                        </button>
-                        <button type="button" class="btn btn-mesa-cobrar" id="btn_modal_cobrar">
-                            <i class="fas fa-money-bill-wave"></i> COBRAR
-                        </button>
-                        @endif
-                        <button type="button" class="btn btn-mesa-cambiar" id="btn_modal_cambiar">
-                            <i class="fas fa-arrow-right-arrow-left"></i> Pasar a otra mesa
-                        </button>
-                        <button type="button" class="btn btn-mesa-unir" id="btn_modal_unir">
-                            <i class="fas fa-object-group"></i> Juntar mesas
-                        </button>
-                        <button type="button" class="btn btn-mesa-cerrar" data-dismiss="modal">
-                            <i class="fas fa-times"></i> Cerrar
-                        </button>
-                    </div>
-                </div>
+    {{-- ===================== Modales ===================== --}}
+    {{-- Opciones de una mesa ocupada --}}
+    <div id="modal_mesa" class="modal-t fixed inset-0 z-50 hidden items-end justify-center bg-black/50 sm:items-center sm:p-4">
+        <div class="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-w-md sm:rounded-3xl">
+            <div class="flex items-start gap-2">
+                <h4 class="flex-1 text-lg font-black text-gray-800" id="modal_mesa_titulo">Mesa</h4>
+                <button type="button" data-cerrar class="h-9 w-9 rounded-full bg-gray-100 text-lg font-bold text-gray-500">&times;</button>
+            </div>
+            <div id="modal_mesa_listo" class="mt-3 hidden rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-center">
+                <p class="font-bold text-amber-900">🔔 Cocina tiene listo un pedido de esta mesa</p>
+                <button type="button" id="btn_modal_entregado" class="mt-2 h-10 rounded-xl bg-amber-500 px-4 text-sm font-black text-white">✔ Ya lo llevé a la mesa</button>
+            </div>
+            <div id="modal_mesa_detalle" class="mt-3 max-h-56 overflow-y-auto text-sm">Cargando…</div>
+            <div id="modal_mesa_unidas" class="mt-3 hidden rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-800"></div>
+            <div class="mt-4 grid grid-cols-2 gap-2">
+                <button type="button" id="btn_modal_editar" class="{{ $btnModal }} bg-emerald-600">✏️ EDITAR</button>
+                <button type="button" id="btn_modal_precuenta" class="{{ $btnModal }} bg-sky-600">🧾 PRECUENTA</button>
+                @if ($puedeCobrar)
+                    <button type="button" id="btn_modal_separadas" class="{{ $btnModal }} bg-violet-600">👥 SEPARADAS</button>
+                    <button type="button" id="btn_modal_cobrar" class="{{ $btnModal }} bg-rose-600">💵 COBRAR</button>
+                @endif
+                <button type="button" id="btn_modal_cambiar" class="{{ $btnModal }} bg-amber-500">⇄ Pasar a otra mesa</button>
+                <button type="button" id="btn_modal_unir" class="{{ $btnModal }} bg-cyan-600">🔗 Juntar mesas</button>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="modal_reservas" tabindex="-1" role="dialog">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header" style="background:#8e44ad; color:#fff;">
-                    <button type="button" class="close" data-dismiss="modal" style="color:#fff; opacity:1;">&times;</button>
-                    <h4 class="modal-title"><i class="fas fa-calendar-check"></i> Reservas de hoy</h4>
-                </div>
-                <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
-                    <div id="lista_reservas"><p class="text-muted">Cargando...</p></div>
-                </div>
-                <div class="modal-footer">
-                    <a href="{{ route('reservas.index') }}" class="btn btn-default"><i class="fas fa-plus"></i> Nueva reserva / ver todas</a>
-                    <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
-                </div>
+    {{-- Reservas de hoy --}}
+    <div id="modal_reservas" class="modal-t fixed inset-0 z-50 hidden items-end justify-center bg-black/50 sm:items-center sm:p-4">
+        <div class="flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-white shadow-xl sm:max-w-lg sm:rounded-3xl">
+            <div class="flex items-center gap-2 rounded-t-3xl bg-violet-600 px-5 py-4 text-white">
+                <h4 class="flex-1 text-lg font-black">📅 Reservas de hoy</h4>
+                <button type="button" data-cerrar class="h-9 w-9 rounded-full bg-white/20 text-lg font-bold">&times;</button>
+            </div>
+            <div id="lista_reservas" class="flex-1 overflow-y-auto p-4"><p class="text-gray-400">Cargando…</p></div>
+            <div class="flex gap-2 border-t p-3">
+                <a href="{{ route('reservas.index') }}" class="flex h-11 flex-1 items-center justify-center rounded-xl bg-gray-100 text-sm font-bold text-gray-700">+ Nueva / ver todas</a>
+                <button type="button" data-cerrar class="h-11 rounded-xl bg-gray-100 px-4 text-sm font-bold text-gray-700">Cerrar</button>
             </div>
         </div>
     </div>
 
-    {{-- Pasar el pedido a otra mesa / juntar dos mesas: 1) elegir la mesa 2) ver el resumen y confirmar --}}
-    <div class="modal fade" id="modal_mover" tabindex="-1" role="dialog">
-        <div class="modal-dialog" role="document" style="max-width:520px; width:95%; margin:30px auto;">
-            <div class="modal-content">
-                <div class="mover-cabecera" id="mover_cabecera">
-                    <button type="button" class="close" data-dismiss="modal">&times;</button>
-                    <h4 id="mover_titulo"></h4>
-                    <p id="mover_sub"></p>
+    {{-- Pasar el pedido a otra mesa / juntar mesas: 1) elegir la mesa 2) ver el resumen y confirmar --}}
+    <div id="modal_mover" class="modal-t fixed inset-0 z-50 hidden items-end justify-center bg-black/50 sm:items-center sm:p-4">
+        <div class="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-xl sm:max-w-lg sm:rounded-3xl">
+            <div id="mover_cabecera" class="relative px-5 py-4 text-white">
+                <button type="button" data-cerrar class="absolute right-4 top-3 h-9 w-9 rounded-full bg-white/20 text-lg font-bold">&times;</button>
+                <h4 id="mover_titulo" class="pr-10 text-lg font-black"></h4>
+                <p id="mover_sub" class="mt-1 text-sm opacity-90"></p>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4">
+                <div class="mb-3 flex gap-2 text-xs font-black text-gray-400">
+                    <span id="mover_paso1" class="flex-1 border-b-4 pb-1 text-center">1. Elige la mesa</span>
+                    <span id="mover_paso2" class="flex-1 border-b-4 pb-1 text-center">2. Confirma</span>
                 </div>
-                <div class="modal-body" style="padding:14px 16px;">
-                    <div class="mover-pasos"><span id="mover_paso1">1. Elige la mesa</span><span id="mover_paso2">2. Confirma</span></div>
-                    <div id="mover_elegir">
-                        <div class="mover-zonas" id="mover_zonas"></div>
-                        <div class="mover-lista" id="mover_lista"></div>
-                        <button type="button" class="btn btn-primary btn-block" id="mover_siguiente" style="display:none; margin-top:12px; padding:12px; font-weight:bold; border-radius:10px;"></button>
+                <div id="mover_elegir">
+                    <div class="mover-zonas" id="mover_zonas"></div>
+                    <div id="mover_lista"></div>
+                    <button type="button" id="mover_siguiente" class="mt-3 hidden h-12 w-full rounded-2xl bg-indigo-600 font-black text-white"></button>
+                </div>
+                <div id="mover_confirmar" class="hidden">
+                    <div class="mover-resumen" id="mover_resumen"></div>
+                    <div id="mover_quedar_caja" class="hidden">
+                        <p class="text-center font-bold text-gray-700">¿A nombre de qué mesa queda la cuenta?</p>
+                        <div class="mover-quedar" id="mover_quedar"></div>
                     </div>
-                    <div id="mover_confirmar" style="display:none;">
-                        <div class="mover-resumen" id="mover_resumen"></div>
-                        <div id="mover_quedar_caja" style="display:none;">
-                            <div style="font-weight:bold; text-align:center; color:#334155;">¿A nombre de qué mesa queda la cuenta?</div>
-                            <div class="mover-quedar" id="mover_quedar"></div>
-                        </div>
-                        <div class="mover-texto" id="mover_texto"></div>
-                        <div class="mover-acciones">
-                            <button type="button" class="btn btn-default" id="mover_volver"><i class="fas fa-arrow-left"></i> Otra mesa</button>
-                            <button type="button" class="btn btn-success" id="mover_ok"></button>
-                        </div>
+                    <div class="rounded-xl bg-slate-100 p-3 text-center text-sm text-slate-700" id="mover_texto"></div>
+                    <div class="mt-4 grid grid-cols-[1fr_2fr] gap-2">
+                        <button type="button" id="mover_volver" class="h-12 rounded-2xl bg-gray-100 font-bold text-gray-700">← Otra mesa</button>
+                        <button type="button" id="mover_ok" class="h-12 rounded-2xl bg-emerald-600 font-black text-white disabled:opacity-60"></button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="modal_elegir_mesa" tabindex="-1" role="dialog">
-        <div class="modal-dialog modal-sm" role="document">
-            <div class="modal-content">
-                <div class="modal-header text-center" style="padding: 12px 15px;">
-                    <button type="button" class="close" data-dismiss="modal" style="position: absolute; right: 10px; top: 10px;">&times;</button>
-                    <h4 class="modal-title" id="elegir_titulo" style="margin: 0;">Elegir mesa</h4>
-                </div>
-                <div class="modal-body" style="padding: 15px;">
-                    <p id="elegir_ayuda" style="font-size:0.9em; color:#666;"></p>
-                    <div id="elegir_zonas"></div>
-                    <div id="elegir_lista" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; max-height:50vh; overflow-y:auto;"></div>
-                </div>
+    {{-- Elegir una mesa (reservas) --}}
+    <div id="modal_elegir_mesa" class="modal-t fixed inset-0 z-50 hidden items-end justify-center bg-black/50 sm:items-center sm:p-4">
+        <div class="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-w-sm sm:rounded-3xl">
+            <div class="flex items-start gap-2">
+                <h4 class="flex-1 text-lg font-black text-gray-800" id="elegir_titulo">Elegir mesa</h4>
+                <button type="button" data-cerrar class="h-9 w-9 rounded-full bg-gray-100 text-lg font-bold text-gray-500">&times;</button>
             </div>
+            <p id="elegir_ayuda" class="mt-1 text-sm text-gray-500"></p>
+            <div id="elegir_zonas" class="mover-zonas mt-3"></div>
+            <div id="elegir_lista" class="grid max-h-[50dvh] grid-cols-2 gap-2 overflow-y-auto"></div>
         </div>
     </div>
+@endsection
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/js/bootstrap.min.js"></script>
-    <script>
-        const URL_COBRAR = "{{ url('cobrarmesa') }}/";
-        const URL_MESAS = "{{ url('comandas/mesas') }}/";
-        const URL_PEDIDO = "{{ url('comandas/pedido') }}/";
-        const URL_PRECUENTA = "{{ url('comandas/precuenta') }}/";
-        const PUEDE_COBRAR = {{ $puedeCobrar ? 'true' : 'false' }};
-        const URL_DELIVERY = "{{ route('delivery.index') }}?pedido=";
+@push('scripts')
+<script>
+    const URL_COBRAR = @json(url('cobrarmesa')) + '/';
+    const URL_MESAS = @json(url('comandas/mesas')) + '/';
+    const URL_PEDIDO = @json(url('comandas/pedido')) + '/';
+    const URL_PRECUENTA = @json(url('comandas/precuenta')) + '/';
+    const URL_DELIVERY = @json(route('delivery.index')) + '?pedido=';
+    const PUEDE_COBRAR = @json((bool) $puedeCobrar);
+    const CSRF = @json(csrf_token());
 
-        // Recargas automáticas: se pausan con la pestaña oculta o la tablet bloqueada (no gastan servidor ni batería)
-        // y se ponen al día apenas el usuario vuelve
-        function cadaSiVisible(fn, ms) {
-            setInterval(() => { if (!document.hidden) fn(); }, ms);
-            document.addEventListener('visibilitychange', () => { if (!document.hidden) fn(); });
-        }
+    const esc = (t) => { const d = document.createElement('div'); d.textContent = t ?? ''; return d.innerHTML; };
+    const soles = (n) => 'S/ ' + Number(n || 0).toFixed(2);
+    function toast(texto) { (window.tushpaAviso || alert)(texto, /no se|error|falta|debe|no hay|inv[aá]lid|ya est|solo atiende/i.test(texto) ? 'aviso' : 'ok'); }
 
-        function postJson(url, data) {
-            return fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                body: JSON.stringify(data)
-            }).then(r => r.json().catch(() => ({ success: false, message: 'Error del servidor.' })));
-        }
+    // Modales: se abren y cierran con clases (sin librerías). Tocar el fondo o la × los cierra.
+    function abrirModal(id) { const m = document.getElementById(id); m.classList.remove('hidden'); m.classList.add('flex'); }
+    function cerrarModal(id) { const m = document.getElementById(id); m.classList.add('hidden'); m.classList.remove('flex'); }
+    function cambiarModal(desde, hacia) { cerrarModal(desde.replace('#', '')); abrirModal(hacia.replace('#', '')); }
+    document.addEventListener('click', (e) => {
+        const modal = e.target.closest('.modal-t');
+        if (modal && (e.target === modal || e.target.closest('[data-cerrar]'))) cerrarModal(modal.id);
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.modal-t.flex').forEach((m) => cerrarModal(m.id)); });
 
-        function toast(texto, ms = 3000) {
-            if (window.tushpaAviso) return window.tushpaAviso(texto, /no se|error|falta|debe|no hay|inv[aá]lid|ya est/i.test(texto) ? 'aviso' : 'ok');
-            const t = document.getElementById('toast');
-            t.textContent = texto;
-            t.style.display = 'block';
-            clearTimeout(t._timer);
-            t._timer = setTimeout(() => t.style.display = 'none', ms);
-        }
-        // El aviso de "enviado a la impresora" desaparece solo
-        setTimeout(() => document.querySelectorAll('.aviso-temporal').forEach(a => a.style.display = 'none'), 4000);
+    // Recargas automáticas: se pausan con la pestaña oculta o la tablet bloqueada y se ponen al día al volver
+    function cadaSiVisible(fn, ms) {
+        setInterval(() => { if (!document.hidden) fn(); }, ms);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) fn(); });
+    }
+    function postJson(url, data) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+            body: JSON.stringify(data),
+        }).then((r) => r.json().catch(() => ({ success: false, message: 'Error del servidor.' })));
+    }
+    setTimeout(() => document.querySelectorAll('.aviso-temporal').forEach((a) => a.remove()), 4000);
 
-        // Precuenta: directo a la impresora; si el agente no está conectado, se abre para imprimir desde el navegador
-        function imprimirPrecuenta(pedidoId) {
-            postJson("{{ url('impresion/precuenta') }}/" + pedidoId, {}).then(res => {
-                if (res.directa) { toast('🖨 ' + res.mensaje); return; }
-                window.open(URL_PRECUENTA + pedidoId, '_blank');
-            }).catch(() => window.open(URL_PRECUENTA + pedidoId, '_blank'));
-        }
+    // Precuenta: directo a la impresora; si el agente no está conectado, se abre para imprimir desde el navegador
+    function imprimirPrecuenta(pedidoId) {
+        postJson(@json(url('impresion/precuenta')) + '/' + pedidoId, {}).then((res) => {
+            if (res.directa) { toast('🖨 ' + res.mensaje); return; }
+            window.open(URL_PRECUENTA + pedidoId, '_blank');
+        }).catch(() => window.open(URL_PRECUENTA + pedidoId, '_blank'));
+    }
 
-        // Abre el segundo modal recién cuando el primero terminó de cerrarse (Bootstrap 3 se descuadra si se solapan)
-        function cambiarModal(desde, hacia) {
-            const $desde = $(desde);
-            if ($desde.hasClass('in')) {
-                $desde.one('hidden.bs.modal', () => $(hacia).modal('show')).modal('hide');
-            } else {
-                $(hacia).modal('show');
-            }
-        }
-
-        /**
-         * Selector de mesas por zona (pestañas por piso). tipo: 'libres' | 'ocupadas'.
-         * alElegir(mesa, zona, boton) hace la acción y devuelve una promesa {success, message}.
-         */
-        function selectorMesas({ tipo, pedidoId = '', titulo, ayuda, desde, confirmar, alElegir }) {
-            const lista = document.getElementById('elegir_lista');
-            const zonas = document.getElementById('elegir_zonas');
-            document.getElementById('elegir_titulo').textContent = titulo;
-            document.getElementById('elegir_ayuda').textContent = ayuda;
-            lista.innerHTML = '<p class="text-muted">Cargando...</p>';
-            zonas.innerHTML = '';
-            cambiarModal(desde, '#modal_elegir_mesa');
-
-            fetch(`{{ route('comandas.mesas_disponibles') }}?tipo=${tipo}&ped_id=${pedidoId}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (!data.mesas.length) {
-                        lista.innerHTML = `<p class="text-muted" style="grid-column:1/-1;">${tipo === 'libres' ? 'No hay mesas libres.' : 'No hay otras mesas ocupadas.'}</p>`;
-                        return;
-                    }
-                    const nombresZona = [...new Set(data.mesas.map(m => m.piso || 'SIN ZONA'))];
-                    let zonaActiva = nombresZona[0];
-
-                    const pintar = () => {
-                        zonas.innerHTML = '';
-                        nombresZona.forEach(z => {
-                            const tab = document.createElement('button');
-                            tab.type = 'button';
-                            tab.className = 'btn btn-sm ' + (z === zonaActiva ? 'btn-primary' : 'btn-default');
-                            tab.style.margin = '0 4px 6px 0';
-                            tab.textContent = z + ' (' + data.mesas.filter(m => (m.piso || 'SIN ZONA') === z).length + ')';
-                            tab.onclick = () => { zonaActiva = z; pintar(); };
-                            zonas.appendChild(tab);
-                        });
-                        lista.innerHTML = '';
-                        data.mesas.filter(m => (m.piso || 'SIN ZONA') === zonaActiva).forEach(m => {
-                            const b = document.createElement('button');
-                            b.type = 'button';
-                            b.className = 'btn ' + (tipo === 'libres' ? 'btn-success' : 'btn-danger');
-                            b.style.whiteSpace = 'normal';
-                            b.style.padding = '14px 6px';
-                            b.innerHTML = '<strong></strong>';
-                            b.querySelector('strong').textContent = m.nombre;
-                            b.onclick = () => {
-                                if (!confirm(confirmar(m, zonaActiva))) return;
-                                b.disabled = true;
-                                alElegir(m, zonaActiva).then(res => {
-                                    b.disabled = false;
-                                    if (!res.success) { alert(res.message || 'No se pudo completar.'); return; }
-                                    $('#modal_elegir_mesa').modal('hide');
-                                });
-                            };
-                            lista.appendChild(b);
+    /** Selector de mesas por zona (reservas). tipo: 'libres' | 'ocupadas'. alElegir(mesa, zona) devuelve {success, message}. */
+    function selectorMesas({ tipo, pedidoId = '', titulo, ayuda, desde, confirmar, alElegir }) {
+        const lista = document.getElementById('elegir_lista');
+        const zonas = document.getElementById('elegir_zonas');
+        document.getElementById('elegir_titulo').textContent = titulo;
+        document.getElementById('elegir_ayuda').textContent = ayuda;
+        lista.innerHTML = '<p class="text-gray-400">Cargando…</p>';
+        zonas.innerHTML = '';
+        cambiarModal(desde, '#modal_elegir_mesa');
+        fetch(@json(route('comandas.mesas_disponibles')) + `?tipo=${tipo}&ped_id=${pedidoId}`).then((r) => r.json()).then((data) => {
+            if (!data.mesas.length) { lista.innerHTML = `<p class="col-span-2 text-gray-400">${tipo === 'libres' ? 'No hay mesas libres.' : 'No hay otras mesas ocupadas.'}</p>`; return; }
+            const nombresZona = [...new Set(data.mesas.map((m) => m.piso || 'SIN ZONA'))];
+            let zonaActiva = nombresZona[0];
+            const pintar = () => {
+                zonas.innerHTML = '';
+                nombresZona.forEach((z) => {
+                    const tab = document.createElement('button');
+                    tab.type = 'button';
+                    tab.className = z === zonaActiva ? 'activa' : '';
+                    tab.textContent = z + ' (' + data.mesas.filter((m) => (m.piso || 'SIN ZONA') === z).length + ')';
+                    tab.onclick = () => { zonaActiva = z; pintar(); };
+                    zonas.appendChild(tab);
+                });
+                lista.innerHTML = '';
+                data.mesas.filter((m) => (m.piso || 'SIN ZONA') === zonaActiva).forEach((m) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'elegir-mesa ' + (tipo === 'libres' ? 'bg-emerald-700' : 'bg-rose-600');
+                    b.textContent = m.nombre;
+                    b.onclick = () => {
+                        if (!confirm(confirmar(m, zonaActiva))) return;
+                        b.disabled = true;
+                        alElegir(m, zonaActiva).then((res) => {
+                            b.disabled = false;
+                            if (!res.success) { toast(res.message || 'No se pudo completar.'); return; }
+                            cerrarModal('modal_elegir_mesa');
                         });
                     };
-                    pintar();
+                    lista.appendChild(b);
                 });
+            };
+            pintar();
+        });
+    }
+
+    function refrescarTodo() {
+        const activo = document.querySelector('.piso-btn.activo');
+        if (activo) refrescarMesas(activo.dataset.pisoId);
+        cargarActivos();
+    }
+
+    // Pasar el pedido a una mesa libre ('libres') o juntar mesas ('juntar')
+    function elegirMesa(tipo, pedidoId, mesaNombre) {
+        const pasar = tipo === 'libres';
+        const el = (id) => document.getElementById(id);
+        const actual = { nombre: mesaNombre, ped_id: pedidoId, total: 0 };
+        const elegidas = new Map();
+        el('mover_cabecera').className = 'relative px-5 py-4 text-white ' + (pasar ? 'bg-gradient-to-br from-amber-500 to-amber-600' : 'bg-gradient-to-br from-cyan-600 to-sky-700');
+        el('mover_titulo').textContent = pasar ? '⇄ Pasar a otra mesa' : '🔗 Juntar mesas';
+        el('mover_sub').textContent = pasar ? `Los clientes de ${mesaNombre} se cambian a una mesa libre y se llevan todo su pedido.`
+            : `¿Un grupo grande o un cumpleaños? Suma mesas a ${mesaNombre}: todo va en una sola cuenta.`;
+        el('mover_lista').innerHTML = '<p class="text-gray-400">Cargando mesas…</p>';
+        el('mover_zonas').innerHTML = '';
+        el('mover_siguiente').classList.add('hidden');
+        paso(1);
+        cambiarModal('#modal_mesa', '#modal_mover');
+
+        function paso(n) {
+            el('mover_elegir').classList.toggle('hidden', n !== 1);
+            el('mover_confirmar').classList.toggle('hidden', n !== 2);
+            el('mover_paso1').className = 'flex-1 border-b-4 pb-1 text-center ' + (n === 1 ? 'border-slate-800 text-slate-800' : 'border-slate-200');
+            el('mover_paso2').className = 'flex-1 border-b-4 pb-1 text-center ' + (n === 2 ? 'border-slate-800 text-slate-800' : 'border-slate-200');
         }
-
-        function refrescarTodo() {
-            const activo = document.querySelector('.piso-btn.active');
-            if (activo) refrescarMesas(activo.dataset.pisoId);
-            cargarActivos();
+        function boton(m, clase, detalle, alTocar) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'mover-mesa ' + clase;
+            b.innerHTML = `${esc(m.nombre)}<small>${detalle}</small>`;
+            b.onclick = alTocar;
+            return b;
         }
-
-        // Pasar el pedido a una mesa libre ('libres') o juntar mesas ('juntar'):
-        //  - mesas libres: el grupo grande ocupa varias mesas con una sola cuenta (se pueden elegir varias)
-        //  - mesa ocupada: se juntan las dos cuentas en una
-        const soles = n => 'S/ ' + Number(n || 0).toFixed(2);
-        function elegirMesa(tipo, pedidoId, mesaNombre) {
-            const pasar = tipo === 'libres';
-            const el = id => document.getElementById(id);
-            const actual = { nombre: mesaNombre, ped_id: pedidoId, total: 0 };
-            const elegidas = new Map(); // mesas libres marcadas para el grupo
-            el('mover_cabecera').className = 'mover-cabecera ' + (pasar ? 'pasar' : 'juntar');
-            el('mover_titulo').innerHTML = pasar ? '<i class="fas fa-arrow-right-arrow-left"></i> Pasar a otra mesa' : '<i class="fas fa-object-group"></i> Juntar mesas';
-            el('mover_sub').textContent = pasar ? `Los clientes de ${mesaNombre} se cambian a una mesa libre y se llevan todo su pedido.`
-                                                : `¿Un grupo grande o un cumpleaños? Suma mesas a ${mesaNombre}: todo va en una sola cuenta.`;
-            el('mover_lista').innerHTML = '<p class="text-muted">Cargando mesas...</p>';
-            el('mover_zonas').innerHTML = '';
-            el('mover_siguiente').style.display = 'none';
-            paso(1);
-            cambiarModal('#modal_mesa', '#modal_mover');
-
-            function paso(n) {
-                el('mover_elegir').style.display = n === 1 ? '' : 'none';
-                el('mover_confirmar').style.display = n === 2 ? '' : 'none';
-                el('mover_paso1').className = n === 1 ? 'activo' : '';
-                el('mover_paso2').className = n === 2 ? 'activo' : '';
-            }
-
-            function boton(m, clase, detalle, alTocar) {
-                const b = document.createElement('button');
-                b.type = 'button';
-                b.className = 'mover-mesa ' + clase;
-                b.innerHTML = `${esc(m.nombre)}<small>${detalle}</small>`;
-                b.onclick = alTocar;
-                return b;
-            }
-
-            function seccion(titulo, ayuda) {
-                const d = document.createElement('div');
-                d.className = 'mover-seccion';
-                d.innerHTML = `<div class="mover-seccion-titulo">${titulo}</div><div class="mover-seccion-ayuda">${ayuda}</div>`;
-                const lista = document.createElement('div');
-                lista.className = 'mover-grilla';
-                d.appendChild(lista);
-                el('mover_lista').appendChild(d);
-                return lista;
-            }
-
-            function pintarSiguiente() {
-                const n = elegidas.size;
-                el('mover_siguiente').style.display = n ? '' : 'none';
-                el('mover_siguiente').innerHTML = `Siguiente: juntar ${n} mesa${n > 1 ? 's' : ''} a ${esc(actual.nombre)} <i class="fas fa-arrow-right"></i>`;
-            }
-            el('mover_siguiente').onclick = () => confirmarLibres();
-
-            fetch(`{{ route('comandas.mesas_disponibles') }}?tipo=${tipo}&ped_id=${pedidoId}`)
-                .then(r => r.json())
-                .then(data => {
-                    actual.total = data.total_actual;
-                    actual.unidas = data.unidas || [];
-                    if (!data.mesas.length) {
-                        el('mover_lista').innerHTML = `<p class="text-muted" style="text-align:center; padding:20px;">${pasar ? 'No hay mesas libres en este momento.' : 'No hay otras mesas para juntar.'}</p>`;
-                        return;
-                    }
-                    const zonaDe = m => m.piso || 'SIN ZONA';
-                    const zonas = [...new Set(data.mesas.map(zonaDe))];
-                    let zona = zonas[0];
-                    const pintar = () => {
-                        el('mover_zonas').innerHTML = '';
-                        if (zonas.length > 1) zonas.forEach(z => {
-                            const b = document.createElement('button');
-                            b.type = 'button';
-                            b.className = z === zona ? 'activa' : '';
-                            b.textContent = `${z} (${data.mesas.filter(m => zonaDe(m) === z).length})`;
-                            b.onclick = () => { zona = z; pintar(); };
-                            el('mover_zonas').appendChild(b);
-                        });
-                        el('mover_lista').innerHTML = '';
-                        const enZona = data.mesas.filter(m => zonaDe(m) === zona);
-                        if (pasar) {
-                            const lista = seccion('', '');
-                            enZona.forEach(m => lista.appendChild(boton(m, 'libre', 'Libre', () => confirmarPasar(m))));
-                            return;
-                        }
-                        if (actual.unidas.length) {
-                            el('mover_lista').insertAdjacentHTML('beforeend', `<div class="mover-ya">🔗 Ya juntas con ${esc(actual.nombre)}: <b>${actual.unidas.map(esc).join(', ')}</b></div>`);
-                        }
-                        const libres = enZona.filter(m => m.estado === 'libre');
-                        const ocupadas = enZona.filter(m => m.estado === 'ocupada');
-                        if (libres.length) {
-                            const lista = seccion('🟢 Mesas libres para el grupo', 'Toca todas las mesas que va a ocupar el grupo (puedes marcar varias).');
-                            libres.forEach(m => {
-                                const marcada = elegidas.has(m.mes_id);
-                                lista.appendChild(boton(m, 'libre' + (marcada ? ' elegida' : ''), marcada ? '✔ Elegida' : 'Libre', () => {
-                                    marcada ? elegidas.delete(m.mes_id) : elegidas.set(m.mes_id, m);
-                                    pintar();
-                                    pintarSiguiente();
-                                }));
-                            });
-                        }
-                        if (ocupadas.length) {
-                            const lista = seccion('🔴 Mesas ocupadas: juntar su cuenta', 'Si otra mesa ya está consumiendo y pagará junto con esta.');
-                            ocupadas.forEach(m => lista.appendChild(boton(m, 'ocupada', soles(m.total) + (m.desde ? ' · desde ' + m.desde : ''), () => confirmarCuenta(m))));
-                        }
-                        if (!libres.length && !ocupadas.length) {
-                            el('mover_lista').insertAdjacentHTML('beforeend', '<p class="text-muted" style="text-align:center;">No hay mesas en esta zona.</p>');
-                        }
-                    };
-                    pintar();
-                });
-
-            function ficha(clase, nombre, detalle) {
-                return `<div class="mover-ficha ${clase}">${esc(nombre)}<small>${detalle}</small></div>`;
-            }
-
-            function confirmarPasar(m) {
-                paso(2);
-                el('mover_volver').onclick = () => paso(1);
-                el('mover_quedar_caja').style.display = 'none';
-                el('mover_resumen').innerHTML = ficha('ocupada', actual.nombre, soles(actual.total))
-                    + '<div class="mover-signo">➜</div>' + ficha('libre queda', m.etiqueta, 'nueva mesa');
-                el('mover_texto').innerHTML = `Todo el pedido (<b>${soles(actual.total)}</b>) pasa a <b>${esc(m.etiqueta)}</b>.<br><b>${esc(actual.nombre)}</b> quedará libre.`;
-                el('mover_ok').innerHTML = `<i class="fas fa-check"></i> Sí, pasar a ${esc(m.etiqueta)}`;
-                el('mover_ok').onclick = () => ejecutar(
-                    postJson("{{ route('comandas.cambiar_mesa') }}", { ped_id: actual.ped_id, mes_id: m.mes_id }),
-                    `✔ Listo: el pedido ahora está en ${m.etiqueta}`);
-            }
-
-            // Grupo grande: las mesas libres elegidas se suman a la cuenta de esta mesa
-            function confirmarLibres() {
-                const mesas = [...elegidas.values()];
-                paso(2);
-                el('mover_volver').onclick = () => paso(1);
-                el('mover_quedar_caja').style.display = 'none';
-                el('mover_resumen').innerHTML = ficha('ocupada queda', actual.nombre, soles(actual.total))
-                    + mesas.map(m => '<div class="mover-signo">+</div>' + ficha('libre', m.etiqueta, 'se junta')).join('');
-                const total = mesas.length + 1 + actual.unidas.length;
-                el('mover_texto').innerHTML = `El grupo ocupará <b>${total} mesas</b> con <b>una sola cuenta</b> en <b>${esc(actual.nombre)}</b>.<br>`
-                    + `Al cobrar, todas quedan libres solas. Si una se desocupa antes, la liberas desde la mesa.`;
-                el('mover_ok').innerHTML = `<i class="fas fa-check"></i> Sí, juntar ${mesas.length} mesa${mesas.length > 1 ? 's' : ''}`;
-                el('mover_ok').onclick = () => ejecutar(
-                    postJson("{{ route('comandas.juntar_libres') }}", { ped_id: actual.ped_id, mesas: mesas.map(m => m.mes_id) }),
-                    `✔ Listo: ${mesas.map(m => m.etiqueta).join(', ')} juntas con ${actual.nombre}`);
-            }
-
-            // Dos mesas ocupadas: se juntan las cuentas; las dos siguen ocupadas como un solo grupo
-            function confirmarCuenta(m) {
-                paso(2);
-                el('mover_volver').onclick = () => paso(1);
-                const otra = { nombre: m.etiqueta, ped_id: m.ped_id, total: m.total };
-                let queda = actual;
-                const pintarJuntar = () => {
-                    const sale = queda === actual ? otra : actual;
-                    el('mover_resumen').innerHTML = ficha('ocupada' + (queda === actual ? ' queda' : ''), actual.nombre, soles(actual.total))
-                        + '<div class="mover-signo">+</div>' + ficha('ocupada' + (queda === otra ? ' queda' : ''), otra.nombre, soles(otra.total))
-                        + '<div class="mover-signo">=</div>' + ficha('total', soles(Number(actual.total) + Number(otra.total)), 'una sola cuenta');
-                    el('mover_quedar').innerHTML = '';
-                    [actual, otra].forEach(op => {
-                        const b = document.createElement('button');
-                        b.type = 'button';
-                        b.className = op === queda ? 'activa' : '';
-                        b.innerHTML = `${op === queda ? '✔ ' : ''}${esc(op.nombre)}`;
-                        b.onclick = () => { queda = op; pintarJuntar(); };
-                        el('mover_quedar').appendChild(b);
-                    });
-                    el('mover_texto').innerHTML = `Lo pedido en las dos mesas queda en <b>una sola cuenta</b> a nombre de <b>${esc(queda.nombre)}</b>.<br>`
-                        + `<b>${esc(sale.nombre)}</b> sigue ocupada como parte del grupo; si se desocupa, la liberas desde la mesa.`;
-                    el('mover_ok').innerHTML = `<i class="fas fa-check"></i> Sí, juntar cuentas en ${esc(queda.nombre)}`;
-                    el('mover_ok').onclick = () => ejecutar(
-                        postJson("{{ route('comandas.unir_mesa') }}", { ped_id: queda.ped_id, ped_id_origen: sale.ped_id }),
-                        `✔ Listo: cuentas de ${actual.nombre} y ${otra.nombre} juntas en ${queda.nombre}`);
-                };
-                el('mover_quedar_caja').style.display = '';
-                pintarJuntar();
-            }
-
-            function ejecutar(promesa, mensaje) {
-                const ok = el('mover_ok');
-                ok.disabled = true;
-                promesa.then(res => {
-                    ok.disabled = false;
-                    if (!res.success) { alert(res.message || 'No se pudo completar.'); return; }
-                    $('#modal_mover').modal('hide');
-                    toast(mensaje);
-                    refrescarTodo();
-                }).catch(() => { ok.disabled = false; alert('Sin conexión. Intenta de nuevo.'); });
-            }
+        function seccion(titulo, ayuda) {
+            const d = document.createElement('div');
+            d.className = 'mover-seccion';
+            d.innerHTML = titulo ? `<div class="mover-seccion-titulo">${titulo}</div><div class="mover-seccion-ayuda">${ayuda}</div>` : '';
+            const lista = document.createElement('div');
+            lista.className = 'mover-grilla';
+            d.appendChild(lista);
+            el('mover_lista').appendChild(d);
+            return lista;
         }
-
-        // Mesas juntas en el modal de la mesa: se liberan con dos toques (por si se desocupan antes de cobrar)
-        function pintarUnidas(pedidoId, unidas) {
-            const cont = document.getElementById('modal_mesa_unidas');
-            if (!unidas.length) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
-            cont.style.display = '';
-            cont.innerHTML = '<div style="font-weight:bold; margin-bottom:6px;">🔗 Mesas juntas en esta cuenta</div>';
-            unidas.forEach(m => {
-                const chip = document.createElement('span');
-                chip.className = 'mesa-unida-chip';
-                chip.innerHTML = `${esc(m.nombre)} <button type="button" title="Liberar">Liberar</button>`;
-                const b = chip.querySelector('button');
-                b.onclick = () => {
-                    if (!b.classList.contains('seguro')) { b.classList.add('seguro'); b.textContent = '¿Seguro? Toca otra vez'; return; }
-                    b.disabled = true;
-                    postJson("{{ route('comandas.separar_mesa') }}", { ped_id: pedidoId, mes_id: m.mes_id }).then(res => {
-                        if (!res.success) { alert(res.message); b.disabled = false; return; }
-                        toast(`✔ ${m.nombre} quedó libre`);
-                        pintarUnidas(pedidoId, unidas.filter(x => x.mes_id !== m.mes_id));
-                        refrescarTodo();
-                    });
-                };
-                cont.appendChild(chip);
-            });
+        function pintarSiguiente() {
+            const n = elegidas.size;
+            el('mover_siguiente').classList.toggle('hidden', !n);
+            el('mover_siguiente').textContent = `Siguiente: juntar ${n} mesa${n > 1 ? 's' : ''} a ${actual.nombre} →`;
         }
+        el('mover_siguiente').onclick = () => confirmarLibres();
 
-        // ---------------- Reservas de hoy
-        let reservasHoy = [];
-
-        function cargarReservas() {
-            return fetch("{{ route('reservas.dia') }}", { headers: { Accept: 'application/json' } })
-                .then(r => r.json())
-                .then(d => {
-                    reservasHoy = d.reservas;
-                    document.getElementById('n_reservas').textContent = reservasHoy.length;
-                    pintarReservas();
-                }).catch(() => {});
-        }
-
-        function pintarReservas() {
-            const cont = document.getElementById('lista_reservas');
-            if (!reservasHoy.length) { cont.innerHTML = '<p class="text-muted text-center">No hay reservas pendientes para hoy.</p>'; return; }
-            const ahora = new Date();
-            cont.innerHTML = reservasHoy.map(r => {
-                const [h, m] = r.hora_inicio.split(':');
-                const llegada = new Date(); llegada.setHours(+h, +m, 0, 0);
-                const minutos = Math.round((llegada - ahora) / 60000);
-                const cuando = minutos > 0 ? `en ${minutos >= 60 ? Math.floor(minutos / 60) + ' h ' : ''}${minutos % 60} min` : (minutos > -30 ? 'ya debería estar' : 'atrasada');
-                const mesa = r.mes_nom
-                    ? `${esc(r.pis_nom || '')} / <b>${esc(r.mes_nom)}</b> <span class="label ${r.mesa_libre ? 'label-success' : 'label-danger'}">${r.mesa_libre ? 'libre' : 'ocupada'}</span>`
-                    : '<span class="text-muted">sin mesa elegida</span>';
-                return `<div class="reserva-item ${minutos <= 60 ? 'proxima' : ''}">
-                    <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
-                        <div>
-                            <div style="font-size:1.15em;"><b>${r.hora_inicio.slice(0, 5)}</b> · <b>${esc(r.nombre_cliente)}</b> · ${r.cantidad_personas} pers.</div>
-                            <div class="text-muted" style="font-size:.9em;">${cuando}${r.telefono ? ' · 📞 ' + esc(r.telefono) : ''} · ${esc(r.estado)}</div>
-                            <div style="font-size:.9em; margin-top:3px;">Mesa: ${mesa}</div>
-                            ${r.platos.length ? `<div style="font-size:.85em; margin-top:3px;">🍽 ${r.platos.map(esc).join(', ')}</div>` : ''}
-                            ${r.observacion ? `<div style="font-size:.85em; color:#8a6d3b;">» ${esc(r.observacion)}</div>` : ''}
-                        </div>
-                        <button type="button" class="btn btn-success" style="font-weight:bold;" onclick="atenderReserva(${r.res_id})">LLEGÓ ✔</button>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-
-        // Llegó el cliente: mesa reservada si está libre; si no (o no eligió), se escoge otra por zona
-        function atenderReserva(resId) {
-            const r = reservasHoy.find(x => x.res_id === resId);
-            const atender = mesId => postJson("{{ url('reservas') }}/" + resId + '/atender', { mes_id: mesId }).then(res => {
-                if (res.success) window.location.href = res.redirect;
-                return res;
-            });
-
-            if (r.mes_id && r.mesa_libre && confirm(`Asignar la ${r.mes_nom} reservada a ${r.nombre_cliente}?`)) {
-                atender(r.mes_id).then(res => { if (!res.success) alert(res.message); });
+        fetch(@json(route('comandas.mesas_disponibles')) + `?tipo=${tipo}&ped_id=${pedidoId}`).then((r) => r.json()).then((data) => {
+            actual.total = data.total_actual;
+            actual.unidas = data.unidas || [];
+            if (!data.mesas.length) {
+                el('mover_lista').innerHTML = `<p class="py-6 text-center text-gray-400">${pasar ? 'No hay mesas libres en este momento.' : 'No hay otras mesas para juntar.'}</p>`;
                 return;
             }
-            selectorMesas({
-                tipo: 'libres', desde: '#modal_reservas',
-                titulo: `Mesa para ${r.nombre_cliente} (${r.cantidad_personas} pers.)`,
-                ayuda: r.mes_id && !r.mesa_libre ? `La ${r.mes_nom} reservada está ocupada: elige otra mesa.` : 'Elige la mesa para la reserva.',
-                confirmar: (m, z) => `¿Atender a ${r.nombre_cliente} en ${m.nombre} (${z})?`,
-                alElegir: m => atender(m.mes_id),
-            });
-        }
-
-        document.getElementById('btn_reservas').addEventListener('click', () => { cargarReservas(); $('#modal_reservas').modal('show'); });
-        cargarReservas();
-        cadaSiVisible(cargarReservas, 60000);
-
-        function irAServicio(orderType, mesaId, mesaNombre, pedidoId) {
-            fetch("{{ route('comandas.set_servicio') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                body: JSON.stringify({ order_type: orderType, mesa_id: mesaId, mesa_nombre: mesaNombre, pedido_id: pedidoId })
-            })
-            .then(r => r.json().catch(() => ({ success: false, message: 'Error del servidor.' })))
-            .then(res => {
-                if (!res.success) {
-                    alert(res.message || 'No se pudo abrir el pedido.');
-                    const activo = document.querySelector('.piso-btn.active');
-                    if (activo) refrescarMesas(activo.dataset.pisoId);
-                    cargarActivos();
+            const zonaDe = (m) => m.piso || 'SIN ZONA';
+            const zonas = [...new Set(data.mesas.map(zonaDe))];
+            let zona = zonas[0];
+            const pintar = () => {
+                el('mover_zonas').innerHTML = '';
+                if (zonas.length > 1) zonas.forEach((z) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = z === zona ? 'activa' : '';
+                    b.textContent = `${z} (${data.mesas.filter((m) => zonaDe(m) === z).length})`;
+                    b.onclick = () => { zona = z; pintar(); };
+                    el('mover_zonas').appendChild(b);
+                });
+                el('mover_lista').innerHTML = '';
+                const enZona = data.mesas.filter((m) => zonaDe(m) === zona);
+                if (pasar) {
+                    const lista = seccion('', '');
+                    enZona.forEach((m) => lista.appendChild(boton(m, 'libre', 'Libre', () => confirmarPasar(m))));
                     return;
                 }
-                window.location.href = "{{ route('comandas.menu') }}";
-            })
-            .catch(() => alert('Error de conexión.'));
-        }
-
-        document.getElementById('btn_llevar').addEventListener('click', () => irAServicio('llevar', null, 'PARA LLEVAR', null));
-        document.getElementById('btn_delivery').addEventListener('click', () => irAServicio('delivery', null, 'DELIVERY', null));
-
-        function activarPisos() {
-            document.querySelectorAll('.piso-btn').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    document.querySelectorAll('.piso-btn').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    refrescarMesas(this.dataset.pisoId);
-                });
-            });
-        }
-        activarPisos();
-
-        // Solo se redibuja si algo cambió: así no se pierde el toque del mozo justo cuando llega la recarga
-        let ultimaVistaMesas = null;
-        function refrescarMesas(pisoId) {
-            fetch(URL_MESAS + pisoId)
-                .then(r => r.json())
-                .then(data => {
-                    const clave = pisoId + '|' + data.vista;
-                    if (clave === ultimaVistaMesas) return;
-                    ultimaVistaMesas = clave;
-                    document.getElementById('mesas_container').innerHTML = data.vista;
-                    actualizarTimers();
-                });
-        }
-
-        cadaSiVisible(function () {
-            const activo = document.querySelector('.piso-btn.active');
-            if (activo) refrescarMesas(activo.dataset.pisoId);
-        }, 10000);
-
-        // TIMER en vivo de cada mesa ocupada (no se reinicia con el refresh de 10s, corre en el navegador)
-        setInterval(actualizarTimers, 1000);
-        function actualizarTimers() {
-            document.querySelectorAll('.mesa-timer').forEach(function (el) {
-                const inicio = new Date(el.dataset.inicio).getTime();
-                if (!inicio) return;
-                const diff = Math.max(0, Math.floor((Date.now() - inicio) / 1000));
-                const h = String(Math.floor(diff / 3600)).padStart(2, '0');
-                const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
-                const s = String(diff % 60).padStart(2, '0');
-                el.textContent = `${h}:${m}:${s}`;
-            });
-        }
-
-        // Click en mesa
-        document.addEventListener('click', function (e) {
-            const mesa = e.target.closest('.btn-mesa-comanda');
-            if (!mesa) return;
-            const estado = mesa.dataset.estado;
-            const mesaId = mesa.dataset.id, mesaNombre = mesa.dataset.nombre, pedidoId = mesa.dataset.pedidoId;
-
-            if (estado === 'Libre') {
-                irAServicio('salon', mesaId, mesaNombre, null);
-                return;
-            }
-
-            if (!pedidoId) {
-                alert('Mesa ocupada sin pedido asociado.');
-                return;
-            }
-
-            const tituloMesa = mesaNombre;
-            document.getElementById('modal_mesa_titulo').textContent = tituloMesa;
-            document.getElementById('modal_mesa_detalle').innerHTML = 'Cargando detalles...';
-            pintarUnidas(pedidoId, []);
-            $('#modal_mesa').modal('show');
-
-            document.getElementById('btn_modal_editar').onclick = function () {
-                $('#modal_mesa').modal('hide');
-                irAServicio('salon', mesaId, mesaNombre, pedidoId);
-            };
-
-            if (PUEDE_COBRAR) {
-                document.getElementById('btn_modal_cobrar').onclick = () => window.location.href = URL_COBRAR + pedidoId;
-                document.getElementById('btn_modal_separadas').onclick = () => window.location.href = URL_COBRAR + pedidoId + '/separadas';
-            }
-            document.getElementById('btn_modal_precuenta').onclick = () => imprimirPrecuenta(pedidoId);
-            const hayListo = Number(mesa.dataset.listos) > 0;
-            document.getElementById('modal_mesa_listo').style.display = hayListo ? 'block' : 'none';
-            document.getElementById('btn_modal_entregado').onclick = () => postJson("{{ url('cocina/entregado') }}/" + pedidoId, {}).then(() => {
-                document.getElementById('modal_mesa_listo').style.display = 'none';
-                toast('✔ Entregado a la mesa');
-                refrescarTodo();
-            });
-            document.getElementById('btn_modal_cambiar').onclick = () => elegirMesa('libres', pedidoId, mesaNombre);
-            document.getElementById('btn_modal_unir').onclick = () => elegirMesa('juntar', pedidoId, mesaNombre);
-
-            fetch(URL_PEDIDO + pedidoId)
-                .then(r => r.json())
-                .then(data => {
-                    if (!data.success) { document.getElementById('modal_mesa_detalle').textContent = 'Error al cargar.'; return; }
-                    let html = '';
-                    data.detalles.forEach(d => {
-                        html += `<div class="modal-mesa-item"><span>${parseFloat(d.ped_det_can)}x ${esc(d.descripcion)}</span><strong>S/ ${(d.ped_det_can * d.ped_det_pre).toFixed(2)}</strong></div>`;
+                if (actual.unidas.length) {
+                    el('mover_lista').insertAdjacentHTML('beforeend', `<div class="mover-ya">🔗 Ya juntas con ${esc(actual.nombre)}: <b>${actual.unidas.map(esc).join(', ')}</b></div>`);
+                }
+                const libres = enZona.filter((m) => m.estado === 'libre');
+                const ocupadas = enZona.filter((m) => m.estado === 'ocupada');
+                if (libres.length) {
+                    const lista = seccion('🟢 Mesas libres para el grupo', 'Toca todas las mesas que va a ocupar el grupo (puedes marcar varias).');
+                    libres.forEach((m) => {
+                        const marcada = elegidas.has(m.mes_id);
+                        lista.appendChild(boton(m, 'libre' + (marcada ? ' elegida' : ''), marcada ? '✔ Elegida' : 'Libre', () => {
+                            marcada ? elegidas.delete(m.mes_id) : elegidas.set(m.mes_id, m);
+                            pintar();
+                            pintarSiguiente();
+                        }));
                     });
-                    html += `<div style="text-align:right; margin-top:10px; font-size:1.1em; font-weight:bold; color:#3498db;">Total: S/ ${data.total.toFixed(2)}</div>`;
-                    document.getElementById('modal_mesa_detalle').innerHTML = html || '<p class="text-muted">Sin ítems</p>';
-                    document.getElementById('modal_mesa_titulo').textContent = `${tituloMesa} (S/ ${data.total.toFixed(2)})`;
-                    pintarUnidas(pedidoId, data.unidas || []);
-                });
+                }
+                if (ocupadas.length) {
+                    const lista = seccion('🔴 Mesas ocupadas: juntar su cuenta', 'Si otra mesa ya está consumiendo y pagará junto con esta.');
+                    ocupadas.forEach((m) => lista.appendChild(boton(m, 'ocupada', soles(m.total) + (m.desde ? ' · desde ' + m.desde : ''), () => confirmarCuenta(m))));
+                }
+                if (!libres.length && !ocupadas.length) el('mover_lista').insertAdjacentHTML('beforeend', '<p class="text-center text-gray-400">No hay mesas en esta zona.</p>');
+            };
+            pintar();
         });
 
-        function esc(t) { const d = document.createElement('div'); d.textContent = t ?? ''; return d.innerHTML; }
+        const ficha = (clase, nombre, detalle) => `<div class="mover-ficha ${clase}">${esc(nombre)}<small>${detalle}</small></div>`;
 
-        // Tabla de Llevar/Delivery activos
-        function cargarActivos() {
-            fetch("{{ route('comandas.activos_llevar_delivery') }}")
-                .then(r => r.json())
-                .then(data => {
-                    if (!data.pedidos.length) {
-                        document.getElementById('takeaway_container').innerHTML = '<p class="text-center text-muted">No hay pedidos activos.</p>';
-                        return;
-                    }
-                    let html = `<table class="takeaway-table"><thead><tr>
-                        <th>ID</th><th>Tipo</th><th>Cliente</th><th>Hora</th><th>Total S/.</th><th>Acciones</th>
-                    </tr></thead><tbody>`;
-                    data.pedidos.forEach(p => {
-                        const hora = new Date(p.fecha_hora).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-                        const tipoClase = p.ped_tip.toLowerCase();
-                        html += `<tr>
-                            <td data-label="ID">${p.ped_id}</td>
-                            <td data-label="Tipo"><span class="label-tipo ${tipoClase}">${p.ped_tip.toUpperCase()}</span></td>
-                            <td data-label="Cliente">${esc(p.ped_cli_nom ?? '-')}</td>
-                            <td data-label="Hora">${hora}</td>
-                            <td data-label="Total">${parseFloat(p.ped_tot).toFixed(2)}</td>
-                            <td data-label="Acciones">
-                                <button class="btn-editar-directo" onclick="irAServicio('${tipoClase}', null, '${p.ped_tip.toUpperCase()}', ${p.ped_id})"><i class="fas fa-edit"></i> Editar</button>
-                                ${PUEDE_COBRAR ? `<button class="btn-cobrar-directo" onclick="window.location.href=URL_COBRAR + ${p.ped_id}"><i class="fas fa-money-bill"></i> Cobrar</button>` : ''}
-                                <button class="btn-editar-directo" style="background:#3498db;" onclick="imprimirPrecuenta(${p.ped_id})"><i class="fas fa-file-invoice"></i> Precuenta</button>
-                                ${PUEDE_COBRAR && p.ped_tip === 'Delivery' ? `<button class="btn-editar-directo" style="background:#7c3aed;" onclick="window.location.href=URL_DELIVERY + ${p.ped_id}"><i class="fas fa-location-dot"></i> Seguimiento</button>` : ''}
-                            </td>
-                        </tr>`;
-                    });
-                    html += '</tbody></table>';
-                    document.getElementById('takeaway_container').innerHTML = html;
-                });
+        function confirmarPasar(m) {
+            paso(2);
+            el('mover_volver').onclick = () => paso(1);
+            el('mover_quedar_caja').classList.add('hidden');
+            el('mover_resumen').innerHTML = ficha('ocupada', actual.nombre, soles(actual.total)) + '<div class="mover-signo">➜</div>' + ficha('libre queda', m.etiqueta, 'nueva mesa');
+            el('mover_texto').innerHTML = `Todo el pedido (<b>${soles(actual.total)}</b>) pasa a <b>${esc(m.etiqueta)}</b>.<br><b>${esc(actual.nombre)}</b> quedará libre.`;
+            el('mover_ok').textContent = `✔ Sí, pasar a ${m.etiqueta}`;
+            el('mover_ok').onclick = () => ejecutar(postJson(@json(route('comandas.cambiar_mesa')), { ped_id: actual.ped_id, mes_id: m.mes_id }), `✔ Listo: el pedido ahora está en ${m.etiqueta}`);
         }
-        cargarActivos();
-        cadaSiVisible(cargarActivos, 15000);
-    </script>
-@include('partials.avisos')
+        function confirmarLibres() {
+            const mesas = [...elegidas.values()];
+            paso(2);
+            el('mover_volver').onclick = () => paso(1);
+            el('mover_quedar_caja').classList.add('hidden');
+            el('mover_resumen').innerHTML = ficha('ocupada queda', actual.nombre, soles(actual.total)) + mesas.map((m) => '<div class="mover-signo">+</div>' + ficha('libre', m.etiqueta, 'se junta')).join('');
+            const total = mesas.length + 1 + actual.unidas.length;
+            el('mover_texto').innerHTML = `El grupo ocupará <b>${total} mesas</b> con <b>una sola cuenta</b> en <b>${esc(actual.nombre)}</b>.<br>Al cobrar, todas quedan libres solas. Si una se desocupa antes, la liberas desde la mesa.`;
+            el('mover_ok').textContent = `✔ Sí, juntar ${mesas.length} mesa${mesas.length > 1 ? 's' : ''}`;
+            el('mover_ok').onclick = () => ejecutar(postJson(@json(route('comandas.juntar_libres')), { ped_id: actual.ped_id, mesas: mesas.map((m) => m.mes_id) }),
+                `✔ Listo: ${mesas.map((m) => m.etiqueta).join(', ')} juntas con ${actual.nombre}`);
+        }
+        function confirmarCuenta(m) {
+            paso(2);
+            el('mover_volver').onclick = () => paso(1);
+            const otra = { nombre: m.etiqueta, ped_id: m.ped_id, total: m.total };
+            let queda = actual;
+            const pintarJuntar = () => {
+                const sale = queda === actual ? otra : actual;
+                el('mover_resumen').innerHTML = ficha('ocupada' + (queda === actual ? ' queda' : ''), actual.nombre, soles(actual.total))
+                    + '<div class="mover-signo">+</div>' + ficha('ocupada' + (queda === otra ? ' queda' : ''), otra.nombre, soles(otra.total))
+                    + '<div class="mover-signo">=</div>' + ficha('total', soles(Number(actual.total) + Number(otra.total)), 'una sola cuenta');
+                el('mover_quedar').innerHTML = '';
+                [actual, otra].forEach((op) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = op === queda ? 'activa' : '';
+                    b.textContent = (op === queda ? '✔ ' : '') + op.nombre;
+                    b.onclick = () => { queda = op; pintarJuntar(); };
+                    el('mover_quedar').appendChild(b);
+                });
+                el('mover_texto').innerHTML = `Lo pedido en las dos mesas queda en <b>una sola cuenta</b> a nombre de <b>${esc(queda.nombre)}</b>.<br><b>${esc(sale.nombre)}</b> sigue ocupada como parte del grupo; si se desocupa, la liberas desde la mesa.`;
+                el('mover_ok').textContent = `✔ Sí, juntar cuentas en ${queda.nombre}`;
+                el('mover_ok').onclick = () => ejecutar(postJson(@json(route('comandas.unir_mesa')), { ped_id: queda.ped_id, ped_id_origen: sale.ped_id }),
+                    `✔ Listo: cuentas de ${actual.nombre} y ${otra.nombre} juntas en ${queda.nombre}`);
+            };
+            el('mover_quedar_caja').classList.remove('hidden');
+            pintarJuntar();
+        }
+        function ejecutar(promesa, mensaje) {
+            const ok = el('mover_ok');
+            ok.disabled = true;
+            promesa.then((res) => {
+                ok.disabled = false;
+                if (!res.success) { toast(res.message || 'No se pudo completar.'); return; }
+                cerrarModal('modal_mover');
+                toast(mensaje);
+                refrescarTodo();
+            }).catch(() => { ok.disabled = false; toast('Sin conexión. Intenta de nuevo.'); });
+        }
+    }
+
+    // Mesas juntas: se liberan con dos toques (por si se desocupan antes de cobrar)
+    function pintarUnidas(pedidoId, unidas) {
+        const cont = document.getElementById('modal_mesa_unidas');
+        if (!unidas.length) { cont.classList.add('hidden'); cont.innerHTML = ''; return; }
+        cont.classList.remove('hidden');
+        cont.innerHTML = '<div class="mb-1.5 font-bold">🔗 Mesas juntas en esta cuenta</div>';
+        unidas.forEach((m) => {
+            const chip = document.createElement('span');
+            chip.className = 'mesa-unida-chip';
+            chip.innerHTML = `${esc(m.nombre)} <button type="button">Liberar</button>`;
+            const b = chip.querySelector('button');
+            b.onclick = () => {
+                if (!b.classList.contains('seguro')) { b.classList.add('seguro'); b.textContent = '¿Seguro? Toca otra vez'; return; }
+                b.disabled = true;
+                postJson(@json(route('comandas.separar_mesa')), { ped_id: pedidoId, mes_id: m.mes_id }).then((res) => {
+                    if (!res.success) { toast(res.message); b.disabled = false; return; }
+                    toast(`✔ ${m.nombre} quedó libre`);
+                    pintarUnidas(pedidoId, unidas.filter((x) => x.mes_id !== m.mes_id));
+                    refrescarTodo();
+                });
+            };
+            cont.appendChild(chip);
+        });
+    }
+
+    // ---------------- Reservas de hoy
+    let reservasHoy = [];
+    function cargarReservas() {
+        return fetch(@json(route('reservas.dia')), { headers: { Accept: 'application/json' } }).then((r) => r.json()).then((d) => {
+            reservasHoy = d.reservas;
+            document.getElementById('n_reservas').textContent = reservasHoy.length;
+            pintarReservas();
+        }).catch(() => {});
+    }
+    function pintarReservas() {
+        const cont = document.getElementById('lista_reservas');
+        if (!reservasHoy.length) { cont.innerHTML = '<p class="py-6 text-center text-gray-400">No hay reservas pendientes para hoy.</p>'; return; }
+        const ahora = new Date();
+        cont.innerHTML = reservasHoy.map((r) => {
+            const [h, m] = r.hora_inicio.split(':');
+            const llegada = new Date(); llegada.setHours(+h, +m, 0, 0);
+            const minutos = Math.round((llegada - ahora) / 60000);
+            const cuando = minutos > 0 ? `en ${minutos >= 60 ? Math.floor(minutos / 60) + ' h ' : ''}${minutos % 60} min` : (minutos > -30 ? 'ya debería estar' : 'atrasada');
+            const mesa = r.mes_nom
+                ? `${esc(r.pis_nom || '')} / <b>${esc(r.mes_nom)}</b> <span class="rounded px-1.5 text-xs font-bold text-white ${r.mesa_libre ? 'bg-emerald-600' : 'bg-rose-600'}">${r.mesa_libre ? 'libre' : 'ocupada'}</span>`
+                : '<span class="text-gray-400">sin mesa elegida</span>';
+            return `<div class="reserva-item ${minutos <= 60 ? 'proxima' : ''}"><div class="flex items-start justify-between gap-2"><div>
+                <div class="text-base"><b>${r.hora_inicio.slice(0, 5)}</b> · <b>${esc(r.nombre_cliente)}</b> · ${r.cantidad_personas} pers.</div>
+                <div class="text-sm text-gray-500">${cuando}${r.telefono ? ' · 📞 ' + esc(r.telefono) : ''} · ${esc(r.estado)}</div>
+                <div class="mt-1 text-sm">Mesa: ${mesa}</div>
+                ${r.platos.length ? `<div class="mt-1 text-sm">🍽 ${r.platos.map(esc).join(', ')}</div>` : ''}
+                ${r.observacion ? `<div class="text-sm text-amber-700">» ${esc(r.observacion)}</div>` : ''}
+                </div><button type="button" class="h-10 shrink-0 rounded-xl bg-emerald-600 px-3 text-sm font-black text-white" onclick="atenderReserva(${r.res_id})">LLEGÓ ✔</button></div></div>`;
+        }).join('');
+    }
+    function atenderReserva(resId) {
+        const r = reservasHoy.find((x) => x.res_id === resId);
+        const atender = (mesId) => postJson(@json(url('reservas')) + '/' + resId + '/atender', { mes_id: mesId }).then((res) => {
+            if (res.success) window.location.href = res.redirect;
+            return res;
+        });
+        if (r.mes_id && r.mesa_libre && confirm(`¿Asignar la ${r.mes_nom} reservada a ${r.nombre_cliente}?`)) {
+            atender(r.mes_id).then((res) => { if (!res.success) toast(res.message); });
+            return;
+        }
+        selectorMesas({
+            tipo: 'libres', desde: '#modal_reservas',
+            titulo: `Mesa para ${r.nombre_cliente} (${r.cantidad_personas} pers.)`,
+            ayuda: r.mes_id && !r.mesa_libre ? `La ${r.mes_nom} reservada está ocupada: elige otra mesa.` : 'Elige la mesa para la reserva.',
+            confirmar: (m, z) => `¿Atender a ${r.nombre_cliente} en ${m.nombre} (${z})?`,
+            alElegir: (m) => atender(m.mes_id),
+        });
+    }
+    document.getElementById('btn_reservas').addEventListener('click', () => { cargarReservas(); abrirModal('modal_reservas'); });
+    cargarReservas();
+    cadaSiVisible(cargarReservas, 60000);
+
+    let abriendo = false;
+    function irAServicio(orderType, mesaId, mesaNombre, pedidoId) {
+        if (abriendo) return;
+        abriendo = true;
+        postJson(@json(route('comandas.set_servicio')), { order_type: orderType, mesa_id: mesaId, mesa_nombre: mesaNombre, pedido_id: pedidoId }).then((res) => {
+            if (!res.success) { abriendo = false; toast(res.message || 'No se pudo abrir el pedido.'); refrescarTodo(); return; }
+            window.location.href = @json(route('comandas.menu'));
+        }).catch(() => { abriendo = false; toast('Error de conexión.'); });
+    }
+    document.getElementById('btn_llevar')?.addEventListener('click', () => irAServicio('llevar', null, 'PARA LLEVAR', null));
+    document.getElementById('btn_delivery')?.addEventListener('click', () => irAServicio('delivery', null, 'DELIVERY', null));
+
+    document.querySelectorAll('.piso-btn').forEach((btn) => btn.addEventListener('click', function () {
+        document.querySelectorAll('.piso-btn').forEach((b) => {
+            const activo = b === this;
+            b.classList.toggle('activo', activo);
+            b.classList.toggle('bg-indigo-600', activo); b.classList.toggle('text-white', activo); b.classList.toggle('ring-indigo-600', activo);
+            b.classList.toggle('bg-white', !activo); b.classList.toggle('text-gray-700', !activo); b.classList.toggle('ring-gray-200', !activo);
+        });
+        refrescarMesas(this.dataset.pisoId);
+    }));
+
+    // Solo se redibuja si algo cambió: así no se pierde el toque del mozo justo cuando llega la recarga
+    let ultimaVistaMesas = null;
+    function refrescarMesas(pisoId) {
+        fetch(URL_MESAS + pisoId).then((r) => r.json()).then((data) => {
+            const clave = pisoId + '|' + data.vista;
+            if (clave === ultimaVistaMesas) return;
+            ultimaVistaMesas = clave;
+            document.getElementById('mesas_container').innerHTML = data.vista;
+            actualizarTimers();
+        });
+    }
+    cadaSiVisible(() => { const a = document.querySelector('.piso-btn.activo'); if (a) refrescarMesas(a.dataset.pisoId); }, 10000);
+
+    // Tiempo en vivo de cada mesa ocupada (corre en el navegador; solo con la pantalla visible)
+    function actualizarTimers() {
+        const ahora = Date.now();
+        document.querySelectorAll('.mesa-timer').forEach((el) => {
+            const inicio = new Date(el.dataset.inicio).getTime();
+            if (!inicio) return;
+            const diff = Math.max(0, Math.floor((ahora - inicio) / 1000));
+            el.textContent = [Math.floor(diff / 3600), Math.floor((diff % 3600) / 60), diff % 60].map((n) => String(n).padStart(2, '0')).join(':');
+        });
+    }
+    actualizarTimers();
+    setInterval(() => { if (!document.hidden) actualizarTimers(); }, 1000);
+
+    // Toque en una mesa
+    document.addEventListener('click', (e) => {
+        const mesa = e.target.closest('.btn-mesa-comanda');
+        if (!mesa) return;
+        const mesaId = mesa.dataset.id, mesaNombre = mesa.dataset.nombre, pedidoId = mesa.dataset.pedidoId;
+        if (mesa.dataset.estado === 'Libre') { irAServicio('salon', mesaId, mesaNombre, null); return; }
+        if (!pedidoId) { toast('Mesa ocupada sin pedido asociado.'); return; }
+
+        document.getElementById('modal_mesa_titulo').textContent = mesaNombre;
+        document.getElementById('modal_mesa_detalle').innerHTML = '<p class="text-gray-400">Cargando…</p>';
+        pintarUnidas(pedidoId, []);
+        abrirModal('modal_mesa');
+
+        document.getElementById('btn_modal_editar').onclick = () => { cerrarModal('modal_mesa'); irAServicio('salon', mesaId, mesaNombre, pedidoId); };
+        if (PUEDE_COBRAR) {
+            document.getElementById('btn_modal_cobrar').onclick = () => window.location.href = URL_COBRAR + pedidoId;
+            document.getElementById('btn_modal_separadas').onclick = () => window.location.href = URL_COBRAR + pedidoId + '/separadas';
+        }
+        document.getElementById('btn_modal_precuenta').onclick = () => imprimirPrecuenta(pedidoId);
+        document.getElementById('modal_mesa_listo').classList.toggle('hidden', !(Number(mesa.dataset.listos) > 0));
+        document.getElementById('btn_modal_entregado').onclick = () => postJson(@json(url('cocina/entregado')) + '/' + pedidoId, {}).then(() => {
+            document.getElementById('modal_mesa_listo').classList.add('hidden');
+            toast('✔ Entregado a la mesa');
+            refrescarTodo();
+        });
+        document.getElementById('btn_modal_cambiar').onclick = () => elegirMesa('libres', pedidoId, mesaNombre);
+        document.getElementById('btn_modal_unir').onclick = () => elegirMesa('juntar', pedidoId, mesaNombre);
+
+        fetch(URL_PEDIDO + pedidoId).then((r) => r.json()).then((data) => {
+            if (!data.success) { document.getElementById('modal_mesa_detalle').textContent = 'Error al cargar.'; return; }
+            const html = data.detalles.map((d) => `<div class="flex justify-between gap-2 border-b border-gray-100 py-1.5"><span>${parseFloat(d.ped_det_can)}× ${esc(d.descripcion)}</span><b>${soles(d.ped_det_can * d.ped_det_pre)}</b></div>`).join('');
+            document.getElementById('modal_mesa_detalle').innerHTML = (html || '<p class="text-gray-400">Sin ítems</p>')
+                + `<div class="mt-2 text-right text-base font-black text-indigo-700">Total: ${soles(data.total)}</div>`;
+            document.getElementById('modal_mesa_titulo').textContent = `${mesaNombre} · ${soles(data.total)}`;
+            pintarUnidas(pedidoId, data.unidas || []);
+        });
+    });
+
+    // Para llevar y delivery en curso
+    function cargarActivos() {
+        const cont = document.getElementById('takeaway_container');
+        if (!cont) return;
+        fetch(@json(route('comandas.activos_llevar_delivery'))).then((r) => r.json()).then((data) => {
+            if (!data.pedidos.length) { cont.innerHTML = '<p class="py-4 text-center text-sm text-gray-400">No hay pedidos activos.</p>'; return; }
+            cont.innerHTML = data.pedidos.map((p) => {
+                const hora = new Date(p.fecha_hora.replace(' ', 'T')).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+                const tipo = p.ped_tip.toLowerCase();
+                return `<div class="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5 ring-1 ring-gray-100">
+                    <span class="rounded-md px-2 py-0.5 text-xs font-black text-white ${tipo === 'delivery' ? 'bg-emerald-600' : 'bg-indigo-600'}">${esc(p.ped_tip.toUpperCase())}</span>
+                    <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800">#${p.ped_id} · ${esc(p.ped_cli_nom ?? '-')} <span class="font-normal text-gray-400">· ${hora}</span></span>
+                    <span class="text-sm font-black">${soles(p.ped_tot)}</span>
+                    <div class="flex w-full gap-1.5 sm:w-auto">
+                        <button class="h-9 flex-1 rounded-lg bg-indigo-50 px-3 text-xs font-bold text-indigo-700" onclick="irAServicio('${tipo}', null, '${esc(p.ped_tip.toUpperCase())}', ${p.ped_id})">Editar</button>
+                        <button class="h-9 flex-1 rounded-lg bg-sky-50 px-3 text-xs font-bold text-sky-700" onclick="imprimirPrecuenta(${p.ped_id})">Precuenta</button>
+                        ${PUEDE_COBRAR ? `<button class="h-9 flex-1 rounded-lg bg-rose-600 px-3 text-xs font-bold text-white" onclick="window.location.href=URL_COBRAR + ${p.ped_id}">Cobrar</button>` : ''}
+                        ${PUEDE_COBRAR && p.ped_tip === 'Delivery' ? `<button class="h-9 flex-1 rounded-lg bg-violet-50 px-3 text-xs font-bold text-violet-700" onclick="window.location.href=URL_DELIVERY + ${p.ped_id}">Seguimiento</button>` : ''}
+                    </div></div>`;
+            }).join('');
+        });
+    }
+    cargarActivos();
+    cadaSiVisible(cargarActivos, 15000);
+</script>
 @include('partials.aviso_servicio')
-</body>
-</html>
+@endpush

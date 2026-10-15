@@ -448,7 +448,8 @@ class Impresion
      * Comanda para cocina/bar: cada línea va a la impresora de la categoría del producto.
      * $lineas: [['IdProducto', 'nombre', 'cantidad', 'observacion']], $anulacion: true = ticket de ANULACIÓN.
      */
-    public static function comanda(int $pedId, array $lineas, bool $anulacion = false, string $motivo = ''): int
+    /** $soloEn: ids de impresoras donde sale TODA la comanda (en vez de la impresora de cada categoría) */
+    public static function comanda(int $pedId, array $lineas, bool $anulacion = false, string $motivo = '', ?array $soloEn = null): int
     {
         if (! $lineas) {
             return 0;
@@ -467,8 +468,12 @@ class Impresion
         $entrega = $pedido->ped_tip === 'Delivery' && ! $anulacion ? Delivery::lineasComanda($pedido) : [];
         $atiende = $pedido->entrega_origen === 'CARTA' ? 'PEDIDO WEB (CARTA QR)' : null;
         $promotor = $pedido->promotor_id ? DB::table('users')->where('IdUsuario', $pedido->promotor_id)->value(DB::raw("COALESCE(NULLIF(apeusu, ''), name)")) : null;
+        // Comanda impresa al cobrar: "Atiende" es el mozo que tomó el pedido, no el cajero
+        if (! $atiende && $soloEn !== null && $pedido->mozo) {
+            $atiende = DB::table('users')->where('IdUsuario', $pedido->mozo)->value(DB::raw("COALESCE(NULLIF(apeusu, ''), name)"));
+        }
 
-        return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° '.$pedido->ped_id, $lineas, $anulacion, $motivo, $entrega, $atiende, $promotor);
+        return self::comandaPara((int) $pedido->id_empresa_negocio, $destino, 'Pedido N° '.$pedido->ped_id, $lineas, $anulacion, $motivo, $entrega, $atiende, $promotor, $soloEn);
     }
 
     /** ¿La sucursal imprime las comandas recién al cobrar? (empresa_negocios.comanda_al_cobrar) */
@@ -511,8 +516,12 @@ class Impresion
         DB::table('pedidos')->where('ped_id', $pedId)->update(['comanda_pendiente' => $pendiente ? json_encode($pendiente, JSON_UNESCAPED_UNICODE) : null]);
     }
 
-    /** Al cobrar: imprime lo que quedó guardado de la comanda y lo limpia. Devuelve cuántos tickets salieron. */
-    public static function imprimirComandaPendiente(int $pedId): int
+    /**
+     * Al cobrar: imprime lo que quedó guardado de la comanda y lo limpia. Devuelve cuántos tickets salieron.
+     * Si el cajero tiene una impresora de barra (users.impresora_barra), la comanda sale en SU ticketera de caja y en
+     * SU barra (varias barras con sus cajas); si no, en la impresora de cada categoría.
+     */
+    public static function imprimirComandaPendiente(int $pedId, $cajero = null): int
     {
         $pendiente = json_decode((string) DB::table('pedidos')->where('ped_id', $pedId)->value('comanda_pendiente'), true);
         if (! $pendiente) {
@@ -520,15 +529,23 @@ class Impresion
         }
         DB::table('pedidos')->where('ped_id', $pedId)->update(['comanda_pendiente' => null]);
 
-        return self::comanda($pedId, array_values($pendiente));
+        $cajero ??= Auth::user();
+        $soloEn = null;
+        if ($cajero && ! empty($cajero->impresora_barra)) {
+            $sucursal = (int) DB::table('pedidos')->where('ped_id', $pedId)->value('id_empresa_negocio');
+            $soloEn = array_values(array_unique(array_filter([(int) (self::impresoraCaja($sucursal, $cajero)->Id ?? 0), (int) $cajero->impresora_barra])));
+        }
+
+        return self::comanda($pedId, array_values($pendiente), false, '', $soloEn);
     }
 
     /**
      * Imprime la comanda en la impresora de la categoría de cada producto.
      * Sirve para pedidos de mesa/llevar y para ventas directas (sin pedido).
+     * $soloEn: los productos que se imprimen (su categoría tiene impresora) salen todos juntos en esas impresoras.
      */
     public static function comandaPara(int $sucursal, string $destino, string $referencia, array $lineas, bool $anulacion = false, string $motivo = '',
-        array $entrega = [], ?string $atiende = null, ?string $promotor = null): int
+        array $entrega = [], ?string $atiende = null, ?string $promotor = null, ?array $soloEn = null): int
     {
         if (! $lineas) {
             return 0;
@@ -542,7 +559,8 @@ class Impresion
         $grupos = [];
         foreach ($lineas as $l) {
             $cat = $impresorasDe[$l['IdProducto']] ?? null;
-            foreach (array_unique(array_filter([(int) ($cat->impresora ?? 0), (int) ($cat->impresora2 ?? 0)])) as $idImp) {
+            $destinos = array_unique(array_filter([(int) ($cat->impresora ?? 0), (int) ($cat->impresora2 ?? 0)]));
+            foreach ($destinos && $soloEn ? $soloEn : $destinos as $idImp) {
                 $grupos[$idImp][] = $l;
             }
         }
