@@ -14,8 +14,8 @@
     window.addEventListener('scroll', alBajar, { passive: true });
     alBajar();
 
-    // En el celular, el menú se cierra al elegir una opción
-    document.querySelectorAll('.menu .navbar-collapse a').forEach((a) => a.addEventListener('click', () => {
+    // En el celular, el menú se cierra al elegir una opción (no al abrir un submenú)
+    document.querySelectorAll('.menu .navbar-collapse a:not([data-bs-toggle="dropdown"])').forEach((a) => a.addEventListener('click', () => {
         const abierto = document.querySelector('.menu .navbar-collapse.show');
         if (abierto && window.bootstrap) bootstrap.Collapse.getOrCreateInstance(abierto).hide();
     }));

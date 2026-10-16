@@ -3,6 +3,17 @@
     $enPortada ??= true;
     $ancla = fn (string $seccion): string => ($enPortada ? '' : route('sitio.inicio')).'#'.$seccion;
 @endphp
+<style>
+    .menu-sub { border: 0; border-radius: 1rem; padding: .5rem; box-shadow: 0 20px 45px -15px rgba(15, 23, 42, .35); min-width: 230px; }
+    .menu-sub .dropdown-item { border-radius: .65rem; padding: .55rem .8rem; font-weight: 500; color: #1e293b; }
+    .menu-sub .dropdown-item i { width: 1.4rem; color: #2563eb; }
+    .menu-sub .dropdown-item:hover { background: #eff6ff; color: #1d4ed8; }
+    /* En la PC el submenú se abre al pasar el mouse */
+    @media (min-width: 992px) {
+        .menu .dropdown:hover > .menu-sub { display: block; margin-top: 0; }
+        .menu .dropdown > .menu-sub::before { content: ''; position: absolute; top: -12px; left: 0; right: 0; height: 12px; }
+    }
+</style>
 <header class="menu">
     <nav class="navbar navbar-expand-lg">
         <div class="container">
@@ -12,14 +23,25 @@
             </button>
             <div class="collapse navbar-collapse" id="menuPrincipal">
                 <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
-                    <li class="nav-item"><a class="nav-link" href="{{ $ancla('rubros') }}">Rubros</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ $ancla('facturacion') }}">Facturación</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ $ancla('funciones') }}">Funciones</a></li>
+                    {{-- Submenús para que todo entre en una línea --}}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">El sistema <i class="fas fa-chevron-down small ms-1"></i></a>
+                        <ul class="dropdown-menu menu-sub">
+                            <li><a class="dropdown-item" href="{{ $ancla('rubros') }}"><i class="fas fa-store"></i>Rubros</a></li>
+                            <li><a class="dropdown-item" href="{{ $ancla('facturacion') }}"><i class="fas fa-file-invoice"></i>Facturación SUNAT</a></li>
+                            <li><a class="dropdown-item" href="{{ $ancla('funciones') }}"><i class="fas fa-puzzle-piece"></i>Funciones</a></li>
+                            <li><a class="dropdown-item" href="{{ $ancla('clientes') }}"><i class="fas fa-users"></i>Clientes</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item"><a class="nav-link" href="{{ $ancla('planes') }}">Planes</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ $ancla('clientes') }}">Clientes</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ $ancla('contacto') }}">Contacto</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('sitio.tutorial') }}"><i class="fas fa-graduation-cap me-1"></i>Tutoriales</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ route('sitio.carta.crear') }}"><i class="fas fa-qrcode me-1"></i>Crea tu carta</a></li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Recursos <i class="fas fa-chevron-down small ms-1"></i></a>
+                        <ul class="dropdown-menu menu-sub">
+                            <li><a class="dropdown-item" href="{{ route('sitio.carta.crear') }}"><i class="fas fa-qrcode"></i>Crea tu carta gratis</a></li>
+                            <li><a class="dropdown-item" href="{{ route('sitio.tutorial') }}"><i class="fas fa-graduation-cap"></i>Tutoriales</a></li>
+                            <li><a class="dropdown-item" href="{{ $ancla('contacto') }}"><i class="fas fa-envelope"></i>Contacto</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item"><a class="nav-link fw-semibold" href="#" data-bs-toggle="modal" data-bs-target="#modalDemo"><i class="fas fa-circle-play me-1"></i>Ver demo</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('sitio.ingresar') }}"><i class="fas fa-right-to-bracket me-1"></i>Ingresar</a></li>
                     <li class="nav-item ms-lg-2 mt-2 mt-lg-0"><a class="btn btn-selva" href="{{ route('sitio.registro') }}">Prueba gratis</a></li>
