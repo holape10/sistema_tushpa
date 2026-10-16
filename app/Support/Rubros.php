@@ -58,6 +58,19 @@ class Rubros
         'COMPLETO' => ['icono' => 'fa-table-cells', 'nombre' => 'Todo el menú', 'ejemplos' => 'Todas las opciones del sistema', 'modulos' => ['*']],
     ];
 
+    /**
+     * Qué opciones del sistema tienen sentido en cada rubro (para no mostrarle a una farmacia "Preparado" o "Es combustible").
+     * Lo que no está aquí lo usan todos. COMPLETO o sin rubro = todo.
+     */
+    private const FUNCIONES = [
+        'preparados' => ['RESTOBAR', 'HOTELERIA', 'CLUB', 'GENERAL'],
+        'insumos' => ['RESTOBAR', 'HOTELERIA', 'CLUB', 'GENERAL'],
+        'combustible' => ['GRIFO'],
+        'lotes' => ['FARMACIA', 'GENERAL', 'CLINICA'],
+        'series' => ['GENERAL'],
+        'restaurante' => ['RESTOBAR', 'HOTELERIA', 'CLUB'],
+    ];
+
     /** Clave de sesión con el rubro elegido en el login (empresa demo sin rubro) */
     public const SESION = 'rubro_elegido';
 
@@ -67,6 +80,33 @@ class Rubros
         $cliente = Tenancy::cliente();
 
         return $cliente !== null && blank($cliente->rubro);
+    }
+
+    /** Rubro de la empresa (o el elegido en el login de la demo); null = sin rubro, se ve todo */
+    public static function actual(): ?string
+    {
+        $cliente = Tenancy::cliente();
+        $rubro = $cliente === null ? null : ($cliente->rubro ?: session(self::SESION));
+
+        return $rubro && isset(self::RUBROS[$rubro]) && $rubro !== 'COMPLETO' ? $rubro : null;
+    }
+
+    /** ¿Esta opción aplica al rubro de la empresa? (preparados, insumos, combustible, lotes, series, restaurante) */
+    public static function permite(string $funcion): bool
+    {
+        $rubro = self::actual();
+
+        return $rubro === null || ! isset(self::FUNCIONES[$funcion]) || in_array($rubro, self::FUNCIONES[$funcion], true);
+    }
+
+    /** @return array<int, int> Tipos de producto (promocion) que se pueden crear: 0 Producto, 4 Insumo, 2 Preparado, 6 Combo */
+    public static function tiposProducto(): array
+    {
+        return array_values(array_filter([0, 4, 2, 6], fn ($t) => match ($t) {
+            4 => self::permite('insumos'),
+            2 => self::permite('preparados'),
+            default => true,
+        }));
     }
 
     /** Deja solo las opciones del rubro elegido en el login; sin elección se ve todo el menú del usuario */

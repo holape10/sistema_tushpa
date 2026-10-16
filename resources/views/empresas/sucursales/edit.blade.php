@@ -207,6 +207,7 @@
                                 @endforeach
                             </div>
                         </div>
+                        @if (\App\Support\Rubros::permite('restaurante'))
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer hover:border-gray-300">
                             <input type="checkbox" name="comandas_solo_mesas" value="1" @checked($campo('comandas_solo_mesas')) class="mt-0.5 rounded text-indigo-600">
                             <span><span class="font-bold text-gray-800">🍽️ Mozos y promotores solo atienden mesas</span>
@@ -231,6 +232,13 @@
                                     <span class="block text-xs text-gray-500">El producto va gratis con su motivo. Ante SUNAT es una operación gratuita y sí descuenta el stock. Todo sale en el reporte "Descuentos y Cortesías".</span></span>
                             </label>
                         </div>
+                        @else
+                            {{-- Opciones de restaurante: este negocio no las usa, se guardan como están --}}
+                            @foreach (['comandas_solo_mesas', 'permite_descuentos', 'permite_cortesias'] as $opcion)
+                                @if ($campo($opcion))<input type="hidden" name="{{ $opcion }}" value="1">@endif
+                            @endforeach
+                            <input type="hidden" name="descuento_max_cajero" value="{{ (float) ($sucursal->descuento_max_cajero ?? 10) }}">
+                        @endif
                         <div>
                             <p class="text-sm font-medium text-gray-600 mb-2">Comprobante que sale seleccionado al cobrar</p>
                             <div class="grid grid-cols-3 gap-3">

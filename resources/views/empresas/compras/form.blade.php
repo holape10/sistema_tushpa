@@ -121,7 +121,7 @@
                     <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
                     <input x-ref="buscador" type="search" x-model="busqueda" autocomplete="off" @input.debounce.200ms="buscar()"
                            @keydown.enter.prevent="enterBuscador()" @keydown.arrow-down.prevent="moverResultado(1)" @keydown.arrow-up.prevent="moverResultado(-1)" @keydown.escape="resultadosAbiertos = false"
-                           placeholder="Buscar producto o insumo, o escanear código…  (F2)"
+                           placeholder="{{ \App\Support\Rubros::permite('insumos') ? 'Buscar producto o insumo, o escanear código…  (F2)' : 'Buscar producto o escanear código…  (F2)' }}"
                            class="w-full h-12 pl-10 pr-3 rounded-xl border-slate-300 text-lg font-semibold focus:ring-indigo-300 focus:border-indigo-400">
                     <div x-show="resultadosAbiertos" x-cloak class="absolute z-30 left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl ring-2 ring-indigo-400 max-h-[55vh] overflow-y-auto">
                         <template x-for="(p, i) in resultados" :key="p.id">
@@ -134,12 +134,14 @@
                                 <span class="text-sm font-semibold whitespace-nowrap" x-text="'Últ. costo ' + num2(p.costo)"></span>
                             </button>
                         </template>
-                        <p x-show="!resultados.length && !buscando" class="px-4 py-5 text-center text-slate-400 text-sm">Sin resultados (combos y preparados no se compran).</p>
+                        <p x-show="!resultados.length && !buscando" class="px-4 py-5 text-center text-slate-400 text-sm">Sin resultados ({{ \App\Support\Rubros::permite('preparados') ? 'combos y preparados' : 'los combos' }} no se compran).</p>
                     </div>
                 </div>
+                @if (\App\Support\Rubros::permite('lotes'))
                 <label class="flex items-center gap-2 text-sm text-slate-600">
                     <input type="checkbox" x-model="conLote" class="rounded text-indigo-600"> Lote y vencimiento
                 </label>
+                @endif
             </div>
 
             <div class="overflow-x-auto">

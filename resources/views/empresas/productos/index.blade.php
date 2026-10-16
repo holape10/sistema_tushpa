@@ -13,8 +13,8 @@
                 class="w-full sm:w-auto rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
                 <option value="" @selected($tipo === '')>Todos los tipos</option>
                 <option value="0" @selected($tipo == '0')>Productos</option>
-                <option value="4" @selected($tipo == '4')>Insumos</option>
-                <option value="2" @selected($tipo == '2')>Preparados</option>
+                @if (\App\Support\Rubros::permite('insumos'))<option value="4" @selected($tipo == '4')>Insumos</option>@endif
+                @if (\App\Support\Rubros::permite('preparados'))<option value="2" @selected($tipo == '2')>Preparados</option>@endif
                 <option value="6" @selected($tipo == '6')>Combos</option>
             </select>
         </form>

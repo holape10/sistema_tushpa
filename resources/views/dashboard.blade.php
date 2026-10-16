@@ -41,16 +41,19 @@
     </form>
 
     {{-- Ahora mismo --}}
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+    @php $esRestaurante = \App\Support\Rubros::permite('restaurante'); @endphp
+    <div class="grid grid-cols-2 {{ $esRestaurante ? 'lg:grid-cols-5' : 'lg:grid-cols-4' }} gap-3 mb-5">
         <div class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3">
             <div class="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg"><i class="fas fa-sack-dollar"></i></div>
             <div><p class="text-xs text-gray-500">Vendido hoy</p><p class="font-bold text-gray-800">{{ $soles($ahora['hoy']) }}</p></div>
         </div>
+        @if ($esRestaurante)
         <a href="{{ route('comandas.seleccion') }}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition">
             <div class="w-11 h-11 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-lg"><i class="fas fa-utensils"></i></div>
             <div><p class="text-xs text-gray-500">Mesas ocupadas</p><p class="font-bold text-gray-800">{{ $ahora['mesas'] }} / {{ $ahora['totalMesas'] }}
                 @if ($ahora['llevar'])<span class="text-xs font-normal text-gray-500">+ {{ $ahora['llevar'] }} llevar</span>@endif</p></div>
         </a>
+        @endif
         <div class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3">
             <div class="w-11 h-11 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-lg"><i class="fas fa-hourglass-half"></i></div>
             <div><p class="text-xs text-gray-500">Pedidos por cobrar</p><p class="font-bold text-gray-800">{{ $soles($ahora['porCobrar']) }}</p></div>
@@ -274,13 +277,13 @@
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div class="px-5 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-bold"><i class="fas fa-user-tie"></i> Ventas por mozo</div>
+            <div class="px-5 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-bold"><i class="fas fa-user-tie"></i> Ventas por {{ $esRestaurante ? 'mozo' : 'vendedor' }}</div>
             <table class="w-full text-sm">
                 <tbody class="divide-y divide-gray-100">
                     @php $maxMozo = max(1, (float) ($topMozos->max('total') ?? 1)); @endphp
                     @forelse ($topMozos as $m)
                         <tr><td class="px-4 py-2">
-                                <span class="font-semibold text-gray-700">{{ $m->apeusu ?? 'Sin mozo' }}</span>
+                                <span class="font-semibold text-gray-700">{{ $m->apeusu ?? ($esRestaurante ? 'Sin mozo' : 'Sin vendedor') }}</span>
                                 <span class="block text-xs text-gray-400">{{ $m->atenciones }} atención(es)</span>
                                 <div class="h-1.5 mt-1 rounded-full bg-gray-100"><div class="h-1.5 rounded-full bg-indigo-500" style="width: {{ round($m->total / $maxMozo * 100) }}%"></div></div>
                             </td>

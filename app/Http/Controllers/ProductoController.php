@@ -14,9 +14,11 @@ use App\Support\Buscar;
 use App\Support\Excel;
 use App\Support\ExcelLector;
 use App\Support\Kardex;
+use App\Support\Rubros;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ProductoController extends Controller
 {
@@ -230,7 +232,8 @@ class ProductoController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['promocion' => 'required|in:0,2,4,6,8'] + $this->reglas(in_array((int) $request->promocion, [4, 8], true)), [], self::NOMBRES);
+        $request->validate(['promocion' => ['required', Rule::in(array_merge(Rubros::tiposProducto(), [8]))]]
+            + $this->reglas(in_array((int) $request->promocion, [4, 8], true)), ['promocion.in' => 'Ese tipo no se usa en este tipo de negocio.'], self::NOMBRES);
 
         if ($request->promocion == 6 && empty(array_filter((array) $request->combo_items))) {
             return back()->withInput()->withErrors(['combo_items' => 'Un combo debe tener al menos un producto o preparado dentro.']);
@@ -255,10 +258,10 @@ class ProductoController extends Controller
                 'stock_min' => $request->stock_min ?: 0,
                 'debe' => trim((string) $request->debe) ?: null,
                 'haber' => trim((string) $request->haber) ?: null,
-                'control_lote' => in_array($tipo, [0, 4]) && $request->boolean('control_lote'),
-                'control_serie' => $tipo === 0 && $request->boolean('control_serie'),
-                'garantia_meses' => $tipo === 0 && $request->boolean('control_serie') ? (min(120, max(0, (int) $request->garantia_meses)) ?: null) : null,
-                'es_combustible' => $tipo === 0 && $request->boolean('es_combustible'),
+                'control_lote' => in_array($tipo, [0, 4]) && $request->boolean('control_lote') && Rubros::permite('lotes'),
+                'control_serie' => $tipo === 0 && $request->boolean('control_serie') && Rubros::permite('series'),
+                'garantia_meses' => $tipo === 0 && $request->boolean('control_serie') && Rubros::permite('series') ? (min(120, max(0, (int) $request->garantia_meses)) ?: null) : null,
+                'es_combustible' => $tipo === 0 && $request->boolean('es_combustible') && Rubros::permite('combustible'),
                 'proest' => 'Activo',
                 'IdEmpresa' => Auth::user()->IdEmpresa,
                 'id_empresa_negocio' => Auth::user()->id_empresa_negocio,
@@ -306,7 +309,8 @@ class ProductoController extends Controller
         $anterior = (int) $producto->promocion;
         // El tipo se puede corregir (ej. un plato que se registró como Producto)
         $tipo = $request->filled('promocion') ? (int) $request->promocion : $anterior;
-        $request->validate(['promocion' => 'nullable|in:0,2,4,6,8'] + $this->reglas(in_array($tipo, [4, 8], true)), [], self::NOMBRES);
+        $request->validate(['promocion' => ['nullable', Rule::in(array_merge(Rubros::tiposProducto(), [8, $anterior]))]]
+            + $this->reglas(in_array($tipo, [4, 8], true)), ['promocion.in' => 'Ese tipo no se usa en este tipo de negocio.'], self::NOMBRES);
         if ($tipo !== $anterior && ($error = $this->errorCambioTipo($producto, $tipo))) {
             return back()->withInput()->withErrors(['promocion' => $error]);
         }
@@ -328,10 +332,11 @@ class ProductoController extends Controller
                     'codigo_barra' => trim((string) $request->codigo_barra) ?: null,
                     'descripcion' => trim((string) $request->descripcion) ?: null,
                     'debe' => trim((string) $request->debe) ?: null, 'haber' => trim((string) $request->haber) ?: null,
-                    'control_lote' => in_array($tipo, [0, 4]) && $request->boolean('control_lote'),
-                    'control_serie' => $tipo === 0 && $request->boolean('control_serie'),
-                    'garantia_meses' => $tipo === 0 && $request->boolean('control_serie') ? (min(120, max(0, (int) $request->garantia_meses)) ?: null) : null,
-                    'es_combustible' => $tipo === 0 && $request->boolean('es_combustible')]
+                    'control_lote' => in_array($tipo, [0, 4]) && $request->boolean('control_lote') && (Rubros::permite('lotes') || $producto->control_lote),
+                    'control_serie' => $tipo === 0 && $request->boolean('control_serie') && (Rubros::permite('series') || $producto->control_serie),
+                    'garantia_meses' => $tipo === 0 && $request->boolean('control_serie') && (Rubros::permite('series') || $producto->control_serie)
+                        ? (min(120, max(0, (int) $request->garantia_meses)) ?: null) : null,
+                    'es_combustible' => $tipo === 0 && $request->boolean('es_combustible') && (Rubros::permite('combustible') || $producto->es_combustible)]
                 + $this->equivalencia($request, $tipo));
 
             if ($tipo === 6) {

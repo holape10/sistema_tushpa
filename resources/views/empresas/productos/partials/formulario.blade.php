@@ -12,6 +12,11 @@
         2 => ['🍽️', 'Preparado', 'El plato final que se vende (ej. Ceviche Mixto).'],
         6 => ['🎁', 'Combo', 'Varios productos o preparados a un solo precio.'],
     ];
+    // Solo los tipos y opciones que tienen sentido en el rubro del negocio (al editar se respeta lo que ya tiene el producto)
+    $tipos = array_filter($tipos, fn ($t) => in_array($t, \App\Support\Rubros::tiposProducto(), true) || ($p && (int) $p->promocion === $t), ARRAY_FILTER_USE_KEY);
+    $verCombustible = \App\Support\Rubros::permite('combustible') || ($p->es_combustible ?? false);
+    $verLote = \App\Support\Rubros::permite('lotes') || ($p->control_lote ?? false);
+    $verSerie = \App\Support\Rubros::permite('series') || ($p->control_serie ?? false);
 @endphp
 
 <form action="{{ $p ? route('productos.update', $p->IdProducto) : route('productos.store') }}" method="POST" enctype="multipart/form-data"
@@ -44,7 +49,7 @@
             </div>
         @else
             <p class="text-sm font-semibold text-gray-700 mb-3">¿Qué vas a registrar?</p>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="grid grid-cols-2 {{ count($tipos) > 2 ? 'lg:grid-cols-4' : '' }} gap-3">
                 @foreach ($tipos as $valor => [$icono, $nombre, $ayuda])
                     <label class="relative cursor-pointer">
                         <input type="radio" name="promocion" value="{{ $valor }}" x-model="tipo" class="peer sr-only">
@@ -202,21 +207,26 @@
                         </div>
                     @endif
 
+                    @if ($verCombustible)
                     <label x-show="tipo == '0'" x-cloak class="flex items-start gap-3 p-3 rounded-xl border border-orange-200 bg-orange-50 cursor-pointer">
                         <input type="checkbox" name="es_combustible" value="1" @checked(old('es_combustible', $p->es_combustible ?? false))
                                class="mt-0.5 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
                         <span class="text-sm"><span class="font-semibold text-orange-800">⛽ Es combustible</span>
                             <span class="block text-xs text-orange-700">Sale como botón grande en el PV Grifo y se vende por importe (S/) o por galones. Usa la unidad Galón.</span></span>
                     </label>
+                    @endif
 
+                    @if ($verLote)
                     <label x-show="tipo == '0' || tipo == '4'" x-cloak class="flex items-start gap-3 p-3 rounded-xl border border-teal-200 bg-teal-50 cursor-pointer">
                         <input type="checkbox" name="control_lote" value="1" @checked(old('control_lote', $p->control_lote ?? false))
                                class="mt-0.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500">
                         <span class="text-sm"><span class="font-semibold text-teal-800">Controlar lote y vencimiento</span>
                             <span class="block text-xs text-teal-700">Farmacias: al comprar pide lote y vencimiento; al vender sale primero el que vence antes.</span></span>
                     </label>
+                    @endif
 
                     {{-- Electrodomésticos, celulares: cada unidad con su serie (o IMEI) --}}
+                    @if ($verSerie)
                     <div x-show="tipo == '0'" x-cloak x-data="{ serie: @js((bool) old('control_serie', $p->control_serie ?? false)) }"
                          class="p-3 rounded-xl border border-sky-200 bg-sky-50">
                         <label class="flex items-start gap-3 cursor-pointer">
@@ -229,6 +239,7 @@
                                    class="w-20 rounded-lg border-sky-300 text-sm"> meses
                         </label>
                     </div>
+                    @endif
                 </div>
             </section>
 
