@@ -216,7 +216,8 @@ class Gimnasio
      */
     public static function levantarCongelamiento(int $conId, int $suc, int $usuarioId): void
     {
-        $c = DB::table('gym_congelamientos')->where('con_id', $conId)->where('estado', 'ACTIVO')->first();
+        $c = DB::table('gym_congelamientos as c')->join('gym_membresias as m', 'm.mem_id', '=', 'c.mem_id')
+            ->where('c.con_id', $conId)->where('c.estado', 'ACTIVO')->where('m.id_empresa_negocio', $suc)->first(['c.*']);
         if (! $c) {
             throw new \RuntimeException('El congelamiento no existe o ya fue anulado.');
         }
@@ -255,14 +256,22 @@ class Gimnasio
     /** Desde cuándo empieza un plan nuevo: al día siguiente de lo que ya tiene pagado (la rutina del día, siempre hoy) */
     public static function inicioSugerido(int $socId, int $suc, int $dias): string
     {
-        $hoy = now()->toDateString();
-        if ($dias <= 1) {
-            return $hoy;
-        }
-        $fin = DB::table('gym_membresias')->where('soc_id', $socId)->where('id_empresa_negocio', $suc)->where('estado', 'ACTIVA')
-            ->where('dias', '>', 1)->max('fin');
+        return self::inicioDesde($dias, self::finPagado($socId, $suc));
+    }
 
-        return $fin && $fin >= $hoy ? Carbon::parse($fin)->addDay()->toDateString() : $hoy;
+    /** Último día que el cliente ya tiene pagado (sin contar las rutinas del día) */
+    public static function finPagado(int $socId, int $suc): ?string
+    {
+        return DB::table('gym_membresias')->where('soc_id', $socId)->where('id_empresa_negocio', $suc)->where('estado', 'ACTIVA')
+            ->where('dias', '>', 1)->max('fin');
+    }
+
+    /** Un plan de varios días empieza al día siguiente de lo pagado; la rutina del día, hoy */
+    public static function inicioDesde(int $dias, ?string $finPagado): string
+    {
+        $hoy = now()->toDateString();
+
+        return $dias > 1 && $finPagado && $finPagado >= $hoy ? Carbon::parse($finPagado)->addDay()->toDateString() : $hoy;
     }
 
     /**
@@ -288,7 +297,8 @@ class Gimnasio
             if (! $plan || ! $plan->IdProducto) {
                 throw new \RuntimeException('Plan no encontrado.');
             }
-            $precio = round((float) ($datos['precio'] ?? $plan->precio), 2);
+            // El precio del plan lo cambia solo el administrador (caja vende al precio del plan)
+            $precio = $user->esAdmin() ? round((float) ($datos['precio'] ?? $plan->precio), 2) : round((float) $plan->precio, 2);
             if ($precio <= 0) {
                 throw new \RuntimeException('El precio debe ser mayor a cero.');
             }
@@ -303,7 +313,9 @@ class Gimnasio
                 'clinom' => ($datos['clinom'] ?? null) ?: $socio->clinom, 'clidir' => ($datos['clidir'] ?? null) ?: $socio->clidir,
                 'clicor' => $socio->clicor, 'telefono' => $socio->telefono,
                 'observaciones' => $plan->dias > 1 ? 'GIMNASIO: DEL '.Carbon::parse($inicio)->format('d/m/Y').' AL '.Carbon::parse($fin)->format('d/m/Y') : 'GIMNASIO',
-                'id_med_pag' => $datos['id_med_pag'] ?? [], 'mon_med_pag' => $datos['mon_med_pag'] ?? [], 'paga' => $datos['paga'] ?? 0,
+                'id_med_pag' => $datos['id_med_pag'] ?? [], 'op_med_pag' => $datos['op_med_pag'] ?? [], 'paga' => $datos['paga'] ?? 0,
+                // El monto es siempre el precio que se cobra (no el que llegue de la pantalla)
+                'mon_med_pag' => ! empty($datos['id_med_pag']) ? [$precio] : [],
             ], [['IdProducto' => $plan->IdProducto, 'cantidad' => 1, 'precio' => $precio, 'descripcion' => mb_substr($plan->nombre.($plan->dias > 1 ? ' ('.Carbon::parse($inicio)->format('d/m').' - '.Carbon::parse($fin)->format('d/m/Y').')' : ''), 0, 150)]],
                 ['ped_tip' => 'GIMNASIO', 'IdUsuario_ven' => $user->IdUsuario]);
 
@@ -385,6 +397,14 @@ class Gimnasio
     {
         $suc = (int) $socio->id_empresa_negocio;
         $sit = self::situacionDe((int) $socio->soc_id, $suc);
+
+        // Escaneó dos veces seguidas (lector o QR): no se registra otro ingreso
+        $reciente = DB::table('gym_asistencias')->where('soc_id', $socio->soc_id)->where('resultado', 'PERMITIDO')
+            ->where('fecha_hora', '>=', now()->subMinute())->orderByDesc('asi_id')->first();
+        if ($reciente && ! $aprobadoPor) {
+            return ['permitido' => true, 'mensaje' => 'Ya registró su ingreso hace un momento ('.Carbon::parse($reciente->fecha_hora)->format('H:i').').',
+                'situacion' => $sit, 'requiere_aprobacion' => false, 'repetido' => true];
+        }
         $permitido = in_array($sit['estado'], ['VIGENTE', 'POR_VENCER'], true) && $socio->estado === 'ACTIVO';
         $requiere = false;
 

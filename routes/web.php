@@ -27,6 +27,7 @@ use App\Http\Controllers\EstacionamientoController;
 use App\Http\Controllers\FidelizacionController;
 use App\Http\Controllers\GastoController;
 use App\Http\Controllers\GimnasioController;
+use App\Http\Controllers\GimnasioReporteController;
 use App\Http\Controllers\GuiaController;
 use App\Http\Controllers\HotelController;
 use App\Http\Controllers\ImportarAntiguoController;
@@ -273,6 +274,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/acceso/marcar', 'marcar')->middleware('throttle:120,1')->name('acceso.marcar');
         Route::post('/acceso/aprobar', 'aprobar')->middleware('throttle:30,1')->name('acceso.aprobar');
     });
+    Route::get('/gimnasio/reporte', [GimnasioReporteController::class, 'index'])->name('gimnasio.reporte');
     Route::controller(EntrenadorController::class)->prefix('gimnasio/entrenador')->name('entrenador.')->group(function () {
         Route::get('/', 'index')->name('index');
         Route::get('/clientes/{id}', 'cliente')->whereNumber('id')->name('cliente');

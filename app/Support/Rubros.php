@@ -44,7 +44,7 @@ class Rubros
             '/hotel', '/hotel/reporte', '/reservas', '/comandas', '/comandas/punto-venta', '/promotores', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/productos?tipo=4',
         ]],
         'GIMNASIO' => ['icono' => 'fa-dumbbell', 'nombre' => 'Gimnasio', 'ejemplos' => 'Gimnasio, academia (membresías y control de ingreso)', 'modulos' => [
-            '/gimnasio', '/gimnasio/acceso', '/gimnasio/entrenador', '/pv',
+            '/gimnasio', '/gimnasio/acceso', '/gimnasio/entrenador', '/gimnasio/reporte', '/pv',
         ]],
         'ESTACIONAMIENTO' => ['icono' => 'fa-square-parking', 'nombre' => 'Estacionamiento', 'ejemplos' => 'Playa de estacionamiento, valet parking, cochera', 'modulos' => [
             '/estacionamiento', '/estacionamiento/abonados', '/estacionamiento/reporte',

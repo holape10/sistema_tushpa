@@ -9,7 +9,7 @@
         $btn = 'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold';
     @endphp
 
-    <div x-data="gimnasio()" class="space-y-5">
+    <div x-data="gimnasio()" x-init="abrir && abrirFicha(abrir, 'vender')" class="space-y-5">
         {{-- Cabecera --}}
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -22,6 +22,9 @@
             <div class="flex flex-wrap gap-2">
                 <button type="button" @click="nuevo()" class="{{ $btn }} bg-orange-500 text-white hover:bg-orange-600"><i class="fas fa-user-plus"></i> Nuevo cliente</button>
                 <a href="{{ route('gimnasio.acceso') }}" target="_blank" class="{{ $btn }} bg-gray-900 text-white hover:bg-black"><i class="fas fa-door-open"></i> Control de ingreso</a>
+                @if ($verReporte)
+                    <a href="{{ route('gimnasio.reporte') }}" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"><i class="fas fa-chart-column"></i> Reporte</a>
+                @endif
                 @if ($esAdmin)
                     <button type="button" @click="modal = 'planes'" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"><i class="fas fa-tags"></i> Planes</button>
                 @endif
@@ -87,6 +90,8 @@
                         </div>
                         <span class="px-2.5 py-1 rounded-full text-[11px] font-black whitespace-nowrap" :class="chip(c.color)"
                               x-text="c.estado === 'VIGENTE' || c.estado === 'POR_VENCER' ? c.texto + ' · ' + c.dias + 'd' : c.texto"></span>
+                        <a x-show="recordatorio(c)" :href="recordatorio(c)" target="_blank" rel="noopener" title="Recordarle por WhatsApp que renueve"
+                           class="px-2.5 py-1.5 rounded-lg bg-green-600 text-white text-xs font-bold"><i class="fab fa-whatsapp"></i></a>
                         <button type="button" @click="abrirFicha(c.soc_id, 'vender')" class="hidden sm:inline-flex px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-bold hover:bg-orange-600">Vender plan</button>
                     </div>
                 </template>
@@ -194,7 +199,8 @@
                                     <label>Empieza el
                                         <input type="date" x-model="venta.inicio" :disabled="venta.dias <= 1" class="{{ $in }} mt-1 disabled:bg-gray-100"></label>
                                     <label>Precio S/
-                                        <input type="number" step="0.10" min="0.1" x-model.number="venta.precio" class="{{ $in }} mt-1"></label>
+                                        <input type="number" step="0.10" min="0.1" x-model.number="venta.precio" class="{{ $in }} mt-1 {{ $esAdmin ? '' : 'bg-gray-100' }}"
+                                               @unless ($esAdmin) readonly title="Solo el administrador cambia el precio del plan" @endunless></label>
                                     <p class="col-span-2 text-xs text-gray-500" x-show="venta.dias > 1" x-text="'Vigente del ' + fecha(venta.inicio) + ' al ' + fecha(sumarDias(venta.inicio, venta.dias - 1))"></p>
                                 </div>
                             </div>
@@ -215,6 +221,8 @@
                                         </select></label>
                                     <label>Paga con S/<input type="number" step="0.10" min="0" x-model.number="venta.paga" class="{{ $in }} mt-1"></label>
                                 </div>
+                                <label x-show="pideOperacion()" class="block">N° de operación <span class="text-rose-600">*</span>
+                                    <input x-model="venta.operacion" maxlength="30" placeholder="Del voucher de Yape, tarjeta o transferencia" class="{{ $in }} mt-1 uppercase"></label>
                                 <p x-show="venta.paga > venta.precio" class="text-sm">Vuelto: <b x-text="soles(venta.paga - venta.precio)"></b></p>
                                 <label class="flex items-center gap-2"><input type="checkbox" x-model="venta.imprimir" class="rounded"> Imprimir comprobante</label>
                                 <button type="button" @click="vender()" :disabled="ocupado || {{ $turno ? 'false' : 'true' }}" class="w-full py-3 rounded-xl bg-orange-500 text-white font-black hover:bg-orange-600 disabled:opacity-50"
@@ -394,6 +402,21 @@
                 clientes: @js($clientes), planes: @js($planes), q: '', filtro: '', mostrar: 100, modal: null, tab: 'vender', ocupado: false,
                 ficha: null, form: {}, venta: {}, cong: {}, plan: planVacio(), planVacio, estadoManual: 'ACTIVO', camara: null, hoyIso,
                 aviso: { visible: false, ok: true, texto: '' },
+                abrir: @js($abrir), exigeOperacion: @js($exigeOperacion),
+                medios: @js($mediospagos->pluck('nom_med_pag', 'id_med_pag')),
+                negocio: @js($negocio),
+                pideOperacion() { return this.exigeOperacion && String(this.medios[this.venta.medio] || '').trim().toUpperCase() !== 'EFECTIVO'; },
+                // Por vencer o vencido hace poco (hasta 30 días): mensaje para que renueve
+                recordatorio(c) {
+                    const cel = String(c.telefono || '').replace(/\D/g, '');
+                    if (cel.length < 9 || c.estado_socio !== 'ACTIVO' || !['POR_VENCER', 'VENCIDO'].includes(c.estado) || !c.vence) return '';
+                    if (c.estado === 'VENCIDO' && this.diasEntre(c.vence, hoyIso) > 30) return '';
+                    const nombre = c.nombre.split(' ')[0];
+                    const texto = c.estado === 'POR_VENCER'
+                        ? `Hola ${nombre}, te saludamos de ${this.negocio}. Tu plan ${c.plan || ''} vence el ${this.fecha(c.vence)}. ¡Renuévalo y sigue entrenando con nosotros! 💪`
+                        : `Hola ${nombre}, te saludamos de ${this.negocio}. Tu plan venció el ${this.fecha(c.vence)}. ¡Te esperamos de vuelta! Renueva en recepción. 💪`;
+                    return 'https://wa.me/' + (cel.length === 9 ? '51' + cel : cel) + '?text=' + encodeURIComponent(texto);
+                },
                 tarjetas: [
                     { estado: 'VIGENTE', nombre: 'Vigentes', texto: 'text-emerald-600', borde: 'border-emerald-400' },
                     { estado: 'POR_VENCER', nombre: 'Por vencer', texto: 'text-amber-500', borde: 'border-amber-400' },
@@ -493,7 +516,7 @@
                     if (!d) return this.avisar('No se pudo abrir la ficha.', false);
                     this.ficha = d; this.estadoManual = d.cliente.estado;
                     this.tab = tab || (['VENCIDO', 'SIN_PLAN', 'POR_VENCER'].includes(d.situacion.estado) ? 'vender' : 'membresias');
-                    this.venta = { plan_id: null, dias: 0, inicio: hoyIso, precio: 0, tdocod: '03', tdicod: '1', clinum: '', clinom: '', medio: @json((string) ($mediospagos->first()->id_med_pag ?? '')), paga: null, imprimir: true };
+                    this.venta = { plan_id: null, dias: 0, inicio: hoyIso, precio: 0, tdocod: '03', tdicod: '1', clinum: '', clinom: '', medio: @json((string) ($mediospagos->first()->id_med_pag ?? '')), operacion: '', paga: null, imprimir: true };
                     this.datosEnVenta(); this.limpiarCong();
                     this.modal = 'ficha';
                 },
@@ -509,10 +532,11 @@
                 async vender() {
                     const v = this.venta;
                     if (v.tdocod === '01' && !/^\d{11}$/.test(v.clinum)) return this.avisar('Para factura escribe el RUC.', false);
+                    if (this.pideOperacion() && !String(v.operacion || '').trim()) return this.avisar('Escribe el N° de operación del pago.', false);
                     this.ocupado = true;
                     const r = await this.post(RUTA + '/clientes/' + this.ficha.cliente.soc_id + '/vender', {
                         plan_id: v.plan_id, inicio: v.inicio, precio: v.precio, tdocod: v.tdocod, clinum: v.clinum, clinom: v.clinom, tdicod: v.tdicod, clidir: v.clidir || '',
-                        id_med_pag: [v.medio], mon_med_pag: [v.precio], paga: v.paga || v.precio, imprimir: v.imprimir ? 1 : 0,
+                        id_med_pag: [v.medio], mon_med_pag: [v.precio], op_med_pag: [String(v.operacion || '').trim()], paga: v.paga || v.precio, imprimir: v.imprimir ? 1 : 0,
                     });
                     this.ocupado = false;
                     this.avisar(r.ok ? `${r.mensaje} ${r.numero}` + (r.vuelto > 0 ? ` · vuelto ${this.soles(r.vuelto)}` : '') : r.mensaje, r.ok);

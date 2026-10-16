@@ -31,7 +31,9 @@ class EntrenadorController extends Controller
         $suc = $this->sucursal();
         $mems = Gimnasio::membresiasVigentes($suc);
         $cong = Gimnasio::congelamientosVigentes($mems->flatten()->pluck('mem_id')->all());
-        $ultimos = DB::table('gym_nutricion')->where('activo', 1)->groupBy('soc_id')->select('soc_id', DB::raw('MAX(fecha) as fecha'))->pluck('fecha', 'soc_id');
+        // Solo los clientes de esta sucursal
+        $ultimos = DB::table('gym_nutricion as n')->join('socios as s', 's.soc_id', '=', 'n.soc_id')->where('s.id_empresa_negocio', $suc)
+            ->where('n.activo', 1)->groupBy('n.soc_id')->select('n.soc_id', DB::raw('MAX(n.fecha) as fecha'))->pluck('fecha', 'soc_id');
 
         $clientes = DB::table('socios as s')->join('cliente as c', 'c.clicod', '=', 's.clicod')
             ->where('s.id_empresa_negocio', $suc)->where('s.estado', 'ACTIVO')->orderBy('c.clinom')

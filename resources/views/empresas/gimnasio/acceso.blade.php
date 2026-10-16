@@ -64,7 +64,7 @@
                             <p x-show="r.aviso_congelamiento" class="mt-3 text-sm bg-black/20 rounded-xl px-4 py-2 inline-block" x-text="r.aviso_congelamiento"></p>
                             <div x-show="r.encontrado && !r.permitido" class="mt-6 flex flex-wrap gap-3 justify-center md:justify-start">
                                 <button type="button" @click="pedirAprobacion()" class="px-5 py-3 rounded-xl bg-white text-rose-700 font-black"><i class="fas fa-user-shield"></i> Aprobar ingreso (administrador)</button>
-                                <a :href="'{{ route('gimnasio.index') }}'" target="_blank" class="px-5 py-3 rounded-xl bg-black/25 font-bold"><i class="fas fa-cash-register"></i> Cobrar plan o rutina del día</a>
+                                <a :href="'{{ route('gimnasio.index') }}?cliente=' + (r.soc_id || '')" target="_blank" class="px-5 py-3 rounded-xl bg-black/25 font-bold"><i class="fas fa-cash-register"></i> Cobrar plan o rutina del día</a>
                             </div>
                         </div>
                     </div>

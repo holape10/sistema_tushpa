@@ -80,10 +80,16 @@ class GimnasioController extends Controller
             'planes' => DB::table('gym_planes')->where('id_empresa_negocio', $suc)->orderByDesc('activo')->orderBy('dias')->get(),
             'entrenadores' => $this->entrenadores(),
             'mediospagos' => MedioPago::where('id_empresa_negocio', $suc)->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag']),
+            'exigeOperacion' => (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('exigir_operacion'),
+            'verReporte' => Auth::user()->esAdmin() || Auth::user()->tieneModulo('/gimnasio/reporte'),
+            // Desde el control de ingreso: abre la ficha de ese cliente para cobrarle
+            'abrir' => (int) request('cliente') ?: null,
+            'negocio' => (string) DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('nombre_comercial'),
             'turno' => Turno::abiertoDe(Auth::user()),
             'esAdmin' => Auth::user()->esAdmin(),
             'motivos' => Gimnasio::MOTIVOS,
-            'hoy' => DB::table('gym_asistencias')->where('id_empresa_negocio', $suc)->whereDate('fecha_hora', now()->toDateString())
+            // Rango de horas (no whereDate) para que use el índice (sucursal, fecha_hora)
+            'hoy' => DB::table('gym_asistencias')->where('id_empresa_negocio', $suc)->whereBetween('fecha_hora', [now()->startOfDay(), now()->endOfDay()])
                 ->where('resultado', 'PERMITIDO')->distinct()->count('soc_id'),
         ]);
     }
@@ -141,8 +147,12 @@ class GimnasioController extends Controller
             'asistencias' => DB::table('gym_asistencias')->where('soc_id', $id)->orderByDesc('fecha_hora')->limit(60)
                 ->get(['fecha_hora', 'metodo', 'resultado', 'motivo']),
             'nutricion' => $this->nutricionDe($id),
-            'planes' => DB::table('gym_planes')->where('id_empresa_negocio', $this->sucursal())->where('activo', 1)->orderBy('dias')->get()
-                ->map(fn ($p) => (array) $p + ['inicio' => Gimnasio::inicioSugerido($id, $this->sucursal(), (int) $p->dias)]),
+            'planes' => (function () use ($id) {
+                $finPagado = Gimnasio::finPagado($id, $this->sucursal());
+
+                return DB::table('gym_planes')->where('id_empresa_negocio', $this->sucursal())->where('activo', 1)->orderBy('dias')->get()
+                    ->map(fn ($p) => (array) $p + ['inicio' => Gimnasio::inicioDesde((int) $p->dias, $finPagado)]);
+            })(),
         ]);
     }
 
@@ -165,7 +175,7 @@ class GimnasioController extends Controller
             'telefono' => 'nullable|string|max:20', 'clicor' => 'nullable|email|max:100',
             'fecha_nac' => 'nullable|date|before:today', 'huella' => 'nullable|string|max:30',
             'entrenador_id' => 'nullable|integer', 'obs' => 'nullable|string|max:255',
-            'foto' => 'nullable|image|max:6144', 'quitar_foto' => 'nullable|boolean',
+            'foto' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:6144', 'quitar_foto' => 'nullable|boolean',
         ], ['clinum.regex' => 'Escribe el DNI (8 dígitos), RUC (11) o carné de extranjería.'],
             ['clinum' => 'DNI', 'clinom' => 'nombre completo', 'fecha_nac' => 'fecha de nacimiento', 'telefono' => 'celular']);
 
@@ -264,6 +274,7 @@ class GimnasioController extends Controller
             'tdocod' => 'required|in:01,03,13', 'clinum' => 'nullable|string|max:15', 'clinom' => 'nullable|string|max:150',
             'tdicod' => 'nullable|string|size:1', 'clidir' => 'nullable|string|max:150',
             'id_med_pag' => 'nullable|array|max:5', 'mon_med_pag' => 'nullable|array|max:5', 'paga' => 'nullable|numeric|min:0',
+            'op_med_pag' => 'nullable|array|max:5', 'op_med_pag.*' => 'nullable|string|max:30',
             'imprimir' => 'nullable|boolean',
         ], ['inicio.after_or_equal' => 'La fecha de inicio no puede ser de hace más de 7 días.']);
         $this->socio($id);
@@ -370,7 +381,7 @@ class GimnasioController extends Controller
     {
         $this->recepcion();
         $filas = DB::table('gym_asistencias as a')->join('socios as s', 's.soc_id', '=', 'a.soc_id')->join('cliente as c', 'c.clicod', '=', 's.clicod')
-            ->where('a.id_empresa_negocio', $this->sucursal())->whereDate('a.fecha_hora', now()->toDateString())
+            ->where('a.id_empresa_negocio', $this->sucursal())->whereBetween('a.fecha_hora', [now()->startOfDay(), now()->endOfDay()])
             ->orderByDesc('a.asi_id')->limit(40)->get(['a.fecha_hora', 'a.resultado', 'a.metodo', 'c.clinom', 's.foto'])
             ->map(fn ($a) => ['hora' => Carbon::parse($a->fecha_hora)->format('H:i'), 'resultado' => $a->resultado, 'metodo' => $a->metodo,
                 'nombre' => $a->clinom, 'foto' => self::urlFoto($a->foto)]);
