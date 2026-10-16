@@ -95,7 +95,7 @@ class Notas
                 throw new \RuntimeException('Motivo de nota no válido.');
             }
 
-            $detRef = DB::table('cpe_detalle')->where('IdCpe_cabecera', $refId)->orderBy('IdCpe_detalle')->get()->keyBy('IdCpe_detalle');
+            $detRef = DB::table('cpe_detalle')->where('IdCpe_cabecera', $refId)->where('cortesia', 0)->orderBy('IdCpe_detalle')->get()->keyBy('IdCpe_detalle');
             $usado = self::usado($refId);
             $total = $tdocod === '07' && in_array($motivo, self::MOTIVOS_TOTALES, true);
             $tigPred = (float) $ref->ccatvg > 0 ? '10' : ((float) $ref->ccatinaf > 0 && (float) $ref->ccatexo == 0 ? '30' : '20');
@@ -107,7 +107,8 @@ class Notas
                     throw new \RuntimeException('El comprobante ya tiene notas de crédito; ya no se puede anular por completo. Usa devolución por ítem o disminución en el valor.');
                 }
                 foreach ($detRef as $l) {
-                    $lineas[] = self::linea($l->cdedes, (float) $l->cdecan, (float) $l->cdepuni, $l->tigcod ?: $tigPred, $l, true, $factor);
+                    // Anulación total: el importe exacto de cada línea (con descuento, cantidad x precio puede diferir en céntimos)
+                    $lineas[] = self::linea($l->cdedes, (float) $l->cdecan, (float) $l->cdepuni, $l->tigcod ?: $tigPred, $l, true, $factor, (float) $l->cdevve);
                 }
             } else {
                 foreach ($d['items'] ?? [] as $i) {
@@ -226,9 +227,9 @@ class Notas
     }
 
     /** Línea de detalle con IGV según su afectación; $conStock = devolución de producto */
-    private static function linea(string $desc, float $cant, float $precio, string $tig, ?object $ref, bool $conStock, float $factor): array
+    private static function linea(string $desc, float $cant, float $precio, string $tig, ?object $ref, bool $conStock, float $factor, ?float $importe = null): array
     {
-        $totalLinea = round($cant * $precio, 2);
+        $totalLinea = $importe ?? round($cant * $precio, 2);
         $sub = $tig === '10' ? round($totalLinea / $factor, 2) : $totalLinea;
 
         return [

@@ -50,10 +50,14 @@ class EdicionVenta
         return null;
     }
 
-    /** ¿Los productos se pueden cambiar? Las ventas de mesa no: sus comandas y opciones del menú ya salieron de cocina */
+    /**
+     * ¿Los productos se pueden cambiar? Las ventas de mesa no (sus comandas y opciones del menú ya salieron de cocina),
+     * ni las que tienen descuento o cortesías (se cobraron con su autorización en la pantalla del restaurante).
+     */
     public static function cambiaProductos(object $cab): bool
     {
-        return empty($cab->ped_id);
+        return empty($cab->ped_id) && (float) ($cab->descuento ?? 0) == 0
+            && ! DB::table('cpe_detalle')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->where('cortesia', 1)->exists();
     }
 
     /**

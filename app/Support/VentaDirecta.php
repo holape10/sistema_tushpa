@@ -42,6 +42,13 @@ class VentaDirecta
         'op_med_pag' => 'nullable|array|max:10',
         'op_med_pag.*' => 'nullable|string|max:30',
         'paga' => 'nullable|numeric|min:0',
+        // Descuento a la cuenta y cortesías (restaurante; la sucursal debe tenerlos activados: ver Descuentos)
+        'items.*.cortesia' => 'nullable|boolean',
+        'items.*.motivo_cortesia' => 'nullable|string|max:80',
+        'descuento_tipo' => 'nullable|in:S,P',
+        'descuento_valor' => 'nullable|numeric|min:0|max:999999',
+        'descuento_motivo' => 'nullable|string|max:80',
+        'clave_admin' => 'nullable|string|max:100',
     ];
 
     public const MENSAJES = ['items.required' => 'El carrito está vacío.'];
@@ -142,10 +149,13 @@ class VentaDirecta
                 throw new \RuntimeException("El importe de {$descripcion} no corresponde a la cantidad por el precio.");
             }
 
+            // Cortesía (restaurante): la línea va gratis, aparte de la que se cobra del mismo producto
+            $cortesia = ! empty($i['cortesia']);
             $clave = ($idProducto ?? 'libre').'|'.($pres->id_presentacion ?? '').'|'.$descripcion.'|'.number_format($precio, 2, '.', '').'|'.$lote
-                .($importe !== null ? '|importe'.count($lineas) : '');
+                .($importe !== null ? '|importe'.count($lineas) : '').($cortesia ? '|cortesia' : '');
             $lineas[$clave] ??= ['IdProducto' => $idProducto, 'descripcion' => $descripcion, 'cantidad' => 0, 'precio' => $precio, 'lote' => $lote,
-                'presentacion' => $pres?->id_presentacion, 'factor' => $pres ? (float) $pres->factor : 1, 'umecod' => $pres?->umecod];
+                'presentacion' => $pres?->id_presentacion, 'factor' => $pres ? (float) $pres->factor : 1, 'umecod' => $pres?->umecod]
+                + ($cortesia ? ['cortesia' => true, 'motivo' => $i['motivo_cortesia'] ?? null] : []);
             $lineas[$clave]['cantidad'] = round($lineas[$clave]['cantidad'] + (float) $i['cantidad'], 3);
             // Electrodomésticos: las series elegidas de cada unidad (si el mismo producto va en dos líneas, se juntan)
             if ($idProducto && ! empty($i['series'])) {

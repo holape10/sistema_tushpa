@@ -15,6 +15,7 @@ use App\Models\Turno;
 use App\Support\Cocina;
 use App\Support\Comprobante;
 use App\Support\ConsultaPeru;
+use App\Support\Descuentos;
 use App\Support\Fidelizacion;
 use App\Support\Impresion\Impresion;
 use App\Support\MesasUnidas;
@@ -126,7 +127,7 @@ class CobroController extends Controller
         return view('empresas.cobros.cobrar', compact(
             'pedido', 'detalle', 'total', 'comprobantes', 'documentos',
             'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso', 'turno', 'separadas', 'cuentasPrevias', 'volver', 'promotores'
-        ));
+        ) + ['descuentos' => Descuentos::config((int) $user->id_empresa_negocio)]);
     }
 
     /**
@@ -148,6 +149,7 @@ class CobroController extends Controller
             'volver' => request('desde') === 'hotel' ? route('hotel.index') : route('comandas.seleccion'), 'pedido' => null, 'detalle' => collect(), 'total' => 0,
             'cuentasPrevias' => collect(), 'mesa' => null, 'piso' => null, 'turno' => $turno,
             'promotores' => ComandasController::promotores((int) $user->id_empresa_negocio),
+            'descuentos' => Descuentos::config((int) $user->id_empresa_negocio),
             'comprobantes' => DB::table('tipo_documento')->where('caja', 1)->get(),
             'documentos' => DB::table('tipo_documento_identidad')->orderBy('orden')->get(),
             'estadopagos' => DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)->get(),
@@ -302,6 +304,13 @@ class CobroController extends Controller
             'tdicod' => 'required|string|size:1',
             'clinum' => 'required|string|max:15',
             'clinom' => 'required|string|max:120',
+            'cortesias' => 'nullable|array|max:200',
+            'cortesias.*.cantidad' => 'nullable|numeric|min:0|max:99999',
+            'cortesias.*.motivo' => 'nullable|string|max:80',
+            'descuento_tipo' => 'nullable|in:S,P',
+            'descuento_valor' => 'nullable|numeric|min:0|max:999999',
+            'descuento_motivo' => 'nullable|string|max:80',
+            'clave_admin' => 'nullable|string|max:100',
         ], [], [
             'clinum' => 'DNI / RUC', 'clinom' => 'Nombre o razón social', 'fecEmi' => 'Fecha de emisión',
         ]);
@@ -363,15 +372,27 @@ class CobroController extends Controller
                 // ---- Comprobante: cliente, serie, totales, medios de pago, detalle y kardex ----
                 // Presentación (TORTA ENTERA = 8 tajadas): del stock salen cantidad x factor unidades base
                 $presentaciones = ProductoPresentacion::whereIn('id_presentacion', $aCobrar->pluck('id_presentacion')->filter())->get()->keyBy('id_presentacion');
-                $lineas = $aCobrar->map(fn ($g) => [
-                    'IdProducto' => $g->IdProducto, 'descripcion' => $g->descripcion,
-                    'cantidad' => (float) $g->cantidad_cobrar, 'precio' => (float) $g->ped_det_pre,
-                    'factor' => (float) ($presentaciones[$g->id_presentacion]->factor ?? 1),
-                    'umecod' => $presentaciones[$g->id_presentacion]->umecod ?? null,
-                    'opciones' => OpcionesPlato::kardexDe($g->opciones),
-                ])->values()->all();
-                // Nunca un comprobante en cero
-                if (round(collect($lineas)->sum(fn ($l) => $l['cantidad'] * $l['precio']), 2) <= 0) {
+                // Cortesías: de cada producto, cuántos van gratis y por qué ({clave: {cantidad, motivo}})
+                $cortesias = (array) $request->input('cortesias', []);
+                $lineas = [];
+                foreach ($aCobrar as $g) {
+                    $base = [
+                        'IdProducto' => $g->IdProducto, 'descripcion' => $g->descripcion, 'precio' => (float) $g->ped_det_pre,
+                        'factor' => (float) ($presentaciones[$g->id_presentacion]->factor ?? 1),
+                        'umecod' => $presentaciones[$g->id_presentacion]->umecod ?? null,
+                        'opciones' => OpcionesPlato::kardexDe($g->opciones),
+                    ];
+                    $gratis = round(min((float) ($cortesias[$g->clave]['cantidad'] ?? 0), (float) $g->cantidad_cobrar), 2);
+                    if ($gratis > 0) {
+                        $lineas[] = $base + ['cantidad' => $gratis, 'cortesia' => true, 'motivo' => $cortesias[$g->clave]['motivo'] ?? null];
+                    }
+                    if ($g->cantidad_cobrar - $gratis > 0.0001) {
+                        $lineas[] = $base + ['cantidad' => round($g->cantidad_cobrar - $gratis, 2)];
+                    }
+                }
+                // Nunca un comprobante en cero (salvo que todo sea cortesía: va como operación gratuita)
+                $aCobrarTotal = round(collect($lineas)->filter(fn ($l) => empty($l['cortesia']))->sum(fn ($l) => $l['cantidad'] * $l['precio']), 2);
+                if ($aCobrarTotal <= 0 && ! collect($lineas)->contains(fn ($l) => ! empty($l['cortesia']))) {
                     throw new \RuntimeException('El total a cobrar es S/ 0.00: no se emite un comprobante en cero. Revisa los precios del pedido.');
                 }
 

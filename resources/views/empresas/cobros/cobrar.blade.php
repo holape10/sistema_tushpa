@@ -46,6 +46,22 @@
         .cart-ctrl input { width: 46px; text-align: center; height: 24px; border: 1px solid #ccc; border-radius: 4px; }
         .cart-obs { width: 100%; border: 1px solid #eee; border-radius: 4px; font-size: 11px; padding: 2px 5px; margin-top: 3px; }
         @media (max-width: 991px) { .panel-pago { border-left: none; padding-left: 0; border-top: 2px dashed #ccc; padding-top: 15px; margin-top: 10px; } }
+        /* Descuentos y cortesías */
+        .btn-cortesia { border: 1px solid #e0c56e; background: #fff8e1; border-radius: 6px; padding: 2px 6px; font-size: 14px; line-height: 1.2; }
+        .btn-cortesia.activa { background: #f39c12; border-color: #e67e22; }
+        .cort-info { display: block; color: #d35400; font-weight: bold; }
+        tr.es-cortesia td { background: #fff8e1; }
+        .dscto-box { background: #eef6ff; border-left: 4px solid #3c8dbc; padding: 8px 10px; border-radius: 5px; margin-bottom: 10px; }
+        #lbl_desglose { font-size: 9pt; color: #555; }
+        .mc-fondo { position: fixed; inset: 0; z-index: 2000; background: rgba(15, 23, 42, .6); display: flex; align-items: center; justify-content: center; padding: 15px; }
+        .mc-caja { background: #fff; border-radius: 14px; width: 100%; max-width: 420px; padding: 18px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+        .mc-caja h4 { margin: 0 0 4px; font-weight: bold; color: #d35400; }
+        .mc-prod { font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+        .mc-motivos { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+        .mc-motivo { border: 1px solid #ccc; background: #f7f7f7; border-radius: 15px; padding: 4px 10px; font-size: 11px; }
+        .mc-motivo.activo { background: #f39c12; border-color: #e67e22; color: #fff; }
+        .mc-botones { display: flex; gap: 8px; margin-top: 12px; }
+        .mc-botones .btn { flex: 1; height: 42px; font-weight: bold; }
     </style>
     @include('partials.pwa')
 </head>
@@ -240,7 +256,7 @@
                                 <input type="text" id="buscar_producto" class="form-control input-sm" placeholder="Buscar producto..." style="margin-bottom:6px;" autocomplete="off">
                                 <div id="productos_grid" class="grid-productos"><p class="text-muted">Cargando...</p></div>
                                 <table class="table table-bordered table-condensed tbl-det" style="margin-top:10px;">
-                                    <thead><tr><th>PRODUCTO</th><th style="width:110px">CANT.</th><th style="width:70px">PRECIO</th><th style="width:75px">TOTAL</th><th style="width:28px"></th></tr></thead>
+                                    <thead><tr><th>PRODUCTO</th><th style="width:110px">CANT.</th><th style="width:70px">PRECIO</th><th style="width:75px">TOTAL</th><th style="width:{{ $descuentos->cortesias ? 70 : 28 }}px"></th></tr></thead>
                                     <tbody id="carrito"><tr><td colspan="5" class="text-center text-muted">Toca un producto para agregarlo.</td></tr></tbody>
                                 </table>
                             @else
@@ -255,12 +271,13 @@
                                 <thead>
                                     <tr><th>PRODUCTO</th><th style="width:60px">{{ $separadas ? 'PEND.' : 'CANT.' }}</th>
                                         @if ($separadas)<th style="width:110px">COBRAR</th>@endif
-                                        <th style="width:70px">PRECIO</th><th style="width:75px">TOTAL</th></tr>
+                                        <th style="width:70px">PRECIO</th><th style="width:75px">TOTAL</th>
+                                        @if ($descuentos->cortesias)<th style="width:40px" title="Cortesía">🎁</th>@endif</tr>
                                 </thead>
                                 <tbody>
                                     @foreach ($detalle as $d)
                                         <tr data-clave="{{ $d->clave }}" data-precio="{{ $d->ped_det_pre }}" data-max="{{ $d->cantidad_pendiente }}">
-                                            <td>{{ $d->descripcion }}@if ($d->item_obs)<br><small class="text-muted">{{ $d->item_obs }}</small>@endif</td>
+                                            <td>{{ $d->descripcion }}@if ($d->item_obs)<br><small class="text-muted">{{ $d->item_obs }}</small>@endif<small class="cort-info"></small></td>
                                             <td class="text-center">{{ rtrim(rtrim(number_format($d->cantidad_pendiente, 2), '0'), '.') }}</td>
                                             @if ($separadas)
                                                 <td><div class="sep-ctrl">
@@ -271,6 +288,9 @@
                                             @endif
                                             <td class="text-right">{{ number_format($d->ped_det_pre, 2) }}</td>
                                             <td class="text-right"><strong class="linea-total">{{ number_format($separadas ? 0 : $d->cantidad_pendiente * $d->ped_det_pre, 2) }}</strong></td>
+                                            @if ($descuentos->cortesias)
+                                                <td class="text-center"><button type="button" class="btn-cortesia btn-cortesia-mesa" title="Dar de cortesía (gratis)">🎁</button></td>
+                                            @endif
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -291,7 +311,30 @@
                             <div class="totales">
                                 <div style="font-size:11pt; color:#d33;"><b>Por cobrar:</b> S/ <span id="lbl_total">{{ number_format($separadas ? 0 : $total, 2) }}</span>
                                     @if ($separadas)<div style="font-size:9pt; color:#666;">Pendiente en la mesa: S/ {{ number_format($total, 2) }}</div>@endif</div>
+                                <div id="lbl_desglose"></div>
                             </div>
+
+                            @if ($descuentos->descuentos)
+                                {{-- Descuento a la cuenta: el cajero hasta el máximo de la sucursal; más que eso, con la clave del administrador --}}
+                                <div class="dscto-box">
+                                    <label>DESCUENTO A LA CUENTA</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-btn">
+                                            <select id="dscto_tipo" class="form-control input-sm" style="width:64px;">
+                                                <option value="S">S/</option>
+                                                <option value="P">%</option>
+                                            </select>
+                                        </span>
+                                        <input type="number" step="any" min="0" id="dscto_valor" class="form-control" placeholder="0.00" autocomplete="off">
+                                    </div>
+                                    <input type="text" id="dscto_motivo" maxlength="80" class="form-control input-sm" placeholder="Motivo (opcional): cliente frecuente, promo…" style="margin-top:5px;">
+                                    <div id="dscto_clave_box" style="display:none; margin-top:5px;">
+                                        <input type="password" id="clave_admin" maxlength="100" autocomplete="new-password" class="form-control input-sm" placeholder="Clave del administrador">
+                                        <small class="text-danger">Pasa el {{ rtrim(rtrim(number_format($descuentos->max, 2), '0'), '.') }}% permitido a caja: necesita la clave de un administrador.</small>
+                                    </div>
+                                    <div id="dscto_info" style="font-size:11px; font-weight:bold; color:#2c6fa3; margin-top:3px;"></div>
+                                </div>
+                            @endif
 
                             <div class="row">
                                 <div class="col-xs-6">
@@ -348,6 +391,31 @@
     </div>
 </div>
 
+@if ($descuentos->cortesias)
+{{-- Modal: dar un producto de cortesía (gratis) con su motivo --}}
+<div id="modal_cortesia" class="mc-fondo" style="display:none;">
+    <div class="mc-caja">
+        <h4>🎁 Cortesía</h4>
+        <div class="mc-prod" id="mc_producto"></div>
+        <div id="mc_cant_box">
+            <label>¿Cuántos van gratis?</label>
+            <input type="number" id="mc_cant" class="form-control big" min="1" step="1">
+        </div>
+        <label style="margin-top:8px;">Motivo</label>
+        <div class="mc-motivos">
+            @foreach (['CUMPLEAÑOS', 'CLIENTE FRECUENTE', 'RECLAMO DEL CLIENTE', 'PROMOCIÓN', 'CORTESÍA DE LA CASA'] as $motivo)
+                <button type="button" class="mc-motivo" data-motivo="{{ $motivo }}">{{ $motivo }}</button>
+            @endforeach
+        </div>
+        <input type="text" id="mc_motivo" maxlength="80" class="form-control" placeholder="O escribe el motivo">
+        <div class="mc-botones">
+            <button type="button" id="mc_ok" class="btn btn-warning">🎁 Dar cortesía</button>
+            <button type="button" id="mc_cancelar" class="btn btn-default">Cancelar</button>
+        </div>
+    </div>
+</div>
+@endif
+
 <script>
     const SEPARADAS = {{ $separadas ? 'true' : 'false' }};
     const DIRECTA = {{ $directa ? 'true' : 'false' }};
@@ -356,6 +424,14 @@
     const PED_ID = {{ $pedido->ped_id ?? 'null' }};
     let medios = [];
     const EXIGE_OP = {{ ($negocio->exigir_operacion ?? false) ? 'true' : 'false' }};
+    // Descuentos y cortesías (se activan en la sucursal)
+    const DSCTO = {{ $descuentos->descuentos ? 'true' : 'false' }};
+    const CORTESIAS = {{ $descuentos->cortesias ? 'true' : 'false' }};
+    const ES_ADMIN = {{ auth()->user()->esAdmin() ? 'true' : 'false' }};
+    const MAX_CAJERO = {{ (float) $descuentos->max }};
+    let BRUTO = TOTAL;      // lo que se cobra antes del descuento (sin las cortesías)
+    let GRATIS = 0;         // valor de las cortesías
+    const cortesias = {};   // cobrar mesa: { clave: { cantidad, motivo } }
 
     const el = id => document.getElementById(id);
     const fmt = n => (Math.round(n * 100) / 100).toFixed(2);
@@ -380,6 +456,70 @@
             el('fecVen').value = f.toISOString().slice(0, 10);
         }
     });
+
+    // ---------- Descuento a la cuenta ----------
+    function montoDescuento() {
+        if (!DSCTO) return 0;
+        const v = parseFloat(el('dscto_valor').value) || 0;
+        if (v <= 0) return 0;
+        return Math.round((el('dscto_tipo').value === 'P' ? BRUTO * v / 100 : v) * 100) / 100;
+    }
+    // TOTAL = lo que se cobra menos el descuento; los medios de pago se vuelven a armar
+    function aplicarDescuento() {
+        const d = montoDescuento();
+        TOTAL = Math.max(0, Math.round((BRUTO - d) * 100) / 100);
+        el('lbl_total').textContent = fmt(TOTAL);
+        el('total_comp').value = fmt(TOTAL);
+        if (DSCTO) {
+            const pct = BRUTO > 0 ? d / BRUTO * 100 : 0;
+            el('dscto_clave_box').style.display = (!ES_ADMIN && pct > MAX_CAJERO + 0.001) ? 'block' : 'none';
+            el('dscto_info').textContent = d > 0 ? `Descuento: -S/ ${fmt(d)} (${pct.toFixed(1)}%)` + (d >= BRUTO ? ' · es mayor que la cuenta' : '') : '';
+        }
+        const partes = [];
+        if (d > 0) partes.push(`Consumo S/ ${fmt(BRUTO)} − descuento S/ ${fmt(d)}`);
+        if (GRATIS > 0) partes.push(`🎁 Cortesías S/ ${fmt(GRATIS)} (no se cobran)`);
+        el('lbl_desglose').textContent = partes.join(' · ');
+        medios = [];
+        renderMedios();
+        el('vuelto').value = fmt(Math.max(0, (parseFloat(el('paga').value) || 0) - TOTAL));
+    }
+    if (DSCTO) {
+        ['dscto_valor', 'dscto_tipo'].forEach(id => el(id).addEventListener('input', aplicarDescuento));
+        el('dscto_tipo').addEventListener('change', aplicarDescuento);
+    }
+
+    // ---------- Modal de cortesía ----------
+    let alDarCortesia = null;
+    function abrirCortesia(nombre, maximo, listo) {
+        alDarCortesia = listo;
+        el('mc_producto').textContent = nombre;
+        el('mc_cant_box').style.display = maximo > 1 ? 'block' : 'none';
+        el('mc_cant').value = maximo;
+        el('mc_cant').max = maximo;
+        el('mc_motivo').value = '';
+        document.querySelectorAll('.mc-motivo').forEach(b => b.classList.remove('activo'));
+        el('modal_cortesia').style.display = 'flex';
+        setTimeout(() => (maximo > 1 ? el('mc_cant') : el('mc_motivo')).focus(), 50);
+    }
+    function cerrarCortesia() { el('modal_cortesia').style.display = 'none'; alDarCortesia = null; }
+    if (CORTESIAS) {
+        document.querySelectorAll('.mc-motivo').forEach(b => b.addEventListener('click', () => {
+            document.querySelectorAll('.mc-motivo').forEach(x => x.classList.remove('activo'));
+            b.classList.add('activo');
+            el('mc_motivo').value = b.dataset.motivo;
+        }));
+        el('mc_cancelar').addEventListener('click', cerrarCortesia);
+        el('modal_cortesia').addEventListener('click', e => { if (e.target === el('modal_cortesia')) cerrarCortesia(); });
+        el('mc_ok').addEventListener('click', () => {
+            const max = parseFloat(el('mc_cant').max) || 1;
+            const cant = Math.min(max, Math.max(0, parseFloat(el('mc_cant').value) || 0));
+            if (cant <= 0) { alert('Escribe cuántos van de cortesía.'); return; }
+            const motivo = el('mc_motivo').value.trim().toUpperCase() || 'CORTESÍA DE LA CASA';
+            const listo = alDarCortesia;
+            cerrarCortesia();
+            if (listo) listo(cant, motivo);
+        });
+    }
 
     // Vuelto
     el('paga').addEventListener('input', function () {
@@ -487,24 +627,50 @@
         return sel;
     }
 
+    /** Cantidad que se cobra de una fila: todo lo pendiente, o lo elegido en cuentas separadas */
+    function cantidadDe(tr) {
+        const inp = tr.querySelector('.sep-cant');
+        const max = parseFloat(tr.dataset.max);
+        if (!inp) return max;
+        const cant = Math.min(Math.max(parseFloat(inp.value) || 0, 0), max);
+        inp.value = cant;
+        return cant;
+    }
+
     function recalcular() {
-        let total = 0;
+        let total = 0, gratis = 0;
         document.querySelectorAll('tr[data-clave]').forEach(tr => {
-            const inp = tr.querySelector('.sep-cant');
-            const max = parseFloat(tr.dataset.max);
-            let cant = Math.min(Math.max(parseFloat(inp.value) || 0, 0), max);
-            inp.value = cant;
-            const linea = Math.round(cant * parseFloat(tr.dataset.precio) * 100) / 100;
+            const cant = cantidadDe(tr);
+            const precio = parseFloat(tr.dataset.precio);
+            const c = cortesias[tr.dataset.clave];
+            const cort = c ? Math.min(c.cantidad, cant) : 0;
+            if (c && cort <= 0) delete cortesias[tr.dataset.clave];
+            const linea = Math.round((cant - cort) * precio * 100) / 100;
             tr.querySelector('.linea-total').textContent = fmt(linea);
+            tr.querySelector('.cort-info').textContent = cort > 0 ? `🎁 ${cort} de cortesía · ${c.motivo}` : '';
+            tr.querySelector('.btn-cortesia-mesa')?.classList.toggle('activa', cort > 0);
+            tr.classList.toggle('es-cortesia', cort > 0);
             tr.classList.toggle('sep-elegido', cant > 0);
             total += linea;
+            gratis += cort * precio;
         });
-        TOTAL = Math.round(total * 100) / 100;
-        el('lbl_total').textContent = fmt(TOTAL);
-        el('total_comp').value = fmt(TOTAL);
-        medios = [];          // al cambiar el total se vuelven a armar los medios de pago
-        renderMedios();
-        el('vuelto').value = fmt(Math.max(0, (parseFloat(el('paga').value) || 0) - TOTAL));
+        BRUTO = Math.round(total * 100) / 100;
+        GRATIS = Math.round(gratis * 100) / 100;
+        aplicarDescuento();
+    }
+
+    // Cobrar mesa: 🎁 en una fila = esos productos van gratis (otra vez 🎁 = se quita la cortesía)
+    if (CORTESIAS && !DIRECTA) {
+        document.addEventListener('click', e => {
+            const b = e.target.closest('.btn-cortesia-mesa');
+            if (!b) return;
+            const tr = b.closest('tr[data-clave]');
+            const clave = tr.dataset.clave;
+            if (cortesias[clave]) { delete cortesias[clave]; recalcular(); return; }
+            const cant = cantidadDe(tr);
+            if (cant <= 0) { alert('Primero elige cuántos de este producto se cobran en esta cuenta.'); return; }
+            abrirCortesia(tr.children[0].firstChild.textContent.trim(), cant, (n, motivo) => { cortesias[clave] = { cantidad: n, motivo }; recalcular(); });
+        });
     }
 
     if (SEPARADAS) {
@@ -603,26 +769,30 @@
                 tr.innerHTML = `<td><span class="nom"></span><input class="cart-obs" maxlength="100" placeholder="nota para cocina"></td>
                     <td><div class="cart-ctrl"><button type="button" class="c-menos">−</button><input type="number" class="c-cant" min="1" step="1"><button type="button" class="c-mas">+</button></div></td>
                     <td class="text-right"></td><td class="text-right"><strong></strong></td>
-                    <td class="text-center"><button type="button" class="btn btn-danger btn-xs c-quitar">&times;</button></td>`;
-                tr.querySelector('.nom').textContent = it.nombre;
+                    <td class="text-center" style="white-space:nowrap;">${CORTESIAS ? '<button type="button" class="btn-cortesia c-cort" title="Cortesía (gratis)">🎁</button> ' : ''}<button type="button" class="btn btn-danger btn-xs c-quitar">&times;</button></td>`;
+                tr.querySelector('.nom').textContent = it.nombre + (it.cortesia ? '  🎁 CORTESÍA · ' + it.motivo : '');
+                tr.classList.toggle('es-cortesia', !!it.cortesia);
+                tr.querySelector('.c-cort')?.classList.toggle('activa', !!it.cortesia);
                 tr.querySelector('.cart-obs').value = it.observacion;
                 tr.querySelector('.c-cant').value = it.cantidad;
                 tr.children[2].textContent = fmt(it.precio);
-                tr.querySelector('strong').textContent = fmt(it.cantidad * it.precio);
+                tr.querySelector('strong').textContent = fmt(it.cortesia ? 0 : it.cantidad * it.precio);
                 tr.querySelector('.c-menos').onclick = () => { if (it.cantidad > 1) { it.cantidad--; pintarCarrito(); } };
                 tr.querySelector('.c-mas').onclick = () => { it.cantidad++; pintarCarrito(); };
                 tr.querySelector('.c-cant').onchange = e => { it.cantidad = Math.max(1, parseFloat(e.target.value) || 1); pintarCarrito(); };
                 tr.querySelector('.cart-obs').onchange = e => { it.observacion = e.target.value; };
                 tr.querySelector('.c-quitar').onclick = () => { carrito.splice(i, 1); pintarCarrito(); };
+                const cort = tr.querySelector('.c-cort');
+                if (cort) cort.onclick = () => {
+                    if (it.cortesia) { it.cortesia = false; it.motivo = ''; pintarCarrito(); return; }
+                    abrirCortesia(it.nombre, 1, (n, motivo) => { it.cortesia = true; it.motivo = motivo; pintarCarrito(); });
+                };
                 tb.appendChild(tr);
             });
         }
-        TOTAL = Math.round(carrito.reduce((a, it) => a + it.cantidad * it.precio, 0) * 100) / 100;
-        el('lbl_total').textContent = fmt(TOTAL);
-        el('total_comp').value = fmt(TOTAL);
-        medios = [];
-        renderMedios();
-        el('vuelto').value = fmt(Math.max(0, (parseFloat(el('paga').value) || 0) - TOTAL));
+        BRUTO = Math.round(carrito.reduce((a, it) => a + (it.cortesia ? 0 : it.cantidad * it.precio), 0) * 100) / 100;
+        GRATIS = Math.round(carrito.reduce((a, it) => a + (it.cortesia ? it.cantidad * it.precio : 0), 0) * 100) / 100;
+        aplicarDescuento();
     }
 
     function cargarProductos(catId = null, texto = '') {
@@ -639,7 +809,8 @@
 
     async function registrarDirecta(body, contado, restaurar) {
         const datos = Object.assign({}, body, {
-            items: carrito.map(it => ({ id: it.id, cantidad: it.cantidad, precio: it.precio, observacion: it.observacion || null })),
+            items: carrito.map(it => ({ id: it.id, cantidad: it.cantidad, precio: it.precio, observacion: it.observacion || null,
+                ...(it.cortesia ? { cortesia: 1, motivo_cortesia: it.motivo } : {}) })),
             enviar_cocina: el('enviar_cocina').checked ? 1 : 0,
         });
         delete datos.ped_id;
@@ -667,6 +838,7 @@
             pintarCarrito();
             el('paga').value = '0.00';
             el('observaciones').value = '';
+            if (DSCTO) { el('dscto_valor').value = ''; el('dscto_motivo').value = ''; el('clave_admin').value = ''; aplicarDescuento(); }
             llenarCliente({ num: '00000000', nom: 'VENTA AL PORTADOR', dir: '--', tdicod: '1' });
             el('msg_cliente').textContent = '';
             restaurar();
@@ -681,7 +853,7 @@
             const card = e.target.closest('.product-item-kiosko');
             if (card) {
                 const id = Number(card.dataset.id);
-                const ya = carrito.find(it => it.id === id);
+                const ya = carrito.find(it => it.id === id && !it.cortesia);
                 if (ya) ya.cantidad++; else carrito.push({ id, nombre: card.dataset.nombre, precio: parseFloat(card.dataset.precio), cantidad: 1, observacion: '' });
                 pintarCarrito();
                 return;
@@ -705,6 +877,8 @@
         pintarCarrito();
     }
 
+    if (!DIRECTA) recalcular();
+
     // Registrar
     el('btnRegistrar').addEventListener('click', async function () {
         const btn = this;
@@ -726,6 +900,10 @@
             return;
         }
         if (DIRECTA && !carrito.length) { alert('Agrega al menos un producto.'); return; }
+        if (DSCTO && montoDescuento() > 0) {
+            if (montoDescuento() >= BRUTO) { alert('El descuento no puede ser igual o mayor que la cuenta.'); el('dscto_valor').focus(); return; }
+            if (el('dscto_clave_box').style.display !== 'none' && !el('clave_admin').value) { alert('Este descuento necesita la clave de un administrador.'); el('clave_admin').focus(); return; }
+        }
         cobrando = true;
         btn.disabled = true;
         btn.textContent = 'PROCESANDO...';
@@ -755,6 +933,12 @@
             op_med_pag: contado ? (medios.length ? medios.map(m => m.op || '') : [EXIGE_OP ? el('op_med_pag').value.trim() : '']) : [],
             // Cuentas separadas: { clave: cantidad } de lo que paga esta persona (null = todo lo pendiente)
             separadas: SEPARADAS ? seleccionSeparada() : null,
+            // Cortesías de la mesa y descuento a la cuenta (el servidor revisa permisos y la clave del administrador)
+            cortesias: cortesias,
+            ...(DSCTO && montoDescuento() > 0 ? {
+                descuento_tipo: el('dscto_tipo').value, descuento_valor: parseFloat(el('dscto_valor').value) || 0,
+                descuento_motivo: el('dscto_motivo').value.trim(), clave_admin: el('clave_admin').value || null,
+            } : {}),
         };
 
         if (DIRECTA) {
@@ -776,6 +960,7 @@
 
             if (res.status === 422) { alert(Object.values(data.errors)[0][0]); restaurar(); return; }
             if (data.estado === 'success') { window.location.href = data.redirect; return; }
+            if (DSCTO && /clave/i.test(data.mensaje || '')) { el('clave_admin').value = ''; el('dscto_clave_box').style.display = 'block'; }
             if (data.estado === 'duplicado') { alert(data.mensaje + ' Actualiza la pantalla para ver si ya quedó cobrado.'); restaurar(); return; }
             alert(data.mensaje || 'No se pudo registrar el cobro.');
             restaurar();

@@ -109,6 +109,9 @@ class SucursalController extends Controller
             'formato_impresion' => 'required|in:TICKET,A4',
             'control_stock' => 'required|in:'.implode(',', array_keys(ControlStock::NIVELES)),
             'comandas_solo_mesas' => 'nullable|boolean',
+            'permite_descuentos' => 'nullable|boolean',
+            'permite_cortesias' => 'nullable|boolean',
+            'descuento_max_cajero' => 'nullable|numeric|min:0|max:100',
         ];
         $nombres = ['nombre_comercial' => 'Nombre comercial', 'codigofiscal' => 'Código de establecimiento',
             'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión', 'control_stock' => 'Venta con o sin stock'];
@@ -161,6 +164,9 @@ class SucursalController extends Controller
             $datos[$campo] = mb_strtoupper(trim($datos[$campo]));
         }
         $datos['comandas_solo_mesas'] = $request->boolean('comandas_solo_mesas');
+        $datos['permite_descuentos'] = $request->boolean('permite_descuentos');
+        $datos['permite_cortesias'] = $request->boolean('permite_cortesias');
+        $datos['descuento_max_cajero'] = (float) ($datos['descuento_max_cajero'] ?? 10);
 
         DB::transaction(function () use ($sucursal, $datos) {
             // Bloqueo: si en este momento alguien está cobrando, se espera a que termine

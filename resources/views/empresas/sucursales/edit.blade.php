@@ -212,6 +212,25 @@
                             <span><span class="font-bold text-gray-800">🍽️ Mozos y promotores solo atienden mesas</span>
                                 <span class="block text-xs text-gray-500 mt-0.5">En Comandas no ven "Para llevar", "Delivery" ni "Punto de venta" (solo administrador y caja). Sin marcar, mozos y promotores tienen "Para llevar".</span></span>
                         </label>
+                        {{-- Descuentos y cortesías al cobrar en el restaurante (cobrar mesa y PV Restaurante) --}}
+                        <div class="rounded-xl border-2 border-gray-200 px-4 py-3 space-y-3">
+                            <p class="font-bold text-gray-800">🏷️ Descuentos y cortesías al cobrar <span class="font-normal text-xs text-gray-500">(cobrar mesa y PV Restaurante)</span></p>
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input type="checkbox" name="permite_descuentos" value="1" @checked($campo('permite_descuentos')) class="mt-0.5 rounded text-indigo-600">
+                                <span><span class="font-semibold text-gray-800">Permitir descuentos a la cuenta</span>
+                                    <span class="block text-xs text-gray-500">En soles o en %. El cajero puede hasta el máximo de abajo; más que eso, el administrador o con su clave.</span></span>
+                            </label>
+                            <label class="flex items-center gap-3 pl-7 text-sm text-gray-700">Máximo para caja sin clave del administrador
+                                <span class="flex items-center gap-1"><input type="number" name="descuento_max_cajero" min="0" max="100" step="0.5"
+                                    value="{{ old('descuento_max_cajero', rtrim(rtrim(number_format((float) ($sucursal->descuento_max_cajero ?? 10), 2, '.', ''), '0'), '.')) }}"
+                                    class="w-20 h-9 rounded-lg border-gray-300 text-sm text-center"> %</span>
+                            </label>
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input type="checkbox" name="permite_cortesias" value="1" @checked($campo('permite_cortesias')) class="mt-0.5 rounded text-indigo-600">
+                                <span><span class="font-semibold text-gray-800">Permitir cortesías 🎁</span>
+                                    <span class="block text-xs text-gray-500">El producto va gratis con su motivo. Ante SUNAT es una operación gratuita y sí descuenta el stock. Todo sale en el reporte "Descuentos y Cortesías".</span></span>
+                            </label>
+                        </div>
                         <div>
                             <p class="text-sm font-medium text-gray-600 mb-2">Comprobante que sale seleccionado al cobrar</p>
                             <div class="grid grid-cols-3 gap-3">

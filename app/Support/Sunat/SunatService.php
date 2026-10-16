@@ -236,12 +236,41 @@ class SunatService
 
         $porcentajeIgv = round((Comprobante::factorDe($cab) - 1) * 100, 2);
         $items = [];
+        $gratuitas = 0.0;
+        $igvGratuitas = 0.0;
         foreach ($detalles as $d) {
             $cant = (float) $d->cdecan ?: 1;
             $valor = (float) $d->cdepve;            // valor de venta de la línea (sin IGV)
             $igv = (float) $d->cdeigv;
             $afecto = (string) $d->tigcod ?: '20';
             $unidad = strtoupper((string) $d->umecod);
+
+            // Cortesía: operación gratuita (no se cobra). Va con su valor referencial y, si es gravada (13), el IGV que
+            // correspondería; no suma al total ni al IGV cobrado (TaxScheme 9996 GRA y leyenda 1002)
+            if (! empty($d->cortesia)) {
+                $referencial = round($cant * (float) $d->precio_lista, 2);
+                $gravada = $afecto === '13';
+                $valorRef = $gravada ? round($referencial / Comprobante::factorDe($cab), 2) : $referencial;
+                $igvRef = $gravada ? round($referencial - $valorRef, 2) : 0.0;
+                $gratuitas += $valorRef;
+                $igvGratuitas += $igvRef;
+                $items[] = (new SaleDetail)
+                    ->setCodProducto($d->procod ?: 'P'.$d->IdProducto)
+                    ->setUnidad(in_array($unidad, ['', 'UNI', 'UND'], true) ? 'NIU' : $unidad)
+                    ->setCantidad($cant)
+                    ->setDescripcion(mb_substr((string) $d->cdedes, 0, 250))
+                    ->setMtoValorUnitario(0)
+                    ->setMtoValorGratuito(round($valorRef / $cant, 10))
+                    ->setMtoBaseIgv($valorRef)
+                    ->setPorcentajeIgv($gravada ? $porcentajeIgv : 0)
+                    ->setIgv($igvRef)
+                    ->setTipAfeIgv($afecto)
+                    ->setTotalImpuestos($igvRef)
+                    ->setMtoValorVenta($valorRef)
+                    ->setMtoPrecioUnitario(0);
+
+                continue;
+            }
 
             $items[] = (new SaleDetail)
                 ->setCodProducto($d->procod ?: 'P'.$d->IdProducto)
@@ -255,9 +284,13 @@ class SunatService
                 ->setTotalImpuestos($igv)
                 ->setMtoValorVenta($valor)
                 ->setMtoValorUnitario(round($valor / $cant, 10))
-                ->setMtoPrecioUnitario((float) $d->cdepuni);
+                ->setMtoPrecioUnitario(round((float) $d->cdevve / $cant, 10));
         }
         $doc->setDetails($items);
+        if ($gratuitas > 0) {
+            $doc->setMtoOperGratuitas(round($gratuitas, 2))->setMtoIGVGratuitas(round($igvGratuitas, 2))
+                ->setLegends(array_merge($doc->getLegends(), [(new Legend)->setCode('1002')->setValue('TRANSFERENCIA GRATUITA DE UN BIEN Y/O SERVICIO PRESTADO GRATUITAMENTE')]));
+        }
 
         return $doc;
     }
@@ -458,6 +491,10 @@ class SunatService
                     ->setMtoOperExoneradas((float) $c->ccatexo)
                     ->setMtoOperInafectas((float) $c->ccatinaf)
                     ->setMtoIGV((float) $c->ccaigv);
+                // Cortesías de la boleta: total de operaciones gratuitas (sin IGV)
+                if ((float) ($c->ccagra ?? 0) > 0) {
+                    $d->setMtoOperGratuitas((float) $c->ccagra);
+                }
                 if (in_array($c->tdocod, ['07', '08'], true)) {
                     $d->setDocReferencia((new Document)->setTipoDoc($c->tdocod_ref)->setNroDoc($c->serie_ref.'-'.(int) $c->num_ref));
                 }

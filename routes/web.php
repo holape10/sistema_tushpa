@@ -19,6 +19,7 @@ use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DeliveryLiquidacionController;
+use App\Http\Controllers\DescuentosCortesiasController;
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\EntradaController;
 use App\Http\Controllers\EntrenadorController;
@@ -99,6 +100,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/comandas/enviar', [ComandasController::class, 'enviarComanda'])->name('comandas.enviar');
     Route::post('/comandas/promotor', [ComandasController::class, 'asignarPromotor'])->name('comandas.promotor');
     Route::get('/promotores', [PromotorController::class, 'index'])->name('promotores.index');
+    Route::get('/reportes/descuentos-cortesias', [DescuentosCortesiasController::class, 'index'])->name('descuentos.reporte');
     Route::post('/comandas/carrito/vaciar', [ComandasController::class, 'clearCart'])->name('comandas.clear_cart');
     Route::get('/comandas/pedido/{ped_id}', [ComandasController::class, 'getPedidoDetails'])->name('comandas.pedido_details');
     Route::get('/comandas/activos-llevar-delivery', [ComandasController::class, 'activosLlevarDelivery'])->name('comandas.activos_llevar_delivery');

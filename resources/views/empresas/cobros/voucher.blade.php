@@ -93,12 +93,13 @@
             <tr><td>POR CONSUMO</td><td class="um">UNIDAD</td><td class="r">1.00</td><td class="r">{{ number_format($cab->ccaitv, 2) }}</td><td class="r">{{ number_format($cab->ccaitv, 2) }}</td></tr>
         @else
             @foreach ($detalle as $d)
+                @php $linea = \App\Support\Descuentos::linea($d); @endphp
                 <tr>
-                    <td>{{ $d->cdedes }}@if (!empty($d->lotes))<br><small>Lote: {{ $d->lotes }}</small>@endif @if (!empty($d->series))<br><small>S/N: {{ $d->series }}</small>@endif</td>
+                    <td>{{ $d->cdedes }}@if ($linea->cortesia)<br><b>🎁 CORTESÍA</b>@endif @if (!empty($d->lotes))<br><small>Lote: {{ $d->lotes }}</small>@endif @if (!empty($d->series))<br><small>S/N: {{ $d->series }}</small>@endif</td>
                     <td class="um">{{ mb_strtoupper($unidades[$d->umecod] ?? $d->umecod) }}</td>
                     <td class="r">{{ number_format($d->cdecan, 2) }}</td>
-                    <td class="r">{{ number_format($d->cdepuni, 2) }}</td>
-                    <td class="r">{{ number_format($d->cdevve, 2) }}</td>
+                    <td class="r">{{ number_format($linea->precio, 2) }}</td>
+                    <td class="r">{{ number_format($linea->total, 2) }}</td>
                 </tr>
             @endforeach
         @endif
@@ -106,6 +107,11 @@
     </table>
 
     <table class="totales" style="margin-top:4px;">
+        @if ((float) ($cab->descuento ?? 0) > 0)
+            <tr><td>CONSUMO S/</td><td>{{ number_format($cab->ccaitv + $cab->descuento, 2) }}</td></tr>
+            <tr><td>DESCUENTO S/</td><td>-{{ number_format($cab->descuento, 2) }}</td></tr>
+        @endif
+        @if ((float) ($cab->ccagra ?? 0) > 0)<tr><td>OP. GRATUITAS S/</td><td>{{ number_format($cab->ccagra, 2) }}</td></tr>@endif
         @if ($cab->ccatvg > 0)<tr><td>OP. GRAVADA S/</td><td>{{ number_format($cab->ccatvg, 2) }}</td></tr>@endif
         @if ($cab->ccatexo > 0)<tr><td>OP. EXONE. S/</td><td>{{ number_format($cab->ccatexo, 2) }}</td></tr>@endif
         <tr><td>IGV S/</td><td>{{ number_format($cab->ccaigv, 2) }}</td></tr>

@@ -222,7 +222,7 @@ document.addEventListener('alpine:init', () => {
          * @param pres undefined = si tiene presentaciones se pregunta con el modal; null = unidad base; objeto = esa presentación
          */
         agregar(p, editar = true, pres, cantidad = 1, precioElegido = null) {
-            if (this.edicion?.soloCabecera) { this.aviso('En una venta de mesa los productos no cambian.', 'error'); return; }
+            if (this.edicion?.soloCabecera) { this.aviso('En esta venta los productos no cambian (es de mesa o tiene descuento o cortesía).', 'error'); return; }
             if (pres === undefined) {
                 if ((p.presentaciones || []).length) { this.abrirElegir(p, editar); return; }
                 pres = null;

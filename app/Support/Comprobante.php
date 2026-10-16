@@ -71,6 +71,10 @@ class Comprobante
         $esContado = $cre->cre_dia_tip === 'CONTADO';
         $cliente = self::cliente($user, $datos, $esContado);
 
+        // ---- Descuento a la cuenta y cortesías (revisa permisos y reparte el descuento entre las líneas) ----
+        [$lineas, $descuento] = Descuentos::aplicar($user, $lineas, $datos);
+        $extra = $descuento + $extra;
+
         // ---- Serie y correlativo (bloqueado para que dos cajas no repitan número) ----
         [$colSerie, $colNum] = self::SERIES[$tdocod];
 
@@ -99,11 +103,14 @@ class Comprobante
             'est_sunat' => $tdocod === '13' ? null : 'PENDIENTE',
         ]);
 
-        // ---- Medios de pago (contado) o cuenta por cobrar (crédito) ----
-        if ($esContado) {
+        // ---- Medios de pago (contado) o cuenta por cobrar (crédito); todo en cortesía = nada que cobrar ----
+        if ($total <= 0 && ! $esContado) {
+            throw new \RuntimeException('Una cuenta toda en cortesía no se vende al crédito: elige CONTADO.');
+        }
+        if ($esContado && $total > 0) {
             self::registrarMedios($user, $turno, $cabId, $total,
                 (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []), (array) ($datos['op_med_pag'] ?? []));
-        } else {
+        } elseif (! $esContado) {
             Cuentas::abrirPorCobrar($cabId);
         }
 
@@ -174,7 +181,8 @@ class Comprobante
             DB::table('cpe_detalle')->where('IdCpe_cabecera', $cabId)->delete();
             $totales = self::totales($lineas, $gravado, $factorIgv);
         } else {
-            $totales = ['ccatvg' => (float) $cab->ccatvg, 'ccaigv' => (float) $cab->ccaigv, 'ccatexo' => (float) $cab->ccatexo, 'ccaitv' => (float) $cab->ccaitv];
+            $totales = ['ccatvg' => (float) $cab->ccatvg, 'ccaigv' => (float) $cab->ccaigv, 'ccatexo' => (float) $cab->ccatexo, 'ccaitv' => (float) $cab->ccaitv,
+                'ccagra' => (float) ($cab->ccagra ?? 0), 'ccaigvgra' => (float) ($cab->ccaigvgra ?? 0)];
             // Los movimientos de kardex llevan el comprobante: se actualizan al nuevo
             DB::table('movimientos_productos')->where('IdCpe_cabecera', $cabId)
                 ->update(['tdocod' => $tdocod, 'serie' => $serie, 'numero' => (string) $numero, 'cliente' => $cliNom]);
@@ -188,10 +196,10 @@ class Comprobante
             'est_sunat' => $tdocod === '13' ? null : 'PENDIENTE', 'ccasunrescod' => null, 'ccadessun' => null, 'ccaqr' => null, 'res_id' => null,
         ]);
 
-        if ($esContado) {
+        if ($esContado && $total > 0) {
             self::registrarMedios($user, $turno, $cabId, $total,
                 (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []), (array) ($datos['op_med_pag'] ?? []));
-        } else {
+        } elseif (! $esContado) {
             Cuentas::abrirPorCobrar($cabId);
         }
 
@@ -255,19 +263,33 @@ class Comprobante
         );
     }
 
-    /** Total de una línea: cantidad x precio, o el importe cobrado si se vendió por importe (S/ 20 de combustible) */
+    /**
+     * Total de una línea: cantidad x precio, o el importe cobrado si se vendió por importe (S/ 20 de combustible)
+     * o con descuento. Una cortesía no se cobra: 0.
+     */
     private static function totalLinea(array $l): float
     {
+        if (! empty($l['cortesia'])) {
+            return 0.0;
+        }
+
         return isset($l['importe']) ? round((float) $l['importe'], 2) : round($l['cantidad'] * $l['precio'], 2);
     }
 
-    /** @return array{ccatvg: float, ccaigv: float, ccatexo: float, ccaitv: float} */
+    /**
+     * Totales cobrados y, aparte, el valor de las cortesías (operaciones gratuitas: no suman al total ni al IGV cobrado).
+     *
+     * @return array{ccatvg: float, ccaigv: float, ccatexo: float, ccaitv: float, ccagra: float, ccaigvgra: float}
+     */
     private static function totales(array $lineas, bool $gravado, float $factorIgv): array
     {
         $total = round(array_sum(array_map(fn ($l) => self::totalLinea($l), $lineas)), 2);
         $ccatvg = $gravado ? round($total / $factorIgv, 2) : 0;
+        $gratuito = round(array_sum(array_map(fn ($l) => ! empty($l['cortesia']) ? round($l['cantidad'] * $l['precio'], 2) : 0, $lineas)), 2);
+        $ccagra = $gravado ? round($gratuito / $factorIgv, 2) : $gratuito;
 
-        return ['ccatvg' => $ccatvg, 'ccaigv' => $gravado ? round($total - $ccatvg, 2) : 0, 'ccatexo' => $gravado ? 0 : $total, 'ccaitv' => $total];
+        return ['ccatvg' => $ccatvg, 'ccaigv' => $gravado ? round($total - $ccatvg, 2) : 0, 'ccatexo' => $gravado ? 0 : $total, 'ccaitv' => $total,
+            'ccagra' => $ccagra, 'ccaigvgra' => $gravado ? round($gratuito - $ccagra, 2) : 0];
     }
 
     private static function vencimiento(array $datos, string $fecEmi, bool $esContado): ?string
@@ -293,6 +315,7 @@ class Comprobante
             'clicorcli' => $datos['clicor'] ?? null, 'telefono_cliente' => $datos['telefono'] ?? null,
             'ccatvg' => $totales['ccatvg'], 'ccaigv' => $totales['ccaigv'], 'por_igv' => $gravado ? round(($factorIgv - 1) * 100, 2) : null,
             'ccatexo' => $totales['ccatexo'], 'ccaitv' => $total,
+            'ccagra' => $totales['ccagra'] ?? 0, 'ccaigvgra' => $totales['ccaigvgra'] ?? 0,
             'totalcontado' => $esContado ? $total : 0, 'totalcredito' => $esContado ? 0 : $total,
             'paga' => $paga, 'vuelto' => $esContado ? max(0, round($paga - $total, 2)) : 0,
             'estadopago' => $esContado ? 'CONTADO' : 'CREDITO', 'cre_dia_id' => $cre->cre_dia_id,
@@ -337,13 +360,17 @@ class Comprobante
                 $porciones[$idOpcion] = ($porciones[$idOpcion] ?? 0) + $cant * (float) $porPlato;
             }
 
+            // Cortesía: operación gratuita (no se cobra); el precio de lista queda como valor referencial
+            $cortesia = ! empty($it['cortesia']);
             $detId = DB::table('cpe_detalle')->insertGetId([
                 'IdCpe_cabecera' => $cabId, 'IdProducto' => $it['IdProducto'], 'IdProducto_rel' => $it['IdProducto'],
                 'procod' => $prod->procod ?? '', 'umecod' => ($it['umecod'] ?? null) ?: ($prod->umecod ?? 'NIU'),
                 'cdecan' => $cant, 'cdedes' => $it['descripcion'],
-                'cdevun' => $valorUni, 'cdepuni' => $precio, 'cdepve' => $subtotal,
+                'cdevun' => $cortesia ? 0 : $valorUni, 'cdepuni' => $cortesia ? 0 : $precio, 'cdepve' => $subtotal,
                 'cdeigv' => round($totalLinea - $subtotal, 2), 'cdevve' => $totalLinea,
-                'tigcod' => $sucursal->tip_igv_pred,
+                'tigcod' => $cortesia ? Descuentos::afectacionGratuita((string) $sucursal->tip_igv_pred) : $sucursal->tip_igv_pred,
+                'precio_lista' => $cortesia ? $precio : ($it['precio_lista'] ?? null), 'descuento' => (float) ($it['descuento'] ?? 0),
+                'cortesia' => $cortesia, 'cortesia_motivo' => $cortesia ? ($it['motivo'] ?? Descuentos::MOTIVO_CORTESIA) : null,
                 'costo' => round(($it['IdProducto'] ? $costoDe($it['IdProducto']) : 0) * $factor
                     + collect($it['opciones'] ?? [])->sum(fn ($porPlato, $id) => $costoDe($id) * $porPlato), 2),
                 'cpe_det_factor' => $factor, 'id_almacen_pro' => $almacen?->id_almacen,
@@ -359,7 +386,7 @@ class Comprobante
                     'IdCpe_cabecera' => $cabId, 'cliente' => $comprobante['cliente'], 'fecha_mov' => $comprobante['fecha'],
                 ] + $banderas;
                 $partes = Kardex::salidaPorVenta($prod, $almacen->id_almacen, round($cant * $factor, 3), $doc + [
-                    'precio' => round($precio / $factor, 2), 'lote_preferido' => $it['lote'] ?? null,
+                    'precio' => $cortesia ? 0 : round($precio / $factor, 2), 'lote_preferido' => $it['lote'] ?? null,
                 ]);
                 if ($lotes = Lotes::texto($partes)) {
                     DB::table('cpe_detalle')->where('IdCpe_detalle', $detId)->update(['lotes' => $lotes]);

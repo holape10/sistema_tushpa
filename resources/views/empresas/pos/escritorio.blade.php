@@ -80,7 +80,7 @@
             <div x-show="edicion" x-cloak class="flex flex-wrap items-center gap-2 rounded-2xl bg-amber-500 text-white px-4 py-3 shadow-sm">
                 <span class="font-bold">✏️ Editando <span x-text="edicion?.numero"></span></span>
                 <span class="text-sm text-amber-50 flex-1"
-                      x-text="edicion?.soloCabecera ? 'Venta de mesa: cambia el comprobante, el cliente o el pago (los productos se quedan). REGISTRAR guarda.'
+                      x-text="edicion?.soloCabecera ? 'Venta de mesa o con descuento/cortesía: cambia el comprobante, el cliente o el pago (los productos se quedan). REGISTRAR guarda.'
                                                    : 'Corrige productos, cliente, pago o el tipo de comprobante. REGISTRAR guarda los cambios.'"></span>
                 <a href="{{ route('ventas.index') }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30">Salir sin guardar</a>
             </div>

@@ -5,6 +5,7 @@ namespace App\Support\Impresion;
 use App\Models\Mesa;
 use App\Support\ConsultaCpe;
 use App\Support\Delivery;
+use App\Support\Descuentos;
 use App\Support\Fidelizacion;
 use App\Support\Sunat\CodigoQr;
 use App\Support\Sunat\NumeroLetras;
@@ -180,7 +181,8 @@ class Impresion
             $p->item('POR CONSUMO', 1, (float) $cab->ccaitv, (float) $cab->ccaitv);
         } else {
             foreach ($detalle as $d) {
-                $p->item($d->cdedes, (float) $d->cdecan, (float) $d->cdepuni, (float) $d->cdevve);
+                $l = Descuentos::linea($d);
+                $p->item($d->cdedes.($l->cortesia ? ' (CORTESIA)' : ''), (float) $d->cdecan, $l->precio, $l->total);
                 if (! empty($d->series)) {
                     $p->parrafo('  S/N: '.$d->series);
                 }
@@ -188,6 +190,7 @@ class Impresion
         }
         $p->linea();
 
+        self::lineasDescuento($p, $cab, '');
         if ($cab->ccatvg > 0) {
             $p->dosColumnas('OP. GRAVADA', number_format($cab->ccatvg, 2));
         }
@@ -304,8 +307,9 @@ class Impresion
         $p->linea()->texto(($resto >= 11 ? mb_str_pad('Descripción', $resto) : 'Desc.'.str_repeat(' ', max(0, $resto - 5))).$columnas('Cant.', 'UDM.', 'P.U', 'Total'))->linea();
         $filas = $cab->consumo ? [(object) ['cdedes' => 'POR CONSUMO', 'cdecan' => 1, 'umecod' => 'NIU', 'cdepuni' => $cab->ccaitv, 'cdevve' => $cab->ccaitv, 'series' => null]] : $detalle;
         foreach ($filas as $d) {
-            $p->parrafo((string) $d->cdedes)
-                ->texto(str_repeat(' ', $resto).$columnas(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), $soles($d->cdepuni), $soles($d->cdevve)));
+            $l = Descuentos::linea($d);
+            $p->parrafo((string) $d->cdedes.($l->cortesia ? ' (CORTESIA)' : ''))
+                ->texto(str_repeat(' ', $resto).$columnas(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), $soles($l->precio), $soles($l->total)));
             if (! empty($d->series)) {
                 $p->parrafo('  S/N: '.$d->series);
             }
@@ -313,6 +317,7 @@ class Impresion
         $p->linea();
 
         // Medios, TOTAL grande y paga con / vuelto en una línea
+        self::lineasDescuento($p, $cab, ' S/');
         foreach ($medios as $m) {
             $p->dosColumnas(($m->nom_med_pag ?? 'PAGO').' S/', $soles($m->monto));
         }
@@ -399,6 +404,7 @@ class Impresion
         }
 
         // Totales
+        self::lineasDescuento($p, $cab, ': S/');
         $p->dosColumnas('SUBTOTAL: S/', $soles((float) $cab->ccatvg + (float) $cab->ccatexo + (float) $cab->ccatinaf));
         if ($cab->ccaigv > 0) {
             $p->dosColumnas('IGV: S/', $soles($cab->ccaigv));
@@ -442,6 +448,18 @@ class Impresion
         return $p;
     }
 
+    /** Consumo y descuento a la cuenta, y el valor de las cortesías (operaciones gratuitas) */
+    private static function lineasDescuento(Escpos $p, object $cab, string $sufijo): void
+    {
+        if ((float) ($cab->descuento ?? 0) > 0) {
+            $p->dosColumnas('CONSUMO'.$sufijo, number_format((float) $cab->ccaitv + (float) $cab->descuento, 2))
+                ->dosColumnas('DESCUENTO'.$sufijo, '-'.number_format((float) $cab->descuento, 2));
+        }
+        if ((float) ($cab->ccagra ?? 0) > 0) {
+            $p->dosColumnas('OP. GRATUITAS'.$sufijo, number_format((float) $cab->ccagra, 2));
+        }
+    }
+
     /** Productos del clásico: nombre completo y debajo Cant. / UDM / P.U. / Total alineados a la derecha */
     private static function productosClasico(Escpos $p, object $cab, $detalle): void
     {
@@ -457,8 +475,9 @@ class Impresion
             $p->texto('POR CONSUMO')->texto($fila('1.00', 'NIU', $soles($cab->ccaitv), $soles($cab->ccaitv)));
         } else {
             foreach ($detalle as $d) {
-                $p->parrafo((string) $d->cdedes);
-                $p->texto($fila(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), $soles($d->cdepuni), $soles($d->cdevve)));
+                $l = Descuentos::linea($d);
+                $p->parrafo((string) $d->cdedes.($l->cortesia ? ' (CORTESIA)' : ''));
+                $p->texto($fila(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), $soles($l->precio), $soles($l->total)));
                 if (! empty($d->series)) {
                     $p->parrafo('  S/N: '.$d->series);
                 }
@@ -484,8 +503,9 @@ class Impresion
         if ($ancho < 42) {
             $p->linea('_')->texto(mb_str_pad('Cant U.M Descrip', $ancho - 16).str_pad('P.U.', 7, ' ', STR_PAD_LEFT).str_pad('Total', 9, ' ', STR_PAD_LEFT))->linea('_');
             foreach ($filas as $d) {
-                $p->parrafo(number_format((float) $d->cdecan, 2).' '.($d->umecod ?: 'NIU').' '.trim((string) $d->cdedes))
-                    ->texto(str_pad($soles($d->cdepuni), $ancho - 9, ' ', STR_PAD_LEFT).str_pad($soles($d->cdevve), 9, ' ', STR_PAD_LEFT));
+                $l = Descuentos::linea($d);
+                $p->parrafo(number_format((float) $d->cdecan, 2).' '.($d->umecod ?: 'NIU').' '.trim((string) $d->cdedes).($l->cortesia ? ' (CORTESIA)' : ''))
+                    ->texto(str_pad($soles($l->precio), $ancho - 9, ' ', STR_PAD_LEFT).str_pad($soles($l->total), 9, ' ', STR_PAD_LEFT));
                 if (! empty($d->series)) {
                     $p->parrafo('  S/N: '.$d->series);
                 }
@@ -497,8 +517,9 @@ class Impresion
 
         $p->linea('_')->texto($fila('Cant.', 'U.M', 'Descrip.', 'P.U.', 'Total'))->linea('_');
         foreach ($filas as $d) {
-            $partes = explode("\n", wordwrap(trim((string) $d->cdedes), $wd - 1, "\n", true));
-            $p->texto($fila(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), array_shift($partes), $soles($d->cdepuni), $soles($d->cdevve)));
+            $l = Descuentos::linea($d);
+            $partes = explode("\n", wordwrap(trim((string) $d->cdedes).($l->cortesia ? ' (CORTESIA)' : ''), $wd - 1, "\n", true));
+            $p->texto($fila(number_format((float) $d->cdecan, 2), (string) ($d->umecod ?: 'NIU'), array_shift($partes), $soles($l->precio), $soles($l->total)));
             foreach ($partes as $resto) {
                 $p->texto(str_repeat(' ', $wc + $wu + 2).$resto);
             }
