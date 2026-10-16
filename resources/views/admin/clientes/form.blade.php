@@ -156,7 +156,18 @@
         @endphp
         <section class="bg-white rounded-2xl shadow-sm p-5 space-y-4"
                  x-data="{ rubro: @js($rubroActual), sel: @js(array_values($marcados)), presets: @js($presets), cambiar: {{ $nuevo ? 'true' : 'false' }},
-                           aplicar() { if (this.presets[this.rubro]) this.sel = [...this.presets[this.rubro]]; } }">
+                           aplicar() {
+                               if (!this.presets[this.rubro]) return;
+                               // Al cambiar de tipo de negocio se conservan los módulos adicionales que ya tenía
+                               const extra = Object.keys(this.adicionales).filter(k => this.tiene(k)).flatMap(k => this.adicionales[k]);
+                               this.sel = [...new Set([...this.presets[this.rubro], ...extra])];
+                           },
+                           adicionales: @js(collect(\App\Support\Rubros::ADICIONALES)->map(fn ($a) => array_values(array_intersect($a['modulos'], $todas)))),
+                           tiene(k) { return this.adicionales[k].length && this.adicionales[k].every(u => this.sel.includes(u)); },
+                           alternar(k) {
+                               this.cambiar = true;
+                               this.sel = this.tiene(k) ? this.sel.filter(u => !this.adicionales[k].includes(u)) : [...new Set([...this.sel, ...this.adicionales[k]])];
+                           } }">
             <div>
                 <h2 class="font-bold text-slate-700">Tipo de negocio y menú</h2>
                 <p class="text-xs text-slate-500">Su administrador verá solo estas opciones. Sus trabajadores no podrán tener más que eso.</p>
@@ -169,6 +180,24 @@
                         <span class="block text-[11px] text-slate-500 leading-tight">{{ $r['ejemplos'] }}</span>
                     </label>
                 @endforeach
+            </div>
+
+            {{-- Módulos adicionales: se suman (o quitan) del menú sin tocar lo demás --}}
+            <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                <p class="text-sm font-bold text-slate-700">Módulos adicionales <span class="font-normal text-xs text-slate-500">— para el cliente que quiere ampliar su sistema. Toca para agregar o quitar.</span></p>
+                <div class="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    @foreach (\App\Support\Rubros::ADICIONALES as $clave => $a)
+                        <button type="button" @click="alternar('{{ $clave }}')" @disabled($menuActual === null && ! $nuevo)
+                                class="text-left rounded-xl border-2 px-3 py-2 transition flex items-start gap-2"
+                                :class="tiene('{{ $clave }}') ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-indigo-300'">
+                            <i class="fas {{ $a['icono'] }} mt-0.5" :class="tiene('{{ $clave }}') ? 'text-emerald-600' : 'text-slate-400'"></i>
+                            <span class="min-w-0"><span class="block text-sm font-bold text-slate-800">{{ $a['nombre'] }}
+                                    <span x-show="tiene('{{ $clave }}')" class="ml-1 text-[10px] text-emerald-700">✔ INCLUIDO</span></span>
+                                <span class="block text-[11px] text-slate-500 leading-tight">{{ $a['detalle'] }}</span></span>
+                        </button>
+                    @endforeach
+                </div>
+                <p x-show="cambiar" class="mt-2 text-[11px] text-slate-500">Se guarda al pulsar "Guardar". Los módulos se agregan a todos sus administradores.</p>
             </div>
 
             @unless ($nuevo)

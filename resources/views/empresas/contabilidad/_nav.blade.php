@@ -2,6 +2,8 @@
 @php
     $menuConta = [
         ['contabilidad.plan', [], 'Plan contable', 'fa-sitemap'],
+        ['contabilidad.registro', ['tipo' => 'ventas'], 'Registro de ventas', 'fa-file-invoice-dollar'],
+        ['contabilidad.registro', ['tipo' => 'compras'], 'Registro de compras', 'fa-file-invoice'],
         ['contabilidad.centralizar', ['tipo' => 'ventas'], 'Centralizar ventas', 'fa-cash-register'],
         ['contabilidad.centralizar', ['tipo' => 'compras'], 'Centralizar compras', 'fa-cart-shopping'],
         ['contabilidad.diario', [], 'Libro diario', 'fa-book'],

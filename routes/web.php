@@ -14,6 +14,7 @@ use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ConcarController;
 use App\Http\Controllers\ConsultaCpeController;
 use App\Http\Controllers\ContabilidadController;
+use App\Http\Controllers\ContabilidadRegistroController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DashboardController;
@@ -702,6 +703,12 @@ Route::middleware('auth')->prefix('contabilidad')->name('contabilidad.')->group(
     Route::get('/mayor', [ContabilidadController::class, 'mayor'])->name('mayor');
     Route::get('/balance', [ContabilidadController::class, 'balance'])->name('balance');
     Route::get('/estados', [ContabilidadController::class, 'estados'])->name('estados');
+    // Registro de ventas y compras contable (solo montos): cada comprobante genera su asiento
+    Route::get('/registro/{tipo}', [ContabilidadRegistroController::class, 'index'])->whereIn('tipo', ['ventas', 'compras'])->name('registro');
+    Route::get('/registro/{tipo}/documento/{doc}', [ContabilidadRegistroController::class, 'documento'])->whereIn('tipo', ['ventas', 'compras'])
+        ->where('doc', '\d{8}|\d{11}')->middleware('throttle:30,1')->name('registro.documento');
+    Route::post('/registro/{tipo}/{id?}', [ContabilidadRegistroController::class, 'guardar'])->whereIn('tipo', ['ventas', 'compras'])->whereNumber('id')->name('registro.guardar');
+    Route::delete('/registro/{tipo}/{id}', [ContabilidadRegistroController::class, 'eliminar'])->whereIn('tipo', ['ventas', 'compras'])->whereNumber('id')->name('registro.eliminar');
 });
 
 Route::middleware('auth')->group(function () {

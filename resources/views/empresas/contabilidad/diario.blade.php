@@ -7,7 +7,8 @@
     @php
         $mes = substr($periodo, 0, 4) . '-' . substr($periodo, 4, 2);
         $origenColor = ['VENTAS' => 'bg-emerald-100 text-emerald-700', 'COBRANZAS' => 'bg-sky-100 text-sky-700', 'COMPRAS' => 'bg-amber-100 text-amber-800',
-                        'PAGOS' => 'bg-rose-100 text-rose-700', 'MANUAL' => 'bg-indigo-100 text-indigo-700', 'APERTURA' => 'bg-violet-100 text-violet-700'];
+                        'PAGOS' => 'bg-rose-100 text-rose-700', 'MANUAL' => 'bg-indigo-100 text-indigo-700', 'APERTURA' => 'bg-violet-100 text-violet-700',
+                        'REG. VENTAS' => 'bg-emerald-100 text-emerald-700', 'REG. COBROS' => 'bg-sky-100 text-sky-700', 'REG. COMPRAS' => 'bg-amber-100 text-amber-800', 'REG. PAGOS' => 'bg-rose-100 text-rose-700'];
         $cuadra = abs((float) $totales->debe - (float) $totales->haber) < 0.01;
     @endphp
 

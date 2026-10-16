@@ -1,8 +1,11 @@
 <?php
+
 namespace App\Support\Contabilidad;
 
 use Carbon\Carbon;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Motor contable por empresa (RUC).
@@ -26,14 +29,15 @@ use Illuminate\Support\Facades\{Auth, DB};
 class Contabilidad
 {
     public const SUBDIARIOS = ['00' => 'APERTURA', '01' => 'CAJA Y BANCOS', '05' => 'VENTAS', '11' => 'COMPRAS', '35' => 'DIARIO'];
-    public const ORIGENES = ['VENTAS', 'COBRANZAS', 'COMPRAS', 'PAGOS', 'PLANILLA', 'MANUAL', 'APERTURA'];
+
+    public const ORIGENES = ['VENTAS', 'COBRANZAS', 'COMPRAS', 'PAGOS', 'REG. VENTAS', 'REG. COBROS', 'REG. COMPRAS', 'REG. PAGOS', 'PLANILLA', 'MANUAL', 'APERTURA'];
 
     public static function asegurar(string $ruc): void
     {
-        if (!DB::table('conta_plan')->where('IdEmpresa', $ruc)->exists()) {
+        if (! DB::table('conta_plan')->where('IdEmpresa', $ruc)->exists()) {
             DB::table('conta_plan')->insert(Pcge::filas($ruc));
         }
-        if (!DB::table('conta_config')->where('IdEmpresa', $ruc)->exists()) {
+        if (! DB::table('conta_config')->where('IdEmpresa', $ruc)->exists()) {
             DB::table('conta_config')->insert(['IdEmpresa' => $ruc, 'created_at' => now(), 'updated_at' => now()]);
         }
     }
@@ -41,6 +45,7 @@ class Contabilidad
     public static function config(string $ruc): object
     {
         self::asegurar($ruc);
+
         return DB::table('conta_config')->where('IdEmpresa', $ruc)->first();
     }
 
@@ -52,7 +57,7 @@ class Contabilidad
     public static function validarPeriodo(string $ruc, string $periodo): void
     {
         if (self::cerrado($ruc, $periodo)) {
-            throw new \RuntimeException('El periodo ' . self::nombrePeriodo($periodo) . ' está CERRADO. Ábrelo en el Libro Diario para modificarlo.');
+            throw new \RuntimeException('El periodo '.self::nombrePeriodo($periodo).' está CERRADO. Ábrelo en el Libro Diario para modificarlo.');
         }
     }
 
@@ -71,20 +76,20 @@ class Contabilidad
      * Registra un asiento. $lineas: [['cuenta','debe','haber','glosa','anexo_doc','anexo_nombre','documento'], ...]
      * Debe = Haber (al céntimo) y todas las cuentas deben ser imputables.
      */
-    public static function crearAsiento(string $ruc, array $cab, array $lineas, ?\Illuminate\Support\Collection $imputables = null): int
+    public static function crearAsiento(string $ruc, array $cab, array $lineas, ?Collection $imputables = null): int
     {
         $imputables ??= self::imputables($ruc);
-        $lineas = array_values(array_filter($lineas, fn($l) => round((float) ($l['debe'] ?? 0), 2) != 0 || round((float) ($l['haber'] ?? 0), 2) != 0));
+        $lineas = array_values(array_filter($lineas, fn ($l) => round((float) ($l['debe'] ?? 0), 2) != 0 || round((float) ($l['haber'] ?? 0), 2) != 0));
         if (count($lineas) < 2) {
-            throw new \RuntimeException('El asiento "' . $cab['glosa'] . '" necesita al menos dos líneas.');
+            throw new \RuntimeException('El asiento "'.$cab['glosa'].'" necesita al menos dos líneas.');
         }
-        $debe = round(array_sum(array_map(fn($l) => round((float) ($l['debe'] ?? 0), 2), $lineas)), 2);
-        $haber = round(array_sum(array_map(fn($l) => round((float) ($l['haber'] ?? 0), 2), $lineas)), 2);
+        $debe = round(array_sum(array_map(fn ($l) => round((float) ($l['debe'] ?? 0), 2), $lineas)), 2);
+        $haber = round(array_sum(array_map(fn ($l) => round((float) ($l['haber'] ?? 0), 2), $lineas)), 2);
         if (abs($debe - $haber) > 0.001) {
-            throw new \RuntimeException("El asiento \"{$cab['glosa']}\" no cuadra: Debe " . number_format($debe, 2) . ' ≠ Haber ' . number_format($haber, 2) . '.');
+            throw new \RuntimeException("El asiento \"{$cab['glosa']}\" no cuadra: Debe ".number_format($debe, 2).' ≠ Haber '.number_format($haber, 2).'.');
         }
         foreach ($lineas as $l) {
-            if (!isset($imputables[$l['cuenta']])) {
+            if (! isset($imputables[$l['cuenta']])) {
                 throw new \RuntimeException("La cuenta {$l['cuenta']} no existe en el plan contable o no es imputable (asiento \"{$cab['glosa']}\"). Revisa el Plan Contable / Configuración de cuentas.");
             }
         }
@@ -93,7 +98,7 @@ class Contabilidad
         self::validarPeriodo($ruc, $periodo);
         $sub = $cab['subdiario'];
         // Al editar un asiento manual se conserva su número si sigue en el mismo periodo y subdiario
-        $numero = !empty($cab['numero']) && ($cab['periodo_anterior'] ?? null) === $periodo . $sub
+        $numero = ! empty($cab['numero']) && ($cab['periodo_anterior'] ?? null) === $periodo.$sub
             ? (int) $cab['numero']
             : (int) DB::table('conta_asientos')->where('IdEmpresa', $ruc)->where('periodo', $periodo)->where('subdiario', $sub)
                 ->lockForUpdate()->max('numero') + 1;
@@ -114,6 +119,7 @@ class Contabilidad
                 'documento' => $l['documento'] ?? null,
             ]);
         }
+
         return $id;
     }
 
@@ -123,12 +129,14 @@ class Contabilidad
         if ($cuenta) {
             return $cuenta;
         }
-        return str_contains(mb_strtoupper((string) $nombre), 'EFECTIVO') || !$nombre ? $cfg->cta_caja : $cfg->cta_banco;
+
+        return str_contains(mb_strtoupper((string) $nombre), 'EFECTIVO') || ! $nombre ? $cfg->cta_caja : $cfg->cta_banco;
     }
 
     private static function rango(string $periodo): array
     {
         $ini = Carbon::createFromFormat('Ym', $periodo)->startOfMonth();
+
         return [$ini->toDateString(), $ini->copy()->endOfMonth()->toDateString()];
     }
 
@@ -162,6 +170,7 @@ class Contabilidad
                     $exo = round($exo + $ajuste, 2);
                 }
                 [$d, $h] = $nota ? ['haber', 'debe'] : ['debe', 'haber'];
+
                 return [
                     ['cuenta' => $cfg->cta_por_cobrar, $d => $total, 'anexo_doc' => $anexoDoc, 'anexo_nombre' => $anexoNom, 'documento' => $docTxt],
                     ['cuenta' => $cfg->cta_igv, $h => $igv, 'documento' => $docTxt],
@@ -171,24 +180,25 @@ class Contabilidad
             };
             $sumarLineas = function (array $acum, array $nuevas) {
                 foreach ($nuevas as $l) {
-                    $k = $l['cuenta'] . '|' . (isset($l['debe']) ? 'D' : 'H');
+                    $k = $l['cuenta'].'|'.(isset($l['debe']) ? 'D' : 'H');
                     $acum[$k] ??= ['cuenta' => $l['cuenta'], 'debe' => 0, 'haber' => 0, 'documento' => $l['documento'] ?? null,
                         'anexo_doc' => $l['anexo_doc'] ?? null, 'anexo_nombre' => $l['anexo_nombre'] ?? null];
                     $acum[$k]['debe'] = round($acum[$k]['debe'] + (float) ($l['debe'] ?? 0), 2);
                     $acum[$k]['haber'] = round($acum[$k]['haber'] + (float) ($l['haber'] ?? 0), 2);
                 }
+
                 return $acum;
             };
 
             // ---- Provisión de ventas ----
             foreach ($docs->groupBy('ccafem') as $fecha => $delDia) {
                 // Facturas, notas (de facturas y de boletas): un asiento por documento
-                foreach ($delDia->filter(fn($c) => $c->tdocod !== '03') as $c) {
-                    $docTxt = $c->serdoc . '-' . $c->numdoc;
+                foreach ($delDia->filter(fn ($c) => $c->tdocod !== '03') as $c) {
+                    $docTxt = $c->serdoc.'-'.$c->numdoc;
                     $nota = $c->tdocod === '07';
                     $tipo = ['01' => 'FACTURA', '07' => 'NOTA DE CRÉDITO', '08' => 'NOTA DE DÉBITO'][$c->tdocod];
                     self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '05', 'origen' => 'VENTAS', 'tdocod' => $c->tdocod, 'documento' => $docTxt,
-                        'glosa' => "{$tipo} {$docTxt} " . $c->ccanom . ($c->serie_ref ? " (REF. {$c->serie_ref}-{$c->num_ref})" : ''),
+                        'glosa' => "{$tipo} {$docTxt} ".$c->ccanom.($c->serie_ref ? " (REF. {$c->serie_ref}-{$c->num_ref})" : ''),
                         'ref_tabla' => 'cpe_cabecera', 'ref_id' => $c->IdCpe_cabecera],
                         $lineasVenta($c, $nota, (string) $c->ccandi, (string) $c->ccanom, $docTxt), $imp);
                     $n['asientos']++;
@@ -199,13 +209,13 @@ class Contabilidad
                     foreach ($boletas as $c) {
                         $acum = $sumarLineas($acum, $lineasVenta($c, false, '00000000', 'CLIENTES VARIOS', ''));
                     }
-                    $rangoDoc = "{$serie}-" . $boletas->min('numdoc') . ' AL ' . $boletas->max('numdoc');
+                    $rangoDoc = "{$serie}-".$boletas->min('numdoc').' AL '.$boletas->max('numdoc');
                     foreach ($acum as &$l) {
                         $l['documento'] = $rangoDoc;
                     }
                     unset($l);
                     self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '05', 'origen' => 'VENTAS', 'tdocod' => '03', 'documento' => $rangoDoc,
-                        'glosa' => 'VENTAS CON BOLETA ' . $rangoDoc . ' (' . $boletas->count() . ' DOC.)'], array_values($acum), $imp);
+                        'glosa' => 'VENTAS CON BOLETA '.$rangoDoc.' ('.$boletas->count().' DOC.)'], array_values($acum), $imp);
                     $n['asientos']++;
                 }
 
@@ -224,9 +234,9 @@ class Contabilidad
                     if ($costo != 0) {
                         [$d, $h] = $costo > 0 ? ['debe', 'haber'] : ['haber', 'debe'];
                         self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '05', 'origen' => 'VENTAS',
-                            'glosa' => 'COSTO DE VENTAS DEL ' . Carbon::parse($fecha)->format('d/m/Y')], [
-                            ['cuenta' => $cfg->cta_costo_ventas, $d => abs($costo)], ['cuenta' => $cfg->cta_mercaderias, $h => abs($costo)],
-                        ], $imp);
+                            'glosa' => 'COSTO DE VENTAS DEL '.Carbon::parse($fecha)->format('d/m/Y')], [
+                                ['cuenta' => $cfg->cta_costo_ventas, $d => abs($costo)], ['cuenta' => $cfg->cta_mercaderias, $h => abs($costo)],
+                            ], $imp);
                         $n['asientos']++;
                         $n['costo'] += $costo;
                     }
@@ -240,12 +250,12 @@ class Contabilidad
                 ->groupBy('c.ccafem', 'm.nom_med_pag', 'm.cuenta_contable')
                 ->select('c.ccafem as fecha', 'm.nom_med_pag', 'm.cuenta_contable', DB::raw('SUM(v.monto) as monto'))->get();
             foreach ($contado->groupBy('fecha') as $fecha => $medios) {
-                $lineas = $medios->map(fn($m) => ['cuenta' => self::cuentaMedio($cfg, $m->nom_med_pag, $m->cuenta_contable), 'debe' => (float) $m->monto,
-                    'glosa' => 'COBRO ' . ($m->nom_med_pag ?? 'CONTADO')])->all();
+                $lineas = $medios->map(fn ($m) => ['cuenta' => self::cuentaMedio($cfg, $m->nom_med_pag, $m->cuenta_contable), 'debe' => (float) $m->monto,
+                    'glosa' => 'COBRO '.($m->nom_med_pag ?? 'CONTADO')])->all();
                 $total = round($medios->sum('monto'), 2);
                 $lineas[] = ['cuenta' => $cfg->cta_por_cobrar, 'haber' => $total, 'anexo_doc' => '00000000', 'anexo_nombre' => 'CLIENTES VARIOS'];
                 self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '01', 'origen' => 'COBRANZAS',
-                    'glosa' => 'COBRANZA DE VENTAS AL CONTADO DEL ' . Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas), $imp);
+                    'glosa' => 'COBRANZA DE VENTAS AL CONTADO DEL '.Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas), $imp);
                 $n['asientos']++;
                 $n['cobranzas'] += $total;
             }
@@ -263,18 +273,19 @@ class Contabilidad
             foreach ($cobros->groupBy('fecha') as $fecha => $grupo) {
                 $lineas = [];
                 foreach ($grupo as $g) {
-                    $doc = $g->serdoc . '-' . $g->numdoc;
-                    $lineas[] = ['cuenta' => self::cuentaMedio($cfg, $g->nom_med_pag, $g->cuenta_contable), 'debe' => (float) $g->monto, 'glosa' => 'COBRO ' . ($g->nom_med_pag ?? '')];
+                    $doc = $g->serdoc.'-'.$g->numdoc;
+                    $lineas[] = ['cuenta' => self::cuentaMedio($cfg, $g->nom_med_pag, $g->cuenta_contable), 'debe' => (float) $g->monto, 'glosa' => 'COBRO '.($g->nom_med_pag ?? '')];
                     $lineas[] = ['cuenta' => $cfg->cta_por_cobrar, 'haber' => (float) $g->monto, 'anexo_doc' => $g->ccandi, 'anexo_nombre' => $g->ccanom, 'documento' => $doc];
                 }
                 $total = round($grupo->sum('monto'), 2);
                 self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '01', 'origen' => 'COBRANZAS',
-                    'glosa' => 'COBRANZA DE CUENTAS POR COBRAR DEL ' . Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas, true), $imp);
+                    'glosa' => 'COBRANZA DE CUENTAS POR COBRAR DEL '.Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas, true), $imp);
                 $n['asientos']++;
                 $n['cobranzas'] += $total;
             }
 
             self::renumerar($ruc, $periodo);
+
             return $n;
         });
     }
@@ -301,15 +312,15 @@ class Contabilidad
                 $total = round((float) $c->total_com * $tc, 2);
                 $igv = round((float) $c->igv_com * $tc, 2);
                 $neto = round($total - $igv, 2);
-                $docTxt = $c->com_doc_ser . '-' . $c->com_doc_num;
+                $docTxt = $c->com_doc_ser.'-'.$c->com_doc_num;
                 $anexo = ['anexo_doc' => $c->prov_ruc, 'anexo_nombre' => $c->prov_raz, 'documento' => $docTxt];
                 self::crearAsiento($ruc, ['fecha' => $c->com_fec, 'subdiario' => '11', 'origen' => 'COMPRAS', 'tdocod' => $c->tdocod, 'documento' => $docTxt,
-                    'glosa' => ($nombres[$c->tdocod] ?? 'COMPRA') . " {$docTxt} {$c->prov_raz}" . ($c->mon_id === 'USD' ? " (US$ {$c->total_com} TC {$c->tip_cam})" : ''),
+                    'glosa' => ($nombres[$c->tdocod] ?? 'COMPRA')." {$docTxt} {$c->prov_raz}".($c->mon_id === 'USD' ? " (US$ {$c->total_com} TC {$c->tip_cam})" : ''),
                     'ref_tabla' => 'compras_cabecera', 'ref_id' => $c->com_cab_id], [
-                    ['cuenta' => $cfg->cta_compras, 'debe' => $neto] + $anexo,
-                    ['cuenta' => $cfg->cta_igv, 'debe' => $igv] + $anexo,
-                    ['cuenta' => $cfg->cta_por_pagar, 'haber' => $total] + $anexo,
-                ], $imp);
+                        ['cuenta' => $cfg->cta_compras, 'debe' => $neto] + $anexo,
+                        ['cuenta' => $cfg->cta_igv, 'debe' => $igv] + $anexo,
+                        ['cuenta' => $cfg->cta_por_pagar, 'haber' => $total] + $anexo,
+                    ], $imp);
                 $n['asientos']++;
                 $n['compras'] += $neto;
                 $n['igv'] += $igv;
@@ -321,30 +332,31 @@ class Contabilidad
                     // Mismo cálculo que la provisión (total e IGV convertidos por separado) para que 20/61 igualen a la 60
                     $monto = round($grupo->sum(function ($c) {
                         $tc = $c->mon_id === 'USD' ? (float) $c->tip_cam : 1.0;
+
                         return round((float) $c->total_com * $tc, 2) - round((float) $c->igv_com * $tc, 2);
                     }), 2);
                     if ($monto > 0) {
                         self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '11', 'origen' => 'COMPRAS',
-                            'glosa' => 'DESTINO DE COMPRAS DEL ' . Carbon::parse($fecha)->format('d/m/Y')], [
-                            ['cuenta' => $cfg->cta_mercaderias, 'debe' => $monto], ['cuenta' => $cfg->cta_variacion, 'haber' => $monto],
-                        ], $imp);
+                            'glosa' => 'DESTINO DE COMPRAS DEL '.Carbon::parse($fecha)->format('d/m/Y')], [
+                                ['cuenta' => $cfg->cta_mercaderias, 'debe' => $monto], ['cuenta' => $cfg->cta_variacion, 'haber' => $monto],
+                            ], $imp);
                         $n['asientos']++;
                     }
                 }
             }
 
             // ---- Pago de compras al contado (por día) ----
-            foreach ($compras->filter(fn($c) => (float) $c->tot_con > 0)->groupBy('com_fec') as $fecha => $grupo) {
+            foreach ($compras->filter(fn ($c) => (float) $c->tot_con > 0)->groupBy('com_fec') as $fecha => $grupo) {
                 $lineas = [];
                 foreach ($grupo as $c) {
                     $monto = round((float) $c->tot_con * ($c->mon_id === 'USD' ? (float) $c->tip_cam : 1), 2);
                     $lineas[] = ['cuenta' => $cfg->cta_por_pagar, 'debe' => $monto, 'anexo_doc' => $c->prov_ruc, 'anexo_nombre' => $c->prov_raz,
-                        'documento' => $c->com_doc_ser . '-' . $c->com_doc_num];
+                        'documento' => $c->com_doc_ser.'-'.$c->com_doc_num];
                     $lineas[] = ['cuenta' => $cfg->cta_caja, 'haber' => $monto, 'glosa' => 'PAGO AL CONTADO'];
                     $n['pagos'] += $monto;
                 }
                 self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '01', 'origen' => 'PAGOS',
-                    'glosa' => 'PAGO DE COMPRAS AL CONTADO DEL ' . Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas, true), $imp);
+                    'glosa' => 'PAGO DE COMPRAS AL CONTADO DEL '.Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas, true), $imp);
                 $n['asientos']++;
             }
 
@@ -362,11 +374,11 @@ class Contabilidad
                 $lineas = [];
                 foreach ($grupo as $g) {
                     $lineas[] = ['cuenta' => $cfg->cta_por_pagar, 'debe' => (float) $g->monto, 'anexo_doc' => $g->prov_ruc, 'anexo_nombre' => $g->prov_raz,
-                        'documento' => $g->com_doc_ser . '-' . $g->com_doc_num];
-                    $lineas[] = ['cuenta' => self::cuentaMedio($cfg, $g->nom_med_pag, $g->cuenta_contable), 'haber' => (float) $g->monto, 'glosa' => 'PAGO ' . ($g->nom_med_pag ?? '')];
+                        'documento' => $g->com_doc_ser.'-'.$g->com_doc_num];
+                    $lineas[] = ['cuenta' => self::cuentaMedio($cfg, $g->nom_med_pag, $g->cuenta_contable), 'haber' => (float) $g->monto, 'glosa' => 'PAGO '.($g->nom_med_pag ?? '')];
                 }
                 self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '01', 'origen' => 'PAGOS',
-                    'glosa' => 'PAGO A PROVEEDORES DEL ' . Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas, true), $imp);
+                    'glosa' => 'PAGO A PROVEEDORES DEL '.Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas, true), $imp);
                 $n['asientos']++;
                 $n['pagos'] += round($grupo->sum('monto'), 2);
             }
@@ -384,17 +396,17 @@ class Contabilidad
                 $credito = $g->credito_fiscal && $igv > 0;
                 $gasto = round($total - ($credito ? $igv : 0), 2);
                 $cuenta = $g->cuenta_contable && isset($imp[$g->cuenta_contable]) ? $g->cuenta_contable : '659';
-                $doc = trim(($g->serie ? $g->serie . '-' : '') . ($g->numero ?? ''), '-') ?: null;
+                $doc = trim(($g->serie ? $g->serie.'-' : '').($g->numero ?? ''), '-') ?: null;
                 $anexo = ['anexo_doc' => $g->prov_doc, 'anexo_nombre' => $g->prov_nombre, 'documento' => $doc];
                 [$d, $h] = $g->tdocod === '07' ? ['haber', 'debe'] : ['debe', 'haber'];
                 self::crearAsiento($ruc, ['fecha' => $g->fecha, 'subdiario' => '11', 'origen' => 'COMPRAS', 'tdocod' => $g->tdocod, 'documento' => $doc,
-                    'glosa' => 'GASTO ' . ($g->categoria ?? '') . ' ' . ($doc ?? '') . ' ' . ($g->prov_nombre ?? $g->descripcion ?? ''),
+                    'glosa' => 'GASTO '.($g->categoria ?? '').' '.($doc ?? '').' '.($g->prov_nombre ?? $g->descripcion ?? ''),
                     'ref_tabla' => 'gastos', 'ref_id' => $g->id], [
-                    ['cuenta' => $cuenta, $d => $gasto, 'glosa' => $g->descripcion] + $anexo,
-                    ['cuenta' => $cfg->cta_igv, $d => $credito ? $igv : 0] + $anexo,
-                    ['cuenta' => $cfg->cta_renta4_pagar ?? '40172', $h => $ret, 'glosa' => 'RETENCIÓN 4TA CATEGORÍA'] + $anexo,
-                    ['cuenta' => $cfg->cta_por_pagar, $h => round($total - $ret, 2)] + $anexo,
-                ], $imp);
+                        ['cuenta' => $cuenta, $d => $gasto, 'glosa' => $g->descripcion] + $anexo,
+                        ['cuenta' => $cfg->cta_igv, $d => $credito ? $igv : 0] + $anexo,
+                        ['cuenta' => $cfg->cta_renta4_pagar ?? '40172', $h => $ret, 'glosa' => 'RETENCIÓN 4TA CATEGORÍA'] + $anexo,
+                        ['cuenta' => $cfg->cta_por_pagar, $h => round($total - $ret, 2)] + $anexo,
+                    ], $imp);
                 $n['asientos']++;
                 $n['gastos'] += $g->tdocod === '07' ? -$gasto : $gasto;
             }
@@ -403,16 +415,17 @@ class Contabilidad
                 foreach ($grupo as $g) {
                     $monto = round(((float) $g->total - (float) $g->retencion) * ($g->moneda === 'USD' ? (float) $g->tipo_cambio : 1), 2);
                     $lineas[] = ['cuenta' => $cfg->cta_por_pagar, 'debe' => $monto, 'anexo_doc' => $g->prov_doc, 'anexo_nombre' => $g->prov_nombre,
-                        'documento' => trim(($g->serie ? $g->serie . '-' : '') . ($g->numero ?? ''), '-') ?: null];
+                        'documento' => trim(($g->serie ? $g->serie.'-' : '').($g->numero ?? ''), '-') ?: null];
                     $lineas[] = ['cuenta' => self::cuentaMedio($cfg, $g->nom_med_pag, $g->cuenta_medio), 'haber' => $monto, 'glosa' => 'PAGO DE GASTO'];
                     $n['pagos'] += $monto;
                 }
                 self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '01', 'origen' => 'PAGOS',
-                    'glosa' => 'PAGO DE GASTOS AL CONTADO DEL ' . Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas, true), $imp);
+                    'glosa' => 'PAGO DE GASTOS AL CONTADO DEL '.Carbon::parse($fecha)->format('d/m/Y')], self::agrupar($lineas, true), $imp);
                 $n['asientos']++;
             }
 
             self::renumerar($ruc, $periodo);
+
             return $n;
         });
     }
@@ -437,8 +450,8 @@ class Contabilidad
         $res = [];
         foreach ($lineas as $l) {
             $lado = isset($l['debe']) ? 'D' : 'H';
-            $k = $l['cuenta'] . '|' . $lado . ($conAnexo ? '|' . ($l['documento'] ?? '') . '|' . ($l['anexo_doc'] ?? '') : '');
-            if (!isset($res[$k])) {
+            $k = $l['cuenta'].'|'.$lado.($conAnexo ? '|'.($l['documento'] ?? '').'|'.($l['anexo_doc'] ?? '') : '');
+            if (! isset($res[$k])) {
                 $res[$k] = $l + ['debe' => 0, 'haber' => 0];
                 $res[$k]['debe'] = 0;
                 $res[$k]['haber'] = 0;
@@ -446,6 +459,7 @@ class Contabilidad
             $res[$k]['debe'] = round($res[$k]['debe'] + (float) ($l['debe'] ?? 0), 2);
             $res[$k]['haber'] = round($res[$k]['haber'] + (float) ($l['haber'] ?? 0), 2);
         }
+
         return array_values($res);
     }
 
@@ -455,7 +469,7 @@ class Contabilidad
     public static function sumas(string $ruc, ?string $desde, string $hasta)
     {
         return DB::table('conta_asiento_detalle as d')->join('conta_asientos as a', 'a.id', '=', 'd.asiento_id')
-            ->where('a.IdEmpresa', $ruc)->where('a.fecha', '<=', $hasta)->when($desde, fn($w) => $w->where('a.fecha', '>=', $desde))
+            ->where('a.IdEmpresa', $ruc)->where('a.fecha', '<=', $hasta)->when($desde, fn ($w) => $w->where('a.fecha', '>=', $desde))
             ->groupBy('d.cuenta')->select('d.cuenta', DB::raw('SUM(d.debe) as debe'), DB::raw('SUM(d.haber) as haber'))
             ->orderBy('d.cuenta')->get()->keyBy('cuenta');
     }
@@ -478,6 +492,7 @@ class Contabilidad
                 }
             }
         }
+
         return round($t, 2);
     }
 }

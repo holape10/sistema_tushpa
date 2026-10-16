@@ -23,6 +23,33 @@ class Rubros
         '/respaldo',
     ];
 
+    /** Contabilidad completa: libros, registro de ventas y compras, SIRE, tributos, planilla, asistencia y CONCAR */
+    private const CONTABLE = [
+        '/contabilidad/plan', '/contabilidad/registro/ventas', '/contabilidad/registro/compras', '/contabilidad/centralizar/ventas',
+        '/contabilidad/centralizar/compras', '/contabilidad/diario', '/contabilidad/mayor', '/contabilidad/balance', '/contabilidad/estados', '/concar',
+    ];
+
+    /**
+     * Módulos que se le pueden agregar a cualquier empresa desde el panel (si quiere ampliar su sistema).
+     * Se suman al menú de sus administradores sin quitarle nada.
+     */
+    public const ADICIONALES = [
+        'CONTABILIDAD' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'detalle' => 'Plan contable, registro de ventas y compras, libros diario y mayor, balance, estados financieros y CONCAR',
+            'modulos' => self::CONTABLE],
+        'SIRE' => ['icono' => 'fa-landmark', 'nombre' => 'SIRE y tributos', 'detalle' => 'Propuestas RVIE / RCE de SUNAT y resumen tributario del mes',
+            'modulos' => ['/sire/ventas', '/sire/compras', '/sire/credenciales', '/tributos']],
+        'PLANILLA' => ['icono' => 'fa-file-signature', 'nombre' => 'Planilla', 'detalle' => 'Trabajadores, planillas y boletas de pago',
+            'modulos' => ['/planilla/trabajadores', '/planilla', '/planilla/parametros']],
+        'ASISTENCIA' => ['icono' => 'fa-user-clock', 'nombre' => 'Asistencia', 'detalle' => 'Marcación, turnos, tareo y reporte de jornadas',
+            'modulos' => ['/asistencia', '/asistencia/motivos', '/asistencia/tareo', '/asistencia/jornadas', '/asistencia/matriz', '/asistencia/turnos', '/asistencia/configuracion']],
+        'TIENDA' => ['icono' => 'fa-bag-shopping', 'nombre' => 'Tienda virtual', 'detalle' => 'Catálogo en línea con pedidos (según su plan)',
+            'modulos' => ['/tienda/configuracion']],
+        'FIDELIZACION' => ['icono' => 'fa-gift', 'nombre' => 'Puntos y premios', 'detalle' => 'Fidelización de clientes con puntos',
+            'modulos' => ['/fidelizacion']],
+        'GUIAS' => ['icono' => 'fa-truck', 'nombre' => 'Guías de remisión', 'detalle' => 'Guías electrónicas SUNAT',
+            'modulos' => ['/guias']],
+    ];
+
     public const RUBROS = [
         'RESTOBAR' => ['icono' => 'fa-utensils', 'nombre' => 'Restobar', 'ejemplos' => 'Restaurante, cafetería, discoteca, bar', 'modulos' => [
             '/comandas', '/comandas/punto-venta', '/promotores', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/reservas', '/motorizados', '/delivery', '/delivery/liquidacion', '/delivery/reporte', '/carta/configuracion', '/recetas', '/entradas', '/preparados', '/mermas', '/reportes/consumo-insumos', '/productos?tipo=4', '/productos?tipo=6',
@@ -54,6 +81,14 @@ class Rubros
         ]],
         'CLINICA' => ['icono' => 'fa-stethoscope', 'nombre' => 'Clínica / consultorio', 'ejemplos' => 'Clínica, consultorio, odontología', 'modulos' => [
             '/clinica', '/clinica/agenda', '/clinica/especialidades', '/clinica/tratamientos', '/punto-venta',
+        ]],
+        // Estudio contable o empresa que solo lleva su contabilidad (sin vender con el sistema)
+        'CONTABLE' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudio contable, contabilidad de la empresa, SIRE, planilla', 'sin_base' => true, 'modulos' => [
+            '/inicio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo',
+            ...self::CONTABLE,
+            '/sire/ventas', '/sire/compras', '/sire/credenciales', '/tributos',
+            '/planilla/trabajadores', '/planilla', '/planilla/parametros',
+            '/asistencia', '/asistencia/motivos', '/asistencia/tareo', '/asistencia/jornadas', '/asistencia/matriz', '/asistencia/turnos', '/asistencia/configuracion',
         ]],
         'COMPLETO' => ['icono' => 'fa-table-cells', 'nombre' => 'Todo el menú', 'ejemplos' => 'Todas las opciones del sistema', 'modulos' => ['*']],
     ];
@@ -125,8 +160,12 @@ class Rubros
     public static function urls(string $rubro): array
     {
         $r = self::RUBROS[$rubro] ?? self::RUBROS['GENERAL'];
+        if ($r['modulos'] === ['*']) {
+            return ['*'];
+        }
 
-        return $r['modulos'] === ['*'] ? ['*'] : array_values(array_unique(array_merge(self::BASE, $r['modulos'])));
+        // El rubro contable no lleva ventas, caja ni almacén: solo su propio menú
+        return array_values(array_unique(empty($r['sin_base']) ? array_merge(self::BASE, $r['modulos']) : $r['modulos']));
     }
 
     /**
