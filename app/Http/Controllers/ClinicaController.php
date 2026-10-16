@@ -1,10 +1,13 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{EmpresaNegocio, PedidoDetalle};
+use App\Models\EmpresaNegocio;
+use App\Models\PedidoDetalle;
 use App\Support\Clinica;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Historias clínicas: pacientes, ficha (antecedentes, alergias, vacunas, odontograma), atenciones con receta,
@@ -33,6 +36,7 @@ class ClinicaController extends Controller
             ->where('h.his_cli_id', $id)->where('h.id_empresa_negocio', $this->suc())
             ->first(['h.*', 'c.clinom', 'c.clinum', 'c.tdicod', 'c.telefono', 'c.clidir']);
         abort_unless($h, 404);
+
         return $h;
     }
 
@@ -40,6 +44,7 @@ class ClinicaController extends Controller
     {
         $a = DB::table('atencion_clinica')->where('ate_cli_id', $id)->where('id_empresa_negocio', $this->suc())->first();
         abort_unless($a, 404);
+
         return $a;
     }
 
@@ -61,14 +66,21 @@ class ClinicaController extends Controller
         $ultima = DB::table('atencion_clinica')->where('id_empresa_negocio', $suc)->groupBy('his_cli_id')
             ->select('his_cli_id', DB::raw('MAX(ate_cli_fec) as ultima'), DB::raw('COUNT(*) as atenciones'))->get()->keyBy('his_cli_id');
 
+        // Especialidades de cada paciente (las de sus atenciones y sus tratamientos): para buscar "todos los de ENDODONCIA"
+        $espDe = DB::table('atencion_clinica')->where('id_empresa_negocio', $suc)->whereNotNull('esp_id')->select('his_cli_id', 'esp_id')
+            ->union(DB::table('clinica_tratamientos')->where('id_empresa_negocio', $suc)->whereNotNull('esp_id')->select('his_cli_id', 'esp_id'))
+            ->get()->groupBy('his_cli_id')->map(fn ($g) => $g->pluck('esp_id')->map(fn ($i) => (int) $i)->unique()->values()->all());
+
         $pacientes = DB::table('historia_clinica as h')->join('cliente as c', 'c.clicod', '=', 'h.clicod')
             ->where('h.id_empresa_negocio', $suc)->orderByDesc('h.his_cli_id')
             ->get(['h.his_cli_id', 'h.his_cli_cod', 'h.tipo', 'h.mascota', 'h.especie', 'h.sexo', 'h.fecha_nac', 'h.origen', 'c.clinom', 'c.clinum', 'c.telefono'])
-            ->map(function ($p) use ($ultima) {
+            ->map(function ($p) use ($ultima, $espDe) {
                 $p->nombre = Clinica::nombre($p);
                 $p->edad = Clinica::edad($p->fecha_nac);
                 $p->ultima = $ultima[$p->his_cli_id]->ultima ?? null;
                 $p->atenciones = (int) ($ultima[$p->his_cli_id]->atenciones ?? 0);
+                $p->esp = $espDe[$p->his_cli_id] ?? [];
+
                 return $p;
             });
 
@@ -86,7 +98,8 @@ class ClinicaController extends Controller
     {
         $this->usa();
         $d = $request->validate(Clinica::REGLAS_PACIENTE, [], ['clinum' => 'DNI', 'clinom' => 'nombre', 'mascota' => 'nombre de la mascota']);
-        return $this->json(fn() => ['his_cli_id' => Clinica::crearPaciente(Auth::user(), $d), 'mensaje' => 'Paciente registrado.']);
+
+        return $this->json(fn () => ['his_cli_id' => Clinica::crearPaciente(Auth::user(), $d), 'mensaje' => 'Paciente registrado.']);
     }
 
     /** Autocompletar en la agenda */
@@ -97,11 +110,12 @@ class ClinicaController extends Controller
         if (mb_strlen($q) < 2) {
             return response()->json([]);
         }
+
         return response()->json(DB::table('historia_clinica as h')->join('cliente as c', 'c.clicod', '=', 'h.clicod')
             ->where('h.id_empresa_negocio', $this->suc())
-            ->where(fn($w) => $w->where('c.clinom', 'like', "%{$q}%")->orWhere('c.clinum', 'like', "{$q}%")->orWhere('h.mascota', 'like', "%{$q}%")->orWhere('h.his_cli_cod', $q))
+            ->where(fn ($w) => $w->where('c.clinom', 'like', "%{$q}%")->orWhere('c.clinum', 'like', "{$q}%")->orWhere('h.mascota', 'like', "%{$q}%")->orWhere('h.his_cli_cod', $q))
             ->limit(12)->get(['h.his_cli_id', 'h.his_cli_cod', 'h.tipo', 'h.mascota', 'c.clinom', 'c.clinum', 'c.telefono'])
-            ->map(fn($p) => ['id' => $p->his_cli_id, 'codigo' => $p->his_cli_cod, 'nombre' => Clinica::nombre($p), 'doc' => $p->clinum, 'telefono' => $p->telefono]));
+            ->map(fn ($p) => ['id' => $p->his_cli_id, 'codigo' => $p->his_cli_cod, 'nombre' => Clinica::nombre($p), 'doc' => $p->clinum, 'telefono' => $p->telefono]));
     }
 
     // ------------------------------------------------------------------ historia
@@ -138,6 +152,7 @@ class ClinicaController extends Controller
             'origen' => 'nullable|string|max:30',
         ]);
         DB::table('historia_clinica')->where('his_cli_id', $id)->update($d);
+
         return response()->json(['ok' => true, 'mensaje' => 'Ficha guardada.']);
     }
 
@@ -148,6 +163,7 @@ class ClinicaController extends Controller
         $this->historia($id);
         $d = $request->validate(['esp_id' => 'nullable|integer', 'cit_id' => 'nullable|integer']);
         $ateId = self::crearAtencion($id, $d['esp_id'] ?? null, $d['cit_id'] ?? null);
+
         return redirect()->route('clinica.atencion', $ateId);
     }
 
@@ -167,6 +183,7 @@ class ClinicaController extends Controller
         if ($cita) {
             DB::table('citas')->where('cit_id', $cita->cit_id)->update(['ate_cli_id' => $ateId, 'estado' => 'EN_ESPERA']);
         }
+
         return $ateId;
     }
 
@@ -178,6 +195,7 @@ class ClinicaController extends Controller
         $a = $this->atencion($id);
         $h = $this->historia((int) $a->his_cli_id);
         $esp = $a->esp_id ? DB::table('especialidad')->where('esp_id', $a->esp_id)->first() : null;
+
         return view('empresas.clinica.atencion', [
             'a' => $a, 'h' => $h, 'esp' => $esp,
             'receta' => DB::table('receta_detalle')->where('ate_cli_id', $id)->orderBy('rec_id')->get(),
@@ -219,7 +237,7 @@ class ClinicaController extends Controller
 
             DB::table('receta_detalle')->where('ate_cli_id', $a->ate_cli_id)->delete();
             foreach ($d['receta'] ?? [] as $r) {
-                DB::table('receta_detalle')->insert(array_map(fn($v) => is_string($v) ? trim($v) : $v, $r) + ['ate_cli_id' => $a->ate_cli_id]);
+                DB::table('receta_detalle')->insert(array_map(fn ($v) => is_string($v) ? trim($v) : $v, $r) + ['ate_cli_id' => $a->ate_cli_id]);
             }
             DB::table('historia_vacunas')->where('ate_cli_id', $a->ate_cli_id)->delete();
             foreach ($d['vacunas'] ?? [] as $v) {
@@ -241,11 +259,11 @@ class ClinicaController extends Controller
             if ($a->cit_id) {
                 DB::table('citas')->where('cit_id', $a->cit_id)->update(['estado' => 'ATENDIDA']);
             }
-            if (!empty($d['pro_cit'])) {
+            if (! empty($d['pro_cit'])) {
                 $cita = $a->cit_id ? DB::table('citas')->where('cit_id', $a->cit_id)->first() : null;
                 $h = DB::table('historia_clinica as h')->join('cliente as c', 'c.clicod', '=', 'h.clicod')->where('h.his_cli_id', $a->his_cli_id)->first(['h.*', 'c.clinom', 'c.telefono']);
                 $ya = DB::table('citas')->where('his_cli_id', $a->his_cli_id)->where('fecha', $d['pro_cit'])->whereNotIn('estado', ['CANCELADA'])->exists();
-                if (!$ya) {
+                if (! $ya) {
                     DB::table('citas')->insert(['his_cli_id' => $a->his_cli_id, 'clicod' => $h->clicod, 'paciente' => Clinica::nombre($h), 'telefono' => $h->telefono,
                         'doctor' => $a->doctor, 'esp_id' => $a->esp_id, 'fecha' => $d['pro_cit'], 'hora' => $cita->hora ?? '09:00:00',
                         'motivo' => 'CONTROL', 'estado' => 'PROGRAMADA', 'id_empresa_negocio' => $a->id_empresa_negocio, 'IdUsuario' => $user->IdUsuario, 'creado' => now()]);
@@ -253,7 +271,8 @@ class ClinicaController extends Controller
             }
             $pedido = Clinica::pedidoDe($a, $user);
             $porCobrar = PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')->exists();
-            return ['mensaje' => 'Atención terminada.' . ($porCobrar ? ' Recepción ya la ve en "Por cobrar".' : ''), 'terminada' => true];
+
+            return ['mensaje' => 'Atención terminada.'.($porCobrar ? ' Recepción ya la ve en "Por cobrar".' : ''), 'terminada' => true];
         });
     }
 
@@ -263,9 +282,10 @@ class ClinicaController extends Controller
         $this->clinico();
         $a = $this->atencion($id);
         $d = $request->validate(['IdProducto' => 'required|integer', 'cantidad' => 'required|numeric|min:0.01|max:999']);
+
         return $this->json(function () use ($a, $d) {
             $prod = DB::table('productos')->where('IdProducto', $d['IdProducto'])->where('id_empresa_negocio', $this->suc())->first();
-            if (!$prod) {
+            if (! $prod) {
                 throw new \RuntimeException('Producto no válido.');
             }
             $pedido = Clinica::pedidoDe($a, Auth::user());
@@ -273,7 +293,8 @@ class ClinicaController extends Controller
                 throw new \RuntimeException('Esta atención ya se cobró.');
             }
             Clinica::agregarLinea($pedido->ped_id, $prod, (float) $d['cantidad'], (float) $prod->propun, Auth::user());
-            return ['mensaje' => $prod->pronom . ' agregado.'];
+
+            return ['mensaje' => $prod->pronom.' agregado.'];
         });
     }
 
@@ -282,11 +303,12 @@ class ClinicaController extends Controller
         $this->clinico();
         $a = $this->atencion($id);
         $linea = PedidoDetalle::where('ped_det_id', $det)->where('ped_id', $a->ped_id)->first();
-        if (!$linea || $linea->item_facturado > 0) {
+        if (! $linea || $linea->item_facturado > 0) {
             return response()->json(['ok' => false, 'mensaje' => 'Ya se cobró: no se puede quitar.']);
         }
         $linea->update(['estadoitem' => 'Eliminado']);
         Clinica::recalcular((int) $a->ped_id);
+
         return response()->json(['ok' => true, 'mensaje' => 'Quitado.']);
     }
 
@@ -296,8 +318,9 @@ class ClinicaController extends Controller
     {
         $n = EmpresaNegocio::find($this->suc());
         $e = DB::table('empresa')->where('IdEmpresa', $n->IdEmpresa)->first();
-        $n->logo = collect([$n->logo_suc, $e->LogEmpresa ?? null])->first(fn($l) => $l && is_file(public_path($l)));
+        $n->logo = collect([$n->logo_suc, $e->LogEmpresa ?? null])->first(fn ($l) => $l && is_file(public_path($l)));
         $n->razon = $e->NomEmpresa ?? '';
+
         return $n;
     }
 
@@ -305,6 +328,7 @@ class ClinicaController extends Controller
     {
         $this->clinico();
         $a = $this->atencion($id);
+
         return view('empresas.clinica.receta', [
             'a' => $a, 'h' => $this->historia((int) $a->his_cli_id), 'negocio' => $this->negocio(),
             'receta' => DB::table('receta_detalle')->where('ate_cli_id', $id)->orderBy('rec_id')->get(),
@@ -321,6 +345,7 @@ class ClinicaController extends Controller
         $atenciones = DB::table('atencion_clinica as a')->leftJoin('users as u', 'u.IdUsuario', '=', 'a.doctor')
             ->leftJoin('especialidad as e', 'e.esp_id', '=', 'a.esp_id')->where('a.his_cli_id', $id)->where('a.ate_cli_est', 'ATENDIDA')
             ->orderBy('a.ate_cli_fec')->get(['a.*', 'e.esp_des', DB::raw("TRIM(CONCAT(u.name, ' ', u.apeusu)) as doctor_nom")]);
+
         return view('empresas.clinica.historia_imprimir', [
             'h' => $h, 'atenciones' => $atenciones, 'negocio' => $this->negocio(),
             'recetas' => DB::table('receta_detalle')->whereIn('ate_cli_id', $atenciones->pluck('ate_cli_id'))->get()->groupBy('ate_cli_id'),
@@ -335,26 +360,61 @@ class ClinicaController extends Controller
         $h = $this->historia($id);
         $d = $request->validate(['tratamiento' => 'nullable|string|max:300', 'riesgos' => 'nullable|string|max:1500', 'doctor' => 'nullable|integer']);
         $doctor = DB::table('users')->where('IdUsuario', $d['doctor'] ?? Auth::id())->first();
+
         return view('empresas.clinica.consentimiento', [
             'h' => $h, 'negocio' => $this->negocio(), 'tratamiento' => $d['tratamiento'] ?? null, 'riesgos' => $d['riesgos'] ?? null,
-            'doctor' => $doctor ? trim($doctor->name . ' ' . $doctor->apeusu) : '',
+            'doctor' => $doctor ? trim($doctor->name.' '.$doctor->apeusu) : '',
         ]);
     }
 
     // ------------------------------------------------------------------ especialidades
 
-    public function guardarEspecialidad(Request $request)
+    /** Catálogo de especialidades de la clínica (se eligen al atender, en la agenda y en los tratamientos) */
+    public function especialidades()
+    {
+        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el administrador configura las especialidades.');
+        $suc = $this->suc();
+        $uso = DB::table('atencion_clinica')->where('id_empresa_negocio', $suc)->whereNotNull('esp_id')->groupBy('esp_id')
+            ->select('esp_id', DB::raw('COUNT(DISTINCT his_cli_id) as pacientes'))->pluck('pacientes', 'esp_id');
+
+        return view('empresas.clinica.especialidades', [
+            'especialidades' => DB::table('especialidad')->where('id_empresa_negocio', $suc)->orderByDesc('activo')->orderBy('esp_des')->get()
+                ->map(fn ($e) => ['esp_id' => $e->esp_id, 'esp_des' => $e->esp_des, 'IdProducto' => (string) $e->IdProducto, 'odontograma' => (bool) $e->odontograma,
+                    'veterinaria' => (bool) $e->veterinaria, 'activo' => (bool) $e->activo, 'pacientes' => (int) ($uso[$e->esp_id] ?? 0)]),
+            'servicios' => DB::table('productos')->where('id_empresa_negocio', $suc)->where('proest', 'Activo')->whereIn('promocion', [0, 2, 6])
+                ->orderBy('pronom')->get(['IdProducto', 'pronom', 'propun']),
+        ]);
+    }
+
+    /** Guarda todas las especialidades de una vez (nuevas y cambios); las que ya no se usan se desactivan, no se borran */
+    public function guardarEspecialidades(Request $request)
     {
         abort_unless(Auth::user()->esAdmin(), 403);
-        $d = $request->validate(['esp_id' => 'nullable|integer', 'esp_des' => 'required|string|max:100', 'IdProducto' => 'nullable|integer',
-            'odontograma' => 'nullable|boolean', 'veterinaria' => 'nullable|boolean', 'activo' => 'nullable|boolean']);
-        $fila = ['esp_des' => mb_strtoupper(trim($d['esp_des'])), 'IdProducto' => $d['IdProducto'] ?? null,
-            'odontograma' => (int) ($d['odontograma'] ?? 0), 'veterinaria' => (int) ($d['veterinaria'] ?? 0), 'activo' => (int) ($d['activo'] ?? 1)];
-        if (!empty($d['esp_id'])) {
-            DB::table('especialidad')->where('esp_id', $d['esp_id'])->where('id_empresa_negocio', $this->suc())->update($fila);
-        } else {
-            DB::table('especialidad')->insert($fila + ['id_empresa_negocio' => $this->suc()]);
+        $d = $request->validate([
+            'especialidades' => 'required|array|max:100',
+            'especialidades.*.esp_id' => 'nullable|integer', 'especialidades.*.esp_des' => 'required|string|max:100',
+            'especialidades.*.IdProducto' => 'nullable|integer', 'especialidades.*.odontograma' => 'nullable|boolean',
+            'especialidades.*.veterinaria' => 'nullable|boolean', 'especialidades.*.activo' => 'nullable|boolean',
+        ], [], ['especialidades.*.esp_des' => 'nombre de la especialidad']);
+        $suc = $this->suc();
+        $nombres = collect($d['especialidades'])->map(fn ($e) => mb_strtoupper(trim($e['esp_des'])));
+        if ($repetido = $nombres->duplicates()->first()) {
+            return response()->json(['ok' => false, 'mensaje' => "La especialidad {$repetido} está dos veces."]);
         }
-        return response()->json(['ok' => true, 'mensaje' => 'Especialidad guardada.']);
+        $productos = DB::table('productos')->where('id_empresa_negocio', $suc)->pluck('IdProducto')->flip();
+
+        DB::transaction(function () use ($d, $suc, $productos) {
+            foreach ($d['especialidades'] as $e) {
+                $fila = ['esp_des' => mb_strtoupper(trim($e['esp_des'])), 'IdProducto' => isset($productos[$e['IdProducto'] ?? 0]) ? (int) $e['IdProducto'] : null,
+                    'odontograma' => (int) ($e['odontograma'] ?? 0), 'veterinaria' => (int) ($e['veterinaria'] ?? 0), 'activo' => (int) ($e['activo'] ?? 1)];
+                if (! empty($e['esp_id'])) {
+                    DB::table('especialidad')->where('esp_id', $e['esp_id'])->where('id_empresa_negocio', $suc)->update($fila);
+                } else {
+                    DB::table('especialidad')->insert($fila + ['id_empresa_negocio' => $suc]);
+                }
+            }
+        });
+
+        return response()->json(['ok' => true, 'mensaje' => count($d['especialidades']).' especialidad(es) guardada(s).']);
     }
 }

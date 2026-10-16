@@ -1,8 +1,16 @@
 <?php
+
 namespace App\Support;
 
-use App\Models\{Pedido, PedidoDetalle, User};
+use App\Models\Cliente;
+use App\Models\Pedido;
+use App\Models\PedidoDetalle;
+use App\Models\Producto;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Historias clínicas: permisos, códigos de historia y el pedido que recepción cobra en caja.
@@ -16,47 +24,59 @@ class Clinica
 
     // Odontograma (notación FDI, norma peruana: rojo = por tratar, azul = tratamiento en buen estado)
     public const PIEZAS_ADULTO = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48];
+
     public const PIEZAS_NINO = [51, 52, 53, 54, 55, 61, 62, 63, 64, 65, 71, 72, 73, 74, 75, 81, 82, 83, 84, 85];
+
     public const CARAS = ['V' => 'vestibular', 'L' => 'lingual/palatino', 'M' => 'mesial', 'D' => 'distal', 'O' => 'oclusal/incisal'];
+
     public const HALLAZGOS_CARA = ['CARIES', 'RESTAURACION', 'RESTAURACION DEFECTUOSA', 'SELLANTE', 'FRACTURA'];
+
     public const HALLAZGOS_PIEZA = ['POR EXTRAER', 'AUSENTE', 'CORONA', 'CORONA DEFECTUOSA', 'ENDODONCIA', 'IMPLANTE', 'REMANENTE RADICULAR',
         'PROTESIS FIJA', 'MOVILIDAD', 'EXTRUSION'];
 
     public const ORIGENES = ['RECOMENDACION', 'FACEBOOK', 'INSTAGRAM', 'TIKTOK', 'GOOGLE / PAGINA WEB', 'PASABA POR AQUI', 'SEGURO / CONVENIO', 'OTRO'];
 
-    /** Deja solo piezas, caras y hallazgos válidos: {"36": {"e": "CORONA", "c": {"O": "CARIES"}}} (acepta el formato antiguo "36": "CARIES") */
+    /**
+     * Deja solo piezas, caras y hallazgos válidos. Una pieza puede tener varios hallazgos de pieza completa
+     * (ej. ENDODONCIA y PROTESIS FIJA) y uno por cara (ej. CARIES oclusal):
+     * {"14": {"e": ["ENDODONCIA", "PROTESIS FIJA"], "c": {"O": "CARIES"}}}.
+     * Acepta los formatos antiguos: "36": "CARIES" y "e": "CORONA" (un solo hallazgo).
+     */
     public static function limpiarOdontograma(?array $piezas): array
     {
         $validas = array_flip(array_merge(self::PIEZAS_ADULTO, self::PIEZAS_NINO));
         $res = [];
         foreach ($piezas ?? [] as $n => $p) {
-            if (!isset($validas[(int) $n])) {
+            if (! isset($validas[(int) $n])) {
                 continue;
             }
             if (is_string($p)) {
-                $p = in_array($p, self::HALLAZGOS_PIEZA, true) ? ['e' => $p] : ['c' => ['O' => $p]];
+                $p = in_array($p, self::HALLAZGOS_PIEZA, true) ? ['e' => [$p]] : ['c' => ['O' => $p]];
             }
-            $e = isset($p['e']) && in_array($p['e'], self::HALLAZGOS_PIEZA, true) ? $p['e'] : null;
-            $caras = array_filter((array) ($p['c'] ?? []), fn($h, $cara) => isset(self::CARAS[$cara]) && in_array($h, self::HALLAZGOS_CARA, true), ARRAY_FILTER_USE_BOTH);
+            // Orden fijo (el del catálogo) para que el mismo diente siempre se lea igual
+            $e = array_values(array_intersect(self::HALLAZGOS_PIEZA, (array) ($p['e'] ?? [])));
+            $caras = array_filter((array) ($p['c'] ?? []), fn ($h, $cara) => isset(self::CARAS[$cara]) && in_array($h, self::HALLAZGOS_CARA, true), ARRAY_FILTER_USE_BOTH);
             if ($e || $caras) {
-                $res[(int) $n] = array_filter(['e' => $e, 'c' => $caras ?: null]);
+                $res[(int) $n] = array_filter(['e' => $e ?: null, 'c' => $caras ?: null]);
             }
         }
         ksort($res);
+
         return $res;
     }
 
-    /** "36: CORONA, CARIES (oclusal)" para imprimir */
+    /** "14: ENDODONCIA, PROTESIS FIJA, CARIES (oclusal/incisal)" para imprimir */
     public static function resumenOdontograma(?string $json): array
     {
         $lineas = [];
         foreach (self::limpiarOdontograma(json_decode((string) $json, true) ?: []) as $n => $p) {
-            $partes = array_filter([$p['e'] ?? null]);
+            $partes = $p['e'] ?? [];
             foreach ($p['c'] ?? [] as $cara => $h) {
-                $partes[] = $h . ' (' . self::CARAS[$cara] . ')';
+                $partes[] = $h.' ('.self::CARAS[$cara].')';
             }
-            $lineas[] = $n . ': ' . implode(', ', $partes);
+            $lineas[] = $n.': '.implode(', ', $partes);
         }
+
         return $lineas;
     }
 
@@ -87,23 +107,25 @@ class Clinica
     public static function nuevoCodigo(int $suc): string
     {
         $ultimo = (int) DB::table('historia_clinica')->where('id_empresa_negocio', $suc)
-            ->max(DB::raw("CAST(SUBSTRING(his_cli_cod, 4) AS UNSIGNED)"));
-        return 'HC-' . str_pad((string) ($ultimo + 1), 6, '0', STR_PAD_LEFT);
+            ->max(DB::raw('CAST(SUBSTRING(his_cli_cod, 4) AS UNSIGNED)'));
+
+        return 'HC-'.str_pad((string) ($ultimo + 1), 6, '0', STR_PAD_LEFT);
     }
 
     public static function edad(?string $fecha): ?string
     {
-        if (!$fecha) {
+        if (! $fecha) {
             return null;
         }
-        $d = \Carbon\Carbon::parse($fecha)->diff(now());
-        return $d->y >= 1 ? $d->y . ' año' . ($d->y === 1 ? '' : 's') : $d->m . ' mes' . ($d->m === 1 ? '' : 'es');
+        $d = Carbon::parse($fecha)->diff(now());
+
+        return $d->y >= 1 ? $d->y.' año'.($d->y === 1 ? '' : 's') : $d->m.' mes'.($d->m === 1 ? '' : 'es');
     }
 
     /** Nombre que se muestra: la persona, o "MASCOTA (dueño)" */
     public static function nombre(object $h): string
     {
-        return $h->tipo === 'MASCOTA' ? trim(($h->mascota ?: 'MASCOTA') . ' · ' . ($h->clinom ?? '')) : (string) ($h->clinom ?? '');
+        return $h->tipo === 'MASCOTA' ? trim(($h->mascota ?: 'MASCOTA').' · '.($h->clinom ?? '')) : (string) ($h->clinom ?? '');
     }
 
     /**
@@ -121,7 +143,7 @@ class Clinica
             'ped_tip' => 'Clinica', 'ped_fec' => now()->toDateString(), 'fecha_hora' => now(), 'ped_est' => 'Aperturado',
             'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $ate->id_empresa_negocio, 'mozo' => $ate->doctor ?: $user->IdUsuario,
             'IdUsuario' => $user->IdUsuario, 'ped_cli_nom' => $h->clinom, 'ped_num_doc' => $h->clinum,
-            'ped_obs' => mb_substr($h->his_cli_cod . ' · ' . self::nombre($h), 0, 255), 'ped_tot' => 0,
+            'ped_obs' => mb_substr($h->his_cli_cod.' · '.self::nombre($h), 0, 255), 'ped_tot' => 0,
         ]);
         DB::table('atencion_clinica')->where('ate_cli_id', $ate->ate_cli_id)->update(['ped_id' => $p->ped_id]);
 
@@ -130,6 +152,7 @@ class Clinica
         if ($esp && $esp->IdProducto && ($prod = DB::table('productos')->where('IdProducto', $esp->IdProducto)->first())) {
             self::agregarLinea($p->ped_id, $prod, 1, (float) $prod->propun, $user);
         }
+
         return $p;
     }
 
@@ -145,7 +168,7 @@ class Clinica
 
     public static function recalcular(int $pedId): void
     {
-        $total = PedidoDetalle::where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')->get()->sum(fn($d) => $d->ped_det_can * $d->ped_det_pre);
+        $total = PedidoDetalle::where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')->get()->sum(fn ($d) => $d->ped_det_can * $d->ped_det_pre);
         Pedido::where('ped_id', $pedId)->update(['ped_tot' => round($total, 2), 'fecha_hora_modificacion' => now()]);
     }
 
@@ -166,41 +189,165 @@ class Clinica
         $suc = (int) $user->id_empresa_negocio;
         $doc = trim($d['clinum']);
         $tipo = ($d['tipo'] ?? 'PERSONA') === 'MASCOTA' ? 'MASCOTA' : 'PERSONA';
-        $cli = \App\Models\Cliente::updateOrCreate(['clinum' => $doc, 'rucemp' => $user->IdEmpresa], array_filter([
+        $cli = Cliente::updateOrCreate(['clinum' => $doc, 'rucemp' => $user->IdEmpresa], array_filter([
             'clinom' => mb_strtoupper(trim($d['clinom'])),
             'tdicod' => $d['tdicod'] ?? (strlen($doc) === 11 ? '6' : '1'),
             'telefono' => $d['telefono'] ?? null, 'clidir' => ($d['clidir'] ?? null) ?: null,
-        ], fn($v) => $v !== null) + ['clidir' => '--']);
+        ], fn ($v) => $v !== null) + ['clidir' => '--']);
 
         $existe = DB::table('historia_clinica')->where('id_empresa_negocio', $suc)->where('clicod', $cli->clicod)->where('tipo', $tipo)
-            ->when($tipo === 'MASCOTA', fn($q) => $q->where('mascota', mb_strtoupper(trim($d['mascota']))))->value('his_cli_id');
+            ->when($tipo === 'MASCOTA', fn ($q) => $q->where('mascota', mb_strtoupper(trim($d['mascota']))))->value('his_cli_id');
         $datos = array_filter([
             'mascota' => $tipo === 'MASCOTA' ? mb_strtoupper(trim($d['mascota'])) : null,
             'especie' => isset($d['especie']) ? mb_strtoupper(trim($d['especie'])) : null, 'raza' => isset($d['raza']) ? mb_strtoupper(trim($d['raza'])) : null,
             'sexo' => $d['sexo'] ?? null, 'fecha_nac' => $d['fecha_nac'] ?? null, 'grupo_sanguineo' => $d['grupo_sanguineo'] ?? null,
             'ocupacion' => $d['ocupacion'] ?? null, 'contacto_emergencia' => $d['contacto_emergencia'] ?? null, 'origen' => $d['origen'] ?? null,
-        ], fn($v) => $v !== null && $v !== '');
+        ], fn ($v) => $v !== null && $v !== '');
         if ($existe) {
             if ($datos) {
                 DB::table('historia_clinica')->where('his_cli_id', $existe)->update($datos);
             }
+
             return (int) $existe;
         }
+
         return DB::table('historia_clinica')->insertGetId($datos + [
             'his_cli_cod' => self::nuevoCodigo($suc), 'clicod' => $cli->clicod, 'tipo' => $tipo, 'id_empresa_negocio' => $suc, 'his_cli_fec' => now(),
         ]);
     }
 
-    /** Atenciones terminadas con algo por cobrar (lo que ve recepción) */
+    /**
+     * Lo que recepción tiene por cobrar: atenciones terminadas y adelantos de tratamientos.
+     * Las atenciones muestran al doctor; los adelantos, el tratamiento.
+     */
     public static function porCobrar(int $suc)
     {
-        return DB::table('atencion_clinica as a')->join('pedidos as p', 'p.ped_id', '=', 'a.ped_id')
+        $pendiente = fn ($q) => $q->where('p.ped_est', 'Aperturado')
+            ->whereExists(fn ($s) => $s->from('pedidos_detalle as d')->whereColumn('d.ped_id', 'p.ped_id')->where('d.estadoitem', '!=', 'Eliminado')
+                ->whereColumn('d.item_facturado', '<', 'd.ped_det_can'));
+
+        $atenciones = DB::table('atencion_clinica as a')->join('pedidos as p', 'p.ped_id', '=', 'a.ped_id')
             ->join('historia_clinica as h', 'h.his_cli_id', '=', 'a.his_cli_id')->join('cliente as c', 'c.clicod', '=', 'h.clicod')
             ->leftJoin('users as u', 'u.IdUsuario', '=', 'a.doctor')
-            ->where('a.id_empresa_negocio', $suc)->where('a.ate_cli_est', 'ATENDIDA')->where('p.ped_est', 'Aperturado')
-            ->whereExists(fn($q) => $q->from('pedidos_detalle as d')->whereColumn('d.ped_id', 'p.ped_id')->where('d.estadoitem', '!=', 'Eliminado')
-                ->whereColumn('d.item_facturado', '<', 'd.ped_det_can'))
-            ->orderBy('a.ate_cli_fec')->get(['a.ate_cli_id', 'a.ped_id', 'a.ate_cli_fec', 'p.ped_tot', 'h.tipo', 'h.mascota', 'h.his_cli_cod',
+            ->where('a.id_empresa_negocio', $suc)->where('a.ate_cli_est', 'ATENDIDA')->tap($pendiente)
+            ->get(['a.ate_cli_id', 'a.ped_id', 'a.ate_cli_fec', 'p.ped_tot', 'h.tipo', 'h.mascota', 'h.his_cli_cod',
                 'c.clinom', DB::raw("TRIM(CONCAT(u.name, ' ', u.apeusu)) as doctor_nom")]);
+
+        $adelantos = DB::table('clinica_tratamiento_registros as r')->join('clinica_tratamientos as t', 't.tra_id', '=', 'r.tra_id')
+            ->join('pedidos as p', 'p.ped_id', '=', 'r.ped_id')
+            ->join('historia_clinica as h', 'h.his_cli_id', '=', 't.his_cli_id')->join('cliente as c', 'c.clicod', '=', 'h.clicod')
+            ->where('t.id_empresa_negocio', $suc)->tap($pendiente)
+            ->get([DB::raw('NULL as ate_cli_id'), 'r.ped_id', DB::raw('DATE(r.fecha_hora) as ate_cli_fec'), 'p.ped_tot', 'h.tipo', 'h.mascota', 'h.his_cli_cod',
+                'c.clinom', DB::raw("CONCAT('Adelanto · ', t.descripcion) as doctor_nom")]);
+
+        return $atenciones->concat($adelantos)->sortBy('ate_cli_fec')->values();
+    }
+
+    // ------------------------------------------------------------------ registro de tratamientos
+
+    /** Servicio con el que se cobran en caja los adelantos (sin receta: no mueve stock). Se crea la primera vez */
+    public static function productoAdelanto(User $user): object
+    {
+        $suc = (int) $user->id_empresa_negocio;
+        $prod = DB::table('productos')->where('id_empresa_negocio', $suc)->where('procod', 'ADELANTO-TRAT')->first();
+        if ($prod) {
+            return $prod;
+        }
+        $cat = DB::table('categorias')->where('id_empresa_negocio', $suc)->where('cat_nom', 'CLINICA')->value('cat_id')
+            ?? DB::table('categorias')->insertGetId(['cat_nom' => 'CLINICA', 'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $suc,
+                'tip_pro_id' => DB::table('tipo_producto')->where('id_empresa_negocio', $suc)->value('tip_pro_id') ?? 1,
+                'cat_acom' => 0, 'visible' => 0, 'predeterminado' => 0]);
+        $id = Producto::create(['pronom' => 'ADELANTO DE TRATAMIENTO', 'procod' => 'ADELANTO-TRAT', 'propun' => 0, 'umecod' => 'ZZ',
+            'costo' => 0, 'promocion' => 2, 'cat_id' => $cat, 'stock_min' => 0, 'proest' => 'Activo', 'IdEmpresa' => $user->IdEmpresa,
+            'id_empresa_negocio' => $suc])->IdProducto;
+
+        return DB::table('productos')->where('IdProducto', $id)->first();
+    }
+
+    /**
+     * Registra una sesión del tratamiento: lo realizado, el adelanto y el saldo que queda. El adelanto se cobra en caja
+     * (pedido 'Clinica' que recepción ve en "Por cobrar"). Con saldo 0 el tratamiento queda CANCELADO.
+     *
+     * @param  array{detalle?: ?string, adelanto?: float|string|null, fecha_hora?: ?string}  $d
+     * @return int reg_id
+     */
+    public static function registrarSesion(object $tra, array $d, User $user): int
+    {
+        $pagado = (float) DB::table('clinica_tratamiento_registros')->where('tra_id', $tra->tra_id)->sum('adelanto');
+        $pendiente = round((float) $tra->costo - $pagado, 2);
+        $adelanto = round((float) ($d['adelanto'] ?? 0), 2);
+        if ($adelanto < 0 || $adelanto > $pendiente + 0.001) {
+            throw new \RuntimeException('El adelanto no puede pasar del saldo pendiente (S/ '.number_format($pendiente, 2).').');
+        }
+        if ($adelanto <= 0 && trim((string) ($d['detalle'] ?? '')) === '') {
+            throw new \RuntimeException('Escribe lo que se realizó o las indicaciones, o el adelanto que paga.');
+        }
+        $saldo = round($pendiente - $adelanto, 2);
+
+        $pedId = null;
+        if ($adelanto > 0) {
+            $h = DB::table('historia_clinica as h')->join('cliente as c', 'c.clicod', '=', 'h.clicod')->where('h.his_cli_id', $tra->his_cli_id)
+                ->first(['h.*', 'c.clinom', 'c.clinum']);
+            $pedido = Pedido::create([
+                'ped_tip' => 'Clinica', 'ped_fec' => now()->toDateString(), 'fecha_hora' => now(), 'ped_est' => 'Aperturado',
+                'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $tra->id_empresa_negocio, 'mozo' => $tra->doctor ?: $user->IdUsuario,
+                'IdUsuario' => $user->IdUsuario, 'ped_cli_nom' => $h->clinom, 'ped_num_doc' => $h->clinum,
+                'ped_obs' => mb_substr($h->his_cli_cod.' · '.self::nombre($h).' · '.$tra->descripcion, 0, 255), 'ped_tot' => 0,
+            ]);
+            $prod = (object) ['IdProducto' => self::productoAdelanto($user)->IdProducto,
+                'pronom' => mb_substr(($saldo <= 0 ? 'CANCELACION' : 'ADELANTO').' DE TRATAMIENTO: '.$tra->descripcion, 0, 150)];
+            self::agregarLinea($pedido->ped_id, $prod, 1, $adelanto, $user);
+            $pedId = $pedido->ped_id;
+        }
+
+        $regId = DB::table('clinica_tratamiento_registros')->insertGetId([
+            'tra_id' => $tra->tra_id, 'fecha_hora' => $d['fecha_hora'] ?? now(), 'detalle' => trim((string) ($d['detalle'] ?? '')) ?: null,
+            'adelanto' => $adelanto, 'saldo' => $saldo, 'ped_id' => $pedId, 'IdUsuario' => $user->IdUsuario, 'creado' => now(),
+        ]);
+        DB::table('clinica_tratamientos')->where('tra_id', $tra->tra_id)->update($saldo <= 0 && (float) $tra->costo > 0
+            ? ['estado' => 'CANCELADO', 'cancelado' => now()] : ['estado' => 'EN CURSO', 'cancelado' => null]);
+
+        return $regId;
+    }
+
+    /** Guarda la firma (imagen PNG que manda la tablet) en storage/app/clinica/firmas */
+    public static function guardarFirma(int $regId, int $suc, string $dataUrl): string
+    {
+        if (! preg_match('#^data:image/png;base64,([A-Za-z0-9+/=]+)$#', $dataUrl, $m)) {
+            throw new \RuntimeException('La firma no es una imagen válida.');
+        }
+        $png = base64_decode($m[1], true);
+        if ($png === false || ! str_starts_with($png, "\x89PNG") || strlen($png) > 400_000) {
+            throw new \RuntimeException('La firma no es una imagen válida.');
+        }
+        $ruta = 'clinica/firmas/'.$suc.'/'.$regId.'.png';
+        Storage::disk('local')->put($ruta, $png);
+        DB::table('clinica_tratamiento_registros')->where('reg_id', $regId)->update(['firma' => $ruta]);
+
+        return $ruta;
+    }
+
+    /**
+     * Tratamientos de un paciente con sus sesiones (lo pagado, el saldo y si caja ya cobró cada adelanto).
+     *
+     * @return Collection<int, object>
+     */
+    public static function tratamientosDe(int $hisId)
+    {
+        $tratamientos = DB::table('clinica_tratamientos as t')->leftJoin('especialidad as e', 'e.esp_id', '=', 't.esp_id')
+            ->where('t.his_cli_id', $hisId)->orderByRaw("t.estado = 'CANCELADO'")->orderByDesc('t.tra_id')
+            ->get(['t.*', 'e.esp_des']);
+        $registros = DB::table('clinica_tratamiento_registros as r')->leftJoin('pedidos as p', 'p.ped_id', '=', 'r.ped_id')
+            ->leftJoin('users as u', 'u.IdUsuario', '=', 'r.IdUsuario')
+            ->whereIn('r.tra_id', $tratamientos->pluck('tra_id'))->orderBy('r.fecha_hora')->orderBy('r.reg_id')
+            ->get(['r.*', 'p.ped_est', DB::raw("TRIM(CONCAT(u.name, ' ', u.apeusu)) as usuario")])->groupBy('tra_id');
+
+        return $tratamientos->map(function ($t) use ($registros) {
+            $t->registros = $registros[$t->tra_id] ?? collect();
+            $t->pagado = round((float) $t->registros->sum('adelanto'), 2);
+            $t->saldo = round((float) $t->costo - $t->pagado, 2);
+
+            return $t;
+        });
     }
 }

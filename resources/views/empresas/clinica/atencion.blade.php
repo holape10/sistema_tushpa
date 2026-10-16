@@ -92,7 +92,7 @@
                 @if ($conOdonto)
                     <section class="{{ $seccion }}">
                         <h2 class="font-bold text-gray-700">🦷 Odontograma</h2>
-                        <p class="text-xs text-gray-500">Elige un hallazgo y toca la cara del diente (o el diente, si es de pieza completa). Tocar otra vez lo quita. Al terminar la atención queda como odontograma de la historia.</p>
+                        <p class="text-xs text-gray-500">Elige un hallazgo y toca la cara del diente (o el diente, si es de pieza completa). Un mismo diente puede llevar varios: ej. ENDODONCIA + PROTESIS FIJA + CARIES en una cara. Tocar otra vez lo quita. Al terminar la atención queda como odontograma de la historia.</p>
                         @include('empresas.clinica._odontograma')
                     </section>
                 @endif

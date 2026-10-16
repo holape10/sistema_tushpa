@@ -1,6 +1,7 @@
 {{--
     Odontograma por caras (norma peruana: rojo = mal estado / por tratar, azul = tratamiento en buen estado).
-    Usa del componente padre: piezas = {"36": {"e": "CORONA", "c": {"O": "CARIES"}}}, editable (bool), pincel, denticion ('ADULTO' | 'NINO').
+    Usa del componente padre: piezas = {"14": {"e": ["ENDODONCIA", "PROTESIS FIJA"], "c": {"O": "CARIES"}}}, editable (bool), pincel,
+    denticion ('ADULTO' | 'NINO'). Una pieza puede tener varios hallazgos de pieza completa y uno por cara.
 --}}
 @once
 <script>
@@ -25,20 +26,35 @@
             return zona === haciaLineaMedia ? 'M' : 'D';
         },
         colorDe(h) { const t = this.caras[h] || this.piezas[h]; return t ? this[t] : null; },
-        // Normaliza datos antiguos ("36": "CARIES") al formato por caras
-        pieza(p) { return !p ? { e: null, c: {} } : typeof p === 'string' ? { e: this.piezas[p] ? p : null, c: this.caras[p] ? { O: p } : {} } : { e: p.e || null, c: p.c || {} }; },
+        // Normaliza datos antiguos ("36": "CARIES" o "e": "CORONA") al formato con varios hallazgos por pieza
+        pieza(p) {
+            if (!p) return { e: [], c: {} };
+            if (typeof p === 'string') return { e: this.piezas[p] ? [p] : [], c: this.caras[p] ? { O: p } : {} };
+            return { e: Array.isArray(p.e) ? p.e : (p.e ? [p.e] : []), c: p.c || {} };
+        },
+        tiene(p, ...hallazgos) { const e = this.pieza(p).e; return hallazgos.some(h => e.includes(h)); },
+        // Hallazgos que se excluyen entre sí (no puede estar ausente y por extraer, ni con corona buena y defectuosa)
+        opuestos: { 'POR EXTRAER': 'AUSENTE', 'AUSENTE': 'POR EXTRAER', 'CORONA': 'CORONA DEFECTUOSA', 'CORONA DEFECTUOSA': 'CORONA' },
+        // Letras de los hallazgos que se dibujan como texto (IMP, RR, M, EX), juntas si hay varios
+        letras(p) {
+            const abrev = { 'IMPLANTE': 'IMP', 'REMANENTE RADICULAR': 'RR', 'MOVILIDAD': 'M', 'EXTRUSION': 'EX' };
+            const hs = this.pieza(p).e.filter(h => abrev[h]);
+            return { texto: hs.map(h => abrev[h]).join(' '), color: hs.some(h => this.piezas[h] === 'rojo') ? this.rojo : this.azul, tam: hs.length > 1 ? 9 : 13 };
+        },
         aplicar(todas, n, zona, pincel) {
             const res = { ...todas }, p = this.pieza(res[n]);
             if (pincel === 'SANO') { delete res[n]; return res; }
             if (this.caras[pincel]) { const c = this.cara(n, zona); p.c = { ...p.c }; p.c[c] === pincel ? delete p.c[c] : p.c[c] = pincel; }
-            else if (this.piezas[pincel]) { p.e = p.e === pincel ? null : pincel; }
-            if (!p.e && !Object.keys(p.c).length) delete res[n]; else res[n] = p;
+            else if (this.piezas[pincel]) {
+                // Tocar el diente agrega el hallazgo (endodoncia + prótesis fija + …); tocar otra vez lo quita
+                p.e = p.e.includes(pincel) ? p.e.filter(h => h !== pincel) : [...p.e.filter(h => h !== this.opuestos[pincel]), pincel];
+            }
+            if (!p.e.length && !Object.keys(p.c).length) delete res[n]; else res[n] = { e: p.e, c: p.c };
             return res;
         },
         resumen(todas) {
             return Object.keys(todas).sort().map(n => {
-                const p = this.pieza(todas[n]), partes = [];
-                if (p.e) partes.push(p.e);
+                const p = this.pieza(todas[n]), partes = [...p.e];
                 for (const [c, h] of Object.entries(p.c)) partes.push(h + ' (' + this.nombresCara[c].split(' ')[0].toLowerCase() + ')');
                 return n + ': ' + partes.join(', ');
             }).filter(x => !x.endsWith(': '));
@@ -65,7 +81,7 @@
                             :class="pincel === h ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-300'" :style="'color:' + Odonto[t]" x-text="h"></button>
                 </template>
             </div>
-            <div class="flex flex-wrap gap-1 items-center"><span class="text-[11px] font-bold text-gray-500 w-24">Pieza completa:</span>
+            <div class="flex flex-wrap gap-1 items-center"><span class="text-[11px] font-bold text-gray-500 w-24" title="Se pueden marcar varios en el mismo diente">Pieza completa:</span>
                 <template x-for="(t, h) in Odonto.piezas" :key="h">
                     <button type="button" @click="pincel = h" class="px-2 py-0.5 rounded-md text-[11px] font-semibold border"
                             :class="pincel === h ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-300'" :style="'color:' + Odonto[t]" x-text="h"></button>
@@ -92,14 +108,16 @@
                                         <polygon points="38,2 38,38 28,28 28,12" :fill="Odonto.colorDe(Odonto.pieza(piezas[n]).c[Odonto.cara(n, 'der')]) || '#fff'" @click="editable && pincel && (piezas = Odonto.aplicar(piezas, n, 'der', pincel))"></polygon>
                                         <rect x="12" y="12" width="16" height="16" :fill="Odonto.colorDe(Odonto.pieza(piezas[n]).c.O) || '#fff'" @click="editable && pincel && (piezas = Odonto.aplicar(piezas, n, 'centro', pincel))"></rect>
                                     </g>
-                                    {{-- Hallazgo de la pieza completa --}}
-                                    <g pointer-events="none" :stroke="Odonto.colorDe(Odonto.pieza(piezas[n]).e)" :fill="Odonto.colorDe(Odonto.pieza(piezas[n]).e)" stroke-width="3">
-                                        <path x-show="['POR EXTRAER', 'AUSENTE'].includes(Odonto.pieza(piezas[n]).e)" d="M4 4L36 36M36 4L4 36"></path>
-                                        <circle x-show="['CORONA', 'CORONA DEFECTUOSA'].includes(Odonto.pieza(piezas[n]).e)" cx="20" cy="20" r="17" fill="none"></circle>
-                                        <path x-show="Odonto.pieza(piezas[n]).e === 'ENDODONCIA'" d="M20 2V38"></path>
-                                        <path x-show="Odonto.pieza(piezas[n]).e === 'PROTESIS FIJA'" d="M0 6H40"></path>
-                                        <text x-show="['IMPLANTE', 'REMANENTE RADICULAR', 'MOVILIDAD', 'EXTRUSION'].includes(Odonto.pieza(piezas[n]).e)" x="20" y="25" text-anchor="middle" font-size="13" font-weight="bold" stroke="none"
-                                              x-text="({ 'IMPLANTE': 'IMP', 'REMANENTE RADICULAR': 'RR', 'MOVILIDAD': 'M', 'EXTRUSION': 'EX' })[Odonto.pieza(piezas[n]).e] || ''"></text>
+                                    {{-- Hallazgos de la pieza completa (pueden ser varios a la vez, cada uno con su dibujo y su color) --}}
+                                    <g pointer-events="none" stroke-width="3" fill="none">
+                                        <path x-show="Odonto.tiene(piezas[n], 'POR EXTRAER', 'AUSENTE')" d="M4 4L36 36M36 4L4 36"
+                                              :stroke="Odonto.tiene(piezas[n], 'POR EXTRAER') ? Odonto.rojo : Odonto.azul"></path>
+                                        <circle x-show="Odonto.tiene(piezas[n], 'CORONA', 'CORONA DEFECTUOSA')" cx="20" cy="20" r="17"
+                                                :stroke="Odonto.tiene(piezas[n], 'CORONA DEFECTUOSA') ? Odonto.rojo : Odonto.azul"></circle>
+                                        <path x-show="Odonto.tiene(piezas[n], 'ENDODONCIA')" d="M20 2V38" :stroke="Odonto.azul"></path>
+                                        <path x-show="Odonto.tiene(piezas[n], 'PROTESIS FIJA')" d="M0 6H40" :stroke="Odonto.azul"></path>
+                                        <text x-show="Odonto.letras(piezas[n]).texto" x="20" y="25" text-anchor="middle" font-weight="bold" stroke="none"
+                                              :font-size="Odonto.letras(piezas[n]).tam" :fill="Odonto.letras(piezas[n]).color" x-text="Odonto.letras(piezas[n]).texto"></text>
                                     </g>
                                 </svg>
                             </div>

@@ -13,21 +13,28 @@
             </div>
             <div class="flex gap-2">
                 <button type="button" @click="nuevo()" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700"><i class="fas fa-user-plus"></i> Nuevo paciente</button>
+                <a href="{{ route('clinica.tratamientos.index') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-file-invoice-dollar"></i> Registro de tratamientos</a>
                 @if ($esAdmin)
-                    <button type="button" @click="modal = 'esp'" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-gear"></i> Especialidades</button>
+                    <a href="{{ route('clinica.especialidades') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-gear"></i> Especialidades</a>
                 @endif
             </div>
         </div>
 
         @if ($esAdmin && $especialidades->isEmpty())
             <div class="rounded-xl bg-sky-50 border border-sky-200 px-4 py-3 text-sm text-sky-800">
-                Para empezar: crea tus <button type="button" @click="modal = 'esp'" class="font-bold underline">especialidades</button>
+                Para empezar: crea tus <a href="{{ route('clinica.especialidades') }}" class="font-bold underline">especialidades</a>
                 (Medicina general, Odontología, Veterinaria…) con el servicio que se cobra. Luego en <b>Usuarios</b> crea a los doctores con el rol <b>Doctor</b>.
             </div>
         @endif
 
-        <div class="bg-white rounded-2xl shadow-sm p-4">
-            <input type="search" x-model="texto" placeholder="Buscar por nombre, DNI, mascota o N° de historia" class="{{ $in }}">
+        <div class="bg-white rounded-2xl shadow-sm p-4 flex flex-wrap gap-3">
+            <input type="search" x-model="texto" placeholder="Buscar por nombre, DNI, mascota o N° de historia" class="{{ $in }} flex-1 min-w-[220px]">
+            {{-- Todos los pacientes de una especialidad (por sus atenciones o tratamientos) --}}
+            <select x-model="espFiltro" class="rounded-lg border-gray-300 text-sm sm:w-64">
+                <option value="">Todas las especialidades</option>
+                @foreach ($especialidades as $e)<option value="{{ $e->esp_id }}">{{ $e->esp_des }}</option>@endforeach
+            </select>
+            <p x-show="espFiltro" x-cloak class="w-full text-sm text-teal-700 font-semibold" x-text="filtrados.length + ' paciente(s) de ' + nombreEsp(espFiltro)"></p>
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
@@ -40,7 +47,10 @@
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-2 font-mono font-bold text-gray-600" x-text="p.his_cli_cod"></td>
                             <td class="px-4 py-2"><span class="font-semibold" x-text="p.nombre"></span>
-                                <span x-show="p.tipo === 'MASCOTA'" class="ml-1 text-xs text-amber-700" x-text="p.especie ? '🐾 ' + p.especie : '🐾'"></span></td>
+                                <span x-show="p.tipo === 'MASCOTA'" class="ml-1 text-xs text-amber-700" x-text="p.especie ? '🐾 ' + p.especie : '🐾'"></span>
+                                <span class="block">
+                                    <template x-for="id in p.esp" :key="id"><span class="inline-block mr-1 mt-0.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 text-[10px] font-bold" x-text="nombreEsp(id)"></span></template>
+                                </span></td>
                             <td class="px-4 py-2" x-text="p.clinum"></td>
                             <td class="px-4 py-2" x-text="p.edad || ''"></td>
                             <td class="px-4 py-2 text-xs text-gray-500" x-text="p.origen || ''"></td>
@@ -70,31 +80,6 @@
             </div>
         </div>
 
-        @if ($esAdmin)
-        {{-- Especialidades --}}
-        <div x-show="modal === 'esp'" x-cloak class="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
-            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-5 space-y-4" @click.outside="modal = null">
-                <div class="flex justify-between"><h3 class="font-bold text-gray-800">Especialidades</h3>
-                    <button type="button" @click="modal = null" class="text-2xl text-gray-400">&times;</button></div>
-                <p class="text-xs text-gray-500">El <b>servicio</b> es el producto que se cobra al terminar la consulta (créalo en Productos, ej. CONSULTA MEDICINA GENERAL S/ 50).
-                    <b>Odontograma</b> agrega el dibujo de los dientes; <b>Veterinaria</b> permite pacientes mascota con vacunas.</p>
-                <template x-for="e in esp" :key="e.k">
-                    <div class="grid grid-cols-12 gap-2 items-center border-b pb-2">
-                        <input x-model="e.esp_des" placeholder="MEDICINA GENERAL" class="{{ $in }} col-span-12 sm:col-span-4 uppercase">
-                        <select x-model="e.IdProducto" class="{{ $in }} col-span-12 sm:col-span-4">
-                            <option value="">Servicio que se cobra…</option>
-                            @foreach ($servicios as $s)<option value="{{ $s->IdProducto }}">{{ $s->pronom }} · S/ {{ number_format($s->propun, 2) }}</option>@endforeach
-                        </select>
-                        <label class="col-span-4 sm:col-span-1 text-xs" title="Odontograma"><input type="checkbox" x-model="e.odontograma"> 🦷</label>
-                        <label class="col-span-4 sm:col-span-1 text-xs" title="Veterinaria"><input type="checkbox" x-model="e.veterinaria"> 🐾</label>
-                        <button type="button" @click="guardarEsp(e)" class="col-span-4 sm:col-span-2 py-1.5 rounded-lg bg-gray-800 text-white text-xs font-bold">Guardar</button>
-                    </div>
-                </template>
-                <button type="button" @click="esp.push({ k: Date.now(), esp_id: null, esp_des: '', IdProducto: '', odontograma: false, veterinaria: false })"
-                        class="text-sm font-semibold text-teal-700">+ Agregar especialidad</button>
-            </div>
-        </div>
-        @endif
 
         <div x-show="aviso" x-cloak class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl shadow-lg text-white font-semibold" :class="ok ? 'bg-teal-600' : 'bg-rose-600'" x-text="aviso"></div>
     </div>
@@ -103,12 +88,14 @@
         function pacientes() {
             const CSRF = '{{ csrf_token() }}';
             return {
-                lista: @js($pacientes), texto: '', modal: null, ocupado: false, aviso: '', ok: true,
+                lista: @js($pacientes), texto: '', espFiltro: '', modal: null, ocupado: false, aviso: '', ok: true,
+                especialidades: @js($especialidades->pluck('esp_des', 'esp_id')),
+                nombreEsp(id) { return this.especialidades[id] || ''; },
                 p: {},
-                esp: @js($especialidades->map(fn($e) => ['k' => $e->esp_id, 'esp_id' => $e->esp_id, 'esp_des' => $e->esp_des, 'IdProducto' => (string) $e->IdProducto, 'odontograma' => (bool) $e->odontograma, 'veterinaria' => (bool) $e->veterinaria])),
                 get filtrados() {
-                    const t = this.texto.trim().toUpperCase();
-                    return !t ? this.lista : this.lista.filter(p => (p.nombre || '').toUpperCase().includes(t) || (p.clinum || '').includes(t) || (p.his_cli_cod || '').toUpperCase().includes(t));
+                    const t = this.texto.trim().toUpperCase(), esp = Number(this.espFiltro);
+                    return this.lista.filter(p => (!esp || (p.esp || []).includes(esp))
+                        && (!t || (p.nombre || '').toUpperCase().includes(t) || (p.clinum || '').includes(t) || (p.his_cli_cod || '').toUpperCase().includes(t)));
                 },
                 avisar(t, ok = true) { if (window.tushpaAviso) return window.tushpaAviso(t, ok); this.aviso = t; this.ok = ok; clearTimeout(this._t); this._t = setTimeout(() => this.aviso = '', 4000); },
                 async post(url, data) {
@@ -131,10 +118,6 @@
                     this.ocupado = false;
                     if (!r.ok) return this.avisar(r.mensaje || 'Revisa los datos.', false);
                     @if ($veClinico) location.href = '{{ url('clinica/historia') }}/' + r.his_cli_id; @else this.avisar(r.mensaje); setTimeout(() => location.reload(), 900); @endif
-                },
-                async guardarEsp(e) {
-                    const r = await this.post('{{ route('clinica.especialidad') }}', { esp_id: e.esp_id, esp_des: e.esp_des, IdProducto: e.IdProducto || null, odontograma: e.odontograma ? 1 : 0, veterinaria: e.veterinaria ? 1 : 0 });
-                    this.avisar(r.mensaje, r.ok); if (r.ok) setTimeout(() => location.reload(), 900);
                 },
             };
         }

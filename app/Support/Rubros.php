@@ -53,7 +53,7 @@ class Rubros
             '/socios', '/punto-venta', '/comandas', '/pv',
         ]],
         'CLINICA' => ['icono' => 'fa-stethoscope', 'nombre' => 'Clínica / consultorio', 'ejemplos' => 'Clínica, consultorio, odontología', 'modulos' => [
-            '/clinica', '/clinica/agenda', '/punto-venta',
+            '/clinica', '/clinica/agenda', '/clinica/especialidades', '/clinica/tratamientos', '/punto-venta',
         ]],
         'COMPLETO' => ['icono' => 'fa-table-cells', 'nombre' => 'Todo el menú', 'ejemplos' => 'Todas las opciones del sistema', 'modulos' => ['*']],
     ];

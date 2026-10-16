@@ -99,8 +99,11 @@
                 @endif
             </div>
 
-            {{-- Atenciones --}}
+            {{-- Registro de tratamientos y atenciones --}}
             <div class="lg:col-span-2 space-y-3">
+                <div id="tratamientos" x-data="registroTratamientos()" x-init="cargar({{ $h->his_cli_id }})" class="mb-4">
+                    @include('empresas.clinica._tratamientos', ['especialidadesTrat' => $especialidades])
+                </div>
                 <h2 class="font-bold text-gray-700">Atenciones ({{ $atenciones->count() }})</h2>
                 @forelse ($atenciones as $a)
                     <details class="bg-white rounded-2xl shadow-sm" @if ($loop->first) open @endif>

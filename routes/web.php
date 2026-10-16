@@ -67,6 +67,7 @@ use App\Http\Controllers\TiendaConfigController;
 use App\Http\Controllers\TiendaController;
 use App\Http\Controllers\TipoCambioController;
 use App\Http\Controllers\TransferenciaController;
+use App\Http\Controllers\TratamientoClinicoController;
 use App\Http\Controllers\TributoController;
 use App\Http\Controllers\TurnoController;
 use App\Http\Controllers\UsuarioController;
@@ -151,7 +152,19 @@ Route::middleware('auth')->group(function () {
         Route::post('/atencion/{id}/servicio', 'agregarServicio')->whereNumber('id')->name('atencion.servicio');
         Route::delete('/atencion/{id}/servicio/{det}', 'quitarServicio')->whereNumber('id')->whereNumber('det');
         Route::get('/atencion/{id}/receta', 'receta')->whereNumber('id')->name('receta');
-        Route::post('/especialidades', 'guardarEspecialidad')->name('especialidad');
+        Route::get('/especialidades', 'especialidades')->name('especialidades');
+        Route::post('/especialidades', 'guardarEspecialidades')->name('especialidad');
+    });
+    // Registro de tratamientos: costo, sesiones con adelanto y saldo, y la firma del paciente en la tablet
+    Route::controller(TratamientoClinicoController::class)->prefix('clinica')->name('clinica.tratamientos.')->group(function () {
+        Route::get('/tratamientos', 'index')->name('index');
+        Route::get('/historia/{id}/tratamientos', 'delPaciente')->whereNumber('id')->name('paciente');
+        Route::post('/historia/{id}/tratamientos', 'guardar')->whereNumber('id')->name('guardar');
+        Route::get('/historia/{id}/tratamientos/imprimir', 'imprimir')->whereNumber('id')->name('imprimir');
+        Route::post('/tratamientos/{id}', 'editar')->whereNumber('id')->name('editar');
+        Route::post('/tratamientos/{id}/sesion', 'sesion')->whereNumber('id')->name('sesion');
+        Route::post('/tratamientos/sesion/{reg}/firma', 'firmar')->whereNumber('reg')->name('firmar');
+        Route::get('/tratamientos/sesion/{reg}/firma', 'firma')->whereNumber('reg')->name('firma');
     });
     Route::controller(AgendaController::class)->prefix('clinica')->name('clinica.')->group(function () {
         Route::get('/agenda', 'index')->name('agenda');
