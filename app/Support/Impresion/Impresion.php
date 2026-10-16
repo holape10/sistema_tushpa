@@ -112,6 +112,42 @@ class Impresion
         return str_repeat($bytes, max(1, $copias)).($cajon && $imp->abrir_cajon ? (new Escpos((int) $imp->columnas))->abrirCajon()->bytes() : '');
     }
 
+    /**
+     * Quién atendió la venta, para el comprobante: el mozo (o doctor) que tomó el pedido, el promotor y el cajero que cobró.
+     * Si una misma persona hizo varias cosas sale una sola vez.
+     *
+     * @return array<int, array{0: string, 1: string}> [etiqueta, nombre]
+     */
+    public static function atencion(object $cab): array
+    {
+        $cajero = (int) ($cab->IdUsuario ?? 0);
+        $atendio = (int) (($cab->mozo ?? null) ?: ($cab->IdUsuario_ven ?? 0));
+        $promotor = (int) ($cab->promotor_id ?? 0);
+        $ids = array_filter([$atendio, $promotor, $cajero]);
+        if (! $ids) {
+            return [];
+        }
+        $nombres = DB::table('users')->whereIn('IdUsuario', $ids)
+            ->select('IdUsuario', DB::raw("COALESCE(NULLIF(TRIM(apeusu), ''), name) as nombre"))->pluck('nombre', 'IdUsuario');
+        $etiqueta = match ($cab->ped_tip ?? null) {
+            'Salon', 'Llevar', 'Delivery', 'Hotel' => 'Mozo',
+            'Clinica' => 'Atendió',
+            default => 'Vendedor',
+        };
+        $lista = [];
+        if ($atendio && $atendio !== $cajero && isset($nombres[$atendio])) {
+            $lista[] = [$etiqueta, (string) $nombres[$atendio]];
+        }
+        if ($promotor && isset($nombres[$promotor])) {
+            $lista[] = ['Promotor', (string) $nombres[$promotor]];
+        }
+        if ($cajero && isset($nombres[$cajero])) {
+            $lista[] = ['Cajero', (string) $nombres[$cajero]];
+        }
+
+        return $lista;
+    }
+
     /** $copias: null = las configuradas en la sucursal (una reimpresión manda 1) */
     public static function comprobante(int $idCpe, bool $exigirAgente = false, ?int $copias = null): bool
     {
@@ -168,8 +204,8 @@ class Impresion
         if ($pedido?->mes_nom) {
             $p->texto('Mesa  : '.Mesa::etiqueta($pedido->pis_nom, $pedido->mes_nom));
         }
-        if ($pedido?->mozo) {
-            $p->texto('Mozo  : '.$pedido->mozo);
+        foreach (self::atencion($cab) as [$etiqueta, $nombre]) {
+            $p->parrafo(mb_str_pad(mb_substr($etiqueta, 0, 6), 6).': '.$nombre);
         }
         $p->texto('Pago  : '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''));
         if (trim((string) $cab->ccaobs) !== '') {
@@ -290,7 +326,10 @@ class Impresion
             $p->parrafo('Dirección: '.$cab->direccion);
         }
         if ($pedido?->mes_nom) {
-            $p->texto('Mesa: '.Mesa::etiqueta($pedido->pis_nom, $pedido->mes_nom).($pedido->mozo ? '  Mozo: '.$pedido->mozo : ''));
+            $p->texto('Mesa: '.Mesa::etiqueta($pedido->pis_nom, $pedido->mes_nom));
+        }
+        foreach (self::atencion($cab) as [$etiqueta, $nombre]) {
+            $p->parrafo($etiqueta.': '.$nombre);
         }
         if ($cab->estadopago === 'CREDITO' && $cab->ccafve) {
             $p->texto('Vence: '.Carbon::parse($cab->ccafve)->format('d/m/Y'));
@@ -388,8 +427,8 @@ class Impresion
         if ($pedido?->mes_nom) {
             $dato('Mesa:', Mesa::etiqueta($pedido->pis_nom, $pedido->mes_nom));
         }
-        if ($pedido?->mozo) {
-            $dato('Mozo:', $pedido->mozo);
+        foreach (self::atencion($cab) as [$etiqueta, $nombre]) {
+            $dato($etiqueta.':', $nombre);
         }
         $p->texto('Condición de Pago:   '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''));
         if (trim((string) $cab->ccaobs) !== '') {

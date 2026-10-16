@@ -46,11 +46,17 @@
                 <label class="block">
                     <span class="text-sm font-semibold text-slate-600">Subdominio propio <span class="font-normal text-slate-400">(opcional)</span></span>
                     <div class="mt-1 flex items-center rounded-xl border border-slate-300 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-indigo-300">
-                        <input type="text" name="subdominio" x-model="sub" @input="sub = sub.toLowerCase().replace(/[^a-z0-9-]/g, '')" maxlength="40"
+                        <input type="text" name="subdominio" x-model="sub" @input="sub = sub.toLowerCase().replace(/[^a-z0-9-]/g, '')" @input.debounce.400ms="revisarSub()" maxlength="40"
                                placeholder="demo" class="flex-1 min-w-0 border-0 focus:ring-0 font-mono text-sm">
                         <span class="px-2 text-xs text-slate-400 whitespace-nowrap">.{{ config('tenancy.dominio') }}</span>
                     </div>
-                    <span class="text-xs text-slate-400" x-text="'Entrará por ' + (sub || ruc || 'RUC') + '.{{ config('tenancy.dominio') }}'"></span>
+                    <span x-show="!subMsg" class="text-xs text-slate-400" x-text="'Entrará por ' + (sub || ruc || 'RUC') + '.{{ config('tenancy.dominio') }}'"></span>
+                    <span x-show="subMsg" x-cloak class="block text-xs font-semibold" :class="subOk ? 'text-emerald-600' : 'text-rose-600'" x-text="(subOk ? '✔ ' : '✖ ') + subMsg"></span>
+                    <span x-show="subSugerencias.length" x-cloak class="flex flex-wrap items-center gap-1 mt-1 text-xs text-slate-500">Libres:
+                        <template x-for="s in subSugerencias" :key="s">
+                            <button type="button" @click="sub = s; revisarSub()" class="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 font-mono font-semibold hover:bg-emerald-100" x-text="s"></button>
+                        </template>
+                    </span>
                 </label>
                 @if ($nuevo)
                     <label class="block sm:col-span-2">
@@ -211,7 +217,17 @@
 <script>
     function clienteForm() {
         return {
-            ruc: @json(old('ruc', $cliente->ruc ?? '')), sub: @json(old('subdominio', $cliente->subdominio ?? '')), buscando: false, msg: '', msgOk: true, enviando: false, ultimo: '',
+            ruc: @json(old('ruc', $cliente->ruc ?? '')), sub: @json(old('subdominio', $cliente->subdominio ?? '')), subMsg: '', subOk: true, subSugerencias: [], buscando: false, msg: '', msgOk: true, enviando: false, ultimo: '',
+            // Avisa mientras se escribe si el subdominio ya lo usa otra empresa o está reservado
+            async revisarSub() {
+                this.subSugerencias = [];
+                if (!this.sub) { this.subMsg = ''; return; }
+                try {
+                    const r = await fetch(@json(route('admin.subdominio', 'SUB')).replace('SUB', encodeURIComponent(this.sub)) + @json($nuevo ? '' : '?cliente='.$cliente->id), { headers: { Accept: 'application/json' } });
+                    const d = await r.json();
+                    this.subOk = d.ok; this.subMsg = d.mensaje; this.subSugerencias = d.sugerencias || [];
+                } catch (e) { this.subMsg = ''; }
+            },
             async buscarRuc() {
                 if (this.buscando || this.ruc === this.ultimo || !/^\d{11}$/.test(this.ruc)) return;
                 this.buscando = true; this.ultimo = this.ruc; this.msg = 'Consultando SUNAT…'; this.msgOk = true;

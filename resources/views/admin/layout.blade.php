@@ -17,6 +17,10 @@
                 <a href="{{ route('admin.clientes.index') }}" class="font-bold">TUSHPA <span class="font-normal text-slate-400">· Panel de clientes</span></a>
                 <nav class="ml-4 flex gap-1 text-sm">
                     <a href="{{ route('admin.clientes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.clientes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Clientes</a>
+                    @php $ticketsNuevos = \App\Http\Controllers\Admin\TicketController::sinLeer(); @endphp
+                    <a href="{{ route('admin.tickets.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.tickets.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">
+                        Tickets @if ($ticketsNuevos)<span class="ml-1 px-1.5 rounded-full bg-rose-500 text-[11px] font-bold">{{ $ticketsNuevos }}</span>@endif
+                    </a>
                     <a href="{{ route('admin.planes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.planes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Planes</a>
                     @if (auth('superadmin')->user()->es_dueno || auth('superadmin')->user()->puede_crear_usuarios)
                         <a href="{{ route('admin.usuarios.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.usuarios.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Usuarios</a>
@@ -26,6 +30,7 @@
                         <a href="{{ route('admin.mensajes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.mensajes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">
                             Mensajes web @if ($mensajesNuevos)<span class="ml-1 px-1.5 rounded-full bg-rose-500 text-[11px] font-bold">{{ $mensajesNuevos }}</span>@endif
                         </a>
+                        <a href="{{ route('admin.visitas.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.visitas.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Visitas</a>
                         <a href="{{ route('admin.logos.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.logos.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Logos web</a>
                         <a href="{{ route('admin.agente.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.agente.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Agente</a>
                         <a href="{{ route('admin.respaldos.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.respaldos.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Respaldos</a>

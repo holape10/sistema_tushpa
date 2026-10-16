@@ -40,3 +40,5 @@ Thumbs.db
 
 # Logos de clientes de la web pública (se suben desde el panel admin)
 /public/imagenes/web-clientes
+/public/imagenes/cartas
+/public/imagenes/tienda

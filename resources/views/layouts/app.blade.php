@@ -222,8 +222,14 @@
                     @endif
                 @endif
                 {{-- Ayuda: soporte del sistema desde cualquier pantalla --}}
-                <a href="{{ route('soporte') }}" title="Soporte" aria-label="Soporte"
-                   class="p-2 rounded-full hover:bg-gray-100 text-gray-600 {{ request()->routeIs('soporte') ? 'bg-indigo-50 text-indigo-700' : '' }}">
+                @php
+                    // Respuestas de soporte sin leer (tickets del administrador)
+                    $respuestasSoporte = auth()->user()->esAdmin() && ($clienteSoporte = \App\Support\Tenancy\Tenancy::cliente())
+                        ? \App\Support\Soporte::sinLeerCliente((int) $clienteSoporte->id) : 0;
+                @endphp
+                <a href="{{ route('soporte') }}" title="{{ $respuestasSoporte ? 'Soporte te respondió' : 'Soporte' }}" aria-label="Soporte"
+                   class="relative p-2 rounded-full hover:bg-gray-100 text-gray-600 {{ request()->routeIs('soporte*') ? 'bg-indigo-50 text-indigo-700' : '' }}">
+                    @if ($respuestasSoporte)<span class="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1 rounded-full bg-emerald-500 text-white text-[11px] font-bold flex items-center justify-center">{{ $respuestasSoporte }}</span>@endif
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </a>
 

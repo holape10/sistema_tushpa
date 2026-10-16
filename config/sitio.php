@@ -6,6 +6,13 @@
  */
 return [
 
+    // Botón "Ver demo" de la web: empresa de demostración y su acceso
+    'demo' => [
+        'url' => env('SITIO_DEMO_URL', 'https://demos.tushpa.app'),
+        'usuario' => env('SITIO_DEMO_USUARIO', 'DEMO'),
+        'clave' => env('SITIO_DEMO_CLAVE', 'DEMO'),
+    ],
+
     // Días de prueba gratis al registrarse desde la web
     'dias_prueba' => (int) env('SITIO_DIAS_PRUEBA', 15),
 

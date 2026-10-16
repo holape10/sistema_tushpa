@@ -23,7 +23,7 @@ class IdentificarEmpresa
     private function esPaginaDelSitio(string $ruta): bool
     {
         $ciudades = implode('|', array_map('preg_quote', SeoSitio::slugsCiudades()));
-        $patron = '~^(/|tutorial|contacto|ingresar|registro(/.*)?|up|sitemap\.xml'.($ciudades !== '' ? '|sistema-de-facturacion-electronica-('.$ciudades.')' : '').')$~';
+        $patron = '~^(/|tutorial|contacto|ingresar|registro(/.*)?|crea-tu-carta(/.*)?|c/[a-z0-9-]+|up|sitemap\.xml'.($ciudades !== '' ? '|sistema-de-facturacion-electronica-('.$ciudades.')' : '').')$~';
 
         return (bool) preg_match($patron, $ruta);
     }

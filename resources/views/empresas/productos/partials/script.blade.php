@@ -9,6 +9,7 @@
         'costo' => old('costo', $p ? (float) $p->costo : 0),
         'codigoBarra' => old('codigo_barra', $p->codigo_barra ?? ''),
         'imagen' => $p?->imagen_url,
+        'fotosExtra' => $p ? array_map(fn ($r) => ['ruta' => $r, 'url' => asset($r)], $p->fotos_extra) : [],
         'umeEquivalente' => old('ume_equivalente', $p->ume_equivalente ?? ''),
         'factorEquivalente' => old('factor_equivalente', $p && $p->ume_equivalente ? (float) $p->factor_equivalente : ''),
         'presentaciones' => array_values(old('presentaciones', $p ? $p->presentaciones->map(fn($x) => [
@@ -31,6 +32,8 @@
             ...ini,
             quitarImagen: false,
             vistaImagen: ini.imagen,
+            fotosNuevas: [],
+            quitarExtra: [],
             modalPrecios: false,
             presentaciones: ini.presentaciones.map(x => ({ key: key++, id: x.id ?? null, umecod: x.umecod || 'NIU', nombre: x.nombre || '',
                 factor: x.factor ?? '', precio: x.precio ?? '', codigo_barra: x.codigo_barra || '' })),
@@ -49,6 +52,18 @@
                 });
             },
 
+            // Fotos adicionales: entre las que ya tiene y las nuevas no pasan de 3
+            elegirFotosExtra(e) {
+                const libres = {{ \App\Models\Producto::MAX_IMAGENES - 1 }} - this.fotosExtra.length;
+                const archivos = [...e.target.files];
+                if (archivos.some(a => a.size > 4 * 1024 * 1024)) { alert('Cada foto debe pesar hasta 4 MB.'); e.target.value = ''; this.fotosNuevas = []; return; }
+                if (archivos.length > libres) { alert('Puedes agregar ' + libres + ' foto(s) más (4 en total con la principal).'); e.target.value = ''; this.fotosNuevas = []; return; }
+                this.fotosNuevas = archivos.map(a => URL.createObjectURL(a));
+            },
+            quitarFotoExtra(f) {
+                this.fotosExtra = this.fotosExtra.filter(x => x.ruta !== f.ruta);
+                this.quitarExtra.push(f.ruta);
+            },
             elegirImagen(e) {
                 const archivo = e.target.files[0];
                 if (!archivo) return;

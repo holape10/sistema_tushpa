@@ -452,6 +452,14 @@ class ClienteController extends Controller
         return Tenancy::errorSubdominio($sub, $actual);
     }
 
+    /** Aviso en vivo: ¿el subdominio está libre? (?cliente= al editar, para no chocar consigo mismo) */
+    public function revisarSubdominio(Request $request, string $sub)
+    {
+        $actual = $request->filled('cliente') ? Cliente::find((int) $request->cliente) : null;
+
+        return response()->json(Tenancy::revisarSubdominio($sub, $actual));
+    }
+
     public function consultarRuc(string $ruc)
     {
         try {

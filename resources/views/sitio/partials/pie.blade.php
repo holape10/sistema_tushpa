@@ -24,6 +24,8 @@
             <div class="col-6 col-lg-3">
                 <h5>Clientes</h5>
                 <ul class="list-unstyled small">
+                    <li class="mb-2"><a href="{{ route('sitio.carta.crear') }}">Crea tu carta digital gratis</a></li>
+                    <li class="mb-2"><a href="{{ config('sitio.demo.url') }}" target="_blank" rel="noopener">Ver demo (usuario y clave: {{ config('sitio.demo.usuario') }})</a></li>
                     <li class="mb-2"><a href="{{ route('sitio.ingresar') }}">Ingresar a mi sistema</a></li>
                     <li class="mb-2"><a href="{{ route('sitio.registro') }}">Prueba gratis</a></li>
                     <li class="mb-2"><a href="{{ $whatsapp }}" target="_blank" rel="noopener">Soporte por WhatsApp</a></li>

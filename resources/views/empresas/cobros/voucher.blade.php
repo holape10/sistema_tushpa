@@ -5,7 +5,7 @@
     $nombre = ($negocio->nombre_comercial ?? null) ?: ($empresa->NomEmpresa ?? '');
     $ubicacion = !empty($negocio->distrito) && !str_contains(mb_strtoupper((string) $negocio->direccion), mb_strtoupper($negocio->distrito))
         ? trim($negocio->departamento . ' - ' . $negocio->provincia . ' - ' . $negocio->distrito, ' -') : null;
-    $vendedor = \Illuminate\Support\Facades\DB::table('users')->where('IdUsuario', $cab->IdUsuario_ven ?: $cab->IdUsuario)->first(['name', 'apeusu']);
+    $atencion = \App\Support\Impresion\Impresion::atencion($cab);
     $unidades = \Illuminate\Support\Facades\DB::table('unidad_medida')->pluck('umenom', 'umecod');
     $medioPago = $medios->pluck('nom_med_pag')->filter()->unique()->implode(' / ');
     $esNota = in_array($cab->tdocod, ['07', '08'], true);
@@ -79,7 +79,7 @@
         @else
             <tr><td>M. Pago:</td><td>{{ $cab->estadopago }}@if ($cab->estadopago === 'CREDITO') · vence {{ \Carbon\Carbon::parse($cab->ccafve)->format('d-m-Y') }}@endif</td></tr>
         @endif
-        @if ($vendedor)<tr><td>Vendedor:</td><td>{{ trim($vendedor->name . ' ' . $vendedor->apeusu) }}</td></tr>@endif
+        @foreach ($atencion as [$etiqueta, $nombreAtencion])<tr><td>{{ $etiqueta }}:</td><td>{{ $nombreAtencion }}</td></tr>@endforeach
         @if (!empty($cab->placa))<tr><td>Placa:</td><td class="b">{{ $cab->placa }}</td></tr>@endif
         @if (!empty($cab->guia_remision))<tr><td>Guía:</td><td>{{ $cab->guia_remision }}</td></tr>@endif
         @if ($cab->ccaobs)<tr><td>Obs.:</td><td class="b">{{ $cab->ccaobs }}</td></tr>@endif

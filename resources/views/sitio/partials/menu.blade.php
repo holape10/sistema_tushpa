@@ -19,6 +19,8 @@
                     <li class="nav-item"><a class="nav-link" href="{{ $ancla('clientes') }}">Clientes</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ $ancla('contacto') }}">Contacto</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('sitio.tutorial') }}"><i class="fas fa-graduation-cap me-1"></i>Tutoriales</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ route('sitio.carta.crear') }}"><i class="fas fa-qrcode me-1"></i>Crea tu carta</a></li>
+                    <li class="nav-item"><a class="nav-link fw-semibold" href="#" data-bs-toggle="modal" data-bs-target="#modalDemo"><i class="fas fa-circle-play me-1"></i>Ver demo</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ route('sitio.ingresar') }}"><i class="fas fa-right-to-bracket me-1"></i>Ingresar</a></li>
                     <li class="nav-item ms-lg-2 mt-2 mt-lg-0"><a class="btn btn-selva" href="{{ route('sitio.registro') }}">Prueba gratis</a></li>
                 </ul>
@@ -26,3 +28,4 @@
         </div>
     </nav>
 </header>
+@include('sitio.partials.demo')

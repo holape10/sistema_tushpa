@@ -148,7 +148,7 @@
                 </p>
                 <div class="d-flex flex-wrap gap-3 mb-4">
                     <a href="{{ route('sitio.registro') }}" class="btn btn-achiote btn-lg"><i class="fas fa-rocket me-2"></i>Prueba gratis {{ config('sitio.dias_prueba') }} días</a>
-                    <a href="#rubros" class="btn btn-hueco btn-lg">Ver qué hace</a>
+                    <button type="button" class="btn btn-hueco btn-lg" data-bs-toggle="modal" data-bs-target="#modalDemo"><i class="fas fa-circle-play me-2"></i>Ver demo</button>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
                     <span class="chip-portada"><i class="fas fa-circle-check" style="color:#ffd700"></i>Sin tarjeta</span>

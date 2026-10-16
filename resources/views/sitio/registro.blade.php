@@ -73,7 +73,8 @@
                            class="form-control @error('subdominio') is-invalid @enderror" placeholder="mirestaurante">
                     <span class="input-group-text dominio-fijo">.{{ config('tenancy.dominio') }}</span>
                 </div>
-                <div class="form-text">Solo letras, números y guiones. Si lo dejas vacío, tu dirección será tu RUC.</div>
+                <div class="form-text" id="sub_ayuda">Solo letras, números y guiones. Si lo dejas vacío, tu dirección será tu RUC.</div>
+                <div id="sub_sugerencias" class="d-flex flex-wrap gap-2 mt-1" style="display:none!important"></div>
 
                 <div class="row g-3 mt-2">
                     @foreach ($planes as $plan)
@@ -158,10 +159,35 @@
             const sugerir = (texto) => texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
                 .replace(/\b(s\.?a\.?c?|e\.?i\.?r\.?l|s\.?r\.?l|sociedad|anonima|cerrada|empresa|de|del|la|el|los|las|y)\b/g, ' ')
                 .replace(/[^a-z0-9]+/g, '').slice(0, 30);
-            const ponerSugerencia = (texto) => { if (!subTocado && texto) el('subdominio').value = sugerir(texto); };
+            // Avisa al momento si la dirección ya la usa otra empresa y propone otras libres
+            const URL_SUB = @json(url('/registro/subdominio')) + '/';
+            const AYUDA_SUB = el('sub_ayuda').textContent;
+            let esperaSub = null;
+            const revisarSub = () => {
+                clearTimeout(esperaSub);
+                const valor = el('subdominio').value, caja = el('sub_sugerencias');
+                caja.innerHTML = ''; caja.style.setProperty('display', 'none', 'important');
+                el('subdominio').classList.remove('is-invalid', 'is-valid');
+                if (!valor) { el('sub_ayuda').textContent = AYUDA_SUB; el('sub_ayuda').className = 'form-text'; return; }
+                esperaSub = setTimeout(() => fetch(URL_SUB + encodeURIComponent(valor), { headers: { Accept: 'application/json' } }).then(r => r.json()).then(d => {
+                    if (el('subdominio').value !== valor) return;
+                    el('sub_ayuda').textContent = (d.ok ? '✔ ' : '✖ ') + d.mensaje;
+                    el('sub_ayuda').className = 'form-text fw-semibold ' + (d.ok ? 'text-success' : 'text-danger');
+                    el('subdominio').classList.add(d.ok ? 'is-valid' : 'is-invalid');
+                    (d.sugerencias || []).forEach(s => {
+                        const b = document.createElement('button');
+                        b.type = 'button'; b.className = 'btn btn-sm btn-outline-success'; b.textContent = s;
+                        b.onclick = () => { el('subdominio').value = s; subTocado = true; revisarSub(); };
+                        caja.appendChild(b);
+                    });
+                    if ((d.sugerencias || []).length) caja.style.removeProperty('display');
+                }).catch(() => {}), 400);
+            };
+            const ponerSugerencia = (texto) => { if (!subTocado && texto) { el('subdominio').value = sugerir(texto); revisarSub(); } };
             el('subdominio').addEventListener('input', function () {
                 subTocado = true;
                 this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+                revisarSub();
             });
             el('nombre_comercial').addEventListener('input', function () { ponerSugerencia(this.value); });
             el('contacto_telefono').addEventListener('input', function () { this.value = this.value.replace(/\D/g, ''); });

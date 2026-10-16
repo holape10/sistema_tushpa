@@ -58,8 +58,36 @@ class Tenancy
     /** Subdominios que nunca puede usar un cliente */
     public static function subdominiosReservados(): array
     {
-        return array_merge(['www', 'mail', 'ftp', 'api', 'panel', 'webmail', 'cpanel', config('tenancy.subdominio_admin')],
-            config('tenancy.principales', []));
+        return array_merge(['www', 'www2', 'mail', 'smtp', 'pop', 'imap', 'ftp', 'api', 'panel', 'webmail', 'cpanel', 'whm', 'ns1', 'ns2',
+            'admin', 'app', 'soporte', 'ayuda', 'blog', 'static', 'cdn', 'assets', 'carta', 'cartas', 'status', 'test', 'dev', 'localhost',
+            config('tenancy.subdominio_admin')], config('tenancy.principales', []));
+    }
+
+    /**
+     * ¿Se puede usar este subdominio? Para avisar en vivo mientras se escribe (panel y registro web).
+     *
+     * @return array{ok: bool, mensaje: string, sugerencias: array<int, string>}
+     */
+    public static function revisarSubdominio(string $sub, ?Cliente $actual = null): array
+    {
+        $sub = mb_strtolower(trim($sub));
+        $error = self::errorSubdominio($sub, $actual);
+
+        return ['ok' => $error === null, 'mensaje' => $error ?? "{$sub}.".config('tenancy.dominio').' está libre.',
+            'sugerencias' => $error && preg_match('/^[a-z0-9-]+$/', $sub) ? self::sugerenciasSubdominio($sub) : []];
+    }
+
+    /** @return array<int, string> Hasta 3 subdominios libres parecidos (mi-tienda → mitienda, mi-tienda-pe, mi-tienda2) */
+    public static function sugerenciasSubdominio(string $sub): array
+    {
+        $base = trim(substr(preg_replace('/[^a-z0-9-]/', '', $sub), 0, 34), '-') ?: 'empresa';
+        $candidatos = collect([str_replace('-', '', $base), $base.'-pe', $base.'-peru', $base.'-app'])
+            ->merge(collect(range(1, 9))->map(fn ($n) => $base.$n))
+            ->filter(fn ($c) => $c !== $sub && preg_match('/^(?!\d+$)[a-z0-9][a-z0-9-]*[a-z0-9]$/', $c) && ! in_array($c, self::subdominiosReservados(), true))
+            ->unique()->values();
+        $usados = Cliente::whereIn('subdominio', $candidatos)->pluck('subdominio')->map(fn ($u) => mb_strtolower($u))->all();
+
+        return $candidatos->reject(fn ($c) => in_array($c, $usados, true))->take(3)->values()->all();
     }
 
     /**
@@ -74,7 +102,8 @@ class Tenancy
         if (! preg_match('/^(?!\d+$)[a-z0-9][a-z0-9-]*[a-z0-9]$/', $sub) || strlen($sub) > 40) {
             return 'El subdominio solo lleva letras minúsculas, números y guiones (ej. demo, mi-tienda), y no puede ser solo números.';
         }
-        if (in_array($sub, self::subdominiosReservados(), true)) {
+        // Una empresa que ya lo tenía antes de reservarlo lo conserva
+        if (in_array($sub, self::subdominiosReservados(), true) && $actual?->subdominio !== $sub) {
             return "El subdominio {$sub} está reservado.";
         }
         if (Cliente::where('subdominio', $sub)->when($actual, fn ($q) => $q->where('id', '!=', $actual->id))->exists()) {

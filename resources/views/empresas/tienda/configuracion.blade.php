@@ -42,7 +42,7 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('tienda.config.guardar') }}" class="bg-white rounded-2xl shadow-sm p-5 sm:p-6 space-y-4">
+    <form method="POST" action="{{ route('tienda.config.guardar') }}" enctype="multipart/form-data" class="bg-white rounded-2xl shadow-sm p-5 sm:p-6 space-y-4">
         @csrf
         <label class="flex items-start gap-3 p-4 rounded-xl border border-indigo-200 bg-indigo-50 cursor-pointer">
             <input type="checkbox" name="tienda_activa" value="1" @checked($negocio->tienda_activa) @disabled(!$permitida) class="mt-0.5 rounded text-indigo-600">
@@ -53,6 +53,30 @@
             <input type="checkbox" name="tienda_mostrar_agotados" value="1" @checked($negocio->tienda_mostrar_agotados) class="rounded">
             Mostrar también los productos agotados (no se pueden pedir)
         </label>
+        {{-- Apariencia: portada, color de tu marca y una frase --}}
+        <div class="rounded-2xl border border-gray-200 p-4 space-y-4" x-data="{ vista: @js($negocio->tienda_banner ? asset($negocio->tienda_banner) : null), quitar: false, color: @js($negocio->tienda_color ?: '#4f46e5') }">
+            <p class="font-bold text-gray-800">🎨 Apariencia de tu tienda</p>
+            <div>
+                <p class="text-sm font-medium text-gray-700 mb-1">Foto de portada <span class="text-xs text-gray-400">(horizontal, ej. 1600 × 500)</span></p>
+                <label class="relative block h-36 rounded-xl overflow-hidden border-2 border-dashed border-gray-200 cursor-pointer hover:border-indigo-300"
+                       :style="!vista || quitar ? 'background: linear-gradient(135deg,' + color + ', #0f172a)' : ''">
+                    <img x-show="vista && !quitar" :src="vista" alt="" class="w-full h-full object-cover">
+                    <span class="absolute inset-0 flex items-center justify-center text-sm font-semibold" :class="vista && !quitar ? 'opacity-0 hover:opacity-100 bg-black/40 text-white' : 'text-white/90'">Toca para elegir la portada</span>
+                    <input type="file" name="banner" accept="image/jpeg,image/png,image/webp" class="sr-only" @change="const f = $event.target.files[0]; if (f) { vista = URL.createObjectURL(f); quitar = false; }">
+                </label>
+                @if ($negocio->tienda_banner)
+                    <label class="mt-1 inline-flex items-center gap-1.5 text-xs text-rose-600"><input type="checkbox" name="quitar_banner" value="1" x-model="quitar" class="rounded"> Quitar portada</label>
+                @endif
+            </div>
+            <div class="grid sm:grid-cols-3 gap-4">
+                <label class="block text-sm font-medium text-gray-700">Color de tu marca
+                    <span class="mt-1 flex items-center gap-2"><input type="color" name="tienda_color" x-model="color" class="h-11 w-16 rounded-lg border-gray-300 p-1">
+                        <span class="font-mono text-xs text-gray-500" x-text="color"></span></span></label>
+                <label class="block sm:col-span-2 text-sm font-medium text-gray-700">Frase de bienvenida
+                    <input name="tienda_eslogan" value="{{ old('tienda_eslogan', $negocio->tienda_eslogan) }}" maxlength="150" placeholder="Ej.: Lo mejor de la selva, directo a tu casa"
+                           class="mt-1 w-full h-11 rounded-xl border-gray-300 text-sm"></label>
+            </div>
+        </div>
         <label class="block text-sm font-medium text-gray-700">WhatsApp de la tienda
             <input name="tienda_whatsapp" value="{{ old('tienda_whatsapp', $negocio->tienda_whatsapp) }}" maxlength="20" placeholder="987654321"
                    class="mt-1 w-full sm:w-72 h-11 rounded-xl border-gray-300 text-sm">

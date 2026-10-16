@@ -13,6 +13,7 @@
 
 @section('content')
 <div class="max-w-4xl mx-auto space-y-4" x-data="{ copiado: false }">
+    @include('empresas.partials.alert')
 
     <section class="rounded-3xl overflow-hidden shadow-sm bg-gradient-to-br from-indigo-700 to-indigo-900 text-white relative isolate">
         <x-kene-adorno patron="laberinto" />
@@ -29,6 +30,10 @@
             </a>
         </div>
     </section>
+
+    @if ($puedeTickets)
+        @include('empresas.partials.soporte_tickets')
+    @endif
 
     <div class="grid sm:grid-cols-2 gap-4">
         <a href="https://wa.me/{{ $s['whatsapp'] }}?text={{ rawurlencode($mensaje) }}" target="_blank" rel="noopener"

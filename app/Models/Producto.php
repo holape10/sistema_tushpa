@@ -51,6 +51,21 @@ class Producto extends Model
         return $this->imagenproducto ? asset($this->imagenproducto) : null;
     }
 
+    /** Hasta 4 fotos por producto: la principal (imagenproducto) y 3 más */
+    public const MAX_IMAGENES = 4;
+
+    /** @return array<int, string> Rutas de las fotos adicionales (sin la principal) */
+    public function getFotosExtraAttribute(): array
+    {
+        return self::fotosExtra($this->imagenes_extra);
+    }
+
+    /** @return array<int, string> Lee la columna imagenes_extra (JSON) de un producto o de una fila de consulta */
+    public static function fotosExtra(?string $json): array
+    {
+        return array_values(array_filter((array) json_decode((string) $json, true), fn ($r) => is_string($r) && $r !== ''));
+    }
+
     public function getTipoNombreAttribute(): string
     {
         return match ((int) $this->promocion) {

@@ -15,5 +15,31 @@
         <input x-ref="imagen" type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="sr-only" @change="elegirImagen($event)">
     </label>
     <input type="hidden" name="quitar_imagen" :value="quitarImagen ? 1 : 0">
-    <p class="text-xs text-gray-400 mt-2 text-center">JPG, PNG o WEBP hasta 4 MB.</p>
+    <p class="text-xs text-gray-400 mt-2 text-center">JPG, PNG o WEBP hasta 4 MB. Esta es la foto principal.</p>
+
+    {{-- Hasta 3 fotos más (4 en total): se ven en la tienda virtual al abrir el producto --}}
+    <div class="mt-4">
+        <p class="text-sm font-semibold text-gray-700 mb-2">Más fotos <span class="text-xs font-normal text-gray-400">(hasta {{ \App\Models\Producto::MAX_IMAGENES - 1 }}, para la tienda virtual)</span></p>
+        <div class="grid grid-cols-3 gap-2">
+            <template x-for="f in fotosExtra" :key="f.ruta">
+                <div class="relative aspect-square rounded-xl overflow-hidden ring-1 ring-gray-200 bg-white">
+                    <img :src="f.url" alt="" class="w-full h-full object-cover">
+                    <button type="button" @click="quitarFotoExtra(f)" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs" title="Quitar">✕</button>
+                </div>
+            </template>
+            <template x-for="(f, i) in fotosNuevas" :key="f">
+                <div class="relative aspect-square rounded-xl overflow-hidden ring-2 ring-indigo-300 bg-white">
+                    <img :src="f" alt="" class="w-full h-full object-cover">
+                    <span class="absolute bottom-1 left-1 px-1.5 rounded bg-indigo-600 text-white text-[10px] font-bold">NUEVA</span>
+                </div>
+            </template>
+            <label x-show="fotosExtra.length + fotosNuevas.length < {{ \App\Models\Producto::MAX_IMAGENES - 1 }}"
+                   class="aspect-square rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 hover:border-indigo-300 cursor-pointer flex flex-col items-center justify-center text-gray-400 text-xs">
+                <span class="text-2xl leading-none">+</span>Agregar
+                <input x-ref="fotosExtra" type="file" name="fotos_extra[]" multiple accept="image/jpeg,image/png,image/webp" class="sr-only" @change="elegirFotosExtra($event)">
+            </label>
+        </div>
+        <template x-for="ruta in quitarExtra" :key="ruta"><input type="hidden" name="quitar_extra[]" :value="ruta"></template>
+        @error('fotos_extra')<p class="text-xs text-rose-600 mt-1">{{ $message }}</p>@enderror
+    </div>
 </section>

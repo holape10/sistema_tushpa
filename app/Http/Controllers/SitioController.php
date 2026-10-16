@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Central\Cliente;
 use App\Models\Central\Plan;
+use App\Support\Captcha;
 use App\Support\ConsultaPeru;
 use App\Support\Rubros;
 use App\Support\SeoSitio;
@@ -115,6 +116,12 @@ class SitioController extends Controller
     }
 
     /** Datos del RUC para llenar el formulario (y avisar si ya tiene cuenta) */
+    /** Aviso en vivo en el registro: ¿la dirección (subdominio) está libre? */
+    public function revisarSubdominio(string $sub): JsonResponse
+    {
+        return response()->json(Tenancy::revisarSubdominio($sub));
+    }
+
     public function consultarRuc(string $ruc): JsonResponse
     {
         if ($error = $this->errorRucTomado($ruc)) {
@@ -245,16 +252,7 @@ class SitioController extends Controller
 
     private function captchaValido(Request $request): bool
     {
-        if (! config('sitio.turnstile.secreto')) {
-            return true;
-        }
-        try {
-            return (bool) Http::asForm()->timeout(8)->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
-                'secret' => config('sitio.turnstile.secreto'), 'response' => (string) $request->input('cf-turnstile-response'), 'remoteip' => $request->ip(),
-            ])->json('success');
-        } catch (\Throwable $e) {
-            return false;
-        }
+        return Captcha::valido($request);
     }
 
     private function planes()

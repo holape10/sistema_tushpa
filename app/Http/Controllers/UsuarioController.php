@@ -6,8 +6,10 @@ use App\Models\Empleado;
 use App\Models\EmpresaNegocio;
 use App\Models\Modulo;
 use App\Models\User;
+use App\Support\ConsultaPeru;
 use App\Support\Delivery;
 use App\Support\Tenancy\Tenancy;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -107,13 +109,11 @@ class UsuarioController extends Controller
         $sucursal = (int) $request->input('id_empresa_negocio');
         $nuevo = $usuario === null;
 
-        return $request->validate([
+        $d = $request->validate([
             'id_empresa_negocio' => ['required', Rule::exists('empresa_negocios', 'id_empresa_negocio')->where('IdEmpresa', Auth::user()->IdEmpresa)],
             'tdicod' => 'required|in:1,4,7',
             'emp_num_doc' => 'nullable|string|max:15',
-            'emp_nom' => 'required|string|max:100',
-            'emp_ape_pat' => 'required|string|max:100',
-            'emp_ape_mat' => 'nullable|string|max:100',
+            'nombre_completo' => 'required|string|max:200',
             'sex_cod' => 'nullable|in:M,F',
             'emp_fec_nac' => 'nullable|date|before:today',
             'estusu' => 'required|in:0,1',
@@ -139,17 +139,31 @@ class UsuarioController extends Controller
             'codigo_movil.unique' => 'Ese código móvil ya lo tiene otro usuario de la sucursal.',
             'email.regex' => 'El usuario de acceso no puede tener espacios.',
         ], [
-            'emp_nom' => 'Nombres', 'emp_ape_pat' => 'Apellido paterno', 'email' => 'Usuario de acceso',
+            'nombre_completo' => 'Nombre completo', 'email' => 'Usuario de acceso',
             'emp_cor' => 'Correo', 'codigo_movil' => 'Código móvil', 'role_id' => 'Rol', 'password' => 'Contraseña',
             'id_empresa_negocio' => 'Sucursal', 'emp_fec_nac' => 'Fecha de nacimiento', 'foto' => 'Foto',
         ]);
+
+        // El nombre completo va en una sola línea (nombres y apellidos juntos)
+        $d['nombre_completo'] = mb_strtoupper(trim(preg_replace('/\s+/', ' ', $d['nombre_completo'])));
+
+        return $d;
+    }
+
+    /** Nombre del DNI desde RENIEC (consultas.holape.app y, de respaldo, apiperu.dev) */
+    public function consultarDni(string $dni): JsonResponse
+    {
+        $this->autorizar();
+        $r = ConsultaPeru::dni($dni);
+
+        return $r ? response()->json(['ok' => true, 'nombre' => mb_strtoupper($r['nombre'])])
+            : response()->json(['ok' => false, 'mensaje' => 'No se encontró el DNI. Escribe el nombre a mano.']);
     }
 
     private function datosEmpleado(array $d): array
     {
         return [
-            'emp_nom' => mb_strtoupper(trim($d['emp_nom'])), 'emp_ape_pat' => mb_strtoupper(trim($d['emp_ape_pat'])),
-            'emp_ape_mat' => mb_strtoupper(trim($d['emp_ape_mat'] ?? '')), 'tdicod' => $d['tdicod'],
+            'emp_nom' => $d['nombre_completo'], 'emp_ape_pat' => '', 'emp_ape_mat' => '', 'tdicod' => $d['tdicod'],
             'emp_num_doc' => $d['emp_num_doc'] ?? null, 'sex_cod' => $d['sex_cod'] ?? null,
             'emp_fec_nac' => $d['emp_fec_nac'] ?? null, 'emp_tel' => $d['emp_tel'] ?? null, 'emp_cel' => $d['emp_cel'] ?? null,
             'emp_cor' => $d['emp_cor'] ?? null, 'emp_dir' => $d['emp_dir'] ?? null,
@@ -160,7 +174,7 @@ class UsuarioController extends Controller
 
     private function nombreCompleto(array $d): string
     {
-        return mb_strtoupper(trim($d['emp_nom'].' '.$d['emp_ape_pat'].' '.($d['emp_ape_mat'] ?? '')));
+        return $d['nombre_completo'];
     }
 
     /** Foto del trabajador en public/imagenes/empleados/{RUC}/ (se ve en el kiosko de asistencia); borra la anterior */
@@ -201,7 +215,7 @@ class UsuarioController extends Controller
             $empleado = Empleado::create($this->datosEmpleado($d));
 
             $usuario = User::create([
-                'name' => mb_strtoupper(trim($d['emp_nom'])),
+                'name' => strtok($d['nombre_completo'], ' '),
                 'apeusu' => $this->nombreCompleto($d),
                 'email' => trim($d['email']),
                 'codigo_movil' => $d['codigo_movil'] ?? null,
@@ -258,7 +272,7 @@ class UsuarioController extends Controller
             }
 
             $usuario->fill([
-                'name' => mb_strtoupper(trim($d['emp_nom'])), 'apeusu' => $this->nombreCompleto($d),
+                'name' => strtok($d['nombre_completo'], ' '), 'apeusu' => $this->nombreCompleto($d),
                 'email' => trim($d['email']), 'codigo_movil' => $d['codigo_movil'] ?? null,
                 'estusu' => (int) $d['estusu'], 'id_empresa_negocio' => $d['id_empresa_negocio'],
             ]);

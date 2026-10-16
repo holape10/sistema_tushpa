@@ -44,12 +44,15 @@ class Tienda
             ->leftJoin('producto_stock as s', fn ($j) => $j->on('s.IdProducto', '=', 'p.IdProducto')->where('s.id_almacen', $almacen))
             ->where('p.id_empresa_negocio', $negocio->id_empresa_negocio)->where('p.proest', 'Activo')->whereNotIn('p.promocion', Producto::NO_VENDIBLES)
             ->orderBy('p.pronom')
-            ->get(['p.IdProducto', 'p.pronom', 'p.propun', 'p.cat_id', 'p.promocion', 'p.umecod', 'p.imagenproducto', 's.stock']);
+            ->get(['p.IdProducto', 'p.pronom', 'p.propun', 'p.cat_id', 'p.promocion', 'p.umecod', 'p.imagenproducto', 'p.imagenes_extra', 'p.descripcion', 's.stock']);
         $precios = Precios::vigentes($filas);
 
         $productos = $filas->map(fn ($p) => [
             'id' => $p->IdProducto, 'nombre' => $p->pronom, 'precio' => $precios[$p->IdProducto], 'normal' => (float) $p->propun,
             'cat' => $p->cat_id, 'img' => $p->imagenproducto ? asset($p->imagenproducto) : null,
+            // Galería: la principal y hasta 3 más
+            'imgs' => array_map('asset', array_values(array_filter(array_merge([$p->imagenproducto], Producto::fotosExtra($p->imagenes_extra))))),
+            'desc' => trim((string) $p->descripcion),
             // Preparados y combos no llevan stock propio: siempre disponibles
             'stock' => (int) $p->promocion === 0 ? max(0, (float) ($p->stock ?? 0)) : null,
         ])->filter(fn ($p) => $p['precio'] > 0)

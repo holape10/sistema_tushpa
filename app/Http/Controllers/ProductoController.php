@@ -73,6 +73,9 @@ class ProductoController extends Controller
             'ume_equivalente' => 'nullable|exists:unidad_medida,umecod',
             'factor_equivalente' => 'nullable|required_with:ume_equivalente|numeric|min:0.0001|max:99999999',
             'imagen' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+            'fotos_extra' => 'nullable|array|max:'.(Producto::MAX_IMAGENES - 1),
+            'fotos_extra.*' => 'image|mimes:jpg,jpeg,png,webp|max:4096',
+            'quitar_extra' => 'nullable|array',
             'presentaciones' => 'nullable|array|max:20',
             'presentaciones.*.id' => 'nullable|integer',
             'presentaciones.*.umecod' => 'required|exists:unidad_medida,umecod',
@@ -90,7 +93,7 @@ class ProductoController extends Controller
 
     private const NOMBRES = [
         'pronom' => 'Nombre del producto', 'debe' => 'Cuenta Debe', 'haber' => 'Cuenta Haber', 'propun' => 'Precio de venta', 'promocion' => 'Tipo', 'codigo_barra' => 'Código de barras',
-        'ume_equivalente' => 'Unidad equivalente', 'factor_equivalente' => 'Factor de equivalencia', 'imagen' => 'Imagen',
+        'ume_equivalente' => 'Unidad equivalente', 'factor_equivalente' => 'Factor de equivalencia', 'imagen' => 'Imagen', 'fotos_extra' => 'Más fotos', 'fotos_extra.*' => 'Foto',
         'presentaciones.*.umecod' => 'Unidad de la presentación', 'presentaciones.*.factor' => 'Factor de la presentación',
         'presentaciones.*.precio' => 'Precio de la presentación', 'presentaciones.*.codigo_barra' => 'Código de barras de la presentación',
         'precios.*.dia' => 'Día del precio dinámico', 'precios.*.hora_inicio' => 'Hora inicio del precio dinámico',
@@ -151,6 +154,30 @@ class ProductoController extends Controller
         }
         if ($anterior && str_starts_with($anterior, 'imagenes/productos/') && is_file(public_path($anterior))) {
             @unlink(public_path($anterior));
+        }
+    }
+
+    /** Fotos adicionales (hasta 3 más la principal): quita las marcadas y agrega las nuevas sin pasar el máximo */
+    private function guardarFotosExtra(Request $request, Producto $producto): void
+    {
+        $actuales = $producto->fotos_extra;
+        $quitar = array_intersect($actuales, (array) $request->input('quitar_extra', []));
+        $quedan = array_values(array_diff($actuales, $quitar));
+        $libres = Producto::MAX_IMAGENES - 1 - count($quedan);
+        $carpeta = 'imagenes/productos/'.preg_replace('/\D/', '', (string) Auth::user()->IdEmpresa);
+        foreach (array_slice($request->file('fotos_extra', []), 0, max(0, $libres)) as $archivo) {
+            $nombre = $producto->IdProducto.'_'.uniqid().'.'.strtolower($archivo->guessExtension() ?: 'jpg');
+            $archivo->move(public_path($carpeta), $nombre);
+            $quedan[] = $carpeta.'/'.$nombre;
+        }
+        if ($quedan === $actuales) {
+            return;
+        }
+        $producto->update(['imagenes_extra' => $quedan ? json_encode($quedan) : null]);
+        foreach ($quitar as $ruta) {
+            if (str_starts_with($ruta, 'imagenes/productos/') && is_file(public_path($ruta))) {
+                @unlink(public_path($ruta));
+            }
         }
     }
 
@@ -282,6 +309,7 @@ class ProductoController extends Controller
 
             $this->guardarExtras($request, $producto);
             $this->guardarImagen($request, $producto);
+            $this->guardarFotosExtra($request, $producto);
         });
 
         return redirect()->route('productos.index')->with('success', 'Registrado correctamente.');
@@ -354,6 +382,7 @@ class ProductoController extends Controller
 
             $this->guardarExtras($request, $producto);
             $this->guardarImagen($request, $producto);
+            $this->guardarFotosExtra($request, $producto);
         });
 
         return redirect()->route('productos.index')->with('success', 'Actualizado correctamente.'.$aviso);

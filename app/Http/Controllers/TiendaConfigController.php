@@ -35,7 +35,12 @@ class TiendaConfigController extends Controller
     {
         $this->autorizar();
         abort_unless(Tienda::permitidaPorPlan(), 403, 'Tu plan no incluye tienda virtual.');
-        $d = $request->validate(['tienda_whatsapp' => 'nullable|string|max:20', 'tienda_mensaje' => 'nullable|string|max:2000']);
+        $d = $request->validate([
+            'tienda_whatsapp' => 'nullable|string|max:20', 'tienda_mensaje' => 'nullable|string|max:2000',
+            'tienda_eslogan' => 'nullable|string|max:150', 'tienda_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'banner' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+        ], [], ['tienda_eslogan' => 'frase', 'tienda_color' => 'color', 'banner' => 'portada']);
+        unset($d['banner']);
         $activa = $request->boolean('tienda_activa');
         $suc = Auth::user()->id_empresa_negocio;
         // Una sola sucursal publica la tienda
@@ -44,8 +49,29 @@ class TiendaConfigController extends Controller
         }
         EmpresaNegocio::where('id_empresa_negocio', $suc)->update($d + [
             'tienda_activa' => $activa, 'tienda_mostrar_agotados' => $request->boolean('tienda_mostrar_agotados'),
-        ]);
+        ] + $this->portada($request, $suc));
 
         return back()->with('success', $activa ? 'Tienda virtual publicada.' : 'Tienda virtual desactivada.');
+    }
+
+    /** Foto de portada de la tienda en public/imagenes/tienda/{RUC}/ (borra la anterior) */
+    private function portada(Request $request, int $suc): array
+    {
+        $anterior = EmpresaNegocio::where('id_empresa_negocio', $suc)->value('tienda_banner');
+        if ($request->hasFile('banner')) {
+            $carpeta = 'imagenes/tienda/'.preg_replace('/\D/', '', (string) Auth::user()->IdEmpresa);
+            $nombre = 'portada_'.uniqid().'.'.strtolower($request->file('banner')->guessExtension() ?: 'jpg');
+            $request->file('banner')->move(public_path($carpeta), $nombre);
+            $nueva = $carpeta.'/'.$nombre;
+        } elseif ($request->boolean('quitar_banner')) {
+            $nueva = null;
+        } else {
+            return [];
+        }
+        if ($anterior && str_starts_with($anterior, 'imagenes/tienda/') && is_file(public_path($anterior))) {
+            @unlink(public_path($anterior));
+        }
+
+        return ['tienda_banner' => $nueva];
     }
 }

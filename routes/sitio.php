@@ -2,6 +2,7 @@
 
 // Web pública del dominio principal (tushpa.app). Se carga desde routes/web.php solo con el multi-empresa activo.
 
+use App\Http\Controllers\CartaWebController;
 use App\Http\Controllers\SitioController;
 use App\Support\SeoSitio;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +24,17 @@ Route::get('/registro', [SitioController::class, 'registro'])->name('registro');
 Route::post('/registro', [SitioController::class, 'registrar'])->middleware('throttle:6,10,sitio-registro')->name('registrar');
 Route::get('/registro/ruc/{ruc}', [SitioController::class, 'consultarRuc'])->where('ruc', '(10|15|17|20)\d{9}')
     ->middleware('throttle:20,1,sitio-ruc')->name('registro.ruc');
+Route::get('/registro/subdominio/{sub}', [SitioController::class, 'revisarSubdominio'])->where('sub', '[A-Za-z0-9-]{1,40}')
+    ->middleware('throttle:40,1,sitio-subdominio')->name('registro.subdominio');
 Route::get('/registro/listo/{cliente}', [SitioController::class, 'listo'])->whereNumber('cliente')->middleware('signed')->name('registro.listo');
 Route::get('/registro/listo/{cliente}/https', [SitioController::class, 'estadoHttps'])->whereNumber('cliente')
     ->middleware(['signed', 'throttle:60,1,sitio-https'])->name('registro.https');
+
+// Crea tu carta: carta digital gratis con foto, diseño, enlace y QR (tushpa.app/c/su-negocio)
+Route::get('/crea-tu-carta', [CartaWebController::class, 'crear'])->name('carta.crear');
+Route::post('/crea-tu-carta', [CartaWebController::class, 'guardar'])->middleware('throttle:5,60,sitio-carta')->name('carta.guardar');
+Route::post('/crea-tu-carta/recuperar', [CartaWebController::class, 'recuperar'])->middleware('throttle:3,10,sitio-carta-recuperar')->name('carta.recuperar');
+Route::get('/crea-tu-carta/{slug}/lista', [CartaWebController::class, 'lista'])->where('slug', '[a-z0-9-]+')->name('carta.lista');
+Route::get('/crea-tu-carta/{slug}/editar', [CartaWebController::class, 'editar'])->where('slug', '[a-z0-9-]+')->name('carta.editar');
+Route::post('/crea-tu-carta/{slug}/editar', [CartaWebController::class, 'actualizar'])->where('slug', '[a-z0-9-]+')->middleware('throttle:20,10')->name('carta.actualizar');
+Route::get('/c/{slug}', [CartaWebController::class, 'ver'])->where('slug', '[a-z0-9-]+')->name('carta.ver');

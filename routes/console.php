@@ -2,7 +2,9 @@
 
 use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
+use App\Models\User;
 use App\Support\Antiguo\CargadorSql;
+use App\Support\DemoDatos;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Foundation\Inspiring;
@@ -51,6 +53,28 @@ Artisan::command('superadmin:crear', function () {
     Superadmin::create(compact('nombre', 'email', 'password'));
     $this->info('Listo. Entra en '.config('tenancy.esquema').'://'.config('tenancy.subdominio_admin').'.'.(config('tenancy.dominio') ?: 'TU_DOMINIO').'/'.config('tenancy.ruta_admin'));
 })->purpose('Crea un usuario del panel multi-empresa');
+
+Artisan::command('demo:cargar {cuenta=demos : Subdominio o RUC de la empresa demo}', function (string $cuenta) {
+    $cliente = Cliente::where('subdominio', $cuenta)->orWhere('ruc', $cuenta)->first();
+    if (! $cliente) {
+        $this->error("No hay una empresa con el subdominio o RUC {$cuenta}.");
+
+        return 1;
+    }
+    Tenancy::conectar($cliente->base_datos);
+    $admin = User::where('estusu', 1)->orderBy('IdUsuario')->get()->first(fn ($u) => $u->esAdmin());
+    if (! $admin) {
+        $this->error('La empresa no tiene un usuario administrador activo.');
+
+        return 1;
+    }
+    $this->info("Cargando datos de ejemplo en {$cliente->razon_social} ({$cliente->base_datos})…");
+    $resumen = (new DemoDatos($admin))->cargar();
+    foreach ($resumen as $que => $n) {
+        $this->line("  + {$n} {$que}");
+    }
+    $this->info($resumen ? 'Listo.' : 'Ya tenía todos los datos de ejemplo: no se agregó nada.');
+})->purpose('Carga productos, clientes y datos de todos los rubros en la empresa demo (se puede repetir sin duplicar)');
 
 Artisan::command('clientes:migrar {--ruc= : Solo este cliente}', function () {
     $clientes = Cliente::query()

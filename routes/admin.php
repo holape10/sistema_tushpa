@@ -6,7 +6,9 @@ use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\RespaldoController;
+use App\Http\Controllers\Admin\TicketController;
 use App\Http\Controllers\Admin\UsuarioController;
+use App\Http\Controllers\Admin\VisitaController;
 use App\Http\Middleware\PanelActivo;
 use Illuminate\Support\Facades\Route;
 
@@ -45,10 +47,18 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/mensajes/{id}/atendido', [ClienteController::class, 'mensajeWebAtendido'])->whereNumber('id')->name('mensajes.atendido');
     Route::get('/planes', [ClienteController::class, 'planesIndex'])->name('planes.index');
     Route::post('/planes/{plan?}', [ClienteController::class, 'planesGuardar'])->whereNumber('plan')->name('planes.guardar');
+    Route::get('/visitas', [VisitaController::class, 'index'])->name('visitas.index');
+    Route::post('/cartas/{id}/estado', [VisitaController::class, 'cartaEstado'])->whereNumber('id')->name('cartas.estado');
+    Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
+    Route::get('/tickets/{id}', [TicketController::class, 'show'])->whereNumber('id')->name('tickets.show');
+    Route::post('/tickets/{id}/responder', [TicketController::class, 'responder'])->whereNumber('id')->name('tickets.responder');
+    Route::post('/tickets/{id}/estado', [TicketController::class, 'estado'])->whereNumber('id')->name('tickets.estado');
+    Route::get('/tickets/{id}/archivo/{mensaje}/{n}', [TicketController::class, 'archivo'])->whereNumber(['id', 'mensaje', 'n'])->name('tickets.archivo');
     Route::get('/usuarios', [UsuarioController::class, 'index'])->name('usuarios.index');
     Route::post('/usuarios', [UsuarioController::class, 'store'])->name('usuarios.store');
     Route::post('/usuarios/{usuario}/permiso', [UsuarioController::class, 'permiso'])->whereNumber('usuario')->name('usuarios.permiso');
     Route::post('/usuarios/{usuario}/estado', [UsuarioController::class, 'estado'])->whereNumber('usuario')->name('usuarios.estado');
     Route::post('/usuarios/{usuario}/clave', [UsuarioController::class, 'clave'])->whereNumber('usuario')->name('usuarios.clave');
+    Route::get('/subdominio/{sub}', [ClienteController::class, 'revisarSubdominio'])->where('sub', '[A-Za-z0-9-]{1,40}')->name('subdominio');
     Route::get('/ruc/{ruc}', [ClienteController::class, 'consultarRuc'])->where('ruc', '\d{11}')->name('ruc');
 });

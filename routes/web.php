@@ -62,6 +62,7 @@ use App\Http\Controllers\SerieController;
 use App\Http\Controllers\SireController;
 use App\Http\Controllers\SocioController;
 use App\Http\Controllers\SocioPortalController;
+use App\Http\Controllers\SoporteController;
 use App\Http\Controllers\SucursalController;
 use App\Http\Controllers\SunatController;
 use App\Http\Controllers\TiendaConfigController;
@@ -74,10 +75,11 @@ use App\Http\Controllers\TurnoController;
 use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\VentaController;
 use App\Http\Controllers\VentaMasivaController;
+use App\Http\Middleware\RegistrarVisita;
 
 // Web pública del dominio principal (tushpa.app): va primero para que "/" de ese dominio sea la web y no el login
 if ($dominioSitio = config('tenancy.dominio')) {
-    Route::domain($dominioSitio)->name('sitio.')->group(base_path('routes/sitio.php'));
+    Route::domain($dominioSitio)->name('sitio.')->middleware(RegistrarVisita::class)->group(base_path('routes/sitio.php'));
 }
 
 Route::get('/', function () {
@@ -408,7 +410,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/concar/{libro}/excel', [ConcarController::class, 'descargar'])->whereIn('libro', ['ventas', 'compras'])->name('concar.excel');
 
     // Soporte: contacto del proveedor del sistema (todos los usuarios)
-    Route::view('/soporte', 'empresas.soporte')->name('soporte');
+    Route::get('/soporte', [SoporteController::class, 'index'])->name('soporte');
+    // Tickets de soporte (administrador): van al panel admin de quien creó la empresa
+    Route::post('/soporte/tickets', [SoporteController::class, 'store'])->middleware('throttle:10,10')->name('soporte.store');
+    Route::get('/soporte/tickets/{id}', [SoporteController::class, 'show'])->whereNumber('id')->name('soporte.ticket');
+    Route::post('/soporte/tickets/{id}/responder', [SoporteController::class, 'responder'])->whereNumber('id')->middleware('throttle:30,10')->name('soporte.responder');
+    Route::post('/soporte/tickets/{id}/cerrar', [SoporteController::class, 'cerrar'])->whereNumber('id')->name('soporte.cerrar');
+    Route::get('/soporte/tickets/{id}/archivo/{mensaje}/{n}', [SoporteController::class, 'archivo'])->whereNumber(['id', 'mensaje', 'n'])->name('soporte.archivo');
 
     // SIRE (SUNAT): credenciales, propuesta RVIE/RCE y cuadre con el sistema
     Route::get('/sire/credenciales', [SireController::class, 'credenciales'])->name('sire.credenciales');
@@ -729,6 +737,7 @@ Route::middleware('auth')->group(function () {
     Route::resource('mesas', MesaController::class)->except('show');
     Route::resource('pisos', PisoController::class)->except('show');
     Route::resource('mediospagos', MedioPagoController::class)->except('show')->parameters(['mediospagos' => 'medioPago']);
+    Route::get('/usuarios/dni/{dni}', [UsuarioController::class, 'consultarDni'])->where('dni', '\d{8}')->middleware('throttle:20,1')->name('usuarios.dni');
     Route::resource('usuarios', UsuarioController::class)->except('show');
 });
 

@@ -58,14 +58,32 @@
                             <option value="{{ $d->tdicod }}" @selected($v('tdicod', '1') == $d->tdicod)>{{ $d->tdides }}</option>
                         @endforeach
                     </select></label>
-                <label class="text-sm">N° documento
-                    <input name="emp_num_doc" value="{{ $v('emp_num_doc') }}" maxlength="15" placeholder="DNI / CE" class="{{ $in }}"></label>
-                <label class="text-sm">Nombres *
-                    <input name="emp_nom" value="{{ $v('emp_nom') }}" required maxlength="100" class="{{ $in }} uppercase"></label>
-                <label class="text-sm">Apellido paterno *
-                    <input name="emp_ape_pat" value="{{ $v('emp_ape_pat') }}" required maxlength="100" class="{{ $in }} uppercase"></label>
-                <label class="text-sm">Apellido materno
-                    <input name="emp_ape_mat" value="{{ $v('emp_ape_mat') }}" maxlength="100" class="{{ $in }} uppercase"></label>
+                {{-- N° de documento con búsqueda en RENIEC y el nombre completo en una sola línea --}}
+                <div class="sm:col-span-2 lg:col-span-4 grid sm:grid-cols-3 gap-4"
+                     x-data="{ dni: @js((string) $v('emp_num_doc')), nombre: @js((string) old('nombre_completo', $empleado ? trim(preg_replace('/\s+/', ' ', $empleado->emp_nom.' '.$empleado->emp_ape_pat.' '.$empleado->emp_ape_mat)) : '')),
+                               buscando: false, aviso: '',
+                               async buscarDni() {
+                                   this.aviso = '';
+                                   if (!/^\d{8}$/.test(this.dni)) { this.aviso = 'El DNI tiene 8 números.'; return; }
+                                   this.buscando = true;
+                                   try {
+                                       const r = await (await fetch('{{ url('/usuarios/dni') }}/' + this.dni, { headers: { Accept: 'application/json' } })).json();
+                                       if (r.ok) { this.nombre = r.nombre; } else { this.aviso = r.mensaje; }
+                                   } catch (e) { this.aviso = 'No se pudo consultar. Escribe el nombre a mano.'; }
+                                   this.buscando = false;
+                               } }">
+                    <label class="text-sm">N° documento
+                        <div class="flex gap-1.5">
+                            <input name="emp_num_doc" x-model="dni" maxlength="15" placeholder="DNI / CE" inputmode="numeric" class="{{ $in }}"
+                                   @keydown.enter.prevent="buscarDni()" @input="dni.length === 8 && /^\d{8}$/.test(dni) && !nombre && buscarDni()">
+                            <button type="button" @click="buscarDni()" :disabled="buscando" title="Buscar el nombre en RENIEC"
+                                    class="mt-1 px-3 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap">
+                                <i class="fas" :class="buscando ? 'fa-spinner fa-spin' : 'fa-magnifying-glass'"></i></button>
+                        </div>
+                        <span x-show="aviso" x-text="aviso" class="block text-xs text-amber-700 mt-1"></span></label>
+                    <label class="text-sm sm:col-span-2">Nombre completo *
+                        <input name="nombre_completo" x-model="nombre" required maxlength="200" placeholder="Nombres y apellidos" class="{{ $in }} uppercase"></label>
+                </div>
                 <label class="text-sm">Género
                     <select name="sex_cod" class="{{ $in }}">
                         <option value="">—</option>
