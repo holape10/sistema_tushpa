@@ -57,19 +57,20 @@ class TratamientoClinicoController extends Controller
                 ->select('tra_id', DB::raw('SUM(adelanto) as pagado'), DB::raw('MAX(fecha_hora) as ultima'), DB::raw('COUNT(*) as sesiones')), 'r', 'r.tra_id', '=', 't.tra_id')
             ->where('t.id_empresa_negocio', $suc)
             ->orderByRaw("t.estado = 'CANCELADO'")->orderByDesc(DB::raw('COALESCE(r.ultima, t.creado)'))
-            ->get(['t.*', 'e.esp_des', 'h.his_cli_cod', 'h.tipo', 'h.mascota', 'c.clinom', 'c.clinum', 'r.pagado', 'r.ultima', 'r.sesiones'])
+            ->get(['t.*', 'e.esp_des', 'h.his_cli_cod', 'h.tipo', 'h.mascota', 'c.clinom', 'c.clinum', 'c.telefono', 'r.pagado', 'r.ultima', 'r.sesiones'])
             ->map(function ($t) {
                 $t->paciente = Clinica::nombre($t);
                 $t->pagado = round((float) $t->pagado, 2);
                 $t->saldo = round((float) $t->costo - $t->pagado, 2);
                 $t->sesiones = (int) $t->sesiones;
 
-                return $t;
+                return Clinica::conCuotas($t);
             });
 
         return view('empresas.clinica.tratamientos', [
             'tratamientos' => $tratamientos,
             'especialidades' => DB::table('especialidad')->where('id_empresa_negocio', $suc)->where('activo', 1)->orderBy('esp_des')->get(['esp_id', 'esp_des']),
+            'negocio' => (string) DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('nombre_comercial'),
         ]);
     }
 
@@ -97,16 +98,16 @@ class TratamientoClinicoController extends Controller
         $this->usa();
         abort_unless(DB::table('historia_clinica')->where('his_cli_id', $hisId)->where('id_empresa_negocio', $this->suc())->exists(), 404);
         $d = $request->validate([
-            'descripcion' => 'required|string|max:200', 'esp_id' => 'nullable|integer', 'costo' => 'required|numeric|min:0|max:999999',
+            'descripcion' => 'required|string|max:200', 'esp_id' => 'nullable|integer', 'costo' => 'required_unless:modalidad,MENSUAL|nullable|numeric|min:0|max:999999',
             'detalle' => 'nullable|string|max:3000', 'adelanto' => 'nullable|numeric|min:0|max:999999', 'firma' => 'nullable|string|max:600000',
-        ], [], ['descripcion' => 'tratamiento', 'costo' => 'costo total']);
+        ] + self::REGLAS_PLAN, [], self::NOMBRES_PLAN + ['descripcion' => 'tratamiento', 'costo' => 'costo total']);
 
         return $this->json(function () use ($hisId, $d) {
             $user = Auth::user();
             $espId = ! empty($d['esp_id']) && DB::table('especialidad')->where('esp_id', $d['esp_id'])->where('id_empresa_negocio', $this->suc())->exists()
                 ? (int) $d['esp_id'] : null;
-            $id = DB::table('clinica_tratamientos')->insertGetId([
-                'his_cli_id' => $hisId, 'esp_id' => $espId, 'descripcion' => mb_strtoupper(trim($d['descripcion'])), 'costo' => round((float) $d['costo'], 2),
+            $id = DB::table('clinica_tratamientos')->insertGetId(self::plan($d) + [
+                'his_cli_id' => $hisId, 'esp_id' => $espId, 'descripcion' => mb_strtoupper(trim($d['descripcion'])),
                 'doctor' => Clinica::esDoctor($user) ? $user->IdUsuario : null, 'IdUsuario' => $user->IdUsuario,
                 'id_empresa_negocio' => $this->suc(), 'creado' => now(),
             ]);
@@ -127,18 +128,20 @@ class TratamientoClinicoController extends Controller
     {
         $this->usa();
         $tra = $this->tratamiento($id);
-        $d = $request->validate(['descripcion' => 'required|string|max:200', 'esp_id' => 'nullable|integer', 'costo' => 'required|numeric|min:0|max:999999'],
-            [], ['descripcion' => 'tratamiento', 'costo' => 'costo total']);
+        $d = $request->validate(['descripcion' => 'required|string|max:200', 'esp_id' => 'nullable|integer',
+            'costo' => 'required_unless:modalidad,MENSUAL|nullable|numeric|min:0|max:999999'] + self::REGLAS_PLAN,
+            [], self::NOMBRES_PLAN + ['descripcion' => 'tratamiento', 'costo' => 'costo total']);
 
         return $this->json(function () use ($tra, $d) {
             $pagado = (float) DB::table('clinica_tratamiento_registros')->where('tra_id', $tra->tra_id)->sum('adelanto');
-            $costo = round((float) $d['costo'], 2);
+            $plan = self::plan($d);
+            $costo = $plan['costo'];
             if ($costo < $pagado) {
                 throw new \RuntimeException('El costo no puede ser menor que lo ya pagado (S/ '.number_format($pagado, 2).').');
             }
             $saldo = round($costo - $pagado, 2);
-            DB::table('clinica_tratamientos')->where('tra_id', $tra->tra_id)->update([
-                'descripcion' => mb_strtoupper(trim($d['descripcion'])), 'costo' => $costo,
+            DB::table('clinica_tratamientos')->where('tra_id', $tra->tra_id)->update($plan + [
+                'descripcion' => mb_strtoupper(trim($d['descripcion'])),
                 'esp_id' => ! empty($d['esp_id']) && DB::table('especialidad')->where('esp_id', $d['esp_id'])->where('id_empresa_negocio', $this->suc())->exists() ? (int) $d['esp_id'] : null,
             ] + ($saldo <= 0 && $costo > 0 ? ['estado' => 'CANCELADO', 'cancelado' => $tra->cancelado ?? now()] : ['estado' => 'EN CURSO', 'cancelado' => null]));
 
@@ -207,6 +210,30 @@ class TratamientoClinicoController extends Controller
         }
 
         return view('empresas.clinica.tratamientos_imprimir', ['h' => $h, 'negocio' => $n, 'tratamientos' => $tratamientos]);
+    }
+
+    /** Plan de pago: único (con adelantos libres) o mensual (ortodoncia: inicial + N cuotas desde una fecha) */
+    private const REGLAS_PLAN = [
+        'modalidad' => 'nullable|in:UNICO,MENSUAL',
+        'cuota_inicial' => 'nullable|numeric|min:0|max:999999',
+        'cuotas' => 'required_if:modalidad,MENSUAL|nullable|integer|min:1|max:120',
+        'cuota' => 'required_if:modalidad,MENSUAL|nullable|numeric|min:0.01|max:999999',
+        'primer_vencimiento' => 'required_if:modalidad,MENSUAL|nullable|date',
+    ];
+
+    private const NOMBRES_PLAN = ['cuota_inicial' => 'cuota inicial', 'cuotas' => 'número de meses', 'cuota' => 'cuota mensual', 'primer_vencimiento' => 'fecha de la primera cuota'];
+
+    /** Columnas del plan; en el mensual el costo total es la inicial más las cuotas */
+    private static function plan(array $d): array
+    {
+        if (($d['modalidad'] ?? 'UNICO') !== 'MENSUAL') {
+            return ['modalidad' => 'UNICO', 'costo' => round((float) ($d['costo'] ?? 0), 2), 'cuota_inicial' => 0, 'cuotas' => 0, 'cuota' => 0, 'primer_vencimiento' => null];
+        }
+        $inicial = round((float) ($d['cuota_inicial'] ?? 0), 2);
+        $cuota = round((float) $d['cuota'], 2);
+
+        return ['modalidad' => 'MENSUAL', 'cuota_inicial' => $inicial, 'cuotas' => (int) $d['cuotas'], 'cuota' => $cuota,
+            'primer_vencimiento' => $d['primer_vencimiento'], 'costo' => round($inicial + (int) $d['cuotas'] * $cuota, 2)];
     }
 
     private function registro(int $reg): object

@@ -41,7 +41,8 @@
                 @foreach ($especialidades as $e)<option value="{{ $e->esp_id }}">{{ $e->esp_des }}</option>@endforeach
             </select>
             <select x-model="estado" class="rounded-lg border-gray-300 text-sm">
-                <option value="">En curso y cancelados</option><option value="EN CURSO">Solo en curso (con saldo)</option><option value="CANCELADO">Solo cancelados</option>
+                <option value="">En curso y cancelados</option><option value="EN CURSO">Solo en curso (con saldo)</option>
+                <option value="VENCIDAS">⚠ Con cuotas vencidas</option><option value="CANCELADO">Solo cancelados</option>
             </select>
         </div>
 
@@ -56,7 +57,11 @@
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-2"><span class="font-semibold" x-text="t.paciente"></span>
                                 <span class="block text-xs text-gray-400" x-text="t.his_cli_cod + ' · DNI ' + t.clinum"></span></td>
-                            <td class="px-4 py-2"><span x-text="t.descripcion"></span><span class="block text-xs text-teal-700 font-semibold" x-text="t.esp_des || ''"></span></td>
+                            <td class="px-4 py-2"><span x-text="t.descripcion"></span><span class="block text-xs text-teal-700 font-semibold" x-text="t.esp_des || ''"></span>
+                                <template x-if="t.modalidad === 'MENSUAL' && t.estado !== 'CANCELADO'">
+                                    <span class="block text-xs font-semibold" :class="Number(t.vencido) > 0 ? 'text-rose-600' : 'text-indigo-700'"
+                                          x-text="Number(t.vencido) > 0 ? '⚠ Debe ' + soles(t.vencido) + ' vencido' : (t.proxima ? '📅 ' + t.proxima.etiqueta + ' · ' + soles(t.proxima.falta) : '')"></span>
+                                </template></td>
                             <td class="px-4 py-2 text-right" x-text="soles(t.costo)"></td>
                             <td class="px-4 py-2 text-right text-emerald-700" x-text="soles(t.pagado)"></td>
                             <td class="px-4 py-2 text-right">
@@ -64,7 +69,10 @@
                                 <span x-show="t.estado === 'CANCELADO'" class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">CANCELADO</span>
                             </td>
                             <td class="px-4 py-2 text-xs text-gray-500" x-text="t.ultima ? new Date(String(t.ultima).replace(' ', 'T')).toLocaleDateString('es-PE') + ' · ' + t.sesiones + ' sesión(es)' : 'sin sesiones'"></td>
-                            <td class="px-4 py-2 text-right"><button type="button" @click="abrir(t.his_cli_id, t.paciente)" class="px-3 py-1 rounded-lg bg-teal-600 text-white text-xs font-bold whitespace-nowrap">Ver / registrar</button></td>
+                            <td class="px-4 py-2 text-right whitespace-nowrap">
+                                <a x-show="recordatorio(t)" :href="recordatorio(t)" target="_blank" rel="noopener" title="Recordarle el pago por WhatsApp"
+                                   class="px-2 py-1 rounded-lg bg-green-600 text-white text-xs font-bold"><i class="fab fa-whatsapp"></i></a>
+                                <button type="button" @click="abrir(t.his_cli_id, t.paciente)" class="px-3 py-1 rounded-lg bg-teal-600 text-white text-xs font-bold">Ver / registrar</button></td>
                         </tr>
                     </template>
                     <tr x-show="!filtrados.length"><td colspan="7" class="px-4 py-8 text-center text-gray-400">Sin tratamientos con esos filtros.</td></tr>
@@ -91,9 +99,22 @@
             return {
                 todos: @js($tratamientos->values()), texto: '', esp: '', estado: '', paciente: null, buscaPaciente: '', sugerencias: [],
                 soles: n => 'S/ ' + (Number(n) || 0).toFixed(2),
+                // Recordatorio por WhatsApp: cuotas vencidas, o la próxima cuota si vence en los próximos 3 días
+                recordatorio(t) {
+                    const cel = String(t.telefono || '').replace(/\D/g, '');
+                    if (!cel || t.estado === 'CANCELADO' || t.modalidad !== 'MENSUAL') return '';
+                    const pronto = t.proxima && (new Date(t.proxima.vence + 'T00:00') - new Date()) / 86400000 <= 3;
+                    if (!(Number(t.vencido) > 0) && !pronto) return '';
+                    const negocio = @js($negocio ?? '');
+                    const texto = Number(t.vencido) > 0
+                        ? `Hola ${t.clinom}, te saludamos de ${negocio}. Te recordamos que tienes cuotas vencidas de tu tratamiento (${t.descripcion}) por ${this.soles(t.vencido)}. ¡Gracias!`
+                        : `Hola ${t.clinom}, te saludamos de ${negocio}. Te recordamos que tu ${t.proxima.etiqueta} de ${this.soles(t.proxima.falta)} vence el ${new Date(t.proxima.vence + 'T00:00').toLocaleDateString('es-PE')}. ¡Gracias!`;
+                    return 'https://wa.me/' + (cel.length === 9 ? '51' + cel : cel) + '?text=' + encodeURIComponent(texto);
+                },
                 get filtrados() {
                     const t = this.texto.trim().toUpperCase();
-                    return this.todos.filter(x => (!this.esp || String(x.esp_id) === this.esp) && (!this.estado || x.estado === this.estado)
+                    return this.todos.filter(x => (!this.esp || String(x.esp_id) === this.esp)
+                        && (!this.estado || (this.estado === 'VENCIDAS' ? x.estado !== 'CANCELADO' && Number(x.vencido) > 0 : x.estado === this.estado))
                         && (!t || [x.paciente, x.clinum, x.his_cli_cod, x.descripcion].some(v => String(v || '').toUpperCase().includes(t))));
                 },
                 async buscar() {

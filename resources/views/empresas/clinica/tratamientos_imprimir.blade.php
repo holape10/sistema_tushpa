@@ -51,6 +51,18 @@
                     @if ($t->estado === 'CANCELADO')<span class="cancelado">CANCELADO {{ \Carbon\Carbon::parse($t->cancelado)->format('d/m/Y') }}</span>
                     @else<span class="saldo">Saldo {{ $soles($t->saldo) }}</span>@endif</span>
             </div>
+            @if (($t->modalidad ?? 'UNICO') === 'MENSUAL')
+                <div style="padding:5px 8px; border-bottom:1px solid #d1d5db; font-size:10px;">
+                    <b>Plan mensual:</b> @if ((float) $t->cuota_inicial > 0) inicial {{ $soles($t->cuota_inicial) }} + @endif {{ $t->cuotas }} cuotas de {{ $soles($t->cuota) }}
+                    @if ((float) $t->vencido > 0) · <span class="saldo"><b>Vencido {{ $soles($t->vencido) }}</b></span>@endif
+                    <div style="margin-top:3px;">
+                        @foreach ($t->cuotas_plan as $c)
+                            <span style="display:inline-block; margin:1px 6px 1px 0; {{ $c['estado'] === 'VENCIDA' ? 'color:#b91c1c; font-weight:bold;' : ($c['estado'] === 'PAGADA' ? 'color:#047857;' : 'color:#555;') }}">
+                                {{ $c['estado'] === 'PAGADA' ? '✔' : ($c['estado'] === 'VENCIDA' ? '⚠' : '○') }} {{ $c['etiqueta'] }} ({{ \Carbon\Carbon::parse($c['vence'])->format('d/m') }})</span>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
             <table>
                 <thead><tr><th style="width:15%">Fecha y hora</th><th>Tratamiento realizado / indicaciones</th><th class="r">Adelanto</th><th class="r">Saldo</th>
                     <th class="c">Cancelación</th><th class="c" style="width:22%">Firma del paciente</th></tr></thead>

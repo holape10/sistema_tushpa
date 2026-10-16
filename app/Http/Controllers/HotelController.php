@@ -92,7 +92,7 @@ class HotelController extends Controller
             ->map(function ($h) use ($estadias, $saldos, $reservas) {
                 $e = $estadias[$h->hab_id] ?? null;
                 $h->estadia = $e ? [
-                    'hos_id' => $e->hos_id, 'ped_id' => $e->ped_id, 'cliente' => $e->cliente, 'documento' => $e->documento,
+                    'hos_id' => $e->hos_id, 'ped_id' => $e->ped_id, 'cliente' => $e->cliente, 'documento' => $e->documento, 'telefono' => $e->telefono ?? null,
                     'personas' => $e->personas, 'inicio' => $e->inicio, 'fin' => $e->fin,
                     'total' => round((float) ($saldos[$e->ped_id]->total ?? 0), 2),
                     'pendiente' => round((float) ($saldos[$e->ped_id]->pendiente ?? 0), 2),
@@ -225,7 +225,7 @@ class HotelController extends Controller
             'hab_id' => 'required_without:res_id|nullable|integer', 'servicio' => 'required_without:res_id|nullable|integer',
             'cantidad' => 'required_without:res_id|nullable|numeric|min:1|max:365', 'precio' => 'nullable|numeric|min:0',
             'cliente' => 'nullable|string|max:150', 'documento' => 'nullable|string|max:15', 'personas' => 'nullable|integer|min:1|max:20',
-            'res_id' => 'nullable|integer', 'forzar' => 'nullable|boolean',
+            'telefono' => 'nullable|string|max:20', 'res_id' => 'nullable|integer', 'forzar' => 'nullable|boolean',
         ]);
         $user = Auth::user();
 
@@ -238,7 +238,8 @@ class HotelController extends Controller
                     throw new \RuntimeException('Esa reserva ya no está pendiente.');
                 }
                 $d = ['hab_id' => $reserva->hab_id, 'servicio' => $reserva->IdProducto, 'cantidad' => (float) $reserva->cantidad,
-                    'precio' => null, 'cliente' => $reserva->cliente, 'documento' => $reserva->documento, 'personas' => $reserva->personas] + $d;
+                    'precio' => null, 'cliente' => $reserva->cliente, 'documento' => $reserva->documento, 'personas' => $reserva->personas,
+                    'telefono' => $reserva->telefono] + $d;
             }
             $hab = DB::table('habitaciones')->where('hab_id', $d['hab_id'])->where('id_empresa_negocio', $suc)->lockForUpdate()->first();
             if (! $hab) {
@@ -271,6 +272,7 @@ class HotelController extends Controller
             $hosId = DB::table('hospedajes')->insertGetId([
                 'ped_id' => $pedido->ped_id, 'hab_id' => $hab->hab_id, 'id_empresa_negocio' => $suc,
                 'cliente' => $cliente, 'documento' => $d['documento'] ?? null, 'personas' => $d['personas'] ?? 1,
+                'telefono' => trim((string) ($d['telefono'] ?? '')) ?: null,
                 'inicio' => now(), 'fin' => $fin, 'hos_est' => 'ACTIVO', 'IdUsuario' => $user->IdUsuario,
             ]);
             DB::table('habitaciones')->where('hab_id', $hab->hab_id)->update(['hab_est' => 'Ocupado']);

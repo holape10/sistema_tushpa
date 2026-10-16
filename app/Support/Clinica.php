@@ -347,7 +347,50 @@ class Clinica
             $t->pagado = round((float) $t->registros->sum('adelanto'), 2);
             $t->saldo = round((float) $t->costo - $t->pagado, 2);
 
-            return $t;
+            return self::conCuotas($t);
         });
+    }
+
+    /**
+     * Plan mensual (ortodoncia): las cuotas salen de la cuota inicial, el número de cuotas, su monto y la fecha de la primera.
+     * Lo pagado se aplica en orden (inicial, cuota 1, cuota 2…). Cada cuota queda PAGADA, PARCIAL, VENCIDA o PENDIENTE.
+     *
+     * @return array<int, array{numero: int, etiqueta: string, vence: string, monto: float, pagado: float, estado: string}>
+     */
+    public static function cuotasDe(object $t, float $pagado): array
+    {
+        if (($t->modalidad ?? 'UNICO') !== 'MENSUAL') {
+            return [];
+        }
+        $hoy = now()->toDateString();
+        $plan = [];
+        if ((float) $t->cuota_inicial > 0) {
+            $plan[] = ['numero' => 0, 'etiqueta' => 'Inicial', 'vence' => Carbon::parse($t->creado)->toDateString(), 'monto' => (float) $t->cuota_inicial];
+        }
+        $primera = Carbon::parse($t->primer_vencimiento ?: $t->creado);
+        for ($i = 1; $i <= (int) $t->cuotas; $i++) {
+            $vence = $primera->copy()->addMonthsNoOverflow($i - 1);
+            $plan[] = ['numero' => $i, 'etiqueta' => 'Cuota '.$i.' · '.ucfirst($vence->locale('es')->isoFormat('MMM YYYY')), 'vence' => $vence->toDateString(), 'monto' => (float) $t->cuota];
+        }
+        $resto = $pagado;
+        foreach ($plan as &$c) {
+            $c['pagado'] = round(min($c['monto'], max(0, $resto)), 2);
+            $resto = round($resto - $c['pagado'], 2);
+            $c['estado'] = $c['pagado'] >= $c['monto'] - 0.001 ? 'PAGADA' : ($c['vence'] < $hoy ? 'VENCIDA' : ($c['pagado'] > 0 ? 'PARCIAL' : 'PENDIENTE'));
+        }
+
+        return $plan;
+    }
+
+    /** Agrega al tratamiento sus cuotas, lo vencido (lo que debía pagar hasta hoy) y la próxima cuota por pagar */
+    public static function conCuotas(object $t): object
+    {
+        $t->cuotas_plan = self::cuotasDe($t, (float) $t->pagado);
+        $pendientes = collect($t->cuotas_plan)->where('estado', '!=', 'PAGADA');
+        $t->vencido = round((float) $pendientes->where('estado', 'VENCIDA')->sum(fn ($c) => $c['monto'] - $c['pagado']), 2);
+        $proxima = $pendientes->first();
+        $t->proxima = $proxima ? ['etiqueta' => $proxima['etiqueta'], 'vence' => $proxima['vence'], 'falta' => round($proxima['monto'] - $proxima['pagado'], 2)] : null;
+
+        return $t;
     }
 }

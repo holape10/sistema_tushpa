@@ -40,13 +40,22 @@
             },
             // ---- Tratamiento ----
             nuevoTratamiento() {
-                this.modalTrat = { tra_id: null, descripcion: '', esp_id: '', costo: '', detalle: '', adelanto: '', conSesion: true };
+                const mes = new Date(); mes.setMonth(mes.getMonth() + 1);
+                this.modalTrat = { tra_id: null, descripcion: '', esp_id: '', costo: '', detalle: '', adelanto: '', conSesion: true,
+                    modalidad: 'UNICO', cuota_inicial: '', cuotas: 12, cuota: '', primer_vencimiento: mes.toISOString().slice(0, 10) };
                 this.$nextTick(() => this.prepararFirma('firma_trat'));
             },
-            editarTratamiento(t) { this.modalTrat = { tra_id: t.tra_id, descripcion: t.descripcion, esp_id: t.esp_id ? String(t.esp_id) : '', costo: t.costo, pagado: t.pagado }; },
+            editarTratamiento(t) {
+                this.modalTrat = { tra_id: t.tra_id, descripcion: t.descripcion, esp_id: t.esp_id ? String(t.esp_id) : '', costo: t.costo, pagado: t.pagado,
+                    modalidad: t.modalidad || 'UNICO', cuota_inicial: t.cuota_inicial, cuotas: t.cuotas, cuota: t.cuota, primer_vencimiento: t.primer_vencimiento };
+            },
+            // Plan mensual: el costo total es la inicial más las cuotas
+            totalPlan(m) { return m.modalidad === 'MENSUAL' ? (Number(m.cuota_inicial) || 0) + (Number(m.cuotas) || 0) * (Number(m.cuota) || 0) : (Number(m.costo) || 0); },
+            mesCorto(f) { return f ? new Date(f + 'T00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : ''; },
             async guardarTratamiento() {
                 const m = this.modalTrat;
-                const datos = { descripcion: m.descripcion, esp_id: m.esp_id || null, costo: m.costo || 0 };
+                const datos = { descripcion: m.descripcion, esp_id: m.esp_id || null, costo: m.costo || 0, modalidad: m.modalidad,
+                    ...(m.modalidad === 'MENSUAL' ? { cuota_inicial: m.cuota_inicial || 0, cuotas: m.cuotas, cuota: m.cuota, primer_vencimiento: m.primer_vencimiento } : {}) };
                 const r = m.tra_id
                     ? await this.post('{{ url('clinica/tratamientos') }}/' + m.tra_id, datos)
                     : await this.post('{{ url('clinica/historia') }}/' + this.hisId + '/tratamientos',
@@ -112,7 +121,12 @@
             <div class="px-4 py-3 flex flex-wrap items-center gap-2 border-b" :class="t.estado === 'CANCELADO' ? 'bg-emerald-50' : 'bg-amber-50'">
                 <div class="flex-1 min-w-[200px]">
                     <p class="font-bold text-gray-800" x-text="t.descripcion"></p>
-                    <p class="text-xs text-gray-500"><span x-text="t.esp_des || 'Sin especialidad'"></span> · desde <span x-text="fecha(t.creado).split(',')[0]"></span></p>
+                    <p class="text-xs text-gray-500"><span x-text="t.esp_des || 'Sin especialidad'"></span> · desde <span x-text="fecha(t.creado).split(',')[0]"></span>
+                        <span x-show="t.modalidad === 'MENSUAL'" class="ml-1 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold"
+                              x-text="'MENSUAL · ' + (Number(t.cuota_inicial) > 0 ? 'inicial ' + soles(t.cuota_inicial) + ' + ' : '') + t.cuotas + ' x ' + soles(t.cuota)"></span></p>
+                    <p x-show="t.estado !== 'CANCELADO' && Number(t.vencido) > 0" class="mt-1 text-xs font-extrabold text-rose-600" x-text="'⚠ Debe ' + soles(t.vencido) + ' de cuotas vencidas'"></p>
+                    <p x-show="t.estado !== 'CANCELADO' && t.proxima && !(Number(t.vencido) > 0)" class="mt-1 text-xs font-semibold text-indigo-700"
+                       x-text="t.proxima ? 'Próxima: ' + t.proxima.etiqueta + ' · ' + soles(t.proxima.falta) + ' (vence ' + mesCorto(t.proxima.vence) + ')' : ''"></p>
                 </div>
                 <div class="text-right text-sm">
                     <p>Costo <b x-text="soles(t.costo)"></b> · Pagado <b class="text-emerald-700" x-text="soles(t.pagado)"></b></p>
@@ -123,6 +137,16 @@
                     <button type="button" @click="editarTratamiento(t)" class="px-2 py-1 rounded-lg bg-white border text-xs" title="Corregir nombre o costo">✏️</button>
                     <button type="button" @click="nuevaSesion(t)" class="px-3 py-1 rounded-lg bg-teal-600 text-white text-xs font-bold">+ Sesión / pago</button>
                 </div>
+            </div>
+            {{-- Calendario de cuotas (plan mensual) --}}
+            <div x-show="t.modalidad === 'MENSUAL'" class="px-4 py-2 border-b flex flex-wrap gap-1.5">
+                <template x-for="c in (t.cuotas_plan || [])" :key="c.numero">
+                    <span class="px-2 py-1 rounded-lg text-[11px] font-semibold border"
+                          :class="{ 'bg-emerald-50 border-emerald-200 text-emerald-800': c.estado === 'PAGADA', 'bg-rose-50 border-rose-300 text-rose-700': c.estado === 'VENCIDA',
+                                    'bg-amber-50 border-amber-200 text-amber-800': c.estado === 'PARCIAL', 'bg-white border-gray-200 text-gray-500': c.estado === 'PENDIENTE' }"
+                          :title="c.etiqueta + ' · vence ' + mesCorto(c.vence) + ' · pagado ' + soles(c.pagado) + ' de ' + soles(c.monto)"
+                          x-text="(c.estado === 'PAGADA' ? '✔ ' : c.estado === 'VENCIDA' ? '⚠ ' : '') + c.etiqueta.replace('Cuota ', 'C') + (c.estado === 'PARCIAL' ? ' · falta ' + soles(c.monto - c.pagado) : '')"></span>
+                </template>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -165,12 +189,31 @@
                 <div class="space-y-3">
                     <label class="block text-xs font-semibold text-gray-500">Tratamiento
                         <input x-model="modalTrat.descripcion" maxlength="200" placeholder="Ej. ENDODONCIA PIEZA 1.4 + CORONA" class="{{ $in }} mt-1 uppercase"></label>
+                    <label class="block text-xs font-semibold text-gray-500">Especialidad
+                        <select x-model="modalTrat.esp_id" class="{{ $in }} mt-1"><option value="">—</option>
+                            @foreach ($especialidadesTrat as $e)<option value="{{ $e->esp_id }}">{{ $e->esp_des }}</option>@endforeach</select></label>
+                    {{-- Cómo paga: un costo con adelantos libres, o un plan mensual (ortodoncia) --}}
                     <div class="grid grid-cols-2 gap-2">
-                        <label class="block text-xs font-semibold text-gray-500">Especialidad
-                            <select x-model="modalTrat.esp_id" class="{{ $in }} mt-1"><option value="">—</option>
-                                @foreach ($especialidadesTrat as $e)<option value="{{ $e->esp_id }}">{{ $e->esp_des }}</option>@endforeach</select></label>
-                        <label class="block text-xs font-semibold text-gray-500">Costo total S/
-                            <input type="number" step="0.01" min="0" x-model="modalTrat.costo" class="{{ $in }} mt-1 text-right font-bold"></label>
+                        <button type="button" @click="modalTrat.modalidad = 'UNICO'" class="rounded-xl border-2 px-3 py-2 text-left"
+                                :class="modalTrat.modalidad === 'UNICO' ? 'border-teal-600 bg-teal-50' : 'border-gray-200'">
+                            <span class="block text-sm font-bold">💵 Costo total</span><span class="block text-[11px] text-gray-500">Paga con adelantos cuando puede</span></button>
+                        <button type="button" @click="modalTrat.modalidad = 'MENSUAL'" class="rounded-xl border-2 px-3 py-2 text-left"
+                                :class="modalTrat.modalidad === 'MENSUAL' ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200'">
+                            <span class="block text-sm font-bold">📅 Mensual</span><span class="block text-[11px] text-gray-500">Ortodoncia: inicial + cuotas por mes</span></button>
+                    </div>
+                    <label x-show="modalTrat.modalidad !== 'MENSUAL'" class="block text-xs font-semibold text-gray-500">Costo total S/
+                        <input type="number" step="0.01" min="0" x-model="modalTrat.costo" class="{{ $in }} mt-1 text-right font-bold"></label>
+                    <div x-show="modalTrat.modalidad === 'MENSUAL'" class="grid grid-cols-2 gap-2 rounded-xl bg-indigo-50/60 p-3">
+                        <label class="block text-xs font-semibold text-gray-500">Cuota inicial S/
+                            <input type="number" step="0.01" min="0" x-model="modalTrat.cuota_inicial" placeholder="0.00" class="{{ $in }} mt-1 text-right"></label>
+                        <label class="block text-xs font-semibold text-gray-500">Cuota mensual S/
+                            <input type="number" step="0.01" min="0" x-model="modalTrat.cuota" class="{{ $in }} mt-1 text-right font-bold"></label>
+                        <label class="block text-xs font-semibold text-gray-500">N° de meses
+                            <input type="number" step="1" min="1" max="120" x-model="modalTrat.cuotas" class="{{ $in }} mt-1 text-right"></label>
+                        <label class="block text-xs font-semibold text-gray-500">Primera cuota vence
+                            <input type="date" x-model="modalTrat.primer_vencimiento" class="{{ $in }} mt-1"></label>
+                        <p class="col-span-2 text-xs text-indigo-800">Total del tratamiento: <b x-text="soles(totalPlan(modalTrat))"></b>.
+                            Si se alarga, aquí mismo se suben los meses.</p>
                     </div>
                     <p x-show="modalTrat.tra_id" class="text-xs text-gray-500">Ya pagado: <b x-text="soles(modalTrat.pagado)"></b> (el costo no puede quedar por debajo).</p>
                     <template x-if="!modalTrat.tra_id">
@@ -180,7 +223,9 @@
                                 <textarea x-model="modalTrat.detalle" rows="2" class="{{ $in }} mt-1"></textarea></label>
                             <label class="block text-xs font-semibold text-gray-500">Adelanto que paga hoy S/
                                 <input type="number" step="0.01" min="0" x-model="modalTrat.adelanto" class="{{ $in }} mt-1 text-right font-bold"></label>
-                            <p class="text-xs text-gray-500" x-show="Number(modalTrat.costo) > 0">Saldo después del adelanto: <b x-text="soles((Number(modalTrat.costo) || 0) - (Number(modalTrat.adelanto) || 0))"></b></p>
+                            <button type="button" x-show="modalTrat.modalidad === 'MENSUAL' && Number(modalTrat.cuota_inicial) > 0" @click="modalTrat.adelanto = modalTrat.cuota_inicial"
+                                    class="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold" x-text="'Paga la inicial (' + soles(modalTrat.cuota_inicial) + ')'"></button>
+                            <p class="text-xs text-gray-500" x-show="totalPlan(modalTrat) > 0">Saldo después del adelanto: <b x-text="soles(totalPlan(modalTrat) - (Number(modalTrat.adelanto) || 0))"></b></p>
                             <div>
                                 <div class="flex justify-between items-center"><span class="text-xs font-semibold text-gray-500">Firma del paciente</span>
                                     <button type="button" @click="borrarFirma('firma_trat')" class="text-xs text-gray-500 underline">Borrar</button></div>
@@ -213,6 +258,13 @@
                             <input type="number" step="0.01" min="0" :max="modalSesion.tra.saldo" x-model="modalSesion.adelanto" class="{{ $in }} mt-1 text-right font-bold"></label>
                         <button type="button" x-show="Number(modalSesion.tra.saldo) > 0" @click="modalSesion.adelanto = modalSesion.tra.saldo"
                                 class="px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold">Cancelar todo el saldo</button>
+                    </div>
+                    <div x-show="modalSesion.tra.modalidad === 'MENSUAL' && modalSesion.tra.estado !== 'CANCELADO'" class="flex flex-wrap gap-2">
+                        <button type="button" x-show="modalSesion.tra.proxima" @click="modalSesion.adelanto = modalSesion.tra.proxima.falta; modalSesion.detalle ||= 'Pago ' + modalSesion.tra.proxima.etiqueta"
+                                class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
+                                x-text="modalSesion.tra.proxima ? 'Pagar ' + modalSesion.tra.proxima.etiqueta + ' (' + soles(modalSesion.tra.proxima.falta) + ')' : ''"></button>
+                        <button type="button" x-show="Number(modalSesion.tra.vencido) > 0" @click="modalSesion.adelanto = modalSesion.tra.vencido; modalSesion.detalle ||= 'Pago de cuotas vencidas'"
+                                class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold" x-text="'Pagar lo vencido (' + soles(modalSesion.tra.vencido) + ')'"></button>
                     </div>
                     <p class="text-xs text-gray-500">Saldo después: <b x-text="soles(Math.max(0, (Number(modalSesion.tra.saldo) || 0) - (Number(modalSesion.adelanto) || 0)))"></b>.
                         El pago lo cobra recepción en caja (le aparece en "Por cobrar").</p>
