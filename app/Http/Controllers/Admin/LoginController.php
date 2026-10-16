@@ -1,9 +1,11 @@
 <?php
+
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, RateLimiter};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -14,25 +16,27 @@ class LoginController extends Controller
         if (Auth::guard('superadmin')->check()) {
             return redirect()->route('admin.clientes.index');
         }
+
         return view('admin.login');
     }
 
     public function store(Request $request)
     {
         $datos = $request->validate([
-            'email'    => 'required|string|email',
+            'email' => 'required|string|email',
             'password' => 'required|string',
         ]);
 
         // 5 intentos por correo + IP; luego hay que esperar
-        $llave = 'admin-login:' . Str::lower($datos['email']) . '|' . $request->ip();
+        $llave = 'admin-login:'.Str::lower($datos['email']).'|'.$request->ip();
         if (RateLimiter::tooManyAttempts($llave, 5)) {
             throw ValidationException::withMessages([
-                'email' => 'Demasiados intentos. Espera ' . RateLimiter::availableIn($llave) . ' segundos.',
+                'email' => 'Demasiados intentos. Espera '.RateLimiter::availableIn($llave).' segundos.',
             ]);
         }
 
-        if (!Auth::guard('superadmin')->attempt($datos)) {
+        // Un usuario desactivado por el dueño ya no entra
+        if (! Auth::guard('superadmin')->attempt($datos + ['activo' => 1])) {
             RateLimiter::hit($llave, 300);
             throw ValidationException::withMessages(['email' => 'Correo o contraseña incorrectos.']);
         }

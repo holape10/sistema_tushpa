@@ -6,6 +6,8 @@ use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\RespaldoController;
+use App\Http\Controllers\Admin\UsuarioController;
+use App\Http\Middleware\PanelActivo;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('admin.clientes.index'));
@@ -13,7 +15,7 @@ Route::get('/', fn () => redirect()->route('admin.clientes.index'));
 Route::get('/login', [LoginController::class, 'create'])->name('login');
 Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:10,1');
 
-Route::middleware('auth:superadmin')->group(function () {
+Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
     Route::get('/clientes', [ClienteController::class, 'index'])->name('clientes.index');
@@ -43,5 +45,10 @@ Route::middleware('auth:superadmin')->group(function () {
     Route::post('/mensajes/{id}/atendido', [ClienteController::class, 'mensajeWebAtendido'])->whereNumber('id')->name('mensajes.atendido');
     Route::get('/planes', [ClienteController::class, 'planesIndex'])->name('planes.index');
     Route::post('/planes/{plan?}', [ClienteController::class, 'planesGuardar'])->whereNumber('plan')->name('planes.guardar');
+    Route::get('/usuarios', [UsuarioController::class, 'index'])->name('usuarios.index');
+    Route::post('/usuarios', [UsuarioController::class, 'store'])->name('usuarios.store');
+    Route::post('/usuarios/{usuario}/permiso', [UsuarioController::class, 'permiso'])->whereNumber('usuario')->name('usuarios.permiso');
+    Route::post('/usuarios/{usuario}/estado', [UsuarioController::class, 'estado'])->whereNumber('usuario')->name('usuarios.estado');
+    Route::post('/usuarios/{usuario}/clave', [UsuarioController::class, 'clave'])->whereNumber('usuario')->name('usuarios.clave');
     Route::get('/ruc/{ruc}', [ClienteController::class, 'consultarRuc'])->where('ruc', '\d{11}')->name('ruc');
 });
