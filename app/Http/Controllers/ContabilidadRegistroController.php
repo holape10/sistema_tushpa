@@ -57,7 +57,7 @@ class ContabilidadRegistroController extends Controller
         $totales = [
             'base' => round($registros->sum(fn ($r) => $signo($r) * $r->base * $tc($r)), 2),
             'igv' => round($registros->sum(fn ($r) => $signo($r) * $r->igv * $tc($r)), 2),
-            'no_gravado' => round($registros->sum(fn ($r) => $signo($r) * ($r->no_gravado + $r->otros) * $tc($r)), 2),
+            'no_gravado' => round($registros->sum(fn ($r) => $signo($r) * ($r->no_gravado + $r->otros + $r->isc + $r->icbper) * $tc($r)), 2),
             'total' => round($registros->sum(fn ($r) => $signo($r) * $r->total * $tc($r)), 2),
         ];
         $imputables = Contabilidad::imputables($ruc);
@@ -66,6 +66,9 @@ class ContabilidadRegistroController extends Controller
         return view('empresas.contabilidad.registro', [
             'tipo' => $tipo, 't' => $t, 'periodo' => $periodo, 'q' => $q, 'registros' => $registros, 'totales' => $totales,
             'cerrado' => Contabilidad::cerrado($ruc, $periodo), 'cfg' => $cfg,
+            // IGV de la sucursal: exonerada (Amazonía) o gravada con la tasa de la configuración contable
+            'exonerada' => (string) DB::table('empresa_negocios')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->value('tip_igv_pred') === '20',
+            'tasa' => (float) ($cfg->tasa_igv ?? 18),
             'cuentas' => $imputables->filter(fn ($n, $c) => collect(Registro::PREFIJOS[$t])->contains(fn ($pre) => str_starts_with((string) $c, $pre))),
             'cajas' => $imputables->filter(fn ($n, $c) => str_starts_with((string) $c, '10')),
             'imputables' => $imputables,
@@ -84,7 +87,8 @@ class ContabilidadRegistroController extends Controller
             'serie' => 'nullable|string|max:20', 'numero' => 'required|string|max:20',
             'doc_tipo' => 'required|in:0,1,4,6,7', 'doc_num' => 'nullable|string|max:15', 'nombre' => 'required|string|max:200',
             'moneda' => 'required|in:PEN,USD', 'tipo_cambio' => 'nullable|numeric|min:0.001|max:99',
-            'base' => 'nullable|numeric|min:0', 'igv' => 'nullable|numeric|min:0', 'no_gravado' => 'nullable|numeric|min:0', 'otros' => 'nullable|numeric',
+            'base' => 'nullable|numeric|min:0', 'igv' => 'nullable|numeric|min:0', 'isc' => 'nullable|numeric|min:0', 'icbper' => 'nullable|numeric|min:0',
+            'no_gravado' => 'nullable|numeric|min:0', 'otros' => 'nullable|numeric', 'retencion' => 'nullable|numeric|min:0',
             'cuenta' => 'required|string|max:12', 'condicion' => 'required|in:CONTADO,CREDITO', 'cuenta_pago' => 'nullable|required_if:condicion,CONTADO|string|max:12',
             'glosa' => 'nullable|string|max:200',
             'lineas' => 'nullable|array|min:2|max:50', 'lineas.*.cuenta' => 'required|string|max:12',
@@ -92,10 +96,15 @@ class ContabilidadRegistroController extends Controller
         ], ['cuenta_pago.required_if' => 'Elige la caja o banco del pago al contado.'],
             ['tdocod' => 'tipo de documento', 'nombre' => $t === 'VENTA' ? 'cliente' : 'proveedor', 'cuenta' => 'cuenta contable']);
 
-        foreach (['base', 'igv', 'no_gravado', 'otros'] as $c) {
+        foreach (['base', 'igv', 'isc', 'icbper', 'no_gravado', 'otros', 'retencion'] as $c) {
             $d[$c] = round((float) ($d[$c] ?? 0), 2);
         }
-        $d['total'] = round($d['base'] + $d['igv'] + $d['no_gravado'] + $d['otros'], 2);
+        // La retención de 4ta solo va en los recibos por honorarios
+        $d['retencion'] = $t === 'COMPRA' && $d['tdocod'] === '02' ? $d['retencion'] : 0;
+        $d['total'] = Registro::total($d);
+        if ($d['retencion'] >= $d['total'] && $d['retencion'] > 0) {
+            return response()->json(['success' => false, 'message' => 'La retención no puede ser mayor que el total del recibo.']);
+        }
         if ($d['total'] <= 0) {
             return response()->json(['success' => false, 'message' => 'El total del comprobante debe ser mayor a cero.']);
         }

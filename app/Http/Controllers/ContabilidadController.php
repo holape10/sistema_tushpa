@@ -1,11 +1,14 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Support\Contabilidad\{Contabilidad, Pcge};
+use App\Support\Contabilidad\Contabilidad;
+use App\Support\Contabilidad\Pcge;
 use App\Support\Excel;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ContabilidadController extends Controller
 {
@@ -14,12 +17,14 @@ class ContabilidadController extends Controller
         abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador accede a la contabilidad.');
         $ruc = (string) Auth::user()->IdEmpresa;
         Contabilidad::asegurar($ruc);
+
         return $ruc;
     }
 
     private function periodo(Request $request): string
     {
         $p = preg_replace('/\D/', '', (string) $request->get('periodo', now()->format('Ym')));
+
         return strlen($p) === 6 ? $p : now()->format('Ym');
     }
 
@@ -41,8 +46,8 @@ class ContabilidadController extends Controller
         $ruc = $this->ruc();
         $q = trim((string) $request->get('q'));
         $cuentas = DB::table('conta_plan')->where('IdEmpresa', $ruc)
-            ->when($request->filled('elemento'), fn($w) => $w->where('cuenta', 'like', $request->elemento . '%'))
-            ->when($q !== '', fn($w) => $w->where(fn($x) => $x->where('cuenta', 'like', "$q%")->orWhere('descripcion', 'like', "%$q%")))
+            ->when($request->filled('elemento'), fn ($w) => $w->where('cuenta', 'like', $request->elemento.'%'))
+            ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('cuenta', 'like', "$q%")->orWhere('descripcion', 'like', "%$q%")))
             ->orderBy('cuenta')->get();
         $usadas = DB::table('conta_asiento_detalle as d')->join('conta_asientos as a', 'a.id', '=', 'd.asiento_id')
             ->where('a.IdEmpresa', $ruc)->distinct()->pluck('d.cuenta')->flip();
@@ -69,17 +74,18 @@ class ContabilidadController extends Controller
         if ($existe) {
             DB::table('conta_plan')->where('id', $existe->id)->update(['descripcion' => mb_strtoupper(trim($d['descripcion'])),
                 'estado' => $d['estado'] ?? $existe->estado, 'updated_at' => now()]);
+
             return back()->with('success', "Cuenta {$cuenta} actualizada.");
         }
 
         // La cuenta padre debe existir (ej. 104103 necesita a 1041 o 104)
-        $padre = DB::table('conta_plan')->where('IdEmpresa', $ruc)->whereIn('cuenta', array_map(fn($i) => substr($cuenta, 0, $i), range(2, strlen($cuenta) - 1)))
+        $padre = DB::table('conta_plan')->where('IdEmpresa', $ruc)->whereIn('cuenta', array_map(fn ($i) => substr($cuenta, 0, $i), range(2, strlen($cuenta) - 1)))
             ->orderByDesc(DB::raw('LENGTH(cuenta)'))->first();
-        if (!$padre && strlen($cuenta) > 2) {
-            return back()->withInput()->withErrors(['cuenta' => "No existe una cuenta superior para {$cuenta} (ej. " . substr($cuenta, 0, 2) . ').']);
+        if (! $padre && strlen($cuenta) > 2) {
+            return back()->withInput()->withErrors(['cuenta' => "No existe una cuenta superior para {$cuenta} (ej. ".substr($cuenta, 0, 2).').']);
         }
         if ($padre && DB::table('conta_asiento_detalle as d')->join('conta_asientos as a', 'a.id', '=', 'd.asiento_id')
-                ->where('a.IdEmpresa', $ruc)->where('d.cuenta', $padre->cuenta)->exists()) {
+            ->where('a.IdEmpresa', $ruc)->where('d.cuenta', $padre->cuenta)->exists()) {
             return back()->withInput()->withErrors(['cuenta' => "La cuenta {$padre->cuenta} ya tiene movimientos; no puede pasar a ser cuenta de título."]);
         }
 
@@ -92,6 +98,7 @@ class ContabilidadController extends Controller
                 DB::table('conta_plan')->where('id', $padre->id)->update(['imputable' => 0]);
             }
         });
+
         return back()->with('success', "Cuenta {$cuenta} creada.");
     }
 
@@ -100,12 +107,12 @@ class ContabilidadController extends Controller
         $ruc = $this->ruc();
         $c = DB::table('conta_plan')->where('id', $id)->where('IdEmpresa', $ruc)->first();
         abort_unless($c, 404);
-        $hijas = DB::table('conta_plan')->where('IdEmpresa', $ruc)->where('cuenta', 'like', $c->cuenta . '%')->where('id', '!=', $id)->exists();
+        $hijas = DB::table('conta_plan')->where('IdEmpresa', $ruc)->where('cuenta', 'like', $c->cuenta.'%')->where('id', '!=', $id)->exists();
         $usada = DB::table('conta_asiento_detalle as d')->join('conta_asientos as a', 'a.id', '=', 'd.asiento_id')
             ->where('a.IdEmpresa', $ruc)->where('d.cuenta', $c->cuenta)->exists();
         $config = collect((array) Contabilidad::config($ruc))->contains($c->cuenta);
         if ($hijas || $usada || $config) {
-            return back()->withErrors(['cuenta' => "La cuenta {$c->cuenta} " . ($hijas ? 'tiene subcuentas' : ($usada ? 'tiene movimientos' : 'se usa en la centralización')) . '; desactívala en lugar de eliminarla.']);
+            return back()->withErrors(['cuenta' => "La cuenta {$c->cuenta} ".($hijas ? 'tiene subcuentas' : ($usada ? 'tiene movimientos' : 'se usa en la centralización')).'; desactívala en lugar de eliminarla.']);
         }
         DB::transaction(function () use ($ruc, $c) {
             DB::table('conta_plan')->where('id', $c->id)->delete();
@@ -113,12 +120,13 @@ class ContabilidadController extends Controller
             for ($i = strlen($c->cuenta) - 1; $i >= 2; $i--) {
                 $padre = DB::table('conta_plan')->where('IdEmpresa', $ruc)->where('cuenta', substr($c->cuenta, 0, $i))->first();
                 if ($padre) {
-                    $quedan = DB::table('conta_plan')->where('IdEmpresa', $ruc)->where('cuenta', 'like', $padre->cuenta . '%')->where('cuenta', '!=', $padre->cuenta)->exists();
+                    $quedan = DB::table('conta_plan')->where('IdEmpresa', $ruc)->where('cuenta', 'like', $padre->cuenta.'%')->where('cuenta', '!=', $padre->cuenta)->exists();
                     DB::table('conta_plan')->where('id', $padre->id)->update(['imputable' => $quedan ? 0 : 1]);
                     break;
                 }
             }
         });
+
         return back()->with('success', "Cuenta {$c->cuenta} eliminada.");
     }
 
@@ -127,35 +135,39 @@ class ContabilidadController extends Controller
         $ruc = $this->ruc();
         $campos = ['cta_caja', 'cta_banco', 'cta_por_cobrar', 'cta_igv', 'cta_ventas', 'cta_ventas_exo', 'cta_por_pagar', 'cta_compras',
             'cta_mercaderias', 'cta_variacion', 'cta_costo_ventas', 'cta_sueldos', 'cta_essalud_gasto', 'cta_remun_pagar', 'cta_essalud_pagar',
-            'cta_onp_pagar', 'cta_afp_pagar', 'cta_renta5_pagar', 'cta_renta4_pagar', 'cta_adelantos'];
-        $d = $request->validate(array_fill_keys($campos, 'required|string|max:12') + ['medios' => 'nullable|array']);
+            'cta_onp_pagar', 'cta_afp_pagar', 'cta_renta5_pagar', 'cta_renta4_pagar', 'cta_adelantos',
+            'cta_igv_compras', 'cta_isc', 'cta_icbper', 'cta_otros_tributos'];
+        $d = $request->validate(array_fill_keys($campos, 'required|string|max:12') + ['medios' => 'nullable|array', 'tasa_igv' => 'required|in:18.00,10.50']);
         $imp = Contabilidad::imputables($ruc);
         foreach ($campos as $c) {
-            if (!isset($imp[$d[$c]])) {
+            if (! isset($imp[$d[$c]])) {
                 return back()->withErrors(['config' => "La cuenta {$d[$c]} no existe o no es imputable (tiene subcuentas)."])->withInput();
             }
         }
         foreach ((array) $request->medios as $id => $cuenta) {
-            if ($cuenta && !isset($imp[$cuenta])) {
+            if ($cuenta && ! isset($imp[$cuenta])) {
                 return back()->withErrors(['config' => "La cuenta {$cuenta} de un medio de pago no existe o no es imputable."])->withInput();
             }
         }
         DB::transaction(function () use ($ruc, $d, $campos, $request) {
             DB::table('conta_config')->where('IdEmpresa', $ruc)->update(array_intersect_key($d, array_flip($campos)) + [
-                'asiento_costo' => $request->boolean('asiento_costo'), 'asiento_destino' => $request->boolean('asiento_destino'), 'updated_at' => now()]);
+                'asiento_costo' => $request->boolean('asiento_costo'), 'asiento_destino' => $request->boolean('asiento_destino'),
+                'tasa_igv' => (float) $d['tasa_igv'], 'updated_at' => now()]);
             foreach ((array) $request->medios as $id => $cuenta) {
                 DB::table('medios_pagos')->where('id_med_pag', $id)->update(['cuenta_contable' => $cuenta ?: null]);
             }
         });
-        return redirect()->route('contabilidad.plan', ['tab' => 'config'])->with('success', 'Cuentas de centralización guardadas.');
+
+        return redirect()->route('contabilidad.plan', ['tab' => 'config'])->with('success', 'Cuentas e impuestos guardados.');
     }
 
     public function planExcel()
     {
         $ruc = $this->ruc();
         $filas = DB::table('conta_plan')->where('IdEmpresa', $ruc)->orderBy('cuenta')->get()
-            ->map(fn($c) => [(string) $c->cuenta, $c->descripcion, $c->nivel, $c->tipo, $c->naturaleza === 'D' ? 'DEUDORA' : 'ACREEDORA', $c->imputable ? 'SÍ' : 'NO', $c->estado])->all();
-        return $this->descargar((new Excel())->hoja('Plan contable', ['Cuenta', 'Descripción', 'Nivel', 'Tipo', 'Naturaleza', 'Imputable', 'Estado'], $filas), 'plan_contable.xlsx');
+            ->map(fn ($c) => [(string) $c->cuenta, $c->descripcion, $c->nivel, $c->tipo, $c->naturaleza === 'D' ? 'DEUDORA' : 'ACREEDORA', $c->imputable ? 'SÍ' : 'NO', $c->estado])->all();
+
+        return $this->descargar((new Excel)->hoja('Plan contable', ['Cuenta', 'Descripción', 'Nivel', 'Tipo', 'Naturaleza', 'Imputable', 'Estado'], $filas), 'plan_contable.xlsx');
     }
 
     // ================================================================== CENTRALIZACIÓN
@@ -195,11 +207,12 @@ class ContabilidadController extends Controller
             return back()->withErrors(['centralizar' => $e->getMessage()]);
         }
         $msg = $tipo === 'ventas'
-            ? "Ventas centralizadas: {$r['documentos']} comprobantes en {$r['asientos']} asientos. Ventas S/ " . number_format($r['ventas'], 2)
-                . ', IGV S/ ' . number_format($r['igv'], 2) . ', costo S/ ' . number_format($r['costo'], 2) . ', cobranzas S/ ' . number_format($r['cobranzas'], 2) . '.'
-            : "Compras centralizadas: {$r['documentos']} documentos en {$r['asientos']} asientos. Compras S/ " . number_format($r['compras'], 2)
-                . ', gastos S/ ' . number_format($r['gastos'] ?? 0, 2)
-                . ', IGV S/ ' . number_format($r['igv'], 2) . ', pagos S/ ' . number_format($r['pagos'], 2) . '.';
+            ? "Ventas centralizadas: {$r['documentos']} comprobantes en {$r['asientos']} asientos. Ventas S/ ".number_format($r['ventas'], 2)
+                .', IGV S/ '.number_format($r['igv'], 2).', costo S/ '.number_format($r['costo'], 2).', cobranzas S/ '.number_format($r['cobranzas'], 2).'.'
+            : "Compras centralizadas: {$r['documentos']} documentos en {$r['asientos']} asientos. Compras S/ ".number_format($r['compras'], 2)
+                .', gastos S/ '.number_format($r['gastos'] ?? 0, 2)
+                .', IGV S/ '.number_format($r['igv'], 2).', pagos S/ '.number_format($r['pagos'], 2).'.';
+
         return redirect()->route('contabilidad.centralizar', ['tipo' => $tipo, 'periodo' => $periodo])->with('success', $msg);
     }
 
@@ -212,10 +225,10 @@ class ContabilidadController extends Controller
         $q = trim((string) $request->get('q'));
 
         $asientos = DB::table('conta_asientos')->where('IdEmpresa', $ruc)->where('periodo', $periodo)
-            ->when($request->filled('origen'), fn($w) => $w->where('origen', $request->origen))
-            ->when($request->filled('subdiario'), fn($w) => $w->where('subdiario', $request->subdiario))
-            ->when($q !== '', fn($w) => $w->where(fn($x) => $x->where('glosa', 'like', "%$q%")->orWhere('documento', 'like', "%$q%")
-                ->orWhereExists(fn($s) => $s->select(DB::raw(1))->from('conta_asiento_detalle as d')->whereColumn('d.asiento_id', 'conta_asientos.id')->where('d.cuenta', 'like', "$q%"))))
+            ->when($request->filled('origen'), fn ($w) => $w->where('origen', $request->origen))
+            ->when($request->filled('subdiario'), fn ($w) => $w->where('subdiario', $request->subdiario))
+            ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('glosa', 'like', "%$q%")->orWhere('documento', 'like', "%$q%")
+                ->orWhereExists(fn ($s) => $s->select(DB::raw(1))->from('conta_asiento_detalle as d')->whereColumn('d.asiento_id', 'conta_asientos.id')->where('d.cuenta', 'like', "$q%"))))
             ->orderBy('fecha')->orderBy('subdiario')->orderBy('numero');
 
         if ($request->get('excel')) {
@@ -225,11 +238,12 @@ class ContabilidadController extends Controller
             $filas = [];
             foreach ($lista as $a) {
                 foreach ($det[$a->id] ?? [] as $d) {
-                    $filas[] = [$a->subdiario . '-' . str_pad($a->numero, 4, '0', STR_PAD_LEFT), Carbon::parse($a->fecha)->format('d/m/Y'), $a->glosa,
+                    $filas[] = [$a->subdiario.'-'.str_pad($a->numero, 4, '0', STR_PAD_LEFT), Carbon::parse($a->fecha)->format('d/m/Y'), $a->glosa,
                         (string) $d->cuenta, $nombres[$d->cuenta] ?? '', $d->documento ?? '', $d->anexo_doc ?? '', (float) $d->debe, (float) $d->haber];
                 }
             }
-            return $this->descargar((new Excel())->hoja('Libro Diario ' . $periodo,
+
+            return $this->descargar((new Excel)->hoja('Libro Diario '.$periodo,
                 ['Asiento', 'Fecha', 'Glosa', 'Cuenta', 'Denominación', 'Documento', 'RUC/DNI', 'Debe', 'Haber'], $filas), "libro_diario_{$periodo}.xlsx");
         }
 
@@ -260,13 +274,14 @@ class ContabilidadController extends Controller
                 $conservar = [];
                 if ($id) {
                     $a = DB::table('conta_asientos')->where('id', $id)->where('IdEmpresa', $ruc)->whereIn('origen', ['MANUAL', 'APERTURA'])->lockForUpdate()->first();
-                    if (!$a) {
+                    if (! $a) {
                         throw new \RuntimeException('Solo se editan asientos manuales; los automáticos se regeneran al centralizar.');
                     }
                     Contabilidad::validarPeriodo($ruc, $a->periodo);
                     DB::table('conta_asientos')->where('id', $id)->delete();
-                    $conservar = ['numero' => $a->numero, 'periodo_anterior' => $a->periodo . $a->subdiario];
+                    $conservar = ['numero' => $a->numero, 'periodo_anterior' => $a->periodo.$a->subdiario];
                 }
+
                 return Contabilidad::crearAsiento($ruc, ['fecha' => $d['fecha'], 'glosa' => $d['glosa'], 'subdiario' => $d['subdiario'],
                     'origen' => $d['subdiario'] === '00' ? 'APERTURA' : 'MANUAL'] + $conservar, $d['lineas']);
             });
@@ -274,7 +289,8 @@ class ContabilidadController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
         $a = DB::table('conta_asientos')->where('id', $nuevo)->first();
-        return response()->json(['success' => true, 'message' => "Asiento {$a->subdiario}-" . str_pad($a->numero, 4, '0', STR_PAD_LEFT) . ' guardado.',
+
+        return response()->json(['success' => true, 'message' => "Asiento {$a->subdiario}-".str_pad($a->numero, 4, '0', STR_PAD_LEFT).' guardado.',
             'periodo' => $a->periodo]);
     }
 
@@ -283,7 +299,7 @@ class ContabilidadController extends Controller
         $ruc = $this->ruc();
         $a = DB::table('conta_asientos')->where('id', $id)->where('IdEmpresa', $ruc)->first();
         abort_unless($a, 404);
-        if (!in_array($a->origen, ['MANUAL', 'APERTURA'], true)) {
+        if (! in_array($a->origen, ['MANUAL', 'APERTURA'], true)) {
             return back()->withErrors(['asiento' => 'Los asientos automáticos no se eliminan: vuelve a centralizar el periodo.']);
         }
         try {
@@ -292,6 +308,7 @@ class ContabilidadController extends Controller
             return back()->withErrors(['asiento' => $e->getMessage()]);
         }
         DB::table('conta_asientos')->where('id', $id)->delete();
+
         return back()->with('success', 'Asiento eliminado.');
     }
 
@@ -302,10 +319,12 @@ class ContabilidadController extends Controller
         if ($request->input('accion') === 'cerrar') {
             DB::table('conta_periodos')->updateOrInsert(['IdEmpresa' => $ruc, 'periodo' => $periodo],
                 ['estado' => 'CERRADO', 'IdUsuario' => Auth::id(), 'updated_at' => now(), 'created_at' => now()]);
-            return back()->with('success', 'Periodo ' . Contabilidad::nombrePeriodo($periodo) . ' cerrado: ya no se puede modificar ni volver a centralizar.');
+
+            return back()->with('success', 'Periodo '.Contabilidad::nombrePeriodo($periodo).' cerrado: ya no se puede modificar ni volver a centralizar.');
         }
         DB::table('conta_periodos')->where('IdEmpresa', $ruc)->where('periodo', $periodo)->delete();
-        return back()->with('success', 'Periodo ' . Contabilidad::nombrePeriodo($periodo) . ' abierto nuevamente.');
+
+        return back()->with('success', 'Periodo '.Contabilidad::nombrePeriodo($periodo).' abierto nuevamente.');
     }
 
     // ================================================================== LIBRO MAYOR
@@ -324,7 +343,7 @@ class ContabilidadController extends Controller
         $saldoInicial = 0.0;
         if ($cuenta !== '') {
             $base = DB::table('conta_asiento_detalle as d')->join('conta_asientos as a', 'a.id', '=', 'd.asiento_id')
-                ->where('a.IdEmpresa', $ruc)->where('d.cuenta', 'like', $cuenta . '%');
+                ->where('a.IdEmpresa', $ruc)->where('d.cuenta', 'like', $cuenta.'%');
             $ini = (clone $base)->where('a.fecha', '<', $desde)->selectRaw('SUM(d.debe) as debe, SUM(d.haber) as haber')->first();
             $saldoInicial = round((float) $ini->debe - (float) $ini->haber, 2);
             $movs = (clone $base)->whereBetween('a.fecha', [$desde, $hasta])->orderBy('a.fecha')->orderBy('a.subdiario')->orderBy('a.numero')->orderBy('d.id')
@@ -338,10 +357,11 @@ class ContabilidadController extends Controller
             if ($request->get('excel')) {
                 $filas = [['', '', 'SALDO ANTERIOR', '', '', '', '', $saldoInicial]];
                 foreach ($movs as $m) {
-                    $filas[] = [Carbon::parse($m->fecha)->format('d/m/Y'), $m->subdiario . '-' . str_pad($m->numero, 4, '0', STR_PAD_LEFT),
+                    $filas[] = [Carbon::parse($m->fecha)->format('d/m/Y'), $m->subdiario.'-'.str_pad($m->numero, 4, '0', STR_PAD_LEFT),
                         $m->glosa ?: $m->glosa_asiento, (string) $m->cuenta, $m->documento ?? '', (float) $m->debe, (float) $m->haber, (float) $m->saldo];
                 }
-                return $this->descargar((new Excel())->hoja('Mayor ' . $cuenta, ['Fecha', 'Asiento', 'Glosa', 'Cuenta', 'Documento', 'Debe', 'Haber', 'Saldo'], $filas),
+
+                return $this->descargar((new Excel)->hoja('Mayor '.$cuenta, ['Fecha', 'Asiento', 'Glosa', 'Cuenta', 'Documento', 'Debe', 'Haber', 'Saldo'], $filas),
                     "libro_mayor_{$cuenta}.xlsx");
             }
         }
@@ -379,7 +399,7 @@ class ContabilidadController extends Controller
             if (in_array($el, ['1', '2', '3', '4', '5'], true)) {
                 $f['activo'] = $f['deudor'];
                 $f['pasivo'] = $f['acreedor'];
-            } elseif (in_array($el, ['6', '7', '8'], true) && !str_starts_with($f['cuenta'], '79')) {
+            } elseif (in_array($el, ['6', '7', '8'], true) && ! str_starts_with($f['cuenta'], '79')) {
                 $f['perdida'] = $f['deudor'];
                 $f['ganancia'] = $f['acreedor'];
             }
@@ -392,11 +412,12 @@ class ContabilidadController extends Controller
         $resultadoNaturaleza = round($tot['ganancia'] - $tot['perdida'], 2);
 
         if ($request->get('excel')) {
-            $x = array_map(fn($f) => [(string) $f['cuenta'], $f['nombre'], $f['debe'], $f['haber'], $f['deudor'], $f['acreedor'], $f['activo'], $f['pasivo'], $f['perdida'], $f['ganancia']], array_values($filas));
+            $x = array_map(fn ($f) => [(string) $f['cuenta'], $f['nombre'], $f['debe'], $f['haber'], $f['deudor'], $f['acreedor'], $f['activo'], $f['pasivo'], $f['perdida'], $f['ganancia']], array_values($filas));
             $x[] = ['', 'TOTALES', $tot['debe'], $tot['haber'], $tot['deudor'], $tot['acreedor'], $tot['activo'], $tot['pasivo'], $tot['perdida'], $tot['ganancia']];
             $x[] = ['', 'RESULTADO DEL EJERCICIO', '', '', '', '', $resultadoBalance < 0 ? -$resultadoBalance : '', $resultadoBalance > 0 ? $resultadoBalance : '',
                 $resultadoNaturaleza > 0 ? $resultadoNaturaleza : '', $resultadoNaturaleza < 0 ? -$resultadoNaturaleza : ''];
-            return $this->descargar((new Excel())->hoja('Balance de comprobación', [
+
+            return $this->descargar((new Excel)->hoja('Balance de comprobación', [
                 ['', '', 'SUMAS', '', 'SALDOS', '', 'INVENTARIO', '', 'RESULTADOS POR NATURALEZA', ''],
                 ['Cuenta', 'Denominación', 'Debe', 'Haber', 'Deudor', 'Acreedor', 'Activo', 'Pasivo y Patrimonio', 'Pérdidas', 'Ganancias']], $x),
                 "balance_comprobacion_{$desde}_{$hasta}.xlsx");
@@ -415,7 +436,7 @@ class ContabilidadController extends Controller
 
         // Estado de resultados por naturaleza (del periodo)
         $s = Contabilidad::sumas($ruc, $desde, $hasta);
-        $n = fn($p, $x = []) => Contabilidad::neto($s, (array) $p, $x);
+        $n = fn ($p, $x = []) => Contabilidad::neto($s, (array) $p, $x);
         $ventas = $n(['70']);
         $descuentos = $n(['74']);
         $costo = -$n(['69', '60', '61']);
@@ -433,8 +454,8 @@ class ContabilidadController extends Controller
 
         // Estado de situación financiera (acumulado al corte)
         $a = Contabilidad::sumas($ruc, null, $hasta);
-        $d = fn($p) => -Contabilidad::neto($a, (array) $p);    // saldo deudor
-        $c = fn($p) => Contabilidad::neto($a, (array) $p);     // saldo acreedor
+        $d = fn ($p) => -Contabilidad::neto($a, (array) $p);    // saldo deudor
+        $c = fn ($p) => Contabilidad::neto($a, (array) $p);     // saldo acreedor
         $activoCorriente = ['Efectivo y equivalentes de efectivo' => $d('10'), 'Inversiones financieras' => $d('11'),
             'Cuentas por cobrar comerciales' => $d(['12', '13']), 'Otras cuentas por cobrar' => $d(['14', '16', '17']),
             'Servicios contratados por anticipado' => $d('18'), 'Estimación de cobranza dudosa' => $d('19'),
@@ -464,14 +485,15 @@ class ContabilidadController extends Controller
                 ['Gastos financieros', -$finGastos], ['RESULTADO ANTES DE IMPUESTOS', $antesImp], ['Impuesto a la renta', -$renta], ['RESULTADO DEL PERIODO', $resultado],
                 ['', ''], ['ESTADO DE SITUACIÓN FINANCIERA', '']);
             foreach (['ACTIVO CORRIENTE' => $activoCorriente, 'ACTIVO NO CORRIENTE' => $activoNoCorriente, 'PASIVO CORRIENTE' => $pasivoCorriente,
-                      'PASIVO NO CORRIENTE' => $pasivoNoCorriente, 'PATRIMONIO' => $patrimonio] as $tit => $grupo) {
+                'PASIVO NO CORRIENTE' => $pasivoNoCorriente, 'PATRIMONIO' => $patrimonio] as $tit => $grupo) {
                 $f[] = [$tit, round(array_sum($grupo), 2)];
                 foreach ($grupo as $k => $v) {
-                    $f[] = ['   ' . $k, $v];
+                    $f[] = ['   '.$k, $v];
                 }
             }
             array_push($f, ['TOTAL ACTIVO', $totActivo], ['TOTAL PASIVO Y PATRIMONIO', round($totPasivo + $totPatrimonio, 2)]);
-            return $this->descargar((new Excel())->hoja('Estados financieros', ['Concepto', 'S/'], $f), "estados_financieros_{$hasta}.xlsx");
+
+            return $this->descargar((new Excel)->hoja('Estados financieros', ['Concepto', 'S/'], $f), "estados_financieros_{$hasta}.xlsx");
         }
 
         return view('empresas.contabilidad.estados', compact('desde', 'hasta', 'er', 'esf'));

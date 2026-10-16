@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Support\Contabilidad;
 
 /**
@@ -46,7 +47,8 @@ class Pcge
 
         // ===================== ELEMENTO 4: PASIVO
         '40' => 'TRIBUTOS, CONTRAPRESTACIONES Y APORTES AL SISTEMA PÚBLICO DE PENSIONES Y DE SALUD POR PAGAR',
-        '401' => 'GOBIERNO CENTRAL', '4011' => 'IMPUESTO GENERAL A LAS VENTAS', '40111' => 'IGV - CUENTA PROPIA', '401111' => 'IGV - CUENTA PROPIA',
+        '401' => 'GOBIERNO CENTRAL', '4011' => 'IMPUESTO GENERAL A LAS VENTAS', '40111' => 'IGV - CUENTA PROPIA', '401111' => 'IGV - CUENTA PROPIA', '40112' => 'IGV - RÉGIMEN DE PERCEPCIONES', '40113' => 'IGV - RÉGIMEN DE RETENCIONES',
+        '4012' => 'IMPUESTO SELECTIVO AL CONSUMO', '4018' => 'OTROS IMPUESTOS Y CONTRAPRESTACIONES', '40181' => 'IMPUESTO A LAS TRANSACCIONES FINANCIERAS', '40189' => 'OTROS IMPUESTOS (ICBPER Y OTROS)',
         '4017' => 'IMPUESTO A LA RENTA', '40171' => 'RENTA DE TERCERA CATEGORÍA', '40172' => 'RENTA DE CUARTA CATEGORÍA', '40173' => 'RENTA DE QUINTA CATEGORÍA',
         '403' => 'INSTITUCIONES PÚBLICAS', '4031' => 'ESSALUD', '4032' => 'ONP',
         '407' => 'ADMINISTRADORAS DE FONDOS DE PENSIONES',
@@ -126,10 +128,12 @@ class Pcge
     {
         $ahora = now();
         $codigos = array_map('strval', array_keys(self::CUENTAS));
+
         return array_map(function ($c) use ($ruc, $ahora, $codigos) {
             [$tipo, $nat] = self::tipo($c);
             // Imputable: la que no tiene subcuentas debajo
-            $hijas = array_filter($codigos, fn($x) => $x !== $c && str_starts_with($x, $c));
+            $hijas = array_filter($codigos, fn ($x) => $x !== $c && str_starts_with($x, $c));
+
             return ['IdEmpresa' => $ruc, 'cuenta' => $c, 'descripcion' => self::CUENTAS[$c], 'nivel' => strlen($c),
                 'tipo' => $tipo, 'naturaleza' => $nat, 'imputable' => empty($hijas) ? 1 : 0, 'estado' => 'Activo',
                 'created_at' => $ahora, 'updated_at' => $ahora];

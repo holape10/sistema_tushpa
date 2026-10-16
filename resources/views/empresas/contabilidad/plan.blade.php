@@ -8,10 +8,11 @@
             'GASTO' => 'bg-amber-100 text-amber-800', 'INGRESO' => 'bg-emerald-100 text-emerald-700', 'RESULTADO' => 'bg-slate-100 text-slate-600',
             'ANALITICA' => 'bg-slate-100 text-slate-600', 'ORDEN' => 'bg-slate-100 text-slate-600'];
         $camposConfig = [
-            'Ventas' => ['cta_por_cobrar' => 'Cuentas por cobrar (clientes)', 'cta_igv' => 'IGV - cuenta propia', 'cta_ventas' => 'Ventas gravadas', 'cta_ventas_exo' => 'Ventas exoneradas / inafectas'],
+            'Ventas' => ['cta_por_cobrar' => 'Cuentas por cobrar (clientes)', 'cta_ventas' => 'Ventas gravadas', 'cta_ventas_exo' => 'Ventas exoneradas / inafectas'],
+            'Impuestos' => ['cta_igv' => 'IGV de ventas (débito fiscal)', 'cta_igv_compras' => 'IGV de compras (crédito fiscal)', 'cta_isc' => 'ISC (impuesto selectivo)',
+                'cta_icbper' => 'ICBPER (bolsas plásticas)', 'cta_otros_tributos' => 'Otros tributos', 'cta_renta4_pagar' => 'Retención 4ta categoría (honorarios)'],
             'Compras' => ['cta_por_pagar' => 'Cuentas por pagar (proveedores)', 'cta_compras' => 'Compras de mercaderías', 'cta_mercaderias' => 'Mercaderías (almacén)', 'cta_variacion' => 'Variación de inventarios'],
-            'Caja, bancos y costo' => ['cta_caja' => 'Caja (efectivo)', 'cta_banco' => 'Banco (tarjeta, Yape, transferencia…)', 'cta_costo_ventas' => 'Costo de ventas',
-                'cta_renta4_pagar' => 'Retención 4ta categoría (honorarios)'],
+            'Caja, bancos y costo' => ['cta_caja' => 'Caja (efectivo)', 'cta_banco' => 'Banco (tarjeta, Yape, transferencia…)', 'cta_costo_ventas' => 'Costo de ventas'],
             'Planilla' => ['cta_sueldos' => 'Sueldos y salarios (gasto)', 'cta_essalud_gasto' => 'EsSalud (gasto)', 'cta_remun_pagar' => 'Remuneraciones por pagar',
                 'cta_essalud_pagar' => 'EsSalud por pagar', 'cta_onp_pagar' => 'ONP por pagar', 'cta_afp_pagar' => 'AFP por pagar',
                 'cta_renta5_pagar' => 'Renta 5ta por pagar', 'cta_adelantos' => 'Adelantos al personal'],
@@ -21,7 +22,7 @@
     <div x-data="{ tab: @js(request('tab', 'plan')), form: null }">
         <div class="flex gap-2 mb-4">
             <button type="button" @click="tab = 'plan'" :class="tab === 'plan' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm">Plan de cuentas</button>
-            <button type="button" @click="tab = 'config'" :class="tab === 'config' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm">Cuentas de centralización</button>
+            <button type="button" @click="tab = 'config'" :class="tab === 'config' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm">Cuentas e impuestos</button>
         </div>
 
         {{-- ============ PLAN ============ --}}
@@ -102,6 +103,16 @@
                     @foreach ($medios as $m)
                         <label class="text-sm text-gray-600">{{ $m->nom_med_pag }}
                             <input name="medios[{{ $m->id_med_pag }}]" list="imputables" value="{{ $m->cuenta_contable }}" placeholder="{{ str_contains(mb_strtoupper($m->nom_med_pag), 'EFECTIVO') ? $config->cta_caja : $config->cta_banco }}" class="block w-full mt-1 rounded-lg border-gray-300 font-mono"></label>
+                    @endforeach
+                </div>
+            </section>
+            <section class="bg-white rounded-2xl shadow-sm p-4">
+                <h3 class="font-bold text-gray-800 mb-1">Tasa del IGV</h3>
+                <p class="text-xs text-gray-400 mb-3">Con esta tasa se calcula el IGV en el Registro de ventas y compras. Si la sucursal es exonerada (Amazonía), los montos van como exonerados.</p>
+                <div class="flex flex-wrap gap-2">
+                    @foreach (['18.00' => '18% (general)', '10.50' => '10.5% (restaurantes y hoteles MYPE)'] as $valor => $texto)
+                        <label class="flex items-center gap-2 rounded-xl border-2 px-4 py-2 cursor-pointer text-sm has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+                            <input type="radio" name="tasa_igv" value="{{ $valor }}" @checked(number_format((float) old('tasa_igv', $config->tasa_igv ?? 18), 2, '.', '') === $valor) class="text-indigo-600"> {{ $texto }}</label>
                     @endforeach
                 </div>
             </section>

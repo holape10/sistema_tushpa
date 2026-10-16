@@ -97,6 +97,26 @@
         </div>
         <div class="mt-4">{{ $asientos->links() }}</div>
 
+        {{-- Movimientos frecuentes: llenan el asiento con sus cuentas; solo falta el monto --}}
+        @php
+            $cfgConta = Contabilidad::config((string) auth()->user()->IdEmpresa);
+            // La cuenta pedida si es imputable; si tiene subcuentas, la primera que lo sea
+            $cta = fn (string $c) => isset($imputables[$c]) ? $c : (collect($imputables)->keys()->first(fn ($k) => str_starts_with((string) $k, $c)) ?? null);
+            $plantillas = collect([
+                ['Depósito de caja al banco', '01', 'DEPÓSITO DE CAJA AL BANCO', [[$cfgConta->cta_banco, 'D'], [$cfgConta->cta_caja, 'H']]],
+                ['Retiro del banco a caja', '01', 'RETIRO DEL BANCO A CAJA', [[$cfgConta->cta_caja, 'D'], [$cfgConta->cta_banco, 'H']]],
+                ['Cobro a un cliente (banco)', '01', 'COBRO A CLIENTE', [[$cfgConta->cta_banco, 'D'], [$cfgConta->cta_por_cobrar, 'H']]],
+                ['Pago a un proveedor (banco)', '01', 'PAGO A PROVEEDOR', [[$cfgConta->cta_por_pagar, 'D'], [$cfgConta->cta_banco, 'H']]],
+                ['Pago del IGV a SUNAT', '01', 'PAGO DE IGV A SUNAT', [[$cfgConta->cta_igv, 'D'], [$cfgConta->cta_banco, 'H']]],
+                ['Préstamo recibido del banco', '01', 'PRÉSTAMO BANCARIO RECIBIDO', [[$cfgConta->cta_banco, 'D'], [$cta('451'), 'H']]],
+                ['Pago de cuota de préstamo', '01', 'PAGO DE CUOTA DE PRÉSTAMO', [[$cta('451'), 'D'], [$cfgConta->cta_banco, 'H']]],
+                ['Aporte de capital', '35', 'APORTE DE CAPITAL', [[$cfgConta->cta_banco, 'D'], [$cta('501'), 'H']]],
+                ['Entrega a rendir al personal', '01', 'ENTREGA A RENDIR', [[$cta('1413'), 'D'], [$cfgConta->cta_caja, 'H']]],
+                ['Comisión bancaria / ITF', '01', 'COMISIONES BANCARIAS', [[$cta('639'), 'D'], [$cfgConta->cta_banco, 'H'], [$cta('94'), 'D'], [$cta('79'), 'H']]],
+                ['Depreciación del mes', '35', 'DEPRECIACIÓN DEL MES', [[$cta('681'), 'D'], [$cta('39'), 'H'], [$cta('94'), 'D'], [$cta('79'), 'H']]],
+            ])->filter(fn ($p) => collect($p[3])->every(fn ($l) => $l[0] && isset($imputables[$l[0]])))->values();
+        @endphp
+
         {{-- Modal asiento manual --}}
         <div x-show="modal" x-cloak class="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center sm:p-4" @click.self="modal = false">
             <div class="bg-white w-full sm:max-w-4xl rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col">
@@ -105,7 +125,20 @@
                     <h3 class="font-bold text-gray-800" x-text="id ? 'Editar asiento' : 'Nuevo asiento'"></h3>
                     <button type="button" @click="modal = false" class="text-gray-400 text-2xl leading-none">&times;</button>
                 </div>
-                <div class="p-5 overflow-y-auto space-y-3 text-sm">
+                <div class="p-5 overflow-y-auto space-y-3 text-sm" @keydown.enter="siguiente($event)">
+                    <div x-show="!id" class="rounded-xl bg-indigo-50/60 border border-indigo-100 p-3">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <p class="font-bold text-indigo-900 text-xs uppercase">Movimientos frecuentes</p>
+                            <label class="ml-auto text-xs text-gray-600">Monto <input type="number" step="0.01" min="0" x-model="montoPlantilla" placeholder="0.00" class="ml-1 w-28 h-8 rounded-lg border-gray-300 text-right text-sm"></label>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach ($plantillas as $i => [$nombre, $sub, $glosa, $lineas])
+                                <button type="button" tabindex="-1" @click="plantilla(@js(['sub' => $sub, 'glosa' => $glosa, 'lineas' => $lineas]))"
+                                        class="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-xs font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white">{{ $nombre }}</button>
+                            @endforeach
+                        </div>
+                        <p class="mt-2 text-[11px] text-gray-500">Debe = a dónde va el dinero o lo que aumenta (gasto, activo). Haber = de dónde sale (caja, banco) o lo que se debe. Para compras y ventas usa el <a href="{{ route('contabilidad.registro', 'compras') }}" class="underline">Registro de compras</a> o de <a href="{{ route('contabilidad.registro', 'ventas') }}" class="underline">ventas</a>: arman el asiento solos.</p>
+                    </div>
                     <div class="grid sm:grid-cols-4 gap-3">
                         <label>Fecha<input type="date" x-model="a.fecha" class="block w-full mt-1 rounded-lg border-gray-300"></label>
                         <label>Subdiario
@@ -130,7 +163,8 @@
                         </tbody>
                         <tfoot>
                             <tr class="font-bold border-t">
-                                <td colspan="2" class="py-2"><button type="button" @click="a.lineas.push({ cuenta: '', debe: '', haber: '', documento: '' })" class="text-indigo-600 text-xs font-semibold">+ Agregar línea</button></td>
+                                <td colspan="2" class="py-2"><button type="button" tabindex="-1" @click="a.lineas.push({ cuenta: '', debe: '', haber: '', documento: '' })" class="text-indigo-600 text-xs font-semibold">+ Agregar línea</button>
+                                    <button type="button" tabindex="-1" x-show="!cuadra() && (suma('debe') || suma('haber'))" @click="cuadrar()" class="ml-3 text-amber-700 text-xs font-semibold">⚖ Cuadrar con la diferencia</button></td>
                                 <td class="text-right pr-2">Totales</td>
                                 <td class="text-right pr-2" x-text="n2(suma('debe'))"></td><td class="text-right pr-2" x-text="n2(suma('haber'))"></td><td></td>
                             </tr>
@@ -165,6 +199,33 @@
                     this.modal = true;
                 },
                 editar(id, datos) { this.id = id; this.error = ''; this.a = JSON.parse(JSON.stringify(datos)); this.modal = true; },
+                montoPlantilla: '',
+                // Llena el asiento con las cuentas del movimiento (y el monto, si se escribió)
+                plantilla(p) {
+                    const m = parseFloat(this.montoPlantilla) || '';
+                    this.a.subdiario = p.sub; this.a.glosa = p.glosa;
+                    this.a.lineas = p.lineas.map(([cuenta, lado]) => ({ cuenta, debe: lado === 'D' ? m : '', haber: lado === 'H' ? m : '', documento: '' }));
+                    this.$nextTick(() => this.$root.querySelector('[x-model="a.glosa"]').focus());
+                },
+                // La diferencia va a la última línea vacía (o a una nueva)
+                cuadrar() {
+                    const dif = Math.round((this.suma('debe') - this.suma('haber')) * 100) / 100;
+                    let l = this.a.lineas.find(x => !parseFloat(x.debe) && !parseFloat(x.haber));
+                    if (!l) { l = vacio(); this.a.lineas.push(l); }
+                    if (dif > 0) { l.haber = dif; l.debe = ''; } else { l.debe = -dif; l.haber = ''; }
+                },
+                // Enter: siguiente campo; al final de la última línea agrega otra si no cuadra, o guarda si cuadra
+                siguiente(e) {
+                    if (e.target.tagName === 'BUTTON') return;
+                    e.preventDefault();
+                    const caja = e.currentTarget;
+                    const campos = [...caja.querySelectorAll('input, select')].filter(x => x.offsetParent !== null && x.tabIndex !== -1);
+                    const i = campos.indexOf(e.target);
+                    if (i < campos.length - 1) { campos[i + 1].focus(); campos[i + 1].select?.(); return; }
+                    if (this.cuadra()) { this.guardar(); return; }
+                    this.a.lineas.push(vacio());
+                    this.$nextTick(() => { const t = [...caja.querySelectorAll('[list="ctas"]')]; t[t.length - 1]?.focus(); });
+                },
                 async guardar() {
                     if (!this.a.glosa.trim()) { this.error = 'Escribe la glosa del asiento.'; return; }
                     this.enviando = true; this.error = '';

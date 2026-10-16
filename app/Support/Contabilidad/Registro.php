@@ -32,18 +32,31 @@ class Registro
     /** Primeros dígitos de las cuentas que se ofrecen para el monto: ingresos (70, 75) o compras y gastos (60 al 68) */
     public const PREFIJOS = ['VENTA' => ['70', '73', '75', '77'], 'COMPRA' => ['60', '62', '63', '64', '65', '66', '67', '68', '33', '34']];
 
-    /** Montos en soles (con el tipo de cambio); el redondeo se lleva a la cuenta principal para que cuadre */
+    /** Total del comprobante: base + IGV + ISC + ICBPER + exonerado + otros */
+    public static function total(array $d): float
+    {
+        return round(array_sum(array_map(fn ($c) => (float) ($d[$c] ?? 0), ['base', 'igv', 'isc', 'icbper', 'no_gravado', 'otros'])), 2);
+    }
+
+    /**
+     * Montos en soles (con el tipo de cambio). El monto principal (venta o costo) se saca por diferencia para que el
+     * asiento cuadre al céntimo aunque haya redondeos.
+     */
     public static function enSoles(array $d): array
     {
         $tc = ($d['moneda'] ?? 'PEN') === 'USD' ? max(0.001, (float) ($d['tipo_cambio'] ?? 1)) : 1.0;
-        $igv = round((float) ($d['igv'] ?? 0) * $tc, 2);
-        $total = round((float) ($d['total'] ?? 0) * $tc, 2);
+        $s = fn (string $c) => round((float) ($d[$c] ?? 0) * $tc, 2);
+        $total = round(self::total($d) * $tc, 2);
 
-        return ['igv' => $igv, 'total' => $total, 'monto' => round($total - $igv, 2), 'tc' => $tc];
+        return ['tc' => $tc, 'total' => $total, 'igv' => $s('igv'), 'isc' => $s('isc'), 'icbper' => $s('icbper'), 'no_gravado' => $s('no_gravado'),
+            'retencion' => $s('retencion'), 'neto' => round($total - $s('retencion'), 2)];
     }
 
     /**
      * Asientos que corresponden al comprobante.
+     *  Venta:  12 (D) total → IGV, ISC, ICBPER (H) + ventas gravadas y exoneradas (H)
+     *  Compra: gasto o compra (D) con todo lo que no es crédito fiscal (ISC, ICBPER, exonerado, otros) + IGV compras (D)
+     *          → 42 por pagar (H) y la retención de 4ta (H) en los recibos por honorarios; luego su destino
      *
      * @return array{provision: array<int, array<string, mixed>>, pago: ?array<int, array<string, mixed>>}
      */
@@ -55,38 +68,46 @@ class Registro
         $doc = trim(($d['serie'] ?? '') !== '' ? $d['serie'].'-'.$d['numero'] : (string) $d['numero']);
         $anexo = ['anexo_doc' => $d['doc_num'] ?? null, 'anexo_nombre' => $d['nombre'] ?? null, 'documento' => $doc];
         // Debe/haber según el lado; la nota de crédito va al revés
-        $linea = fn (string $cuenta, float $monto, bool $alDebe, string $glosa) => $monto == 0 ? null : [
+        $linea = fn (?string $cuenta, float $monto, bool $alDebe, string $glosa) => $monto == 0 || ! $cuenta ? null : [
             'cuenta' => $cuenta, 'debe' => ($alDebe xor $nota) ? $monto : 0, 'haber' => ($alDebe xor $nota) ? 0 : $monto, 'glosa' => $glosa,
         ] + $anexo;
 
         if ($venta) {
+            // Lo exonerado va a su propia cuenta si se usa la cuenta de ventas por defecto
+            $exoAparte = $s['no_gravado'] > 0 && $d['cuenta'] === $cfg->cta_ventas && $cfg->cta_ventas_exo !== $cfg->cta_ventas;
+            $principal = round($s['total'] - $s['igv'] - $s['isc'] - $s['icbper'] - ($exoAparte ? $s['no_gravado'] : 0), 2);
             $provision = [
                 $linea($cfg->cta_por_cobrar, $s['total'], true, 'POR COBRAR'),
                 $linea($cfg->cta_igv, $s['igv'], false, 'IGV'),
-                $linea($d['cuenta'], $s['monto'], false, 'VENTA'),
+                $linea($cfg->cta_isc ?? null, $s['isc'], false, 'ISC'),
+                $linea($cfg->cta_icbper ?? null, $s['icbper'], false, 'ICBPER'),
+                $linea($d['cuenta'], $principal, false, 'VENTA'),
+                $exoAparte ? $linea($cfg->cta_ventas_exo, $s['no_gravado'], false, 'VENTA EXONERADA') : null,
             ];
         } else {
+            $costo = round($s['total'] - $s['igv'], 2);
             $provision = [
-                $linea($d['cuenta'], $s['monto'], true, 'COMPRA / GASTO'),
-                $linea($cfg->cta_igv, $s['igv'], true, 'IGV CRÉDITO FISCAL'),
-                $linea($cfg->cta_por_pagar, $s['total'], false, 'POR PAGAR'),
+                $linea($d['cuenta'], $costo, true, 'COMPRA / GASTO'),
+                $linea($cfg->cta_igv_compras ?? $cfg->cta_igv, $s['igv'], true, 'IGV CRÉDITO FISCAL'),
+                $linea($cfg->cta_por_pagar, $s['neto'], false, 'POR PAGAR'),
+                $linea($cfg->cta_renta4_pagar, $s['retencion'], false, 'RETENCIÓN 4TA CATEGORÍA'),
             ];
             // Destino: mercaderías al almacén (20 → 61); gastos a su función (94 → 79)
             $existe = fn (string $c) => $imputables === null || isset($imputables[$c]);
             if (str_starts_with($d['cuenta'], '60') && $cfg->asiento_destino && $existe($cfg->cta_mercaderias) && $existe($cfg->cta_variacion)) {
-                $provision[] = $linea($cfg->cta_mercaderias, $s['monto'], true, 'DESTINO');
-                $provision[] = $linea($cfg->cta_variacion, $s['monto'], false, 'DESTINO');
+                $provision[] = $linea($cfg->cta_mercaderias, $costo, true, 'DESTINO');
+                $provision[] = $linea($cfg->cta_variacion, $costo, false, 'DESTINO');
             } elseif (preg_match('/^6[2-8]/', $d['cuenta']) && $existe('94') && $existe('79')) {
-                $provision[] = $linea('94', $s['monto'], true, 'DESTINO GASTOS ADMINISTRATIVOS');
-                $provision[] = $linea('79', $s['monto'], false, 'DESTINO');
+                $provision[] = $linea('94', $costo, true, 'DESTINO GASTOS ADMINISTRATIVOS');
+                $provision[] = $linea('79', $costo, false, 'DESTINO');
             }
         }
 
         $pago = null;
         if (($d['condicion'] ?? 'CREDITO') === 'CONTADO' && ! empty($d['cuenta_pago'])) {
             $pago = $venta
-                ? [$linea($d['cuenta_pago'], $s['total'], true, 'COBRO'), $linea($cfg->cta_por_cobrar, $s['total'], false, 'COBRO')]
-                : [$linea($cfg->cta_por_pagar, $s['total'], true, 'PAGO'), $linea($d['cuenta_pago'], $s['total'], false, 'PAGO')];
+                ? [$linea($d['cuenta_pago'], $s['neto'], true, 'COBRO'), $linea($cfg->cta_por_cobrar, $s['neto'], false, 'COBRO')]
+                : [$linea($cfg->cta_por_pagar, $s['neto'], true, 'PAGO'), $linea($d['cuenta_pago'], $s['neto'], false, 'PAGO')];
             $pago = array_values(array_filter($pago));
         }
 
@@ -112,7 +133,7 @@ class Registro
             }
 
             $fila = array_intersect_key($d, array_flip(['tipo', 'fecha', 'fecha_vence', 'tdocod', 'serie', 'numero', 'doc_tipo', 'doc_num', 'nombre',
-                'moneda', 'tipo_cambio', 'base', 'igv', 'no_gravado', 'otros', 'total', 'cuenta', 'condicion', 'cuenta_pago', 'glosa']))
+                'moneda', 'tipo_cambio', 'base', 'igv', 'isc', 'icbper', 'no_gravado', 'otros', 'retencion', 'total', 'cuenta', 'condicion', 'cuenta_pago', 'glosa']))
                 + ['IdEmpresa' => $ruc, 'periodo' => $periodo, 'asiento_editado' => $lineas !== null, 'IdUsuario' => Auth::id(), 'updated_at' => now()];
             if ($id) {
                 $anterior = DB::table('conta_registros')->where('id', $id)->where('IdEmpresa', $ruc)->lockForUpdate()->first();
