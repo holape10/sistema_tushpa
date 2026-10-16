@@ -121,7 +121,8 @@ class Importador
             'Precios por día' => $contar('precios_dia_semana'),
             'Medios de pago' => $contar('medios_pagos'),
             'Mesas' => $contar('mesas'),
-            'Ventas (comprobantes)' => $contar('cpe_cabecera'),
+            'Ventas (comprobantes)' => $contar('cpe_cabecera', fn ($q) => $q->whereIn('tdocod', Historial::VENTAS)),
+            'Vales y proformas (no se importan)' => $contar('cpe_cabecera', fn ($q) => $q->whereNotIn('tdocod', Historial::VENTAS)),
             'Compras' => $contar('compras_cabecera'),
         ];
     }
@@ -156,6 +157,13 @@ class Importador
     {
         $secciones = $opc['secciones'] ?? [];
         $rucAntiguo = collect($this->sucursales())->firstWhere('id', $suc)['ruc'] ?? null;
+        $this->unidades();
+        // Los comprobantes electrónicos son de un RUC: no se pasan a otra empresa
+        if (in_array('historial', $secciones, true) && ! $this->mismoRuc($user, $suc)) {
+            $secciones = array_values(array_diff($secciones, ['historial']));
+            $this->aviso("Historial NO importado: el respaldo es del RUC {$rucAntiguo} y esta empresa es {$user->IdEmpresa}. "
+                .'Las ventas, compras y cuentas de otro RUC no se pasan (sí los productos, clientes y lo demás).');
+        }
 
         foreach (array_keys(self::SECCIONES) as $s) {
             if (! in_array($s, $secciones, true)) {
@@ -182,6 +190,40 @@ class Importador
         }
 
         return ['secciones' => $this->reporte, 'avisos' => $this->avisos];
+    }
+
+    /** ¿El respaldo es de la misma empresa (RUC) a la que se importa? Sin RUC en el respaldo se asume que sí */
+    public function mismoRuc(User $user, int $suc): bool
+    {
+        $ruc = collect($this->sucursales())->firstWhere('id', $suc)['ruc'] ?? null;
+
+        return ! $ruc || (string) $ruc === (string) $user->IdEmpresa;
+    }
+
+    /**
+     * Unidades del sistema antiguo que el nuevo no tiene (MIL millar, BE fardo, CEN ciento, DZN docena…): se agregan
+     * para que los productos y sus presentaciones conserven su unidad SUNAT y no queden como "Unidad".
+     */
+    private function unidades(): void
+    {
+        if (! $this->hay('unidad_medida')) {
+            return;
+        }
+        $existentes = DB::table('unidad_medida')->pluck('umecod')->map(fn ($u) => strtoupper($u))->flip();
+        foreach ($this->src('unidad_medida')->get() as $u) {
+            $cod = strtoupper(trim((string) self::v($u, 'umecod', '')));
+            if (! preg_match('/^[A-Z0-9]{2,3}$/', $cod) || isset($existentes[$cod])) {
+                continue;
+            }
+            $fila = ['umecod' => $cod, 'umenom' => mb_convert_case(mb_strtolower(trim((string) self::v($u, 'umenom', $cod))), MB_CASE_TITLE),
+                'umecin' => mb_substr(trim((string) self::v($u, 'umecin', $cod)), 0, 3) ?: $cod];
+            if (Schema::hasColumn('unidad_medida', 'umeest')) {
+                $fila['umeest'] = 'Activo';
+            }
+            DB::table('unidad_medida')->insert($fila);
+            $existentes[$cod] = true;
+            $this->aviso("Unidad agregada: {$cod} ({$fila['umenom']}).");
+        }
     }
 
     private function sumar(string $s, string $k, int $n = 1): void
@@ -727,7 +769,7 @@ class Importador
         };
 
         $this->src('cliente')
-            ->when($rucAntiguo && $this->col('cliente', 'rucemp'), fn ($q) => $q->where('rucemp', $rucAntiguo))
+            ->when($rucAntiguo && $this->col('cliente', 'rucemp'), fn ($q) => $q->where(fn ($w) => $w->where('rucemp', $rucAntiguo)->orWhere('rucemp', '')->orWhereNull('rucemp')))
             ->orderBy('clicod')->chunk(1000, function ($filas) use (&$existentes, &$nuevos, &$vistos, $tipos, $user, $mensualDe) {
                 foreach ($filas as $c) {
                     $num = preg_replace('/\s+/', '', (string) self::v($c, 'clinum', ''));

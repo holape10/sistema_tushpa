@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Support\Antiguo;
 
 use Illuminate\Support\Facades\DB;
@@ -22,12 +23,13 @@ class CargadorSql
     ];
 
     private const RUTINA = '/^CREATE\s+(?:OR\s+REPLACE\s+)?(?:DEFINER\s*=\s*\S+\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?(?:PROCEDURE|FUNCTION|TRIGGER|EVENT)\b/i';
+
     private const TABLA = '/^(?:INSERT\s+(?:IGNORE\s+)?INTO|REPLACE\s+INTO|CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?|DROP\s+TABLE(?:\s+IF\s+EXISTS)?|ALTER\s+TABLE)\s+`?([A-Za-z0-9_]+)`?/i';
 
     /** @return array{ejecutadas: int, omitidas: int, errores: string[], tablas: string[]} */
     public static function cargar(string $archivo, string $bd): array
     {
-        if (!preg_match('/^[A-Za-z0-9_]+$/', $bd)) {
+        if (! preg_match('/^[A-Za-z0-9_]+$/', $bd)) {
             throw new \RuntimeException('Nombre de base de datos no válido.');
         }
         DB::statement("CREATE DATABASE IF NOT EXISTS `{$bd}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
@@ -37,7 +39,7 @@ class CargadorSql
 
         $gz = str_ends_with(strtolower($archivo), '.gz');
         $f = $gz ? gzopen($archivo, 'rb') : fopen($archivo, 'rb');
-        if (!$f) {
+        if (! $f) {
             throw new \RuntimeException('No se pudo abrir el archivo.');
         }
 
@@ -55,6 +57,7 @@ class CargadorSql
                 if (preg_match('/^END\s*;?\s*$/i', $t)) {
                     $enRutina = false;
                 }
+
                 continue;
             }
 
@@ -64,17 +67,19 @@ class CargadorSql
                 }
                 if (preg_match('/^DELIMITER\s+(\S+)/i', $t, $m)) {
                     $delim = $m[1];
+
                     continue;
                 }
                 if ($delim === ';' && preg_match(self::RUTINA, $t)) {
                     $res['omitidas']++;
                     $enRutina = true;
+
                     continue;
                 }
             }
 
-            $buffer .= $limpia . "\n";
-            if (!str_ends_with($t, $delim)) {
+            $buffer .= $limpia."\n";
+            if (! str_ends_with($t, $delim)) {
                 continue;
             }
 
@@ -86,14 +91,16 @@ class CargadorSql
 
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 1, UNIQUE_CHECKS = 1');
         $res['tablas'] = array_values(array_unique($res['tablas']));
+
         return $res;
     }
 
     private static function ejecutar(\PDO $pdo, string $sql, array &$res): void
     {
-        if ($sql === '' || preg_match(self::RUTINA, $sql) || !preg_match(self::TABLA, $sql, $m)
-            || !in_array(strtolower($m[1]), self::TABLAS, true)) {
+        if ($sql === '' || preg_match(self::RUTINA, $sql) || ! preg_match(self::TABLA, $sql, $m)
+            || ! in_array(strtolower($m[1]), self::TABLAS, true)) {
             $res['omitidas']++;
+
             return;
         }
         try {
@@ -102,7 +109,7 @@ class CargadorSql
             $res['tablas'][] = strtolower($m[1]);
         } catch (\Throwable $e) {
             if (count($res['errores']) < 20) {
-                $res['errores'][] = $m[1] . ': ' . mb_substr($e->getMessage(), 0, 200);
+                $res['errores'][] = $m[1].': '.mb_substr($e->getMessage(), 0, 200);
             }
         }
     }

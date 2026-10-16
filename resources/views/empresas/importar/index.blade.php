@@ -78,6 +78,15 @@
             </div>
         </div>
 
+        @unless ($mismoRuc)
+            @php $rucRespaldo = collect($sucursales)->firstWhere('id', $suc)['ruc'] ?? ''; @endphp
+            <div class="rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 px-5 py-4 text-sm">
+                <p class="font-bold">⚠️ Este respaldo es de otra empresa (RUC {{ $rucRespaldo }}) y estás en el RUC {{ auth()->user()->IdEmpresa }}.</p>
+                <p class="mt-1">Se pueden pasar productos, clientes, proveedores y lo demás, pero el <b>historial de ventas y compras NO</b>: son comprobantes electrónicos de otro RUC.
+                    Si es la misma empresa, impórtalo entrando al sistema de la empresa con RUC {{ $rucRespaldo }}.</p>
+            </div>
+        @endunless
+
         <form method="POST" action="{{ route('importar.ejecutar') }}" enctype="multipart/form-data" class="space-y-6"
               x-data="{ enviando: false, secciones: @js(array_keys(\App\Support\Antiguo\Importador::SECCIONES)) }" @submit="enviando = true">
             @csrf
