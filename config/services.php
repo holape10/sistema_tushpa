@@ -46,4 +46,13 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
     ],
 
+    // WhatsApp Business (API de Meta) del sistema: recordatorios de citas de las clínicas que no pusieron su propia cuenta
+    'whatsapp' => [
+        'token' => env('WHATSAPP_TOKEN'),
+        'phone_id' => env('WHATSAPP_PHONE_ID'),
+        'idioma' => env('WHATSAPP_IDIOMA', 'es'),
+        'plantilla_paciente' => env('WHATSAPP_PLANTILLA_PACIENTE', 'recordatorio_cita'),
+        'plantilla_doctor' => env('WHATSAPP_PLANTILLA_DOCTOR', 'agenda_doctor'),
+    ],
+
 ];

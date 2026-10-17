@@ -114,6 +114,11 @@
             <div class="{{ $tarjeta }} lg:col-span-2">
                 <h2 class="font-bold text-gray-800"><i class="fas fa-teeth-open text-amber-600"></i> Tratamientos</h2>
                 <p class="text-xs text-gray-400 mb-3">{{ $tratNuevos }} nuevo(s) en el periodo · cobrado en el periodo {{ $soles($cobradoTratamientos) }} · saldo por cobrar {{ $soles($saldoPorCobrar) }}</p>
+                @if ($presupuestos->emitidos)
+                    <p class="text-sm mb-3 rounded-xl bg-teal-50 px-3 py-2"><b>Presupuestos:</b> {{ $presupuestos->emitidos }} entregado(s) por {{ $soles($presupuestos->montoEmitido) }} ·
+                        <b class="text-teal-700">{{ $presupuestos->aceptados }} aceptado(s)</b> por {{ $soles($presupuestos->montoAceptado) }}
+                        ({{ round($presupuestos->aceptados / $presupuestos->emitidos * 100) }}%)</p>
+                @endif
                 <p class="text-sm font-semibold text-rose-700 mb-2">Con cuotas vencidas ({{ $conVencido->count() }})</p>
                 <table class="w-full text-sm">
                     <tbody class="divide-y divide-gray-100">

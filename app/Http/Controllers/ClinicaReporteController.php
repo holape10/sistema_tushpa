@@ -149,7 +149,12 @@ class ClinicaReporteController extends Controller
             return Clinica::conCuotas($t);
         });
 
+        $presupuestos = DB::table('clinica_presupuestos')->where('id_empresa_negocio', $suc)->whereBetween('fecha', $rango)->get(['estado', 'total']);
+
         return [
+            'presupuestos' => (object) ['emitidos' => $presupuestos->count(), 'aceptados' => $presupuestos->where('estado', 'ACEPTADO')->count(),
+                'montoAceptado' => round((float) $presupuestos->where('estado', 'ACEPTADO')->sum('total'), 2),
+                'montoEmitido' => round((float) $presupuestos->sum('total'), 2)],
             'tratActivos' => $lista->where('saldo', '>', 0.009)->count(),
             'tratNuevos' => DB::table('clinica_tratamientos')->where('id_empresa_negocio', $suc)->whereBetween('creado', [$rango[0].' 00:00:00', $rango[1].' 23:59:59'])->count(),
             'cobradoTratamientos' => round((float) DB::table('clinica_tratamiento_registros as r')->join('clinica_tratamientos as t', 't.tra_id', '=', 'r.tra_id')

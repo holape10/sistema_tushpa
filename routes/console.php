@@ -4,6 +4,7 @@ use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
 use App\Models\User;
 use App\Support\Antiguo\CargadorSql;
+use App\Support\ClinicaRecordatorios;
 use App\Support\DemoDatos;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\Tenancy\Provisionador;
@@ -214,3 +215,24 @@ Artisan::command('sunat:rescatar {--ruc= : Solo esta empresa}', function () {
 
 // Cada hora de 7am a 10pm: lo que está por vencer el plazo de SUNAT se envía solo
 Schedule::command('sunat:rescatar')->hourlyAt(20)->between('07:00', '22:00')->withoutOverlapping(50);
+
+Artisan::command('clinica:recordatorios {--ruc= : Solo esta empresa}', function () {
+    $bases = Tenancy::activa()
+        ? Cliente::where('estado', 'ACTIVO')->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))->pluck('base_datos', 'ruc')
+        : collect(['local' => null]);
+    foreach ($bases as $ruc => $base) {
+        try {
+            $r = $base ? Tenancy::en($base, fn () => ClinicaRecordatorios::ejecutar()) : ClinicaRecordatorios::ejecutar();
+        } catch (Throwable $e) {
+            $this->error("{$ruc}: ".$e->getMessage());
+
+            continue;
+        }
+        if ($r['pacientes'] || $r['doctores'] || $r['errores']) {
+            $this->line("<info>{$ruc}</info> pacientes {$r['pacientes']} · doctores {$r['doctores']} · con error {$r['errores']}");
+        }
+    }
+})->purpose('Recuerda por WhatsApp/correo las citas de mañana a los pacientes y a sus doctores');
+
+// Cada 15 minutos de 7am a 9:45pm: cada clínica envía desde la hora que eligió (por defecto 6pm)
+Schedule::command('clinica:recordatorios')->everyFifteenMinutes()->between('07:00', '21:45')->withoutOverlapping(14);

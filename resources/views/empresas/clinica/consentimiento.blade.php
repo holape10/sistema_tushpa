@@ -13,8 +13,9 @@
         h1 { text-align: center; font-size: 16px; color: #0f766e; margin: 10px 0 16px; }
         .linea { border-bottom: 1px solid #111; display: inline-block; min-width: 60mm; }
         ol li { margin-bottom: 6px; }
-        .firmas { display: flex; justify-content: space-between; margin-top: 60px; text-align: center; }
-        .firmas div { width: 70mm; border-top: 1px solid #111; padding-top: 4px; }
+        .firmas2 { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 50px; text-align: center; gap: 20px; }
+        .firmas2 .col { width: 70mm; }
+        .firmas2 .linea { border-top: 1px solid #111; padding-top: 4px; }
         .huella { width: 25mm; height: 30mm; border: 1px solid #999; margin: 0 auto 4px; }
         .acciones { text-align: center; margin: 12px; }
         .acciones button { padding: 10px 22px; border: 0; border-radius: 8px; background: #0f766e; color: #fff; font-weight: bold; cursor: pointer; }
@@ -23,7 +24,12 @@
 </head>
 <body>
 @php $mascota = $h->tipo === 'MASCOTA'; @endphp
-<div class="acciones"><button onclick="window.print()">Imprimir</button></div>
+<div class="acciones">
+    <button onclick="window.print()">Imprimir</button>
+    @if ($con && ! $firma)
+        <button style="background:#4f46e5" onclick="tushpaFirmar({ tipo: 'consentimiento', id: {{ $con->con_id }}, titulo: @js($tratamiento), alFirmar: () => location.reload() })">✍️ Firmar (aquí o en el celular)</button>
+    @endif
+</div>
 <div class="hoja">
     <div class="cab">
         <div><b>{{ $negocio->nombre_comercial ?: $negocio->razon }}</b><br>{{ $negocio->direccion }}</div>
@@ -45,12 +51,21 @@
         <li>Sé que puedo retirar este consentimiento en cualquier momento antes del procedimiento.</li>
     </ol>
     <p>Por lo expuesto, <b>AUTORIZO</b> la realización del tratamiento indicado{{ $mascota ? ' a mi mascota' : '' }}.</p>
-    <p>{{ \Illuminate\Support\Str::title(mb_strtolower($negocio->distrito ?: 'Lugar')) }}, {{ now()->locale('es')->isoFormat('D [de] MMMM [de] YYYY') }}</p>
+    <p>{{ \Illuminate\Support\Str::title(mb_strtolower($negocio->distrito ?: 'Lugar')) }}, {{ \Carbon\Carbon::parse($con->creado ?? now())->locale('es')->isoFormat('D [de] MMMM [de] YYYY') }}</p>
 
-    <div class="firmas">
-        <div><div class="huella"></div>Firma y huella {{ $mascota ? 'del propietario' : 'del paciente' }}<br>DNI {{ $h->clinum }}</div>
-        <div style="margin-top:34mm;">Firma y sello del profesional<br>{{ $doctor }}</div>
+    <div class="firmas2">
+        <div class="col">
+            @if ($firma)
+                <img src="{{ $firma }}" alt="Firma" style="height:70px;display:block;margin:0 auto -4px">
+            @else
+                <div class="huella"></div>
+            @endif
+            <div class="linea">Firma {{ $firma ? '' : 'y huella ' }}{{ $mascota ? 'del propietario' : 'del paciente' }}<br>DNI {{ $h->clinum }}
+                @if ($con && $con->firmado)<br><small>Firmado digitalmente el {{ \Carbon\Carbon::parse($con->firmado)->format('d/m/Y H:i') }}</small>@endif</div>
+        </div>
+        <div class="col"><div style="height:{{ $firma ? '70px' : '30mm' }}"></div><div class="linea">Firma y sello del profesional<br>{{ $doctor }}</div></div>
     </div>
 </div>
+@include('empresas.clinica._firma_js')
 </body>
 </html>

@@ -67,6 +67,94 @@ class Clinica
         return $res;
     }
 
+    /**
+     * Periodontograma (dientes permanentes): por diente ausente, movilidad (0-3), furca (0-3) y, por cara vestibular (v) y
+     * palatina/lingual (l), en 3 sitios (en el orden en que se ven en pantalla): profundidad de sondaje "ps" (mm), margen gingival "mg"
+     * (mm; positivo = recesión, negativo = agrandamiento), sangrado "s" y placa "p". El nivel de inserción es PS + MG.
+     *
+     * @return array<int, array{aus?: bool, mov?: int, fur?: int, v?: array, l?: array}>
+     */
+    public static function limpiarPeriodontograma(?array $datos): array
+    {
+        $num = fn ($v, int $min, int $max) => is_numeric($v) ? max($min, min($max, (int) $v)) : null;
+        $res = [];
+        foreach ($datos ?? [] as $n => $d) {
+            if (! in_array((int) $n, self::PIEZAS_ADULTO, true) || ! is_array($d)) {
+                continue;
+            }
+            $diente = [];
+            if (! empty($d['aus'])) {
+                $res[(int) $n] = ['aus' => true];
+
+                continue;
+            }
+            foreach (['mov' => 3, 'fur' => 3] as $k => $max) {
+                if (($v = $num($d[$k] ?? null, 0, $max)) !== null && $v > 0) {
+                    $diente[$k] = $v;
+                }
+            }
+            foreach (['v', 'l'] as $cara) {
+                $c = (array) ($d[$cara] ?? []);
+                $lado = [
+                    'ps' => array_map(fn ($v) => $num($v, 0, 15), array_pad(array_slice(array_values((array) ($c['ps'] ?? [])), 0, 3), 3, null)),
+                    'mg' => array_map(fn ($v) => $num($v, -10, 15), array_pad(array_slice(array_values((array) ($c['mg'] ?? [])), 0, 3), 3, null)),
+                    's' => array_map(fn ($v) => (bool) $v, array_pad(array_slice(array_values((array) ($c['s'] ?? [])), 0, 3), 3, false)),
+                    'p' => array_map(fn ($v) => (bool) $v, array_pad(array_slice(array_values((array) ($c['p'] ?? [])), 0, 3), 3, false)),
+                ];
+                if (array_filter($lado['ps'], fn ($v) => $v !== null) || array_filter($lado['mg'], fn ($v) => $v !== null) || in_array(true, $lado['s'], true) || in_array(true, $lado['p'], true)) {
+                    $diente[$cara] = $lado;
+                }
+            }
+            if ($diente) {
+                $res[(int) $n] = $diente;
+            }
+        }
+        ksort($res);
+
+        return $res;
+    }
+
+    /**
+     * Indicadores del periodontograma: % de sangrado y de placa, sondaje promedio, bolsas de 4-5 y de 6+ mm y nivel de inserción.
+     *
+     * @return array{dientes: int, sitios: int, sangrado: ?float, placa: ?float, ps_promedio: ?float, bolsas_4: int, bolsas_6: int, nic_promedio: ?float, nic_max: ?int, movilidad: int, furcas: int}|null
+     */
+    public static function resumenPeriodontograma(?string $json): ?array
+    {
+        $datos = self::limpiarPeriodontograma(json_decode((string) $json, true) ?: []);
+        $presentes = array_filter($datos, fn ($d) => empty($d['aus']));
+        if (! $presentes) {
+            return null;
+        }
+        $ps = $nic = [];
+        $sangra = $placa = $sitios = 0;
+        foreach ($presentes as $d) {
+            foreach (['v', 'l'] as $cara) {
+                if (! isset($d[$cara])) {
+                    continue;
+                }
+                foreach ([0, 1, 2] as $i) {
+                    $sitios++;
+                    $sangra += $d[$cara]['s'][$i] ? 1 : 0;
+                    $placa += $d[$cara]['p'][$i] ? 1 : 0;
+                    if ($d[$cara]['ps'][$i] !== null) {
+                        $ps[] = $d[$cara]['ps'][$i];
+                        $nic[] = $d[$cara]['ps'][$i] + (int) ($d[$cara]['mg'][$i] ?? 0);
+                    }
+                }
+            }
+        }
+
+        return [
+            'dientes' => count($presentes), 'sitios' => $sitios,
+            'sangrado' => $sitios ? round($sangra / $sitios * 100, 1) : null, 'placa' => $sitios ? round($placa / $sitios * 100, 1) : null,
+            'ps_promedio' => $ps ? round(array_sum($ps) / count($ps), 1) : null,
+            'bolsas_4' => count(array_filter($ps, fn ($v) => $v >= 4 && $v <= 5)), 'bolsas_6' => count(array_filter($ps, fn ($v) => $v >= 6)),
+            'nic_promedio' => $nic ? round(array_sum($nic) / count($nic), 1) : null, 'nic_max' => $nic ? max($nic) : null,
+            'movilidad' => count(array_filter($presentes, fn ($d) => ($d['mov'] ?? 0) > 0)), 'furcas' => count(array_filter($presentes, fn ($d) => ($d['fur'] ?? 0) > 0)),
+        ];
+    }
+
     /** "14: ENDODONCIA, PROTESIS FIJA, CARIES (oclusal/incisal)" para imprimir */
     public static function resumenOdontograma(?string $json): array
     {

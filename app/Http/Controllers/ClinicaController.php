@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EmpresaNegocio;
 use App\Models\PedidoDetalle;
 use App\Support\Clinica;
+use App\Support\ClinicaFirmas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -138,6 +139,10 @@ class ClinicaController extends Controller
             'proximas' => DB::table('citas')->where('his_cli_id', $id)->where('fecha', '>=', now()->toDateString())
                 ->whereIn('estado', ['PROGRAMADA', 'CONFIRMADA'])->orderBy('fecha')->orderBy('hora')->get(),
             'conOdontograma' => DB::table('especialidad')->where('id_empresa_negocio', $suc)->where('odontograma', 1)->exists(),
+            'servicios' => DB::table('productos')->where('id_empresa_negocio', $suc)->where('proest', 'Activo')->where('propun', '>', 0)
+                ->orderBy('pronom')->limit(800)->get(['pronom', 'propun']),
+            'consentimientos' => DB::table('clinica_consentimientos')->where('his_cli_id', $id)->orderByDesc('con_id')->get(),
+            'doctores' => Clinica::doctores($suc),
         ]);
     }
 
@@ -173,6 +178,15 @@ class ClinicaController extends Controller
         $cita = $citId ? DB::table('citas')->where('cit_id', $citId)->where('id_empresa_negocio', $user->id_empresa_negocio)->first() : null;
         if ($cita && $cita->ate_cli_id) {
             return (int) $cita->ate_cli_id;        // ya se estaba atendiendo
+        }
+        // Sin cita: si hoy ya tiene una atención sin terminar, se continúa esa (un doble clic no abre dos)
+        if (! $cita) {
+            $abierta = DB::table('atencion_clinica')->where('his_cli_id', $hisId)->where('id_empresa_negocio', $user->id_empresa_negocio)
+                ->where('ate_cli_fec', now()->toDateString())->where('ate_cli_est', 'PENDIENTE')->whereNull('cit_id')
+                ->when($espId, fn ($q) => $q->where('esp_id', $espId))->orderByDesc('ate_cli_id')->value('ate_cli_id');
+            if ($abierta) {
+                return (int) $abierta;
+            }
         }
         $ateId = DB::table('atencion_clinica')->insertGetId([
             'his_cli_id' => $hisId, 'ate_cli_fec' => now()->toDateString(), 'ate_cli_hor' => now()->format('H:i:s'),
@@ -219,7 +233,7 @@ class ClinicaController extends Controller
             'mot_con' => 'nullable|string|max:5000', 'antecedente' => 'nullable|string|max:5000', 'alergia' => 'nullable|string|max:2000',
             'int_qui' => 'nullable|string|max:2000', 'exa_fis' => 'nullable|string|max:5000', 'cie10' => 'nullable|string|max:500',
             'diagnostico' => 'nullable|string|max:5000', 'tratamiento' => 'nullable|string|max:5000', 'examenes' => 'nullable|string|max:3000',
-            'indicaciones' => 'nullable|string|max:3000', 'pro_cit' => 'nullable|date|after:today', 'odontograma' => 'nullable|array',
+            'indicaciones' => 'nullable|string|max:3000', 'pro_cit' => 'nullable|date|after:today', 'odontograma' => 'nullable|array', 'periodontograma' => 'nullable|array',
             'receta' => 'nullable|array|max:30', 'receta.*.medicamento' => 'required|string|max:150', 'receta.*.dosis' => 'nullable|string|max:80',
             'receta.*.frecuencia' => 'nullable|string|max:80', 'receta.*.duracion' => 'nullable|string|max:60', 'receta.*.cantidad' => 'nullable|string|max:30',
             'receta.*.indicaciones' => 'nullable|string|max:200',
@@ -233,7 +247,9 @@ class ClinicaController extends Controller
             $piezas = Clinica::limpiarOdontograma($d['odontograma'] ?? []);
             $campos = array_intersect_key($d, array_flip(['esp_id', 'pre_art', 'fre_car', 'fre_res', 'temperatura', 'saturacion', 'peso', 'talla', 'mot_con',
                 'antecedente', 'alergia', 'int_qui', 'exa_fis', 'cie10', 'diagnostico', 'tratamiento', 'examenes', 'indicaciones', 'pro_cit']));
-            DB::table('atencion_clinica')->where('ate_cli_id', $a->ate_cli_id)->update($campos + ['odontograma' => $piezas ? json_encode($piezas) : null]);
+            $perio = array_key_exists('periodontograma', $d) ? Clinica::limpiarPeriodontograma($d['periodontograma'] ?? []) : null;
+            DB::table('atencion_clinica')->where('ate_cli_id', $a->ate_cli_id)->update($campos + ['odontograma' => $piezas ? json_encode($piezas) : null]
+                + ($perio === null ? [] : ['periodontograma' => $perio ? json_encode($perio) : null]));
 
             DB::table('receta_detalle')->where('ate_cli_id', $a->ate_cli_id)->delete();
             foreach ($d['receta'] ?? [] as $r) {
@@ -338,6 +354,19 @@ class ClinicaController extends Controller
         ]);
     }
 
+    public function periodontograma(int $id)
+    {
+        $this->clinico();
+        $a = $this->atencion($id);
+
+        return view('empresas.clinica.periodontograma_imprimir', [
+            'a' => $a, 'h' => $this->historia((int) $a->his_cli_id), 'negocio' => $this->negocio(),
+            'perio' => Clinica::limpiarPeriodontograma(json_decode((string) $a->periodontograma, true) ?: []),
+            'resumen' => Clinica::resumenPeriodontograma($a->periodontograma),
+            'doctor' => $this->nombreDoctor($a->doctor),
+        ]);
+    }
+
     public function imprimirHistoria(int $id)
     {
         $this->clinico();
@@ -353,18 +382,60 @@ class ClinicaController extends Controller
         ]);
     }
 
-    /** Consentimiento informado para imprimir y firmar (tratamiento y riesgos los escribe el doctor antes de imprimir) */
+    /**
+     * Consentimiento informado: con el tratamiento escrito se guarda en la historia (para firmarlo en la pantalla o en el
+     * celular del paciente); sin tratamiento sale la hoja en blanco para llenar a mano.
+     */
     public function consentimiento(Request $request, int $id)
     {
         $this->clinico();
         $h = $this->historia($id);
         $d = $request->validate(['tratamiento' => 'nullable|string|max:300', 'riesgos' => 'nullable|string|max:1500', 'doctor' => 'nullable|integer']);
-        $doctor = DB::table('users')->where('IdUsuario', $d['doctor'] ?? Auth::id())->first();
+        if (trim((string) ($d['tratamiento'] ?? '')) !== '') {
+            return redirect()->route('clinica.consentimiento.ver', $this->crearConsentimientoDe($h, $d));
+        }
 
         return view('empresas.clinica.consentimiento', [
-            'h' => $h, 'negocio' => $this->negocio(), 'tratamiento' => $d['tratamiento'] ?? null, 'riesgos' => $d['riesgos'] ?? null,
-            'doctor' => $doctor ? trim($doctor->name.' '.$doctor->apeusu) : '',
+            'h' => $h, 'negocio' => $this->negocio(), 'tratamiento' => null, 'riesgos' => null, 'doctor' => $this->nombreDoctor(Auth::id()), 'con' => null, 'firma' => null,
         ]);
+    }
+
+    public function crearConsentimiento(Request $request, int $id)
+    {
+        $this->clinico();
+        $h = $this->historia($id);
+        $d = $request->validate(['tratamiento' => 'required|string|max:300', 'riesgos' => 'nullable|string|max:1500', 'doctor' => 'nullable|integer']);
+
+        return redirect()->route('clinica.consentimiento.ver', $this->crearConsentimientoDe($h, $d));
+    }
+
+    private function crearConsentimientoDe(object $h, array $d): int
+    {
+        $doctor = ! empty($d['doctor']) && DB::table('users')->where('IdUsuario', $d['doctor'])->exists() ? (int) $d['doctor'] : Auth::id();
+
+        return DB::table('clinica_consentimientos')->insertGetId([
+            'his_cli_id' => $h->his_cli_id, 'tratamiento' => trim($d['tratamiento']), 'riesgos' => trim((string) ($d['riesgos'] ?? '')) ?: null,
+            'doctor' => $doctor, 'IdUsuario' => Auth::id(), 'id_empresa_negocio' => $this->suc(), 'creado' => now(),
+        ]);
+    }
+
+    public function verConsentimiento(int $con)
+    {
+        $this->clinico();
+        $c = DB::table('clinica_consentimientos')->where('con_id', $con)->where('id_empresa_negocio', $this->suc())->first();
+        abort_unless($c, 404);
+
+        return view('empresas.clinica.consentimiento', [
+            'h' => $this->historia((int) $c->his_cli_id), 'negocio' => $this->negocio(), 'tratamiento' => $c->tratamiento, 'riesgos' => $c->riesgos,
+            'doctor' => $this->nombreDoctor($c->doctor), 'con' => $c, 'firma' => ClinicaFirmas::imagen($c->firma),
+        ]);
+    }
+
+    private function nombreDoctor(?int $id): string
+    {
+        $u = $id ? DB::table('users')->where('IdUsuario', $id)->first() : null;
+
+        return $u ? trim($u->apeusu ?: $u->name) : '';
     }
 
     // ------------------------------------------------------------------ especialidades

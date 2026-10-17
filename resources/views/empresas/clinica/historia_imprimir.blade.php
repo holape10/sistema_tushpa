@@ -78,6 +78,11 @@
             @foreach (['mot_con' => 'Motivo', 'antecedente' => 'Enfermedad actual', 'exa_fis' => 'Examen físico', 'diagnostico' => 'Diagnóstico', 'tratamiento' => 'Tratamiento', 'examenes' => 'Exámenes', 'indicaciones' => 'Indicaciones'] as $c => $t)
                 @if ($a->$c)<p><b>{{ $t }}:</b> {{ $c === 'diagnostico' && $a->cie10 ? '[' . $a->cie10 . '] ' : '' }}{!! nl2br(e($a->$c)) !!}</p>@endif
             @endforeach
+            @if ($a->cie10 && ! $a->diagnostico)<p><b>CIE-10:</b> {{ $a->cie10 }}</p>@endif
+            @if ($perio = \App\Support\Clinica::resumenPeriodontograma($a->periodontograma ?? null))
+                <p><b>Periodontograma:</b> sangrado {{ $perio['sangrado'] }}% · placa {{ $perio['placa'] }}% · PS promedio {{ $perio['ps_promedio'] ?? '—' }} mm ·
+                    bolsas 4-5 mm: {{ $perio['bolsas_4'] }} · ≥ 6 mm: {{ $perio['bolsas_6'] }} · NIC promedio {{ $perio['nic_promedio'] ?? '—' }} mm</p>
+            @endif
             @if (!empty($recetas[$a->ate_cli_id]))
                 <p><b>Receta:</b> {{ $recetas[$a->ate_cli_id]->map(fn($r) => trim($r->medicamento . ' ' . $r->dosis . ' ' . $r->frecuencia . ($r->duracion ? ' por ' . $r->duracion : '')))->implode(' · ') }}</p>
             @endif

@@ -88,8 +88,9 @@ class Cie10
     /** Códigos de un texto "K02.1 (D), K04.0 (P)" → ['K02.1', 'K04.0'] */
     public static function codigos(?string $texto): array
     {
-        preg_match_all('/\b([A-Z]\d{2}(?:\.\d{1,2})?)\b/i', (string) $texto, $m);
+        // También los escritos sin punto: "K020" → K02.0
+        preg_match_all('/\b([A-Z]\d{2})\.?(\d{1,2})?\b/i', (string) $texto, $m, PREG_SET_ORDER);
 
-        return array_values(array_unique(array_map('strtoupper', $m[1])));
+        return array_values(array_unique(array_map(fn ($x) => strtoupper($x[1]).(($x[2] ?? '') !== '' ? '.'.$x[2] : ''), $m)));
     }
 }

@@ -36,14 +36,14 @@
                     <button class="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700"><i class="fas fa-stethoscope"></i> Nueva atención</button>
                 </form>
                 <a href="{{ route('clinica.imprimir', $h->his_cli_id) }}" target="_blank" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-sm font-semibold"><i class="fas fa-print"></i> Imprimir historia</a>
-                <button type="button" @click="const t = prompt('¿Para qué tratamiento es el consentimiento? (ej. Extracción de la pieza 38)'); if (t) window.open('{{ route('clinica.consentimiento', $h->his_cli_id) }}?tratamiento=' + encodeURIComponent(t), '_blank')"
-                        class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-sm font-semibold"><i class="fas fa-file-signature"></i> Consentimiento</button>
+                <button type="button" @click="consentimiento = true" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-sm font-semibold"><i class="fas fa-file-signature"></i> Consentimiento</button>
+                <a href="#archivos" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-sm font-semibold"><i class="fas fa-x-ray"></i> Radiografías</a>
             </div>
         </div>
 
-        <div class="grid lg:grid-cols-3 gap-5">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {{-- Ficha permanente --}}
-            <div class="lg:col-span-1 space-y-5">
+            <div class="lg:col-span-1 space-y-5 min-w-0">
                 <form @submit.prevent="guardarFicha()" class="bg-white rounded-2xl shadow-sm p-5 space-y-3">
                     <h2 class="font-bold text-gray-700">Ficha del paciente</h2>
                     <label class="block text-xs font-semibold text-gray-500">Alergias
@@ -77,6 +77,18 @@
                     </div>
                 @endif
 
+                @if ($consentimientos->isNotEmpty())
+                    <div class="bg-white rounded-2xl shadow-sm p-5">
+                        <h2 class="font-bold text-gray-700 mb-2">Consentimientos</h2>
+                        @foreach ($consentimientos as $c)
+                            <a href="{{ route('clinica.consentimiento.ver', $c->con_id) }}" target="_blank" class="flex items-center gap-2 text-sm border-b last:border-0 py-1.5 hover:bg-gray-50">
+                                <span class="flex-1 min-w-0 truncate">{{ $c->tratamiento }}<span class="block text-xs text-gray-400">{{ \Carbon\Carbon::parse($c->creado)->format('d/m/Y') }}</span></span>
+                                <span class="px-2 py-0.5 rounded-full text-[11px] font-bold {{ $c->firma ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">{{ $c->firma ? '✔ Firmado' : 'Sin firma' }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                @endif
+
                 @if ($mascota || $vacunas->isNotEmpty())
                     <div class="bg-white rounded-2xl shadow-sm p-5">
                         <h2 class="font-bold text-gray-700 mb-2">Vacunas y desparasitaciones</h2>
@@ -100,10 +112,12 @@
             </div>
 
             {{-- Registro de tratamientos y atenciones --}}
-            <div class="lg:col-span-2 space-y-3">
-                <div id="tratamientos" x-data="registroTratamientos()" x-init="cargar({{ $h->his_cli_id }})" class="mb-4">
+            <div class="lg:col-span-2 space-y-3 min-w-0">
+                <div id="tratamientos" x-data="registroTratamientos()" x-init="cargar({{ $h->his_cli_id }})" @tratamientos-recargar.window="cargar({{ $h->his_cli_id }})" class="mb-4">
                     @include('empresas.clinica._tratamientos', ['especialidadesTrat' => $especialidades])
                 </div>
+                <div id="presupuestos" class="mb-4">@include('empresas.clinica._presupuestos')</div>
+                <div id="archivos" class="mb-4 scroll-mt-20">@include('empresas.clinica._archivos')</div>
                 <h2 class="font-bold text-gray-700">Atenciones ({{ $atenciones->count() }})</h2>
                 @forelse ($atenciones as $a)
                     <details class="bg-white rounded-2xl shadow-sm" @if ($loop->first) open @endif>
@@ -135,6 +149,31 @@
             </div>
         </div>
 
+        {{-- Nuevo consentimiento: se guarda en la historia y se abre para imprimir o firmar --}}
+        <div x-show="consentimiento" x-cloak class="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+            <form method="POST" action="{{ route('clinica.consentimiento.crear', $h->his_cli_id) }}" target="_blank" @submit="setTimeout(() => location.reload(), 1500)"
+                  class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 space-y-3" @click.outside="consentimiento = false">
+                @csrf
+                <h3 class="font-bold text-gray-800">Consentimiento informado</h3>
+                <label class="block text-xs font-semibold text-gray-500">Tratamiento o procedimiento
+                    <input name="tratamiento" required maxlength="300" placeholder="Ej. Extracción de la pieza 38" class="{{ $in }} mt-1"></label>
+                <label class="block text-xs font-semibold text-gray-500">Riesgos y posibles complicaciones explicados (opcional)
+                    <textarea name="riesgos" rows="3" maxlength="1500" placeholder="Ej. Dolor e inflamación, sangrado, parestesia temporal…" class="{{ $in }} mt-1"></textarea></label>
+                @if ($doctores->isNotEmpty())
+                    <label class="block text-xs font-semibold text-gray-500">Profesional
+                        <select name="doctor" class="{{ $in }} mt-1">
+                            @foreach ($doctores as $d)<option value="{{ $d->IdUsuario }}" @selected((int) $d->IdUsuario === (int) auth()->id())>{{ $d->nombre }}</option>@endforeach
+                        </select></label>
+                @endif
+                <p class="text-xs text-gray-500">Se abre la hoja: la imprimes, o el paciente la firma en la pantalla o en su celular (QR).</p>
+                <div class="flex justify-end gap-2">
+                    <a href="{{ route('clinica.consentimiento', $h->his_cli_id) }}" target="_blank" class="px-4 py-2 rounded-xl bg-gray-100 text-sm font-semibold mr-auto">Hoja en blanco</a>
+                    <button type="button" @click="consentimiento = false" class="px-4 py-2 rounded-xl bg-gray-100 text-sm font-semibold">Cancelar</button>
+                    <button class="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-bold">Crear y abrir</button>
+                </div>
+            </form>
+        </div>
+
         <div x-show="aviso" x-cloak class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl shadow-lg text-white font-semibold" :class="ok ? 'bg-teal-600' : 'bg-rose-600'" x-text="aviso"></div>
     </div>
 
@@ -142,7 +181,7 @@
         function historia() {
             return {
                 f: @js(collect((array) $h)->only(['alergias', 'antecedentes', 'fecha_nac', 'sexo', 'especie', 'raza', 'grupo_sanguineo', 'ocupacion', 'contacto_emergencia', 'origen'])),
-                aviso: '', ok: true,
+                aviso: '', ok: true, consentimiento: false,
                 async guardarFicha() {
                     const r = await fetch('{{ route('clinica.ficha', $h->his_cli_id) }}', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify(this.f) });
                     const j = await r.json().catch(() => ({}));

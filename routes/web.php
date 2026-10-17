@@ -6,7 +6,11 @@ use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\ClinicaArchivoController;
 use App\Http\Controllers\ClinicaController;
+use App\Http\Controllers\ClinicaFirmaController;
+use App\Http\Controllers\ClinicaPresupuestoController;
+use App\Http\Controllers\ClinicaRecordatorioController;
 use App\Http\Controllers\ClinicaReporteController;
 use App\Http\Controllers\CobroController;
 use App\Http\Controllers\CocinaController;
@@ -172,6 +176,37 @@ Route::middleware('auth')->group(function () {
         Route::get('/tratamientos/sesion/{reg}/firma', 'firma')->whereNumber('reg')->name('firma');
     });
     Route::get('/clinica/reportes', [ClinicaReporteController::class, 'index'])->name('clinica.reportes');
+    // Odontología: presupuestos firmados, radiografías y fotos, consentimientos, periodontograma, firmas y recordatorios
+    Route::controller(ClinicaPresupuestoController::class)->prefix('clinica')->name('clinica.presupuestos.')->group(function () {
+        Route::get('/historia/{id}/presupuestos', 'lista')->whereNumber('id')->name('lista');
+        Route::post('/historia/{id}/presupuestos', 'guardar')->whereNumber('id')->name('guardar');
+        Route::post('/presupuestos/{id}', 'actualizar')->whereNumber('id')->name('actualizar');
+        Route::post('/presupuestos/{id}/estado', 'estado')->whereNumber('id')->name('estado');
+        Route::get('/presupuestos/{id}/imprimir', 'imprimir')->whereNumber('id')->name('imprimir');
+    });
+    Route::controller(ClinicaArchivoController::class)->prefix('clinica')->name('clinica.archivos.')->group(function () {
+        Route::get('/historia/{id}/archivos', 'lista')->whereNumber('id')->name('lista');
+        Route::post('/historia/{id}/archivos', 'subir')->whereNumber('id')->name('subir');
+        Route::get('/archivos/{id}', 'ver')->whereNumber('id')->name('ver');
+        Route::post('/archivos/{id}', 'editar')->whereNumber('id')->name('editar');
+        Route::delete('/archivos/{id}', 'eliminar')->whereNumber('id')->name('eliminar');
+    });
+    Route::controller(ClinicaFirmaController::class)->prefix('clinica/firma/{tipo}/{id}')->whereIn('tipo', ['sesion', 'presupuesto', 'consentimiento'])
+        ->whereNumber('id')->name('clinica.firma.')->group(function () {
+            Route::post('/', 'guardar')->name('guardar');
+            Route::get('/enlace', 'enlace')->name('enlace');
+            Route::get('/estado', 'estado')->name('estado');
+            Route::get('/imagen', 'imagen')->name('imagen');
+        });
+    Route::post('/clinica/historia/{id}/consentimiento', [ClinicaController::class, 'crearConsentimiento'])->whereNumber('id')->name('clinica.consentimiento.crear');
+    Route::get('/clinica/consentimiento/{con}', [ClinicaController::class, 'verConsentimiento'])->whereNumber('con')->name('clinica.consentimiento.ver');
+    Route::get('/clinica/atencion/{id}/periodontograma', [ClinicaController::class, 'periodontograma'])->whereNumber('id')->name('clinica.periodontograma');
+    Route::controller(ClinicaRecordatorioController::class)->prefix('clinica/recordatorios')->name('clinica.recordatorios')->group(function () {
+        Route::get('/', 'index');
+        Route::post('/', 'guardar')->name('.guardar');
+        Route::post('/probar', 'probar')->middleware('throttle:10,10')->name('.probar');
+        Route::post('/manual', 'manual')->name('.manual');
+    });
     Route::controller(AgendaController::class)->prefix('clinica')->name('clinica.')->group(function () {
         Route::get('/agenda', 'index')->name('agenda');
         Route::get('/agenda/datos', 'datos')->name('agenda.datos');
@@ -501,6 +536,11 @@ Route::get('/manifest.webmanifest', [PwaController::class, 'manifest'])->name('p
 // Consulta pública de comprobantes: {subdominio}/cpe (sin sesión). La validación en SUNAT gasta consultas: con límite
 Route::get('/cpe', [ConsultaCpeController::class, 'index'])->name('cpe.consulta');
 Route::post('/cpe', [ConsultaCpeController::class, 'consultar'])->middleware('throttle:10,1')->name('cpe.consultar');
+// Firma del paciente en su celular (QR / enlace firmado que vence en 30 minutos, sin usuario)
+Route::get('/firmar/{tipo}/{id}', [ClinicaFirmaController::class, 'remota'])->whereIn('tipo', ['sesion', 'presupuesto', 'consentimiento'])->whereNumber('id')
+    ->middleware(['signed', 'throttle:30,1'])->name('clinica.firma.remota');
+Route::post('/firmar/{tipo}/{id}', [ClinicaFirmaController::class, 'guardarRemota'])->whereIn('tipo', ['sesion', 'presupuesto', 'consentimiento'])->whereNumber('id')
+    ->middleware(['signed', 'throttle:10,1']);
 Route::get('/cpe/archivo/{id}/{tipo}', [ConsultaCpeController::class, 'archivo'])->whereNumber('id')->whereIn('tipo', ['xml', 'cdr'])
     ->middleware(['signed', 'throttle:30,1'])->name('cpe.archivo');
 

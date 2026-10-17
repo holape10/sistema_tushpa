@@ -7,13 +7,14 @@
     $in = 'block w-full rounded-lg border-gray-300 text-sm focus:border-teal-500 focus:ring-teal-500';
     $especialidadesTrat = $especialidadesTrat ?? collect();
 @endphp
+@include('empresas.clinica._firma_js')
 @once
 <script>
     window.registroTratamientos = function () {
         const CSRF = '{{ csrf_token() }}';
         const soles = n => 'S/ ' + (Number(n) || 0).toFixed(2);
         return {
-            hisId: null, lista: [], cargando: false, modalTrat: null, modalSesion: null, modalFirma: null, guardando: false,
+            hisId: null, lista: [], cargando: false, modalTrat: null, modalSesion: null, guardando: false,
             soles,
             fecha(f) { return f ? new Date(String(f).replace(' ', 'T')).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''; },
             async cargar(hisId) {
@@ -74,12 +75,9 @@
                 if (r.ok) { this.modalSesion = null; this.cargar(this.hisId); }
             },
             // ---- Firma en la tablet (dedo, lápiz o mouse) ----
-            firmar(reg) { this.modalFirma = reg; this.$nextTick(() => this.prepararFirma('firma_sola')); },
-            async guardarFirma() {
-                const firma = this.firmaDe('firma_sola');
-                if (!firma) { tushpaAviso('El paciente debe firmar en el recuadro.', 'error'); return; }
-                const r = await this.post('{{ url('clinica/tratamientos/sesion') }}/' + this.modalFirma.reg_id + '/firma', { firma });
-                if (r.ok) { this.modalFirma = null; this.cargar(this.hisId); }
+            // Firmar una sesión que quedó sin firma: aquí mismo o en el celular del paciente (QR)
+            firmar(reg) {
+                tushpaFirmar({ tipo: 'sesion', id: reg.reg_id, titulo: this.fecha(reg.fecha_hora) + ' · ' + (reg.detalle || 'Sesión del tratamiento'), alFirmar: () => this.cargar(this.hisId) });
             },
             prepararFirma(ref, intento = 0) {
                 const c = this.$refs[ref];
@@ -118,12 +116,15 @@
 
     <template x-for="t in lista" :key="t.tra_id">
         <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div class="px-4 py-3 flex flex-wrap items-center gap-2 border-b" :class="t.estado === 'CANCELADO' ? 'bg-emerald-50' : 'bg-amber-50'">
-                <div class="flex-1 min-w-[200px]">
+            <div class="px-4 py-3 flex flex-wrap items-center gap-2 border-b min-w-0" :class="t.estado === 'CANCELADO' ? 'bg-emerald-50' : 'bg-amber-50'">
+                <div class="flex-1 min-w-0 basis-full sm:basis-auto sm:min-w-[200px]">
                     <p class="font-bold text-gray-800" x-text="t.descripcion"></p>
                     <p class="text-xs text-gray-500"><span x-text="t.esp_des || 'Sin especialidad'"></span> · desde <span x-text="fecha(t.creado).split(',')[0]"></span>
-                        <span x-show="t.modalidad === 'MENSUAL'" class="ml-1 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold"
-                              x-text="'MENSUAL · ' + (Number(t.cuota_inicial) > 0 ? 'inicial ' + soles(t.cuota_inicial) + ' + ' : '') + t.cuotas + ' x ' + soles(t.cuota)"></span></p>
+                        <span x-show="t.modalidad === 'MENSUAL'" class="inline-block ml-1 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold"
+                              x-text="'MENSUAL · ' + (Number(t.cuota_inicial) > 0 ? 'inicial ' + soles(t.cuota_inicial) + ' + ' : '') + t.cuotas + ' cuotas de ' + soles(t.cuota)"></span></p>
+                    {{-- De dónde sale el costo del plan mensual (la inicial es la que se escribió al crear el tratamiento) --}}
+                    <p x-show="t.modalidad === 'MENSUAL'" class="mt-1 text-[11px] text-gray-500"
+                       x-text="'Costo = ' + (Number(t.cuota_inicial) > 0 ? 'cuota inicial ' + soles(t.cuota_inicial) + ' (se paga al empezar) + ' : '') + t.cuotas + ' × ' + soles(t.cuota) + ' = ' + soles(t.costo) + '. ¿No es así? Corrígelo con ✏️.'"></p>
                     <p x-show="t.estado !== 'CANCELADO' && Number(t.vencido) > 0" class="mt-1 text-xs font-extrabold text-rose-600" x-text="'⚠ Debe ' + soles(t.vencido) + ' de cuotas vencidas'"></p>
                     <p x-show="t.estado !== 'CANCELADO' && t.proxima && !(Number(t.vencido) > 0)" class="mt-1 text-xs font-semibold text-indigo-700"
                        x-text="t.proxima ? 'Próxima: ' + t.proxima.etiqueta + ' · ' + soles(t.proxima.falta) + ' (vence ' + mesCorto(t.proxima.vence) + ')' : ''"></p>
@@ -170,7 +171,7 @@
                                 <td class="px-3 py-2 text-center"><span x-show="Number(r.adelanto) > 0 && Number(r.saldo) <= 0" class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">CANCELADO</span></td>
                                 <td class="px-3 py-2 text-center">
                                     <img x-show="r.firma_url" :src="r.firma_url" alt="Firma" class="h-10 mx-auto">
-                                    <button type="button" x-show="!r.firma_url" @click="firmar(r)" class="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold">✍️ Firmar</button>
+                                    <button type="button" x-show="!r.firma_url" @click="firmar(r)" class="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold whitespace-nowrap">✍️ Firmar</button>
                                 </td>
                             </tr>
                         </template>
@@ -204,7 +205,7 @@
                     <label x-show="modalTrat.modalidad !== 'MENSUAL'" class="block text-xs font-semibold text-gray-500">Costo total S/
                         <input type="number" step="0.01" min="0" x-model="modalTrat.costo" class="{{ $in }} mt-1 text-right font-bold"></label>
                     <div x-show="modalTrat.modalidad === 'MENSUAL'" class="grid grid-cols-2 gap-2 rounded-xl bg-indigo-50/60 p-3">
-                        <label class="block text-xs font-semibold text-gray-500">Cuota inicial S/
+                        <label class="block text-xs font-semibold text-gray-500">Cuota inicial S/ <span class="font-normal">(si no hay, 0)</span>
                             <input type="number" step="0.01" min="0" x-model="modalTrat.cuota_inicial" placeholder="0.00" class="{{ $in }} mt-1 text-right"></label>
                         <label class="block text-xs font-semibold text-gray-500">Cuota mensual S/
                             <input type="number" step="0.01" min="0" x-model="modalTrat.cuota" class="{{ $in }} mt-1 text-right font-bold"></label>
@@ -212,8 +213,9 @@
                             <input type="number" step="1" min="1" max="120" x-model="modalTrat.cuotas" class="{{ $in }} mt-1 text-right"></label>
                         <label class="block text-xs font-semibold text-gray-500">Primera cuota vence
                             <input type="date" x-model="modalTrat.primer_vencimiento" class="{{ $in }} mt-1"></label>
-                        <p class="col-span-2 text-xs text-indigo-800">Total del tratamiento: <b x-text="soles(totalPlan(modalTrat))"></b>.
-                            Si se alarga, aquí mismo se suben los meses.</p>
+                        <p class="col-span-2 text-xs text-indigo-800">Total del tratamiento: <b x-text="soles(totalPlan(modalTrat))"></b>
+                            <span x-text="'= ' + (Number(modalTrat.cuota_inicial) > 0 ? soles(modalTrat.cuota_inicial) + ' de inicial + ' : '') + (Number(modalTrat.cuotas) || 0) + ' × ' + soles(modalTrat.cuota)"></span>.
+                            La inicial vence el día que se registra el tratamiento. Si se alarga, aquí mismo se suben los meses.</p>
                     </div>
                     <p x-show="modalTrat.tra_id" class="text-xs text-gray-500">Ya pagado: <b x-text="soles(modalTrat.pagado)"></b> (el costo no puede quedar por debajo).</p>
                     <template x-if="!modalTrat.tra_id">
@@ -282,19 +284,4 @@
         </div>
     </div>
 
-    {{-- Firmar una sesión que quedó sin firma --}}
-    <div x-show="modalFirma" x-cloak class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 space-y-3" @click.outside="modalFirma = null">
-            <h3 class="font-bold text-gray-800">✍️ Firma del paciente</h3>
-            <p class="text-sm text-gray-500" x-text="modalFirma ? fecha(modalFirma.fecha_hora) + ' · ' + (modalFirma.detalle || '') : ''"></p>
-            <canvas x-ref="firma_sola" class="w-full h-40 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 touch-none"></canvas>
-            <div class="flex justify-between gap-2">
-                <button type="button" @click="borrarFirma('firma_sola')" class="px-4 py-2 rounded-xl bg-gray-100 text-sm font-semibold">Borrar</button>
-                <div class="flex gap-2">
-                    <button type="button" @click="modalFirma = null" class="px-4 py-2 rounded-xl bg-gray-100 text-sm font-semibold">Cancelar</button>
-                    <button type="button" @click="guardarFirma()" :disabled="guardando" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold disabled:opacity-40">Guardar firma</button>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>

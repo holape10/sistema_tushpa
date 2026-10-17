@@ -11,9 +11,10 @@
                 <h1 class="text-2xl font-extrabold text-gray-800"><i class="fas fa-notes-medical text-teal-600"></i> Historias clínicas</h1>
                 <p class="text-sm text-gray-500">Pacientes y su historia. Las citas del día están en <a href="{{ route('clinica.agenda') }}" class="font-semibold text-teal-700 underline">Agenda</a>.</p>
             </div>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
                 <button type="button" @click="nuevo()" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700"><i class="fas fa-user-plus"></i> Nuevo paciente</button>
                 <a href="{{ route('clinica.tratamientos.index') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-file-invoice-dollar"></i> Registro de tratamientos</a>
+                <a href="{{ route('clinica.recordatorios') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fab fa-whatsapp"></i> Recordatorios</a>
                 @if ($esAdmin)
                     <a href="{{ route('clinica.reportes') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-chart-pie"></i> Reportes</a>
                     <a href="{{ route('clinica.especialidades') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-gear"></i> Especialidades</a>

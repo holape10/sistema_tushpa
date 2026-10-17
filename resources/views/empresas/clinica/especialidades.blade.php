@@ -29,7 +29,10 @@
                 <tbody class="divide-y">
                     <template x-for="(e, i) in lista" :key="e.k">
                         <tr :class="e.activo ? '' : 'bg-gray-50 text-gray-400'">
-                            <td class="px-3 py-2"><input x-model="e.esp_des" placeholder="Ej. ENDODONCIA" maxlength="100" class="{{ $in }} uppercase min-w-[180px]"></td>
+                            <td class="px-3 py-2"><input x-model="e.esp_des" placeholder="Ej. ENDODONCIA" maxlength="100" class="{{ $in }} uppercase min-w-[180px]">
+                                {{-- Avisos de marcas que parecen equivocadas (ej. ortodoncia sin odontograma, endodoncia marcada como veterinaria) --}}
+                                <p x-show="dental(e) && !e.odontograma" class="mt-1 text-[11px] font-semibold text-amber-600">¿Lleva odontograma? Marca 🦷 para verlo al atender.</p>
+                                <p x-show="dental(e) && e.veterinaria" class="mt-1 text-[11px] font-semibold text-rose-600">Está marcada como veterinaria 🐾: quita esa marca si es para personas.</p></td>
                             <td class="px-3 py-2">
                                 <select x-model="e.IdProducto" class="{{ $in }} min-w-[200px]">
                                     <option value="">— Ninguno —</option>
@@ -67,6 +70,7 @@
                 ocupado: false,
                 original: JSON.stringify(inicial),
                 get cambios() { return JSON.stringify(this.lista.map(({ k, ...e }) => e)) !== this.original; },
+                dental(e) { return /ODONTO|ORTODON|ENDODON|PERIODON|IMPLANT|REHABILITACI.N ORAL|CIRUG.A (BUCAL|ORAL|MAXILO)|DENTAL|PROTESIS|PR.TESIS/i.test(e.esp_des || ''); },
                 agregar() {
                     this.lista.push({ k: k++, esp_id: null, esp_des: '', IdProducto: '', odontograma: false, veterinaria: false, activo: true, pacientes: 0 });
                     this.$nextTick(() => { const f = this.$el.querySelectorAll('tbody input[placeholder]'); f[f.length - 1]?.focus(); });

@@ -22,6 +22,7 @@
                 </select>
                 <button type="button" @click="nuevaCita()" class="px-4 h-9 rounded-xl bg-teal-600 text-white text-sm font-bold"><i class="fas fa-plus"></i> Nueva cita</button>
                 <a href="{{ route('clinica.index') }}" class="px-3 h-9 leading-9 rounded-xl bg-white border text-sm font-semibold">Pacientes</a>
+                <a href="{{ route('clinica.recordatorios') }}" class="px-3 h-9 leading-9 rounded-xl bg-emerald-600 text-white text-sm font-semibold"><i class="fab fa-whatsapp"></i> Recordatorios</a>
             </div>
         </div>
 

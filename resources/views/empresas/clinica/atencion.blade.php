@@ -29,8 +29,8 @@
                 </select></label>
         </div>
 
-        <div class="grid lg:grid-cols-3 gap-5">
-            <div class="lg:col-span-2 space-y-5">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div class="lg:col-span-2 space-y-5 min-w-0">
                 {{-- Signos vitales --}}
                 <section class="{{ $seccion }}">
                     <h2 class="font-bold text-gray-700">Signos vitales</h2>
@@ -119,6 +119,9 @@
                         <p class="text-xs text-gray-500">Elige un hallazgo y toca la cara del diente (o el diente, si es de pieza completa). Un mismo diente puede llevar varios: ej. ENDODONCIA + PROTESIS FIJA + CARIES en una cara. Tocar otra vez lo quita. Al terminar la atención queda como odontograma de la historia.</p>
                         @include('empresas.clinica._odontograma')
                     </section>
+                    <section class="{{ $seccion }} min-w-0">
+                        @include('empresas.clinica._periodontograma')
+                    </section>
                 @endif
 
                 @if ($conVacunas)
@@ -197,6 +200,8 @@
         function atencion() {
             const CSRF = '{{ csrf_token() }}';
             return {
+                // Periodontograma (solo especialidades con odontograma)
+                ...(window.perioMixin ? perioMixin(@js(json_decode((string) $a->periodontograma, true) ?: (object) [])) : {}),
                 d: @js($datos), receta: @js($receta->map(fn($r) => collect((array) $r)->only(['medicamento', 'dosis', 'frecuencia', 'duracion', 'cantidad', 'indicaciones']))),
                 vacunas: @js($vacunas->map(fn($v) => ['tipo' => $v->tipo, 'nombre' => $v->nombre, 'lote' => $v->lote, 'proxima' => $v->proxima])),
                 editable: true, piezas: @js((object) $odontoInicial), pincel: 'CARIES',
@@ -204,8 +209,9 @@
                 serv: { IdProducto: '', cantidad: 1 }, ocupado: false, aviso: '', ok: true,
                 cieQ: '', cieAbierto: false,
                 // "K02.1 (D), K04.0 (P)" ⇄ etiquetas
-                cies: (String(@js($datos['cie10'] ?? '')).match(/[A-Z]\d{2}(?:\.\d{1,2})?(?:\s*\([PDR]\))?/gi) || []).map(t => {
-                    const c = t.replace(/\s*\(.*$/, '').toUpperCase(), tipo = (t.match(/\(([PDR])\)/i) || [])[1];
+                cies: (String(@js($datos['cie10'] ?? '')).match(/\b[A-Z]\d{2}(?:\.?\d{1,2})?\b(?:\s*\([PDR]\))?/gi) || []).map(t => {
+                    // "K020" (escrito sin punto) se lee como K02.0
+                    const c = t.replace(/\s*\(.*$/, '').toUpperCase().replace(/^([A-Z]\d{2})(\d{1,2})$/, '$1.$2'), tipo = (t.match(/\(([PDR])\)/i) || [])[1];
                     return { c, d: (CIE10.find(x => x.c === c) || {}).d || '', t: (tipo || 'D').toUpperCase() };
                 }),
                 cieResultados() {
@@ -238,6 +244,7 @@
                         receta: this.receta.filter(x => (x.medicamento || '').trim()).map(x => this.limpio(x)),
                         vacunas: this.vacunas.filter(x => (x.nombre || '').trim()).map(x => this.limpio(x)),
                         odontograma: this.piezas, finalizar: finalizar ? 1 : 0,
+                        ...(this.perio ? { periodontograma: this.perioDatos() } : {}),
                     }));
                     this.ocupado = false;
                     this.avisar(r.mensaje || 'Error', !!r.ok);
