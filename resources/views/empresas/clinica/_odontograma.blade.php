@@ -13,7 +13,18 @@
         caras: { 'CARIES': 'rojo', 'RESTAURACION': 'azul', 'RESTAURACION DEFECTUOSA': 'rojo', 'SELLANTE': 'azul', 'FRACTURA': 'rojo' },
         // Hallazgos de la pieza completa
         piezas: { 'POR EXTRAER': 'rojo', 'AUSENTE': 'azul', 'CORONA': 'azul', 'CORONA DEFECTUOSA': 'rojo', 'ENDODONCIA': 'azul',
-                  'IMPLANTE': 'azul', 'REMANENTE RADICULAR': 'rojo', 'PROTESIS FIJA': 'azul', 'MOVILIDAD': 'rojo', 'EXTRUSION': 'rojo' },
+                  'IMPLANTE': 'azul', 'REMANENTE RADICULAR': 'rojo', 'PROTESIS FIJA': 'azul', 'PROTESIS FIJA DEFECTUOSA': 'rojo',
+                  'PROTESIS REMOVIBLE': 'azul', 'PROTESIS REMOVIBLE DEFECTUOSA': 'rojo', 'MOVILIDAD': 'rojo',
+                  // Norma técnica del odontograma (MINSA): posición y desarrollo de la pieza
+                  'EXTRUSION': 'azul', 'INTRUSION': 'azul', 'EN ERUPCION': 'azul', 'GIROVERSION': 'azul', 'DIASTEMA': 'azul',
+                  'SUPERNUMERARIA': 'azul', 'ECTOPICA': 'azul', 'CLAVIJA': 'azul', 'EDENTULO TOTAL': 'azul',
+                  // Defectos del esmalte y lesiones iniciales (se anotan con su sigla)
+                  'FOSAS Y FISURAS PROFUNDAS': 'rojo', 'MANCHA BLANCA': 'rojo', 'HIPOMINERALIZACION': 'rojo', 'HIPOPLASIA': 'rojo', 'OPACIDAD DEL ESMALTE': 'rojo' },
+        // Grupos para que los botones no sean una lista larga
+        grupos: { 'Tratamientos': ['CORONA', 'CORONA DEFECTUOSA', 'ENDODONCIA', 'IMPLANTE', 'PROTESIS FIJA', 'PROTESIS FIJA DEFECTUOSA', 'PROTESIS REMOVIBLE', 'PROTESIS REMOVIBLE DEFECTUOSA'],
+                  'Pieza': ['POR EXTRAER', 'AUSENTE', 'REMANENTE RADICULAR', 'MOVILIDAD', 'EDENTULO TOTAL'],
+                  'Posición y desarrollo': ['EXTRUSION', 'INTRUSION', 'EN ERUPCION', 'GIROVERSION', 'DIASTEMA', 'SUPERNUMERARIA', 'ECTOPICA', 'CLAVIJA'],
+                  'Esmalte': ['FOSAS Y FISURAS PROFUNDAS', 'MANCHA BLANCA', 'HIPOMINERALIZACION', 'HIPOPLASIA', 'OPACIDAD DEL ESMALTE'] },
         nombresCara: { V: 'Vestibular', L: 'Lingual / palatino', M: 'Mesial', D: 'Distal', O: 'Oclusal / incisal' },
         superior(n) { const q = Math.floor(n / 10); return [1, 2, 5, 6].includes(q); },
         derechaPaciente(n) { const q = Math.floor(n / 10); return [1, 4, 5, 8].includes(q); },
@@ -34,10 +45,14 @@
         },
         tiene(p, ...hallazgos) { const e = this.pieza(p).e; return hallazgos.some(h => e.includes(h)); },
         // Hallazgos que se excluyen entre sí (no puede estar ausente y por extraer, ni con corona buena y defectuosa)
-        opuestos: { 'POR EXTRAER': 'AUSENTE', 'AUSENTE': 'POR EXTRAER', 'CORONA': 'CORONA DEFECTUOSA', 'CORONA DEFECTUOSA': 'CORONA' },
+        opuestos: { 'POR EXTRAER': 'AUSENTE', 'AUSENTE': 'POR EXTRAER', 'CORONA': 'CORONA DEFECTUOSA', 'CORONA DEFECTUOSA': 'CORONA',
+                    'PROTESIS FIJA': 'PROTESIS FIJA DEFECTUOSA', 'PROTESIS FIJA DEFECTUOSA': 'PROTESIS FIJA',
+                    'PROTESIS REMOVIBLE': 'PROTESIS REMOVIBLE DEFECTUOSA', 'PROTESIS REMOVIBLE DEFECTUOSA': 'PROTESIS REMOVIBLE',
+                    'EXTRUSION': 'INTRUSION', 'INTRUSION': 'EXTRUSION' },
         // Letras de los hallazgos que se dibujan como texto (IMP, RR, M, EX), juntas si hay varios
         letras(p) {
-            const abrev = { 'IMPLANTE': 'IMP', 'REMANENTE RADICULAR': 'RR', 'MOVILIDAD': 'M', 'EXTRUSION': 'EX' };
+            const abrev = { 'IMPLANTE': 'IMP', 'REMANENTE RADICULAR': 'RR', 'MOVILIDAD': 'M', 'SUPERNUMERARIA': 'S', 'ECTOPICA': 'E',
+                            'FOSAS Y FISURAS PROFUNDAS': 'FFP', 'MANCHA BLANCA': 'MB', 'HIPOMINERALIZACION': 'HM', 'HIPOPLASIA': 'HP', 'OPACIDAD DEL ESMALTE': 'O' };
             const hs = this.pieza(p).e.filter(h => abrev[h]);
             return { texto: hs.map(h => abrev[h]).join(' '), color: hs.some(h => this.piezas[h] === 'rojo') ? this.rojo : this.azul, tam: hs.length > 1 ? 9 : 13 };
         },
@@ -81,11 +96,16 @@
                             :class="pincel === h ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-300'" :style="'color:' + Odonto[t]" x-text="h"></button>
                 </template>
             </div>
-            <div class="flex flex-wrap gap-1 items-center"><span class="text-[11px] font-bold text-gray-500 w-24" title="Se pueden marcar varios en el mismo diente">Pieza completa:</span>
-                <template x-for="(t, h) in Odonto.piezas" :key="h">
-                    <button type="button" @click="pincel = h" class="px-2 py-0.5 rounded-md text-[11px] font-semibold border"
-                            :class="pincel === h ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-300'" :style="'color:' + Odonto[t]" x-text="h"></button>
-                </template>
+            {{-- Hallazgos de pieza completa por grupo (se pueden marcar varios en el mismo diente) --}}
+            <template x-for="(lista, grupo) in Odonto.grupos" :key="grupo">
+                <div class="flex flex-wrap gap-1 items-center"><span class="text-[11px] font-bold text-gray-500 w-24" x-text="grupo + ':'"></span>
+                    <template x-for="h in lista" :key="h">
+                        <button type="button" @click="pincel = h" class="px-2 py-0.5 rounded-md text-[11px] font-semibold border"
+                                :class="pincel === h ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-300'" :style="'color:' + Odonto[Odonto.piezas[h]]" x-text="h"></button>
+                    </template>
+                </div>
+            </template>
+            <div class="flex flex-wrap gap-1 items-center"><span class="w-24"></span>
                 <button type="button" @click="pincel = 'SANO'" class="px-2 py-0.5 rounded-md text-[11px] font-semibold border"
                         :class="pincel === 'SANO' ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-300'">Borrar pieza</button>
             </div>
@@ -115,7 +135,25 @@
                                         <circle x-show="Odonto.tiene(piezas[n], 'CORONA', 'CORONA DEFECTUOSA')" cx="20" cy="20" r="17"
                                                 :stroke="Odonto.tiene(piezas[n], 'CORONA DEFECTUOSA') ? Odonto.rojo : Odonto.azul"></circle>
                                         <path x-show="Odonto.tiene(piezas[n], 'ENDODONCIA')" d="M20 2V38" :stroke="Odonto.azul"></path>
-                                        <path x-show="Odonto.tiene(piezas[n], 'PROTESIS FIJA')" d="M0 6H40" :stroke="Odonto.azul"></path>
+                                        <path x-show="Odonto.tiene(piezas[n], 'PROTESIS FIJA', 'PROTESIS FIJA DEFECTUOSA')" d="M0 6H40"
+                                              :stroke="Odonto.tiene(piezas[n], 'PROTESIS FIJA DEFECTUOSA') ? Odonto.rojo : Odonto.azul"></path>
+                                        {{-- Prótesis removible: dos líneas paralelas --}}
+                                        <path x-show="Odonto.tiene(piezas[n], 'PROTESIS REMOVIBLE', 'PROTESIS REMOVIBLE DEFECTUOSA')" d="M0 3H40M0 9H40" stroke-width="2"
+                                              :stroke="Odonto.tiene(piezas[n], 'PROTESIS REMOVIBLE DEFECTUOSA') ? Odonto.rojo : Odonto.azul"></path>
+                                        {{-- Edéntulo total: línea horizontal --}}
+                                        <path x-show="Odonto.tiene(piezas[n], 'EDENTULO TOTAL')" d="M0 34H40" :stroke="Odonto.azul"></path>
+                                        {{-- En erupción: línea en zigzag --}}
+                                        <path x-show="Odonto.tiene(piezas[n], 'EN ERUPCION')" d="M20 2L26 9L14 16L26 23L14 30L20 38" stroke-width="2" :stroke="Odonto.azul"></path>
+                                        {{-- Extruida (flecha hacia el plano oclusal) e intruida (flecha hacia la raíz) --}}
+                                        <path x-show="Odonto.tiene(piezas[n], 'EXTRUSION')" :d="Odonto.superior(n) ? 'M20 6V34M13 27L20 35L27 27' : 'M20 34V6M13 13L20 5L27 13'" stroke-width="2.5" :stroke="Odonto.azul"></path>
+                                        <path x-show="Odonto.tiene(piezas[n], 'INTRUSION')" :d="Odonto.superior(n) ? 'M20 34V6M13 13L20 5L27 13' : 'M20 6V34M13 27L20 35L27 27'" stroke-width="2.5" :stroke="Odonto.azul"></path>
+                                        {{-- Giroversión: flecha curva --}}
+                                        <path x-show="Odonto.tiene(piezas[n], 'GIROVERSION')" d="M6 30Q20 42 34 30M29 26L34 30L28 34" stroke-width="2" :stroke="Odonto.azul"></path>
+                                        {{-- Diastema: paréntesis invertidos al costado --}}
+                                        <path x-show="Odonto.tiene(piezas[n], 'DIASTEMA')" d="M33 6Q39 20 33 34M39 6Q33 20 39 34" stroke-width="2" :stroke="Odonto.azul"></path>
+                                        {{-- Pieza en clavija: triángulo --}}
+                                        <path x-show="Odonto.tiene(piezas[n], 'CLAVIJA')" d="M20 4L37 36H3Z" stroke-width="2" :stroke="Odonto.azul"></path>
+                                        <circle x-show="Odonto.tiene(piezas[n], 'SUPERNUMERARIA')" cx="20" cy="20" r="11" stroke-width="2" :stroke="Odonto.azul"></circle>
                                         <text x-show="Odonto.letras(piezas[n]).texto" x="20" y="25" text-anchor="middle" font-weight="bold" stroke="none"
                                               :font-size="Odonto.letras(piezas[n]).tam" :fill="Odonto.letras(piezas[n]).color" x-text="Odonto.letras(piezas[n]).texto"></text>
                                     </g>

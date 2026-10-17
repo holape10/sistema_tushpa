@@ -80,7 +80,7 @@ class Rubros
             '/socios', '/punto-venta', '/comandas', '/pv',
         ]],
         'CLINICA' => ['icono' => 'fa-stethoscope', 'nombre' => 'Clínica / consultorio', 'ejemplos' => 'Clínica, consultorio, odontología', 'modulos' => [
-            '/clinica', '/clinica/agenda', '/clinica/especialidades', '/clinica/tratamientos', '/punto-venta',
+            '/clinica', '/clinica/agenda', '/clinica/especialidades', '/clinica/tratamientos', '/clinica/reportes', '/punto-venta',
         ]],
         // Estudio contable o empresa que solo lleva su contabilidad (sin vender con el sistema)
         'CONTABLE' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudio contable, contabilidad de la empresa, SIRE, planilla', 'sin_base' => true, 'modulos' => [

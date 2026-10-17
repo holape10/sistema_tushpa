@@ -15,6 +15,7 @@
                 <button type="button" @click="nuevo()" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700"><i class="fas fa-user-plus"></i> Nuevo paciente</button>
                 <a href="{{ route('clinica.tratamientos.index') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-file-invoice-dollar"></i> Registro de tratamientos</a>
                 @if ($esAdmin)
+                    <a href="{{ route('clinica.reportes') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-chart-pie"></i> Reportes</a>
                     <a href="{{ route('clinica.especialidades') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-gear"></i> Especialidades</a>
                 @endif
             </div>

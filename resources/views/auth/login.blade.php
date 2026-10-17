@@ -18,7 +18,8 @@
 
     <div class="min-h-screen flex flex-col lg:flex-row">
 
-        <!-- Panel izquierdo: marca + rubros -->
+        <!-- Panel izquierdo: marca + rubros (no va cuando se elige el rubro: ahí los rubros ocupan toda la pantalla) -->
+        @unless ($rubros)
         <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-indigo-950 via-indigo-800 to-blue-700 flex-col items-center justify-center overflow-hidden px-10 py-12 isolate">
             <x-kene-adorno patron="laberinto" color="text-white/[0.07]" :franja="false" />
             <!-- Decoración de fondo -->
@@ -58,32 +59,44 @@
                 <p class="text-indigo-300/70 text-xs mt-8">Desarrollamos ideas, creamos soluciones</p>
             </div>
         </div>
+        @endunless
 
         <!-- Panel derecho: formulario -->
-        <div class="flex-1 flex items-center justify-center px-6 py-12 bg-gray-50">
-            <div class="w-full {{ $rubros ? 'max-w-lg' : 'max-w-sm' }}" x-data="{ rubro: @js(old('rubro', '')), rubros: @js($rubros ? $rubros->map(fn ($r) => ['nombre' => $r['nombre'], 'icono' => $r['icono']]) : []) }">
+        <div class="flex-1 flex items-center justify-center px-4 sm:px-6 py-10 {{ $rubros ? 'bg-gradient-to-b from-indigo-50 via-white to-gray-50' : 'bg-gray-50' }}">
+            <div class="w-full {{ $rubros ? 'max-w-5xl' : 'max-w-sm' }}" x-data="{ rubro: @js(old('rubro', '')), rubros: @js($rubros ? $rubros->map(fn ($r) => ['nombre' => $r['nombre'], 'icono' => $r['icono']]) : []) }">
 
-                <!-- Logo visible solo en móvil -->
-                <div class="flex lg:hidden flex-col items-center mb-8">
-                    <img src="{{ asset('imagenes/icono.png') }}" alt="Logo" class="w-16 h-16 mb-2">
-                    <span class="font-bold text-gray-700 tracking-wide">TUSHPA</span>
-                </div>
+                @if ($rubros)
+                    <!-- Logo arriba (pantalla de elegir el tipo de negocio) -->
+                    <div class="flex flex-col items-center mb-6">
+                        <img src="{{ asset('imagenes/logo.webp') }}" alt="TUSHPA" width="320" height="128" fetchpriority="high" class="w-64 sm:w-80 h-24 sm:h-28 object-contain drop-shadow">
+                        <p class="text-gray-500 text-sm -mt-1">Un solo sistema para gestionar y facturar cualquier tipo de negocio</p>
+                    </div>
+                @else
+                    <!-- Logo visible solo en móvil -->
+                    <div class="flex lg:hidden flex-col items-center mb-8">
+                        <img src="{{ asset('imagenes/icono.png') }}" alt="Logo" class="w-16 h-16 mb-2">
+                        <span class="font-bold text-gray-700 tracking-wide">TUSHPA</span>
+                    </div>
+                @endif
 
                 @if ($rubros)
                     {{-- Paso 1 (demo): el tipo de negocio decide qué menú se ve al entrar --}}
-                    <div x-show="! rubro" class="bg-white rounded-2xl shadow-xl shadow-gray-200/60 border border-gray-100 p-6 sm:p-8" @if (old('rubro')) style="display:none" @endif>
-                        <h2 class="text-xl font-bold text-gray-800 mb-1">¿Qué tipo de negocio tienes?</h2>
-                        <p class="text-gray-400 text-sm mb-5">Elige uno y te mostramos solo lo que necesitas</p>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div x-show="! rubro" @if (old('rubro')) style="display:none" @endif>
+                        <h2 class="text-2xl sm:text-3xl font-extrabold text-gray-800 text-center">¿Qué tipo de negocio tienes?</h2>
+                        <p class="text-gray-500 text-center mb-6">Elige uno y te mostramos solo lo que necesitas</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                             @foreach ($rubros as $clave => $r)
                                 <button type="button" @click="rubro = @js($clave); $nextTick(() => $root.querySelector('[name=email]')?.focus())"
-                                        class="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-gray-100 bg-gray-50 px-2 py-4 text-center hover:border-indigo-400 hover:bg-indigo-50 active:scale-[0.97] transition">
-                                    <i class="fas {{ $r['icono'] }} text-2xl text-indigo-600"></i>
-                                    <span class="text-sm font-semibold text-gray-800 leading-tight">{{ $r['nombre'] }}</span>
-                                    <span class="text-[11px] text-gray-400 leading-tight">{{ $r['ejemplos'] }}</span>
+                                        class="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-white bg-white shadow-sm px-3 py-5 sm:py-6 text-center
+                                               hover:border-indigo-400 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.97] transition">
+                                    <span class="w-14 h-14 rounded-2xl bg-indigo-50 group-hover:bg-indigo-600 flex items-center justify-center transition">
+                                        <i class="fas {{ $r['icono'] }} text-2xl text-indigo-600 group-hover:text-white transition"></i></span>
+                                    <span class="text-base font-bold text-gray-800 leading-tight">{{ $r['nombre'] }}</span>
+                                    <span class="text-xs text-gray-400 leading-snug">{{ $r['ejemplos'] }}</span>
                                 </button>
                             @endforeach
                         </div>
+                        <p class="text-center text-gray-400 text-xs mt-6">Desarrollamos ideas, creamos soluciones</p>
                     </div>
                 @endif
 

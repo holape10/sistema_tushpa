@@ -7,6 +7,7 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ClinicaController;
+use App\Http\Controllers\ClinicaReporteController;
 use App\Http\Controllers\CobroController;
 use App\Http\Controllers\CocinaController;
 use App\Http\Controllers\ComandasController;
@@ -170,6 +171,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/tratamientos/sesion/{reg}/firma', 'firmar')->whereNumber('reg')->name('firmar');
         Route::get('/tratamientos/sesion/{reg}/firma', 'firma')->whereNumber('reg')->name('firma');
     });
+    Route::get('/clinica/reportes', [ClinicaReporteController::class, 'index'])->name('clinica.reportes');
     Route::controller(AgendaController::class)->prefix('clinica')->name('clinica.')->group(function () {
         Route::get('/agenda', 'index')->name('agenda');
         Route::get('/agenda/datos', 'datos')->name('agenda.datos');

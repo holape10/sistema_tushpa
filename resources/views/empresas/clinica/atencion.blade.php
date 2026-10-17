@@ -55,12 +55,36 @@
 
                 <section class="{{ $seccion }}">
                     <h2 class="font-bold text-gray-700">Diagnóstico</h2>
-                    <div class="grid sm:grid-cols-4 gap-2">
-                        <label class="block text-xs font-semibold text-gray-500">CIE-10
-                            <input x-model="d.cie10" maxlength="100" placeholder="J00, K29.7" class="{{ $in }} mt-1 uppercase"></label>
-                        <label class="block text-xs font-semibold text-gray-500 sm:col-span-3">Diagnóstico
-                            <textarea x-model="d.diagnostico" rows="2" class="{{ $in }} mt-1" placeholder="Rinofaringitis aguda"></textarea></label>
+                    {{-- CIE-10: buscar por código o por palabra; cada diagnóstico con su tipo (presuntivo, definitivo, repetido) --}}
+                    <div class="relative" @click.outside="cieAbierto = false">
+                        <label class="block text-xs font-semibold text-gray-500">CIE-10 <span class="font-normal text-gray-400">(escribe el código o una palabra: caries, pulpitis, gingivitis…)</span>
+                            <input x-model="cieQ" @focus="cieAbierto = true" @input="cieAbierto = true" @keydown.enter.prevent="cieResultados()[0] && agregarCie(cieResultados()[0])"
+                                   placeholder="Buscar diagnóstico CIE-10" class="{{ $in }} mt-1"></label>
+                        <div x-show="cieAbierto && cieQ.trim().length >= 1" x-cloak class="absolute z-20 left-0 right-0 mt-1 bg-white rounded-xl shadow-xl ring-1 ring-black/5 max-h-72 overflow-y-auto">
+                            <template x-for="x in cieResultados()" :key="x.c">
+                                <button type="button" @click="agregarCie(x)" class="w-full text-left px-3 py-2 hover:bg-teal-50 border-b border-gray-50 text-sm">
+                                    <b class="font-mono text-teal-700" x-text="x.c"></b> <span x-text="x.d"></span>
+                                    <span class="ml-1 text-[10px] text-gray-400" x-text="x.g"></span></button>
+                            </template>
+                            <button type="button" x-show="/^[A-Za-z]\d{2}(\.\d{1,2})?$/.test(cieQ.trim()) && !cieResultados().some(x => x.c === cieQ.trim().toUpperCase())"
+                                    @click="agregarCie({ c: cieQ.trim().toUpperCase(), d: '' })" class="w-full text-left px-3 py-2 text-sm text-teal-700 font-semibold">
+                                + Usar el código <span x-text="cieQ.trim().toUpperCase()"></span></button>
+                            <p x-show="!cieResultados().length && !/^[A-Za-z]\d{2}/.test(cieQ.trim())" class="px-3 py-3 text-sm text-gray-400">No está en la lista. Escribe el código (ej. K05.1).</p>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5 mt-2" x-show="cies.length">
+                            <template x-for="(x, i) in cies" :key="x.c">
+                                <span class="inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200 pl-2 pr-1 py-1 text-xs">
+                                    <b class="font-mono text-teal-800" x-text="x.c"></b><span class="text-gray-600 max-w-[220px] truncate" x-text="x.d"></span>
+                                    <button type="button" @click="x.t = ({ P: 'D', D: 'R', R: 'P' })[x.t]; sincronizarCie()" :title="({ P: 'Presuntivo', D: 'Definitivo', R: 'Repetido' })[x.t] + ' (clic para cambiar)'"
+                                            class="px-1.5 rounded font-bold" :class="x.t === 'D' ? 'bg-teal-600 text-white' : (x.t === 'P' ? 'bg-amber-400 text-white' : 'bg-gray-400 text-white')" x-text="x.t"></button>
+                                    <button type="button" @click="cies.splice(i, 1); sincronizarCie()" class="w-5 h-5 rounded hover:bg-teal-100 text-gray-500">×</button>
+                                </span>
+                            </template>
+                            <span class="text-[11px] text-gray-400 self-center">P presuntivo · D definitivo · R repetido</span>
+                        </div>
                     </div>
+                    <label class="block text-xs font-semibold text-gray-500">Diagnóstico
+                        <textarea x-model="d.diagnostico" rows="2" class="{{ $in }} mt-1" placeholder="Caries de la dentina en pieza 36"></textarea></label>
                     <label class="block text-sm font-semibold text-gray-700">Tratamiento / plan
                         <textarea x-model="d.tratamiento" rows="2" class="{{ $in }} mt-1"></textarea></label>
                 </section>
@@ -167,6 +191,9 @@
     </div>
 
     <script>
+        // Catálogo CIE-10 (odontología primero si la especialidad lleva odontograma)
+        const CIE10 = @js(\App\Support\Cie10::lista((bool) $conOdonto));
+        const sinTildesCie = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         function atencion() {
             const CSRF = '{{ csrf_token() }}';
             return {
@@ -175,6 +202,26 @@
                 editable: true, piezas: @js((object) $odontoInicial), pincel: 'CARIES',
                 denticion: @js(collect(array_keys($odontoInicial))->contains(fn($n) => $n >= 51) ? 'NINO' : (\App\Support\Clinica::edad($h->fecha_nac) && \Carbon\Carbon::parse($h->fecha_nac)->age < 12 ? 'NINO' : 'ADULTO')),
                 serv: { IdProducto: '', cantidad: 1 }, ocupado: false, aviso: '', ok: true,
+                cieQ: '', cieAbierto: false,
+                // "K02.1 (D), K04.0 (P)" ⇄ etiquetas
+                cies: (String(@js($datos['cie10'] ?? '')).match(/[A-Z]\d{2}(?:\.\d{1,2})?(?:\s*\([PDR]\))?/gi) || []).map(t => {
+                    const c = t.replace(/\s*\(.*$/, '').toUpperCase(), tipo = (t.match(/\(([PDR])\)/i) || [])[1];
+                    return { c, d: (CIE10.find(x => x.c === c) || {}).d || '', t: (tipo || 'D').toUpperCase() };
+                }),
+                cieResultados() {
+                    const q = sinTildesCie(this.cieQ.trim());
+                    if (!q) return [];
+                    return CIE10.filter(x => !this.cies.some(y => y.c === x.c) && (sinTildesCie(x.c).startsWith(q.replace(/\s/g, '')) || sinTildesCie(x.d).includes(q))).slice(0, 12);
+                },
+                agregarCie(x) {
+                    this.cies.push({ c: x.c, d: x.d, t: 'D' });
+                    // La descripción pasa al diagnóstico si aún no está
+                    if (x.d && !String(this.d.diagnostico || '').toLowerCase().includes(x.d.toLowerCase())) {
+                        this.d.diagnostico = (String(this.d.diagnostico || '').trim() ? String(this.d.diagnostico).trim() + '\n' : '') + x.d;
+                    }
+                    this.cieQ = ''; this.cieAbierto = false; this.sincronizarCie();
+                },
+                sincronizarCie() { this.d.cie10 = this.cies.map(x => x.c + ' (' + x.t + ')').join(', '); },
                 get imc() { const p = Number(this.d.peso), t = Number(this.d.talla); return {{ $mascota ? 'false' : 'true' }} && p > 0 && t > 0.3 ? (p / (t * t)).toFixed(1) : ''; },
                 get imcTexto() { const i = Number(this.imc); return !i ? '' : i < 18.5 ? '(bajo peso)' : i < 25 ? '(normal)' : i < 30 ? '(sobrepeso)' : '(obesidad)'; },
                 avisar(t, ok = true) { if (window.tushpaAviso) return window.tushpaAviso(t, ok); this.aviso = t; this.ok = ok; clearTimeout(this._t); this._t = setTimeout(() => this.aviso = '', 3500); },

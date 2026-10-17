@@ -217,7 +217,7 @@ class ClinicaController extends Controller
             'temperatura' => 'nullable|numeric|between:30,45', 'saturacion' => 'nullable|integer|between:50,100',
             'peso' => 'nullable|numeric|min:0|max:999', 'talla' => 'nullable|numeric|min:0|max:3',
             'mot_con' => 'nullable|string|max:5000', 'antecedente' => 'nullable|string|max:5000', 'alergia' => 'nullable|string|max:2000',
-            'int_qui' => 'nullable|string|max:2000', 'exa_fis' => 'nullable|string|max:5000', 'cie10' => 'nullable|string|max:100',
+            'int_qui' => 'nullable|string|max:2000', 'exa_fis' => 'nullable|string|max:5000', 'cie10' => 'nullable|string|max:500',
             'diagnostico' => 'nullable|string|max:5000', 'tratamiento' => 'nullable|string|max:5000', 'examenes' => 'nullable|string|max:3000',
             'indicaciones' => 'nullable|string|max:3000', 'pro_cit' => 'nullable|date|after:today', 'odontograma' => 'nullable|array',
             'receta' => 'nullable|array|max:30', 'receta.*.medicamento' => 'required|string|max:150', 'receta.*.dosis' => 'nullable|string|max:80',
