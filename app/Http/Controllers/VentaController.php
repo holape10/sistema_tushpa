@@ -230,6 +230,29 @@ class VentaController extends Controller
         return response()->json(['success' => true, 'message' => 'Venta anulada.'.($devueltos ? " Se devolvió al stock lo vendido ($devueltos movimiento(s) de kardex)." : '')]);
     }
 
+    /**
+     * Comprobante RECHAZADO por SUNAT que ya no se va a corregir (por ejemplo, de años anteriores): sale de pendientes
+     * y queda marcado como DESCARTADO. Para SUNAT nunca existió, así que no lleva comunicación de baja.
+     * No devuelve stock ni anula cobros: la venta sí se hizo (si corresponde, se emite un comprobante nuevo).
+     */
+    public function descartar(Request $request, $id)
+    {
+        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador descarta comprobantes rechazados.');
+        $request->validate(['motivo' => 'required|string|min:5|max:70'], [], ['motivo' => 'Motivo']);
+        $cab = $this->venta($id);
+        if ($cab->ccabaj) {
+            return response()->json(['success' => false, 'message' => 'El comprobante ya está anulado o descartado.']);
+        }
+        if (! in_array($cab->tdocod, ['01', '03', '07', '08'], true) || $cab->est_sunat !== 'RECHAZADO') {
+            return response()->json(['success' => false, 'message' => 'Solo se descartan comprobantes RECHAZADOS por SUNAT.']);
+        }
+        DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([
+            'ccabaj' => 'DESCARTADO '.now()->format('d/m/Y H:i'), 'motivo_baja' => mb_substr(trim($request->motivo), 0, 70), 'IdUsuario_baja' => Auth::id(),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Comprobante descartado: ya no sale en pendientes de SUNAT.']);
+    }
+
     // ------------------------------------------------------------------ WhatsApp
 
     /** Celular para WhatsApp con código de país (9 dígitos de Perú → 51…), o null */

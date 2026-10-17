@@ -166,6 +166,7 @@
                                                 'aceptado' => in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
                                                 'estado' => $v->est_sunat ?: 'PENDIENTE',
                                                 'guia' => !$anulada,
+                                                'descartar' => !$anulada && auth()->user()->esAdmin() && $v->est_sunat === 'RECHAZADO' && in_array($v->tdocod, ['01', '03', '07', '08'], true),
                                                 'baja' => in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja && $turnoAbierto
                                                     && in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true)
                                                     && $v->ccafem >= now()->subDays(\App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS)->toDateString(),
@@ -201,6 +202,10 @@
                             class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-red-50">
                         <i class="fas fa-ban text-red-600 w-4"></i>
                         <span><span class="font-semibold">Comunicación de baja</span><span class="block text-[11px] text-gray-400">Anular ante SUNAT sin nota de crédito</span></span></button>
+                    <button type="button" x-show="menu.venta.descartar" @click="menu.abierto = false; descartar(menu.venta.id, menu.venta.numero)"
+                            class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50">
+                        <i class="fas fa-ban text-gray-600 w-4"></i>
+                        <span><span class="font-semibold">Descartar (rechazado)</span><span class="block text-[11px] text-gray-400">SUNAT lo rechazó y ya no se corregirá: sale de pendientes</span></span></button>
                     <p x-show="!menu.venta.aceptado" class="px-3 py-1.5 text-[11px] text-amber-700 bg-amber-50"
                        x-text="'SUNAT: ' + menu.venta.estado + '. Las notas se habilitan cuando el comprobante esté ACEPTADO.'"></p>
                     <div class="border-t border-gray-100 my-1"></div>
@@ -555,6 +560,16 @@
                     location.reload();
                 },
 
+                async descartar(id, numero) {
+                    const motivo = prompt('Descartar ' + numero + ' (rechazado por SUNAT).\nNo devuelve stock ni anula cobros; solo deja de salir en pendientes.\n\nMotivo:', 'RECHAZADO POR SUNAT - NO SE CORREGIRÁ');
+                    if (!motivo || motivo.trim().length < 5) return;
+                    const r = await fetch(@js(url('/ventas')) + '/' + id + '/descartar', {
+                        method: 'POST', body: JSON.stringify({ motivo }),
+                        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) },
+                    }).then(x => x.json()).catch(() => ({ success: false, message: 'Sin conexión.' }));
+                    alert(r.message);
+                    if (r.success) location.reload();
+                },
                 abrirAnular(id, numero, esBaja = false) { this.idActual = id; this.anularNumero = numero; this.esBaja = esBaja; this.motivo = ''; this.error = ''; this.modal = 'anular'; },
 
                 async anular() {

@@ -595,8 +595,8 @@ class Impresion
         $entrega = $pedido->ped_tip === 'Delivery' && ! $anulacion ? Delivery::lineasComanda($pedido) : [];
         $atiende = $pedido->entrega_origen === 'CARTA' ? 'PEDIDO WEB (CARTA QR)' : null;
         $promotor = $pedido->promotor_id ? DB::table('users')->where('IdUsuario', $pedido->promotor_id)->value(DB::raw("COALESCE(NULLIF(apeusu, ''), name)")) : null;
-        // Comanda impresa al cobrar: "Atiende" es el mozo que tomó el pedido, no el cajero
-        if (! $atiende && $soloEn !== null && $pedido->mozo) {
+        // "Atiende" es siempre el mozo de la mesa (aunque la comanda la envíe o la cobre el cajero)
+        if (! $atiende && $pedido->mozo) {
             $atiende = DB::table('users')->where('IdUsuario', $pedido->mozo)->value(DB::raw("COALESCE(NULLIF(apeusu, ''), name)"));
         }
 

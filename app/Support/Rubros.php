@@ -104,7 +104,18 @@ class Rubros
         'lotes' => ['FARMACIA', 'GENERAL', 'CLINICA'],
         'series' => ['GENERAL'],
         'restaurante' => ['RESTOBAR', 'HOTELERIA', 'CLUB'],
+        'doctores' => ['CLINICA'],
+        'entrenadores' => ['GIMNASIO'],
     ];
+
+    /** Rol => opción que lo habilita: mozo, promotor y motorizado son de restaurante; doctor de clínica; entrenador de gimnasio */
+    private const ROLES = [8 => 'restaurante', 13 => 'restaurante', 12 => 'restaurante', 10 => 'doctores', 11 => 'entrenadores'];
+
+    /** ¿Este rol tiene sentido en el rubro de la empresa? (administrador y cajero, siempre) */
+    public static function permiteRol(int $rol): bool
+    {
+        return ! isset(self::ROLES[$rol]) || self::permite(self::ROLES[$rol]);
+    }
 
     /** Clave de sesión con el rubro elegido en el login (empresa demo sin rubro) */
     public const SESION = 'rubro_elegido';

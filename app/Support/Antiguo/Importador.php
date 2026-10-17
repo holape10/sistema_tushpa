@@ -699,7 +699,7 @@ class Importador
             if (isset($existentes[mb_strtolower($email)])) {
                 // Ya existe: solo se completa el código del mozo si se importó antes sin él
                 $codigo = trim((string) self::v($a, 'codigo_movil', ''));
-                if (ctype_digit($codigo) && DB::table('users')->where('email', $email)->whereNull('codigo_movil')->update(['codigo_movil' => (int) $codigo])) {
+                if (ctype_digit($codigo) && strlen($codigo) <= 8 && DB::table('users')->where('email', $email)->whereNull('codigo_movil')->update(['codigo_movil' => $codigo])) {
                     $this->sumar('usuarios', 'actualizados');
 
                     continue;
@@ -733,7 +733,7 @@ class Importador
                 'estusu' => (string) self::v($a, 'estusu', '1') === '1' ? 1 : 0,
                 'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $nuevaSuc, 'emp_id' => $empId,
                 // Código con el que el mozo entra desde la tablet o el celular (desde 1 dígito)
-                'codigo_movil' => ctype_digit(trim((string) self::v($a, 'codigo_movil', ''))) ? (int) trim((string) self::v($a, 'codigo_movil')) : null,
+                'codigo_movil' => preg_match('/^\d{1,8}$/', trim((string) self::v($a, 'codigo_movil', ''))) ? trim((string) self::v($a, 'codigo_movil')) : null,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('role_user')->insert(['role_id' => $rol, 'user_IdUsuario' => $nuevoId, 'id_empresa_negocio' => $nuevaSuc]);

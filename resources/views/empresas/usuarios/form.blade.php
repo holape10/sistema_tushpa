@@ -131,19 +131,19 @@
                             <option value="{{ $r->id }}" @selected($rolSel === (int) $r->id)>{{ $r->description }}</option>
                         @endforeach
                     </select></label>
-                <label class="text-sm">Código móvil <span x-show="rol === 8" class="text-red-600">*</span>
-                    <input name="codigo_movil" value="{{ old('codigo_movil', $usuario->codigo_movil ?? '') }}" inputmode="numeric" maxlength="6"
-                           :required="rol === 8" placeholder="Solo números" oninput="this.value = this.value.replace(/\D/g, '')"
-                           :class="rol === 8 ? 'bg-sky-50 border-sky-400' : ''" class="{{ $in }}">
-                    <span class="text-xs text-gray-400" x-show="rol === 8">Con este código el mozo entra desde la tablet o celular.</span>
+                <label class="text-sm">Código móvil <span x-show="conCodigo()" class="text-red-600">*</span>
+                    <input name="codigo_movil" value="{{ old('codigo_movil', $usuario->codigo_movil ?? '') }}" inputmode="numeric" maxlength="8"
+                           :required="conCodigo()" placeholder="De 1 a 8 números (ej. su DNI)" oninput="this.value = this.value.replace(/\D/g, '')"
+                           :class="conCodigo() ? 'bg-sky-50 border-sky-400' : ''" class="{{ $in }}">
+                    <span class="text-xs text-gray-400" x-show="conCodigo()">Con este código entra desde el celular o la tablet. No necesita contraseña.</span>
                     <span class="text-xs text-emerald-700" x-show="rol === 12" x-cloak>🛵 Al entrar con su usuario va directo a su pantalla de repartos. Queda en la lista de Motorizados (con su celular) para asignarle pedidos.</span></label>
-                <label class="text-sm">Contraseña {{ $usuario ? '' : '*' }}
+                <label class="text-sm" x-show="!conCodigo() || editando">Contraseña <span x-show="!editando && !conCodigo()">*</span>
                     <div class="relative" x-data="{ ver: false }">
-                        <input :type="ver ? 'text' : 'password'" name="password" {{ $usuario ? '' : 'required' }} minlength="4" autocomplete="new-password"
+                        <input :type="ver ? 'text' : 'password'" name="password" :required="!editando && !conCodigo()" minlength="4" autocomplete="new-password"
                                placeholder="{{ $usuario ? 'Dejar vacío para no cambiar' : '' }}" class="{{ $in }} pr-9">
                         <button type="button" @click="ver = !ver" class="absolute inset-y-0 right-0 px-2 text-gray-400 text-xs">👁</button>
                     </div></label>
-                <label class="text-sm">Confirmar contraseña
+                <label class="text-sm" x-show="!conCodigo() || editando">Confirmar contraseña
                     <input type="password" name="password_confirmation" autocomplete="new-password" class="{{ $in }}"></label>
             </div>
         </div>
@@ -182,8 +182,10 @@
     <script>
         const PRESETS = @json($presets);
         function formUsuario(rol, editando) {
+            // Mozo (8) y promotor (13): entran con su código móvil, sin contraseña
             return {
-                rol,
+                rol, editando,
+                conCodigo() { return [8, 13].includes(Number(this.rol)); },
                 // Al crear, elegir el rol marca los módulos sugeridos; al editar solo si se pide con el botón
                 aplicarPreset(forzar = false) {
                     if (editando && !forzar) return;

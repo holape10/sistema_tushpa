@@ -40,16 +40,16 @@ class LoginMovilController extends Controller
         return EmpresaNegocio::count() === 1 ? EmpresaNegocio::first() : null;
     }
 
-    /** Mozos activos con código móvil de la sucursal del equipo */
+    /** Mozos y promotores activos con código móvil de la sucursal del equipo */
     private function mozos(EmpresaNegocio $sucursal)
     {
         return User::join('role_user as ru', 'ru.user_IdUsuario', '=', 'users.IdUsuario')
-            ->where('ru.role_id', 8)
+            ->whereIn('ru.role_id', [8, 13])
             ->where('users.id_empresa_negocio', $sucursal->id_empresa_negocio)
             ->where('users.estusu', 1)
             ->whereNotNull('users.codigo_movil')
             ->orderBy('users.apeusu')
-            ->get(['users.IdUsuario', 'users.apeusu']);
+            ->get(['users.IdUsuario', 'users.apeusu', 'ru.role_id']);
     }
 
     public function create(Request $request)
@@ -68,7 +68,7 @@ class LoginMovilController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['usuario' => 'required|integer', 'codigo' => 'required|digits_between:1,6']);
+        $request->validate(['usuario' => 'required|integer', 'codigo' => 'required|regex:/^\d{1,8}$/']);
 
         $sucursal = $this->sucursal($request);
         abort_unless($sucursal, 403);

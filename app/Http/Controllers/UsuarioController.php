@@ -8,11 +8,13 @@ use App\Models\Modulo;
 use App\Models\User;
 use App\Support\ConsultaPeru;
 use App\Support\Delivery;
+use App\Support\Rubros;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UsuarioController extends Controller
@@ -20,6 +22,11 @@ class UsuarioController extends Controller
     private const ROL_MOZO = 8;
 
     private const ROL_MOTORIZADO = 12;
+
+    private const ROL_PROMOTOR = 13;
+
+    /** Entran solo desde el celular con su código (no necesitan contraseña) */
+    private const ROLES_CON_CODIGO = [self::ROL_MOZO, self::ROL_PROMOTOR];
 
     // Módulos que se marcan solos al elegir el rol (el admin puede cambiarlos después)
     public const PRESETS = [
@@ -70,7 +77,8 @@ class UsuarioController extends Controller
         }
 
         return [
-            'roles' => DB::table('roles')->orderBy('id')->get(),
+            // Solo los roles del rubro del negocio (mozo y promotor en restaurante, doctor en clínica, entrenador en gimnasio)
+            'roles' => DB::table('roles')->orderBy('id')->get()->filter(fn ($r) => Rubros::permiteRol((int) $r->id))->values(),
             'modulos' => $modulos->groupBy('mod_gen'),
             'presets' => $presets,
             'sucursales' => EmpresaNegocio::where('IdEmpresa', Auth::user()->IdEmpresa)->get(),
@@ -126,16 +134,24 @@ class UsuarioController extends Controller
             'email' => array_merge(['required', 'string', 'max:50'],
                 $usuario && trim((string) $request->email) === $usuario->email ? [] : ['regex:/^\S+$/'],
                 [Rule::unique('users', 'email')->ignore($usuario?->IdUsuario, 'IdUsuario')]),
-            'role_id' => 'required|exists:roles,id',
-            // El mozo entra desde la tablet/celular con este código
-            'codigo_movil' => ['nullable', 'required_if:role_id,'.self::ROL_MOZO, 'digits_between:1,6',
+            'role_id' => ['required', 'exists:roles,id', function ($campo, $valor, $falla) use ($usuario) {
+                // Un rol de otro rubro no se asigna (salvo que el usuario ya lo tenga)
+                $actual = $usuario ? (int) DB::table('role_user')->where('user_IdUsuario', $usuario->IdUsuario)->value('role_id') : 0;
+                if ((int) $valor !== $actual && ! Rubros::permiteRol((int) $valor)) {
+                    $falla('Ese rol no corresponde al tipo de negocio de la empresa.');
+                }
+            }],
+            // Mozo y promotor entran desde el celular con este código (de 1 a 8 dígitos; puede ser su DNI)
+            'codigo_movil' => ['nullable', 'required_if:role_id,'.implode(',', self::ROLES_CON_CODIGO), 'regex:/^\d{1,8}$/',
                 Rule::unique('users', 'codigo_movil')->where('id_empresa_negocio', $sucursal)->ignore($usuario?->IdUsuario, 'IdUsuario')],
-            'password' => [$nuevo ? 'required' : 'nullable', 'string', 'min:4', 'confirmed'],
+            // Mozo y promotor no necesitan contraseña: entran con su código
+            'password' => [$nuevo && ! in_array((int) $request->input('role_id'), self::ROLES_CON_CODIGO, true) ? 'required' : 'nullable', 'string', 'min:4', 'confirmed'],
             'modulos' => 'nullable|array',
             'modulos.*' => 'integer|exists:modulos,mod_id',
             'foto' => 'nullable|image|max:5120',
         ], [
-            'codigo_movil.required_if' => 'El código móvil es obligatorio para los mozos (lo usan para entrar desde la tablet o celular).',
+            'codigo_movil.required_if' => 'El código móvil es obligatorio para mozos y promotores (con él entran desde el celular).',
+            'codigo_movil.regex' => 'El código móvil lleva de 1 a 8 números (puede ser su DNI).',
             'codigo_movil.unique' => 'Ese código móvil ya lo tiene otro usuario de la sucursal.',
             'email.regex' => 'El usuario de acceso no puede tener espacios.',
         ], [
@@ -219,7 +235,8 @@ class UsuarioController extends Controller
                 'apeusu' => $this->nombreCompleto($d),
                 'email' => trim($d['email']),
                 'codigo_movil' => $d['codigo_movil'] ?? null,
-                'password' => bcrypt($d['password']),
+                // Mozo o promotor sin contraseña: una al azar (entra con su código móvil)
+                'password' => bcrypt(($d['password'] ?? null) ?: Str::random(32)),
                 'estusu' => (int) $d['estusu'],
                 'IdEmpresa' => Auth::user()->IdEmpresa,
                 'id_empresa_negocio' => $d['id_empresa_negocio'],
