@@ -169,7 +169,9 @@
                         <div class="col-sm-4">
                             <div class="form-group">
                                 <label>Dirección</label>
-                                <input type="text" id="clidir" class="form-control input-sm" value="--">
+                                <input type="text" id="clidir" class="form-control input-sm" value="--" list="dirs_cliente">
+                                <datalist id="dirs_cliente"></datalist>
+                                <small id="dirs_aviso" style="display:none;color:#4f46e5"></small>
                             </div>
                         </div>
                         <div class="col-xs-6 col-sm-4">
@@ -702,6 +704,11 @@
         el('clinum').value = c.num ?? el('clinum').value;
         el('clinom').value = c.nom || '';
         el('clidir').value = c.dir || '--';
+        // Cliente con varias sucursales: sus direcciones para elegir
+        const dirs = Array.isArray(c.dirs) ? c.dirs : [];
+        el('dirs_cliente').innerHTML = dirs.map(d => `<option value="${d.replace(/"/g, '&quot;')}"></option>`).join('');
+        el('dirs_aviso').style.display = dirs.length > 1 ? '' : 'none';
+        el('dirs_aviso').textContent = dirs.length > 1 ? `🏢 ${dirs.length} direcciones: borra el campo para elegir la sucursal` : '';
         el('clicor').value = c.cor || '';
         el('telefono').value = c.tel || '';
         if (c.tdicod) el('tdicod').value = c.tdicod;

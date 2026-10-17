@@ -5,6 +5,7 @@ use App\Models\Central\Superadmin;
 use App\Models\User;
 use App\Support\Antiguo\CargadorSql;
 use App\Support\DemoDatos;
+use App\Support\Sunat\RescateEnvios;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Foundation\Inspiring;
@@ -188,3 +189,28 @@ Artisan::command('clientes:suspender-vencidos', function () {
 })->purpose('Suspende las empresas cuya advertencia de pago o prueba gratis venció');
 
 Schedule::command('clientes:suspender-vencidos')->dailyAt('00:15');
+
+Artisan::command('sunat:rescatar {--ruc= : Solo esta empresa}', function () {
+    // Una sola empresa (sin multi-empresa) o cada empresa activa del panel
+    $bases = Tenancy::activa()
+        ? Cliente::where('estado', 'ACTIVO')->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))->pluck('base_datos', 'ruc')
+        : collect(['local' => null]);
+    foreach ($bases as $ruc => $base) {
+        try {
+            $r = $base ? Tenancy::en($base, fn () => RescateEnvios::ejecutar()) : RescateEnvios::ejecutar();
+        } catch (Throwable $e) {
+            $this->error("{$ruc}: ".$e->getMessage());
+
+            continue;
+        }
+        if ($r['enviados'] || $r['fallidos']) {
+            $this->line("<info>{$ruc}</info> enviados {$r['enviados']} · aceptados {$r['aceptados']} · con problema {$r['fallidos']}");
+            foreach ($r['detalle'] as $d) {
+                $this->line("   {$d}");
+            }
+        }
+    }
+})->purpose('Envía a SUNAT las facturas (desde el día 2) y boletas (desde el día 5) que nadie envió y están por vencer');
+
+// Cada hora de 7am a 10pm: lo que está por vencer el plazo de SUNAT se envía solo
+Schedule::command('sunat:rescatar')->hourlyAt(20)->between('07:00', '22:00')->withoutOverlapping(50);

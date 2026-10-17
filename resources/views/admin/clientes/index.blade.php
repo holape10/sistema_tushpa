@@ -132,6 +132,7 @@
                                 <span class="text-xs text-slate-400">Eliminado</span>
                             @else
                             <a href="{{ route('admin.clientes.edit', $cl) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2">Editar</a>
+                            <a href="{{ route('admin.clientes.comprobantes', $cl->id) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2" title="Pendientes y rechazados de SUNAT">Comprobantes</a>
                             @if ($cl->activo())
                                 <button type="button" x-data class="text-xs font-semibold text-amber-600 hover:text-amber-700 mr-2"
                                         @click="$dispatch('advertir', @js(['id' => $cl->id, 'nombre' => $cl->nombre_comercial ?: $cl->razon_social, 'telefono' => $cl->contacto_telefono,

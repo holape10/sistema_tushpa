@@ -251,16 +251,23 @@ class Comprobante
             );
         }
 
-        return Cliente::updateOrCreate(
+        $direccion = trim((string) ($datos['clidir'] ?? '')) ?: '--';
+        $existente = Cliente::where('clinum', $clinum)->where('rucemp', $user->IdEmpresa)->first();
+        // Cliente con varias sucursales: la dirección principal no se pisa; la otra queda en su lista de direcciones
+        $principal = $existente && $existente->clidir && $existente->clidir !== '--' ? $existente->clidir : $direccion;
+        $cliente = Cliente::updateOrCreate(
             ['clinum' => $clinum, 'rucemp' => $user->IdEmpresa],
             [
                 'clinom' => $clinom,
-                'clidir' => ($datos['clidir'] ?? null) ?: '--',
+                'clidir' => $principal,
                 'clicor' => $datos['clicor'] ?? null,
                 'tdicod' => $tdicod,
                 'telefono' => $datos['telefono'] ?? null,
             ]
         );
+        ClienteDirecciones::recordar($cliente->clicod, $direccion, $principal);
+
+        return $cliente;
     }
 
     /**

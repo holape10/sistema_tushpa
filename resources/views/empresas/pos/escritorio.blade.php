@@ -47,15 +47,15 @@
                                         <span x-text="' · ' + p.presentaciones.map(x => x.nombre).join(', ')"></span>
                                     </template>
                                 </span>
-                                {{-- Farmacia: el lote que saldrá primero --}}
-                                <template x-if="cfg.farmacia && p.lotes && p.lotes.length">
+                                {{-- Productos con lote (farmacia, minimarket…): el lote que saldrá primero --}}
+                                <template x-if="p.lotes && p.lotes.length">
                                     <span class="mt-1 inline-flex flex-wrap items-center gap-1.5 text-xs font-semibold">
                                         <span class="px-2 py-0.5 rounded-full text-white" :class="colorLote(p.lotes[0])"
                                               x-text="'Lote ' + p.lotes[0].lote + ' · ' + textoVence(p.lotes[0])"></span>
                                         <span x-show="p.lotes.length > 1" class="opacity-70" x-text="'+' + (p.lotes.length - 1) + ' lote(s) más'"></span>
                                     </span>
                                 </template>
-                                <template x-if="cfg.farmacia && p.control_lote && (!p.lotes || !p.lotes.length)">
+                                <template x-if="p.control_lote && (!p.lotes || !p.lotes.length)">
                                     <span class="mt-1 inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">Sin lotes registrados</span>
                                 </template>
                             </span>
@@ -142,8 +142,8 @@
                                                    x-text="(it.series.length ? it.series.length + ' unidad(es)' : 'Falta la serie') + ' · ' + seriesLibres(it).length + ' disponible(s)' + (it.garantia ? ' · garantía ' + it.garantia + ' meses' : '')"></p>
                                             </div>
                                         </template>
-                                        {{-- Farmacia: lote a vender (automático = el que vence antes) y de qué lotes sale --}}
-                                        <template x-if="cfg.farmacia && it.lotes && it.lotes.length">
+                                        {{-- Productos con lote: lote a vender (automático = el que vence antes) y de qué lotes sale --}}
+                                        <template x-if="it.lotes && it.lotes.length">
                                             <div class="mt-1 flex flex-wrap items-center gap-1.5">
                                                 <select x-model="it.lote" class="h-7 py-0 pl-2 pr-7 rounded-lg border-teal-200 bg-teal-50 text-[11px] font-semibold text-teal-800">
                                                     <option value="">Automático (vence primero)</option>
@@ -331,7 +331,10 @@
                         </template>
                     </ul>
                 </div>
-                <input type="text" x-model="cliente.dir" placeholder="Dirección" maxlength="150" class="w-full h-10 rounded-xl border-slate-200 text-sm" aria-label="Dirección">
+                <input type="text" x-model="cliente.dir" placeholder="Dirección" maxlength="150" list="pv_dirs_cliente" @focus="cliente.dirs && cliente.dirs.length > 1 && $event.target.select()"
+                       class="w-full h-10 rounded-xl border-slate-200 text-sm" aria-label="Dirección">
+                <datalist id="pv_dirs_cliente"><template x-for="d in (cliente.dirs || [])" :key="d"><option :value="d"></option></template></datalist>
+                <p x-show="cliente.dirs && cliente.dirs.length > 1" x-cloak class="mt-0.5 text-[11px] text-indigo-600" x-text="'🏢 ' + cliente.dirs.length + ' direcciones: toca el campo para elegir la sucursal'"></p>
                 <p x-show="msgCliente.texto" x-cloak class="text-xs" :class="msgCliente.ok ? 'text-emerald-600' : 'text-rose-600'" x-text="msgCliente.texto"></p>
             </section>
 

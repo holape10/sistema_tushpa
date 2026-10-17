@@ -4,7 +4,9 @@
 
 use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\ClienteController;
+use App\Http\Controllers\Admin\ComprobanteController;
 use App\Http\Controllers\Admin\LoginController;
+use App\Http\Controllers\Admin\ProspectoController;
 use App\Http\Controllers\Admin\RespaldoController;
 use App\Http\Controllers\Admin\TicketController;
 use App\Http\Controllers\Admin\UsuarioController;
@@ -48,6 +50,11 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/planes', [ClienteController::class, 'planesIndex'])->name('planes.index');
     Route::post('/planes/{plan?}', [ClienteController::class, 'planesGuardar'])->whereNumber('plan')->name('planes.guardar');
     Route::get('/visitas', [VisitaController::class, 'index'])->name('visitas.index');
+    Route::get('/prospectos', [ProspectoController::class, 'index'])->name('prospectos.index');
+    Route::get('/prospectos/excel', [ProspectoController::class, 'excel'])->name('prospectos.excel');
+    Route::post('/prospectos/carta/{id}/contactado', [ProspectoController::class, 'contactado'])->whereNumber('id')->name('prospectos.contactado');
+    Route::get('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'index'])->whereNumber('cliente')->name('clientes.comprobantes');
+    Route::post('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'accion'])->whereNumber('cliente')->name('clientes.comprobantes.accion');
     Route::post('/cartas/{id}/estado', [VisitaController::class, 'cartaEstado'])->whereNumber('id')->name('cartas.estado');
     Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
     Route::get('/tickets/{id}', [TicketController::class, 'show'])->whereNumber('id')->name('tickets.show');

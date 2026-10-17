@@ -12,6 +12,7 @@ use App\Models\PedidoDetalle;
 use App\Models\Piso;
 use App\Models\ProductoPresentacion;
 use App\Models\Turno;
+use App\Support\ClienteDirecciones;
 use App\Support\Cocina;
 use App\Support\Comprobante;
 use App\Support\ConsultaPeru;
@@ -278,6 +279,8 @@ class CobroController extends Controller
             return response()->json([
                 'nom' => $cli->clinom, 'dir' => $cli->clidir, 'tdicod' => $cli->tdicod,
                 'cor' => $cli->clicor, 'tel' => $cli->telefono,
+                // Todas sus direcciones (cliente con varias sucursales) para elegir en el comprobante
+                'dirs' => ClienteDirecciones::de($cli->clicod, $cli->clidir),
             ]);
         }
 

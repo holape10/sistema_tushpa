@@ -248,11 +248,11 @@ document.addEventListener('alpine:init', () => {
             it.flash = true;
             setTimeout(() => { it.flash = false; }, 600);
             this.sonido(true);
-            // Farmacia: avisa qué lote vender si está pronto a vencer, o si todo lo que queda está vencido
-            if (CFG.farmacia && it.lotes && it.lotes.length) {
+            // Producto con lote: avisa qué lote vender si está pronto a vencer, o si todo lo que queda está vencido
+            if (it.lotes && it.lotes.length) {
                 const primero = it.lotes.find(l => !l.vencido);
                 if (!primero) this.aviso(`⚠ ${it.descripcion}: todos sus lotes están VENCIDOS`, 'error');
-                else if (primero.dias !== null && primero.dias <= CFG.diasAlerta) this.aviso(`💊 Vender lote ${primero.lote}: ${this.textoVence(primero)}`);
+                else if (primero.dias !== null && primero.dias <= CFG.diasAlerta) this.aviso(`📦 Vender lote ${primero.lote}: ${this.textoVence(primero)}`);
             }
             this.busqueda = '';
             this.resultados = [];
@@ -474,7 +474,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         usarCliente(c) {
-            this.cliente = { tdicod: c.tdicod || (String(c.num).length === 11 ? '6' : '1'), num: c.num, nom: c.nom || '', dir: c.dir && c.dir !== '--' ? c.dir : '' };
+            this.cliente = { tdicod: c.tdicod || (String(c.num).length === 11 ? '6' : '1'), num: c.num, nom: c.nom || '', dir: c.dir && c.dir !== '--' ? c.dir : '',
+                             dirs: Array.isArray(c.dirs) ? c.dirs : [] };
             this._ultimoDoc = c.num;
             this.sugerencias = [];
             if (this.cliente.tdicod === '6' && CFG.comprobantes.some(x => x.tdocod === '01')) {
@@ -528,8 +529,8 @@ document.addEventListener('alpine:init', () => {
             const paga = this.esContado ? (Number(this.paga) || 0) : 0;
             if (paga > 0 && paga < this.total && !confirm(`El cliente paga ${this.soles(paga)} y el total es ${this.soles(this.total)}. ¿Continuar igual?`)) return;
 
-            // Farmacia: confirmar si alguna línea saldría de un lote vencido (no alcanza el stock vigente)
-            if (CFG.farmacia) {
+            // Producto con lote: confirmar si alguna línea saldría de un lote vencido (no alcanza el stock vigente)
+            {
                 const vencida = this.carrito.find(it => this.planLotes(it).some(p => p.lote && p.vencido));
                 if (vencida && !confirm(`${vencida.descripcion} saldría de un lote VENCIDO porque no alcanza el stock vigente. ¿Vender igual?`)) return;
             }
