@@ -81,7 +81,7 @@
                             <input value="{{ $carta->email }}" disabled class="form-control">
                         @else
                             <label class="form-label" for="email">Tu correo</label>
-                            <input id="email" type="email" name="email" value="{{ old('email') }}" required maxlength="120" class="form-control" placeholder="tucorreo@gmail.com">
+                            <input id="email" type="email" name="email" value="{{ old('email', session('google.email')) }}" required maxlength="120" class="form-control" placeholder="tucorreo@gmail.com">
                             <div class="form-text">Ahí te enviamos el enlace para editarla.</div>
                         @endif
                     </div>

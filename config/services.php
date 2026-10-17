@@ -41,4 +41,9 @@ return [
         ],
     ],
 
+    // "Continuar con Google" en tushpa.app (Google One Tap). Vacío = no se muestra
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+    ],
+
 ];

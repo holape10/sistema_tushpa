@@ -98,7 +98,7 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label" for="contacto_nombre">Tu nombre</label>
-                        <input id="contacto_nombre" name="contacto_nombre" value="{{ old('contacto_nombre') }}" required maxlength="120" class="form-control" autocomplete="name">
+                        <input id="contacto_nombre" name="contacto_nombre" value="{{ old('contacto_nombre', session('google.nombre')) }}" required maxlength="120" class="form-control" autocomplete="name">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="contacto_telefono">Celular (WhatsApp)</label>
@@ -106,7 +106,7 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="contacto_correo">Correo</label>
-                        <input id="contacto_correo" name="contacto_correo" type="email" value="{{ old('contacto_correo') }}" required maxlength="120" class="form-control" autocomplete="email">
+                        <input id="contacto_correo" name="contacto_correo" type="email" value="{{ old('contacto_correo', session('google.email')) }}" required maxlength="120" class="form-control" autocomplete="email">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="password">Contraseña</label>

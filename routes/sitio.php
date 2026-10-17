@@ -3,6 +3,8 @@
 // Web pública del dominio principal (tushpa.app). Se carga desde routes/web.php solo con el multi-empresa activo.
 
 use App\Http\Controllers\CartaWebController;
+use App\Http\Controllers\GoogleWebController;
+use App\Http\Controllers\PromocionWebController;
 use App\Http\Controllers\SitioController;
 use App\Support\SeoSitio;
 use Illuminate\Support\Facades\Route;
@@ -38,3 +40,11 @@ Route::get('/crea-tu-carta/{slug}/lista', [CartaWebController::class, 'lista'])-
 Route::get('/crea-tu-carta/{slug}/editar', [CartaWebController::class, 'editar'])->where('slug', '[a-z0-9-]+')->name('carta.editar');
 Route::post('/crea-tu-carta/{slug}/editar', [CartaWebController::class, 'actualizar'])->where('slug', '[a-z0-9-]+')->middleware('throttle:20,10')->name('carta.actualizar');
 Route::get('/c/{slug}', [CartaWebController::class, 'ver'])->where('slug', '[a-z0-9-]+')->name('carta.ver');
+
+// Promociones creadas en el panel: su página de oferta, y el conteo de vistas y clics
+Route::get('/ofertas/{slug}', [PromocionWebController::class, 'oferta'])->where('slug', '[a-z0-9-]+')->name('oferta');
+Route::post('/promo/{id}/vista', [PromocionWebController::class, 'vista'])->whereNumber('id')->middleware('throttle:60,1,sitio-promo')->name('promo.vista');
+Route::get('/promo/{id}', [PromocionWebController::class, 'clic'])->whereNumber('id')->name('promo.clic');
+
+// Continuar con Google (One Tap): llena el registro con el nombre y el correo
+Route::post('/google', [GoogleWebController::class, 'entrar'])->middleware('throttle:10,1,sitio-google')->name('google');

@@ -37,5 +37,6 @@
         &copy; {{ date('Y') }} TUSHPA · <a class="text-white-50" href="https://wa.me/{{ config('soporte.whatsapp') }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> {{ config('soporte.telefono') }}</a>
     </p>
     @stack('scripts')
+    @include('sitio.partials.extras')
 </body>
 </html>

@@ -798,5 +798,6 @@ Menú Principal → Configuración → Certificado Digital<br>
             });
         });
     </script>
+@include('sitio.partials.extras')
 </body>
 </html>
