@@ -47,8 +47,79 @@ class DemoDatos
         $this->estacionamiento();
         $this->club();
         $this->clinica();
+        $this->prestamos();
 
         return $this->resumen;
+    }
+
+    /**
+     * Préstamos de ejemplo: clientes al día, atrasados, morosos, uno que terminó y otro por renovar,
+     * con sus pagos de días anteriores (para que el panel, la cobranza y los reportes se vean con movimiento).
+     */
+    private function prestamos(): void
+    {
+        if (! Schema::hasTable('prestamos')) {
+            return;
+        }
+        Prestamos::config($this->suc);
+        $planes = DB::table('prestamo_planes')->where('id_empresa_negocio', $this->suc)->pluck('plan_id', 'nombre');
+        // [dni, nombre, celular, zona, negocio, monto, cuotas, días atrás, pagos: 1 = paga cada día, 0.7 = a veces, 0 = no paga]
+        $lista = [
+            ['45100201', 'ROSA ELENA HUAMÁN QUISPE', '987210301', 'MERCADO CENTRAL', 'PUESTO DE VERDURAS', 300, 24, 12, 1],
+            ['45100202', 'JUAN CARLOS PAREDES LÓPEZ', '987210302', 'MERCADO CENTRAL', 'VENTA DE ABARROTES', 500, 24, 20, 1],
+            ['45100203', 'MARÍA DEL PILAR TORRES VEGA', '987210303', 'MERCADO CENTRAL', 'JUGUERÍA', 200, 24, 8, 0.75],
+            ['45100204', 'PEDRO PABLO SALDAÑA RÍOS', '987210304', 'AV. PRINCIPAL', 'MOTOTAXI', 100, 20, 15, 0.5],
+            ['45100205', 'CARMEN ROSA DÍAZ FLORES', '987210305', 'AV. PRINCIPAL', 'BODEGA', 1000, 24, 22, 1],
+            ['45100206', 'LUIS ALBERTO RAMOS CHÁVEZ', '987210306', 'AV. PRINCIPAL', 'TALLER DE CALZADO', 400, 24, 26, 0.3],
+            ['45100207', 'ANA LUCÍA MENDOZA CRUZ', '987210307', 'BARRIO NORTE', 'PELUQUERÍA', 150, 20, 5, 1],
+            ['45100208', 'JORGE LUIS VARGAS PINEDO', '987210308', 'BARRIO NORTE', 'VENTA DE COMIDA', 600, 24, 18, 0.85],
+            ['45100209', 'SONIA BEATRIZ GÓMEZ SOTO', '987210309', 'BARRIO NORTE', 'TIENDA DE ROPA', 250, 24, 3, 1],
+            ['45100210', 'RAÚL ERNESTO CASTRO NÚÑEZ', '987210310', 'MERCADO CENTRAL', 'FERRETERÍA', 800, 24, 10, 1],
+        ];
+        foreach ($lista as [$dni, $nombre, $tel, $zona, $negocio, $monto, $cuotas, $atras, $paga]) {
+            $clicod = $this->cliente($dni, $nombre, $tel, $zona);
+            if (DB::table('prestamo_clientes')->where('id_empresa_negocio', $this->suc)->where('clicod', $clicod)->exists()) {
+                continue;
+            }
+            $pcl = DB::table('prestamo_clientes')->insertGetId(['clicod' => $clicod, 'direccion' => $zona.' · PUESTO '.substr($dni, -2), 'zona' => $zona,
+                'negocio' => $negocio, 'estado' => 'ACTIVO', 'id_empresa_negocio' => $this->suc, 'creado' => now()->subDays($atras + 30)]);
+            $preId = Prestamos::crear($this->admin, $pcl, ['monto' => $monto, 'plan_id' => $planes[$cuotas === 20 ? 'PRIMER PRÉSTAMO' : 'DIARIO 24 DÍAS'] ?? null,
+                'interes_pct' => 20, 'cuotas' => $cuotas, 'frecuencia' => 'DIARIA', 'fecha' => now()->subDays($atras)->toDateString()]);
+            DB::table('prestamos')->where('pre_id', $preId)->update(['creado' => now()->subDays($atras)]);
+            $this->pagosDemo($preId, $paga);
+            $this->sumar('préstamos de ejemplo');
+        }
+        // Un cliente que ya terminó su préstamo a tiempo (calificación excelente)
+        $clicod = $this->cliente('45100211', 'GLADYS NOEMÍ PINTO ARÉVALO', '987210311', 'BARRIO NORTE');
+        if (! DB::table('prestamo_clientes')->where('id_empresa_negocio', $this->suc)->where('clicod', $clicod)->exists()) {
+            $pcl = DB::table('prestamo_clientes')->insertGetId(['clicod' => $clicod, 'direccion' => 'BARRIO NORTE · CASA 11', 'zona' => 'BARRIO NORTE',
+                'negocio' => 'VENTA DE EMOLIENTE', 'estado' => 'ACTIVO', 'id_empresa_negocio' => $this->suc, 'creado' => now()->subDays(60)]);
+            $preId = Prestamos::crear($this->admin, $pcl, ['monto' => 100, 'interes_pct' => 20, 'cuotas' => 20, 'frecuencia' => 'DIARIA', 'fecha' => now()->subDays(40)->toDateString()]);
+            $this->pagosDemo($preId, 1);
+            $this->sumar('préstamos de ejemplo');
+        }
+    }
+
+    /** Pagos de días anteriores según qué tan cumplido es el cliente (en la fecha de cada cuota) */
+    private function pagosDemo(int $preId, float $paga): void
+    {
+        $p = DB::table('prestamos')->where('pre_id', $preId)->first();
+        $hoy = now()->toDateString();
+        $deuda = 0.0;
+        foreach (DB::table('prestamo_cuotas')->where('pre_id', $preId)->where('fecha', '<', $hoy)->orderBy('numero')->get() as $i => $c) {
+            $deuda += (float) $c->monto;
+            // Cumplido: paga lo que debe; el impuntual paga una cuota cuando puede y se le acumula el atraso
+            if ($paga >= 1 || ($paga > 0 && (($i * 37 + $preId) % 100) / 100 < $paga)) {
+                DB::table('prestamo_pagos')->insert(['pre_id' => $preId, 'fecha_hora' => $c->fecha.' '.sprintf('%02d:%02d:00', 8 + ($i % 9), ($i * 7) % 60),
+                    'monto' => round($paga >= 0.8 ? $deuda : (float) $c->monto, 2), 'mora' => 0, 'medio' => $i % 4 === 0 ? 'YAPE' : 'EFECTIVO', 'operacion' => $i % 4 === 0 ? 'Y'.(100000 + $preId * 100 + $i) : null,
+                    'tipo' => 'PAGO', 'IdUsuario' => $this->admin->IdUsuario, 'id_empresa_negocio' => $this->suc]);
+                $deuda = $paga >= 0.8 ? 0 : round($deuda - (float) $c->monto, 2);
+            }
+        }
+        Prestamos::recalcular($preId);
+        if (DB::table('prestamos')->where('pre_id', $preId)->value('estado') === 'PAGADO') {
+            DB::table('prestamos')->where('pre_id', $preId)->update(['cancelado' => DB::table('prestamo_pagos')->where('pre_id', $preId)->max('fecha_hora')]);
+        }
     }
 
     private function sumar(string $que, int $n = 1): void

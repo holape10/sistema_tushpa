@@ -51,6 +51,11 @@ use App\Http\Controllers\PisoController;
 use App\Http\Controllers\PlanillaController;
 use App\Http\Controllers\PosMovilController;
 use App\Http\Controllers\PreparadoController;
+use App\Http\Controllers\PrestamoClienteController;
+use App\Http\Controllers\PrestamoCobranzaController;
+use App\Http\Controllers\PrestamoConfigController;
+use App\Http\Controllers\PrestamoController;
+use App\Http\Controllers\PrestamoReporteController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProformaController;
 use App\Http\Controllers\PromotorController;
@@ -322,6 +327,33 @@ Route::middleware('auth')->group(function () {
         Route::post('/clientes/{id}/nutricion', 'guardarNutricion')->whereNumber('id')->name('nutricion');
         Route::post('/nutricion/{id}/quitar', 'quitarNutricion')->whereNumber('id')->name('nutricion.quitar');
     });
+
+    // Préstamos (cobro diario "gota a gota", semanal o mensual)
+    Route::controller(PrestamoController::class)->prefix('prestamos')->name('prestamos.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/nuevo', 'nuevo')->name('nuevo');
+        Route::post('/', 'guardar')->name('guardar');
+        Route::get('/{id}', 'ver')->whereNumber('id')->name('ver');
+        Route::post('/{id}', 'editar')->whereNumber('id')->name('editar');
+        Route::post('/{id}/pagar', 'pagar')->whereNumber('id')->middleware('throttle:60,1')->name('pagar');
+        Route::post('/{id}/gestion', 'gestion')->whereNumber('id')->name('gestion');
+        Route::post('/{id}/anular', 'anular')->whereNumber('id')->name('anular');
+        Route::get('/{id}/tarjeta', 'tarjeta')->whereNumber('id')->name('tarjeta');
+        Route::post('/pagos/{pag}/anular', 'anularPago')->whereNumber('pag')->name('pago.anular');
+        Route::get('/pagos/{pag}/recibo', 'recibo')->whereNumber('pag')->name('recibo');
+    });
+    Route::controller(PrestamoClienteController::class)->prefix('prestamos/clientes')->name('prestamos.clientes')->group(function () {
+        Route::get('/', 'index');
+        Route::post('/', 'guardar')->name('.guardar');
+        Route::get('/buscar', 'buscar')->name('.buscar');
+        Route::get('/{id}', 'ficha')->whereNumber('id')->name('.ficha');
+    });
+    Route::get('/prestamos/cobranza', [PrestamoCobranzaController::class, 'index'])->name('prestamos.cobranza');
+    Route::get('/prestamos/cobranza/datos', [PrestamoCobranzaController::class, 'datos'])->name('prestamos.cobranza.datos');
+    Route::get('/prestamos/reportes', [PrestamoReporteController::class, 'index'])->name('prestamos.reportes');
+    Route::get('/prestamos/configuracion', [PrestamoConfigController::class, 'index'])->name('prestamos.configuracion');
+    Route::post('/prestamos/configuracion', [PrestamoConfigController::class, 'guardar'])->name('prestamos.configuracion.guardar');
+    Route::post('/prestamos/configuracion/plan', [PrestamoConfigController::class, 'plan'])->name('prestamos.configuracion.plan');
 
     // Hotel / hospedaje
     Route::get('/hotel', [HotelController::class, 'index'])->name('hotel.index');

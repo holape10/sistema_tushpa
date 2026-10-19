@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#1e1b4b">
-    <title>Ingresar · Mozos y promotores</title>
+    <title>Ingresar · Mozos, promotores y cobradores</title>
     <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -81,8 +81,8 @@
             <div class="aviso"><i class="fas fa-circle-info"></i> Este equipo aún no está asociado a una sucursal.<br>
                 Pide al administrador o cajero que inicie sesión <b>una vez</b> desde aquí con su usuario y contraseña.</div>
         @elseif ($mozos->isEmpty())
-            <div class="aviso"><i class="fas fa-circle-info"></i> No hay mozos ni promotores con código móvil en <b>{{ $sucursal->nombre_comercial }}</b>.<br>
-                Créalos en <em>Usuarios</em> con el rol Mozo o Promotor y su código.</div>
+            <div class="aviso"><i class="fas fa-circle-info"></i> No hay mozos, promotores ni cobradores con código móvil en <b>{{ $sucursal->nombre_comercial }}</b>.<br>
+                Créalos en <em>Usuarios</em> con el rol Mozo, Promotor o Cobrador y su código.</div>
         @else
             @if ($errors->any())
                 <div class="error"><i class="fas fa-triangle-exclamation"></i> {{ $errors->first() }}</div>
@@ -102,7 +102,7 @@
                                 data-iniciales="{{ $iniciales($m->apeusu) }}">
                             <span class="avatar" style="background: {{ $colores[$m->IdUsuario % count($colores)] }}">{{ $iniciales($m->apeusu) }}</span>
                             <span class="nombre">{{ $m->apeusu }}</span>
-                            <span class="rol {{ $promotor ? 'promotor' : '' }}">{{ $promotor ? 'PROMOTOR' : 'MOZO' }}</span>
+                            <span class="rol {{ $promotor || (int) $m->role_id === 14 ? 'promotor' : '' }}">{{ ['13' => 'PROMOTOR', '14' => 'COBRADOR'][(string) $m->role_id] ?? 'MOZO' }}</span>
                         </button>
                     @endforeach
                     <p class="vacio-lista oculto" id="sin_resultados">No encontramos ese nombre.</p>

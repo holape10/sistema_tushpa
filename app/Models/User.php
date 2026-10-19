@@ -93,6 +93,7 @@ class User extends Authenticatable
             'entrenador' => 'entrenador.index', // el entrenador entra a su panel
             'motorizado' => 'repartidor.mio', // el motorizado entra a sus repartos
             'promotor' => 'comandas.seleccion', // el promotor toma pedidos como un mozo
+            'cobrador' => 'prestamos.cobranza', // el cobrador de préstamos entra a su ruta del día
             'caja' => 'inicio', // accesos del menú del usuario
             default => 'inicio', // admin y cualquier otro caso
         };

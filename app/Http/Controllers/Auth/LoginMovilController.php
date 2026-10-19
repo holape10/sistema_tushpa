@@ -44,7 +44,7 @@ class LoginMovilController extends Controller
     private function mozos(EmpresaNegocio $sucursal)
     {
         return User::join('role_user as ru', 'ru.user_IdUsuario', '=', 'users.IdUsuario')
-            ->whereIn('ru.role_id', [8, 13])
+            ->whereIn('ru.role_id', [8, 13, 14])
             ->where('users.id_empresa_negocio', $sucursal->id_empresa_negocio)
             ->where('users.estusu', 1)
             ->whereNotNull('users.codigo_movil')

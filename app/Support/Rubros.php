@@ -82,6 +82,11 @@ class Rubros
         'CLINICA' => ['icono' => 'fa-stethoscope', 'nombre' => 'Clínica / consultorio', 'ejemplos' => 'Clínica, consultorio, odontología', 'modulos' => [
             '/clinica', '/clinica/agenda', '/clinica/especialidades', '/clinica/tratamientos', '/clinica/reportes', '/punto-venta',
         ]],
+        // Préstamos con cobro diario ("gota a gota"), semanal o mensual: no vende ni emite comprobantes
+        'PRESTAMOS' => ['icono' => 'fa-hand-holding-dollar', 'nombre' => 'Préstamos', 'ejemplos' => 'Préstamos diarios, cobranza en ruta y morosidad', 'sin_base' => true, 'modulos' => [
+            '/inicio', '/usuarios', '/empresas', '/sucursales', '/soporte', '/respaldo',
+            '/prestamos', '/prestamos/clientes', '/prestamos/cobranza', '/prestamos/reportes', '/prestamos/configuracion',
+        ]],
         // Estudio contable o empresa que solo lleva su contabilidad (sin vender con el sistema)
         'CONTABLE' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudio contable, contabilidad de la empresa, SIRE, planilla', 'sin_base' => true, 'modulos' => [
             '/inicio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo',
@@ -106,10 +111,11 @@ class Rubros
         'restaurante' => ['RESTOBAR', 'HOTELERIA', 'CLUB'],
         'doctores' => ['CLINICA'],
         'entrenadores' => ['GIMNASIO'],
+        'cobradores' => ['PRESTAMOS'],
     ];
 
     /** Rol => opción que lo habilita: mozo, promotor y motorizado son de restaurante; doctor de clínica; entrenador de gimnasio */
-    private const ROLES = [8 => 'restaurante', 13 => 'restaurante', 12 => 'restaurante', 10 => 'doctores', 11 => 'entrenadores'];
+    private const ROLES = [8 => 'restaurante', 13 => 'restaurante', 12 => 'restaurante', 10 => 'doctores', 11 => 'entrenadores', 14 => 'cobradores'];
 
     /** ¿Este rol tiene sentido en el rubro de la empresa? (administrador y cajero, siempre) */
     public static function permiteRol(int $rol): bool

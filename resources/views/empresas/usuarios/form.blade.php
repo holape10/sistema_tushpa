@@ -185,7 +185,7 @@
             // Mozo (8) y promotor (13): entran con su código móvil, sin contraseña
             return {
                 rol, editando,
-                conCodigo() { return [8, 13].includes(Number(this.rol)); },
+                conCodigo() { return [8, 13, 14].includes(Number(this.rol)); },
                 // Al crear, elegir el rol marca los módulos sugeridos; al editar solo si se pide con el botón
                 aplicarPreset(forzar = false) {
                     if (editando && !forzar) return;

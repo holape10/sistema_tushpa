@@ -25,8 +25,10 @@ class UsuarioController extends Controller
 
     private const ROL_PROMOTOR = 13;
 
+    private const ROL_COBRADOR = 14;
+
     /** Entran solo desde el celular con su código (no necesitan contraseña) */
-    private const ROLES_CON_CODIGO = [self::ROL_MOZO, self::ROL_PROMOTOR];
+    private const ROLES_CON_CODIGO = [self::ROL_MOZO, self::ROL_PROMOTOR, self::ROL_COBRADOR];
 
     // Módulos que se marcan solos al elegir el rol (el admin puede cambiarlos después)
     public const PRESETS = [
@@ -35,6 +37,7 @@ class UsuarioController extends Controller
         12 => ['Inicio'],
         13 => ['Inicio', 'Comandas', 'Ventas de Promotores'],
         10 => ['Inicio', 'Historias Clínicas', 'Agenda de Citas'],
+        14 => ['Inicio', 'Cobranza del Día', 'Clientes de Préstamos'],
         4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Envío de Comprobantes', 'Resumen Diario',
             'Kardex', 'Stock Productos', 'Clientes'],
     ];
@@ -150,7 +153,7 @@ class UsuarioController extends Controller
             'modulos.*' => 'integer|exists:modulos,mod_id',
             'foto' => 'nullable|image|max:5120',
         ], [
-            'codigo_movil.required_if' => 'El código móvil es obligatorio para mozos y promotores (con él entran desde el celular).',
+            'codigo_movil.required_if' => 'El código móvil es obligatorio para mozos, promotores y cobradores (con él entran desde el celular).',
             'codigo_movil.regex' => 'El código móvil lleva de 1 a 8 números (puede ser su DNI).',
             'codigo_movil.unique' => 'Ese código móvil ya lo tiene otro usuario de la sucursal.',
             'email.regex' => 'El usuario de acceso no puede tener espacios.',
