@@ -111,6 +111,10 @@ class PrestamoClienteController extends Controller
                 $fila['estado'] = $d['estado'] ?? 'ACTIVO';
                 if ($actual) {
                     DB::table('prestamo_clientes')->where('pcl_id', $actual->pcl_id)->update($fila);
+                    // Si cambió de cobrador, sus préstamos vigentes pasan a la ruta del nuevo
+                    if ((int) $actual->cobrador_id !== (int) ($fila['cobrador_id'] ?? 0)) {
+                        DB::table('prestamos')->where('pcl_id', $actual->pcl_id)->where('estado', 'VIGENTE')->update(['cobrador_id' => $fila['cobrador_id'] ?? null]);
+                    }
 
                     return (int) $actual->pcl_id;
                 }

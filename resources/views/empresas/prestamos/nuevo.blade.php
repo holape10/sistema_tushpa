@@ -142,7 +142,7 @@
             const planes = @js($planes);
             const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
             const inicial = @js($cliente);
-            const plan0 = planes.find(p => inicial?.esPrimero && Number(p.primer_prestamo)) || planes.find(p => !Number(p.primer_prestamo)) || planes[0] || { plan_id: null, interes: 20, cuotas: 24, frecuencia: 'DIARIA', monto_min: 100 };
+            const plan0 = planes.find(p => inicial?.esPrimero && Number(p.primer_prestamo)) || planes.find(p => !Number(p.primer_prestamo) && p.frecuencia === 'DIARIA') || planes.find(p => !Number(p.primer_prestamo)) || planes[0] || { plan_id: null, interes: 20, cuotas: 24, frecuencia: 'DIARIA', monto_min: 100 };
             return {
                 planes, cliente: inicial, q: '', sugerencias: [], renovar: null, ocupado: false,
                 plan: plan0.plan_id, monto: Number(plan0.monto_min) || 100, interes: Number(plan0.interes), cuotas: Number(plan0.cuotas), frecuencia: plan0.frecuencia,
