@@ -204,6 +204,8 @@ class DemoDatos
         $bebidas = $this->categoria('BEBIDAS', '#22c55e');
         $tragos = $this->categoria('TRAGOS', '#a855f7');
         $insumos = $this->categoria('INSUMOS COCINA', '#64748b');
+        // Los insumos no se venden: su categoría no sale en la comanda ni en los puntos de venta
+        DB::table('categorias')->where('cat_id', $insumos)->update(['visible' => 0]);
 
         foreach ([[$entradas, 'TEQUEÑOS CON GUACAMOLE', 12], [$entradas, 'YUCA FRITA CON SALSA HUANCAÍNA', 9], [$entradas, 'CHONTA EN ENSALADA', 14],
             [$ceviches, 'CEVICHE CLÁSICO', 25], [$ceviches, 'CEVICHE MIXTO', 32], [$ceviches, 'LECHE DE TIGRE', 15],
