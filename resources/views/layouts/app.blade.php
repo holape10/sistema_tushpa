@@ -221,6 +221,7 @@
                         <span class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold">{{ $sucursalActual }}</span>
                     @endif
                 @endif
+                @include('partials.equipo_caja')
                 {{-- Ayuda: soporte del sistema desde cualquier pantalla --}}
                 @php
                     // Respuestas de soporte sin leer (tickets del administrador)

@@ -161,6 +161,33 @@
         @if ($impresoras->isNotEmpty())
             <form method="POST" action="{{ route('impresion.asignaciones') }}" class="grid lg:grid-cols-2 gap-5 mb-5">
                 @csrf
+                @if ($agentes->isNotEmpty())
+                    {{-- Varias cajas: cada PC imprime en sus impresoras, cobre quien cobre --}}
+                    <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm p-5">
+                        <h3 class="font-bold text-gray-800"><i class="fas fa-desktop text-indigo-500"></i> Cajas: ¿qué imprime cada PC?</h3>
+                        <p class="text-xs text-gray-400 mb-3">Para locales con varias cajas. Lo que se cobra en una PC sale en <b>su</b> ticketera de comprobantes, y la comanda en su caja y en <b>su barra</b>, sin importar el usuario.
+                            Después, en cada PC de caja toca <b>"Esta PC es…"</b> una sola vez (o elígela arriba, junto a tu nombre de sucursal).</p>
+                        <div class="space-y-2">
+                            @foreach ($agentes as $a)
+                                <div class="flex flex-wrap items-center gap-2 text-sm">
+                                    <span class="font-semibold text-gray-700 w-40 truncate"><i class="fas fa-desktop text-gray-400"></i> {{ $a->pc }}
+                                        @if ($equipoActual === $a->pc)<span class="ml-1 rounded-full bg-green-100 text-green-700 px-2 text-[11px]">esta PC</span>@endif</span>
+                                    <select name="equipo_caja[{{ $a->pc }}]" class="w-48 rounded-lg border-gray-300 text-sm" title="Ticketera de comprobantes y precuentas de esta PC">
+                                        <option value="">Comprobantes: por usuario</option>
+                                        @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($a->impresora_caja == $i->Id)>Comprobantes: {{ $i->descripcion }}</option>@endforeach
+                                    </select>
+                                    <select name="equipo_barra[{{ $a->pc }}]" class="w-48 rounded-lg border-gray-300 text-sm" title="Al cobrar, la comanda sale en la caja y en esta barra">
+                                        <option value="">Barra: por categoría</option>
+                                        @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($a->impresora_barra == $i->Id)>Barra: {{ $i->descripcion }}</option>@endforeach
+                                    </select>
+                                    @if (($a->impresora_caja || $a->impresora_barra) && $equipoActual !== $a->pc)
+                                        <button form="form-equipo" name="pc" value="{{ $a->pc }}" class="px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-700 text-xs font-semibold hover:bg-indigo-50">Esta PC es {{ $a->pc }}</button>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
                 <div class="bg-white rounded-2xl shadow-sm p-5">
                     <h3 class="font-bold text-gray-800">Cocina / bar: ¿dónde sale cada categoría?</h3>
                     <p class="text-xs text-gray-400 mb-3">Al enviar una comanda, cada producto se imprime en la impresora de su categoría. Con <b>"También en"</b> sale una copia en otra ticketera (ej.: barra y caja). Sin impresora = no se imprime.</p>
@@ -194,7 +221,7 @@
                 </div>
                 <div class="bg-white rounded-2xl shadow-sm p-5">
                     <h3 class="font-bold text-gray-800">Caja: impresora de cada usuario</h3>
-                    <p class="text-xs text-gray-400 mb-3">Comprobantes y precuentas salen en la impresora del usuario que cobra; si no tiene, en la de "caja por defecto". @if ($negocio->comanda_al_cobrar ?? false)Con <b>Barra</b>, al cobrar la comanda sale en su caja y en esa barra (para locales con varias barras).@endif</p>
+                    <p class="text-xs text-gray-400 mb-3">Comprobantes y precuentas salen en la impresora de la PC de caja (si está elegida arriba); si no, en la del usuario que cobra; si no tiene, en la de "caja por defecto". @if ($negocio->comanda_al_cobrar ?? false)Con <b>Barra</b>, al cobrar la comanda sale en su caja y en esa barra (para locales con varias barras).@endif</p>
                     <div class="space-y-2 max-h-80 overflow-y-auto">
                         @foreach ($usuarios as $u)
                             <div class="flex items-center justify-between gap-2 text-sm">
@@ -217,6 +244,7 @@
                     <button class="px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">Guardar asignaciones</button>
                 </div>
             </form>
+            <form id="form-equipo" method="POST" action="{{ route('impresion.equipo') }}">@csrf</form>
         @endif
 
         {{-- Cola --}}

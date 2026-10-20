@@ -35,14 +35,53 @@ class Impresion
             ->where('id_empresa_negocio', $sucursal)->where('activo', 1)->first();
     }
 
-    /** Impresora de caja: la del usuario (terminal) o la predeterminada de la sucursal */
+    /** Cookie con la PC de caja en la que está este navegador (CAJA01, CAJA02…) */
+    public const COOKIE_EQUIPO = 'equipo_caja';
+
+    /** Equipos (PCs con agente) de la sucursal que tienen impresoras asignadas */
+    public static function equipos(int $sucursal)
+    {
+        return DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)
+            ->where(fn ($q) => $q->whereNotNull('impresora_caja')->orWhereNotNull('impresora_barra'))->orderBy('pc')->get();
+    }
+
+    /** La PC de caja de este navegador (elegida una vez en esa PC), si la sucursal la tiene configurada */
+    public static function equipo(int $sucursal): ?object
+    {
+        $pc = request()->cookie(self::COOKIE_EQUIPO);
+        if (! is_string($pc) || $pc === '') {
+            return null;
+        }
+
+        return self::equipos($sucursal)->firstWhere('pc', mb_strtoupper($pc));
+    }
+
+    /** Impresora de caja: la de la PC donde se cobra, la del usuario (terminal) o la predeterminada de la sucursal */
     public static function impresoraCaja(int $sucursal, $user = null): ?object
     {
         $user ??= Auth::user();
 
-        return self::impresora($user?->terminal ? (int) $user->terminal : null, $sucursal)
+        return self::impresora((int) (self::equipo($sucursal)?->impresora_caja) ?: null, $sucursal)
+            ?? self::impresora($user?->terminal ? (int) $user->terminal : null, $sucursal)
             ?? DB::table('configuracion_impresoras')->where('id_empresa_negocio', $sucursal)->where('activo', 1)
                 ->orderByDesc('predeterminado')->orderBy('Id')->first();
+    }
+
+    /**
+     * Varias barras: la comanda que sale al cobrar va a la ticketera de caja y a la barra de la PC donde se cobra
+     * (o la barra del cajero). null = cada producto a la impresora de su categoría.
+     *
+     * @return array<int, int>|null
+     */
+    public static function destinosComandaCaja(int $sucursal, $cajero = null): ?array
+    {
+        $cajero ??= Auth::user();
+        $barra = (int) (self::equipo($sucursal)?->impresora_barra ?: ($cajero->impresora_barra ?? 0));
+        if (! $barra || ! self::impresora($barra, $sucursal)) {
+            return null;
+        }
+
+        return array_values(array_unique(array_filter([(int) (self::impresoraCaja($sucursal, $cajero)->Id ?? 0), $barra])));
     }
 
     public static function agenteConectado(int $sucursal): bool
@@ -645,8 +684,8 @@ class Impresion
 
     /**
      * Al cobrar: imprime lo que quedó guardado de la comanda y lo limpia. Devuelve cuántos tickets salieron.
-     * Si el cajero tiene una impresora de barra (users.impresora_barra), la comanda sale en SU ticketera de caja y en
-     * SU barra (varias barras con sus cajas); si no, en la impresora de cada categoría.
+     * Con barra (la de la PC donde se cobra o la del cajero) la comanda sale en la ticketera de caja y en esa barra
+     * (varias barras con sus cajas); si no, en la impresora de cada categoría.
      */
     public static function imprimirComandaPendiente(int $pedId, $cajero = null): int
     {
@@ -655,15 +694,9 @@ class Impresion
             return 0;
         }
         DB::table('pedidos')->where('ped_id', $pedId)->update(['comanda_pendiente' => null]);
+        $sucursal = (int) DB::table('pedidos')->where('ped_id', $pedId)->value('id_empresa_negocio');
 
-        $cajero ??= Auth::user();
-        $soloEn = null;
-        if ($cajero && ! empty($cajero->impresora_barra)) {
-            $sucursal = (int) DB::table('pedidos')->where('ped_id', $pedId)->value('id_empresa_negocio');
-            $soloEn = array_values(array_unique(array_filter([(int) (self::impresoraCaja($sucursal, $cajero)->Id ?? 0), (int) $cajero->impresora_barra])));
-        }
-
-        return self::comanda($pedId, array_values($pendiente), false, '', $soloEn);
+        return self::comanda($pedId, array_values($pendiente), false, '', self::destinosComandaCaja($sucursal, $cajero));
     }
 
     /**

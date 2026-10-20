@@ -227,7 +227,7 @@ class CobroController extends Controller
                     'observacion' => $i['observacion'] ?? null,
                 ])->values()->all();
                 $destino = 'PUNTO DE VENTA';
-                Impresion::comandaPara($user->id_empresa_negocio, $destino, $respuesta['numero'], $lineas);
+                Impresion::comandaPara($user->id_empresa_negocio, $destino, $respuesta['numero'], $lineas, soloEn: Impresion::destinosComandaCaja((int) $user->id_empresa_negocio, $user));
                 Cocina::registrarDirecta($user->id_empresa_negocio, $destino.' '.$respuesta['numero'], $lineas);
             } catch (\Throwable $e) {
                 report($e);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Support\Impresion\Impresion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -67,6 +68,7 @@ class ImpresionController extends Controller
             'negocio' => DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->first(),
             'conectado' => Impresion::agenteConectado($sucursal),
             'agentes' => DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)->where('contacto', '>=', now()->subDays(7))->orderBy('pc')->get(),
+            'equipoActual' => Impresion::equipo($sucursal)?->pc,
             'cola' => DB::table('cola_impresion')->where('id_empresa_negocio', $sucursal)->orderByDesc('id')->limit(25)
                 ->get(['id', 'impresora', 'tipo', 'referencia', 'estado', 'intentos', 'error', 'creado', 'impreso']),
             'categorias' => DB::table('categorias')->where('id_empresa_negocio', $sucursal)->orderBy('cat_nom')->get(['cat_id', 'cat_nom', 'impresora', 'impresora2']),
@@ -126,6 +128,8 @@ class ImpresionController extends Controller
         DB::table('categorias')->where('id_empresa_negocio', $sucursal)->where('impresora2', $id)->update(['impresora2' => null]);
         DB::table('users')->where('id_empresa_negocio', $sucursal)->where('terminal', $id)->update(['terminal' => null]);
         DB::table('users')->where('id_empresa_negocio', $sucursal)->where('impresora_barra', $id)->update(['impresora_barra' => null]);
+        DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)->where('impresora_caja', $id)->update(['impresora_caja' => null]);
+        DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)->where('impresora_barra', $id)->update(['impresora_barra' => null]);
 
         return back()->with('success', 'Impresora eliminada.');
     }
@@ -153,7 +157,26 @@ class ImpresionController extends Controller
         return back()->with('success', "Guardado: comandas {$d['copias_comanda']} copia(s), comprobantes {$d['copias_comprobante']} copia(s).");
     }
 
-    /** Qué impresora usa cada categoría (cocina/bar) y cada usuario (caja) */
+    /**
+     * "Esta PC es CAJA01": el navegador lo recuerda (cookie de 5 años) y lo que se cobra aquí sale en las impresoras de
+     * esa PC. Vacío = este navegador no es una caja (usa la impresora del usuario).
+     */
+    public function equipo(Request $request)
+    {
+        abort_unless(Auth::user()->esAdminOCaja(), 403);
+        $pc = mb_strtoupper(trim((string) $request->input('pc', '')));
+        if ($pc === '') {
+            Cookie::queue(Cookie::forget(Impresion::COOKIE_EQUIPO));
+
+            return back()->with('success', 'Este navegador ya no está asignado a ninguna caja.');
+        }
+        abort_unless(Impresion::equipos($this->sucursal())->contains('pc', $pc), 422, 'Esa PC no tiene impresoras asignadas.');
+        Cookie::queue(Impresion::COOKIE_EQUIPO, $pc, 60 * 24 * 365 * 5);
+
+        return back()->with('success', "Listo: en este navegador los comprobantes y comandas saldrán en las impresoras de {$pc}.");
+    }
+
+    /** Qué impresora usa cada categoría (cocina/bar), cada PC de caja y cada usuario (caja) */
     public function asignaciones(Request $request)
     {
         $this->soloAdmin();
@@ -168,6 +191,11 @@ class ImpresionController extends Controller
             DB::table('categorias')->where('cat_id', $cat)->where('id_empresa_negocio', $sucursal)->update([
                 'impresora' => $principal, 'impresora2' => $principal && $segunda !== $principal ? $segunda : null,
             ]);
+        }
+        $barrasEquipo = (array) $request->input('equipo_barra', []);
+        foreach ((array) $request->input('equipo_caja', []) as $pc => $imp) {
+            DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)->where('pc', $pc)
+                ->update(['impresora_caja' => $limpiar($imp), 'impresora_barra' => $limpiar($barrasEquipo[$pc] ?? null)]);
         }
         $barras = (array) $request->input('barra', []);
         foreach ((array) $request->input('usuario', []) as $usu => $imp) {
@@ -322,9 +350,6 @@ class ImpresionController extends Controller
 
     // ------------------------------------------------------------------ API del agente (sin sesión, con token)
 
-    /** Segundos sin consultar tras los que un agente se considera desconectado */
-    private const AGENTE_VIVO = 90;
-
     /** PC de una impresora compartida ("CAJA02/CPE2", "\\\\CAJA02\\CPE2"); null si es de red, A4 local o sin PC */
     public static function pcDeRuta(string $ruta, string $conexion): ?string
     {
@@ -364,9 +389,10 @@ class ImpresionController extends Controller
         if ($miPc !== '') {
             DB::table('impresion_agentes')->updateOrInsert(['id_empresa_negocio' => $sucursal, 'pc' => $miPc], ['contacto' => now()]);
         }
-        // PCs con agente conectado: lo de sus impresoras compartidas solo lo imprime ese agente (en su misma PC)
+        // PCs con agente (conectado en los últimos 7 días): lo de sus impresoras compartidas solo lo imprime ese agente,
+        // en su misma PC. Si está apagado el trabajo espera a que se prenda (otra PC no llega a esa impresora por la red).
         $pcsConAgente = DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)
-            ->where('contacto', '>=', now()->subSeconds(self::AGENTE_VIVO))->pluck('pc')->all();
+            ->where('contacto', '>=', now()->subDays(7))->pluck('pc')->all();
         $esMio = function (object $t) use ($miPc, $pcsConAgente) {
             $pc = self::pcDeRuta((string) $t->ruta, (string) $t->tip_conex_imp);
 
