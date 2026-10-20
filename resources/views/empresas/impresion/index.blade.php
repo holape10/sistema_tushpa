@@ -156,8 +156,8 @@
                     </label>
                     <label class="flex items-start gap-2 cursor-pointer">
                         <input type="checkbox" name="nombre_corto" value="1" @checked($negocio->nombre_corto ?? false) class="mt-0.5 rounded">
-                        <span><b class="text-gray-800">Nombres cortos en tickets y comandas</b>
-                            <span class="block text-xs text-gray-500">Mozo, promotor y cajero salen con primer nombre y primer apellido (ej.: ÁLVARO IZQUIERDO).</span></span>
+                        <span><b class="text-gray-800">Nombres cortos y mozo en las mesas</b>
+                            <span class="block text-xs text-gray-500">Cada mesa ocupada muestra a su mozo, y en tickets y comandas salen con primer nombre y primer apellido (ej.: ÁLVARO IZQUIERDO).</span></span>
                     </label>
                 </div>
             </form>

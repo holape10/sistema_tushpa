@@ -21,6 +21,13 @@
         @if ($m->pedido_id && $m->pedido_fecha_hora)
             <span class="mesa-timer block font-mono text-[11px] opacity-90" data-inicio="{{ \Carbon\Carbon::parse($m->pedido_fecha_hora)->toIso8601String() }}">00:00:00</span>
         @endif
+        {{-- Quién atiende la mesa (solo en las sucursales con nombres cortos) --}}
+        @if (! empty($m->mozo_nombre))
+            <span class="mt-1 inline-flex max-w-full items-center justify-center gap-1 rounded-xl bg-black/25 px-2 py-0.5 text-[11px] font-bold leading-tight" title="Mozo: {{ $m->mozo_nombre }}">
+                <svg class="h-3 w-3 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 10a4 4 0 100-8 4 4 0 000 8zm-7 8a7 7 0 0114 0H3z"/></svg>
+                <span class="break-words">{{ $m->mozo_nombre }}</span>
+            </span>
+        @endif
         {{-- Cocina ya lo tiene listo: el mozo debe llevarlo --}}
         @if (($m->listos ?? 0) > 0)
             <span class="absolute -top-2 -right-1.5 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-black shadow animate-pulse" title="Listo en cocina para servir">🔔 LISTO</span>

@@ -569,20 +569,37 @@
         document.getElementById('mesas_container').innerHTML = vista;
         actualizarTimers();
     }
+    // Internet lento: se manda la huella de lo que ya se tiene (si nada cambió, el servidor no reenvía las mesas),
+    // no se pide otra vez una zona que aún está cargando y una consulta colgada se corta a los 12 s
+    const huellas = new Map(), cargando = new Set();
+    function traerZona(pisoId) {
+        if (cargando.has(pisoId)) return Promise.resolve(null);
+        cargando.add(pisoId);
+        const corte = new AbortController(), reloj = setTimeout(() => corte.abort(), 12000);
+        return fetch(URL_MESAS + pisoId + (huellas.has(pisoId) && zonas.has(pisoId) ? '?h=' + huellas.get(pisoId) : ''), { signal: corte.signal, headers: { 'Accept': 'application/json' } })
+            .then((r) => r.json()).then((data) => {
+                if (data.igual) return null;
+                zonas.set(pisoId, data.vista);
+                huellas.set(pisoId, data.h);
+                return data.vista;
+            }).finally(() => { clearTimeout(reloj); cargando.delete(pisoId); });
+    }
     function refrescarMesas(pisoId) {
         pisoId = String(pisoId);
         pisoVisible = pisoId;
+        const cont = document.getElementById('mesas_container');
         if (zonas.has(pisoId)) mostrarMesas(pisoId, zonas.get(pisoId));
-        else document.getElementById('mesas_container').style.opacity = '.5';
-        return fetch(URL_MESAS + pisoId).then((r) => r.json()).then((data) => {
-            zonas.set(pisoId, data.vista);
-            if (pisoVisible === pisoId) { document.getElementById('mesas_container').style.opacity = ''; mostrarMesas(pisoId, data.vista); }
-        }).catch(() => { document.getElementById('mesas_container').style.opacity = ''; });
+        else cont.style.opacity = '.5';
+        return traerZona(pisoId).then((vista) => {
+            if (pisoVisible !== pisoId) return;
+            cont.style.opacity = '';
+            if (vista !== null) mostrarMesas(pisoId, vista);
+        }).catch(() => { cont.style.opacity = ''; });
     }
     // Las demás zonas se traen de a una, sin apuro, para que al tocarlas aparezcan al instante
     (function precargar() {
         const pendientes = [...document.querySelectorAll('.piso-btn')].map((b) => String(b.dataset.pisoId)).filter((id) => !zonas.has(id));
-        pendientes.reduce((p, id) => p.then(() => zonas.has(id) ? null : fetch(URL_MESAS + id).then((r) => r.json()).then((d) => zonas.set(id, d.vista)).catch(() => {})), Promise.resolve());
+        pendientes.reduce((p, id) => p.then(() => zonas.has(id) ? null : traerZona(id).catch(() => {})), Promise.resolve());
     })();
     cadaSiVisible(() => { if (pisoVisible) refrescarMesas(pisoVisible); }, 10000);
 

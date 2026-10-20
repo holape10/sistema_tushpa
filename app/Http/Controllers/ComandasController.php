@@ -18,6 +18,7 @@ use App\Support\ControlStock;
 use App\Support\Delivery;
 use App\Support\Impresion\Impresion;
 use App\Support\MesasUnidas;
+use App\Support\NombreCorto;
 use App\Support\OpcionesPlato;
 use App\Support\Porciones;
 use App\Support\Precios;
@@ -303,7 +304,16 @@ class ComandasController extends Controller
             ->where('pedidos.ped_est', 'Aperturado')
             ->get(['pedidos.ped_id', 'pedidos.ped_tot', 'pedidos.fecha_hora', 'mesas.mes_id', 'mesas.mes_nom', 'pisos.pis_nom'])->keyBy('ped_id');
 
-        return $mesas->each(function ($m) use ($listos, $reservas, $grupos, $nombrePiso) {
+        // Mozo de cada mesa ocupada (primer nombre y primer apellido), si la sucursal lo usa
+        $mozos = [];
+        if (NombreCorto::activo((int) $id_empresa_negocio)) {
+            $pedidos = $mesas->pluck('pedido_id')->merge($grupos->keys())->filter()->unique()->values();
+            $mozos = $pedidos->isEmpty() ? [] : DB::table('pedidos as p')->join('users as u', 'u.IdUsuario', '=', 'p.mozo')->whereIn('p.ped_id', $pedidos)
+                ->select('p.ped_id', DB::raw("COALESCE(NULLIF(TRIM(u.apeusu), ''), u.name) as nombre"))
+                ->pluck('nombre', 'ped_id')->map(fn ($n) => NombreCorto::de((string) $n))->all();
+        }
+
+        return $mesas->each(function ($m) use ($listos, $reservas, $grupos, $nombrePiso, $mozos) {
             $m->etiqueta = Mesa::etiqueta($nombrePiso, $m->mes_nom);
             $grupo = ! $m->pedido_id && $m->unida_ped_id ? ($grupos[$m->unida_ped_id] ?? null) : null;
             $m->principal = $grupo ? ['mes_id' => $grupo->mes_id, 'nombre' => Mesa::etiqueta($grupo->pis_nom, $grupo->mes_nom)] : null;
@@ -314,16 +324,21 @@ class ComandasController extends Controller
             }
             $m->listos = (int) ($listos[$m->pedido_id] ?? 0);
             $m->reserva = $reservas[$m->mes_id] ?? null;
+            $m->mozo_nombre = $m->pedido_id ? ($mozos[$m->pedido_id] ?? null) : null;
         });
     }
 
-    public function getMesasPorPiso($piso_id)
+    /**
+     * Mesas de una zona (la pantalla las vuelve a pedir cada 10 s). Con ?h= (la huella de lo que ya tiene) y sin
+     * cambios, responde solo {igual: true}: en internet lento no se vuelve a bajar todo.
+     */
+    public function getMesasPorPiso(Request $request, $piso_id)
     {
         $mesas = $this->mesasDelPiso($piso_id, Auth::user()->id_empresa_negocio);
+        $vista = view('empresas.comandas.partials.mesas_grid', compact('mesas'))->render();
+        $huella = substr(md5($vista), 0, 16);
 
-        return response()->json([
-            'vista' => view('empresas.comandas.partials.mesas_grid', compact('mesas'))->render(),
-        ]);
+        return response()->json($request->query('h') === $huella ? ['igual' => true] : ['vista' => $vista, 'h' => $huella]);
     }
 
     public function setServiceData(Request $request)
