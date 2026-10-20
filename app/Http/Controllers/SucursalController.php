@@ -229,20 +229,27 @@ class SucursalController extends Controller
             .'Ahora crea sus usuarios en Usuarios eligiendo esta sucursal; al entrar, trabajarán directo en ella.');
     }
 
-    /** El administrador pasa a trabajar en otra sucursal (sus ventas, caja y reportes serán de esa sucursal) */
+    /**
+     * El administrador pasa a trabajar en otra sucursal (sus ventas, caja y reportes serán de esa sucursal).
+     * Su turno de caja es de cada sucursal: el que tenga abierto queda abierto en la sucursal que deja y lo retoma al volver.
+     */
     public function cambiar(Request $request)
     {
         $this->autorizar();
         $user = Auth::user();
         $destino = $this->sucursal((int) $request->input('id'));
-        if (Turno::abiertoDe($user)) {
-            return back()->withErrors(['sucursal' => 'Cierra tu turno de caja antes de cambiar de sucursal.']);
-        }
+        $turnoQueDeja = Turno::abiertoDe($user);
         DB::transaction(function () use ($user, $destino) {
             DB::table('users')->where('IdUsuario', $user->IdUsuario)->update(['id_empresa_negocio' => $destino->id_empresa_negocio]);
             DB::table('role_user')->where('user_IdUsuario', $user->IdUsuario)->update(['id_empresa_negocio' => $destino->id_empresa_negocio]);
         });
+        $user->id_empresa_negocio = $destino->id_empresa_negocio;
+        $turnoAqui = Turno::abiertoDe($user);
 
-        return redirect()->route('dashboard')->with('success', "Ahora trabajas en la sucursal {$destino->nombre_comercial}.");
+        $mensaje = "Ahora trabajas en la sucursal {$destino->nombre_comercial}."
+            .($turnoQueDeja ? ' Tu turno de caja de la otra sucursal sigue abierto: lo retomas al volver.' : '')
+            .($turnoAqui ? ' Aquí sigues con tu turno N° '.$turnoAqui->id_turno.' abierto.' : ' Para vender aquí, abre tu turno de caja.');
+
+        return redirect()->route('dashboard')->with('success', $mensaje);
     }
 }
