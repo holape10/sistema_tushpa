@@ -171,6 +171,40 @@ document.addEventListener('alpine:init', () => {
             else this.$refs.buscador.focus();
         },
 
+        // ---------- Modal: producto nuevo (se crea aquí y pasa a la compra sin perder lo avanzado) ----------
+        nuevo: null,
+        abrirNuevo() {
+            this.nuevo = { pronom: (this.busqueda || '').toUpperCase(), promocion: String(CFG.tipoNuevo), umecod: 'NIU', cat_id: '', codigo_barra: '',
+                           costo: '', propun: '', error: '', guardando: false };
+            // Si lo buscado es un código de barras, va a ese campo
+            if (/^\d{6,}$/.test(this.nuevo.pronom)) { this.nuevo.codigo_barra = this.nuevo.pronom; this.nuevo.pronom = ''; }
+            this.resultadosAbiertos = false;
+            this.enfocar('nuevo-nombre');
+        },
+        cerrarNuevo() {
+            this.nuevo = null;
+            this.$nextTick(() => this.$refs.buscador.focus());
+        },
+        async guardarNuevo() {
+            if (!this.nuevo || this.nuevo.guardando) return;
+            this.nuevo.guardando = true; this.nuevo.error = '';
+            try {
+                const { error, guardando, ...datos } = this.nuevo;
+                const r = await fetch(CFG.rutas.productoNuevo, { method: 'POST', body: JSON.stringify(datos),
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CFG.csrf } });
+                const d = await r.json();
+                if (!r.ok) {
+                    this.nuevo.error = d.message || Object.values(d.errors || {}).flat()[0] || 'No se pudo crear el producto.';
+                    return;
+                }
+                this.nuevo = null;
+                this.aviso('Producto ' + d.nombre + ' creado');
+                this.abrirPedir(d, null);
+            } catch (e) {
+                this.nuevo.error = 'No se pudo crear el producto. Revisa tu conexión.';
+            } finally { if (this.nuevo) this.nuevo.guardando = false; }
+        },
+
         // ---------- Modal: cantidad y costo antes de pasar al detalle ----------
         pedir: null,
         abrirPedir(p, pres) {

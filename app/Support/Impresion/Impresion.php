@@ -7,6 +7,7 @@ use App\Support\ConsultaCpe;
 use App\Support\Delivery;
 use App\Support\Descuentos;
 use App\Support\Fidelizacion;
+use App\Support\NombreCorto;
 use App\Support\Sunat\CodigoQr;
 use App\Support\Sunat\NumeroLetras;
 use Carbon\Carbon;
@@ -167,9 +168,10 @@ class Impresion
             return [];
         }
         $nombres = DB::table('users')->whereIn('IdUsuario', $ids)
-            ->select('IdUsuario', DB::raw("COALESCE(NULLIF(TRIM(apeusu), ''), name) as nombre"))->pluck('nombre', 'IdUsuario');
+            ->select('IdUsuario', DB::raw("COALESCE(NULLIF(TRIM(apeusu), ''), name) as nombre"))->pluck('nombre', 'IdUsuario')
+            ->map(fn ($n) => NombreCorto::para((int) ($cab->id_empresa_negocio ?? 0), (string) $n));
         $etiqueta = match ($cab->ped_tip ?? null) {
-            'Salon', 'Llevar', 'Delivery', 'Hotel' => 'Mozo',
+            'Salon', 'Llevar', 'Delivery', 'Hotel', 'PVCOMANDA' => 'Mozo',
             'Clinica' => 'Atendió',
             default => 'Vendedor',
         };
@@ -725,7 +727,8 @@ class Impresion
             }
         }
 
-        $usuario = $atiende ?? Auth::user()?->apeusu;
+        $usuario = NombreCorto::para($sucursal, $atiende ?? Auth::user()?->apeusu);
+        $promotor = NombreCorto::para($sucursal, $promotor);
         $enviados = 0;
 
         foreach ($grupos as $idImp => $items) {
@@ -800,7 +803,7 @@ class Impresion
         $p->linea('=')->tamano(2, 2)->negrita()->texto('PRECUENTA')->negrita(false)->tamano()
             ->tamano(1, 2)->texto($pedido->mes_nom ? trim(($pedido->pis_nom ?? '').' / '.$pedido->mes_nom, ' /') : mb_strtoupper((string) $pedido->ped_tip))->tamano()
             ->alinear('izq')->linea('=')
-            ->texto('Fecha : '.now()->format('d/m/Y H:i'))->texto('Mozo  : '.$pedido->mozo_nom)->texto('Pedido: '.$pedido->ped_id)->linea();
+            ->texto('Fecha : '.now()->format('d/m/Y H:i'))->texto('Mozo  : '.NombreCorto::para((int) $pedido->id_empresa_negocio, $pedido->mozo_nom))->texto('Pedido: '.$pedido->ped_id)->linea();
         foreach ($items as $i) {
             $p->item($i->descripcion, $i->cantidad, $i->precio, $i->cantidad * $i->precio);
         }

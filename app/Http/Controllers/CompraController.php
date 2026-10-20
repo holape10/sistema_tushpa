@@ -9,6 +9,7 @@ use App\Support\Compras;
 use App\Support\ConsultaPeru;
 use App\Support\Precios;
 use App\Support\Recetas;
+use App\Support\Rubros;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -195,6 +196,55 @@ class CompraController extends Controller
         ]));
     }
 
+    /**
+     * Producto nuevo creado desde la compra (sin salir de la pantalla): lo básico para comprarlo y venderlo.
+     * Responde con el mismo formato del buscador para agregarlo de frente al detalle.
+     */
+    public function productoRapido(Request $request)
+    {
+        $this->autorizar();
+        $user = Auth::user();
+        $tipos = array_values(array_intersect(Compras::TIPOS_CON_STOCK, Rubros::tiposProducto()));
+        $d = $request->validate([
+            'promocion' => ['required', 'integer', 'in:'.implode(',', $tipos)],
+            'pronom' => 'required|string|max:150',
+            'propun' => ((int) $request->promocion === 4 ? 'nullable' : 'required').'|numeric|min:0|max:999999',
+            'costo' => 'nullable|numeric|min:0|max:999999',
+            'umecod' => 'nullable|exists:unidad_medida,umecod',
+            'cat_id' => 'nullable|integer',
+            'codigo_barra' => 'nullable|string|max:50',
+        ], [], ['pronom' => 'nombre del producto', 'propun' => 'precio de venta', 'promocion' => 'tipo', 'codigo_barra' => 'código de barras', 'umecod' => 'unidad']);
+
+        $sucursal = (int) $user->id_empresa_negocio;
+        $nombre = mb_strtoupper(trim(preg_replace('/\s+/', ' ', $d['pronom'])));
+        if (Producto::where('id_empresa_negocio', $sucursal)->where('pronom', $nombre)->where('proest', 'Activo')->exists()) {
+            return response()->json(['message' => "Ya existe un producto llamado {$nombre}: búscalo en el buscador."], 422);
+        }
+        $codigo = trim((string) ($d['codigo_barra'] ?? ''));
+        if ($codigo !== '' && (Producto::where('id_empresa_negocio', $sucursal)->where(fn ($q) => $q->where('codigo_barra', $codigo)->orWhere('procod', $codigo))->exists()
+            || DB::table('producto_presentacion as pp')->join('productos as p', 'p.IdProducto', '=', 'pp.IdProducto')
+                ->where('p.id_empresa_negocio', $sucursal)->where('pp.codigo_barra', $codigo)->exists())) {
+            return response()->json(['message' => "El código de barras {$codigo} ya lo tiene otro producto."], 422);
+        }
+        $categoria = ! empty($d['cat_id']) && DB::table('categorias')->where('cat_id', $d['cat_id'])->where('id_empresa_negocio', $sucursal)->exists()
+            ? (int) $d['cat_id'] : null;
+
+        $producto = Producto::create([
+            'procod' => 'P'.time().random_int(10, 99), 'codigo_barra' => $codigo ?: null, 'pronom' => $nombre,
+            'umecod' => $d['umecod'] ?? 'NIU', 'costo' => $d['costo'] ?? 0, 'propun' => $d['propun'] ?? 0,
+            'promocion' => (int) $d['promocion'], 'cat_id' => $categoria, 'stock_min' => 0, 'proest' => 'Activo',
+            'ume_equivalente' => null, 'factor_equivalente' => 1,
+            'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $sucursal,
+        ]);
+        $unidad = UnidadMedida::where('umecod', $producto->umecod)->value('umenom');
+
+        return response()->json([
+            'id' => $producto->IdProducto, 'codigo' => $producto->procod, 'nombre' => $producto->pronom, 'costo' => (float) $producto->costo,
+            'stock' => 0.0, 'insumo' => (int) $producto->promocion === 4, 'control_lote' => false, 'control_serie' => false,
+            'unidad' => $unidad ?? $producto->umecod, 'presentaciones' => [], 'presentacion' => null,
+        ]);
+    }
+
     /** Sugerencias de proveedores por nombre o RUC */
     public function proveedores(Request $request)
     {
@@ -267,6 +317,10 @@ class CompraController extends Controller
             'estadopagos' => DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)->get(['cre_dia_id', 'cre_dia_nom', 'cre_dia_tip', 'cre_dia_fac']),
             'almacenes' => Almacen::where('id_empresa_negocio', $user->id_empresa_negocio)->orderByDesc('predeterminado')->get(['id_almacen', 'descripcion']),
             'documentosIdentidad' => DB::table('tipo_documento_identidad')->orderBy('orden')->get(['tdicod', 'tdides']),
+            // Para crear un producto sin salir de la compra
+            'categorias' => DB::table('categorias')->where('id_empresa_negocio', $user->id_empresa_negocio)->orderBy('cat_nom')->get(['cat_id', 'cat_nom']),
+            'unidades' => UnidadMedida::orderBy('umenom')->get(['umecod', 'umenom']),
+            'tiposNuevo' => array_values(array_intersect(Compras::TIPOS_CON_STOCK, Rubros::tiposProducto())),
         ];
     }
 }

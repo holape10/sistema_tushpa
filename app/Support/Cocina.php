@@ -41,7 +41,8 @@ class Cocina
         $crearTicket = fn (string $tipo) => DB::table('cocina_tickets')->insertGetId([
             'ped_id' => $pedId, 'id_empresa_negocio' => $pedido->id_empresa_negocio, 'destino' => mb_substr($destino, 0, 60),
             // Pantalla de cocina: el mozo de la mesa y, si hay, el promotor
-            'ped_tip' => $pedido->ped_tip, 'mozo' => mb_substr(($pedido->mozo_nom ?? Auth::user()?->apeusu).($pedido->promotor_nom ? ' · PROM. '.$pedido->promotor_nom : ''), 0, 100),
+            'ped_tip' => $pedido->ped_tip, 'mozo' => mb_substr(NombreCorto::para((int) $pedido->id_empresa_negocio, $pedido->mozo_nom ?? Auth::user()?->apeusu)
+                .($pedido->promotor_nom ? ' · PROM. '.NombreCorto::para((int) $pedido->id_empresa_negocio, $pedido->promotor_nom) : ''), 0, 100),
             'tipo' => $tipo, 'creado' => now(),
         ]);
 
@@ -103,7 +104,7 @@ class Cocina
     }
 
     /** Venta directa (punto de venta): tarjeta sin pedido (ped_id = 0), con el comprobante como referencia */
-    public static function registrarDirecta(int $sucursal, string $destino, array $items): void
+    public static function registrarDirecta(int $sucursal, string $destino, array $items, ?string $mozo = null): void
     {
         $items = array_values(array_filter($items, fn ($i) => ! empty($i['IdProducto'])));
         if (! $items) {
@@ -112,10 +113,10 @@ class Cocina
         $estacion = DB::table('productos as pr')->leftJoin('categorias as c', 'c.cat_id', '=', 'pr.cat_id')
             ->whereIn('pr.IdProducto', array_column($items, 'IdProducto'))->pluck('c.impresora', 'pr.IdProducto');
 
-        DB::transaction(function () use ($sucursal, $destino, $items, $estacion) {
+        DB::transaction(function () use ($sucursal, $destino, $items, $estacion, $mozo) {
             $ticket = DB::table('cocina_tickets')->insertGetId([
                 'ped_id' => 0, 'id_empresa_negocio' => $sucursal, 'destino' => mb_substr($destino, 0, 60),
-                'ped_tip' => 'PV', 'mozo' => Auth::user()?->apeusu, 'tipo' => 'NUEVO', 'creado' => now(),
+                'ped_tip' => 'PV', 'mozo' => NombreCorto::para($sucursal, $mozo ?? Auth::user()?->apeusu), 'tipo' => 'NUEVO', 'creado' => now(),
             ]);
             foreach ($items as $n) {
                 DB::table('cocina_items')->insert([

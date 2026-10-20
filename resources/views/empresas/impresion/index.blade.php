@@ -154,6 +154,11 @@
                         <span><b class="text-gray-800">Pedir N° de operación al cobrar</b>
                             <span class="block text-xs text-gray-500">Con tarjeta, Yape o cualquier medio que no sea EFECTIVO (cobrar mesa y PV Restaurante).</span></span>
                     </label>
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" name="nombre_corto" value="1" @checked($negocio->nombre_corto ?? false) class="mt-0.5 rounded">
+                        <span><b class="text-gray-800">Nombres cortos en tickets y comandas</b>
+                            <span class="block text-xs text-gray-500">Mozo, promotor y cajero salen con primer nombre y primer apellido (ej.: ÁLVARO IZQUIERDO).</span></span>
+                    </label>
                 </div>
             </form>
 

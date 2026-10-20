@@ -45,7 +45,7 @@
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm tabla-movil">
             <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
                 <tr>
                     <th class="text-left px-4 py-3">Empresa</th>
@@ -60,12 +60,12 @@
             <tbody class="divide-y divide-slate-100">
                 @forelse ($clientes as $cl)
                     <tr class="{{ $cl->activo() ? '' : 'bg-rose-50/50' }}">
-                        <td class="px-4 py-3">
+                        <td class="px-4 py-3" data-label="Empresa">
                             <p class="font-semibold">{{ $cl->nombre_comercial ?: $cl->razon_social }}
                                 @if ($cl->rubro)<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700">{{ \App\Support\Rubros::RUBROS[$cl->rubro]['nombre'] ?? $cl->rubro }}</span>@endif</p>
                             <p class="text-xs text-slate-400">{{ $cl->ruc }} · {{ $cl->razon_social }}</p>
                         </td>
-                        <td class="px-4 py-3">
+                        <td class="px-4 py-3" data-label="Acceso">
                             <a href="{{ $cl->url() }}" target="_blank" class="text-indigo-700 hover:underline">{{ $cl->host() }}</a>
                             <div class="mt-1 flex items-center gap-2 text-xs">
                                 @if ($cl->tieneHttps())
@@ -79,16 +79,16 @@
                                 @endif
                             </div>
                         </td>
-                        <td class="px-4 py-3">
+                        <td class="px-4 py-3" data-label="Plan">
                             {{ $cl->plan ?: '—' }}
                             @if ($cl->planContratado)<span class="block text-xs text-slate-400">S/ {{ number_format($cl->planContratado->precio, 2) }} /mes</span>@endif
                         </td>
-                        <td class="px-4 py-3">
+                        <td class="px-4 py-3" data-label="Vence">
                             @if ($cl->vence_el)
                                 <span class="{{ $cl->vence_el->isPast() ? 'text-rose-600 font-semibold' : ($cl->vence_el->lte(now()->addDays(7)) ? 'text-amber-600 font-semibold' : '') }}">{{ $cl->vence_el->format('d/m/Y') }}</span>
                             @else — @endif
                         </td>
-                        <td class="px-4 py-3">
+                        <td class="px-4 py-3" data-label="Estado">
                             @if ($cl->estado === 'ELIMINADO')
                                 <span class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold" title="{{ $cl->motivo_suspension }}">Eliminado</span>
                             @elseif ($cl->activo() && $cl->enPrueba())
@@ -107,7 +107,7 @@
                             @endif
                             @if ($cl->origen === 'web')<span class="block mt-1 text-[11px] text-slate-400">🌐 registro web</span>@endif
                         </td>
-                        <td class="px-4 py-3">
+                        <td class="px-4 py-3" data-label="Comprobantes">
                             @php $cp = $comprobantes[$cl->id] ?? ['tipos' => [], 'total' => 0, 'mes' => 0]; @endphp
                             @if ($cp['total'])
                                 <p class="font-semibold">{{ number_format($cp['total']) }} <span class="text-xs font-normal text-slate-400">· {{ number_format($cp['mes']) }} este mes</span></p>
@@ -117,7 +117,7 @@
                             @else <span class="text-slate-400">—</span> @endif
                             @if ($usuarios->isNotEmpty() && $cl->creado_por)<p class="text-[11px] text-slate-400 mt-0.5">De: {{ $usuarios[$cl->creado_por] ?? '—' }}</p>@endif
                         </td>
-                        <td class="px-4 py-3 whitespace-nowrap text-right">
+                        <td class="px-4 py-3 whitespace-nowrap text-right celda-acciones">
                             @if ($cl->contacto_telefono && $cl->estado !== 'ELIMINADO')
                                 <a href="https://wa.me/51{{ preg_replace('/\D/', '', $cl->contacto_telefono) }}?text={{ rawurlencode('Hola '.($cl->contacto_nombre ?: '').', te saludamos de TUSHPA por tu sistema '.($cl->nombre_comercial ?: $cl->razon_social).'.') }}"
                                    target="_blank" rel="noopener" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700 mr-2" title="Escribirle por WhatsApp">💬</a>

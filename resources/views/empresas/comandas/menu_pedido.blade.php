@@ -50,6 +50,16 @@
                     <button type="button" id="mot_nuevo" title="Nuevo motorizado" class="h-10 w-10 rounded-xl bg-gray-100 font-black text-gray-700">+</button>
                 </div>
             @endif
+            @if ($mozos->isNotEmpty())
+                {{-- Caja o administrador: el mozo que atendió (sale en la comanda, el comprobante y el reporte por mozo) --}}
+                <div class="flex items-center gap-1.5">
+                    <span title="Mozo que atendió">🤵</span>
+                    <select id="mozo" class="h-10 max-w-[170px] rounded-xl border-gray-300 text-base sm:text-sm" title="Mozo que atendió">
+                        <option value="">Mozo…</option>
+                        @foreach ($mozos as $mz)<option value="{{ $mz->IdUsuario }}" @selected((int) $mozoActual === (int) $mz->IdUsuario)>{{ $mz->nombre }}</option>@endforeach
+                    </select>
+                </div>
+            @endif
             @if ($esPromotor)
                 {{-- El promotor que entró con su usuario: el pedido es suyo --}}
                 <span class="inline-flex h-10 items-center gap-1.5 rounded-xl bg-fuchsia-50 px-3 text-sm font-bold text-fuchsia-700">⭐ {{ $nombreProm }}</span>
@@ -160,6 +170,7 @@
         enviar: @json(route('comandas.enviar')),
         opciones: @json(url('/comandas/opciones')),
         promotor: @json(route('comandas.promotor')),
+        mozo: @json(route('comandas.mozo')),
         motAsignar: @json(route('motorizados.asignar')),
         motGuardar: @json(route('motorizados.guardar')),
         mesas: @json(route('comandas.seleccion')),
@@ -447,7 +458,8 @@
         if (e.target.closest('.btn-enviar')) enviar();
     });
 
-    // ---------- Promotor y motorizado ----------
+    // ---------- Mozo, promotor y motorizado ----------
+    $('mozo')?.addEventListener('change', (e) => post(URL.mozo, { mozo_id: e.target.value || null }));
     $('promotor')?.addEventListener('change', (e) => post(URL.promotor, { promotor_id: e.target.value || null }));
     const selMot = $('motorizado');
     if (selMot) {

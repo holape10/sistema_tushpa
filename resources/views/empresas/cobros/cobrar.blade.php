@@ -203,6 +203,15 @@
                     @endif
 
                     <div data-fidelizacion data-doc-input="#clinum" data-total-input="#total_comp"></div>
+                    @if ($mozos->isNotEmpty())
+                        <div class="form-group">
+                            <label><i class="fas fa-user-tie"></i> Mozo que atendió (opcional)</label>
+                            <select id="mozo_id" class="form-control input-sm">
+                                <option value="">— {{ $pedido ? 'El del pedido' : 'Sin mozo' }} —</option>
+                                @foreach ($mozos as $mz)<option value="{{ $mz->IdUsuario }}" @selected((int) ($pedido->mozo ?? 0) === (int) $mz->IdUsuario)>{{ $mz->nombre }}</option>@endforeach
+                            </select>
+                        </div>
+                    @endif
                     @if ($promotores->isNotEmpty())
                         <div class="form-group">
                             <label><i class="fas fa-star"></i> Promotor (opcional)</label>
@@ -920,6 +929,7 @@
             ped_id: PED_ID,
             clave_cobro: claveCobro,
             ...(el('promotor_id') ? { promotor_id: el('promotor_id').value || null } : {}),
+            ...(el('mozo_id') ? { mozo_id: el('mozo_id').value || null } : {}),
             tdocod: el('tdocod').value,
             estadopago: el('estadopago').value,
             fecEmi: el('fecEmi').value,

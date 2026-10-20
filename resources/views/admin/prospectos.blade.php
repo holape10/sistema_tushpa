@@ -25,14 +25,14 @@
                         {{ $texto }} <span class="opacity-70">({{ $totales[$valor] }})</span></a>
                 @endforeach
             </div>
-            <form method="GET" class="ml-auto flex gap-2">
+            <form method="GET" class="ml-auto flex gap-2 w-full sm:w-auto">
                 <input type="hidden" name="tab" value="{{ $tab }}">
                 @if ($tab === 'cartas')
                     <select name="estado" onchange="this.form.submit()" class="rounded-xl border-slate-300 text-sm">
                         <option value="">Todos</option><option value="sin" @selected($estado === 'sin')>Aún sin contactar</option><option value="con" @selected($estado === 'con')>Ya contactados</option>
                     </select>
                 @endif
-                <input name="q" value="{{ $q }}" placeholder="Buscar nombre, correo o celular" class="rounded-xl border-slate-300 text-sm w-60">
+                <input name="q" value="{{ $q }}" placeholder="Buscar nombre, correo o celular" class="rounded-xl border-slate-300 text-sm min-w-0 flex-1 sm:flex-none sm:w-60">
             </form>
         </div>
 

@@ -14,7 +14,10 @@
                             @if ($plan->destacado)<span class="cinta">⭐ El más elegido</span>@endif
                             <h3 class="fs-4 mb-1">{{ $plan->nombre }}</h3>
                             @if ($plan->descripcion)<p class="texto-gris small mb-3">{{ $plan->descripcion }}</p>@endif
-                            <div class="precio mb-4">S/ {{ rtrim(rtrim(number_format($plan->precio, 2), '0'), '.') }} <small>/ mes</small></div>
+                            <div class="precio mb-1">S/ {{ rtrim(rtrim(number_format($plan->precio, 2), '0'), '.') }} <small>/ mes</small></div>
+                            {{-- Plan anual: el precio escrito en el panel o 10 meses (2 gratis) --}}
+                            <p class="small mb-4"><b>o S/ {{ rtrim(rtrim(number_format($plan->precioAnual(), 2), '0'), '.') }} al año</b>
+                                @if ($plan->ahorroAnual() > 0)<span class="badge rounded-pill text-bg-success ms-1">Ahorras S/ {{ rtrim(rtrim(number_format($plan->ahorroAnual(), 2), '0'), '.') }}</span>@endif</p>
                             <ul class="lista-check mb-4 flex-grow-1">
                                 @foreach ($plan->listaCaracteristicas() as $caracteristica)
                                     <li><i class="fas fa-circle-check"></i><span>{{ $caracteristica }}</span></li>

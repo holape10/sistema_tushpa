@@ -52,7 +52,7 @@
                         </div>
                         <hr>
                         <p class="fw-semibold mb-1"><i class="fas fa-key me-1 text-warning"></i>Enlace para editar (guárdalo)</p>
-                        <p class="small text-muted mb-2">Con este enlace cambias la foto o el diseño cuando quieras. También te lo enviamos a <b>{{ $carta->email }}</b>.</p>
+                        <p class="small text-muted mb-2">Con este enlace cambias tus productos, precios o el diseño cuando quieras. También te lo enviamos a <b>{{ $carta->email }}</b>.</p>
                         <div class="input-group">
                             <input id="editar" value="{{ $urlEditar }}" readonly class="form-control form-control-sm">
                             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('editar').value); this.textContent = '✔'">Copiar</button>

@@ -420,10 +420,10 @@ class ClienteController extends Controller
     {
         abort_unless($this->esDueno(), 403, 'Solo el dueño del sistema cambia los planes.');
         $d = $request->validate([
-            'nombre' => 'required|string|max:60', 'precio' => 'required|numeric|min:0|max:99999',
+            'nombre' => 'required|string|max:60', 'precio' => 'required|numeric|min:0|max:99999', 'precio_anual' => 'nullable|numeric|min:0|max:999999',
             'descripcion' => 'nullable|string|max:255', 'caracteristicas' => 'nullable|string|max:3000',
             'max_usuarios' => 'nullable|integer|min:1|max:9999', 'orden' => 'nullable|integer|min:0|max:999',
-        ], [], ['max_usuarios' => 'máximo de usuarios']);
+        ], [], ['max_usuarios' => 'máximo de usuarios', 'precio_anual' => 'precio anual']);
         $d += ['destacado' => $request->boolean('destacado'), 'tienda_virtual' => $request->boolean('tienda_virtual'),
             'activo' => $request->boolean('activo', true)];
         $d['nombre'] = mb_strtoupper(trim($d['nombre']));

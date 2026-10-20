@@ -134,9 +134,12 @@
                                 <span class="text-sm font-semibold whitespace-nowrap" x-text="'Últ. costo ' + num2(p.costo)"></span>
                             </button>
                         </template>
-                        <p x-show="!resultados.length && !buscando" class="px-4 py-5 text-center text-slate-400 text-sm">Sin resultados ({{ \App\Support\Rubros::permite('preparados') ? 'combos y preparados' : 'los combos' }} no se compran).</p>
+                        <div x-show="!resultados.length && !buscando" class="px-4 py-5 text-center text-slate-400 text-sm">Sin resultados ({{ \App\Support\Rubros::permite('preparados') ? 'combos y preparados' : 'los combos' }} no se compran).
+                            <button type="button" @click="abrirNuevo()" class="block mx-auto mt-2 px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold">+ Crear “<span x-text="busqueda"></span>”</button></div>
                     </div>
                 </div>
+                <button type="button" @click="abrirNuevo()" class="h-12 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold whitespace-nowrap"
+                        title="Crea el producto aquí mismo, sin perder lo que llevas de la compra">+ Nuevo producto</button>
                 @if (\App\Support\Rubros::permite('lotes'))
                 <label class="flex items-center gap-2 text-sm text-slate-600">
                     <input type="checkbox" x-model="conLote" class="rounded text-indigo-600"> Lote y vencimiento
@@ -269,6 +272,54 @@
         </div>
     </div>
 
+    {{-- Modal: crear un producto que aún no existe, sin salir de la compra --}}
+    <template x-if="nuevo">
+        <div class="fixed inset-0 z-[70] bg-slate-900/60 flex items-center justify-center p-4" @click.self="cerrarNuevo()" @keydown.escape.window="cerrarNuevo()">
+            <form @submit.prevent="guardarNuevo()" class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+                <div class="px-6 pt-5 pb-3 bg-emerald-600 text-white">
+                    <p class="text-xs font-bold uppercase tracking-wide text-emerald-100">Nuevo producto</p>
+                    <p class="text-sm text-emerald-50">Se crea y pasa a la compra. Lo demás (foto, presentaciones…) lo completas después en Productos.</p>
+                </div>
+                <div class="p-6 grid grid-cols-2 gap-3">
+                    <label class="col-span-2 block text-xs font-bold uppercase text-slate-500">Nombre
+                        <input id="nuevo-nombre" x-model="nuevo.pronom" required maxlength="150" class="mt-1 w-full h-11 rounded-xl border-slate-300 text-base font-semibold uppercase">
+                    </label>
+                    <label class="block text-xs font-bold uppercase text-slate-500">Tipo
+                        <select x-model="nuevo.promocion" class="mt-1 w-full h-11 rounded-xl border-slate-300 text-sm">
+                            @foreach ($tiposNuevo as $t)<option value="{{ $t }}">{{ $t === 4 ? 'Insumo (no se vende)' : 'Producto' }}</option>@endforeach
+                        </select>
+                    </label>
+                    <label class="block text-xs font-bold uppercase text-slate-500">Unidad
+                        <select x-model="nuevo.umecod" class="mt-1 w-full h-11 rounded-xl border-slate-300 text-sm">
+                            @foreach ($unidades as $u)<option value="{{ $u->umecod }}">{{ $u->umenom }}</option>@endforeach
+                        </select>
+                    </label>
+                    <label class="block text-xs font-bold uppercase text-slate-500">Categoría
+                        <select x-model="nuevo.cat_id" class="mt-1 w-full h-11 rounded-xl border-slate-300 text-sm">
+                            <option value="">— Sin categoría —</option>
+                            @foreach ($categorias as $c)<option value="{{ $c->cat_id }}">{{ $c->cat_nom }}</option>@endforeach
+                        </select>
+                    </label>
+                    <label class="block text-xs font-bold uppercase text-slate-500">Código de barras
+                        <input x-model="nuevo.codigo_barra" maxlength="50" placeholder="Opcional" class="mt-1 w-full h-11 rounded-xl border-slate-300 text-sm">
+                    </label>
+                    <label class="block text-xs font-bold uppercase text-slate-500">Costo (con IGV)
+                        <input type="number" step="any" min="0" x-model="nuevo.costo" class="mt-1 w-full h-11 rounded-xl border-amber-300 bg-amber-50 text-right font-bold">
+                    </label>
+                    <label class="block text-xs font-bold uppercase text-slate-500" x-show="nuevo.promocion != 4">Precio de venta
+                        <input type="number" step="any" min="0" x-model="nuevo.propun" :required="nuevo.promocion != 4" class="mt-1 w-full h-11 rounded-xl border-emerald-300 bg-emerald-50 text-right font-bold">
+                    </label>
+                    <p x-show="nuevo.error" class="col-span-2 text-sm font-semibold text-rose-600" x-text="nuevo.error"></p>
+                </div>
+                <div class="px-6 pb-6 grid grid-cols-2 gap-3">
+                    <button type="submit" :disabled="nuevo.guardando" class="h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-extrabold"
+                            x-text="nuevo.guardando ? 'Creando…' : '✓ Crear y agregar'"></button>
+                    <button type="button" @click="cerrarNuevo()" class="h-12 rounded-2xl bg-slate-200 font-extrabold text-slate-700">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </template>
+
     {{-- Modal: cantidad y costo antes de pasar al detalle (Enter avanza; al agregar el cursor vuelve al buscador) --}}
     <template x-if="pedir">
         <div class="fixed inset-0 z-[70] bg-slate-900/60 flex items-center justify-center p-4" @click.self="cerrarPedir()">
@@ -311,6 +362,7 @@
         documentos: @json($documentos),
         tiposIgv: @json($tiposIgv),
         tipIgvPred: @json($tipIgvPred),
+        tipoNuevo: @json($tiposNuevo[0] ?? 0),
         estadopagos: @json($estadopagos),
         almacenes: @json($almacenes),
         documentosIdentidad: @json($documentosIdentidad),
@@ -320,6 +372,7 @@
             guardar: @json($compra ? route('compras.update', $compra['id']) : route('compras.store')),
             metodo: @json($compra ? 'PUT' : 'POST'),
             productos: @json(route('compras.productos')),
+            productoNuevo: @json(route('compras.producto_nuevo')),
             proveedores: @json(route('compras.proveedores')),
             proveedor: @json(url('compras/proveedor')),
             tipoCambio: @json(route('tipo_cambio.consultar')),

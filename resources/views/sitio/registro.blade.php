@@ -86,6 +86,7 @@
                                     @if ($plan->destacado)<span class="badge bg-primary rounded-pill">Popular</span>@endif
                                 </div>
                                 <div class="text-primary fw-bold fs-5">S/ {{ rtrim(rtrim(number_format($plan->precio, 2), '0'), '.') }}<span class="text-muted fs-6 fw-normal"> /mes</span></div>
+                                <div class="small text-success fw-semibold">o S/ {{ rtrim(rtrim(number_format($plan->precioAnual(), 2), '0'), '.') }} al año</div>
                                 <div class="small text-muted">{{ $plan->descripcion }}</div>
                             </label>
                         </div>

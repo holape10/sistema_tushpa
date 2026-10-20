@@ -35,6 +35,7 @@ Route::get('/registro/listo/{cliente}/https', [SitioController::class, 'estadoHt
 // Crea tu carta: carta digital gratis con foto, diseño, enlace y QR (tushpa.app/c/su-negocio)
 Route::get('/crea-tu-carta', [CartaWebController::class, 'crear'])->name('carta.crear');
 Route::post('/crea-tu-carta', [CartaWebController::class, 'guardar'])->middleware('throttle:5,60,sitio-carta')->name('carta.guardar');
+Route::post('/crea-tu-carta/foto', [CartaWebController::class, 'subirFoto'])->middleware('throttle:120,60,sitio-carta-foto')->name('carta.foto');
 Route::post('/crea-tu-carta/recuperar', [CartaWebController::class, 'recuperar'])->middleware('throttle:3,10,sitio-carta-recuperar')->name('carta.recuperar');
 Route::get('/crea-tu-carta/{slug}/lista', [CartaWebController::class, 'lista'])->where('slug', '[a-z0-9-]+')->name('carta.lista');
 Route::get('/crea-tu-carta/{slug}/editar', [CartaWebController::class, 'editar'])->where('slug', '[a-z0-9-]+')->name('carta.editar');

@@ -49,7 +49,7 @@
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm tabla-movil">
             <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
                 <tr><th class="text-left px-4 py-3">Copia</th><th class="text-left px-4 py-3">Fecha</th><th class="text-left px-4 py-3">Tipo</th><th class="text-right px-4 py-3">Tamaño</th><th class="px-4 py-3"></th></tr>
             </thead>

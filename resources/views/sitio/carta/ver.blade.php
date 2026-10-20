@@ -3,6 +3,10 @@
     [, $fondo, $acento, $texto, $letra] = $d;
     $wa = preg_replace('/\D/', '', (string) $carta->whatsapp);
     $wa = $wa ? (strlen($wa) === 9 ? '51'.$wa : $wa) : null;
+    // Productos por categoría, en el orden en que los escribió (sin categoría van al final como "OTROS")
+    $grupos = $productos->groupBy(fn ($p) => $p->categoria ?: 'OTROS');
+    $imagen = $carta->foto ?: $productos->firstWhere('foto')?->foto;
+    $soles = fn ($n) => 'S/ '.number_format((float) $n, 2);
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -13,7 +17,7 @@
     <title>Carta · {{ $carta->nombre }}</title>
     <meta name="description" content="Carta de {{ $carta->nombre }}{{ $carta->direccion ? ' · '.$carta->direccion : '' }}">
     <meta property="og:title" content="Carta · {{ $carta->nombre }}">
-    <meta property="og:image" content="{{ asset($carta->foto) }}">
+    @if ($imagen)<meta property="og:image" content="{{ asset($imagen) }}">@endif
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
@@ -36,6 +40,21 @@
         .zoom img { width: 200%; max-width: none; display: block; }
         .zoom .cerrar { position: fixed; top: 12px; right: 12px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: #fff; font-size: 1.4rem; }
         .pie { text-align: center; font-size: .72rem; opacity: .55; padding: 0 0 100px; }
+        .menu { max-width: 820px; margin: 0 auto; padding: 0 12px 24px; }
+        .cats { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; overflow-x: auto; padding: 10px 12px; margin: 0 -12px 8px; background: {{ $fondo }}; scrollbar-width: none; }
+        .cats::-webkit-scrollbar { display: none; }
+        .cats a { flex: 0 0 auto; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(127,127,127,.35); color: inherit; text-decoration: none; font-size: .82rem; font-weight: 600; white-space: nowrap; }
+        .cats a:active { background: {{ $acento }}; color: {{ $fondo }}; }
+        .cat-titulo { font-family: {{ $letra }}; font-size: 1.3rem; margin: 22px 0 10px; display: flex; align-items: center; gap: 10px; scroll-margin-top: 60px; }
+        .cat-titulo::after { content: ''; flex: 1; height: 2px; background: {{ $acento }}; opacity: .5; border-radius: 2px; }
+        .plato { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 16px; background: rgba(127,127,127,.08); margin-bottom: 10px; }
+        .plato img { width: 84px; height: 84px; flex: 0 0 84px; object-fit: cover; border-radius: 12px; cursor: zoom-in; background: #fff; }
+        .plato .info { flex: 1; min-width: 0; }
+        .plato b { display: block; font-size: 1rem; line-height: 1.25; }
+        .plato p { margin: 3px 0 0; font-size: .82rem; opacity: .75; line-height: 1.35; }
+        .plato .precio { font-weight: 800; color: {{ $acento }}; white-space: nowrap; font-size: 1.02rem; }
+        .zoom.producto { display: none; align-items: center; justify-content: center; }
+        .zoom.producto img { width: auto; max-width: 100%; max-height: 100%; margin: auto; }
         .pie a { color: inherit; }
     </style>
 </head>
@@ -50,10 +69,30 @@
         </div>
     </header>
 
-    <main class="foto">
-        <img src="{{ asset($carta->foto) }}" alt="Carta de {{ $carta->nombre }}" onclick="document.getElementById('zoom').style.display = 'block'">
-        <p class="ayuda"><i class="fas fa-magnifying-glass-plus"></i> Toca la carta para verla más grande</p>
-    </main>
+    @if ($productos->isNotEmpty())
+        <main class="menu">
+            @if ($grupos->count() > 1)
+                <nav class="cats">@foreach ($grupos->keys() as $i => $categoria)<a href="#cat-{{ $i }}">{{ $categoria }}</a>@endforeach</nav>
+            @endif
+            @foreach ($grupos as $categoria => $platos)
+                <h2 class="cat-titulo" id="cat-{{ $loop->index }}">{{ $categoria }}</h2>
+                @foreach ($platos as $p)
+                    <div class="plato">
+                        @if ($p->foto)<img src="{{ asset($p->foto) }}" alt="{{ $p->nombre }}" loading="lazy" onclick="verFoto(this.src)">@endif
+                        <div class="info"><b>{{ $p->nombre }}</b>@if ($p->descripcion)<p>{{ $p->descripcion }}</p>@endif</div>
+                        @if ($p->precio !== null)<span class="precio">{{ $soles($p->precio) }}</span>@endif
+                    </div>
+                @endforeach
+            @endforeach
+        </main>
+    @endif
+
+    @if ($carta->foto)
+        <main class="foto" @if ($productos->isNotEmpty()) style="padding-bottom: 24px" @endif>
+            <img src="{{ asset($carta->foto) }}" alt="Carta de {{ $carta->nombre }}" onclick="document.getElementById('zoom').style.display = 'block'">
+            <p class="ayuda"><i class="fas fa-magnifying-glass-plus"></i> Toca la carta para verla más grande</p>
+        </main>
+    @endif
 
     <p class="pie">Carta digital gratis hecha con <a href="{{ route('sitio.carta.crear') }}">TUSHPA</a> · crea la tuya</p>
 
@@ -69,9 +108,18 @@
         </nav>
     @endif
 
-    <div class="zoom" id="zoom">
-        <button class="cerrar" onclick="document.getElementById('zoom').style.display = 'none'" aria-label="Cerrar">×</button>
-        <img src="{{ asset($carta->foto) }}" alt="">
+    @if ($carta->foto)
+        <div class="zoom" id="zoom">
+            <button class="cerrar" onclick="document.getElementById('zoom').style.display = 'none'" aria-label="Cerrar">×</button>
+            <img src="{{ asset($carta->foto) }}" alt="">
+        </div>
+    @endif
+    <div class="zoom producto" id="zoom_producto" onclick="this.style.display = 'none'">
+        <button class="cerrar" aria-label="Cerrar">×</button>
+        <img src="" alt="">
     </div>
+    <script>
+        function verFoto(src) { const z = document.getElementById('zoom_producto'); z.querySelector('img').src = src; z.style.display = 'flex'; }
+    </script>
 </body>
 </html>

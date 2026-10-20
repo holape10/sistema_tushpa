@@ -79,7 +79,39 @@
                 ['fa-prescription', 'Recetas y consentimientos', 'Se generan e imprimen desde la atención.'],
                 ['fa-cash-register', 'Cobro con comprobante', 'Boleta o factura de cada atención.'],
             ]],
+        'prestamos' => ['icono' => 'fa-hand-holding-dollar', 'nombre' => 'Préstamos', 'ejemplos' => 'Préstamos diarios ("gota a gota"), semanales o mensuales',
+            'texto' => 'Presta, cobra en ruta desde el celular y sabe al instante quién está al día y quién debe.',
+            'funciones' => [
+                ['fa-id-card', 'Clientes con DNI', 'Ficha de cada cliente con su historial y su calificación.'],
+                ['fa-calculator', 'Simulador de préstamo', 'Interés, número de cuotas y cronograma sin domingos ni feriados.'],
+                ['fa-motorcycle', 'Cobranza en ruta', 'El cobrador ve sus clientes del día en el celular y cobra ahí mismo.'],
+                ['fa-triangle-exclamation', 'Mora y renovaciones', 'Atrasos, mora por día y renovación descontando el saldo.'],
+                ['fa-chart-pie', 'Panel y reportes', 'Lo prestado, lo cobrado, la ganancia y los deudores.'],
+                ['fa-receipt', 'Recibo y tarjeta de pagos', 'Comprobante de cada cobro para el cliente.'],
+            ]],
+        'contabilidad' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudios contables y empresas que llevan su contabilidad',
+            'texto' => 'Lleva la contabilidad, el SIRE y la planilla de tus empresas en el mismo sistema.',
+            'funciones' => [
+                ['fa-book', 'Libros contables', 'Plan contable, libro diario, mayor, balance y estados financieros.'],
+                ['fa-landmark', 'SIRE de SUNAT', 'Propuestas RVIE y RCE, y resumen tributario del mes.'],
+                ['fa-file-signature', 'Planilla', 'Trabajadores, planillas y boletas de pago.'],
+                ['fa-user-clock', 'Asistencia', 'Marcación, turnos y tareo de tu personal.'],
+                ['fa-file-export', 'Exporta a CONCAR', 'Pasa tus asientos sin volver a digitarlos.'],
+            ]],
     ];
+    // Rubros del sistema (los mismos de la demo): si se agrega uno nuevo y aún no tiene texto aquí, sale igual con sus datos
+    $equivalencias = ['RESTOBAR' => 'restaurante', 'HOTELERIA' => 'hotel', 'GENERAL' => 'comercio', 'FARMACIA' => 'farmacia', 'GRIFO' => 'grifo',
+        'GIMNASIO' => 'gimnasio', 'ESTACIONAMIENTO' => 'estacionamiento', 'CLUB' => 'club', 'CLINICA' => 'clinica', 'PRESTAMOS' => 'prestamos', 'CONTABLE' => 'contabilidad'];
+    foreach (\App\Support\Rubros::RUBROS as $claveRubro => $rubroSistema) {
+        $clave = $equivalencias[$claveRubro] ?? mb_strtolower($claveRubro);
+        if ($claveRubro === 'COMPLETO' || isset($rubros[$clave])) {
+            continue;
+        }
+        $rubros[$clave] = ['icono' => $rubroSistema['icono'], 'nombre' => $rubroSistema['nombre'], 'ejemplos' => $rubroSistema['ejemplos'],
+            'texto' => 'Todo lo de tu negocio en un solo sistema, con facturación electrónica, caja y reportes.',
+            'funciones' => [['fa-check', $rubroSistema['nombre'], $rubroSistema['ejemplos']], ['fa-file-invoice', 'Facturación electrónica', 'Boletas y facturas a SUNAT.'],
+                ['fa-cash-register', 'Caja y reportes', 'Apertura, cierre y reportes de ventas.']]];
+    }
     $whatsapp = 'https://wa.me/'.config('soporte.whatsapp').'?text='.rawurlencode('Hola, quiero información sobre el sistema TUSHPA.');
 
     // Preguntas frecuentes: se muestran abajo y también salen en los datos estructurados (mismo texto en ambos)
@@ -188,7 +220,7 @@
 <div class="confianza">
     <div class="container d-flex flex-wrap justify-content-center gap-4 text-center">
         <span><i class="fas fa-file-invoice"></i>Facturación electrónica SUNAT</span>
-        <span><i class="fas fa-store"></i>9 rubros de negocio</span>
+        <span><i class="fas fa-store"></i>{{ count($rubros) }} rubros de negocio</span>
         <span><i class="fas fa-mobile-screen"></i>PC, tablet y celular</span>
         <span><i class="fas fa-database"></i>Base de datos propia por empresa</span>
         <span><i class="fas fa-location-dot"></i>Desde Iquitos, Loreto</span>

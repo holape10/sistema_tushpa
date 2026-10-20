@@ -114,6 +114,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/comandas/carrito', [ComandasController::class, 'getCartDetails'])->name('comandas.get_cart_details');
     Route::post('/comandas/enviar', [ComandasController::class, 'enviarComanda'])->name('comandas.enviar');
     Route::post('/comandas/promotor', [ComandasController::class, 'asignarPromotor'])->name('comandas.promotor');
+    Route::post('/comandas/mozo', [ComandasController::class, 'asignarMozo'])->name('comandas.mozo');
     Route::get('/promotores', [PromotorController::class, 'index'])->name('promotores.index');
     Route::get('/reportes/descuentos-cortesias', [DescuentosCortesiasController::class, 'index'])->name('descuentos.reporte');
     Route::post('/comandas/carrito/vaciar', [ComandasController::class, 'clearCart'])->name('comandas.clear_cart');
@@ -511,6 +512,7 @@ Route::middleware('auth')->group(function () {
     Route::put('/compras/{id}', [CompraController::class, 'update'])->whereNumber('id')->name('compras.update');
     Route::post('/compras/{id}/anular', [CompraController::class, 'anular'])->whereNumber('id')->name('compras.anular');
     Route::get('/compras/productos', [CompraController::class, 'productos'])->name('compras.productos');
+    Route::post('/compras/producto-nuevo', [CompraController::class, 'productoRapido'])->name('compras.producto_nuevo');
     Route::get('/compras/proveedores', [CompraController::class, 'proveedores'])->name('compras.proveedores');
     Route::get('/compras/proveedor/{doc}', [CompraController::class, 'proveedor'])->name('compras.proveedor');
 

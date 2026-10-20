@@ -38,7 +38,7 @@ use Illuminate\Support\Facades\RateLimiter;
  */
 class ComandasController extends Controller
 {
-    private const SESION = ['comanda_cart', 'comanda_order_type', 'comanda_mesa_id', 'comanda_mesa_nombre', 'comanda_pedido_id', 'comanda_eliminados', 'comanda_reserva_id', 'comanda_mot_id', 'comanda_prom_id'];
+    private const SESION = ['comanda_cart', 'comanda_order_type', 'comanda_mesa_id', 'comanda_mesa_nombre', 'comanda_pedido_id', 'comanda_eliminados', 'comanda_reserva_id', 'comanda_mot_id', 'comanda_prom_id', 'comanda_mozo_id'];
 
     public function seleccionServicio()
     {
@@ -489,11 +489,39 @@ class ComandasController extends Controller
         }
 
         $esPromotor = Auth::user()->tieneRol([13]);
+
+        // Caja y administrador eligen el mozo que atendió (el pedido queda a su nombre); los mozos no lo ven
+        $mozos = Auth::user()->esAdminOCaja() ? self::mozos((int) $id_empresa_negocio) : collect();
+        $mozoActual = $mozos->isEmpty() ? null : ($pedidoId ? Pedido::where('ped_id', $pedidoId)->value('mozo') : session('comanda_mozo_id'));
         $total = round(collect($cart)->sum(fn ($i) => $i['cantidad'] * $i['precio']), 2);
         $productosIniciales = $cat_default_id ? $this->productosHtml($cat_default_id, null) : '';
 
         return view('empresas.comandas.menu_pedido', compact('categorias', 'cat_default_id', 'cart', 'order_type', 'mesa_info', 'esAdmin', 'motorizados', 'motActual',
-            'promotores', 'promActual', 'esPromotor', 'total', 'productosIniciales'));
+            'promotores', 'promActual', 'esPromotor', 'mozos', 'mozoActual', 'total', 'productosIniciales'));
+    }
+
+    /** Usuarios activos con rol Mozo de la sucursal */
+    public static function mozos(int $sucursal): Collection
+    {
+        return DB::table('users as u')->join('role_user as r', 'r.user_IdUsuario', '=', 'u.IdUsuario')->where('r.role_id', 8)
+            ->where('u.id_empresa_negocio', $sucursal)->where('u.estusu', 1)->orderBy('u.apeusu')
+            ->get(['u.IdUsuario', DB::raw("COALESCE(NULLIF(u.apeusu, ''), u.name) as nombre")]);
+    }
+
+    /** Caja o administrador eligen el mozo que atendió: queda en el pedido (o en la comanda que aún no se envía) */
+    public function asignarMozo(Request $request)
+    {
+        abort_unless(Auth::user()->esAdminOCaja(), 403);
+        $d = $request->validate(['mozo_id' => 'nullable|integer']);
+        $suc = (int) Auth::user()->id_empresa_negocio;
+        $mozo = ! empty($d['mozo_id']) && self::mozos($suc)->contains('IdUsuario', (int) $d['mozo_id']) ? (int) $d['mozo_id'] : null;
+        session()->put('comanda_mozo_id', $mozo);
+        if ($pedId = (int) session('comanda_pedido_id')) {
+            DB::table('pedidos')->where('ped_id', $pedId)->where('id_empresa_negocio', $suc)->where('ped_est', 'Aperturado')
+                ->update(['mozo' => $mozo ?: Auth::id()]);
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     /** Usuarios activos con rol Promotor de la sucursal */
@@ -922,7 +950,7 @@ class ComandasController extends Controller
                         'IdEmpresa' => $usuario->IdEmpresa,
                         'id_empresa_negocio' => $usuario->id_empresa_negocio,
                         'ped_est' => 'Aperturado',
-                        'mozo' => $usuario->IdUsuario,
+                        'mozo' => ($usuario->esAdminOCaja() ? session('comanda_mozo_id') : null) ?: $usuario->IdUsuario,
                         'IdUsuario' => $usuario->IdUsuario,
                         'ped_cli_nom' => match ($order_type) {
                             'salon' => 'CONSUMO EN SALON', 'delivery' => 'DELIVERY', default => 'PARA LLEVAR'

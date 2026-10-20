@@ -50,7 +50,7 @@
     </div>
 
     <div class="grid lg:grid-cols-3 gap-4">
-        <div class="bg-white rounded-2xl shadow-sm p-5">
+        <div class="bg-white rounded-2xl shadow-sm p-5 min-w-0">
             <p class="font-bold mb-3">Páginas más vistas</p>
             @forelse ($paginas as $pg)
                 <div class="flex justify-between gap-2 py-1.5 border-b border-slate-100 last:border-0 text-sm">
@@ -61,7 +61,7 @@
                 <p class="text-sm text-slate-400">Aún no hay visitas.</p>
             @endforelse
         </div>
-        <div class="bg-white rounded-2xl shadow-sm p-5">
+        <div class="bg-white rounded-2xl shadow-sm p-5 min-w-0">
             <p class="font-bold mb-3">¿De dónde llegan?</p>
             @php $maxOrigen = max(1, (int) $origenes->max('personas')); @endphp
             @forelse ($origenes as $o)
@@ -72,9 +72,9 @@
             @empty
                 <p class="text-sm text-slate-400">Aún no hay visitas.</p>
             @endforelse
-            <p class="text-[11px] text-slate-400 mt-3">Tip: en tus anuncios usa enlaces como {{ config('tenancy.dominio') }}/?utm_source=facebook para saber cuál funciona.</p>
+            <p class="text-[11px] text-slate-400 mt-3 break-words">Tip: en tus anuncios usa enlaces como {{ config('tenancy.dominio') }}/?utm_source=facebook para saber cuál funciona.</p>
         </div>
-        <div class="bg-white rounded-2xl shadow-sm p-5">
+        <div class="bg-white rounded-2xl shadow-sm p-5 min-w-0">
             <p class="font-bold mb-3">Dispositivo</p>
             @php $totalDisp = max(1, (int) $dispositivos->sum('personas')); @endphp
             @foreach ($dispositivos as $d)
@@ -97,9 +97,9 @@
     <div class="bg-white rounded-2xl shadow-sm mt-4 overflow-x-auto">
         <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
             <p class="font-bold">📋 Cartas creadas en "Crea tu carta"</p>
-            <span class="text-sm text-slate-400">· {{ $cartasPeriodo }} en {{ $dias }} días · posibles clientes</span>
+            <span class="text-sm text-slate-400 hidden sm:inline">· {{ $cartasPeriodo }} en {{ $dias }} días · posibles clientes</span>
         </div>
-        <table class="w-full text-sm">
+        <table class="w-full text-sm tabla-movil">
             <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
                 <tr><th class="text-left px-4 py-2">Negocio</th><th class="text-left px-4 py-2">Contacto</th><th class="text-center px-4 py-2">Visitas</th><th class="text-left px-4 py-2">Creada</th><th class="px-4 py-2"></th></tr>
             </thead>

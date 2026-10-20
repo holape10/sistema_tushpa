@@ -35,7 +35,7 @@
 
         {{-- Lista --}}
         <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm overflow-x-auto">
-            <table class="w-full text-sm">
+            <table class="w-full text-sm tabla-movil">
                 <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
                     <tr><th class="text-left px-4 py-3">Usuario</th><th class="text-left px-4 py-3">Último acceso</th><th class="text-center px-4 py-3">Empresas</th><th class="text-left px-4 py-3">Permisos</th><th class="px-4 py-3"></th></tr>
                 </thead>

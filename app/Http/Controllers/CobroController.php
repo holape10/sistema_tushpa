@@ -124,10 +124,11 @@ class CobroController extends Controller
         $piso = $pedido->pis_id ? Piso::find($pedido->pis_id) : null;
 
         $promotores = ComandasController::promotores((int) $user->id_empresa_negocio);
+        $mozos = ComandasController::mozos((int) $user->id_empresa_negocio);
 
         return view('empresas.cobros.cobrar', compact(
             'pedido', 'detalle', 'total', 'comprobantes', 'documentos',
-            'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso', 'turno', 'separadas', 'cuentasPrevias', 'volver', 'promotores'
+            'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso', 'turno', 'separadas', 'cuentasPrevias', 'volver', 'promotores', 'mozos'
         ) + ['descuentos' => Descuentos::config((int) $user->id_empresa_negocio)]);
     }
 
@@ -150,6 +151,7 @@ class CobroController extends Controller
             'volver' => request('desde') === 'hotel' ? route('hotel.index') : route('comandas.seleccion'), 'pedido' => null, 'detalle' => collect(), 'total' => 0,
             'cuentasPrevias' => collect(), 'mesa' => null, 'piso' => null, 'turno' => $turno,
             'promotores' => ComandasController::promotores((int) $user->id_empresa_negocio),
+            'mozos' => ComandasController::mozos((int) $user->id_empresa_negocio),
             'descuentos' => Descuentos::config((int) $user->id_empresa_negocio),
             'comprobantes' => DB::table('tipo_documento')->where('caja', 1)->get(),
             'documentos' => DB::table('tipo_documento_identidad')->orderBy('orden')->get(),
@@ -182,6 +184,14 @@ class CobroController extends Controller
         return $id && ComandasController::promotores((int) Auth::user()->id_empresa_negocio)->contains('IdUsuario', $id) ? $id : null;
     }
 
+    /** Mozo que eligió el cajero (solo usuarios con rol Mozo de la sucursal); null = ninguno */
+    private function mozoElegido(Request $request): ?int
+    {
+        $id = (int) $request->input('mozo_id');
+
+        return $id && ComandasController::mozos((int) Auth::user()->id_empresa_negocio)->contains('IdUsuario', $id) ? $id : null;
+    }
+
     private function liberarClaveCobro(Request $request): void
     {
         Cache::forget('cobro:'.Auth::id().':'.(string) $request->input('clave_cobro'));
@@ -205,6 +215,9 @@ class CobroController extends Controller
             if ($promotor = $this->promotorElegido($request)) {
                 DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->update(['promotor_id' => $promotor]);
             }
+            if ($mozo = $this->mozoElegido($request)) {
+                DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->update(['mozo' => $mozo, 'IdUsuario_ven' => $mozo]);
+            }
         } catch (\RuntimeException $e) {
             $this->liberarClaveCobro($request);
 
@@ -227,8 +240,12 @@ class CobroController extends Controller
                     'observacion' => $i['observacion'] ?? null,
                 ])->values()->all();
                 $destino = 'PUNTO DE VENTA';
-                Impresion::comandaPara($user->id_empresa_negocio, $destino, $respuesta['numero'], $lineas, soloEn: Impresion::destinosComandaCaja((int) $user->id_empresa_negocio, $user));
-                Cocina::registrarDirecta($user->id_empresa_negocio, $destino.' '.$respuesta['numero'], $lineas);
+                // "Atiende": el mozo que eligió el cajero (si no, el cajero)
+                $mozo = $this->mozoElegido($request);
+                $atiende = $mozo ? DB::table('users')->where('IdUsuario', $mozo)->value(DB::raw("COALESCE(NULLIF(apeusu, ''), name)")) : null;
+                Impresion::comandaPara($user->id_empresa_negocio, $destino, $respuesta['numero'], $lineas, atiende: $atiende,
+                    soloEn: Impresion::destinosComandaCaja((int) $user->id_empresa_negocio, $user));
+                Cocina::registrarDirecta($user->id_empresa_negocio, $destino.' '.$respuesta['numero'], $lineas, $atiende);
             } catch (\Throwable $e) {
                 report($e);
             }
@@ -347,6 +364,13 @@ class CobroController extends Controller
                 $promotor = $request->has('promotor_id') ? $this->promotorElegido($request) : ($pedido->promotor_id ? (int) $pedido->promotor_id : null);
                 if ($request->has('promotor_id') && (int) $pedido->promotor_id !== (int) $promotor) {
                     $pedido->update(['promotor_id' => $promotor]);
+                }
+
+                // El cajero puede corregir el mozo que atendió (vacío = se queda el del pedido)
+                if ($mozo = $this->mozoElegido($request)) {
+                    if ((int) $pedido->mozo !== $mozo) {
+                        $pedido->update(['mozo' => $mozo]);
+                    }
                 }
 
                 $items = $this->itemsPendientes($pedido->ped_id);

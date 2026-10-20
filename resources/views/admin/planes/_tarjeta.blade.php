@@ -15,6 +15,11 @@
             <input type="number" step="0.01" min="0" name="precio" value="{{ $pl->precio }}" required class="mt-1 w-full rounded-xl border-slate-300 text-sm text-right font-bold">
         </label>
     </div>
+    <label class="block text-xs font-semibold text-slate-500">Precio anual S/
+        <input type="number" step="0.01" min="0" name="precio_anual" value="{{ $pl->precio_anual }}" placeholder="{{ $nuevo ? 'Vacío = 10 meses (2 gratis)' : number_format($pl->precio * \App\Models\Central\Plan::MESES_ANUAL, 2, '.', '').' (10 meses: 2 gratis)' }}"
+               class="mt-1 w-full rounded-xl border-slate-300 text-sm text-right font-bold">
+        <span class="block mt-0.5 font-normal text-[11px] text-slate-400">Si lo dejas vacío se cobra 10 meses (2 meses gratis).@unless ($nuevo) Hoy en la web: S/ {{ number_format($pl->precioAnual(), 2) }} al año.@endunless</span>
+    </label>
     <label class="block text-xs font-semibold text-slate-500">Descripción corta
         <input name="descripcion" value="{{ $pl->descripcion }}" maxlength="255" class="mt-1 w-full rounded-xl border-slate-300 text-sm">
     </label>
