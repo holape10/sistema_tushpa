@@ -109,6 +109,7 @@ class SucursalController extends Controller
             'formato_impresion' => 'required|in:TICKET,A4',
             'control_stock' => 'required|in:'.implode(',', array_keys(ControlStock::NIVELES)),
             'comandas_solo_mesas' => 'nullable|boolean',
+            'ip_mozos' => 'nullable|string|max:255',
             'permite_descuentos' => 'nullable|boolean',
             'permite_cortesias' => 'nullable|boolean',
             'descuento_max_cajero' => 'nullable|numeric|min:0|max:100',
@@ -164,6 +165,12 @@ class SucursalController extends Controller
             $datos[$campo] = mb_strtoupper(trim($datos[$campo]));
         }
         $datos['comandas_solo_mesas'] = $request->boolean('comandas_solo_mesas');
+        // Wi-Fi del local: IP(s) públicas separadas por coma; vacío = mozos y promotores entran desde cualquier red
+        $ips = collect(explode(',', (string) ($datos['ip_mozos'] ?? '')))->map(fn ($i) => trim($i))->filter();
+        if ($mala = $ips->first(fn ($ip) => ! filter_var($ip, FILTER_VALIDATE_IP))) {
+            return back()->withInput()->withErrors(['ip_mozos' => "\"{$mala}\" no es una IP válida."]);
+        }
+        $datos['ip_mozos'] = $ips->implode(',') ?: null;
         $datos['permite_descuentos'] = $request->boolean('permite_descuentos');
         $datos['permite_cortesias'] = $request->boolean('permite_cortesias');
         $datos['descuento_max_cajero'] = (float) ($datos['descuento_max_cajero'] ?? 10);

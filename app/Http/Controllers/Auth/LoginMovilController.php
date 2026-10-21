@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\EmpresaNegocio;
 use App\Models\User;
+use App\Support\RedLocal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
@@ -90,6 +91,9 @@ class LoginMovilController extends Controller
         }
 
         RateLimiter::clear($llave);
+        if (! RedLocal::permite($user, (string) $request->ip())) {
+            return back()->withErrors(['codigo' => RedLocal::mensaje()])->withInput(['usuario' => $request->usuario]);
+        }
         Auth::login($user);
         $request->session()->regenerate();
 

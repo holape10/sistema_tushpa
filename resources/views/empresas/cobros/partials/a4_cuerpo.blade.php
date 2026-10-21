@@ -25,7 +25,6 @@
     $cant = fn($n) => rtrim(rtrim(number_format($n, 3), '0'), '.');
     $mon = ($cab->moncod ?? 'PEN') === 'USD' ? '$' : 'S/';
     $fecha = fn($f) => $f ? \Carbon\Carbon::parse($f)->format('d-m-Y') : '-';
-    $soporte = config('soporte');
 @endphp
 <style>
     .a4 { font-family: 'DejaVu Sans', 'Segoe UI', Tahoma, sans-serif; color: #2c3e50; font-size: 9px; }
@@ -207,6 +206,6 @@
     <div class="pie">
         @if ($electronico)Representación impresa del comprobante electrónico · Consúltelo en <strong>{{ \App\Support\ConsultaCpe::direccion() }}</strong><br>@endif
         <strong>"BIENES TRANSFERIDOS EN LA AMAZONÍA PARA SER CONSUMIDOS EN LA MISMA" - "SERVICIOS PRESTADOS EN LA AMAZONÍA"</strong><br>
-        SISTEMA DESARROLLADO POR <a href="https://holape.app">{{ $soporte['nombre'] ?? 'HOLAPE EIRL' }}</a> - {{ $soporte['telefono'] ?? '' }}
+        <span style="font-size:8px; color:#9ca3af;">{{ config('soporte.firma_comprobante') }}</span>
     </div>
 </div>

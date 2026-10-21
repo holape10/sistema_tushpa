@@ -153,6 +153,7 @@
             @endif
         </div>
     @endif
+    <div class="c" style="margin-top:8px; font-size:8px; color:#555;">{{ config('soporte.firma_comprobante') }}</div>
 </div>
 
 @unless (request('embed'))

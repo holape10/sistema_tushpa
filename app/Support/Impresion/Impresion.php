@@ -319,7 +319,9 @@ class Impresion
                 ->texto('Consulta tu comprobante en:')->texto(ConsultaCpe::direccion());
         }
         $p->alinear('centro')->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA')
-            ->texto('¡Gracias por su preferencia!')->avanzar(3)->cortar();
+            ->texto('¡Gracias por su preferencia!');
+        self::firma($p);
+        $p->avanzar(3)->cortar();
         self::encolar($imp, self::conCopias($imp, $p->bytes(), $copias, true), 'COMPROBANTE', $numero);
 
         return true;
@@ -429,8 +431,10 @@ class Impresion
                 ->parrafo('Consulta tu comprobante en: '.ConsultaCpe::direccion(), $chico);
         }
 
-        return $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico)
-            ->fuente()->avanzar(3)->cortar();
+        $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico)->fuente();
+        self::firma($p);
+
+        return $p->avanzar(3)->cortar();
     }
 
     /**
@@ -528,10 +532,17 @@ class Impresion
             $p->parrafo('REPRESENTACION IMPRESA DE LA '.mb_strtoupper($tdodes), $chico)->fuente()->qr(CodigoQr::texto($cab))->avanzar()->fuente('b')
                 ->parrafo('Consulta tu comprobante en: '.ConsultaCpe::direccion(), $chico);
         }
-        $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico)
-            ->fuente()->avanzar(3)->cortar();
+        $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico)->fuente();
+        self::firma($p);
+        $p->avanzar(3)->cortar();
 
         return $p;
+    }
+
+    /** Línea discreta al pie del comprobante (letra pequeña): quién desarrolló el sistema */
+    private static function firma(Escpos $p): void
+    {
+        $p->alinear('centro')->fuente('b')->parrafo((string) config('soporte.firma_comprobante'), $p->columnasFuenteB())->fuente();
     }
 
     /** Consumo y descuento a la cuenta, y el valor de las cortesías (operaciones gratuitas) */

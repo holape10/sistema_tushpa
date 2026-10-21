@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\IdentificarEmpresa;
 use App\Http\Middleware\SoloMenuContador;
+use App\Http\Middleware\SoloWifiLocal;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -29,7 +30,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Antes que todo (incluida la sesión): elige la base de datos según el subdominio
         $middleware->prepend(IdentificarEmpresa::class);
         // El contador solo entra a las secciones de su menú
-        $middleware->web(append: [SoloMenuContador::class]);
+        // Mozos y promotores solo con el Wi-Fi del local (si la sucursal lo activó)
+        $middleware->web(append: [SoloMenuContador::class, SoloWifiLocal::class]);
 
         $middleware->redirectGuestsTo(fn (Request $request) => $request->attributes->get('panel_admin')
             ? route('admin.login')

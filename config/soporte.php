@@ -8,6 +8,8 @@ return [
     'correo' => env('SOPORTE_CORREO', 'holapesac@gmail.com'),
     'direccion' => env('SOPORTE_DIRECCION', 'JR. RAUL PILLCO PEREZ NRO. 285'),
     'horario' => env('SOPORTE_HORARIO', 'Lunes a sábado'),
+    // Línea discreta al pie de todos los comprobantes
+    'firma_comprobante' => env('SOPORTE_FIRMA', 'Sistema desarrollado por tushpa.app - 928 396 147'),
 
     // Cuenta para el pago del servicio (se muestra en la pantalla de "Servicio suspendido")
     'pago' => [

@@ -21,7 +21,6 @@
     $fecha = fn ($f) => $f ? \Carbon\Carbon::parse($f)->format('d-m-Y') : '-';
     $cant = fn ($n) => rtrim(rtrim(number_format((float) $n, 3), '0'), '.');
     $ubigeo = fn ($c) => \App\Support\Ubigeo::nombre($c);
-    $soporte = config('soporte');
 @endphp
 <style>
     .a4 { font-family: 'DejaVu Sans', 'Segoe UI', Tahoma, sans-serif; color: #2c3e50; font-size: 9px; }
@@ -172,6 +171,6 @@
 
     <div class="pie">
         Representación impresa de la guía de remisión electrónica · Consúltela en www.sunat.gob.pe<br>
-        SISTEMA DESARROLLADO POR <a href="https://holape.app">{{ $soporte['nombre'] ?? 'HOLAPE EIRL' }}</a> - {{ $soporte['telefono'] ?? '' }}
+        <span style="font-size:8px; color:#9ca3af;">{{ config('soporte.firma_comprobante') }}</span>
     </div>
 </div>

@@ -159,12 +159,19 @@
             const ids = [...document.querySelectorAll('.chk:checked')].map(c => c.value);
             if (!ids.length || !confirm(`¿Enviar ${ids.length} comprobante(s) a SUNAT?`)) return;
             this.disabled = true;
-            let ok = 0;
-            for (let i = 0; i < ids.length; i++) {
-                document.getElementById('progreso').textContent = `Enviando ${i + 1} de ${ids.length}...`;
-                if (await enviar(ids[i])) ok++;
-            }
-            document.getElementById('progreso').textContent = `Listo: ${ok} aceptado(s), ${ids.length - ok} con problema.`;
+            // De 3 en 3 a la vez: SUNAT tarda en responder cada uno, así el lote termina casi 3 veces más rápido
+            let ok = 0, hechos = 0, siguiente = 0;
+            const progreso = document.getElementById('progreso');
+            progreso.textContent = `Enviando 0 de ${ids.length}...`;
+            const trabajador = async () => {
+                while (siguiente < ids.length) {
+                    const id = ids[siguiente++];
+                    if (await enviar(id)) ok++;
+                    progreso.textContent = `Enviando ${++hechos} de ${ids.length}...`;
+                }
+            };
+            await Promise.all(Array.from({ length: Math.min(3, ids.length) }, trabajador));
+            progreso.textContent = `Listo: ${ok} aceptado(s), ${ids.length - ok} con problema.`;
         });
     </script>
 @endsection

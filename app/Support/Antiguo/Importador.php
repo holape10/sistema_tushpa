@@ -14,6 +14,7 @@ use App\Models\Subcategoria;
 use App\Models\User;
 use App\Support\Kardex;
 use App\Support\Recetas;
+use App\Support\Unidades;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -206,6 +207,8 @@ class Importador
      */
     private function unidades(): void
     {
+        // Primero las unidades más usadas en el Perú; luego las propias del sistema antiguo
+        Unidades::completar();
         if (! $this->hay('unidad_medida')) {
             return;
         }
@@ -224,6 +227,17 @@ class Importador
             $existentes[$cod] = true;
             $this->aviso("Unidad agregada: {$cod} ({$fila['umenom']}).");
         }
+    }
+
+    /** Unidad del producto antiguo (KG, UND, MTS… se reconocen); si no se entiende, Unidad y queda el aviso */
+    private function unidad($escrita, string $producto): string
+    {
+        $cod = Unidades::codigo($escrita);
+        if ($cod === null && trim((string) $escrita) !== '') {
+            $this->aviso("{$producto}: la unidad \"{$escrita}\" no se reconoce, quedó como Unidad.");
+        }
+
+        return $cod ?? 'NIU';
     }
 
     private function sumar(string $s, string $k, int $n = 1): void
@@ -358,9 +372,8 @@ class Importador
             $codigo = mb_substr(trim((string) self::v($a, 'procod', '')), 0, 20);
             $prod = $porNombre[$nombre.'|'.$tipo] ?? null;
 
-            $ume = strtoupper((string) self::v($a, 'umecod', 'NIU'));
-            $ume = isset($unidades[$ume]) ? $ume : 'NIU';
-            $umeCons = strtoupper((string) self::v($a, 'umecod_cons', ''));
+            $ume = $this->unidad(self::v($a, 'umecod'), $nombre);
+            $umeCons = Unidades::codigo(self::v($a, 'umecod_cons')) ?? '';
             $factorCons = (float) self::v($a, 'factor_cons', 0);
             $estado = self::clave(self::v($a, 'proest', 'Activo')) === 'INACTIVO' ? 'Inactivo' : 'Activo';
 
@@ -451,8 +464,8 @@ class Importador
 
                 continue;
             }
-            $ume = strtoupper((string) self::v($f, 'umecod', 'NIU'));
-            $guardar($padre, isset($unidades[$ume]) ? $ume : 'NIU', self::clave($f->pronom), (float) self::v($f, 'factor', 1),
+            $ume = $this->unidad(self::v($f, 'umecod'), (string) $f->pronom);
+            $guardar($padre, $ume, self::clave($f->pronom), (float) self::v($f, 'factor', 1),
                 (float) self::v($f, 'propun', 0), self::v($f, 'codigo_barra'));
         }
 
@@ -462,8 +475,7 @@ class Importador
                 if (! $padre) {
                     continue;
                 }
-                $ume = strtoupper((string) self::v($p, 'umecod', 'NIU'));
-                $ume = isset($unidades[$ume]) ? $ume : 'NIU';
+                $ume = $this->unidad(self::v($p, 'umecod'), 'presentación de '.$padre->pronom);
                 $factor = (float) (self::v($p, 'pres_fac') ?: self::v($p, 'pres_can', 1));
                 $guardar($padre, $ume, self::clave(($unidades[$ume] ?? $ume).' X '.rtrim(rtrim(number_format($factor, 3, '.', ''), '0'), '.')),
                     $factor, (float) self::v($p, 'pres_pre_pub', 0), null);

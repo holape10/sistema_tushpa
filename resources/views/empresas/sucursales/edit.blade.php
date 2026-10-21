@@ -213,6 +213,17 @@
                             <span><span class="font-bold text-gray-800">🍽️ Mozos y promotores solo atienden mesas</span>
                                 <span class="block text-xs text-gray-500 mt-0.5">En Comandas no ven "Para llevar", "Delivery" ni "Punto de venta" (solo administrador y caja). Sin marcar, mozos y promotores tienen "Para llevar".</span></span>
                         </label>
+                        {{-- Mozos y promotores solo con el Wi-Fi del local (sus celulares salen a internet con la IP pública del local) --}}
+                        <div class="rounded-xl border-2 border-gray-200 px-4 py-3" x-data="{ ip: @js(old('ip_mozos', $sucursal->ip_mozos)) }">
+                            <p class="font-bold text-gray-800">📶 Mozos y promotores solo con el Wi-Fi del local</p>
+                            <p class="text-xs text-gray-500 mt-0.5 mb-2">Si se conectan con sus datos móviles u otra red, no pueden entrar y se les cierra la sesión. Administrador y caja entran desde cualquier red. Vacío = sin restricción.</p>
+                            <div class="flex flex-wrap gap-2">
+                                <input name="ip_mozos" x-model="ip" maxlength="255" placeholder="IP pública del local (varias separadas por coma)" class="flex-1 min-w-56 h-10 rounded-lg border-gray-300 text-sm">
+                                <button type="button" @click="ip = ip ? (ip.split(',').map(s => s.trim()).includes(@js(request()->ip())) ? ip : ip + ', ' + @js(request()->ip())) : @js(request()->ip())"
+                                        class="h-10 px-3 rounded-lg bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100">Usar la IP de esta conexión ({{ request()->ip() }})</button>
+                            </div>
+                            <p class="text-xs text-amber-700 mt-2">Toca el botón estando conectado al Wi-Fi del local. Si tu proveedor de internet cambia la IP (por ejemplo al reiniciar el módem), vuelve a tocarlo.</p>
+                        </div>
                         {{-- Descuentos y cortesías al cobrar en el restaurante (cobrar mesa y PV Restaurante) --}}
                         <div class="rounded-xl border-2 border-gray-200 px-4 py-3 space-y-3">
                             <p class="font-bold text-gray-800">🏷️ Descuentos y cortesías al cobrar <span class="font-normal text-xs text-gray-500">(cobrar mesa y PV Restaurante)</span></p>
@@ -238,6 +249,7 @@
                                 @if ($campo($opcion))<input type="hidden" name="{{ $opcion }}" value="1">@endif
                             @endforeach
                             <input type="hidden" name="descuento_max_cajero" value="{{ (float) ($sucursal->descuento_max_cajero ?? 10) }}">
+                            <input type="hidden" name="ip_mozos" value="{{ $sucursal->ip_mozos }}">
                         @endif
                         <div>
                             <p class="text-sm font-medium text-gray-600 mb-2">Comprobante que sale seleccionado al cobrar</p>
