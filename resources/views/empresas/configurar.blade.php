@@ -66,14 +66,6 @@
                                 <p id="rucMsg" class="text-xs mt-1"></p>
                             </div>
 
-                            <div class="sm:col-span-1">
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de negocio</label>
-                                <select name="id_tipo_sistema" class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                                    <option value="1">RESTAURANTE</option>
-                                    <option value="2">COMERCIO / BODEGA</option>
-                                </select>
-                            </div>
-
                             <div class="sm:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Razón Social <span class="text-red-500">*</span></label>
                                 <input type="text" id="nomEmpresa" name="nomEmpresa" value="{{ old('nomEmpresa') }}"

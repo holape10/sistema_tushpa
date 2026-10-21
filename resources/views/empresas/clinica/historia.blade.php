@@ -38,6 +38,14 @@
                 <a href="{{ route('clinica.imprimir', $h->his_cli_id) }}" target="_blank" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-sm font-semibold"><i class="fas fa-print"></i> Imprimir historia</a>
                 <button type="button" @click="consentimiento = true" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-sm font-semibold"><i class="fas fa-file-signature"></i> Consentimiento</button>
                 <a href="#archivos" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-sm font-semibold"><i class="fas fa-x-ray"></i> Radiografías</a>
+                @if (auth()->user()->esAdmin())
+                    {{-- Historias de prueba o duplicadas: se borra con todo lo suyo (no si ya tiene algo cobrado) --}}
+                    <form method="POST" action="{{ route('clinica.historia.eliminar', $h->his_cli_id) }}"
+                          onsubmit="return confirm('¿Eliminar la historia de {{ addslashes($h->clinom) }} con todas sus atenciones, citas, tratamientos y archivos? No se puede deshacer.')">
+                        @csrf @method('DELETE')
+                        <button class="px-4 py-2 rounded-xl bg-white border border-rose-300 text-rose-600 text-sm font-semibold hover:bg-rose-50"><i class="fas fa-trash"></i> Eliminar historia</button>
+                    </form>
+                @endif
             </div>
         </div>
 

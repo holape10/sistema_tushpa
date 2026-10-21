@@ -15,9 +15,11 @@ use Illuminate\Support\Facades\Schema;
 
 class ReporteController extends Controller
 {
-    private function autorizar(): void
+    /** Administrador y caja ven todos; el contador, solo los reportes que tiene en su menú (ej. Reporte: SUNAT) */
+    private function autorizar(?string $clave = null): void
     {
-        abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja ven los reportes.');
+        $user = Auth::user();
+        abort_unless($user->esAdminOCaja() || ($clave !== null && $user->contadorCon('/reportes/'.$clave)), 403, 'No tienes acceso a este reporte.');
     }
 
     /** Catálogo de reportes de un grupo (Ventas o Compras) */
@@ -32,7 +34,7 @@ class ReporteController extends Controller
 
     public function ver(Request $request, string $clave)
     {
-        $this->autorizar();
+        $this->autorizar($clave);
         abort_unless(isset(Reportes::CATALOGO[$clave]), 404);
         $sucursales = EmpresaNegocio::where('IdEmpresa', Auth::user()->IdEmpresa)->orderBy('id_empresa_negocio')->get();
         $sucursal = (int) $request->get('sucursal', Auth::user()->id_empresa_negocio);

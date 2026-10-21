@@ -76,6 +76,27 @@ class User extends Authenticatable
         return $this->tieneRol([2, 4]);
     }
 
+    /** Contador: solo ve lo contable y tributario que el administrador le dio en su menú */
+    public function esContador(): bool
+    {
+        return $this->tieneRol([15]);
+    }
+
+    /** ¿Es contador y tiene en su menú alguna de estas opciones? */
+    public function contadorCon(string ...$urls): bool
+    {
+        if (! $this->esContador()) {
+            return false;
+        }
+        foreach ($urls as $url) {
+            if ($this->tieneModulo($url)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function esMozo(): bool
     {
         return $this->tieneRol([8]);

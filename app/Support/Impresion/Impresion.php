@@ -21,6 +21,9 @@ use Illuminate\Support\Facades\DB;
  */
 class Impresion
 {
+    /** Ventas directas (Punto Venta, PV Farmacia, PV móvil, táctil y grifo): su comprobante no muestra vendedor ni cajero */
+    private const VENTA_DIRECTA = ['PV', 'FARMACIA', 'POS', 'TACTIL', 'GRIFO'];
+
     /** Segundos sin contacto para considerar que el agente está apagado */
     public const AGENTE_TIMEOUT = 90;
 
@@ -154,12 +157,15 @@ class Impresion
 
     /**
      * Quién atendió la venta, para el comprobante: el mozo (o doctor) que tomó el pedido, el promotor y el cajero que cobró.
-     * Si una misma persona hizo varias cosas sale una sola vez.
+     * Si una misma persona hizo varias cosas sale una sola vez. Las ventas directas de los puntos de venta no llevan nombres.
      *
      * @return array<int, array{0: string, 1: string}> [etiqueta, nombre]
      */
     public static function atencion(object $cab): array
     {
+        if (in_array($cab->ped_tip ?? null, self::VENTA_DIRECTA, true)) {
+            return [];
+        }
         $cajero = (int) ($cab->IdUsuario ?? 0);
         $atendio = (int) (($cab->mozo ?? null) ?: ($cab->IdUsuario_ven ?? 0));
         $promotor = (int) ($cab->promotor_id ?? 0);

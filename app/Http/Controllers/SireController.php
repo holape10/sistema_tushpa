@@ -21,7 +21,7 @@ class SireController extends Controller
 
     private function autorizar(): Empresa
     {
-        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador puede usar el SIRE.');
+        abort_unless(Auth::user()->esAdmin() || Auth::user()->contadorCon('/sire/ventas', '/sire/compras', '/sire/credenciales'), 403, 'Solo el Administrador o el contador pueden usar el SIRE.');
 
         return Empresa::findOrFail(Auth::user()->IdEmpresa);
     }

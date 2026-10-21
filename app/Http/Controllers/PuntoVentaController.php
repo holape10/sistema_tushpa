@@ -11,6 +11,7 @@ use App\Support\Proformas;
 use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -142,16 +143,32 @@ class PuntoVentaController extends Controller
         return $this->registrarComo($request, 'FARMACIA');
     }
 
+    /**
+     * Internet lento: cada venta trae una clave (la pantalla la crea y la repite si reintenta). Si la venta ya se registró
+     * pero la respuesta no llegó y la caja vuelve a tocar REGISTRAR, se devuelve la misma venta en vez de crear otra.
+     */
     private function registrarComo(Request $request, string $origen)
     {
         $this->autorizar();
         $request->validate(VentaDirecta::REGLAS, VentaDirecta::MENSAJES, VentaDirecta::NOMBRES);
 
+        $clave = (string) $request->input('clave_venta');
+        $llave = preg_match('/^[A-Za-z0-9-]{8,64}$/', $clave) ? 'pv:'.DB::connection()->getDatabaseName().':'.Auth::id().':'.$clave : null;
+        if ($llave && ! Cache::add($llave, 'procesando', now()->addMinutes(15))) {
+            $previa = Cache::get($llave);
+
+            return response()->json(is_array($previa) ? $previa + ['repetida' => true]
+                : ['estado' => 'error', 'mensaje' => 'Esta venta todavía se está registrando. Espera unos segundos y revisa la última venta.']);
+        }
+
         try {
             $cabId = VentaDirecta::registrar(Auth::user(), $request->all(), $origen, recargos: true);
         } catch (\RuntimeException $e) {
+            $llave && Cache::forget($llave);
+
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
+            $llave && Cache::forget($llave);
             report($e);
 
             return response()->json([
@@ -160,6 +177,11 @@ class PuntoVentaController extends Controller
             ]);
         }
 
-        return response()->json(VentaDirecta::respuesta($cabId));
+        $respuesta = VentaDirecta::respuesta($cabId);
+        if ($llave) {
+            Cache::put($llave, $respuesta, now()->addMinutes(15));
+        }
+
+        return response()->json($respuesta);
     }
 }

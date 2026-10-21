@@ -76,24 +76,6 @@
                                        style="background: #eee;">
                             </div>
 
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Negocio <span class="text-red-500">*</span></label>
-                                @if(count($tipos_sistemas) > 0)
-                                    <select name="id_tipo_sistema" class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                                        @foreach($tipos_sistemas as $tipo)
-                                            <option value="{{ $tipo->id_tipo }}" {{ $empresa->id_tipo_sistema == $tipo->id_tipo ? 'selected' : '' }}>
-                                                {{ $tipo->nombre_sistema }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                @else
-                                    <select name="id_tipo_sistema" class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                                        <option value="1" {{ $empresa->id_tipo_sistema == 1 ? 'selected' : '' }}>RESTAURANTE</option>
-                                        <option value="2" {{ $empresa->id_tipo_sistema == 2 ? 'selected' : '' }}>COMERCIO / BODEGA</option>
-                                    </select>
-                                @endif
-                            </div>
-
                             <div class="sm:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Razón Social <span class="text-red-500">*</span></label>
                                 <input type="text" name="nomEmpresa" value="{{ old('nomEmpresa', $empresa->NomEmpresa) }}" 

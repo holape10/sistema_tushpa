@@ -40,6 +40,12 @@ class UsuarioController extends Controller
         14 => ['Inicio', 'Cobranza del Día', 'Clientes de Préstamos'],
         4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Envío de Comprobantes', 'Resumen Diario',
             'Kardex', 'Stock Productos', 'Clientes'],
+        // Contador: reporte de ventas SUNAT, envío a SUNAT y, si la empresa los tiene, contabilidad, planilla y SIRE
+        15 => ['Inicio', 'Reporte: SUNAT', 'Envío de Comprobantes', 'Resumen Diario',
+            'Plan Contable', 'Centralizar Ventas', 'Centralizar Compras', 'Libro Diario', 'Libro Mayor', 'Balance de Comprobación', 'Estados Financieros',
+            'Registro de Ventas (contable)', 'Registro de Compras (contable)', 'CONCAR',
+            'Trabajadores', 'Planillas y Boletas', 'Parámetros de Planilla',
+            'SIRE Ventas (RVIE)', 'SIRE Compras (RCE)', 'Credenciales SIRE', 'Resumen Tributario'],
     ];
 
     private function autorizar(): void

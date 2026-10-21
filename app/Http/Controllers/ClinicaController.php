@@ -9,6 +9,7 @@ use App\Support\ClinicaFirmas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Historias clínicas: pacientes, ficha (antecedentes, alergias, vacunas, odontograma), atenciones con receta,
@@ -144,6 +145,44 @@ class ClinicaController extends Controller
             'consentimientos' => DB::table('clinica_consentimientos')->where('his_cli_id', $id)->orderByDesc('con_id')->get(),
             'doctores' => Clinica::doctores($suc),
         ]);
+    }
+
+    /**
+     * Elimina una historia (por ejemplo una de prueba) con todo lo suyo: atenciones, recetas, vacunas, citas, tratamientos,
+     * presupuestos, consentimientos y archivos. Solo el administrador, y solo si nada de esa historia se cobró en caja.
+     * El paciente sigue como cliente.
+     */
+    public function eliminarHistoria(int $id)
+    {
+        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el administrador elimina historias clínicas.');
+        $h = $this->historia($id);
+        $atenciones = DB::table('atencion_clinica')->where('his_cli_id', $id)->pluck('ate_cli_id');
+        $tratamientos = DB::table('clinica_tratamientos')->where('his_cli_id', $id)->pluck('tra_id');
+        $pedidos = DB::table('atencion_clinica')->where('his_cli_id', $id)->whereNotNull('ped_id')->pluck('ped_id')
+            ->merge(DB::table('clinica_tratamiento_registros')->whereIn('tra_id', $tratamientos)->whereNotNull('ped_id')->pluck('ped_id'))->unique()->values();
+        if ($pedidos->isNotEmpty() && DB::table('cpe_cabecera')->whereIn('ped_id', $pedidos)->exists()) {
+            return back()->with('error', 'Esta historia tiene atenciones cobradas en caja: no se puede eliminar.');
+        }
+
+        DB::transaction(function () use ($id, $atenciones, $tratamientos, $pedidos) {
+            DB::table('receta_detalle')->whereIn('ate_cli_id', $atenciones)->delete();
+            DB::table('atencion_clinica')->where('his_cli_id', $id)->delete();
+            DB::table('historia_vacunas')->where('his_cli_id', $id)->delete();
+            $citas = DB::table('citas')->where('his_cli_id', $id)->pluck('cit_id');
+            DB::table('clinica_recordatorios')->whereIn('cit_id', $citas)->delete();
+            DB::table('citas')->where('his_cli_id', $id)->delete();
+            DB::table('clinica_tratamiento_registros')->whereIn('tra_id', $tratamientos)->delete();
+            DB::table('clinica_tratamientos')->where('his_cli_id', $id)->delete();
+            DB::table('clinica_presupuestos')->where('his_cli_id', $id)->delete();
+            DB::table('clinica_consentimientos')->where('his_cli_id', $id)->delete();
+            DB::table('clinica_archivos')->where('his_cli_id', $id)->delete();
+            // Lo que estaba por cobrar en caja (sin comprobante) se anula
+            DB::table('pedidos')->whereIn('ped_id', $pedidos)->where('ped_est', 'Aperturado')->update(['ped_est' => 'Anulado', 'ped_tot' => 0]);
+            DB::table('historia_clinica')->where('his_cli_id', $id)->delete();
+        });
+        Storage::disk('local')->deleteDirectory('clinica/archivos/'.$this->suc().'/'.$id);
+
+        return redirect()->route('clinica.index')->with('success', 'Historia de '.$h->clinom.' eliminada.');
     }
 
     public function guardarFicha(Request $request, int $id)

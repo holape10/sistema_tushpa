@@ -1,16 +1,20 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Support\{Concar, Excel};
+use App\Support\Concar;
+use App\Support\Excel;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /** Exportación de ventas y compras a la plantilla de importación de asientos de CONCAR */
 class ConcarController extends Controller
 {
     private function autorizar(): string
     {
-        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador puede exportar a CONCAR.');
+        abort_unless(Auth::user()->esAdmin() || Auth::user()->contadorCon('/concar'), 403, 'Solo el Administrador o el contador pueden exportar a CONCAR.');
+
         return Auth::user()->IdEmpresa;
     }
 
@@ -47,6 +51,7 @@ class ConcarController extends Controller
         ]);
 
         DB::table('concar_config')->updateOrInsert(['IdEmpresa' => $ruc], $d + ['updated_at' => now()]);
+
         return back()->with('success', 'Configuración de CONCAR guardada.');
     }
 
@@ -57,15 +62,15 @@ class ConcarController extends Controller
         $desde = (int) ($d['desde'] ?? 1);
 
         $datos = $libro === 'ventas' ? Concar::ventas($ruc, $d['periodo'], $desde) : Concar::compras($ruc, $d['periodo'], $desde);
-        if (!$datos['filas']) {
-            return back()->with('error', 'No hay ' . $libro . ' para exportar en ese periodo.');
+        if (! $datos['filas']) {
+            return back()->with('error', 'No hay '.$libro.' para exportar en ese periodo.');
         }
         if ($datos['asientos'] + $desde - 1 > 9999) {
             return back()->with('error', 'El correlativo pasa de 9999 asientos en el mes; CONCAR solo admite 4 dígitos.');
         }
 
-        $ruta = (new Excel())->hoja('Asientos', Concar::titulos(Concar::config($ruc)), $datos['filas'])->guardar();
-        $nombre = 'CONCAR_' . strtoupper($libro) . "_{$ruc}_{$d['periodo']}.xlsx";
+        $ruta = (new Excel)->hoja('Asientos', Concar::titulos(Concar::config($ruc)), $datos['filas'])->guardar();
+        $nombre = 'CONCAR_'.strtoupper($libro)."_{$ruc}_{$d['periodo']}.xlsx";
 
         return response()->download($ruta, $nombre, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
             ->deleteFileAfterSend();

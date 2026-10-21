@@ -12,7 +12,7 @@ class SunatController extends Controller
 {
     private function autorizar(): void
     {
-        abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja envían comprobantes a SUNAT.');
+        abort_unless(Auth::user()->esAdminOCaja() || Auth::user()->contadorCon('/sunat/envios', '/sunat/resumenes'), 403, 'Solo Administrador, Caja o el contador envían comprobantes a SUNAT.');
     }
 
     private function sunat(): SunatService

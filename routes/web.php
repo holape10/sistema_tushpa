@@ -162,6 +162,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/historia/{id}/atencion', 'nuevaAtencion')->whereNumber('id')->name('nueva_atencion');
         Route::get('/historia/{id}/imprimir', 'imprimirHistoria')->whereNumber('id')->name('imprimir');
         Route::get('/historia/{id}/consentimiento', 'consentimiento')->whereNumber('id')->name('consentimiento');
+        Route::delete('/historia/{id}', 'eliminarHistoria')->whereNumber('id')->name('historia.eliminar');
         Route::get('/atencion/{id}', 'verAtencion')->whereNumber('id')->name('atencion');
         Route::post('/atencion/{id}', 'guardarAtencion')->whereNumber('id')->name('atencion.guardar');
         Route::post('/atencion/{id}/servicio', 'agregarServicio')->whereNumber('id')->name('atencion.servicio');

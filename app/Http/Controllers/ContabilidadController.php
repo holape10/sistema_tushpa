@@ -14,7 +14,7 @@ class ContabilidadController extends Controller
 {
     private function ruc(): string
     {
-        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador accede a la contabilidad.');
+        abort_unless(Auth::user()->esAdmin() || Auth::user()->contadorCon('/contabilidad/plan', '/contabilidad/centralizar/ventas', '/contabilidad/centralizar/compras', '/contabilidad/diario', '/contabilidad/mayor', '/contabilidad/balance', '/contabilidad/estados'), 403, 'Solo el Administrador o el contador acceden a la contabilidad.');
         $ruc = (string) Auth::user()->IdEmpresa;
         Contabilidad::asegurar($ruc);
 

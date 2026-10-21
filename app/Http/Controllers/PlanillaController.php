@@ -1,17 +1,20 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Support\{Excel, Planilla};
 use App\Support\Contabilidad\Contabilidad;
-use Carbon\Carbon;
+use App\Support\Excel;
+use App\Support\Planilla;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class PlanillaController extends Controller
 {
     private function ruc(): string
     {
-        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador gestiona la planilla.');
+        abort_unless(Auth::user()->esAdmin() || Auth::user()->contadorCon('/planilla', '/planilla/trabajadores', '/planilla/parametros'), 403, 'Solo el Administrador o el contador gestionan la planilla.');
+
         return (string) Auth::user()->IdEmpresa;
     }
 
@@ -27,6 +30,7 @@ class PlanillaController extends Controller
             ->orderByRaw('t.activo IS NULL, t.activo DESC')->orderBy('e.emp_nom')
             ->select('e.emp_id', 'e.emp_nom', 'e.emp_ape_pat', 'e.emp_ape_mat', 'e.emp_num_doc', 'n.nombre_comercial as sucursal', 't.*', 'e.emp_id as id')->get();
         $p = Planilla::parametros($ruc, now()->year);
+
         return view('empresas.planilla.trabajadores', ['empleados' => $empleados, 'afps' => array_keys($p->comisiones), 'rmv' => $p->rmv]);
     }
 
@@ -49,6 +53,7 @@ class PlanillaController extends Controller
             'cuspp' => $d['cuspp'] ?? null, 'banco' => $d['banco'] ?? null, 'cuenta' => $d['cuenta'] ?? null,
             'activo' => $request->boolean('activo', true), 'updated_at' => now(), 'created_at' => now(),
         ]);
+
         return response()->json(['success' => true]);
     }
 
@@ -58,6 +63,7 @@ class PlanillaController extends Controller
     {
         $ruc = $this->ruc();
         $anio = (int) $request->get('anio', now()->year);
+
         return view('empresas.planilla.parametros', ['p' => Planilla::parametros($ruc, $anio), 'anio' => $anio]);
     }
 
@@ -74,6 +80,7 @@ class PlanillaController extends Controller
         DB::table('planilla_parametros')->where('IdEmpresa', $ruc)->where('anio', $d['anio'])->update(
             collect($d)->except(['anio', 'comisiones'])->all() + ['afp_comisiones' => json_encode(array_map('floatval', $d['comisiones'])),
                 'calcular_quinta' => $request->boolean('calcular_quinta'), 'updated_at' => now()]);
+
         return back()->with('success', "Parámetros de {$d['anio']} guardados.");
     }
 
@@ -87,13 +94,14 @@ class PlanillaController extends Controller
         $detalle = $planilla ? DB::table('planilla_detalle')->where('planilla_id', $planilla->id)->orderBy('nombre')->get() : collect();
 
         if ($planilla && $request->get('excel')) {
-            $filas = $detalle->map(fn($d) => [$d->nombre, (string) $d->dni, $d->cargo, $d->sistema_pension, $d->dias, (float) $d->faltas, $d->tardanza_min,
+            $filas = $detalle->map(fn ($d) => [$d->nombre, (string) $d->dni, $d->cargo, $d->sistema_pension, $d->dias, (float) $d->faltas, $d->tardanza_min,
                 (float) $d->sueldo, (float) $d->asig_familiar, (float) $d->horas_extra, (float) $d->bonos, (float) $d->total_ingresos,
                 (float) $d->desc_faltas + (float) $d->desc_tardanza, (float) $d->onp, (float) $d->afp_aporte + (float) $d->afp_prima + (float) $d->afp_comision,
                 (float) $d->renta_quinta, (float) $d->adelantos + (float) $d->otros_descuentos, (float) $d->total_descuentos, (float) $d->neto, (float) $d->essalud])->all();
-            $ruta = (new Excel())->hoja('Planilla ' . $periodo, ['Trabajador', 'DNI', 'Cargo', 'Pensión', 'Días', 'Faltas', 'Tardanza (min)', 'Sueldo',
+            $ruta = (new Excel)->hoja('Planilla '.$periodo, ['Trabajador', 'DNI', 'Cargo', 'Pensión', 'Días', 'Faltas', 'Tardanza (min)', 'Sueldo',
                 'Asig. familiar', 'Horas extra', 'Bonos', 'Total ingresos', 'Desc. faltas/tard.', 'ONP', 'AFP', 'Renta 5ta', 'Adelantos/otros',
                 'Total descuentos', 'Neto a pagar', 'EsSalud'], $filas)->guardar();
+
             return response()->download($ruta, "planilla_{$periodo}.xlsx")->deleteFileAfterSend();
         }
 
@@ -113,6 +121,7 @@ class PlanillaController extends Controller
         } catch (\RuntimeException $e) {
             return back()->withErrors(['planilla' => $e->getMessage()]);
         }
+
         return redirect()->route('planilla.index', ['periodo' => $periodo])->with('success', 'Planilla generada con la asistencia del mes. Revisa y ajusta antes de cerrarla.');
     }
 
@@ -129,6 +138,7 @@ class PlanillaController extends Controller
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
+
         return response()->json(['success' => true, 'fila' => DB::table('planilla_detalle')->where('id', $id)->first(),
             'planilla' => DB::table('planillas')->where('id', $d->planilla_id)->first()]);
     }
@@ -141,6 +151,7 @@ class PlanillaController extends Controller
         abort_unless($d, 404);
         DB::table('planilla_detalle')->where('id', $id)->delete();
         Planilla::totales($d->planilla_id);
+
         return back()->with('success', 'Trabajador quitado de esta planilla.');
     }
 
@@ -153,7 +164,8 @@ class PlanillaController extends Controller
         } catch (\RuntimeException $e) {
             return back()->withErrors(['planilla' => $e->getMessage()]);
         }
-        return back()->with('success', 'Planilla cerrada' . (DB::table('planillas')->where('id', $id)->value('asiento_id') ? ' y registrada en el Libro diario.' : '.'));
+
+        return back()->with('success', 'Planilla cerrada'.(DB::table('planillas')->where('id', $id)->value('asiento_id') ? ' y registrada en el Libro diario.' : '.'));
     }
 
     public function reabrir(int $id)
@@ -164,6 +176,7 @@ class PlanillaController extends Controller
         } catch (\RuntimeException $e) {
             return back()->withErrors(['planilla' => $e->getMessage()]);
         }
+
         return back()->with('success', 'Planilla abierta para corregirla (se quitó su asiento contable).');
     }
 
@@ -173,10 +186,11 @@ class PlanillaController extends Controller
         $ruc = $this->ruc();
         $pl = DB::table('planillas')->where('id', $id)->where('IdEmpresa', $ruc)->first();
         abort_unless($pl, 404);
-        $detalle = DB::table('planilla_detalle')->where('planilla_id', $id)->when($request->filled('emp'), fn($w) => $w->where('emp_id', $request->emp))->orderBy('nombre')->get();
+        $detalle = DB::table('planilla_detalle')->where('planilla_id', $id)->when($request->filled('emp'), fn ($w) => $w->where('emp_id', $request->emp))->orderBy('nombre')->get();
         $trab = DB::table('planilla_trabajadores')->whereIn('emp_id', $detalle->pluck('emp_id'))->get()->keyBy('emp_id');
         $empresa = DB::table('empresa')->where('IdEmpresa', $ruc)->first();
         $p = Planilla::parametros($ruc, (int) substr($pl->periodo, 0, 4));
+
         return view('empresas.planilla.boletas', ['pl' => $pl, 'detalle' => $detalle, 'trab' => $trab, 'empresa' => $empresa, 'p' => $p,
             'negocio' => DB::table('empresa_negocios')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->first(),
             'nombrePeriodo' => Contabilidad::nombrePeriodo($pl->periodo)]);

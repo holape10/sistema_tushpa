@@ -25,7 +25,6 @@
                     <th class="px-4 py-3 text-left">Razón Social</th>
                     <th class="px-4 py-3 text-left">Dirección</th>
                     <th class="px-4 py-3 text-left">Estado</th>
-                    <th class="px-4 py-3 text-left">Tipo Negocio</th>
                     <th class="px-4 py-3 text-right">Acciones</th>
                 </tr>
             </thead>
@@ -39,15 +38,6 @@
                             <span class="px-2 py-0.5 rounded-full text-xs {{ $empresa->EstEmpresa == 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
                                 {{ $empresa->EstEmpresa }}
                             </span>
-                        </td>
-                        <td class="px-4 py-3">
-                            @if($empresa->id_tipo_sistema == 1)
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">RESTAURANTE</span>
-                            @elseif($empresa->id_tipo_sistema == 2)
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">COMERCIO</span>
-                            @else
-                                <span class="text-gray-400">-</span>
-                            @endif
                         </td>
                         <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                             <a href="{{ route('empresas.edit', $empresa->IdEmpresa) }}" 

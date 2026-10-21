@@ -7,6 +7,36 @@ document.addEventListener('alpine:init', () => {
     const CLAVE_BORRADOR = (CFG.farmacia ? 'pv_farmacia_' : 'pv_escritorio_') + CFG.usuario;
     const redondear = n => Math.round((Number(n) || 0) * 100) / 100;
 
+    // Internet lento: lo ya buscado se guarda 60 s (escribir más letras filtra aquí mismo, sin volver a pedir)
+    // y una consulta colgada se corta a los 12 s
+    const BUSQUEDAS = new Map(), VIGENCIA = 60000, MAXIMO = 20;
+    const normal = t => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const traer = (url, opciones = {}, ms = 12000) => {
+        const corte = new AbortController(), reloj = setTimeout(() => corte.abort(), ms);
+        opciones.signal?.addEventListener('abort', () => corte.abort());
+        return fetch(url, { ...opciones, signal: corte.signal }).finally(() => clearTimeout(reloj));
+    };
+    const vigente = q => { const c = BUSQUEDAS.get(q); return c && Date.now() - c.hora < VIGENCIA ? c.lista : null; };
+    // Si una búsqueda más corta trajo menos del máximo, ya tiene todos los resultados: se filtra sin ir al servidor
+    const desdeCache = q => {
+        for (let n = q.length - 1; n >= 2; n--) {
+            const lista = vigente(q.slice(0, n));
+            if (lista && lista.length < MAXIMO) {
+                const palabras = normal(q).split(/\s+/).filter(Boolean);
+                return lista.filter(p => palabras.every(w => normal(p.nombre).includes(w) || normal(p.codigo).startsWith(w) || String(p.codigo_barra ?? '') === w));
+            }
+        }
+        return null;
+    };
+    const porCodigoLocal = codigo => {
+        for (const { lista, hora } of BUSQUEDAS.values()) {
+            if (Date.now() - hora >= VIGENCIA) continue;
+            const p = lista.find(x => x.codigo === codigo || (x.codigo_barra && x.codigo_barra === codigo));
+            if (p) return p;
+        }
+        return null;
+    };
+
     Alpine.data('puntoVenta', () => ({
         cfg: CFG,
 
@@ -42,6 +72,7 @@ document.addEventListener('alpine:init', () => {
         sugActiva: 0,
 
         procesando: false,
+        _claveVenta: null, // clave de la venta en curso (se repite en los reintentos)
         ultima: null,
         avisos: [],
 
@@ -167,11 +198,19 @@ document.addEventListener('alpine:init', () => {
             const q = this.busqueda.trim();
             if (q.length < 2) { this.resultados = []; this.resultadosAbiertos = false; return []; }
             this._ctrl?.abort();
+            const local = vigente(q.toLowerCase()) || desdeCache(q.toLowerCase());
+            if (local) {
+                this.resultados = local;
+                this.resultadoActivo = 0;
+                this.resultadosAbiertos = true;
+                return local;
+            }
             this._ctrl = new AbortController();
             this.buscando = true;
             try {
-                const r = await fetch(CFG.rutas.productos + '?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' }, signal: this._ctrl.signal });
+                const r = await traer(CFG.rutas.productos + '?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' }, signal: this._ctrl.signal });
                 const data = await r.json();
+                BUSQUEDAS.set(q.toLowerCase(), { lista: data, hora: Date.now() });
                 if (this.busqueda.trim() !== q) return [];
                 this.resultados = data;
                 this.resultadoActivo = 0;
@@ -179,6 +218,7 @@ document.addEventListener('alpine:init', () => {
                 return data;
             } catch (e) {
                 if (e.name !== 'AbortError') this.aviso('No se pudo buscar. Revisa tu conexión.', 'error');
+                else if (this.busqueda.trim() === q && !this._ctrl.signal.aborted) this.aviso('El internet está lento: la búsqueda tardó demasiado. Intenta otra vez.', 'error');
                 return [];
             } finally {
                 this.buscando = false;
@@ -186,8 +226,11 @@ document.addEventListener('alpine:init', () => {
         },
 
         async porCodigo(codigo) {
+            // Lector de barras: si el producto ya está en lo buscado, entra sin esperar al servidor
+            const local = porCodigoLocal(codigo);
+            if (local) return local;
             try {
-                const r = await fetch(CFG.rutas.productos + '?codigo=' + encodeURIComponent(codigo), { headers: { Accept: 'application/json' } });
+                const r = await traer(CFG.rutas.productos + '?codigo=' + encodeURIComponent(codigo), { headers: { Accept: 'application/json' } });
                 return (await r.json())[0] || null;
             } catch (e) {
                 this.aviso('No se pudo consultar el código.', 'error');
@@ -555,6 +598,9 @@ document.addEventListener('alpine:init', () => {
                 op_med_pag: medios.map(m => String(m.operacion || '').trim()),
             };
 
+            // La misma clave en cada reintento: si la venta ya se registró y no llegó la respuesta, no se duplica
+            this._claveVenta ||= (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2));
+            body.clave_venta = this._claveVenta;
             this.procesando = true;
             try {
                 const r = await fetch(this.edicion ? CFG.rutas.editar : CFG.rutas.registrar, {
@@ -569,6 +615,8 @@ document.addEventListener('alpine:init', () => {
                 if (d.estado !== 'success') { this.sonido(false); this.aviso(d.mensaje || 'No se pudo registrar la venta.', 'error'); return; }
 
                 this.ultima = d;
+                this._claveVenta = null;
+                BUSQUEDAS.clear(); // el stock cambió
                 this.sonido(true);
                 if (this.edicion) {
                     // Corregida: se imprime si se pidió y se vuelve al Panel de Ventas
