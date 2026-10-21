@@ -183,12 +183,16 @@
                     @include('empresas.productos.partials.precio')
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Costo</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            <span x-text="tipo == '4' ? 'Precio de compra *' : 'Costo'"></span>
+                            <span x-show="tipo == '4'" x-cloak class="font-normal text-gray-400" x-text="'(por ' + nombreUnidad(umecod) + ')'"></span>
+                        </label>
                         <div class="flex">
                             <span class="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">S/</span>
-                            <input type="number" step="0.01" min="0" name="costo" x-model="costo"
+                            <input type="number" step="0.01" min="0" name="costo" x-model="costo" :required="tipo == '4'"
                                    class="flex-1 min-w-0 h-11 rounded-r-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
                         </div>
+                        <p x-show="tipo == '4'" x-cloak class="mt-1 text-xs text-amber-700">Obligatorio: con este precio se calcula el costo y el food cost de las recetas que lo usan.</p>
                     </div>
 
                     <div x-show="tipo != '4' && precio > 0 && costo > 0" x-cloak class="rounded-xl px-3 py-2 text-sm"

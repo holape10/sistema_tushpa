@@ -64,15 +64,17 @@
     @include('partials.pwa')
 </head>
 <body>
+    @include('partials.halloween_login')
     @php
         $colores = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#0ea5e9', '#8b5cf6', '#ef4444', '#14b8a6'];
         $iniciales = fn ($n) => collect(preg_split('/\s+/', trim((string) $n)))->filter()->take(2)->map(fn ($p) => mb_substr($p, 0, 1))->implode('');
         $hora = (int) now()->format('H');
         $saludo = $hora < 12 ? 'Buenos días' : ($hora < 19 ? 'Buenas tardes' : 'Buenas noches');
+        $halloween = \App\Support\Temporada::halloween();
     @endphp
     <header class="cab">
         <img src="{{ asset('imagenes/192.png') }}" alt="">
-        <div><small>{{ $saludo }}</small><b>{{ $sucursal->nombre_comercial ?? 'TUSHPA' }}</b></div>
+        <div><small @class(['saludo-hw' => $halloween])>{{ $halloween ? '🎃 Feliz Halloween' : $saludo }}</small><b>{{ $sucursal->nombre_comercial ?? 'TUSHPA' }}</b></div>
         <div class="hora" id="reloj">{{ now()->format('H:i') }}<span>{{ now()->locale('es')->isoFormat('ddd D MMM') }}</span></div>
     </header>
 
@@ -90,7 +92,7 @@
 
             {{-- Paso 1: ¿quién eres? --}}
             <section id="paso_usuario">
-                <h1>¿Quién eres?</h1>
+                <h1>¿Quién eres?@if ($halloween) <span class="calabaza">🎃</span>@endif</h1>
                 <p class="sub">Toca tu nombre para entrar</p>
                 @if ($mozos->count() > 8)
                     <div class="buscar"><i class="fas fa-magnifying-glass"></i><input id="buscar" type="search" placeholder="Buscar mi nombre" autocomplete="off"></div>

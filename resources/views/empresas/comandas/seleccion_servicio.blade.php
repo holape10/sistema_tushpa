@@ -40,10 +40,11 @@
     @endphp
 
     <div class="space-y-4">
+        @include('partials.halloween_comandas')
         {{-- Cabecera --}}
         <div class="flex flex-wrap items-center gap-2">
             <div class="mr-auto">
-                <h2 class="text-xl font-black text-gray-800 sm:text-2xl">🍽️ Elige la mesa o el tipo de pedido</h2>
+                <h2 class="text-xl font-black text-gray-800 sm:text-2xl">{{ \App\Support\Temporada::halloween() ? '🎃' : '🍽️' }} Elige la mesa o el tipo de pedido</h2>
                 <p class="text-sm text-gray-500">{{ auth()->user()->apeusu }}</p>
             </div>
             <button type="button" id="btn_reservas" class="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-violet-700 shadow-sm ring-1 ring-gray-200">

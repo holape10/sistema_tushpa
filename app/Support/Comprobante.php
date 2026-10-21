@@ -343,7 +343,8 @@ class Comprobante
         $idsOpciones = collect($lineas)->flatMap(fn ($it) => array_keys($it['opciones'] ?? []))->all();
         $productos = Producto::whereIn('IdProducto', array_merge(array_filter(array_column($lineas, 'IdProducto')), $idsOpciones))->get()->keyBy('IdProducto');
         // Platos y opciones con receta: su costo es el de sus ingredientes al precio de hoy (para la rentabilidad)
-        $costosReceta = Recetas::costos($productos->whereIn('promocion', [2, Producto::OPCION])->keys());
+        $costosReceta = Recetas::costos($productos->whereIn('promocion', [2, Producto::OPCION])->keys())
+            + Recetas::costosCombos($productos->where('promocion', 6)->keys()); // combos: lo que lleva
         $costoDe = fn ($id) => (float) ($costosReceta[$id] ?? $productos[$id]->costo ?? 0);
         // Sucursal que vende solo con stock
         $banderas = ControlStock::banderas((int) $user->id_empresa_negocio);

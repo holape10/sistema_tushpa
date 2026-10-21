@@ -1,10 +1,16 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Almacen, Producto};
-use App\Support\{Excel, ExcelLector, Kardex};
+use App\Models\Almacen;
+use App\Models\Producto;
+use App\Support\Excel;
+use App\Support\ExcelLector;
+use App\Support\Kardex;
+use App\Support\Recetas;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Inventario físico: se cuenta lo que hay en el almacén y el sistema ajusta el stock a ese conteo.
@@ -48,7 +54,7 @@ class InventarioController extends Controller
             ->leftJoin('almacenes as a', 'a.id_almacen', '=', 'i.id_almacen')
             ->leftJoin('users as u', 'u.IdUsuario', '=', 'i.IdUsuario')
             ->where('i.id_empresa_negocio', Auth::user()->id_empresa_negocio)
-            ->when($request->get('almacen'), fn($q, $a) => $q->where('i.id_almacen', $a))
+            ->when($request->get('almacen'), fn ($q, $a) => $q->where('i.id_almacen', $a))
             ->orderByDesc('i.inv_cab_id')
             ->select('i.*', 'a.descripcion as almacen', 'u.apeusu',
                 DB::raw('(SELECT COUNT(*) FROM inventario_detalle d WHERE d.inv_cab_id = i.inv_cab_id) as items'),
@@ -56,6 +62,7 @@ class InventarioController extends Controller
             ->paginate(20)->withQueryString();
 
         $almacenes = $this->almacenes();
+
         return view('empresas.inventarios.index', compact('inventarios', 'almacenes'));
     }
 
@@ -80,10 +87,10 @@ class InventarioController extends Controller
     {
         $this->autorizar();
         $request->validate([
-            'id_almacen'    => 'required|integer',
-            'fecha'         => 'required|date|before_or_equal:today',
+            'id_almacen' => 'required|integer',
+            'fecha' => 'required|date|before_or_equal:today',
             'observaciones' => 'nullable|string|max:255',
-            'items'         => 'required|json',
+            'items' => 'required|json',
         ], [], ['items' => 'Productos contados']);
 
         $user = Auth::user();
@@ -91,7 +98,7 @@ class InventarioController extends Controller
 
         // Los conteos llegan como JSON para no chocar con el límite max_input_vars cuando hay cientos de productos
         $items = collect(json_decode($request->items, true))
-            ->filter(fn($i) => isset($i['IdProducto'], $i['cantidad']) && is_numeric($i['cantidad']) && $i['cantidad'] >= 0)
+            ->filter(fn ($i) => isset($i['IdProducto'], $i['cantidad']) && is_numeric($i['cantidad']) && $i['cantidad'] >= 0)
             ->keyBy('IdProducto');
         if ($items->isEmpty()) {
             return back()->withInput()->withErrors(['items' => 'Ingresa el conteo de al menos un producto.']);
@@ -103,8 +110,8 @@ class InventarioController extends Controller
             return back()->withInput()->withErrors(['items' => 'Hay productos que no existen o no manejan stock.']);
         }
 
-        $id = DB::transaction(fn() => self::procesar($almacen, $request->fecha, $request->observaciones, 'MANUAL',
-            $items->map(fn($i) => ['IdProducto' => (int) $i['IdProducto'], 'cantidad' => (float) $i['cantidad'],
+        $id = DB::transaction(fn () => self::procesar($almacen, $request->fecha, $request->observaciones, 'MANUAL',
+            $items->map(fn ($i) => ['IdProducto' => (int) $i['IdProducto'], 'cantidad' => (float) $i['cantidad'],
                 'costo' => isset($i['costo']) && is_numeric($i['costo']) ? (float) $i['costo'] : null])->values()->all(),
             $productos));
 
@@ -115,7 +122,7 @@ class InventarioController extends Controller
      * Registra el inventario y ajusta el kardex. Debe llamarse dentro de una transacción.
      * También lo usa la importación de productos para cargar el stock inicial.
      *
-     * @param array $items [['IdProducto' => int, 'cantidad' => float, 'costo' => ?float], ...]
+     * @param  array  $items  [['IdProducto' => int, 'cantidad' => float, 'costo' => ?float], ...]
      */
     public static function procesar(Almacen $almacen, string $fecha, ?string $observaciones, string $origen, array $items, $productos): int
     {
@@ -146,7 +153,7 @@ class InventarioController extends Controller
             if ($diferencia != 0) {
                 Kardex::registrar($prod->IdProducto, $almacen->id_almacen, abs($diferencia), $diferencia > 0 ? 'I' : 'E', [
                     'cod_tip_ope' => $operacion, 'inv_cab_id' => $cabId, 'fecha_mov' => $fecha, 'costo' => $costo,
-                    'numero' => 'INV-' . $cabId, 'descripcion' => 'INVENTARIO N° ' . $cabId,
+                    'numero' => 'INV-'.$cabId, 'descripcion' => 'INVENTARIO N° '.$cabId,
                     'id_empresa_negocio' => $almacen->id_empresa_negocio,
                 ]);
             }
@@ -154,6 +161,8 @@ class InventarioController extends Controller
             // El costo indicado en el conteo pasa a ser el costo del producto
             if ($it['costo'] !== null && $it['costo'] > 0 && (float) $prod->costo != $it['costo']) {
                 Producto::where('IdProducto', $prod->IdProducto)->update(['costo' => $it['costo']]);
+                Recetas::registrarCambioCosto((int) $prod->IdProducto, (float) $prod->costo, (float) $it['costo'], 'INVENTARIO', null, (int) $almacen->id_empresa_negocio);
+                Recetas::refrescarCostos([(int) $prod->IdProducto]);
             }
         }
 
@@ -183,14 +192,14 @@ class InventarioController extends Controller
         $vista = $this->show($id);
         ['inventario' => $inv, 'detalle' => $detalle] = $vista->getData();
 
-        $filas = $detalle->map(fn($d) => [$d->procod, $d->pronom, $d->umecod, (float) $d->stock_sistema, (float) $d->stock_fisico,
+        $filas = $detalle->map(fn ($d) => [$d->procod, $d->pronom, $d->umecod, (float) $d->stock_sistema, (float) $d->stock_fisico,
             (float) $d->diferencia, (float) $d->costo, round($d->diferencia * $d->costo, 2),
             $d->cod_tip_ope === '16' ? 'SALDO INICIAL' : 'AJUSTE'])->all();
 
-        $ruta = (new Excel())->hoja('Inventario ' . $id,
+        $ruta = (new Excel)->hoja('Inventario '.$id,
             ['Código', 'Producto', 'Unidad', 'Stock sistema', 'Stock físico', 'Diferencia', 'Costo unit.', 'Valor ajuste', 'Tipo'], $filas)->guardar();
 
-        return response()->download($ruta, "inventario_{$id}_" . str_replace(' ', '_', $inv->almacen) . '.xlsx',
+        return response()->download($ruta, "inventario_{$id}_".str_replace(' ', '_', $inv->almacen).'.xlsx',
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend();
     }
 
@@ -200,11 +209,11 @@ class InventarioController extends Controller
         $this->autorizar();
         $almacen = $this->almacen((int) $request->get('almacen'));
 
-        $filas = $this->productos($almacen->id_almacen)->map(fn($p) => [
+        $filas = $this->productos($almacen->id_almacen)->map(fn ($p) => [
             $p->IdProducto, (string) $p->procod, $p->pronom, $p->umecod, $p->cat_nom ?? '', (float) $p->stock, '', (float) $p->costo,
         ])->all();
 
-        $ruta = (new Excel())
+        $ruta = (new Excel)
             ->hoja('Conteo', ['ID', 'Código', 'Producto', 'Unidad', 'Categoría', 'Stock sistema', 'Stock físico', 'Costo unitario'], $filas)
             ->hoja('Instrucciones', ['Paso', 'Detalle'], [
                 ['1', 'Escribe en la columna "Stock físico" la cantidad que contaste de cada producto.'],
@@ -215,7 +224,7 @@ class InventarioController extends Controller
                 ['6', 'Guarda el archivo y súbelo en Inventarios > Nuevo inventario > Cargar Excel.'],
             ])->guardar();
 
-        return response()->download($ruta, 'conteo_' . str_replace(' ', '_', $almacen->descripcion) . '_' . now()->format('Ymd') . '.xlsx',
+        return response()->download($ruta, 'conteo_'.str_replace(' ', '_', $almacen->descripcion).'_'.now()->format('Ymd').'.xlsx',
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend();
     }
 
@@ -228,11 +237,11 @@ class InventarioController extends Controller
         try {
             $filas = ExcelLector::filas($request->file('archivo')->getRealPath(), $request->file('archivo')->getClientOriginalExtension());
         } catch (\Throwable $e) {
-            return response()->json(['message' => 'No se pudo leer el archivo: ' . $e->getMessage()], 422);
+            return response()->json(['message' => 'No se pudo leer el archivo: '.$e->getMessage()], 422);
         }
 
-        $cab = array_map(fn($t) => self::normalizar($t), $filas[0] ?? []);
-        $col = fn(array $nombres) => collect($nombres)->map(fn($n) => array_search($n, $cab, true))->first(fn($i) => $i !== false);
+        $cab = array_map(fn ($t) => self::normalizar($t), $filas[0] ?? []);
+        $col = fn (array $nombres) => collect($nombres)->map(fn ($n) => array_search($n, $cab, true))->first(fn ($i) => $i !== false);
         $cId = $col(['id']);
         $cCod = $col(['codigo', 'cod']);
         $cNom = $col(['producto', 'nombre', 'descripcion']);
@@ -245,8 +254,8 @@ class InventarioController extends Controller
         $productos = Producto::where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->whereIn('promocion', [0, 4])
             ->get(['IdProducto', 'procod', 'pronom']);
         $porId = $productos->keyBy('IdProducto');
-        $porCodigo = $productos->filter(fn($p) => $p->procod !== '')->keyBy(fn($p) => mb_strtoupper(trim($p->procod)));
-        $porNombre = $productos->keyBy(fn($p) => mb_strtoupper(trim($p->pronom)));
+        $porCodigo = $productos->filter(fn ($p) => $p->procod !== '')->keyBy(fn ($p) => mb_strtoupper(trim($p->procod)));
+        $porNombre = $productos->keyBy(fn ($p) => mb_strtoupper(trim($p->pronom)));
 
         $items = [];
         $errores = [];
@@ -260,9 +269,9 @@ class InventarioController extends Controller
                 ?? ($cCod !== null ? $porCodigo[mb_strtoupper($f[$cCod] ?? '')] ?? null : null)
                 ?? ($cNom !== null ? $porNombre[mb_strtoupper($f[$cNom] ?? '')] ?? null : null);
 
-            if (!$prod) {
-                $errores[] = "Fila {$n}: producto no encontrado (" . ($f[$cCod] ?? $f[$cNom] ?? $f[$cId] ?? '') . ').';
-            } elseif (!is_numeric($cant) || $cant < 0) {
+            if (! $prod) {
+                $errores[] = "Fila {$n}: producto no encontrado (".($f[$cCod] ?? $f[$cNom] ?? $f[$cId] ?? '').').';
+            } elseif (! is_numeric($cant) || $cant < 0) {
                 $errores[] = "Fila {$n}: el stock físico \"{$cant}\" no es una cantidad válida.";
             } else {
                 $costo = $cCosto !== null ? str_replace(',', '.', $f[$cCosto] ?? '') : '';
@@ -276,6 +285,7 @@ class InventarioController extends Controller
     private static function normalizar(string $t): string
     {
         $t = mb_strtolower(trim($t));
+
         return strtr($t, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n', '.' => '', '°' => '']);
     }
 }

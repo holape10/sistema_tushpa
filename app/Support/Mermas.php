@@ -29,18 +29,14 @@ class Mermas
             return [['ume' => 'NIU', 'nombre' => 'porción', 'factor' => 1]];
         }
 
-        return collect(Recetas::unidadesPara($p->umecod ?: 'NIU'))
+        return collect(Recetas::unidadesPara($p->umecod ?: 'NIU', $p->ume_equivalente ?? null, (float) ($p->factor_equivalente ?? 0)))
             ->map(fn ($f, $u) => ['ume' => $u, 'nombre' => Recetas::nombreUnidad($u), 'factor' => $f])->values()->all();
     }
 
     /** Costo de una unidad (de la unidad del producto): el plato vale lo que cuesta su receta */
     public static function costoUnitario(Producto $p): float
     {
-        if ((int) $p->promocion === 2) {
-            return Recetas::costos([$p->IdProducto])[$p->IdProducto] ?? (float) $p->costo;
-        }
-
-        return (float) $p->costo;
+        return Recetas::costoActual($p);
     }
 
     /**

@@ -14,6 +14,7 @@ use App\Support\Buscar;
 use App\Support\Excel;
 use App\Support\ExcelLector;
 use App\Support\Kardex;
+use App\Support\Recetas;
 use App\Support\Rubros;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -59,13 +60,19 @@ class ProductoController extends Controller
     }
 
     /** Reglas comunes de crear y editar; el precio de venta no aplica a insumos (no se venden) */
-    private function reglas(bool $esInsumo): array
+    /** Sin precio de compra, el insumo cuenta como gratis en las recetas y el food cost sale más bajo de lo real */
+    private const MENSAJE_COSTO = [
+        'costo.required' => 'Escribe el precio de compra del insumo (en la unidad que elegiste): sin él, el food cost de las recetas no es real.',
+        'costo.gt' => 'Escribe el precio de compra del insumo (en la unidad que elegiste): sin él, el food cost de las recetas no es real.',
+    ];
+
+    private function reglas(bool $sinPrecioVenta, bool $esInsumo = false): array
     {
         return [
             'pronom' => 'required|string|max:150',
             'descripcion' => 'nullable|string|max:255',
-            'propun' => $esInsumo ? 'nullable|numeric|min:0' : 'required|numeric|min:0.01',
-            'costo' => 'nullable|numeric|min:0',
+            'propun' => $sinPrecioVenta ? 'nullable|numeric|min:0' : 'required|numeric|min:0.01',
+            'costo' => $esInsumo ? 'required|numeric|gt:0' : 'nullable|numeric|min:0',
             'debe' => 'nullable|string|max:12|regex:/^[0-9A-Za-z]+$/',
             'haber' => 'nullable|string|max:12|regex:/^[0-9A-Za-z]+$/',
             'codigo_barra' => 'nullable|string|max:50',
@@ -260,7 +267,7 @@ class ProductoController extends Controller
     public function store(Request $request)
     {
         $request->validate(['promocion' => ['required', Rule::in(array_merge(Rubros::tiposProducto(), [8]))]]
-            + $this->reglas(in_array((int) $request->promocion, [4, 8], true)), ['promocion.in' => 'Ese tipo no se usa en este tipo de negocio.'], self::NOMBRES);
+            + $this->reglas(in_array((int) $request->promocion, [4, 8], true), (int) $request->promocion === 4), ['promocion.in' => 'Ese tipo no se usa en este tipo de negocio.'] + self::MENSAJE_COSTO, self::NOMBRES);
 
         if ($request->promocion == 6 && empty(array_filter((array) $request->combo_items))) {
             return back()->withInput()->withErrors(['combo_items' => 'Un combo debe tener al menos un producto o preparado dentro.']);
@@ -310,9 +317,25 @@ class ProductoController extends Controller
             $this->guardarExtras($request, $producto);
             $this->guardarImagen($request, $producto);
             $this->guardarFotosExtra($request, $producto);
+            $this->costoAlDia($producto, (float) $producto->costo);
         });
 
         return redirect()->route('productos.index')->with('success', 'Registrado correctamente.');
+    }
+
+    /** El combo cuesta lo que lleva; si cambió el costo de un producto o insumo, los platos y combos que lo usan se actualizan */
+    private function costoAlDia(Producto $producto, float $costoAntes): void
+    {
+        $producto->refresh();
+        if ((int) $producto->promocion === 6) {
+            $producto->update(['costo' => Recetas::costosCombos([$producto->IdProducto])[$producto->IdProducto] ?? 0]);
+
+            return;
+        }
+        if (abs((float) $producto->costo - $costoAntes) >= 0.005) {
+            Recetas::registrarCambioCosto((int) $producto->IdProducto, $costoAntes, (float) $producto->costo, 'PRODUCTO', null, (int) $producto->id_empresa_negocio);
+            Recetas::refrescarCostos([(int) $producto->IdProducto]);
+        }
     }
 
     public function edit(Producto $producto)
@@ -338,7 +361,7 @@ class ProductoController extends Controller
         // El tipo se puede corregir (ej. un plato que se registró como Producto)
         $tipo = $request->filled('promocion') ? (int) $request->promocion : $anterior;
         $request->validate(['promocion' => ['nullable', Rule::in(array_merge(Rubros::tiposProducto(), [8, $anterior]))]]
-            + $this->reglas(in_array($tipo, [4, 8], true)), ['promocion.in' => 'Ese tipo no se usa en este tipo de negocio.'], self::NOMBRES);
+            + $this->reglas(in_array($tipo, [4, 8], true), $tipo === 4), ['promocion.in' => 'Ese tipo no se usa en este tipo de negocio.'] + self::MENSAJE_COSTO, self::NOMBRES);
         if ($tipo !== $anterior && ($error = $this->errorCambioTipo($producto, $tipo))) {
             return back()->withInput()->withErrors(['promocion' => $error]);
         }
@@ -351,7 +374,8 @@ class ProductoController extends Controller
             return back()->withInput()->withErrors(['codigo_barra' => $error]);
         }
 
-        DB::transaction(function () use ($request, $producto, $tipo, $anterior, &$aviso) {
+        $costoAntes = (float) $producto->costo;
+        DB::transaction(function () use ($request, $producto, $tipo, $anterior, &$aviso, $costoAntes) {
             if ($tipo !== $anterior) {
                 $aviso = $this->cambiarTipo($producto, $anterior, $tipo);
             }
@@ -383,6 +407,7 @@ class ProductoController extends Controller
             $this->guardarExtras($request, $producto);
             $this->guardarImagen($request, $producto);
             $this->guardarFotosExtra($request, $producto);
+            $this->costoAlDia($producto, $costoAntes);
         });
 
         return redirect()->route('productos.index')->with('success', 'Actualizado correctamente.'.$aviso);

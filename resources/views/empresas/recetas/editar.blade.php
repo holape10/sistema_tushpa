@@ -176,6 +176,7 @@
                 if (r.ok) { this.lineas = await r.json(); this.avisar('Receta copiada: ajusta las cantidades y guarda.', 'info'); }
             },
             async guardar() {
+                if (this.sinCosto) { this.avisar('Falta el precio de compra de algún ingrediente (en rojo): escribe a cuánto lo compras.', 'error'); return; }
                 const vacias = this.lineas.filter(l => !(Number(l.cantidad) > 0));
                 if (vacias.length) { this.avisar('Escribe la cantidad de: ' + vacias.map(l => l.nombre).join(', '), 'aviso'); return; }
                 this.guardando = true;

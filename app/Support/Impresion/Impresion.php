@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Impresión directa: arma el ticket ESC/POS y lo deja en cola_impresion.
@@ -45,6 +46,13 @@ class Impresion
     /** Equipos (PCs con agente) de la sucursal que tienen impresoras asignadas */
     public static function equipos(int $sucursal)
     {
+        // Base que aún no corrió su migración (por ejemplo, justo al actualizar): sin equipos, en vez de romper la pantalla
+        static $listas = [];
+        $base = DB::connection()->getDatabaseName();
+        if (! ($listas[$base] ??= Schema::hasColumn('impresion_agentes', 'impresora_caja'))) {
+            return collect();
+        }
+
         return DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)
             ->where(fn ($q) => $q->whereNotNull('impresora_caja')->orWhereNotNull('impresora_barra'))->orderBy('pc')->get();
     }

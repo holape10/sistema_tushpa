@@ -143,6 +143,7 @@ class Compras
                     Producto::where('IdProducto', $l['pro_id'])->update(['costo' => $nuevo]);
                     // Para avisar qué platos ganan menos si subió un insumo de sus recetas
                     Recetas::registrarCambioCosto((int) $l['pro_id'], $antes, $nuevo, 'COMPRA', $comId, (int) $user->id_empresa_negocio);
+                    Recetas::refrescarCostos([(int) $l['pro_id']]);
                 }
             }
 

@@ -209,11 +209,12 @@ class CompraController extends Controller
             'promocion' => ['required', 'integer', 'in:'.implode(',', $tipos)],
             'pronom' => 'required|string|max:150',
             'propun' => ((int) $request->promocion === 4 ? 'nullable' : 'required').'|numeric|min:0|max:999999',
-            'costo' => 'nullable|numeric|min:0|max:999999',
+            'costo' => ((int) $request->promocion === 4 ? 'required|numeric|gt:0' : 'nullable|numeric|min:0').'|max:999999',
             'umecod' => 'nullable|exists:unidad_medida,umecod',
             'cat_id' => 'nullable|integer',
             'codigo_barra' => 'nullable|string|max:50',
-        ], [], ['pronom' => 'nombre del producto', 'propun' => 'precio de venta', 'promocion' => 'tipo', 'codigo_barra' => 'código de barras', 'umecod' => 'unidad']);
+        ], ['costo.required' => 'Escribe el costo del insumo: sin él, el food cost de las recetas no es real.', 'costo.gt' => 'Escribe el costo del insumo: sin él, el food cost de las recetas no es real.'],
+            ['pronom' => 'nombre del producto', 'propun' => 'precio de venta', 'promocion' => 'tipo', 'codigo_barra' => 'código de barras', 'umecod' => 'unidad']);
 
         $sucursal = (int) $user->id_empresa_negocio;
         $nombre = mb_strtoupper(trim(preg_replace('/\s+/', ' ', $d['pronom'])));

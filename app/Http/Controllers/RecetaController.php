@@ -38,8 +38,14 @@ class RecetaController extends Controller
                 'con_receta' => $conReceta->count(),
                 'promedio' => $conReceta->whereNotNull('food_cost')->avg('food_cost'),
                 'altos' => $conReceta->where('estado.nivel', 'alto')->count(),
+                'incompletos' => $conReceta->where('estado.nivel', 'incompleto')->count(),
             ],
             'subidas' => Recetas::subidas($this->sucursal()),
+            // Insumos usados en recetas que no tienen precio de compra: el food cost de esos platos no es real
+            'sinPrecio' => DB::table('productos as i')->where('i.id_empresa_negocio', $this->sucursal())->where('i.proest', 'Activo')
+                ->where(fn ($q) => $q->whereNull('i.costo')->orWhere('i.costo', '<=', 0))
+                ->whereExists(fn ($e) => $e->from('producto_receta as r')->whereColumn('r.IdInsumo', 'i.IdProducto'))
+                ->orderBy('i.pronom')->get(['i.IdProducto', 'i.pronom']),
             'filtro' => in_array($request->get('ver'), ['sin', 'alto', 'con'], true) ? $request->get('ver') : '',
         ]);
     }
@@ -54,7 +60,7 @@ class RecetaController extends Controller
             'precio' => $precio,
             'lineas' => Recetas::de($plato->IdProducto)->map(fn ($r) => [
                 'insumo' => $r->IdInsumo, 'nombre' => $r->nombre, 'cantidad' => $r->cantidad, 'umecod' => $r->umecod,
-                'ume_insumo' => $r->ume_insumo, 'costo' => $r->costo_unitario, 'unidades' => $this->unidades($r->ume_insumo),
+                'ume_insumo' => $r->ume_insumo, 'costo' => $r->costo_unitario, 'unidades' => $this->unidades($r->ume_insumo, $r->ume_equivalente, (float) $r->factor_equivalente),
             ])->values(),
             'otros' => DB::table('producto_receta as r')->join('productos as p', 'p.IdProducto', '=', 'r.IdProducto')
                 ->where('r.id_empresa_negocio', $plato->id_empresa_negocio)->where('r.IdProducto', '!=', $plato->IdProducto)
@@ -69,7 +75,7 @@ class RecetaController extends Controller
         $q = trim((string) $request->get('q'));
         $filas = Producto::where('id_empresa_negocio', $this->sucursal())->where('proest', 'Activo')->whereIn('promocion', [0, 4])
             ->tap(fn ($w) => Buscar::palabras($w, $q, ['pronom'], ['procod', 'codigo_barra']))
-            ->orderByDesc('promocion')->orderBy('pronom')->limit(15)->get(['IdProducto', 'pronom', 'umecod', 'costo']);
+            ->orderByDesc('promocion')->orderBy('pronom')->limit(15)->get(['IdProducto', 'pronom', 'umecod', 'costo', 'ume_equivalente', 'factor_equivalente']);
 
         return response()->json($filas->map(fn ($p) => $this->insumo($p)));
     }
@@ -81,7 +87,7 @@ class RecetaController extends Controller
 
         return response()->json(Recetas::de($plato->IdProducto)->map(fn ($r) => [
             'insumo' => $r->IdInsumo, 'nombre' => $r->nombre, 'cantidad' => $r->cantidad, 'umecod' => $r->umecod,
-            'ume_insumo' => $r->ume_insumo, 'costo' => $r->costo_unitario, 'unidades' => $this->unidades($r->ume_insumo),
+            'ume_insumo' => $r->ume_insumo, 'costo' => $r->costo_unitario, 'unidades' => $this->unidades($r->ume_insumo, $r->ume_equivalente, (float) $r->factor_equivalente),
         ])->values());
     }
 
@@ -92,8 +98,9 @@ class RecetaController extends Controller
         $d = $request->validate([
             'nombre' => 'required|string|max:150',
             'umecod' => 'required|in:KGM,LTR,NIU,GRM,MLT',
-            'costo' => 'nullable|numeric|min:0|max:999999',
-        ], [], ['nombre' => 'nombre del insumo', 'umecod' => 'unidad', 'costo' => 'costo']);
+            'costo' => 'required|numeric|gt:0|max:999999',
+        ], ['costo.required' => 'Escribe a cuánto compras el insumo: sin su precio el food cost no es real.',
+            'costo.gt' => 'Escribe a cuánto compras el insumo: sin su precio el food cost no es real.'], ['nombre' => 'nombre del insumo', 'umecod' => 'unidad', 'costo' => 'costo']);
         $nombre = mb_strtoupper(trim($d['nombre']));
         if (Producto::where('id_empresa_negocio', $suc)->where('pronom', $nombre)->exists()) {
             return response()->json(['ok' => false, 'mensaje' => "Ya existe \"{$nombre}\": búscalo en la lista."], 422);
@@ -104,7 +111,7 @@ class RecetaController extends Controller
             ['IdEmpresa' => Auth::user()->IdEmpresa, 'visible' => 0]);
         $insumo = Producto::create([
             'procod' => mb_substr('I'.time().random_int(10, 99), 0, 20), 'pronom' => $nombre, 'promocion' => 4,
-            'umecod' => $d['umecod'], 'costo' => $d['costo'] ?? 0, 'propun' => 0, 'cat_id' => $categoria->cat_id,
+            'umecod' => $d['umecod'], 'costo' => $d['costo'], 'propun' => 0, 'cat_id' => $categoria->cat_id,
             'stock_min' => 0, 'proest' => 'Activo', 'IdEmpresa' => Auth::user()->IdEmpresa, 'id_empresa_negocio' => $suc,
         ]);
 
@@ -130,8 +137,12 @@ class RecetaController extends Controller
             if (! $insumo) {
                 return response()->json(['ok' => false, 'mensaje' => 'Un ingrediente ya no existe. Vuelve a buscarlo.'], 422);
             }
-            if (! array_key_exists($l['umecod'], Recetas::unidadesPara($insumo->umecod))) {
+            if (! array_key_exists($l['umecod'], Recetas::unidadesPara($insumo->umecod, $insumo->ume_equivalente, (float) $insumo->factor_equivalente))) {
                 return response()->json(['ok' => false, 'mensaje' => "La unidad de {$insumo->pronom} no es válida."], 422);
+            }
+            // Todo ingrediente con su precio de compra: si no, cuenta como gratis y el food cost sale más bajo de lo real
+            if (! ((float) ($l['costo'] ?? 0) > 0) && ! ((float) $insumo->costo > 0)) {
+                return response()->json(['ok' => false, 'mensaje' => "Falta el precio de compra de {$insumo->pronom}: escribe a cuánto lo compras."], 422);
             }
         }
         if ($lineas->pluck('insumo')->duplicates()->isNotEmpty()) {
@@ -148,6 +159,8 @@ class RecetaController extends Controller
         $costo = Recetas::guardar($plato->IdProducto, $plato->id_empresa_negocio, $lineas->map(fn ($l) => [
             'insumo' => (int) $l['insumo'], 'cantidad' => (float) $l['cantidad'], 'umecod' => $l['umecod'],
         ])->all());
+        // Los precios cambiados aquí valen para los demás platos y combos que usan esos insumos
+        Recetas::refrescarCostos($lineas->pluck('insumo')->push($plato->IdProducto));
 
         return response()->json(['ok' => true, 'costo' => $costo, 'mensaje' => $lineas->isEmpty()
             ? 'Receta borrada: este plato ya no descuenta insumos.'
@@ -162,9 +175,9 @@ class RecetaController extends Controller
     /**
      * @return array<int, array{ume: string, nombre: string, factor: float}>
      */
-    private function unidades(string $umeInsumo): array
+    private function unidades(string $umeInsumo, ?string $umeEquivalente = null, float $factorEquivalente = 0): array
     {
-        return collect(Recetas::unidadesPara($umeInsumo))
+        return collect(Recetas::unidadesPara($umeInsumo, $umeEquivalente, $factorEquivalente))
             ->map(fn ($factor, $ume) => ['ume' => $ume, 'nombre' => Recetas::nombreUnidad($ume), 'factor' => $factor])->values()->all();
     }
 
@@ -173,7 +186,7 @@ class RecetaController extends Controller
      */
     private function insumo(Producto $p): array
     {
-        $unidades = $this->unidades($p->umecod ?: 'NIU');
+        $unidades = $this->unidades($p->umecod ?: 'NIU', $p->ume_equivalente, (float) $p->factor_equivalente);
 
         return [
             'insumo' => (int) $p->IdProducto, 'nombre' => $p->pronom, 'ume_insumo' => $p->umecod ?: 'NIU', 'costo' => (float) $p->costo,

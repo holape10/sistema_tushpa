@@ -34,11 +34,21 @@ class Recetas
     public const NOMBRES = ['KGM' => 'kg', 'GRM' => 'g', 'LTR' => 'L', 'MLT' => 'ml', 'NIU' => 'unid.', 'GLL' => 'galón', 'BX' => 'caja'];
 
     /**
+     * Unidades en que se puede escribir un insumo en la receta. Además de las suyas (el kilo en gramos), la "unidad
+     * equivalente" del insumo: huevos comprados por CAJA (1 caja = 30 unidades) se escriben en unidades.
+     *
      * @return array<string, float> unidad que se puede escribir => cuánto vale en la unidad del insumo
      */
-    public static function unidadesPara(string $umeInsumo): array
+    public static function unidadesPara(string $umeInsumo, ?string $umeEquivalente = null, float $factorEquivalente = 0): array
     {
-        return self::EQUIVALENTES[$umeInsumo] ?? [$umeInsumo => 1];
+        $unidades = self::EQUIVALENTES[$umeInsumo] ?? [$umeInsumo => 1];
+        if ($umeEquivalente && $umeEquivalente !== $umeInsumo && $factorEquivalente > 0) {
+            foreach (self::EQUIVALENTES[$umeEquivalente] ?? [$umeEquivalente => 1] as $ume => $vale) {
+                $unidades[$ume] ??= $vale / $factorEquivalente;
+            }
+        }
+
+        return $unidades;
     }
 
     public static function nombreUnidad(string $ume): string
@@ -46,10 +56,10 @@ class Recetas
         return self::NOMBRES[$ume] ?? mb_strtolower($ume);
     }
 
-    /** Cantidad de la receta llevada a la unidad del insumo (220 g de un insumo en kg = 0.22) */
-    public static function enUnidadDelInsumo(float $cantidad, string $umeEscrita, string $umeInsumo): float
+    /** Cantidad de la receta llevada a la unidad del insumo (220 g de un insumo en kg = 0.22; 2 huevos de una caja de 30 = 0.0667) */
+    public static function enUnidadDelInsumo(float $cantidad, string $umeEscrita, string $umeInsumo, ?string $umeEquivalente = null, float $factorEquivalente = 0): float
     {
-        return $cantidad * (self::unidadesPara($umeInsumo)[$umeEscrita] ?? 1);
+        return $cantidad * (self::unidadesPara($umeInsumo, $umeEquivalente, $factorEquivalente)[$umeEscrita] ?? 1);
     }
 
     /**
@@ -61,11 +71,12 @@ class Recetas
     {
         return DB::table('producto_receta as r')->join('productos as i', 'i.IdProducto', '=', 'r.IdInsumo')
             ->where('r.IdProducto', $idProducto)->orderBy('r.id_receta')
-            ->get(['r.id_receta', 'r.IdInsumo', 'i.pronom as nombre', 'r.cantidad', 'r.umecod', 'i.umecod as ume_insumo', 'i.costo as costo_unitario'])
+            ->get(['r.id_receta', 'r.IdInsumo', 'i.pronom as nombre', 'r.cantidad', 'r.umecod', 'i.umecod as ume_insumo', 'i.costo as costo_unitario',
+                'i.ume_equivalente', 'i.factor_equivalente'])
             ->map(function ($r) {
                 $r->cantidad = (float) $r->cantidad;
                 $r->costo_unitario = (float) $r->costo_unitario;
-                $r->cantidad_base = self::enUnidadDelInsumo($r->cantidad, $r->umecod, $r->ume_insumo);
+                $r->cantidad_base = self::enUnidadDelInsumo($r->cantidad, $r->umecod, $r->ume_insumo, $r->ume_equivalente, (float) $r->factor_equivalente);
                 $r->costo = round($r->cantidad_base * $r->costo_unitario, 4);
 
                 return $r;
@@ -87,10 +98,81 @@ class Recetas
 
         return DB::table('producto_receta as r')->join('productos as i', 'i.IdProducto', '=', 'r.IdInsumo')
             ->whereIn('r.IdProducto', $ids)
-            ->get(['r.IdProducto', 'r.cantidad', 'r.umecod', 'i.umecod as ume_insumo', 'i.costo'])
+            ->get(['r.IdProducto', 'r.cantidad', 'r.umecod', 'i.umecod as ume_insumo', 'i.costo', 'i.ume_equivalente', 'i.factor_equivalente'])
             ->groupBy('IdProducto')
-            ->map(fn ($lineas) => round($lineas->sum(fn ($r) => self::enUnidadDelInsumo((float) $r->cantidad, $r->umecod, $r->ume_insumo) * (float) $r->costo), 2))
+            ->map(fn ($lineas) => round($lineas->sum(fn ($r) => self::enUnidadDelInsumo((float) $r->cantidad, $r->umecod, $r->ume_insumo,
+                $r->ume_equivalente, (float) $r->factor_equivalente) * (float) $r->costo), 2))
             ->all();
+    }
+
+    /**
+     * Costo de combos: la suma de lo que lleva (cada plato al costo de su receta; cada producto a su costo).
+     *
+     * @param  iterable<int>  $ids
+     * @return array<int, float>
+     */
+    public static function costosCombos(iterable $ids): array
+    {
+        $ids = collect($ids)->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return [];
+        }
+        $partes = DB::table('combos as c')->join('productos as p', 'p.IdProducto', '=', 'c.IdProducto_comb')
+            ->whereIn('c.IdProducto_rel', $ids)->get(['c.IdProducto_rel', 'c.IdProducto_comb', 'c.prod_comb_cant', 'p.costo', 'p.promocion']);
+        $recetas = self::costos($partes->whereIn('promocion', [2, Producto::OPCION])->pluck('IdProducto_comb'));
+
+        return $partes->groupBy('IdProducto_rel')->map(fn ($g) => round($g->sum(fn ($c) => (float) $c->prod_comb_cant
+            * (float) ($recetas[$c->IdProducto_comb] ?? $c->costo)), 2))->all();
+    }
+
+    /** Costo de una unidad de cualquier producto: el plato y la entrada por su receta, el combo por lo que lleva, el resto su costo */
+    public static function costoActual(object $producto): float
+    {
+        $tipo = (int) $producto->promocion;
+        $id = (int) $producto->IdProducto;
+        if (in_array($tipo, [2, Producto::OPCION], true)) {
+            return self::costos([$id])[$id] ?? (float) $producto->costo;
+        }
+        if ($tipo === 6) {
+            return self::costosCombos([$id])[$id] ?? (float) $producto->costo;
+        }
+
+        return (float) $producto->costo;
+    }
+
+    /**
+     * Cuando cambia el costo de insumos o productos, deja al día el costo guardado de los platos, entradas y combos que
+     * los usan (para la lista de productos, inventarios y reportes).
+     *
+     * @param  iterable<int>  $ids
+     */
+    public static function refrescarCostos(iterable $ids): void
+    {
+        $ids = collect($ids)->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return;
+        }
+        $platos = DB::table('producto_receta')->whereIn('IdInsumo', $ids)->distinct()->pluck('IdProducto');
+        foreach (self::costos($platos) as $id => $costo) {
+            DB::table('productos')->where('IdProducto', $id)->update(['costo' => $costo]);
+        }
+        $combos = DB::table('combos')->whereIn('IdProducto_comb', $ids->merge($platos))->distinct()->pluck('IdProducto_rel');
+        foreach (self::costosCombos($combos) as $id => $costo) {
+            DB::table('productos')->where('IdProducto', $id)->update(['costo' => $costo]);
+        }
+    }
+
+    /**
+     * Insumos sin precio de compra en las recetas de estos platos: hacen que el food cost salga más bajo de lo real.
+     *
+     * @param  iterable<int>  $platos
+     * @return array<int, array<int, string>> plato => nombres de los insumos sin precio
+     */
+    public static function sinPrecio(iterable $platos): array
+    {
+        return DB::table('producto_receta as r')->join('productos as i', 'i.IdProducto', '=', 'r.IdInsumo')
+            ->whereIn('r.IdProducto', collect($platos)->all() ?: [0])->where(fn ($q) => $q->whereNull('i.costo')->orWhere('i.costo', '<=', 0))
+            ->get(['r.IdProducto', 'i.pronom'])->groupBy('IdProducto')->map(fn ($g) => $g->pluck('pronom')->all())->all();
     }
 
     /** Food cost en % (null si el plato no tiene precio) */
@@ -135,8 +217,9 @@ class Recetas
         $costos = self::costos($platos->pluck('IdProducto'));
         $ingredientes = DB::table('producto_receta')->whereIn('IdProducto', $platos->pluck('IdProducto'))
             ->groupBy('IdProducto')->select('IdProducto', DB::raw('COUNT(*) as n'))->pluck('n', 'IdProducto');
+        $sinPrecio = self::sinPrecio($platos->pluck('IdProducto'));
 
-        return $platos->map(function ($p) use ($precios, $costos, $ingredientes) {
+        return $platos->map(function ($p) use ($precios, $costos, $ingredientes, $sinPrecio) {
             $p->precio = (float) ($precios[$p->IdProducto] ?? $p->propun);
             $p->tiene_receta = isset($costos[$p->IdProducto]);
             $p->ingredientes = (int) ($ingredientes[$p->IdProducto] ?? 0);
@@ -144,6 +227,11 @@ class Recetas
             $p->food_cost = $p->tiene_receta ? self::foodCost($p->costo, $p->precio) : null;
             $p->ganancia = $p->tiene_receta ? round($p->precio - $p->costo, 2) : null;
             $p->estado = self::estado($p->food_cost);
+            // Un ingrediente sin precio cuenta como gratis: el food cost no es real hasta completarlo
+            $p->sin_precio = $sinPrecio[$p->IdProducto] ?? [];
+            if ($p->sin_precio) {
+                $p->estado = ['nivel' => 'incompleto', 'color' => '#7c3aed', 'texto' => 'Falta precio'];
+            }
 
             return $p;
         });

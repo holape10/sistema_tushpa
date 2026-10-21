@@ -8,6 +8,7 @@
         'id' => $p->IdProducto, 'nombre' => $p->pronom, 'cat' => $p->cat_nom ?: 'SIN CATEGORÍA', 'precio' => $p->precio,
         'costo' => $p->costo, 'fc' => $p->food_cost, 'ganancia' => $p->ganancia, 'receta' => $p->tiene_receta,
         'ingredientes' => $p->ingredientes, 'nivel' => $p->estado['nivel'], 'color' => $p->estado['color'], 'texto' => $p->estado['texto'],
+        'sin_precio' => implode(', ', $p->sin_precio),
         'url' => route('recetas.editar', $p->IdProducto),
     ];
 @endphp
@@ -16,7 +17,7 @@
         get lista() {
             const q = this.norm(this.q.trim());
             return this.platos.filter(p => (!q || this.norm(p.nombre + ' ' + p.cat).includes(q))
-                && (this.ver === '' || (this.ver === 'sin' && !p.receta) || (this.ver === 'con' && p.receta) || (this.ver === 'alto' && p.nivel === 'alto')));
+                && (this.ver === '' || (this.ver === 'sin' && !p.receta) || (this.ver === 'con' && p.receta) || (this.ver === 'alto' && p.nivel === 'alto') || (this.ver === 'incompleto' && p.nivel === 'incompleto')));
         } }">
     @include('empresas.partials.alert')
 
@@ -54,6 +55,21 @@
         </div>
     </section>
 
+    @if ($sinPrecio->isNotEmpty())
+        {{-- Sin precio de compra un ingrediente cuenta como gratis: el food cost sale más bajo de lo real --}}
+        <section class="rounded-2xl bg-violet-50 ring-1 ring-violet-200 p-4 sm:p-5">
+            <h2 class="font-black text-violet-900">⚠ {{ $sinPrecio->count() }} {{ $sinPrecio->count() === 1 ? 'ingrediente no tiene' : 'ingredientes no tienen' }} precio de compra</h2>
+            <p class="text-sm text-violet-800 mt-1">Cuentan como gratis, así que el costo y el food cost de {{ $resumen['incompletos'] }} plato(s) salen <b>más bajos de lo real</b>.
+                Ponles su precio (en Productos o al abrir la receta) y todo se recalcula solo.</p>
+            <div class="mt-2 flex flex-wrap gap-1.5">
+                @foreach ($sinPrecio as $i)
+                    <a href="{{ route('productos.edit', $i->IdProducto) }}" class="rounded-lg bg-white px-2.5 py-1 text-sm font-semibold text-violet-800 ring-1 ring-violet-200 hover:ring-violet-400">{{ $i->pronom }} →</a>
+                @endforeach
+            </div>
+            <button type="button" @click="ver = 'incompleto'" class="mt-3 text-sm font-bold text-violet-700 underline">Ver los platos afectados</button>
+        </section>
+    @endif
+
     @if ($subidas->isNotEmpty())
         <section class="rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-4 sm:p-5">
             <h2 class="font-black text-amber-900">📈 Subieron de costo en los últimos 15 días</h2>
@@ -84,7 +100,7 @@
         <div class="bg-white rounded-2xl shadow-sm">
             <div class="p-4 flex flex-wrap gap-3 items-center border-b border-gray-100">
                 <div class="flex gap-1 bg-gray-100 rounded-xl p-1 text-sm font-semibold">
-                    @foreach (['' => 'Todos', 'con' => 'Con receta', 'sin' => 'Sin receta', 'alto' => 'Ganas poco'] as $k => $t)
+                    @foreach (['' => 'Todos', 'con' => 'Con receta', 'sin' => 'Sin receta', 'alto' => 'Ganas poco'] + ($resumen['incompletos'] ? ['incompleto' => 'Falta precio'] : []) as $k => $t)
                         <button type="button" @click="ver = '{{ $k }}'" :class="ver === '{{ $k }}' ? 'bg-white shadow text-indigo-700' : 'text-gray-500'" class="px-3 py-1.5 rounded-lg">{{ $t }}</button>
                     @endforeach
                 </div>
@@ -97,6 +113,7 @@
                         <div class="flex-1 min-w-48">
                             <p class="font-bold text-gray-800" x-text="p.nombre"></p>
                             <p class="text-xs text-gray-400"><span x-text="p.cat"></span> · <span x-text="p.receta ? p.ingredientes + ' ingrediente(s)' : 'sin receta'"></span></p>
+                            <p x-show="p.sin_precio" class="text-xs font-semibold text-violet-700" x-text="'Sin precio de compra: ' + p.sin_precio"></p>
                         </div>
                         <div class="w-20 text-right"><p class="text-[11px] text-gray-400">Precio</p><p class="font-semibold text-gray-700" x-text="'S/ ' + p.precio.toFixed(2)"></p></div>
                         <div class="w-20 text-right"><p class="text-[11px] text-gray-400">Costo</p><p class="font-semibold text-gray-700" x-text="p.receta ? 'S/ ' + p.costo.toFixed(2) : '—'"></p></div>
