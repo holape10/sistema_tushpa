@@ -41,6 +41,7 @@ use App\Http\Controllers\ImpresionController;
 use App\Http\Controllers\InicioController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\KardexController;
+use App\Http\Controllers\LineaTiempoController;
 use App\Http\Controllers\LoteController;
 use App\Http\Controllers\MedioPagoController;
 use App\Http\Controllers\MermaController;
@@ -853,5 +854,10 @@ Route::get('/inicio', [InicioController::class, 'index'])
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth'])
     ->name('dashboard');
+
+// Línea de tiempo: qué hizo cada usuario en el día (solo el administrador)
+Route::get('/actividad', [LineaTiempoController::class, 'index'])
+    ->middleware(['auth'])
+    ->name('actividad.index');
 
 require __DIR__.'/auth.php';

@@ -43,7 +43,7 @@ class Cocina
             // Pantalla de cocina: el mozo de la mesa y, si hay, el promotor
             'ped_tip' => $pedido->ped_tip, 'mozo' => mb_substr(NombreCorto::para((int) $pedido->id_empresa_negocio, $pedido->mozo_nom ?? Auth::user()?->apeusu)
                 .($pedido->promotor_nom ? ' · PROM. '.NombreCorto::para((int) $pedido->id_empresa_negocio, $pedido->promotor_nom) : ''), 0, 100),
-            'tipo' => $tipo, 'creado' => now(),
+            'tipo' => $tipo, 'creado' => now(), 'IdUsuario' => Auth::id(),
         ]);
 
         DB::transaction(function () use ($pedId, $nuevos, $anulaciones, $estacion, $crearTicket) {
@@ -116,7 +116,7 @@ class Cocina
         DB::transaction(function () use ($sucursal, $destino, $items, $estacion, $mozo) {
             $ticket = DB::table('cocina_tickets')->insertGetId([
                 'ped_id' => 0, 'id_empresa_negocio' => $sucursal, 'destino' => mb_substr($destino, 0, 60),
-                'ped_tip' => 'PV', 'mozo' => NombreCorto::para($sucursal, $mozo ?? Auth::user()?->apeusu), 'tipo' => 'NUEVO', 'creado' => now(),
+                'ped_tip' => 'PV', 'mozo' => NombreCorto::para($sucursal, $mozo ?? Auth::user()?->apeusu), 'tipo' => 'NUEVO', 'creado' => now(), 'IdUsuario' => Auth::id(),
             ]);
             foreach ($items as $n) {
                 DB::table('cocina_items')->insert([
