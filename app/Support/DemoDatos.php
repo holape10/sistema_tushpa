@@ -48,6 +48,7 @@ class DemoDatos
         $this->club();
         $this->clinica();
         $this->prestamos();
+        $this->colegio();
 
         return $this->resumen;
     }
@@ -394,6 +395,54 @@ class DemoDatos
                     'id_empresa_negocio' => $this->suc, 'creado' => now()]);
                 $this->sumar('socios del club');
             }
+        }
+    }
+
+    /** Colegio de ejemplo: grados con sus precios y alumnos (dos hermanos) con padres y apoderado, ya matriculados */
+    private function colegio(): void
+    {
+        if (! Schema::hasTable('col_alumnos')) {
+            return;
+        }
+        $cfg = Colegio::config($this->suc);
+        if (! DB::table('col_grados')->where('id_empresa_negocio', $this->suc)->exists()) {
+            foreach (Colegio::GRADOS_TIPICOS as $i => [$nivel, $grado]) {
+                [$pension, $matricula] = match ($nivel) {
+                    'INICIAL' => [180, 200], 'PRIMARIA' => [220, 250], default => [250, 280]
+                };
+                DB::table('col_grados')->insert(['nivel' => $nivel, 'grado' => $grado, 'seccion' => 'ÚNICA', 'pension' => $pension, 'matricula' => $matricula,
+                    'inscripcion' => 150, 'orden' => $i + 1, 'activo' => 1, 'id_empresa_negocio' => $this->suc]);
+            }
+            $this->sumar('grados del colegio', count(Colegio::GRADOS_TIPICOS));
+        }
+        $grados = DB::table('col_grados')->where('id_empresa_negocio', $this->suc)->get()->keyBy(fn ($g) => $g->nivel.' '.$g->grado);
+        // [dni, alumno, grado, nuevo, hermano del anterior, [padre], [madre]]
+        $lista = [
+            ['80100101', 'SEBASTIÁN ANDRÉ RÍOS VELA', 'PRIMARIA SEGUNDO', false, false, ['44100101', 'CARLOS ALBERTO RÍOS PINEDO', '965500101'], ['44100102', 'MARÍA ELENA VELA SANGAMA', '965500102']],
+            ['80100102', 'VALENTINA SOFÍA RÍOS VELA', 'INICIAL 5 AÑOS', true, true, ['44100101', 'CARLOS ALBERTO RÍOS PINEDO', '965500101'], ['44100102', 'MARÍA ELENA VELA SANGAMA', '965500102']],
+            ['80100103', 'DIEGO ALONSO TORRES HUAMÁN', 'SECUNDARIA PRIMERO', false, false, ['44100103', 'JORGE LUIS TORRES CHÁVEZ', '965500103'], ['44100104', 'ROSA ISABEL HUAMÁN QUISPE', '965500104']],
+            ['80100104', 'CAMILA NICOLE PANDURO SOTO', 'PRIMARIA CUARTO', true, false, ['44100105', 'RENZO PANDURO DEL ÁGUILA', '965500105'], ['44100106', 'LUCÍA SOTO PIZANGO', '965500106']],
+        ];
+        $anterior = null;
+        foreach ($lista as $i => [$dni, $nombre, $grado, $nuevo, $hermano, $padre, $madre]) {
+            $aluId = DB::table('col_alumnos')->where('id_empresa_negocio', $this->suc)->where('dni', $dni)->value('alu_id');
+            if (! $aluId) {
+                $grupo = $hermano && $anterior ? (DB::table('col_alumnos')->where('alu_id', $anterior)->value('grupo_id')
+                    ?: tap(DB::table('col_grupos')->insertGetId(['nombre' => 'FAMILIA RÍOS VELA', 'id_empresa_negocio' => $this->suc]),
+                        fn ($g) => DB::table('col_alumnos')->where('alu_id', $anterior)->update(['grupo_id' => $g]))) : null;
+                $aluId = DB::table('col_alumnos')->insertGetId(['codigo' => str_pad((string) ($i + 1), 5, '0', STR_PAD_LEFT), 'dni' => $dni, 'nombres' => $nombre,
+                    'sexo' => str_contains($nombre, 'SOFÍA') || str_contains($nombre, 'NICOLE') ? 'F' : 'M', 'grupo_id' => $grupo, 'estado' => 'ACTIVO',
+                    'id_empresa_negocio' => $this->suc, 'creado' => now()]);
+                foreach ([['PADRE', $padre], ['MADRE', $madre]] as $j => [$tipo, [$doc, $nom, $tel]]) {
+                    DB::table('col_responsables')->insert(['alu_id' => $aluId, 'tipo' => $tipo, 'clicod' => $this->cliente($doc, $nom, $tel),
+                        'paga' => $j === (int) ($i % 2), 'id_empresa_negocio' => $this->suc]);
+                }
+                $this->sumar('alumnos');
+            }
+            if (isset($grados[$grado]) && ! DB::table('col_matriculas')->where('alu_id', $aluId)->where('anio', $cfg->anio)->exists()) {
+                Colegio::matricular($this->admin, (int) $aluId, (int) $grados[$grado]->grado_id, (int) $cfg->anio, $nuevo);
+            }
+            $anterior = $aluId;
         }
     }
 

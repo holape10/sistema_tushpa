@@ -87,6 +87,10 @@ class Rubros
             '/inicio', '/usuarios', '/empresas', '/sucursales', '/soporte', '/respaldo',
             '/prestamos', '/prestamos/clientes', '/prestamos/cobranza', '/prestamos/reportes', '/prestamos/configuracion',
         ]],
+        // Colegio: alumnos, matrícula, pensiones (con descuento de hermanos y por adelantado), sorteo y morosidad
+        'COLEGIO' => ['icono' => 'fa-school', 'nombre' => 'Colegio', 'ejemplos' => 'Colegios, academias, nidos: matrículas y pensiones', 'modulos' => [
+            '/colegio', '/colegio/reportes', '/colegio/sorteo', '/colegio/configuracion',
+        ]],
         // Estudio contable o empresa que solo lleva su contabilidad (sin vender con el sistema)
         'CONTABLE' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudio contable, contabilidad de la empresa, SIRE, planilla', 'sin_base' => true, 'modulos' => [
             '/inicio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo',

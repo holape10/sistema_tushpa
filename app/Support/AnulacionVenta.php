@@ -29,6 +29,7 @@ class AnulacionVenta
             Socios::revertirComprobante($cabId);   // cuotas de socio pagadas con esta venta
             Gimnasio::revertirComprobante($cabId); // membresía de gimnasio pagada con esta venta
             Estacionamiento::revertirComprobante($cabId); // pensión o cobro de estacionamiento
+            Colegio::revertirComprobante($cabId); // pensiones del colegio pagadas con él vuelven a deberse
             Fidelizacion::revertir($cabId);        // los puntos que ganó con esta compra
             Porciones::revertir($cabId);           // las porciones del día que se vendieron
             Series::revertirVenta($cabId);         // los equipos vendidos (número de serie) vuelven a estar disponibles

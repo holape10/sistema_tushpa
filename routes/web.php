@@ -14,6 +14,9 @@ use App\Http\Controllers\ClinicaRecordatorioController;
 use App\Http\Controllers\ClinicaReporteController;
 use App\Http\Controllers\CobroController;
 use App\Http\Controllers\CocinaController;
+use App\Http\Controllers\ColegioConfigController;
+use App\Http\Controllers\ColegioController;
+use App\Http\Controllers\ColegioReporteController;
 use App\Http\Controllers\ComandasController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ConcarController;
@@ -355,6 +358,27 @@ Route::middleware('auth')->group(function () {
     Route::get('/prestamos/cobranza/datos', [PrestamoCobranzaController::class, 'datos'])->name('prestamos.cobranza.datos');
     Route::get('/prestamos/reportes', [PrestamoReporteController::class, 'index'])->name('prestamos.reportes');
     Route::get('/prestamos/configuracion', [PrestamoConfigController::class, 'index'])->name('prestamos.configuracion');
+
+    // Colegio: alumnos, pensiones, sorteo, reportes y configuración
+    Route::controller(ColegioController::class)->prefix('colegio')->name('colegio.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/alumnos/buscar', 'buscar')->name('buscar');
+        Route::post('/alumnos', 'guardar')->name('guardar');
+        Route::get('/alumnos/{id}', 'ver')->whereNumber('id')->name('ver');
+        Route::post('/alumnos/{id}/cobrar', 'cobrar')->whereNumber('id')->name('cobrar');
+        Route::post('/alumnos/{id}/cargo', 'agregarCargo')->whereNumber('id')->name('cargo');
+        Route::post('/alumnos/{id}/matricular', 'matricular')->whereNumber('id')->name('matricular');
+        Route::post('/alumnos/{id}/retirar', 'retirar')->whereNumber('id')->name('retirar');
+        Route::post('/cargos/{car}/becar', 'becar')->whereNumber('car')->name('becar');
+        Route::post('/cargos/{car}/anular', 'anularCargo')->whereNumber('car')->name('anular');
+        Route::post('/matriculas/{mat}/descuento', 'descuento')->whereNumber('mat')->name('descuento');
+        Route::get('/sorteo', 'sorteo')->name('sorteo');
+        Route::post('/sorteo', 'sortear')->name('sortear');
+    });
+    Route::get('/colegio/reportes', [ColegioReporteController::class, 'index'])->name('colegio.reportes');
+    Route::get('/colegio/configuracion', [ColegioConfigController::class, 'index'])->name('colegio.configuracion');
+    Route::post('/colegio/configuracion', [ColegioConfigController::class, 'guardar'])->name('colegio.configuracion.guardar');
+    Route::post('/colegio/configuracion/grados', [ColegioConfigController::class, 'grados'])->name('colegio.configuracion.grados');
     Route::post('/prestamos/configuracion', [PrestamoConfigController::class, 'guardar'])->name('prestamos.configuracion.guardar');
     Route::post('/prestamos/configuracion/plan', [PrestamoConfigController::class, 'plan'])->name('prestamos.configuracion.plan');
 
