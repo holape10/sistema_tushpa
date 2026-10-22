@@ -148,6 +148,9 @@
                                 <span class="text-xs text-slate-400">Eliminado</span>
                             @else
                             <a href="{{ route('admin.clientes.edit', $cl) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2">Editar</a>
+                            @if (auth('superadmin')->user()->es_dueno)
+                                <a href="{{ route('admin.anuncios.index', ['empresa' => $cl->id]) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2" title="Mostrarle un mensaje arriba de su sistema">Anunciar</a>
+                            @endif
                             <a href="{{ route('admin.clientes.comprobantes', $cl->id) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2" title="Pendientes y rechazados de SUNAT">Comprobantes</a>
                             @if ($cl->activo())
                                 <button type="button" x-data class="text-xs font-semibold text-amber-600 hover:text-amber-700 mr-2"

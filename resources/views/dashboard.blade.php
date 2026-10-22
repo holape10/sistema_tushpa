@@ -24,6 +24,7 @@
         <div class="flex flex-wrap items-end gap-3">
             <label class="text-sm min-w-56 flex-1">Establecimiento
                 <select name="sucursal" class="{{ $in }}">
+                    @if ($sucursales->count() > 1)<option value="0" @selected($sucursal == 0)>TODAS LAS SUCURSALES</option>@endif
                     @foreach ($sucursales as $s)
                         <option value="{{ $s->id_empresa_negocio }}" @selected($sucursal == $s->id_empresa_negocio)>{{ $s->nombre_comercial }} - {{ $s->IdEmpresa }}</option>
                     @endforeach

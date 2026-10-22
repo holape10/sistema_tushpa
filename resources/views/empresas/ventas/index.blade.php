@@ -16,6 +16,7 @@
             <div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <label class="text-sm">Sucursal
                     <select name="sucursal" class="{{ $in }}">
+                        @if ($sucursales->count() > 1)<option value="0" @selected($sucursal == 0)>TODAS LAS SUCURSALES</option>@endif
                         @foreach ($sucursales as $s)
                             <option value="{{ $s->id_empresa_negocio }}" @selected($sucursal == $s->id_empresa_negocio)>{{ $s->IdEmpresa }} - {{ $s->nombre_comercial }}</option>
                         @endforeach

@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\EmpresaNegocio;
 use App\Support\Excel;
 use App\Support\Reportes;
+use App\Support\SucursalesVisibles;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -36,19 +36,21 @@ class ReporteController extends Controller
     {
         $this->autorizar($clave);
         abort_unless(isset(Reportes::CATALOGO[$clave]), 404);
-        $sucursales = EmpresaNegocio::where('IdEmpresa', Auth::user()->IdEmpresa)->orderBy('id_empresa_negocio')->get();
-        $sucursal = (int) $request->get('sucursal', Auth::user()->id_empresa_negocio);
-        abort_unless($sucursales->contains('id_empresa_negocio', $sucursal), 403);
+        // El cajero (y todo el que no es administrador) solo ve su sucursal; el administrador, cualquiera o todas juntas
+        $user = Auth::user();
+        $sucursales = SucursalesVisibles::de($user);
+        $sucursal = SucursalesVisibles::elegida($request, $user, $clave !== 'consumo-insumos');
+        $ids = SucursalesVisibles::ids($user, $sucursal);
 
         $desde = Carbon::parse($request->get('desde', now()->startOfMonth()->toDateString()))->toDateString();
         $hasta = Carbon::parse($request->get('hasta', now()->toDateString()))->toDateString();
         if ($hasta < $desde) {
             [$desde, $hasta] = [$hasta, $desde];
         }
-        $filtros = ['sucursal' => $sucursal, 'desde' => $desde, 'hasta' => $hasta]
+        $filtros = ['sucursal' => $sucursal, 'sucursales' => $ids, 'desde' => $desde, 'hasta' => $hasta]
             + $request->only(['tipo', 'estado', 'agrupar', 'categoria', 'orden', 'limite', 'vendedor', 'medio', 'cliente', 'motorizado', 'estado_sunat']);
         $r = Reportes::generar($clave, $filtros);
-        $nombreSucursal = $sucursales->firstWhere('id_empresa_negocio', $sucursal)->nombre_comercial ?? '';
+        $nombreSucursal = SucursalesVisibles::nombre($user, $sucursal);
         $archivo = "reporte_{$clave}_{$desde}_{$hasta}";
 
         if ($request->get('formato') === 'excel') {
@@ -59,13 +61,13 @@ class ReporteController extends Controller
         }
 
         return view('empresas.reportes.ver', $r + [
-            'clave' => $clave, 'filtros' => $filtros, 'sucursales' => $sucursales, 'otros' => collect(Reportes::CATALOGO)->where(1, $r['grupo']),
-            'categorias' => DB::table('categorias')->where('id_empresa_negocio', $sucursal)->orderBy('cat_nom')->get(['cat_id', 'cat_nom']),
+            'clave' => $clave, 'filtros' => collect($filtros)->except('sucursales')->all(), 'permiteTodas' => $user->esAdmin() && $clave !== 'consumo-insumos', 'sucursales' => $sucursales, 'otros' => collect(Reportes::CATALOGO)->where(1, $r['grupo']),
+            'categorias' => DB::table('categorias')->whereIn('id_empresa_negocio', $ids)->orderBy('cat_nom')->get(['cat_id', 'cat_nom']),
             'tipos' => ['sunat' => 'Solo SUNAT (sin notas de venta)', '01' => 'Factura', '03' => 'Boleta', '13' => 'Nota de venta', '07' => 'Nota de crédito', '08' => 'Nota de débito'],
             'vendedores' => DB::table('users')->where('IdEmpresa', Auth::user()->IdEmpresa)->orderBy('apeusu')->get(['IdUsuario', 'apeusu', 'name', 'estusu']),
-            'medios' => DB::table('medios_pagos')->where('id_empresa_negocio', $sucursal)->orderBy('nom_med_pag')->get(['id_med_pag', 'nom_med_pag']),
+            'medios' => DB::table('medios_pagos')->whereIn('id_empresa_negocio', $ids)->orderBy('nom_med_pag')->get(['id_med_pag', 'nom_med_pag']),
             'motorizados' => Schema::hasTable('motorizados')
-                ? DB::table('motorizados')->where('id_empresa_negocio', $sucursal)->orderBy('nombre')->get(['mot_id', 'nombre']) : collect(),
+                ? DB::table('motorizados')->whereIn('id_empresa_negocio', $ids)->orderBy('nombre')->get(['mot_id', 'nombre']) : collect(),
         ]);
     }
 

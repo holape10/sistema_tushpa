@@ -12,8 +12,13 @@
             ['INFO', "Estimado cliente: el sistema estará en mantenimiento hoy {$hoy} de 11:00 p. m. a 12:00 a. m. Te recomendamos no emitir comprobantes en ese horario."],
             ['URGENTE', 'Estimado cliente: estamos presentando lentitud en el sistema. Ya lo estamos solucionando, gracias por tu paciencia.'],
             ['OFERTA', 'Novedad: ya puedes … Escríbenos por WhatsApp si quieres que te expliquemos cómo usarlo.'],
+            ['CERT', 'Estimado cliente: su certificado digital para emitir comprobantes electrónicos vence el __/__/____. Renuévelo a tiempo para no dejar de facturar. Escríbanos por WhatsApp al 928 396 147.'],
+            ['PAGO', 'Estimado cliente: le recordamos que el pago de su servicio TUSHPA vence el __/__/____. Gracias por su preferencia.'],
         ];
         $rubrosSel = old('rubros', $e && $e->rubros ? json_decode($e->rubros, true) : []);
+        $empresasSel = array_map('intval', old('empresas', $e && ! empty($e->empresas) ? json_decode($e->empresas, true) : ($paraEmpresa ? [$paraEmpresa] : [])));
+        $para = old('para', $empresasSel ? 'EMPRESAS' : ($rubrosSel ? 'RUBROS' : 'TODAS'));
+        $nombreCliente = $clientes->pluck('nombre', 'id');
         $fecha = fn ($v) => $v ? \Illuminate\Support\Carbon::parse($v)->format('Y-m-d\TH:i') : '';
     @endphp
     <div class="mb-4">
@@ -29,7 +34,9 @@
         <form method="POST" action="{{ $e ? route('admin.anuncios.guardar', $e->id) : route('admin.anuncios.guardar') }}"
               class="lg:col-span-2 bg-white rounded-2xl shadow-sm p-5 space-y-3"
               x-data="{ mensaje: @js(old('mensaje', $e->mensaje ?? '')), tipo: @js(old('tipo', $e->tipo ?? 'AVISO')), cerrar: @js((bool) old('se_puede_cerrar', $e->se_puede_cerrar ?? true)),
-                        tipos: @js(Anuncios::TIPOS) }">
+                        tipos: @js(Anuncios::TIPOS), para: @js($para), elegidas: @js($empresasSel), busca: '', clientes: @js($clientes),
+                        encontradas() { const t = this.busca.trim().toLowerCase(); return this.clientes.filter(c => !this.elegidas.includes(c.id)
+                            && (c.nombre.toLowerCase().includes(t) || String(c.ruc).startsWith(t) || (c.sub || '').toLowerCase().includes(t))).slice(0, 30); } }">
             @csrf
             <div class="flex items-center gap-2">
                 <p class="font-bold flex-1">{{ $e ? 'Editar anuncio' : '📢 Nuevo anuncio' }}</p>
@@ -40,8 +47,9 @@
                     <p class="text-xs font-semibold text-slate-500 mb-1">Mensajes listos (luego lo ajustas):</p>
                     <div class="flex flex-wrap gap-1.5">
                         @foreach ($plantillas as [$t, $texto])
-                            <button type="button" @click="mensaje = @js($texto); tipo = '{{ $t }}'" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs">
-                                {{ ['AVISO' => 'Falla de SUNAT', 'INFO' => 'Mantenimiento', 'URGENTE' => 'Lentitud', 'OFERTA' => 'Novedad'][$t] }}</button>
+                            <button type="button" @click="mensaje = @js($texto); tipo = '{{ in_array($t, ['CERT', 'PAGO'], true) ? 'AVISO' : $t }}'@if (in_array($t, ['CERT', 'PAGO'], true)); para = 'EMPRESAS'@endif"
+                                    class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs">
+                                {{ ['AVISO' => 'Falla de SUNAT', 'INFO' => 'Mantenimiento', 'URGENTE' => 'Lentitud', 'OFERTA' => 'Novedad', 'CERT' => 'Certificado por vencer', 'PAGO' => 'Recordar pago'][$t] }}</button>
                         @endforeach
                     </div>
                 </div>
@@ -65,16 +73,42 @@
                 <label class="block text-sm">Hasta <span class="text-slate-400 text-xs">(vacío = hasta quitarlo)</span>
                     <input type="datetime-local" name="hasta" value="{{ old('hasta', $fecha($e->hasta ?? null) ?: ($e ? '' : now()->endOfDay()->format('Y-m-d\TH:i'))) }}" class="{{ $in }}"></label>
             </div>
-            <details class="text-sm" @if ($rubrosSel) open @endif>
-                <summary class="cursor-pointer font-semibold text-slate-600">¿A quiénes? <span class="font-normal text-slate-400">{{ $rubrosSel ? count($rubrosSel).' rubro(s)' : 'Todas las empresas' }}</span></summary>
-                <p class="text-xs text-slate-400 mt-1">Si no marcas ninguno, lo ven todas.</p>
-                <div class="mt-2 grid grid-cols-2 gap-1">
+            {{-- A quiénes: todas, algunos rubros o empresas elegidas (ej. recordarle a una sola que su certificado vence) --}}
+            <div class="text-sm space-y-2">
+                <p>¿A quiénes?</p>
+                <div class="grid grid-cols-3 gap-1.5">
+                    @foreach (['TODAS' => '🌎 Todas', 'RUBROS' => '🏷 Por rubro', 'EMPRESAS' => '🏢 Empresas'] as $valor => $texto)
+                        <label class="rounded-xl border-2 px-2 py-1.5 text-center cursor-pointer text-xs font-semibold" :class="para === '{{ $valor }}' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200'">
+                            <input type="radio" name="para" value="{{ $valor }}" x-model="para" class="sr-only">{{ $texto }}</label>
+                    @endforeach
+                </div>
+                <div x-show="para === 'RUBROS'" x-cloak class="grid grid-cols-2 gap-1">
                     @foreach ($rubros as $clave => $nombre)
                         <label class="flex items-center gap-2 text-xs"><input type="checkbox" name="rubros[]" value="{{ $clave }}" @checked(in_array($clave, $rubrosSel, true)) class="rounded border-slate-300">
                             {{ $nombre }} <span class="text-slate-400">({{ $empresas[$clave] ?? 0 }})</span></label>
                     @endforeach
                 </div>
-            </details>
+                <div x-show="para === 'EMPRESAS'" x-cloak class="space-y-2">
+                    <div class="flex flex-wrap gap-1.5">
+                        <template x-for="id in elegidas" :key="id">
+                            <span class="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-800 pl-2.5 pr-1 py-0.5 text-xs font-semibold">
+                                <span x-text="(clientes.find(c => c.id === id) || {}).nombre"></span>
+                                <input type="hidden" name="empresas[]" :value="id">
+                                <button type="button" @click="elegidas = elegidas.filter(x => x !== id)" class="h-5 w-5 rounded-full hover:bg-indigo-200">&times;</button>
+                            </span>
+                        </template>
+                        <span x-show="!elegidas.length" class="text-xs text-slate-400">Aún no eliges ninguna.</span>
+                    </div>
+                    <input type="search" x-model="busca" placeholder="Busca por RUC, nombre o subdominio…" class="w-full rounded-xl border-slate-300 text-sm">
+                    <div x-show="busca.trim()" class="max-h-48 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+                        <template x-for="c in encontradas()" :key="c.id">
+                            <button type="button" @click="elegidas.push(c.id); busca = ''" class="w-full text-left px-3 py-1.5 hover:bg-indigo-50">
+                                <span class="text-sm font-semibold" x-text="c.nombre"></span> <span class="text-xs text-slate-400" x-text="c.ruc + ' · ' + (c.sub || '')"></span></button>
+                        </template>
+                        <p x-show="!encontradas().length" class="px-3 py-2 text-xs text-slate-400">No hay coincidencias.</p>
+                    </div>
+                </div>
+            </div>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="se_puede_cerrar" value="1" x-model="cerrar" class="rounded border-slate-300"> El cliente lo puede cerrar con la ✕</label>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="activo" value="1" @checked(old('activo', $e->activo ?? true)) class="rounded border-slate-300"> Activo</label>
 
@@ -95,6 +129,7 @@
                     $vencido = $a->hasta && $a->hasta < now()->toDateTimeString();
                     $porVenir = $a->desde && $a->desde > now()->toDateTimeString();
                     $rs = $a->rubros ? json_decode($a->rubros, true) : [];
+                    $es = ! empty($a->empresas) ? json_decode($a->empresas, true) : [];
                 @endphp
                 <div class="p-4 {{ $a->activo && ! $vencido ? '' : 'opacity-60' }}">
                     <div class="rounded-lg px-3 py-2 text-sm" style="background: {{ $fondo }}; color: {{ $color }}">{{ $icono }} {{ $a->mensaje }}</div>
@@ -105,7 +140,7 @@
                         @else<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Se está viendo</span>@endif
                         <span>{{ $a->desde ? \Illuminate\Support\Carbon::parse($a->desde)->format('d/m/Y H:i') : \Illuminate\Support\Carbon::parse($a->created_at)->format('d/m/Y H:i') }}
                             → {{ $a->hasta ? \Illuminate\Support\Carbon::parse($a->hasta)->format('d/m/Y H:i') : 'sin fin' }}</span>
-                        <span>{{ $rs ? implode(', ', array_map(fn ($r) => $rubros[$r] ?? $r, $rs)) : 'Todas las empresas' }}</span>
+                        <span>{{ $es ? '🏢 '.implode(', ', array_map(fn ($id) => $nombreCliente[$id] ?? '#'.$id, $es)) : ($rs ? implode(', ', array_map(fn ($r) => $rubros[$r] ?? $r, $rs)) : 'Todas las empresas') }}</span>
                         @unless ($a->se_puede_cerrar)<span>· no se puede cerrar</span>@endunless
                         <span class="ml-auto flex gap-3">
                             <a href="{{ route('admin.anuncios.index', ['editar' => $a->id]) }}" class="font-semibold text-slate-600 hover:text-indigo-700">Editar</a>

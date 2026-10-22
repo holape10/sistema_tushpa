@@ -40,6 +40,8 @@ class Reportes
     /** @param array $f desde, hasta, sucursal, y los filtros propios de cada reporte */
     public static function generar(string $clave, array $f): array
     {
+        // Una sucursal o varias (el administrador puede ver todas juntas)
+        $f['sucursales'] ??= [(int) $f['sucursal']];
         $r = match ($clave) {
             'ventas' => self::ventas($f),
             'ventas-vendedor' => self::porVendedor($f),
@@ -102,14 +104,14 @@ class Reportes
 
     private static function cpe(array $f)
     {
-        return self::filtrosComunes(DB::table('cpe_cabecera as c')->where('c.id_empresa_negocio', $f['sucursal'])
+        return self::filtrosComunes(DB::table('cpe_cabecera as c')->whereIn('c.id_empresa_negocio', $f['sucursales'])
             ->whereBetween('c.ccafem', [$f['desde'], $f['hasta']])->whereNull('c.ccabaj'), $f);
     }
 
     private static function detalle(array $f)
     {
         return self::filtrosComunes(DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
-            ->where('c.id_empresa_negocio', $f['sucursal'])->whereBetween('c.ccafem', [$f['desde'], $f['hasta']])->whereNull('c.ccabaj'), $f);
+            ->whereIn('c.id_empresa_negocio', $f['sucursales'])->whereBetween('c.ccafem', [$f['desde'], $f['hasta']])->whereNull('c.ccabaj'), $f);
     }
 
     // ================================================================== VENTAS
@@ -118,7 +120,7 @@ class Reportes
     {
         $estado = $f['estado'] ?? 'vigentes';
         $q = DB::table('cpe_cabecera as c')->leftJoin('users as u', 'u.IdUsuario', '=', DB::raw('COALESCE(c.IdUsuario_ven, c.IdUsuario)'))
-            ->where('c.id_empresa_negocio', $f['sucursal'])->whereBetween('c.ccafem', [$f['desde'], $f['hasta']])
+            ->whereIn('c.id_empresa_negocio', $f['sucursales'])->whereBetween('c.ccafem', [$f['desde'], $f['hasta']])
             ->when($estado === 'vigentes', fn ($w) => $w->whereNull('c.ccabaj'))->when($estado === 'anuladas', fn ($w) => $w->whereNotNull('c.ccabaj'))
             ->tap(fn ($w) => self::filtrosComunes($w, $f))
             ->orderBy('c.fecha_hora')->select('c.*', DB::raw("COALESCE(NULLIF(u.apeusu, ''), u.name) as vendedor"))->get();
@@ -261,7 +263,7 @@ class Reportes
         // Todos los productos que se venden (activos), con o sin ventas en el periodo
         $rows = DB::table('productos as p')->leftJoinSub($vendidos, 'v', 'v.IdProducto', '=', 'p.IdProducto')
             ->leftJoin('categorias as cat', 'cat.cat_id', '=', 'p.cat_id')
-            ->where('p.id_empresa_negocio', $f['sucursal'])->where('p.proest', 'Activo')->whereNotIn('p.promocion', Producto::NO_VENDIBLES)
+            ->whereIn('p.id_empresa_negocio', $f['sucursales'])->where('p.proest', 'Activo')->whereNotIn('p.promocion', Producto::NO_VENDIBLES)
             ->when(! empty($f['categoria']), fn ($w) => $w->where('p.cat_id', $f['categoria']))
             ->orderBy(DB::raw('COALESCE(v.cantidad, 0)'), $orden)->orderBy('p.pronom')->limit($limite)
             ->get(['p.procod', 'p.pronom', 'cat.cat_nom', 'p.propun', DB::raw('COALESCE(v.cantidad, 0) as cantidad'), DB::raw('COALESCE(v.total, 0) as total')]);
@@ -307,7 +309,7 @@ class Reportes
     private static function compras(array $f): array
     {
         $rows = DB::table('compras_cabecera as c')->leftJoin('proveedor as p', 'p.prov_id', '=', 'c.prov_id')
-            ->where('c.id_empresa_negocio', $f['sucursal'])->whereBetween('c.com_fec', [$f['desde'], $f['hasta']])
+            ->whereIn('c.id_empresa_negocio', $f['sucursales'])->whereBetween('c.com_fec', [$f['desde'], $f['hasta']])
             ->when(($f['estado'] ?? 'vigentes') === 'vigentes', fn ($w) => $w->where('c.est_compra', 'Registrado'))
             ->when(($f['estado'] ?? '') === 'anuladas', fn ($w) => $w->where('c.est_compra', 'Anulado'))
             ->orderBy('c.com_fec')->select('c.*', 'p.prov_ruc', 'p.prov_raz')->get();
@@ -331,7 +333,7 @@ class Reportes
     {
         $tc = "CASE WHEN c.mon_id = 'USD' THEN c.tip_cam ELSE 1 END";
         $rows = DB::table('compras_cabecera as c')->leftJoin('proveedor as p', 'p.prov_id', '=', 'c.prov_id')
-            ->where('c.id_empresa_negocio', $f['sucursal'])->whereBetween('c.com_fec', [$f['desde'], $f['hasta']])->where('c.est_compra', 'Registrado')
+            ->whereIn('c.id_empresa_negocio', $f['sucursales'])->whereBetween('c.com_fec', [$f['desde'], $f['hasta']])->where('c.est_compra', 'Registrado')
             ->groupBy('c.prov_id', 'p.prov_ruc', 'p.prov_raz')
             ->select('p.prov_ruc', 'p.prov_raz', DB::raw('COUNT(*) as docs'), DB::raw("SUM(c.total_com * $tc) as total"), DB::raw("SUM(c.igv_com * $tc) as igv"),
                 DB::raw("SUM(c.saldofactura * $tc) as saldo"), DB::raw('MAX(c.com_fec) as ultima'))
@@ -350,7 +352,7 @@ class Reportes
         $tc = "CASE WHEN c.mon_id = 'USD' THEN c.tip_cam ELSE 1 END";
         $rows = DB::table('compras_detalle as d')->join('compras_cabecera as c', 'c.com_cab_id', '=', 'd.com_cab_id')
             ->leftJoin('productos as p', 'p.IdProducto', '=', 'd.pro_id')
-            ->where('c.id_empresa_negocio', $f['sucursal'])->whereBetween('c.com_fec', [$f['desde'], $f['hasta']])->where('c.est_compra', 'Registrado')
+            ->whereIn('c.id_empresa_negocio', $f['sucursales'])->whereBetween('c.com_fec', [$f['desde'], $f['hasta']])->where('c.est_compra', 'Registrado')
             ->groupBy('d.pro_id', 'p.procod', 'p.pronom', 'd.ume_cod')
             ->select('p.procod', 'p.pronom', 'd.ume_cod', DB::raw('SUM(d.cantidad) as cantidad'), DB::raw("SUM(d.total * $tc) as total"),
                 DB::raw('COUNT(DISTINCT c.com_cab_id) as compras'), DB::raw('MIN(d.precio_costo) as minimo'), DB::raw('MAX(d.precio_costo) as maximo'),
@@ -374,7 +376,7 @@ class Reportes
         $agrupar = in_array($f['agrupar'] ?? '', ['insumo', 'plato', 'dia'], true) ? $f['agrupar'] : 'insumo';
         $signo = "CASE WHEN m.mov_tip = 'E' THEN m.cantidad ELSE -m.cantidad END";
         $base = DB::table('movimientos_productos as m')->join('productos as i', 'i.IdProducto', '=', 'm.IdProducto')
-            ->where('m.id_empresa_negocio', $f['sucursal'])->whereBetween('m.fecha_mov', [$f['desde'], $f['hasta']])
+            ->whereIn('m.id_empresa_negocio', $f['sucursales'])->whereBetween('m.fecha_mov', [$f['desde'], $f['hasta']])
             ->where(fn ($w) => $w->whereNotNull('m.merma_id')
                 ->orWhere(fn ($v) => $v->whereNotNull('m.IdProducto_rel')->whereColumn('m.IdProducto_rel', '!=', 'm.IdProducto')
                     ->whereIn('m.cod_tip_ope', ['01', '05'])->whereNotNull('m.IdCpe_cabecera')));

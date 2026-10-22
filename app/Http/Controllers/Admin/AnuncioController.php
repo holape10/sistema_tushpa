@@ -30,6 +30,10 @@ class AnuncioController extends Controller
             'editar' => $editar,
             'rubros' => collect(Rubros::RUBROS)->except('COMPLETO')->map(fn ($r) => $r['nombre']),
             'empresas' => Cliente::where('estado', 'ACTIVO')->groupBy('rubro')->selectRaw('rubro, COUNT(*) as n')->pluck('n', 'rubro'),
+            'clientes' => Cliente::where('estado', '!=', 'ELIMINADO')->orderBy('razon_social')
+                ->get(['id', 'ruc', 'razon_social', 'nombre_comercial', 'subdominio'])
+                ->map(fn ($c) => ['id' => $c->id, 'nombre' => $c->nombre_comercial ?: $c->razon_social, 'ruc' => $c->ruc, 'sub' => $c->subdominio])->values(),
+            'paraEmpresa' => (int) $request->get('empresa'),
         ]);
     }
 
@@ -39,14 +43,18 @@ class AnuncioController extends Controller
         abort_if($id && ! Anuncios::db()->where('id', $id)->exists(), 404);
         $d = $request->validate([
             'mensaje' => 'required|string|min:5|max:600', 'tipo' => ['required', Rule::in(array_keys(Anuncios::TIPOS))],
-            'rubros' => 'nullable|array', 'rubros.*' => Rule::in(array_keys(Rubros::RUBROS)),
+            'para' => 'required|in:TODAS,RUBROS,EMPRESAS',
+            'rubros' => 'nullable|array|required_if:para,RUBROS', 'rubros.*' => Rule::in(array_keys(Rubros::RUBROS)),
+            'empresas' => 'nullable|array|required_if:para,EMPRESAS', 'empresas.*' => 'integer|exists:central.clientes,id',
             'desde' => 'nullable|date', 'hasta' => 'nullable|date|after_or_equal:desde',
             'se_puede_cerrar' => 'nullable|boolean', 'activo' => 'nullable|boolean',
-        ], ['hasta.after_or_equal' => 'La fecha "hasta" debe ser después de "desde".'], ['hasta' => 'hasta', 'desde' => 'desde']);
+        ], ['hasta.after_or_equal' => 'La fecha "hasta" debe ser después de "desde".', 'rubros.required_if' => 'Marca al menos un rubro.',
+            'empresas.required_if' => 'Elige al menos una empresa.'], ['hasta' => 'hasta', 'desde' => 'desde']);
 
         $fila = [
             'mensaje' => trim($d['mensaje']), 'tipo' => $d['tipo'],
-            'rubros' => empty($d['rubros']) ? null : json_encode(array_values($d['rubros'])),
+            'rubros' => $d['para'] === 'RUBROS' ? json_encode(array_values($d['rubros'])) : null,
+            'empresas' => $d['para'] === 'EMPRESAS' ? json_encode(array_map('intval', array_values(array_unique($d['empresas'])))) : null,
             'desde' => $d['desde'] ?? null, 'hasta' => $d['hasta'] ?? null,
             'se_puede_cerrar' => $request->boolean('se_puede_cerrar'), 'activo' => $request->boolean('activo'), 'updated_at' => now(),
         ];

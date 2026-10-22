@@ -27,6 +27,7 @@
             @if ($sucursales->count() > 1)
                 <label class="text-sm">Sucursal
                     <select name="sucursal" class="block rounded-lg border-gray-300 text-sm">
+                        @if ($permiteTodas)<option value="0" @selected($filtros['sucursal'] == 0)>TODAS LAS SUCURSALES</option>@endif
                         @foreach ($sucursales as $s)<option value="{{ $s->id_empresa_negocio }}" @selected($filtros['sucursal'] == $s->id_empresa_negocio)>{{ $s->nombre_comercial }}</option>@endforeach
                     </select></label>
             @endif

@@ -62,9 +62,12 @@ class Anuncios
 
         return collect($todos)->map(fn ($a) => (object) $a)->filter(function ($a) use ($cliente, $ahora) {
             $rubros = $a->rubros ? json_decode($a->rubros, true) : null;
+            $empresas = ! empty($a->empresas) ? json_decode($a->empresas, true) : null;
+            // Si se eligieron empresas, solo ellas lo ven; si no, todas (o las de los rubros elegidos)
+            $paraEsta = $empresas ? in_array((int) $cliente->id, array_map('intval', $empresas), true)
+                : (empty($rubros) || in_array($cliente->rubro, $rubros, true));
 
-            return (! $a->hasta || $a->hasta >= $ahora) && (! $a->desde || $a->desde <= $ahora)
-                && (empty($rubros) || in_array($cliente->rubro, $rubros, true));
+            return (! $a->hasta || $a->hasta >= $ahora) && (! $a->desde || $a->desde <= $ahora) && $paraEsta;
         })->values();
     }
 }

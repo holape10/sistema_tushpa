@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\EmpresaNegocio;
 use App\Models\MedioPago;
 use App\Models\Turno;
 use App\Support\AnulacionVenta;
 use App\Support\Impresion\ComprobantePdf;
 use App\Support\Notas;
+use App\Support\SucursalesVisibles;
 use App\Support\Sunat\SunatService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -22,10 +22,10 @@ class VentaController extends Controller
         abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja ven el panel de ventas.');
     }
 
-    /** Sucursales de la empresa del usuario (el filtro nunca sale de su empresa) */
+    /** Sucursales que ve el usuario: el administrador todas las de su empresa; caja, solo la suya */
     private function sucursales()
     {
-        return EmpresaNegocio::where('IdEmpresa', Auth::user()->IdEmpresa)->orderBy('id_empresa_negocio')->get();
+        return SucursalesVisibles::de(Auth::user());
     }
 
     private function venta($id): object
@@ -40,8 +40,8 @@ class VentaController extends Controller
     /** Consulta base con los filtros del formulario */
     private function consulta(Request $request)
     {
-        $sucursal = (int) $request->get('sucursal', Auth::user()->id_empresa_negocio);
-        abort_unless($this->sucursales()->contains('id_empresa_negocio', $sucursal), 403);
+        $sucursal = SucursalesVisibles::elegida($request, Auth::user());
+        $ids = SucursalesVisibles::ids(Auth::user(), $sucursal);
 
         $desde = $request->get('desde', now()->startOfMonth()->toDateString());
         $hasta = $request->get('hasta', now()->toDateString());
@@ -52,7 +52,7 @@ class VentaController extends Controller
             ->leftJoin('tipo_documento as t', 't.tdocod', '=', 'c.tdocod')
             ->leftJoin('users as u', 'u.IdUsuario', '=', 'c.IdUsuario')
             ->leftJoin('mesas as m', 'm.mes_id', '=', 'c.mes_id')
-            ->where('c.id_empresa_negocio', $sucursal)
+            ->whereIn('c.id_empresa_negocio', $ids)
             ->whereBetween('c.ccafem', [$desde, $hasta])
             ->when($request->filled('tipo'), fn ($w) => $w->where('c.tdocod', $request->tipo))
             ->when($cliente !== '', fn ($w) => $w->where(fn ($x) => $x->where('c.ccanom', 'like', "%$cliente%")->orWhere('c.ccandi', 'like', "$cliente%")))
@@ -113,7 +113,7 @@ class VentaController extends Controller
             'ventas' => $ventas, 'medios' => $medios, 'resumen' => $resumen, 'turnosAbiertos' => $turnosAbiertos,
             'sucursales' => $this->sucursales(),
             'tipos' => DB::table('tipo_documento')->orderBy('tdocod')->get(),
-            'mediosPago' => MedioPago::where('id_empresa_negocio', $filtros['sucursal'])->get(),
+            'mediosPago' => MedioPago::whereIn('id_empresa_negocio', SucursalesVisibles::ids(Auth::user(), $filtros['sucursal']))->get(),
             'empresa' => DB::table('empresa')->where('IdEmpresa', Auth::user()->IdEmpresa)->first(),
         ]);
     }
