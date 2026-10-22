@@ -2,6 +2,8 @@
     Advertencia de pago que deja el panel admin.tushpa.app (antes de suspender): barra fija abajo en todas las pantallas
     del sistema de la empresa, con los días que faltan y los datos para pagar. Se puede ocultar por un rato; vuelve al recargar.
 --}}
+{{-- Anuncio general del panel (en el layout ya salió arriba; en las pantallas de venta sale flotando) --}}
+@include('partials.anuncio_general', ['flotante' => true])
 @php
     $clienteTenancy = \App\Support\Tenancy\Tenancy::cliente();
     $pago = config('soporte.pago');

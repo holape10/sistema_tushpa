@@ -3,6 +3,7 @@
 // Panel multi-empresa (base central). Se carga desde bootstrap/app.php con dominio admin.{dominio} y prefijo TENANCY_ADMIN_RUTA.
 
 use App\Http\Controllers\Admin\AgenteController;
+use App\Http\Controllers\Admin\AnuncioController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\ComprobanteController;
 use App\Http\Controllers\Admin\LoginController;
@@ -51,6 +52,10 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/planes', [ClienteController::class, 'planesIndex'])->name('planes.index');
     Route::post('/planes/{plan?}', [ClienteController::class, 'planesGuardar'])->whereNumber('plan')->name('planes.guardar');
     Route::get('/visitas', [VisitaController::class, 'index'])->name('visitas.index');
+    Route::get('/anuncios', [AnuncioController::class, 'index'])->name('anuncios.index');
+    Route::post('/anuncios/{id?}', [AnuncioController::class, 'guardar'])->whereNumber('id')->name('anuncios.guardar');
+    Route::post('/anuncios/{id}/estado', [AnuncioController::class, 'estado'])->whereNumber('id')->name('anuncios.estado');
+    Route::post('/anuncios/{id}/eliminar', [AnuncioController::class, 'eliminar'])->whereNumber('id')->name('anuncios.eliminar');
     Route::get('/promociones', [PromocionController::class, 'index'])->name('promociones.index');
     Route::post('/promociones/{id?}', [PromocionController::class, 'guardar'])->whereNumber('id')->name('promociones.guardar');
     Route::post('/promociones/{id}/estado', [PromocionController::class, 'estado'])->whereNumber('id')->name('promociones.estado');

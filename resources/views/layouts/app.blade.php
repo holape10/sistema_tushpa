@@ -208,6 +208,7 @@
 
     <!-- Contenido -->
     <div class="flex-1 flex flex-col overflow-hidden transition-[padding] duration-200" :class="anclado ? 'pl-64' : ''">
+        @include('partials.anuncio_general')
         <header class="relative z-20 bg-white shadow-sm px-4 py-3 flex items-center justify-between" :class="anclado ? 'pl-6' : 'pl-16'">
             <h1 class="text-gray-700 font-semibold text-sm sm:text-base">@yield('title', 'Panel')</h1>
             <div class="flex items-center gap-4">
