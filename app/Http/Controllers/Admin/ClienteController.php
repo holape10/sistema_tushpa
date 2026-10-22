@@ -70,7 +70,10 @@ class ClienteController extends Controller
         $q = trim((string) $request->get('q'));
         $filtro = (string) $request->get('filtro');
         $limiteEliminar = now()->subDays(config('sitio.dias_para_eliminar'))->toDateString();
-        $clientes = $this->mios()->with('planContratado')
+        // El dueño puede ver solo las empresas de un usuario del panel (los totales también se calculan solo de ese usuario)
+        $usuario = $this->esDueno() ? (int) $request->get('usuario') : 0;
+        $base = fn () => $this->mios()->when($usuario, fn ($w) => $w->where('clientes.creado_por', $usuario));
+        $clientes = $base()->with('planContratado')
             ->when($filtro === '', fn ($w) => $w->where('estado', '!=', 'ELIMINADO'))
             ->when($filtro === 'prueba', fn ($w) => $w->where('estado', 'ACTIVO')->whereNotNull('prueba_hasta'))
             ->when($filtro === 'web', fn ($w) => $w->where('origen', 'web')->where('estado', '!=', 'ELIMINADO'))
@@ -84,20 +87,23 @@ class ClienteController extends Controller
             ->paginate(20)->withQueryString();
 
         $totales = [
-            'activos' => $this->mios()->where('estado', 'ACTIVO')->count(),
-            'suspendidos' => $this->mios()->where('estado', 'SUSPENDIDO')->count(),
-            'por_vencer' => $this->mios()->where('estado', 'ACTIVO')->whereNotNull('vence_el')
+            'activos' => $base()->where('estado', 'ACTIVO')->count(),
+            'suspendidos' => $base()->where('estado', 'SUSPENDIDO')->count(),
+            'por_vencer' => $base()->where('estado', 'ACTIVO')->whereNotNull('vence_el')
                 ->where('vence_el', '<=', now()->addDays(7)->toDateString())->count(),
             // Ingreso mensual de los clientes activos según su plan
-            'ingreso' => (float) $this->mios()->where('clientes.estado', 'ACTIVO')->whereNull('clientes.prueba_hasta')
+            'ingreso' => (float) $base()->where('clientes.estado', 'ACTIVO')->whereNull('clientes.prueba_hasta')
                 ->join('planes', 'planes.id', '=', 'clientes.plan_id')->sum('planes.precio'),
-            'en_prueba' => $this->mios()->where('estado', 'ACTIVO')->whereNotNull('prueba_hasta')->count(),
-            'para_eliminar' => $this->mios()->where('estado', 'SUSPENDIDO')->where('suspendido_el', '<=', $limiteEliminar)->count(),
+            'en_prueba' => $base()->where('estado', 'ACTIVO')->whereNotNull('prueba_hasta')->count(),
+            'para_eliminar' => $base()->where('estado', 'SUSPENDIDO')->where('suspendido_el', '<=', $limiteEliminar)->count(),
         ];
         $comprobantes = $clientes->getCollection()->mapWithKeys(fn ($cl) => [$cl->id => $this->comprobantes($cl)]);
         $usuarios = $this->esDueno() ? Superadmin::orderBy('nombre')->pluck('nombre', 'id') : collect();
 
-        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'filtro', 'comprobantes', 'usuarios', 'limiteEliminar'));
+        $porUsuario = $this->esDueno() ? Cliente::where('estado', '!=', 'ELIMINADO')->groupBy('creado_por')
+            ->select('creado_por', DB::raw('COUNT(*) as n'))->pluck('n', 'creado_por') : collect();
+
+        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'filtro', 'comprobantes', 'usuarios', 'limiteEliminar', 'usuario', 'porUsuario'));
     }
 
     public function create()

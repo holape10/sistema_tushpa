@@ -23,7 +23,7 @@
     @auth('superadmin')
         {{-- En celular el menú se abre con el botón ☰ (en PC va en una sola fila) --}}
         <header class="bg-slate-900 text-white" x-data="{ menu: false }">
-            <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
+            <div class="@yield('ancho', 'max-w-6xl') mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
                 <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-8 h-8 rounded-lg bg-white p-1">
                 <a href="{{ route('admin.clientes.index') }}" class="font-bold">TUSHPA <span class="font-normal text-slate-400 hidden sm:inline">· Panel de clientes</span></a>
                 <button type="button" @click="menu = !menu" class="lg:hidden ml-auto px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700" aria-label="Menú">
@@ -61,7 +61,7 @@
         </header>
     @endauth
 
-    <main class="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+    <main class="@yield('ancho', 'max-w-6xl') mx-auto px-3 sm:px-4 py-4 sm:py-6">
         @if (session('ok'))
             <div class="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm">{{ session('ok') }}</div>
         @endif
