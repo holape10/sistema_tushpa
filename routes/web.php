@@ -51,6 +51,7 @@ use App\Http\Controllers\MermaController;
 use App\Http\Controllers\MesaController;
 use App\Http\Controllers\MotorizadoController;
 use App\Http\Controllers\NotaController;
+use App\Http\Controllers\PanelDuenoController;
 use App\Http\Controllers\PisoController;
 use App\Http\Controllers\PlanillaController;
 use App\Http\Controllers\PosMovilController;
@@ -889,5 +890,12 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::get('/actividad', [LineaTiempoController::class, 'index'])
     ->middleware(['auth'])
     ->name('actividad.index');
+
+// Panel del dueño: cómo va el negocio, horas pico, ranking del equipo, alertas y resumen del día por WhatsApp
+Route::middleware('auth')->prefix('panel-dueno')->name('dueno.')->controller(PanelDuenoController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/resumen-dia', 'resumenDia')->name('resumen_dia');
+    Route::post('/configuracion', 'configuracion')->name('configuracion');
+});
 
 require __DIR__.'/auth.php';

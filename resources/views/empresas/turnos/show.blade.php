@@ -28,6 +28,9 @@
     <a href="{{ route('turnos.categorias', $turno->id_turno) }}">Categorías</a>
     <a href="{{ route('turnos.listado') }}">Listado de turnos</a>
     <a href="{{ route('turnos.index') }}">Caja</a>
+    @if ($turno->estado == 'CERRADO' && auth()->user()->esAdmin())
+        <a href="{{ route('dueno.index', ['resumen' => 1]) }}">📲 Resumen del día al dueño</a>
+    @endif
 </div>
 <div class="hoja">
     @if (session('success'))
