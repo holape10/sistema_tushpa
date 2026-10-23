@@ -20,7 +20,8 @@
                 && (this.ver === '' || (this.ver === 'sin' && !p.receta) || (this.ver === 'con' && p.receta) || (this.ver === 'alto' && p.nivel === 'alto') || (this.ver === 'incompleto' && p.nivel === 'incompleto')));
         },
         {{-- Imprimir / descargar: un plato (su botón) o los que se ven en la lista y tienen receta --}}
-        menu: null, imprimiendo: false,
+        menu: null, imprimiendo: false, previa: null,
+        verTicket(ids) { this.menu = null; if (!ids.length) return tushpaAviso('No hay platos con receta en esta lista.', 'error'); this.previa = ids; },
         get conReceta() { return this.lista.filter(p => p.receta).map(p => p.id); },
         enlace(tipo, ids) { return { excel: @js(route('recetas.exportar.excel')), pdf: @js(route('recetas.exportar.pdf')), navegador: @js(route('recetas.exportar.ticket.navegador')) }[tipo] + '?ids=' + ids.join(','); },
         descargar(tipo, ids) { this.menu = null; if (!ids.length) return tushpaAviso('No hay platos con receta en esta lista.', 'error'); window.open(this.enlace(tipo, ids), '_blank'); },
@@ -31,7 +32,7 @@
             try {
                 const r = await fetch(@js(route('recetas.exportar.ticket')), { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) }, body: JSON.stringify({ ids: ids.join(',') }) });
                 const d = await r.json().catch(() => ({}));
-                if (d.directa) tushpaAviso(d.mensaje, 'ok'); else window.open(this.enlace('navegador', ids), '_blank');
+                if (d.directa) { tushpaAviso(d.mensaje, 'ok'); this.previa = null; } else window.open(this.enlace('navegador', ids), '_blank');
             } finally { this.imprimiendo = false; }
         } }">
     @include('empresas.partials.alert')
@@ -125,7 +126,7 @@
                 {{-- Las recetas que se ven en la lista (según el filtro y la búsqueda) --}}
                 <div class="flex flex-wrap items-center gap-1.5 w-full lg:w-auto">
                     <span class="text-xs text-gray-400 mr-1" x-text="conReceta.length + (conReceta.length === 1 ? ' receta' : ' recetas') + ':'"></span>
-                    <button type="button" @click="imprimir(conReceta)" :disabled="imprimiendo || !conReceta.length" class="h-9 px-3 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 disabled:opacity-40">🖨 Imprimir todas</button>
+                    <button type="button" @click="verTicket(conReceta)" :disabled="!conReceta.length" class="h-9 px-3 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 disabled:opacity-40">🖨 Imprimir todas</button>
                     <button type="button" @click="descargar('pdf', conReceta)" :disabled="!conReceta.length" class="h-9 px-3 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 disabled:opacity-40">PDF</button>
                     <button type="button" @click="descargar('excel', conReceta)" :disabled="!conReceta.length" class="h-9 px-3 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-40">Excel</button>
                 </div>
@@ -160,7 +161,7 @@
                         <button type="button" x-show="p.receta" @click="menu = menu === p.id ? null : p.id" title="Imprimir o descargar la receta"
                                 class="w-9 h-9 rounded-xl bg-gray-100 text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">🖨</button>
                         <div x-show="menu === p.id" x-cloak x-transition class="absolute right-2 top-11 z-20 w-44 rounded-xl bg-white shadow-xl ring-1 ring-black/5 py-1 text-sm">
-                            <button type="button" @click="imprimir([p.id])" class="w-full text-left px-3 py-2 hover:bg-gray-50">🖨 Imprimir ticket</button>
+                            <button type="button" @click="verTicket([p.id])" class="w-full text-left px-3 py-2 hover:bg-gray-50">🖨 Ver e imprimir ticket</button>
                             <button type="button" @click="descargar('pdf', [p.id])" class="w-full text-left px-3 py-2 hover:bg-gray-50">📄 Descargar PDF</button>
                             <button type="button" @click="descargar('excel', [p.id])" class="w-full text-left px-3 py-2 hover:bg-gray-50">📊 Descargar Excel</button>
                         </div>
@@ -168,6 +169,24 @@
                     </div>
                 </template>
                 <p x-show="!lista.length" class="p-8 text-center text-gray-400 text-sm">No hay platos con ese filtro.</p>
+            </div>
+        </div>
+
+        {{-- Vista previa del ticket: se ve tal como sale de la ticketera y desde aquí se imprime --}}
+        <div x-show="previa" x-cloak class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-3" @keydown.escape.window="previa = null" @click.self="previa = null">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-full flex flex-col overflow-hidden">
+                <div class="px-4 py-3 border-b flex items-center gap-2">
+                    <p class="font-bold text-gray-800 flex-1" x-text="previa && previa.length > 1 ? 'Vista previa · ' + previa.length + ' recetas' : 'Vista previa del ticket'"></p>
+                    <button type="button" @click="previa = null" class="w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-500" aria-label="Cerrar">✕</button>
+                </div>
+                <template x-if="previa">
+                    <iframe :src="enlace('navegador', previa) + '&vista=1'" class="w-full flex-1 min-h-[60vh] bg-gray-200" title="Vista previa del ticket"></iframe>
+                </template>
+                <div class="p-3 border-t grid grid-cols-2 gap-2">
+                    <button type="button" @click="imprimir(previa)" :disabled="imprimiendo" class="h-11 rounded-xl bg-slate-800 text-white text-sm font-bold hover:bg-slate-700 disabled:opacity-50"
+                            x-text="imprimiendo ? 'Enviando…' : '🖨 Imprimir en la ticketera'"></button>
+                    <button type="button" @click="window.open(enlace('navegador', previa), '_blank')" class="h-11 rounded-xl bg-gray-100 text-gray-700 text-sm font-bold hover:bg-gray-200">Imprimir desde esta PC</button>
+                </div>
             </div>
         </div>
     @endif

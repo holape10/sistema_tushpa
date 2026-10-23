@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\Excel;
+use App\Support\FichaReceta;
 use App\Support\Impresion\Escpos;
 use App\Support\Impresion\Impresion;
 use App\Support\Recetas;
@@ -40,12 +41,6 @@ class RecetaExportarController extends Controller
         return $fichas;
     }
 
-    /** 220.0 => "220", 0.5 => "0.5" */
-    public static function cantidad(float $n): string
-    {
-        return rtrim(rtrim(number_format($n, 3, '.', ''), '0'), '.');
-    }
-
     private function nombreArchivo(Collection $fichas, string $extension): string
     {
         $base = $fichas->count() === 1 ? 'receta_'.preg_replace('/[^A-Za-z0-9]+/', '_', $fichas->first()->pronom) : 'recetas_'.now()->format('Ymd');
@@ -56,13 +51,14 @@ class RecetaExportarController extends Controller
     public function excel(Request $request): BinaryFileResponse
     {
         $fichas = $this->fichas($request);
-        $resumen = $fichas->map(fn ($p) => [$p->pronom, $p->cat_nom ?: 'SIN CATEGORÍA', $p->precio, $p->costo, $p->ganancia, $p->food_cost, $p->estado['texto'], $p->lineas->count()])->all();
-        $ingredientes = $fichas->flatMap(fn ($p) => $p->lineas->map(fn ($l) => [$p->pronom, $l->nombre, (float) self::cantidad($l->cantidad),
-            Recetas::nombreUnidad($l->umecod), $l->costo_unitario, Recetas::nombreUnidad($l->ume_insumo), round($l->costo, 2)]))->all();
+        $resumen = $fichas->map(fn ($p) => [mb_strtoupper($p->pronom), $p->cat_nom ?: 'SIN CATEGORÍA', $p->costo, $p->precio, $p->ganancia, $p->food_cost,
+            $p->estado['texto'], FichaReceta::resumen($p)['explica'], $p->lineas->count()])->all();
+        $ingredientes = $fichas->flatMap(fn ($p) => collect(FichaReceta::lineas($p))->map(fn ($l) => [mb_strtoupper($p->pronom), $l['nombre'],
+            $l['cantidad'], $l['unidad'], $l['sin_precio'] ? 'SIN PRECIO' : $l['precio_compra'], $l['unidad_compra'], $l['equivale'], $l['costo'], $l['parte']]))->all();
 
         $ruta = (new Excel)
-            ->hoja('Recetas', ['Plato', 'Categoría', 'Precio S/', 'Costo S/', 'Ganancia S/', 'Food cost %', 'Estado', 'Ingredientes'], $resumen)
-            ->hoja('Ingredientes', ['Plato', 'Ingrediente', 'Cantidad', 'Unidad', 'Costo unitario S/', 'Por', 'Costo S/'], $ingredientes)
+            ->hoja('Recetas', ['Plato', 'Categoría', "Te cuesta\nprepararlo S/", "Lo vendes\na S/", "Ganas por\ncada uno S/", 'Food cost %', 'Cómo está', '¿Qué significa?', 'Ingredientes'], $resumen)
+            ->hoja('Ingredientes', ['Plato', 'Ingrediente', 'Lleva', 'Unidad', "Se compra\na S/", 'Por cada', 'Equivalencia', "Cuesta en\nel plato S/", "Parte del\ncosto %"], $ingredientes)
             ->guardar();
 
         return response()->download($ruta, $this->nombreArchivo($fichas, 'xlsx'),
@@ -95,19 +91,28 @@ class RecetaExportarController extends Controller
         }
 
         $p = new Escpos((int) $imp->columnas);
-        foreach ($fichas as $i => $f) {
+        foreach ($fichas as $f) {
+            $r = FichaReceta::resumen($f);
             $p->alinear('centro')->negrita()->texto('RECETA')->negrita(false)
                 ->tamano(1, 2)->negrita()->parrafo(mb_strtoupper($f->pronom))->negrita(false)->tamano()
-                ->texto($f->cat_nom ?: 'SIN CATEGORÍA')->alinear('izq')->linea('=');
-            foreach ($f->lineas as $l) {
-                $p->negrita()->parrafo($l->nombre)->negrita(false)
-                    ->dosColumnas('   '.self::cantidad($l->cantidad).' '.Recetas::nombreUnidad($l->umecod), 'S/ '.number_format($l->costo, 2));
+                ->texto($f->cat_nom ?: 'SIN CATEGORÍA')->alinear('izq')->linea('=')
+                ->negrita()->texto('INGREDIENTES ('.$f->lineas->count().')')->negrita(false)->linea();
+            foreach (FichaReceta::lineas($f) as $n => $l) {
+                $p->negrita()->parrafo(($n + 1).'. '.$l['nombre'])->negrita(false)
+                    ->dosColumnas('   Lleva: '.$l['lleva'], 'S/ '.number_format($l['costo'], 2))
+                    ->parrafo('   '.($l['compra'] ? 'Se compra a '.$l['compra'] : 'SIN PRECIO DE COMPRA'));
+                if ($l['equivale']) {
+                    $p->parrafo('   ('.$l['equivale'].')');
+                }
             }
             $p->linea()
-                ->dosColumnas('Costo de ingredientes', 'S/ '.number_format($f->costo, 2))
-                ->dosColumnas('Precio de venta', 'S/ '.number_format($f->precio, 2))
-                ->negrita()->dosColumnas('Ganancia', 'S/ '.number_format($f->ganancia, 2))->negrita(false)
-                ->dosColumnas('Food cost', $f->food_cost !== null ? $f->food_cost.'% · '.$f->estado['texto'] : '—');
+                ->dosColumnas('Te cuesta prepararlo', $r['cuesta'])
+                ->dosColumnas('Lo vendes a', $r['vende'])
+                ->negrita()->dosColumnas('GANAS POR CADA UNO', $r['ganas'])->negrita(false)
+                ->linea()->texto('Food cost: '.$r['food_cost']);
+            if ($r['explica']) {
+                $p->parrafo($r['explica']);
+            }
             // Varias recetas: cada una en su propio ticket (se cortan por separado para la cocina)
             $p->avanzar(3)->cortar();
         }
@@ -117,10 +122,10 @@ class RecetaExportarController extends Controller
             .(Impresion::agenteConectado($sucursal) ? 'enviada(s) a la impresora.' : 'en cola, saldrán apenas se conecte el agente de impresión.')]);
     }
 
-    /** Versión de 80 mm para imprimir desde el navegador cuando no hay ticketera */
+    /** El ticket en 80 mm: vista previa (?vista=1, dentro de la pantalla) o para imprimir desde el navegador cuando no hay ticketera */
     public function ticketNavegador(Request $request): View
     {
-        return view('empresas.recetas.ticket', ['fichas' => $this->fichas($request)]);
+        return view('empresas.recetas.ticket', ['fichas' => $this->fichas($request), 'vistaPrevia' => $request->boolean('vista')]);
     }
 
     private function negocio(): string
