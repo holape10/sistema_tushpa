@@ -35,6 +35,7 @@
                 p: null, cargando: true, online: navigator.onLine, agente: null, pendientes: 0, errores: 0, nombrePc: '', subiendo: false,
                 vista: 'venta', busqueda: '', categoria: null, carrito: [], mesasAbiertas: [], mesa: null, elegirPresentacion: null,
                 cobro: null, ventas: [], aviso: null, avisoTipo: 'ok', procesando: false, volvio: false, subidasAlVolver: 0,
+                ultima: null, pvResultados: [], pvActivo: 0, pvAbierto: false, pvMedio: null, pvMonto: '',
 
                 async init() {
                     this.p = await C.paquete().catch(() => null);
@@ -46,6 +47,12 @@
                         }
                     }
                     this.cargando = false;
+                    // Comercios (sin mesas) abren en la vista de Punto de venta; se recuerda la última que usó
+                    if (this.p) {
+                        let guardada = null;
+                        try { guardada = localStorage.getItem('tushpa_caja_vista'); } catch (e) { /* sin almacenamiento */ }
+                        this.irA(['pv', 'venta'].includes(guardada) ? guardada : (this.p.mesas.length ? 'venta' : 'pv'));
+                    }
                     await this.refrescar();
                     this.agente = await C.agenteDisponible();
                     // Volvió el internet: sube lo vendido y ofrece volver al sistema normal
@@ -153,6 +160,108 @@
                 get factor() { return this.mesa ? this.p.empresa.factor_mesa : this.p.empresa.factor; },
                 get total() { return C.totales(this.lista, this.p?.empresa.gravado, this.factor || 1.18).total; },
 
+                // ---------------------------------------------------------------- vista punto de venta (como la del sistema)
+
+                irA(vista) {
+                    if (vista === 'pv') {
+                        this.mesa = null;
+                        if (!this.cobro || this.cobro.modal) this.pvNuevo();
+                        this.$nextTick(() => this.$refs.pvBuscador?.focus());
+                    } else if (this.cobro && !this.cobro.modal) {
+                        this.cobro = null;
+                    }
+                    if (['pv', 'venta'].includes(vista)) { try { localStorage.setItem('tushpa_caja_vista', vista); } catch (e) { /* sin almacenamiento */ } }
+                    this.vista = vista;
+                },
+
+                get pvComprobantes() { return ['01', '03', '13'].filter((t) => this.p?.series[t]); },
+                nombreComprobante(t) { return { '01': 'Factura', '03': 'Boleta', '13': 'N. Venta' }[t]; },
+
+                pvNuevo() {
+                    const tdocod = this.pvComprobantes.includes(this.p.empresa.tdocod) ? this.p.empresa.tdocod : this.pvComprobantes[0];
+                    this.cobro = { modal: false, tdocod, tdicod: tdocod === '01' ? '6' : '1', clinum: tdocod === '01' ? '' : '00000000',
+                        clinom: tdocod === '01' ? '' : 'VENTA AL PORTADOR', clidir: '', observaciones: '', paga: '', pagos: [] };
+                    this.pvMedio = this.p.medios[0]?.id;
+                    this.pvMonto = '';
+                },
+
+                pvElegirComprobante(t) {
+                    const portador = !this.cobro.clinum || this.cobro.clinum === '00000000';
+                    this.cobro.tdocod = t;
+                    if (t === '01' && portador) Object.assign(this.cobro, { tdicod: '6', clinum: '', clinom: '' });
+                    if (t !== '01' && !this.cobro.clinum) Object.assign(this.cobro, { tdicod: '1', clinum: '00000000', clinom: 'VENTA AL PORTADOR' });
+                },
+
+                pvBuscar() {
+                    const texto = this.busqueda.trim(), q = sinTildes(texto);
+                    this.pvResultados = q ? this.p.productos.filter((x) => sinTildes(x.nombre).includes(q) || sinTildes(x.codigo) === q || x.barra === texto).slice(0, 30) : [];
+                    this.pvActivo = 0;
+                    this.pvAbierto = !!q;
+                },
+
+                pvEnter() {
+                    const t = this.busqueda.trim();
+                    const exacto = this.p.productos.find((y) => (y.barra && y.barra === t) || y.codigo === t);
+                    const x = exacto || this.pvResultados[this.pvActivo];
+                    if (x) this.pvAgregar(x);
+                },
+
+                pvAgregar(x) {
+                    this.busqueda = '';
+                    this.pvResultados = [];
+                    this.pvAbierto = false;
+                    this.tocar(x);
+                    this.$nextTick(() => this.$refs.pvBuscador?.focus());
+                },
+
+                pvMover(paso) { this.pvActivo = Math.min(Math.max(this.pvActivo + paso, 0), Math.max(this.pvResultados.length - 1, 0)); },
+
+                pvLineaLibre() {
+                    const clave = 'L' + Date.now();
+                    this.carrito.push({ clave, id: null, nombre: '', precio: 0, presentacion: null, categoria: null, cantidad: 1, enviado: 0, observacion: '', libre: true });
+                    this.$nextTick(() => document.getElementById('des-' + clave)?.focus());
+                },
+
+                get pvPagado() { return this.cobro ? r2(this.cobro.pagos.reduce((s, x) => s + Number(x.monto || 0), 0)) : 0; },
+                get pvRestante() { return r2(this.total - this.pvPagado); },
+
+                pvAgregarMedio() {
+                    const monto = r2(Number(this.pvMonto) || this.pvRestante);
+                    if (monto <= 0) return;
+                    this.cobro.pagos.push({ medio: Number(this.pvMedio), monto, operacion: '' });
+                    this.pvMonto = '';
+                },
+
+                nombreMedio(id) { return this.p.medios.find((m) => m.id === Number(id))?.nombre || ''; },
+
+                /** IMPRIMIR / REGISTRAR: lo que falta pagar va con el medio elegido arriba */
+                async pvRegistrar(imprimir) {
+                    if (this.procesando) return;
+                    if (!this.p.turno) { this.avisar('No tienes turno de caja abierto. Ábrelo cuando haya internet para poder vender.', 'error'); return; }
+                    if (!this.carrito.length) { this.avisar('Agrega productos al detalle.', 'error'); this.$refs.pvBuscador?.focus(); return; }
+                    if (this.carrito.some((i) => !String(i.nombre).trim() || !(Number(i.precio) > 0) || !(Number(i.cantidad) > 0))) {
+                        this.avisar('Revisa el detalle: cada línea necesita descripción, cantidad y precio.', 'error');
+                        return;
+                    }
+                    const pagos = this.cobro.pagos;
+                    if (this.pvRestante > 0.009) this.cobro.pagos = [...pagos, { medio: Number(this.pvMedio), monto: this.pvRestante, operacion: '' }];
+                    if (!(await this.confirmarCobro(imprimir)) && this.cobro) this.cobro.pagos = pagos;
+                },
+
+                pvCancelar() {
+                    if (this.carrito.length && !confirm('¿Cancelar esta venta?')) return;
+                    this.carrito = [];
+                    this.pvNuevo();
+                    this.$refs.pvBuscador?.focus();
+                },
+
+                pvTecla(e) {
+                    if (this.vista !== 'pv' || this.cobro?.modal || !this.p) return;
+                    if (e.key === 'F2') { e.preventDefault(); this.$refs.pvBuscador?.focus(); }
+                    if (e.key === 'F9') { e.preventDefault(); this.pvRegistrar(true); }
+                    if (e.key === 'F10') { e.preventDefault(); this.pvRegistrar(false); }
+                },
+
                 // ---------------------------------------------------------------- mesas
 
                 estadoMesa(m) { return this.mesasAbiertas.find((x) => x.id === m.id); },
@@ -230,7 +339,7 @@
                     if (!this.lista.length) return;
                     if (this.mesa && this.porEnviar.length && !confirm('Hay productos que aún no salieron a cocina. ¿Cobrar igual?')) return;
                     const medio = this.p.medios[0]?.id;
-                    this.cobro = { tdocod: this.p.empresa.tdocod, clinum: '', clinom: '', clidir: '', observaciones: '', paga: '',
+                    this.cobro = { modal: true, tdocod: this.p.empresa.tdocod, clinum: '', clinom: '', clidir: '', observaciones: '', paga: '',
                         pagos: [{ medio, monto: this.total, operacion: '' }] };
                 },
 
@@ -242,18 +351,19 @@
                     this.cobro.pagos.push({ medio: this.p.medios[1]?.id || this.p.medios[0]?.id, monto: falta > 0 ? falta : 0, operacion: '' });
                 },
 
-                async confirmarCobro() {
+                async confirmarCobro(imprimir = true) {
                     const c = this.cobro, total = this.total;
-                    const doc = c.clinum.trim();
+                    const doc = c.clinum.trim() === '00000000' ? '' : c.clinum.trim();
                     let cliente = { tdicod: '1', clinum: '00000000', clinom: 'VENTA AL PORTADOR', clidir: '' };
                     if (c.tdocod === '01') {
                         if (!/^(10|15|17|20)\d{9}$/.test(doc)) { this.avisar('Para factura escribe un RUC válido de 11 dígitos.', 'error'); return; }
                         if (!c.clinom.trim()) { this.avisar('Escribe la razón social del cliente (sin internet no se puede buscar el RUC).', 'error'); return; }
                         cliente = { tdicod: '6', clinum: doc, clinom: c.clinom.trim().toUpperCase(), clidir: c.clidir.trim().toUpperCase() };
                     } else if (doc) {
-                        if (!/^\d{8}$/.test(doc)) { this.avisar('El DNI debe tener 8 dígitos (o déjalo vacío).', 'error'); return; }
+                        const ruc = /^(10|15|17|20)\d{9}$/.test(doc);
+                        if (!ruc && !/^\d{8}$/.test(doc)) { this.avisar('El DNI debe tener 8 dígitos o el RUC 11 (o déjalo vacío).', 'error'); return; }
                         if (!c.clinom.trim()) { this.avisar('Escribe el nombre del cliente (sin internet no se puede buscar el DNI).', 'error'); return; }
-                        cliente = { tdicod: '1', clinum: doc, clinom: c.clinom.trim().toUpperCase(), clidir: c.clidir.trim().toUpperCase() };
+                        cliente = { tdicod: ruc ? '6' : '1', clinum: doc, clinom: c.clinom.trim().toUpperCase(), clidir: c.clidir.trim().toUpperCase() };
                     } else if (c.tdocod === '03' && total > 700) {
                         this.avisar('Boletas de más de S/ 700 necesitan DNI y nombre del cliente (SUNAT).', 'error'); return;
                     }
@@ -266,17 +376,19 @@
                             uuid: uuid(), usuario: this.p.usuario.id, tdocod: c.tdocod, serie, numero, fecha: ahora(), id_turno: this.p.turno.id, origen: this.p.empresa.origen,
                             mesa: this.mesa?.id || null, mesa_nombre: this.mesa?.nombre || null, mozo: null, ...cliente,
                             observaciones: c.observaciones.trim().slice(0, 90) || null, total, paga: Number(c.paga || 0),
-                            items: this.lista.map((i) => ({ id: i.id, descripcion: i.nombre, cantidad: i.cantidad, precio: i.precio, presentacion: i.presentacion })),
+                            items: this.lista.map((i) => ({ id: i.id, descripcion: String(i.nombre).trim().toUpperCase(), cantidad: i.cantidad, precio: i.precio, presentacion: i.presentacion })),
                             pagos: c.pagos.filter((x) => Number(x.monto) > 0).map((x) => ({ medio: Number(x.medio), monto: r2(x.monto), operacion: x.operacion || null,
                                 nombre: this.p.medios.find((m) => m.id === Number(x.medio))?.nombre })),
                         };
                         await C.guardarVenta(venta);
-                        await this.imprimirVenta(venta);
+                        if (imprimir) await this.imprimirVenta(venta);
                         if (this.mesa) { await C.borrarMesa(this.mesa.id); this.mesa = null; this.vista = 'mesas'; } else { this.carrito = []; }
-                        this.cobro = null;
+                        this.ultima = venta;
+                        if (c.modal) { this.cobro = null; } else { this.pvNuevo(); this.$nextTick(() => this.$refs.pvBuscador?.focus()); }
                         this.avisar(`Venta ${serie}-${String(numero).padStart(8, '0')} guardada en esta PC.` + (this.online ? '' : ' Se subirá sola cuando vuelva el internet.'));
                         await this.refrescar();
                         if (this.online) this.subir(true);
+                        return true;
                     } catch (e) {
                         this.avisar(e.message, 'error');
                     } finally {
@@ -335,7 +447,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.pwa')
 </head>
-<body class="bg-gray-100 text-gray-800 h-screen overflow-hidden" x-data="cajaSinInternet()" x-cloak>
+<body class="bg-gray-100 text-gray-800 h-screen overflow-hidden" x-data="cajaSinInternet()" x-cloak @keydown.window="pvTecla($event)">
 <div class="h-full flex flex-col">
     {{-- Barra: internet, agente, pendientes --}}
     <header class="bg-white border-b px-4 py-2 flex flex-wrap items-center gap-2 text-sm">
@@ -388,12 +500,203 @@
             {{-- Izquierda: productos / mesas / ventas --}}
             <section class="flex-1 flex flex-col min-w-0">
                 <nav class="flex gap-1 px-3 pt-3">
-                    <button type="button" @click="vista = 'venta'" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'venta' ? 'bg-white text-indigo-700' : 'text-gray-500'"
+                    <button type="button" @click="irA('pv')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'pv' ? 'bg-white text-indigo-700' : 'text-gray-500'">Punto de venta</button>
+                    <button type="button" @click="irA('venta')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'venta' ? 'bg-white text-indigo-700' : 'text-gray-500'"
                             x-text="mesa ? 'Productos · ' + mesa.nombre : 'Venta rápida'"></button>
-                    <button type="button" x-show="p.mesas.length" @click="vista = 'mesas'" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'mesas' ? 'bg-white text-indigo-700' : 'text-gray-500'">
+                    <button type="button" x-show="p.mesas.length" @click="irA('mesas')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'mesas' ? 'bg-white text-indigo-700' : 'text-gray-500'">
                         Mesas <span class="text-xs" x-show="mesasAbiertas.length" x-text="'(' + mesasAbiertas.length + ')'"></span></button>
-                    <button type="button" @click="vista = 'ventas'; refrescar()" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'ventas' ? 'bg-white text-indigo-700' : 'text-gray-500'">Ventas de esta PC</button>
+                    <button type="button" @click="irA('ventas'); refrescar()" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'ventas' ? 'bg-white text-indigo-700' : 'text-gray-500'">Ventas de esta PC</button>
                 </nav>
+
+                {{-- Punto de venta: el mismo diseño de la pantalla del sistema (comercios) --}}
+                <div x-show="vista === 'pv'" class="flex-1 overflow-y-auto px-3 pb-3 pt-2">
+                    <template x-if="cobro && !cobro.modal">
+                        <div class="grid lg:grid-cols-12 gap-4 items-start max-w-[1600px] mx-auto">
+                            {{-- Izquierda: búsqueda, detalle y medios de pago --}}
+                            <div class="lg:col-span-7 space-y-4 min-w-0">
+                                <div class="relative" @click.outside="pvAbierto = false">
+                                    <svg class="w-7 h-7 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
+                                    <input x-ref="pvBuscador" type="search" autocomplete="off" x-model="busqueda" @input="pvBuscar()" @focus="pvAbierto = pvResultados.length > 0"
+                                           @keydown.enter.prevent.stop="pvEnter()" @keydown.arrow-down.prevent="pvMover(1)" @keydown.arrow-up.prevent="pvMover(-1)" @keydown.escape="pvAbierto = false"
+                                           placeholder="Buscar producto o escanear código…  (F2)"
+                                           class="w-full h-16 pl-14 pr-4 rounded-2xl border-0 shadow-sm text-2xl font-bold text-slate-800 placeholder:text-slate-300 placeholder:font-normal focus:ring-4 focus:ring-indigo-300">
+                                    <div x-show="pvAbierto" class="absolute z-30 left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl ring-2 ring-indigo-400 overflow-hidden max-h-[65vh] overflow-y-auto">
+                                        <template x-for="(x, i) in pvResultados" :key="x.id">
+                                            <button type="button" @click="pvAgregar(x)" @mouseenter="pvActivo = i" :class="i === pvActivo ? 'bg-indigo-600 text-white' : 'text-slate-800'"
+                                                    class="w-full flex items-center gap-4 px-5 py-3 text-left border-b border-slate-100 last:border-0">
+                                                <span class="flex-1 min-w-0">
+                                                    <span class="block text-xl font-bold leading-snug" x-text="x.nombre"></span>
+                                                    <span class="block text-sm opacity-70" x-text="x.codigo + (x.presentaciones.length ? ' · ' + x.presentaciones.map((y) => y.nombre).join(', ') : '')"></span>
+                                                </span>
+                                                <span class="text-xl font-extrabold whitespace-nowrap" x-text="'S/ ' + x.precio.toFixed(2)"></span>
+                                            </button>
+                                        </template>
+                                        <p x-show="!pvResultados.length" class="px-5 py-6 text-center text-slate-400">No se encontró “<span x-text="busqueda"></span>”.</p>
+                                    </div>
+                                </div>
+
+                                <section class="bg-white rounded-2xl shadow-sm overflow-hidden">
+                                    <div class="flex flex-wrap items-center gap-2 px-4 py-3 bg-slate-800 text-white">
+                                        <h2 class="font-bold tracking-wide flex-1">DETALLE <span x-show="carrito.length" class="text-slate-300 font-normal" x-text="'· ' + carrito.length + (carrito.length === 1 ? ' línea' : ' líneas')"></span></h2>
+                                        <button type="button" x-show="carrito.length" @click="carrito = []" class="text-xs px-2.5 py-1.5 rounded-lg text-rose-200 hover:bg-white/10">Vaciar</button>
+                                        <button type="button" @click="pvLineaLibre()" class="text-sm font-bold px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400">+ Línea libre</button>
+                                    </div>
+                                    <table class="w-full text-sm">
+                                        <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                                            <tr><th class="text-left px-4 py-2">Producto</th><th class="px-2 py-2 w-24">Cant.</th><th class="px-2 py-2 w-28">P. Unit.</th><th class="text-right px-4 py-2 w-28">Total</th><th class="w-10"></th></tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100">
+                                            <template x-for="(it, i) in carrito" :key="it.clave">
+                                                <tr>
+                                                    <td class="px-4 py-1.5">
+                                                        <input type="text" x-model="it.nombre" :id="'des-' + it.clave" maxlength="150" :readonly="!it.libre" :placeholder="it.libre ? 'Descripción (línea libre)' : ''"
+                                                               @keydown.enter.prevent="document.getElementById('cant-' + it.clave)?.focus()"
+                                                               class="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-indigo-400 focus:ring-0 px-0 py-1 font-semibold uppercase text-slate-800">
+                                                        <span class="block text-[11px] text-slate-400 -mt-0.5" x-text="it.libre ? 'Línea libre · no mueve stock' : (p.productos.find((x) => x.id === it.id)?.codigo || '')"></span>
+                                                    </td>
+                                                    <td class="px-2 py-1.5">
+                                                        <input type="number" step="any" min="0.01" x-model.number="it.cantidad" :id="'cant-' + it.clave"
+                                                               @keydown.enter.prevent="it.libre ? document.getElementById('pre-' + it.clave)?.focus() : $refs.pvBuscador.focus()"
+                                                               class="w-full rounded-lg border-slate-200 text-center font-bold focus:ring-indigo-300 focus:border-indigo-400">
+                                                    </td>
+                                                    <td class="px-2 py-1.5">
+                                                        <input type="number" step="any" min="0.01" x-model.number="it.precio" :id="'pre-' + it.clave" :readonly="!it.libre" @keydown.enter.prevent="$refs.pvBuscador.focus()"
+                                                               :class="it.libre ? 'border-dashed border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-700 cursor-not-allowed'"
+                                                               class="w-full rounded-lg text-right font-semibold">
+                                                    </td>
+                                                    <td class="text-right px-4 py-1.5 font-bold text-slate-800 whitespace-nowrap" x-text="'S/ ' + ((Number(it.cantidad) || 0) * (Number(it.precio) || 0)).toFixed(2)"></td>
+                                                    <td class="pr-2">
+                                                        <button type="button" @click="carrito.splice(i, 1)" class="p-1.5 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50" aria-label="Quitar línea">
+                                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                    <p x-show="!carrito.length" class="py-12 text-center text-slate-400">Busca un producto o escanea su código para empezar.<br><span class="text-xs">Enter en el buscador agrega el producto elegido</span></p>
+                                    <div class="px-4 py-3 border-t border-slate-100">
+                                        <label class="text-xs font-bold text-slate-500 uppercase">Observaciones</label>
+                                        <textarea x-model="cobro.observaciones" rows="1" maxlength="90" class="mt-1 w-full rounded-xl border-slate-200 text-sm focus:ring-indigo-300 focus:border-indigo-400"></textarea>
+                                    </div>
+                                </section>
+
+                                <section class="bg-white rounded-2xl shadow-sm p-4">
+                                    <div class="flex flex-wrap items-end gap-2">
+                                        <label class="flex-1 min-w-[160px]">
+                                            <span class="text-xs font-bold text-slate-500 uppercase">Medio de pago</span>
+                                            <select x-model.number="pvMedio" class="mt-1 w-full h-11 rounded-xl border-slate-200 font-semibold">
+                                                <template x-for="m in p.medios" :key="m.id"><option :value="m.id" x-text="m.nombre" :selected="m.id === pvMedio"></option></template>
+                                            </select>
+                                        </label>
+                                        <label class="w-40">
+                                            <span class="text-xs font-bold text-slate-500 uppercase">Monto</span>
+                                            <input type="number" step="any" min="0" x-model="pvMonto" @keydown.enter.prevent="pvAgregarMedio()" :placeholder="Math.max(0, pvRestante).toFixed(2)"
+                                                   class="mt-1 w-full h-11 rounded-xl border-slate-200 text-right font-semibold">
+                                        </label>
+                                        <button type="button" @click="pvAgregarMedio()" class="h-11 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold">+ Agregar</button>
+                                    </div>
+                                    <table class="w-full text-sm mt-3" x-show="cobro.pagos.length">
+                                        <thead class="text-xs uppercase text-slate-500 border-b border-slate-100"><tr><th class="text-left py-2">Medio</th><th class="text-right py-2 w-32">Monto</th><th class="w-8"></th></tr></thead>
+                                        <tbody class="divide-y divide-slate-50">
+                                            <template x-for="(m, i) in cobro.pagos" :key="i">
+                                                <tr>
+                                                    <td class="py-1.5 font-semibold">
+                                                        <span x-text="nombreMedio(m.medio)"></span>
+                                                        <input x-show="nombreMedio(m.medio).toUpperCase() !== 'EFECTIVO'" type="text" maxlength="30" x-model="m.operacion" placeholder="N° operación"
+                                                               class="mt-1 block w-full max-w-[11rem] h-8 rounded-lg border-slate-200 text-xs font-normal uppercase">
+                                                    </td>
+                                                    <td class="py-1.5"><input type="number" step="any" min="0" x-model.number="m.monto" class="w-full h-9 rounded-lg border-slate-200 text-right font-semibold"></td>
+                                                    <td class="text-right"><button type="button" @click="cobro.pagos.splice(i, 1)" class="p-1 rounded text-slate-300 hover:text-rose-600" aria-label="Quitar medio">✕</button></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                    <p x-show="carrito.length && pvRestante > 0.009" class="mt-2 rounded-lg bg-slate-50 text-slate-600 text-sm px-3 py-2">
+                                        <span x-text="cobro.pagos.length ? 'Lo que falta' : 'Todo'"></span> (<b x-text="'S/ ' + pvRestante.toFixed(2)"></b>) se cobra con <b x-text="nombreMedio(pvMedio)"></b>.
+                                    </p>
+                                    <p x-show="carrito.length && pvRestante < -0.009" class="mt-2 rounded-lg bg-amber-50 text-amber-800 text-sm px-3 py-2">
+                                        <strong>Excede el total por:</strong> <span x-text="'S/ ' + Math.abs(pvRestante).toFixed(2)"></span>
+                                    </p>
+                                </section>
+                            </div>
+
+                            {{-- Derecha: comprobante, cliente y totales --}}
+                            <div class="lg:col-span-5 space-y-4 min-w-0">
+                                <section class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <h2 class="text-xs font-bold text-slate-500 uppercase">Comprobante</h2>
+                                        <span class="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold" x-text="p.turno ? 'Turno N° ' + p.turno.numero : 'Sin turno'"></span>
+                                    </div>
+                                    <div class="grid gap-1.5 p-1 bg-slate-100 rounded-xl" :style="`grid-template-columns: repeat(${pvComprobantes.length}, minmax(0, 1fr))`">
+                                        <template x-for="t in pvComprobantes" :key="t">
+                                            <button type="button" @click="pvElegirComprobante(t)" :class="cobro.tdocod === t ? 'bg-white text-indigo-700 shadow' : 'text-slate-500 hover:text-slate-700'"
+                                                    class="h-10 rounded-lg text-sm font-bold transition" x-text="nombreComprobante(t)"></button>
+                                        </template>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <label>
+                                            <span class="text-xs font-semibold text-slate-500">F. Pago</span>
+                                            <input type="text" value="CONTADO" readonly class="mt-1 w-full h-10 rounded-xl border-slate-200 bg-slate-50 text-sm font-semibold">
+                                        </label>
+                                        <label>
+                                            <span class="text-xs font-semibold text-slate-500">F. Emisión</span>
+                                            <input type="text" :value="new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })" readonly class="mt-1 w-full h-10 rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-500">
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <section class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
+                                    <h2 class="text-xs font-bold text-slate-500 uppercase">Cliente</h2>
+                                    <div class="flex gap-2">
+                                        <select x-model="cobro.tdicod" class="h-10 w-28 shrink-0 rounded-xl border-slate-200 text-sm" aria-label="Tipo de documento">
+                                            <option value="1">DNI</option><option value="6">RUC</option>
+                                        </select>
+                                        <input type="text" inputmode="numeric" maxlength="11" x-model="cobro.clinum" @focus="$event.target.select()" placeholder="DNI / RUC"
+                                               class="flex-1 min-w-0 h-10 rounded-xl border-slate-200 font-semibold" aria-label="Número de documento">
+                                    </div>
+                                    <input type="text" x-model="cobro.clinom" @focus="$event.target.select()" placeholder="Nombre o razón social" class="w-full h-10 rounded-xl border-slate-200 text-sm uppercase font-semibold" aria-label="Nombre o razón social">
+                                    <input type="text" x-model="cobro.clidir" placeholder="Dirección" maxlength="150" class="w-full h-10 rounded-xl border-slate-200 text-sm" aria-label="Dirección">
+                                    <p class="text-[11px] text-slate-400">Sin internet no se busca el DNI/RUC: escribe el nombre tal como figura.</p>
+                                </section>
+
+                                <section class="bg-white rounded-2xl shadow-sm p-4">
+                                    <div class="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <p class="text-xs font-semibold text-slate-500">Total</p>
+                                            <p class="text-2xl font-extrabold text-indigo-700" x-text="total.toFixed(2)"></p>
+                                        </div>
+                                        <label>
+                                            <span class="text-xs font-semibold text-slate-500">Paga con</span>
+                                            <input type="number" step="any" min="0" x-model.number="cobro.paga" placeholder="0.00"
+                                                   class="w-full h-10 rounded-xl border-2 border-emerald-300 text-right text-lg font-bold focus:ring-emerald-200 focus:border-emerald-500">
+                                        </label>
+                                        <div>
+                                            <p class="text-xs font-semibold text-slate-500">Vuelto</p>
+                                            <p class="text-2xl font-extrabold" :class="cobro.paga > 0 && cobro.paga < total ? 'text-rose-600' : 'text-emerald-600'" x-text="cobro.paga > 0 ? (cobro.paga - total).toFixed(2) : '0.00'"></p>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2 mt-4">
+                                        <button type="button" @click="pvRegistrar(true)" :disabled="procesando" class="h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
+                                            IMPRIMIR<span class="block text-[10px] font-semibold opacity-80">F9</span></button>
+                                        <button type="button" @click="pvRegistrar(false)" :disabled="procesando" class="h-14 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
+                                            REGISTRAR<span class="block text-[10px] font-semibold opacity-80">F10</span></button>
+                                        <button type="button" @click="pvCancelar()" :disabled="procesando" class="h-14 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-extrabold tracking-wide shadow disabled:opacity-50">CANCELAR</button>
+                                    </div>
+                                    <p x-show="procesando" class="text-center text-sm text-slate-500 mt-2">Registrando…</p>
+                                    <template x-if="ultima">
+                                        <div class="mt-3 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                                            <span class="text-slate-600">Última: <strong x-text="ultima.serie + '-' + String(ultima.numero).padStart(8, '0')"></strong> · <span x-text="'S/ ' + Number(ultima.total).toFixed(2)"></span>
+                                                <template x-if="ultima.paga > ultima.total"><span class="text-emerald-600 font-semibold" x-text="' · Vuelto S/ ' + (ultima.paga - ultima.total).toFixed(2)"></span></template>
+                                            </span>
+                                            <button type="button" @click="reimprimir(ultima)" class="text-xs font-semibold text-indigo-700 hover:underline">Reimprimir</button>
+                                        </div>
+                                    </template>
+                                </section>
+                            </div>
+                        </div>
+                    </template>
+                </div>
 
                 <div x-show="vista === 'venta'" class="flex-1 flex flex-col min-h-0 bg-white mx-3 mb-3 rounded-b-xl rounded-tr-xl p-3 gap-2">
                     <input x-model="busqueda" @keydown.enter.prevent="buscarEnter()" placeholder="Buscar producto o escanear código…" class="rounded-lg border-gray-300 text-sm" autofocus>
@@ -461,7 +764,7 @@
             </section>
 
             {{-- Derecha: pedido --}}
-            <aside class="w-80 xl:w-96 bg-white border-l flex flex-col">
+            <aside x-show="vista !== 'pv'" class="w-80 xl:w-96 bg-white border-l flex flex-col">
                 <div class="p-3 border-b flex items-center gap-2">
                     <h2 class="font-bold flex-1" x-text="mesa ? mesa.nombre : 'Pedido'"></h2>
                     <button type="button" x-show="mesa" @click="salirMesa()" class="text-xs text-gray-500 hover:underline">Volver a mesas</button>
@@ -537,7 +840,7 @@
     </div>
 
     {{-- Cobrar --}}
-    <template x-if="cobro">
+    <template x-if="cobro && cobro.modal">
         <div class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
             <form @submit.prevent="confirmarCobro()" class="bg-white rounded-2xl p-5 w-full max-w-lg space-y-3 max-h-full overflow-y-auto">
                 <div class="flex items-center justify-between"><h3 class="text-lg font-bold">Cobrar</h3><span class="text-2xl font-extrabold" x-text="'S/ ' + total.toFixed(2)"></span></div>
