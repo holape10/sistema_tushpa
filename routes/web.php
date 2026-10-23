@@ -259,6 +259,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/estado', 'estado')->name('estado');
         Route::post('/local', 'local')->name('local');
         Route::post('/ubicacion', 'ubicacion')->middleware('throttle:30,1,delivery-ubicacion')->name('ubicacion');
+        Route::get('/direccion', 'direccion')->middleware('throttle:30,1,delivery-direccion')->name('direccion');
         Route::post('/{id}/datos', 'datos')->whereNumber('id')->name('datos');
         Route::post('/{id}/estado', 'cambiarEstado')->whereNumber('id')->name('cambiar_estado');
         Route::get('/{id}/recorrido', 'recorrido')->whereNumber('id')->name('recorrido');

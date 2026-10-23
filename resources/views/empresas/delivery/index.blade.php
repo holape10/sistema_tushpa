@@ -16,18 +16,33 @@
                 <h1 class="text-2xl font-extrabold text-gray-800">🛵 Delivery en vivo</h1>
                 <p class="text-sm text-gray-500">Pedidos delivery de hoy, dónde va cada motorizado y el enlace de seguimiento para tu cliente.</p>
             </div>
-            <button type="button" @click="fijandoLocal = !fijandoLocal"
-                    :class="fijandoLocal ? 'bg-amber-500 text-white' : 'bg-white text-gray-700 border'"
-                    class="px-3 py-2 rounded-lg text-sm font-semibold shadow-sm"
-                    x-text="fijandoLocal ? 'Toca en el mapa dónde está tu local…' : '🏪 ' + (local ? 'Cambiar ubicación del local' : 'Fijar ubicación de mi local')"></button>
+            <button type="button" x-show="local && !fijandoLocal" @click="empezarLocal()"
+                    class="px-3 py-2 rounded-lg bg-white border text-sm font-semibold text-gray-700 shadow-sm">🏪 Cambiar ubicación del local</button>
             <button type="button" @click="abrirTarifas()" class="px-3 py-2 rounded-lg bg-white border text-sm font-semibold text-gray-700 shadow-sm">💲 Costos de envío</button>
             <a href="{{ route('delivery.liquidacion') }}" class="px-3 py-2 rounded-lg bg-white border text-sm font-semibold text-gray-700 shadow-sm">💵 Liquidación</a>
             <a href="{{ route('delivery.reporte') }}" class="px-3 py-2 rounded-lg bg-white border text-sm font-semibold text-gray-700 shadow-sm">⏱️ Reporte</a>
             <a href="{{ route('motorizados.index') }}" class="px-3 py-2 rounded-lg bg-white border text-sm font-semibold text-gray-700 shadow-sm">📲 Motorizados</a>
         </div>
 
-        <div x-show="!local" class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-            Primero fija la ubicación de tu local: toca <b>🏪 Fijar ubicación de mi local</b> y luego el punto en el mapa.
+        {{-- Ubicar el local: escribiendo la dirección, con el GPS del equipo o tocando el mapa; se confirma antes de guardar --}}
+        <div x-show="!local || fijandoLocal" x-cloak class="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 space-y-2">
+            <p class="font-bold">🏪 ¿Dónde está tu local? <span class="font-normal">Desde ahí se miden las distancias y el costo de envío.</span></p>
+            <form @submit.prevent="buscarLocal()" class="flex flex-wrap gap-2">
+                <input x-model="busquedaLocal" placeholder="Escribe la dirección del local (ej. Jr. Próspero 450)" class="{{ $in }} flex-1 min-w-[220px]">
+                <button :disabled="buscando || !busquedaLocal" class="px-4 py-2 rounded-lg bg-amber-500 text-white font-bold disabled:opacity-50" x-text="buscando ? 'Buscando…' : '🔍 Buscar'"></button>
+                <button type="button" @click="gpsLocal()" class="px-4 py-2 rounded-lg bg-white border border-amber-300 font-semibold">📍 Usar mi ubicación (GPS)</button>
+            </form>
+            <div x-show="resultadosLocal.length > 1" class="flex flex-wrap gap-1.5">
+                <template x-for="r in resultadosLocal" :key="r.lat + ',' + r.lng">
+                    <button type="button" @click="candidatoLocal(r.lat, r.lng)" class="px-2 py-1 rounded-lg bg-white border border-amber-200 text-xs text-left max-w-xs truncate" x-text="r.nombre"></button>
+                </template>
+            </div>
+            <p class="text-xs">O toca el punto en el mapa. Puedes arrastrar el pin 🏪 hasta la puerta exacta.</p>
+            <div x-show="candidato" class="flex flex-wrap gap-2 pt-1">
+                <button type="button" @click="guardarLocal(candidato)" class="px-5 py-2 rounded-lg bg-emerald-600 text-white font-bold">✓ Mi local está aquí</button>
+                <button type="button" x-show="local" @click="cancelarLocal()" class="px-4 py-2 rounded-lg bg-white border">Cancelar</button>
+            </div>
+            <p x-show="errorLocal" x-text="errorLocal" class="text-rose-600 text-xs"></p>
         </div>
 
         {{-- Motorizados: verde si mandó su ubicación hace menos de 2 minutos --}}
@@ -69,7 +84,7 @@
                             </div>
                             <div class="text-right shrink-0">
                                 <span class="inline-block text-[11px] font-bold rounded-full px-2 py-0.5" :class="colores[p.estado]" x-text="nombres[p.estado]"></span>
-                                <p class="text-xs mt-1" :class="p.estado !== 'ENTREGADO' && p.minutos >= 45 ? 'text-rose-600 font-bold' : 'text-gray-400'" x-text="p.minutos + ' min'"></p>
+                                <p class="text-xs mt-1" :class="p.estado !== 'ENTREGADO' && p.minutos >= 45 ? 'text-rose-600 font-bold' : 'text-gray-400'" x-text="p.minutos >= 60 ? Math.floor(p.minutos / 60) + ' h ' + (p.minutos % 60) + ' min' : p.minutos + ' min'"></p>
                             </div>
                         </div>
 
@@ -85,9 +100,14 @@
                         </div>
 
                         <div class="flex flex-wrap gap-1.5 mt-3 text-xs" @click.stop>
-                            <button type="button" @click="abrirDatos(p)" class="px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 font-semibold">📝 Datos de entrega</button>
-                            <button type="button" x-show="p.estado !== 'ENTREGADO'" @click="verSugeridos(p)" class="px-2.5 py-1.5 rounded-lg font-semibold"
-                                    :class="p.motorizado ? 'bg-gray-100 text-gray-700' : 'bg-orange-500 text-white'" x-text="p.motorizado ? '🛵 Cambiar motorizado' : '🛵 Asignar el más cercano'"></button>
+                            <button type="button" @click="abrirDatos(p)" class="px-2.5 py-1.5 rounded-lg font-semibold"
+                                    :class="p.lat === null && p.estado !== 'ENTREGADO' ? 'bg-orange-500 text-white' : 'bg-indigo-50 text-indigo-700'"
+                                    x-text="p.lat === null && p.estado !== 'ENTREGADO' ? '📍 Ubicar entrega' : '📝 Datos de entrega'"></button>
+                            {{-- Un clic asigna al más cercano y libre; "Cambiar" abre la lista para elegir --}}
+                            <button type="button" x-show="p.estado !== 'ENTREGADO' && !p.motorizado" @click="asignarCercano(p)"
+                                    class="px-2.5 py-1.5 rounded-lg font-semibold bg-orange-500 text-white">🛵 Asignar el más cercano</button>
+                            <button type="button" x-show="p.estado !== 'ENTREGADO' && p.motorizado" @click="verSugeridos(p)"
+                                    class="px-2.5 py-1.5 rounded-lg font-semibold bg-gray-100 text-gray-700">🛵 Cambiar motorizado</button>
                             <a x-show="p.cobrar" :href="p.cobrar" class="px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-800 font-semibold">💰 Cobrar</a>
                             <button type="button" x-show="p.estado === 'PREPARANDO'" @click="estado(p, 'LISTO')" class="px-2.5 py-1.5 rounded-lg bg-sky-50 text-sky-700 font-semibold">✅ Listo para salir</button>
                             <button type="button" x-show="p.estado !== 'ENTREGADO'" @click="if (confirm('¿Marcar el pedido #' + p.id + ' como entregado?')) estado(p, 'ENTREGADO')" class="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-semibold">📦 Entregado</button>
@@ -119,7 +139,12 @@
                         <div class="grid sm:grid-cols-2 gap-3">
                             <label>Cliente<input x-model="datos.cliente" maxlength="120" class="{{ $in }} mt-1 uppercase"></label>
                             <label>Celular<input x-model="datos.telefono" maxlength="20" inputmode="tel" class="{{ $in }} mt-1" placeholder="987654321"></label>
-                            <label class="sm:col-span-2">Dirección<input x-model="datos.direccion" maxlength="255" class="{{ $in }} mt-1"></label>
+                            <label class="sm:col-span-2">Dirección
+                                <span class="mt-1 flex gap-2">
+                                    <input x-model="datos.direccion" maxlength="255" class="{{ $in }}" placeholder="Jr. Próspero 450" @keydown.enter.prevent="ubicarDireccion()">
+                                    <button type="button" @click="ubicarDireccion()" :disabled="!datos.direccion || buscando"
+                                            class="shrink-0 px-3 rounded-lg bg-indigo-600 text-white font-semibold disabled:opacity-50" x-text="buscando ? '…' : '📍 Ubicar'"></button>
+                                </span></label>
                             <label>Referencia<input x-model="datos.referencia" maxlength="255" class="{{ $in }} mt-1" placeholder="Frente al parque, puerta verde"></label>
                             <label>Motorizado
                                 <select x-model="datos.mot_id" class="{{ $in }} mt-1">
@@ -144,10 +169,16 @@
                         <div class="rounded-xl bg-gray-50 p-3 space-y-2">
                             <p class="font-semibold text-gray-700">📍 Ubicación de entrega</p>
                             <div class="flex gap-2">
-                                <input x-model="enlace" class="{{ $in }}" placeholder="Pega aquí la ubicación que te mandó por WhatsApp o el enlace de Google Maps">
+                                <input x-model="enlace" class="{{ $in }}" placeholder="¿Te mandó su ubicación por WhatsApp? Pega aquí el enlace" @keydown.enter.prevent="buscarEnlace()">
                                 <button type="button" @click="buscarEnlace()" :disabled="!enlace || buscando" class="px-3 rounded-lg bg-indigo-600 text-white font-semibold disabled:opacity-50" x-text="buscando ? '…' : 'Ubicar'"></button>
                             </div>
-                            <p class="text-xs text-gray-500">O toca el punto en el mapa (puedes arrastrar el pin).</p>
+                            <div x-show="resultados.length > 1" class="flex flex-wrap gap-1.5">
+                                <span class="text-xs text-gray-500 w-full">Hay varias coincidencias, elige la correcta:</span>
+                                <template x-for="r in resultados" :key="r.lat + ',' + r.lng">
+                                    <button type="button" @click="ponerPin(r.lat, r.lng, true)" class="px-2 py-1 rounded-lg bg-white border text-xs text-left max-w-xs truncate" x-text="r.nombre"></button>
+                                </template>
+                            </div>
+                            <p class="text-xs text-gray-500">O toca el punto en el mapa. Arrastra el pin 🏠 hasta la puerta exacta.</p>
                             <div id="mapa-datos" class="h-64 rounded-lg overflow-hidden"></div>
                             <p class="text-xs" :class="datos.lat ? 'text-emerald-700' : 'text-gray-400'"
                                x-text="datos.lat ? 'Ubicación marcada: ' + Number(datos.lat).toFixed(5) + ', ' + Number(datos.lng).toFixed(5) : 'Aún sin ubicación'"></p>
@@ -229,11 +260,13 @@
             const URL_BASE = @json(url('delivery'));
             const LOCAL_INICIAL = @json($local && $local->local_lat !== null ? ['lat' => (float) $local->local_lat, 'lng' => (float) $local->local_lng] : null);
             const NOMBRE_LOCAL = @json($local->nombre_comercial ?? 'Mi local');
+            const DIRECCION_LOCAL = @json((string) ($local->direccion ?? ''));
+            const URL_DIRECCION = @json(route('delivery.direccion'));
             const ABRIR = @json($abrir);
             let TARIFAS = @json($tarifas);
             let conocidos = null;
 
-            let mapa, mapaDatos, pinDatos, capaMotos, capaDestinos, marcaLocal, linea;
+            let mapa, mapaDatos, pinDatos, capaMotos, capaDestinos, marcaLocal, linea, pinCandidato;
 
             function icono(emoji, texto, apagado) {
                 const t = String(texto ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -248,6 +281,7 @@
             return {
                 pedidos: [], motorizados: [], local: LOCAL_INICIAL, cargado: false, seleccionado: null,
                 fijandoLocal: false, datos: null, sugeridos: null, tarifas: null, enlace: '', buscando: false, guardando: false, error: '', aviso: '', recorridoTexto: '',
+                busquedaLocal: DIRECCION_LOCAL, resultadosLocal: [], candidato: null, errorLocal: '', resultados: [],
                 nombres: { PREPARANDO: 'Preparando', LISTO: 'Listo', EN_LOCAL: 'En el local', EN_CAMINO: 'En camino', ENTREGADO: 'Entregado' },
                 colores: { PREPARANDO: 'bg-gray-100 text-gray-700', LISTO: 'bg-sky-100 text-sky-700', EN_LOCAL: 'bg-amber-100 text-amber-800', EN_CAMINO: 'bg-indigo-100 text-indigo-700', ENTREGADO: 'bg-emerald-100 text-emerald-700' },
                 pasos: [
@@ -262,8 +296,10 @@
                     capaMotos = L.layerGroup().addTo(mapa);
                     capaDestinos = L.layerGroup().addTo(mapa);
                     this.pintarLocal();
-                    mapa.on('click', e => { if (this.fijandoLocal) this.guardarLocal(e.latlng); });
+                    mapa.on('click', e => { if (this.fijandoLocal || !this.local) this.candidatoLocal(e.latlng.lat, e.latlng.lng); });
 
+                    // Sin ubicación del local: se propone con la dirección registrada (solo falta confirmar)
+                    if (!this.local && this.busquedaLocal) this.buscarLocal();
                     this.cargar(true);
                     setInterval(() => { if (!document.hidden) this.cargar(); }, 10000);
                     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.cargar(); });
@@ -354,10 +390,53 @@
                     }).catch(() => {});
                 },
 
+                empezarLocal() {
+                    this.fijandoLocal = true;
+                    this.errorLocal = '';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                },
+
+                // Ubicación propuesta del local: pin que se puede arrastrar; se guarda al confirmar
+                candidatoLocal(lat, lng) {
+                    this.candidato = { lat, lng };
+                    if (!pinCandidato) {
+                        pinCandidato = L.marker([lat, lng], { draggable: true, icon: icono('🏪', '¿Aquí?'), zIndexOffset: 2000 }).addTo(mapa);
+                        pinCandidato.on('dragend', () => { const c = pinCandidato.getLatLng(); this.candidato = { lat: c.lat, lng: c.lng }; });
+                    } else {
+                        pinCandidato.setLatLng([lat, lng]);
+                    }
+                    mapa.setView([lat, lng], Math.max(mapa.getZoom(), 17));
+                },
+
+                buscarLocal() {
+                    this.buscando = true;
+                    this.errorLocal = '';
+                    post(URL_BASE + '/ubicacion', { texto: this.busquedaLocal }).then(c => {
+                        this.resultadosLocal = c.resultados || [];
+                        this.candidatoLocal(c.lat, c.lng);
+                    }).catch(e => this.errorLocal = e.message).finally(() => this.buscando = false);
+                },
+
+                gpsLocal() {
+                    if (!navigator.geolocation) { this.errorLocal = 'Este equipo no tiene GPS: busca la dirección o toca el mapa.'; return; }
+                    this.errorLocal = '';
+                    navigator.geolocation.getCurrentPosition(
+                        p => this.candidatoLocal(p.coords.latitude, p.coords.longitude),
+                        () => this.errorLocal = 'No se pudo leer tu ubicación (da permiso al navegador o búscala por dirección).',
+                        { enableHighAccuracy: true, timeout: 10000 });
+                },
+
+                cancelarLocal() {
+                    this.fijandoLocal = false;
+                    this.candidato = null;
+                    if (pinCandidato) { pinCandidato.remove(); pinCandidato = null; }
+                },
+
                 guardarLocal(latlng) {
                     post(URL_BASE + '/local', { lat: latlng.lat, lng: latlng.lng }).then(d => {
                         this.local = { lat: latlng.lat, lng: latlng.lng };
-                        this.fijandoLocal = false;
+                        this.cancelarLocal();
+                        this.resultadosLocal = [];
                         this.pintarLocal();
                         this.mostrarAviso(d.mensaje);
                     }).catch(e => this.mostrarAviso(e.message));
@@ -370,6 +449,7 @@
                 abrirDatos(p) {
                     this.error = '';
                     this.enlace = '';
+                    this.resultados = [];
                     this.datos = { id: p.id, cliente: p.cliente, telefono: p.telefono || '', direccion: p.direccion || '', referencia: p.referencia || '',
                         mot_id: p.mot_id ? String(p.mot_id) : '', lat: p.lat, lng: p.lng, pago: p.pago || '', paga_con: p.paga_con ?? '',
                         envio: p.envio ?? '', km: null, fuera: false, cobrado: p.cobrado };
@@ -381,20 +461,45 @@
                         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapaDatos);
                         if (this.local) L.marker([this.local.lat, this.local.lng], { icon: icono('🏪', NOMBRE_LOCAL) }).addTo(mapaDatos);
                         if (p.lat !== null) this.ponerPin(p.lat, p.lng, false);
-                        mapaDatos.on('click', e => this.ponerPin(e.latlng.lat, e.latlng.lng, false));
+                        mapaDatos.on('click', e => this.ponerPin(e.latlng.lat, e.latlng.lng, false, true));
+                        // La ventana aún se está abriendo: cuando su tamaño cambia se vuelve a medir para que el mapa cargue completo
+                        const caja = document.getElementById('mapa-datos');
+                        if (window.ResizeObserver) new ResizeObserver(() => mapaDatos && mapaDatos.invalidateSize()).observe(caja);
+                        setTimeout(() => mapaDatos && mapaDatos.invalidateSize(), 400);
+                        // Tiene dirección pero aún no ubicación: se busca sola
+                        if (p.lat === null && this.datos.direccion) this.ubicarDireccion();
                     }, 80);
                 },
 
-                ponerPin(lat, lng, centrar) {
+                ubicarDireccion() {
+                    if (!this.datos?.direccion) return;
+                    this.buscar(this.datos.direccion);
+                },
+
+                buscar(texto) {
+                    this.buscando = true;
+                    this.error = '';
+                    post(URL_BASE + '/ubicacion', { texto }).then(c => {
+                        this.resultados = c.resultados || [];
+                        this.ponerPin(c.lat, c.lng, true);
+                    }).catch(e => this.error = e.message).finally(() => this.buscando = false);
+                },
+
+                ponerPin(lat, lng, centrar, completarDireccion) {
                     this.datos.lat = lat;
                     this.datos.lng = lng;
                     if (!pinDatos) {
                         pinDatos = L.marker([lat, lng], { draggable: true, icon: icono('🏠', 'Entrega') }).addTo(mapaDatos);
-                        pinDatos.on('dragend', () => { const c = pinDatos.getLatLng(); this.datos.lat = c.lat; this.datos.lng = c.lng; });
+                        pinDatos.on('dragend', () => { const c = pinDatos.getLatLng(); this.ponerPin(c.lat, c.lng, false, true); });
                     } else {
                         pinDatos.setLatLng([lat, lng]);
                     }
                     if (centrar) mapaDatos.setView([lat, lng], 17);
+                    // Marcó el punto sin escribir la dirección: se llena con la del mapa (la puede corregir)
+                    if (completarDireccion && !this.datos.direccion) {
+                        fetch(URL_DIRECCION + '?lat=' + lat + '&lng=' + lng, { headers: { 'Accept': 'application/json' } }).then(r => r.json())
+                            .then(d => { if (this.datos && !this.datos.direccion && d.direccion) this.datos.direccion = d.direccion; }).catch(() => {});
+                    }
                     // Costo de envío según la distancia (si hay tarifas y aún no se cobró)
                     post(URL_BASE + '/envio', { lat, lng }).then(c => {
                         if (!this.datos) return;
@@ -405,10 +510,15 @@
                 },
 
                 buscarEnlace() {
-                    this.buscando = true;
-                    this.error = '';
-                    post(URL_BASE + '/ubicacion', { texto: this.enlace }).then(c => this.ponerPin(c.lat, c.lng, true))
-                        .catch(e => this.error = e.message).finally(() => this.buscando = false);
+                    if (this.enlace) this.buscar(this.enlace);
+                },
+
+                // Un clic: el más cercano y libre (el servidor lo elige); si no hay ninguno con ubicación, abre la lista
+                asignarCercano(p) {
+                    post(URL_BASE + '/' + p.id + '/asignar', {}).then(d => {
+                        this.mostrarAviso(d.mensaje);
+                        this.cargar();
+                    }).catch(() => this.verSugeridos(p));
                 },
 
                 guardarDatos() {

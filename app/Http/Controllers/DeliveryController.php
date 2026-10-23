@@ -26,7 +26,7 @@ class DeliveryController extends Controller
     public function index(Request $request): View
     {
         $suc = $this->sucursal();
-        $local = DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['nombre_comercial', 'local_lat', 'local_lng']);
+        $local = DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['nombre_comercial', 'local_lat', 'local_lng', 'direccion']);
 
         return view('empresas.delivery.index', [
             'local' => $local,
@@ -152,13 +152,31 @@ class DeliveryController extends Controller
         return response()->json(['ok' => true, 'mensaje' => 'Ubicación del local guardada.']);
     }
 
-    /** Coordenadas de lo que se pega (ubicación de WhatsApp, enlace de Google Maps o "lat, lng") */
+    /**
+     * Ubica lo que se escribe o pega: enlace de Google Maps, ubicación de WhatsApp, "lat, lng" o una dirección
+     * ("Jr. Próspero 450"), que se busca en el mapa cerca del local. Con varias coincidencias se devuelven para elegir.
+     */
     public function ubicacion(Request $request): JsonResponse
     {
-        $this->sucursal();
-        $c = Delivery::coordenadas((string) $request->validate(['texto' => 'required|string|max:500'])['texto']);
+        $suc = $this->sucursal();
+        $texto = (string) $request->validate(['texto' => 'required|string|max:500'])['texto'];
+        if ($c = Delivery::coordenadas($texto)) {
+            return response()->json($c + ['resultados' => [$c + ['nombre' => 'Ubicación del enlace']]]);
+        }
+        $resultados = Delivery::buscarDireccion($suc, $texto);
 
-        return $c ? response()->json($c) : response()->json(['error' => 'No se encontró una ubicación en lo que pegaste. Toca el punto en el mapa.'], 422);
+        return $resultados
+            ? response()->json($resultados[0] + ['resultados' => $resultados])
+            : response()->json(['error' => 'No encontré esa dirección en el mapa. Prueba solo la calle (ej. "Jr. Próspero") o toca el punto en el mapa.'], 422);
+    }
+
+    /** Dirección aproximada del punto marcado en el mapa (para llenarla si aún está vacía) */
+    public function direccion(Request $request): JsonResponse
+    {
+        $this->sucursal();
+        $d = $request->validate(['lat' => 'required|numeric|between:-90,90', 'lng' => 'required|numeric|between:-180,180']);
+
+        return response()->json(['direccion' => Delivery::direccionDe((float) $d['lat'], (float) $d['lng'])]);
     }
 
     /** Reporte de tiempos: cuánto tarda cada paso (cocina, espera del motorizado, viaje) por pedido y por motorizado */

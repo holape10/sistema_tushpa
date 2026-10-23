@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -146,6 +147,89 @@ class Delivery
         }
 
         return null;
+    }
+
+    /**
+     * Busca una dirección escrita ("Jr. Próspero 450", "Plaza de Armas") en OpenStreetMap, cerca del local y en su ciudad.
+     *
+     * @return array<int, array{lat: float, lng: float, nombre: string}>
+     */
+    public static function buscarDireccion(int $suc, string $texto): array
+    {
+        $texto = trim(preg_replace('/\s+/', ' ', $texto));
+        if (mb_strlen($texto) < 3) {
+            return [];
+        }
+        $n = DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['distrito', 'provincia', 'local_lat', 'local_lng']);
+        $ciudades = collect([$n->distrito ?? null, $n->provincia ?? null])->map(fn ($c) => trim((string) $c))->filter()->unique();
+        // OpenStreetMap no entiende las abreviaturas: "Jr." → Jirón, "Av." → Avenida…
+        $completa = preg_replace_callback('/\b(jr|av|ca|cl|psje|pje|prol|urb|mz|lt|aa\.?hh|ah)\b\.?/iu', fn ($m) => [
+            'jr' => 'Jirón', 'av' => 'Avenida', 'ca' => 'Calle', 'cl' => 'Calle', 'psje' => 'Pasaje', 'pje' => 'Pasaje', 'prol' => 'Prolongación',
+            'urb' => 'Urbanización', 'mz' => 'Manzana', 'lt' => 'Lote', 'aa.hh' => 'Asentamiento Humano', 'aahh' => 'Asentamiento Humano', 'ah' => 'Asentamiento Humano',
+        ][mb_strtolower(rtrim($m[1], '.'))] ?? $m[0], $texto);
+        // Muchas casas no tienen su número en el mapa: si no sale, se busca la calle
+        $sinNumero = trim(preg_replace('/\s*(n[°º]?\.?\s*)?\d+[a-z]?\s*$/iu', '', $completa));
+        $conCiudad = fn (string $t) => $ciudades->isNotEmpty() && ! $ciudades->contains(fn ($c) => str_contains(mb_strtolower($t), mb_strtolower($c)))
+            ? $t.', '.$ciudades->implode(', ') : $t;
+        // Si escribió "Calle" y en el mapa es "Jirón" (o al revés), se prueba solo con el nombre: "Putumayo"
+        $nucleo = trim(preg_replace('/^(Jirón|Avenida|Calle|Pasaje|Prolongación|Carretera)\s+(de\s+)?/iu', '', $sinNumero));
+        $intentos = array_values(array_unique(array_filter([$conCiudad($completa), $conCiudad($sinNumero), $conCiudad($nucleo), $completa, $sinNumero],
+            fn ($t) => mb_strlen($t) >= 3)));
+
+        // Solo lo que está cerca del local (40 km) o, sin local, en su ciudad: las calles se repiten en todo el país
+        $cerca = function (array $r) use ($n, $ciudades) {
+            if ($n && $n->local_lat !== null) {
+                return self::distanciaKm((float) $n->local_lat, (float) $n->local_lng, (float) $r['lat'], (float) $r['lon']) <= 40;
+            }
+
+            return $ciudades->isEmpty() || $ciudades->contains(fn ($c) => str_contains(mb_strtolower((string) ($r['display_name'] ?? '')), mb_strtolower($c)));
+        };
+        foreach ($intentos as $q) {
+            $lista = collect(self::nominatim('search', ['q' => $q, 'countrycodes' => 'pe', 'limit' => 8]))
+                ->filter(fn ($r) => isset($r['lat'], $r['lon']) && $cerca($r))
+                ->map(fn ($r) => ['lat' => (float) $r['lat'], 'lng' => (float) $r['lon'], 'nombre' => (string) ($r['display_name'] ?? '')])
+                ->values()->all();
+            if ($lista) {
+                return $lista;
+            }
+        }
+
+        return [];
+    }
+
+    /** La dirección aproximada de un punto del mapa (para llenarla sola al marcar la entrega) */
+    public static function direccionDe(float $lat, float $lng): ?string
+    {
+        $r = self::nominatim('reverse', ['lat' => round($lat, 5), 'lon' => round($lng, 5), 'zoom' => 18, 'addressdetails' => 1]);
+        $a = $r['address'] ?? [];
+        $calle = trim(($a['road'] ?? $a['pedestrian'] ?? $a['footway'] ?? '').' '.($a['house_number'] ?? ''));
+        $partes = array_filter([$calle, $a['neighbourhood'] ?? $a['suburb'] ?? $a['quarter'] ?? null, $a['city'] ?? $a['town'] ?? $a['village'] ?? null]);
+
+        return $partes ? mb_substr(implode(', ', $partes), 0, 255) : null;
+    }
+
+    /**
+     * Consulta a OpenStreetMap. Nominatim pide identificarse y pocas consultas: lo encontrado se guarda una semana
+     * (lo que falla no se guarda, para volver a intentar).
+     */
+    private static function nominatim(string $tipo, array $parametros): array
+    {
+        $clave = 'nominatim:'.$tipo.':'.md5(json_encode($parametros));
+        if (is_array($guardado = Cache::get($clave))) {
+            return $guardado;
+        }
+        try {
+            $r = Http::timeout(8)->withHeaders(['User-Agent' => 'TushpaSistema/1.0 ('.config('app.url').')', 'Accept-Language' => 'es'])
+                ->get('https://nominatim.openstreetmap.org/'.$tipo, $parametros + ['format' => 'jsonv2']);
+            $datos = $r->successful() ? (array) $r->json() : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+        if ($datos && ! isset($datos['error'])) {
+            Cache::put($clave, $datos, now()->addDays(7));
+        }
+
+        return $datos;
     }
 
     /**
