@@ -116,7 +116,7 @@
                             <td class="px-4 py-2 text-right whitespace-nowrap space-x-2">
                                 <form method="POST" action="{{ route('impresion.prueba', $i->Id) }}" class="inline">@csrf<button class="text-indigo-600 hover:underline"><i class="fas fa-print"></i> Prueba</button></form>
                                 <button type="button" @click='editar(@json($i))' class="text-indigo-600 hover:underline">Editar</button>
-                                <form method="POST" action="{{ route('impresion.eliminar', $i->Id) }}" class="inline" onsubmit="return confirm('¿Eliminar la impresora {{ $i->descripcion }}?')">
+                                <form method="POST" action="{{ route('impresion.eliminar', $i->Id) }}" class="inline" onsubmit="return confirm('¿Eliminar la impresora {{ $i->descripcion }}?\n\nLas categorías, cajas y usuarios que la usan quedarán SIN impresora (sus comandas dejarán de salir) hasta que les asignes otra. Para cambiar su nombre o ruta usa Editar.')">
                                     @csrf @method('DELETE')<button class="text-red-600 hover:underline">Eliminar</button></form>
                             </td>
                         </tr>
@@ -147,7 +147,9 @@
                     <label class="flex items-start gap-2 cursor-pointer">
                         <input type="checkbox" name="comanda_al_cobrar" value="1" @checked($negocio->comanda_al_cobrar ?? false) class="mt-0.5 rounded">
                         <span><b class="text-gray-800">Imprimir las comandas recién al cobrar</b>
-                            <span class="block text-xs text-gray-500">El mozo envía el pedido y la comanda sale a cocina/bar cuando la caja cobra.</span></span>
+                            <span class="block text-xs text-gray-500">Marcado: el mozo envía el pedido y la comanda sale cuando la caja cobra, en la barra de esa PC.
+                                Sin marcar: la comanda sale apenas el mozo la envía, en la barra del mozo (o en la impresora de cada categoría).
+                                En los dos casos la ticketera de caja solo imprime comprobantes.</span></span>
                     </label>
                     <label class="flex items-start gap-2 cursor-pointer">
                         <input type="checkbox" name="exigir_operacion" value="1" @checked($negocio->exigir_operacion ?? false) class="mt-0.5 rounded">
@@ -170,7 +172,8 @@
                     {{-- Varias cajas: cada PC imprime en sus impresoras, cobre quien cobre --}}
                     <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm p-5">
                         <h3 class="font-bold text-gray-800"><i class="fas fa-desktop text-indigo-500"></i> Cajas: ¿qué imprime cada PC?</h3>
-                        <p class="text-xs text-gray-400 mb-3">Para locales con varias cajas. Lo que se cobra en una PC sale en <b>su</b> ticketera de comprobantes, y la comanda en su caja y en <b>su barra</b>, sin importar el usuario.
+                        <p class="text-xs text-gray-400 mb-3">Para locales con varias cajas. Lo que se cobra en una PC sale en <b>su</b> ticketera de comprobantes.
+                            @if ($negocio->comanda_al_cobrar ?? false)Al cobrar, la comanda sale solo en <b>su barra</b>, sin importar el usuario.@else Las comandas que se envían desde esa PC salen en <b>su barra</b>.@endif
                             Después, en cada PC de caja toca <b>"Esta PC es…"</b> una sola vez (o elígela arriba, junto a tu nombre de sucursal).</p>
                         <div class="space-y-2">
                             @foreach ($agentes as $a)
@@ -181,7 +184,7 @@
                                         <option value="">Comprobantes: por usuario</option>
                                         @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($a->impresora_caja == $i->Id)>Comprobantes: {{ $i->descripcion }}</option>@endforeach
                                     </select>
-                                    <select name="equipo_barra[{{ $a->pc }}]" class="w-48 rounded-lg border-gray-300 text-sm" title="Al cobrar, la comanda sale en la caja y en esta barra">
+                                    <select name="equipo_barra[{{ $a->pc }}]" class="w-48 rounded-lg border-gray-300 text-sm" title="La comanda de esta PC sale en esta barra">
                                         <option value="">Barra: por categoría</option>
                                         @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($a->impresora_barra == $i->Id)>Barra: {{ $i->descripcion }}</option>@endforeach
                                     </select>
@@ -195,7 +198,13 @@
                 @endif
                 <div class="bg-white rounded-2xl shadow-sm p-5">
                     <h3 class="font-bold text-gray-800">Cocina / bar: ¿dónde sale cada categoría?</h3>
-                    <p class="text-xs text-gray-400 mb-3">Al enviar una comanda, cada producto se imprime en la impresora de su categoría. Con <b>"También en"</b> sale una copia en otra ticketera (ej.: barra y caja). Sin impresora = no se imprime.</p>
+                    <p class="text-xs text-gray-400 mb-3">Al enviar una comanda, cada producto se imprime en la impresora de su categoría. Con <b>"También en"</b> sale una copia en otra ticketera (ej.: barra y caja). Sin impresora = no se imprime.
+                        Con barras (por PC o por usuario), la categoría solo dice <b>si</b> el producto va en la comanda: sale completa en la barra que toca (no en esta impresora ni en "También en").</p>
+                    @if ($categorias->isNotEmpty() && $categorias->every(fn ($c) => ! $c->impresora))
+                        <div class="mb-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2">
+                            <b>Ninguna categoría tiene impresora: no sale ninguna comanda</b> (ni al enviar ni al cobrar, tampoco en las barras). Usa "Poner en todas" y guarda.
+                        </div>
+                    @endif
                     {{-- Atajo: la misma impresora para todas las categorías --}}
                     <div class="flex items-center justify-end gap-2 text-xs mb-2 pb-2 border-b">
                         <span class="text-gray-500 mr-auto">Poner en todas:</span>
@@ -226,7 +235,8 @@
                 </div>
                 <div class="bg-white rounded-2xl shadow-sm p-5">
                     <h3 class="font-bold text-gray-800">Caja: impresora de cada usuario</h3>
-                    <p class="text-xs text-gray-400 mb-3">Comprobantes y precuentas salen en la impresora de la PC de caja (si está elegida arriba); si no, en la del usuario que cobra; si no tiene, en la de "caja por defecto". @if ($negocio->comanda_al_cobrar ?? false)Con <b>Barra</b>, al cobrar la comanda sale en su caja y en esa barra (para locales con varias barras).@endif</p>
+                    <p class="text-xs text-gray-400 mb-3">Comprobantes y precuentas salen en la impresora de la PC de caja (si está elegida arriba); si no, en la del usuario que cobra; si no tiene, en la de "caja por defecto".
+                        @if ($negocio->comanda_al_cobrar ?? false)Con <b>Barra</b>, al cobrar la comanda sale solo en esa barra (para locales con varias barras).@else Con <b>Barra</b>, las comandas que envía ese usuario (por ejemplo un mozo desde su celular) salen en esa barra.@endif</p>
                     <div class="space-y-2 max-h-80 overflow-y-auto">
                         @foreach ($usuarios as $u)
                             <div class="flex items-center justify-between gap-2 text-sm">
@@ -235,12 +245,11 @@
                                     <option value="">— La de caja por defecto —</option>
                                     @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($u->terminal == $i->Id)>{{ $i->descripcion }}</option>@endforeach
                                 </select>
-                                @if ($negocio->comanda_al_cobrar ?? false)
-                                    <select name="barra[{{ $u->IdUsuario }}]" class="w-40 rounded-lg border-gray-300 text-sm" title="Al cobrar, la comanda sale en su caja y en esta barra">
-                                        <option value="">Barra: por categoría</option>
-                                        @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($u->impresora_barra == $i->Id)>Barra: {{ $i->descripcion }}</option>@endforeach
-                                    </select>
-                                @endif
+                                <select name="barra[{{ $u->IdUsuario }}]" class="w-40 rounded-lg border-gray-300 text-sm"
+                                        title="{{ ($negocio->comanda_al_cobrar ?? false) ? 'Al cobrar, la comanda sale en esta barra' : 'Las comandas que envía salen en esta barra' }}">
+                                    <option value="">Barra: por categoría</option>
+                                    @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($u->impresora_barra == $i->Id)>Barra: {{ $i->descripcion }}</option>@endforeach
+                                </select>
                             </div>
                         @endforeach
                     </div>

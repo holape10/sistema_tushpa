@@ -80,20 +80,28 @@ class Impresion
     }
 
     /**
-     * Varias barras: la comanda que sale al cobrar va a la ticketera de caja y a la barra de la PC donde se cobra
-     * (o la barra del cajero). null = cada producto a la impresora de su categoría.
+     * Varias barras: la comanda que sale al cobrar va SOLO a la barra de la PC donde se cobra (o la barra del cajero);
+     * la ticketera de caja queda para los comprobantes. null = cada producto a la impresora de su categoría.
      *
      * @return array<int, int>|null
      */
     public static function destinosComandaCaja(int $sucursal, $cajero = null): ?array
     {
-        $cajero ??= Auth::user();
-        $barra = (int) (self::equipo($sucursal)?->impresora_barra ?: ($cajero->impresora_barra ?? 0));
-        if (! $barra || ! self::impresora($barra, $sucursal)) {
-            return null;
-        }
+        return self::barraDeEnvio($sucursal, $cajero);
+    }
 
-        return array_values(array_unique(array_filter([(int) (self::impresoraCaja($sucursal, $cajero)->Id ?? 0), $barra])));
+    /**
+     * Varias barras con la comanda al enviar: lo que manda un mozo (o una PC de caja) sale en SU barra, no en la
+     * impresora de cada categoría. null = cada producto a la impresora de su categoría.
+     *
+     * @return array<int, int>|null
+     */
+    public static function barraDeEnvio(int $sucursal, $usuario = null): ?array
+    {
+        $usuario ??= Auth::user();
+        $barra = (int) (self::equipo($sucursal)?->impresora_barra ?: ($usuario->impresora_barra ?? 0));
+
+        return $barra && self::impresora($barra, $sucursal) ? [$barra] : null;
     }
 
     public static function agenteConectado(int $sucursal): bool
@@ -720,8 +728,8 @@ class Impresion
 
     /**
      * Al cobrar: imprime lo que quedó guardado de la comanda y lo limpia. Devuelve cuántos tickets salieron.
-     * Con barra (la de la PC donde se cobra o la del cajero) la comanda sale en la ticketera de caja y en esa barra
-     * (varias barras con sus cajas); si no, en la impresora de cada categoría.
+     * Con barra (la de la PC donde se cobra o la del cajero) la comanda sale solo en esa barra (varias barras con sus
+     * cajas); si no, en la impresora de cada categoría.
      */
     public static function imprimirComandaPendiente(int $pedId, $cajero = null): int
     {

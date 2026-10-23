@@ -1123,8 +1123,10 @@ class ComandasController extends Controller
             if ($alCobrar) {
                 Impresion::guardarComandaPendiente($resultado['pedido_id'], $cocina, $anulaciones);
             } else {
-                $tickets = Impresion::comanda($resultado['pedido_id'], $cocina)
-                    + Impresion::comanda($resultado['pedido_id'], $anulaciones, true);
+                // Varias barras: si el mozo (o la PC de caja) tiene barra, su comanda sale ahí
+                $barra = Impresion::barraDeEnvio((int) $usuario->id_empresa_negocio, $usuario);
+                $tickets = Impresion::comanda($resultado['pedido_id'], $cocina, false, '', $barra)
+                    + Impresion::comanda($resultado['pedido_id'], $anulaciones, true, '', $barra);
             }
         } catch (\Throwable $e) {
             report($e);
