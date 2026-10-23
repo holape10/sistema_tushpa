@@ -297,7 +297,7 @@ class KardexController extends Controller
     public function movimiento(Request $request)
     {
         $tipo = $request->get('tipo') === 'E' ? 'E' : 'I';
-        $productos = $this->productosConStock()->get(['IdProducto', 'pronom', 'procod', 'costo', 'control_lote', 'control_serie']);
+        $productos = $this->productosConStock()->get(['IdProducto', 'pronom', 'procod', 'costo', 'control_lote', 'control_serie', 'umecod', 'ume_equivalente', 'factor_equivalente']);
         $almacenes = $this->almacenes();
         $operaciones = DB::table('tipo_operacion_sunat')->whereIn('cod_tip_ope', self::OPERACIONES[$tipo])->get();
 
@@ -327,7 +327,8 @@ class KardexController extends Controller
             'observaciones' => 'nullable|string|max:255',
             'items' => 'required|array|min:1',
             'items.*.IdProducto' => 'required|integer',
-            'items.*.cantidad' => 'required|numeric|min:0.01',
+            // Con unidad equivalente puede ser poco: 5 ml de una botella de 750 ml = 0.00667
+            'items.*.cantidad' => 'required|numeric|min:0.00001',
             'items.*.costo' => 'nullable|numeric|min:0',
             'items.*.lote' => 'nullable|string|max:50',
             'items.*.vencimiento' => 'nullable|date',
