@@ -36,6 +36,9 @@
                         Tickets @if ($ticketsNuevos)<span class="ml-1 px-1.5 rounded-full bg-rose-500 text-[11px] font-bold">{{ $ticketsNuevos }}</span>@endif
                     </a>
                     <a href="{{ route('admin.planes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.planes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Planes</a>
+                    @unless (auth('superadmin')->user()->es_dueno)
+                        <a href="{{ route('admin.cobros.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.cobros.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Mis datos de cobro</a>
+                    @endunless
                     @if (auth('superadmin')->user()->es_dueno || auth('superadmin')->user()->puede_crear_usuarios)
                         <a href="{{ route('admin.usuarios.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.usuarios.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Usuarios</a>
                     @endif

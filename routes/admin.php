@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\AnuncioController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\ComprobanteController;
+use App\Http\Controllers\Admin\DatosCobroController;
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\PromocionController;
 use App\Http\Controllers\Admin\ProspectoController;
@@ -79,6 +80,9 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/usuarios/{usuario}/permiso', [UsuarioController::class, 'permiso'])->whereNumber('usuario')->name('usuarios.permiso');
     Route::post('/usuarios/{usuario}/estado', [UsuarioController::class, 'estado'])->whereNumber('usuario')->name('usuarios.estado');
     Route::post('/usuarios/{usuario}/clave', [UsuarioController::class, 'clave'])->whereNumber('usuario')->name('usuarios.clave');
+    Route::get('/mis-cobros', [DatosCobroController::class, 'index'])->name('cobros.index');
+    Route::post('/mis-cobros', [DatosCobroController::class, 'guardar'])->name('cobros.guardar');
+    Route::post('/mis-cobros/qr/quitar', [DatosCobroController::class, 'quitarQr'])->name('cobros.qr.quitar');
     Route::get('/subdominio/{sub}', [ClienteController::class, 'revisarSubdominio'])->where('sub', '[A-Za-z0-9-]{1,40}')->name('subdominio');
     Route::get('/ruc/{ruc}', [ClienteController::class, 'consultarRuc'])->where('ruc', '\d{11}')->name('ruc');
 });

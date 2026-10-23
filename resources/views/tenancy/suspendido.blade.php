@@ -1,6 +1,6 @@
 @php
-    $s = config('soporte');
-    $pago = $s['pago'];
+    // Datos de cobro de quien le vendió el sistema (usuario del panel) o, si no los puso, los de TUSHPA
+    $pago = \App\Support\Tenancy\DatosCobro::para($cliente);
     $empresa = $cliente->nombre_comercial ?: $cliente->razon_social;
     $mensaje = "Hola, soy de {$empresa} (RUC {$cliente->ruc}). Ya realicé el pago del servicio TUSHPA, les envío el comprobante para reactivar el acceso.";
 @endphp
@@ -57,6 +57,7 @@
         .qr img { display: block; width: 100%; height: auto; }
         .seguro { position: relative; margin-top: 18px; display: flex; align-items: center; gap: 8px; color: #dbeafe; font-size: 12px; }
         .seguro svg { width: 16px; height: 16px; flex: 0 0 16px; }
+        .tarjeta.sin-qr { grid-template-columns: 1fr; max-width: 620px; }
         @media (max-width: 820px) {
             .tarjeta { grid-template-columns: 1fr; border-radius: 22px; }
             .info { padding: 28px 22px 24px; }
@@ -70,7 +71,7 @@
     </style>
 </head>
 <body>
-    <main class="tarjeta">
+    <main class="tarjeta {{ $pago['qr'] ? '' : 'sin-qr' }}">
         <section class="info">
             <div class="marca"><img src="{{ asset('imagenes/192.png') }}" alt="">TUSHPA</div>
 
@@ -83,40 +84,50 @@
             @endif
 
             <ol class="pasos">
-                <li><b class="n">1</b><span>Escanea el QR con Yape, Plin o la app de tu banco, o transfiere a la cuenta {{ $pago['banco'] }}.</span></li>
+                <li><b class="n">1</b><span>
+                    @if ($pago['qr'] && $pago['cuenta'])Escanea el QR con Yape, Plin o la app de tu banco, o transfiere a la cuenta {{ $pago['banco'] }}.
+                    @elseif ($pago['qr'])Escanea el QR con Yape, Plin o la app de tu banco.
+                    @else Transfiere a la cuenta {{ $pago['banco'] }}.@endif
+                </span></li>
                 <li><b class="n">2</b><span>Envíanos la captura del pago por WhatsApp.</span></li>
                 <li><b class="n">3</b><span>Reactivamos tu acceso y sigues trabajando.</span></li>
             </ol>
 
             <div class="cuentas">
-                <div class="cuenta">
-                    <div><small>Cuenta {{ $pago['banco'] }} · {{ $pago['titular'] }}</small><span>{{ $pago['cuenta'] }}</span></div>
-                    <button type="button" class="copiar" data-valor="{{ preg_replace('/\D/', '', $pago['cuenta']) }}">Copiar</button>
-                </div>
-                <div class="cuenta">
-                    <div><small>CCI (desde otros bancos)</small><span>{{ $pago['cci'] }}</span></div>
-                    <button type="button" class="copiar" data-valor="{{ preg_replace('/\D/', '', $pago['cci']) }}">Copiar</button>
-                </div>
+                @if ($pago['cuenta'])
+                    <div class="cuenta">
+                        <div><small>Cuenta {{ $pago['banco'] }} · {{ $pago['titular'] }}</small><span>{{ $pago['cuenta'] }}</span></div>
+                        <button type="button" class="copiar" data-valor="{{ preg_replace('/\D/', '', $pago['cuenta']) }}">Copiar</button>
+                    </div>
+                @endif
+                @if ($pago['cci'])
+                    <div class="cuenta">
+                        <div><small>CCI (desde otros bancos)</small><span>{{ $pago['cci'] }}</span></div>
+                        <button type="button" class="copiar" data-valor="{{ preg_replace('/\D/', '', $pago['cci']) }}">Copiar</button>
+                    </div>
+                @endif
             </div>
 
             <div class="acciones">
-                <a class="wa" href="https://wa.me/{{ $s['whatsapp'] }}?text={{ rawurlencode($mensaje) }}" target="_blank" rel="noopener">
+                <a class="wa" href="https://wa.me/{{ $pago['whatsapp'] }}?text={{ rawurlencode($mensaje) }}" target="_blank" rel="noopener">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.07.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35zM12.05 21.5h-.01a9.4 9.4 0 01-4.79-1.31l-.34-.2-3.56.93.95-3.47-.22-.36a9.4 9.4 0 01-1.44-5.01c0-5.2 4.23-9.43 9.43-9.43 2.52 0 4.89.98 6.67 2.77a9.36 9.36 0 012.76 6.67c0 5.2-4.23 9.43-9.43 9.43zm8.02-17.45A11.25 11.25 0 0012.05.75C5.8.75.72 5.83.72 12.08c0 2 .52 3.95 1.52 5.66L.62 23.25l5.65-1.48a11.3 11.3 0 005.41 1.38h.01c6.25 0 11.33-5.08 11.33-11.33 0-3.03-1.18-5.87-3.32-8.01z"/></svg>
                     Ya pagué · enviar comprobante
                 </a>
-                <span class="nota">Soporte: {{ $s['telefono'] }} · {{ $s['horario'] }}</span>
+                <span class="nota">Soporte: {{ $pago['telefono'] }}{{ $pago['horario'] ? ' · '.$pago['horario'] : '' }}</span>
             </div>
         </section>
 
-        <aside class="pago">
-            <h2>Paga con cualquier billetera digital</h2>
-            <p>Yape · Plin · BBVA · BCP · Interbank y más</p>
-            <div class="qr"><img src="{{ asset($pago['qr']) }}" alt="QR de pago {{ $pago['banco'] }} - {{ $pago['titular'] }}"></div>
-            <div class="seguro">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/></svg>
-                Titular: {{ $pago['titular'] }}
-            </div>
-        </aside>
+        @if ($pago['qr'])
+            <aside class="pago">
+                <h2>Paga con cualquier billetera digital</h2>
+                <p>Yape · Plin · BBVA · BCP · Interbank y más</p>
+                <div class="qr"><img src="{{ $pago['qr'] }}" alt="QR de pago {{ $pago['banco'] }} - {{ $pago['titular'] }}"></div>
+                <div class="seguro">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/></svg>
+                    Titular: {{ $pago['titular'] }}
+                </div>
+            </aside>
+        @endif
     </main>
 
     <script>

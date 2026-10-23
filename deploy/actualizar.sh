@@ -8,7 +8,8 @@ cd "${DIR}"
 export COMPOSER_ALLOW_SUPERUSER=1
 
 echo "==> Modo mantenimiento"
-php artisan down --retry=15 || true
+# Pantalla amable "Estamos actualizando el sistema" (resources/views/errors/503.blade.php), armada antes de tocar el código
+php artisan down --retry=15 --render="errors::503" || true
 trap 'php artisan up || true' EXIT
 
 echo "==> Código"
