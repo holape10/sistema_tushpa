@@ -43,7 +43,7 @@
                     @endphp
                     <tr>
                         <td class="px-4 py-2 text-gray-500">{{ $d->procod }}</td>
-                        <td class="px-4 py-2 font-medium text-gray-700">{{ $d->pronom }} <span class="text-xs text-gray-400">{{ $d->umecod }}</span></td>
+                        <td class="px-4 py-2 font-medium text-gray-700">{{ $d->pronom }} <span class="text-xs text-gray-400">{{ \App\Support\Unidades::nombre($d->umecod ?: 'NIU') }}</span></td>
                         <td class="px-4 py-2 text-right whitespace-nowrap">{{ $cant($d->stock_sistema) }}</td>
                         <td class="px-4 py-2 text-right whitespace-nowrap">{{ $cant($d->stock_fisico) }}</td>
                         <td class="px-4 py-2 text-right font-semibold {{ $d->diferencia > 0 ? 'text-green-600' : ($d->diferencia < 0 ? 'text-red-600' : 'text-gray-400') }}">

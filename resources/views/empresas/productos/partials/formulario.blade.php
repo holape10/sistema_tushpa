@@ -105,10 +105,11 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">Unidad de medida *</label>
                         <select name="umecod" x-model="umecod" required class="{{ $campo }}">
                             @foreach ($unidades as $u)
-                                <option value="{{ $u->umecod }}">{{ $u->umenom }}</option>
+                                @php $sunat = \App\Support\Unidades::sunat($u->umecod); @endphp
+                                <option value="{{ $u->umecod }}">{{ $u->umenom }} — {{ $sunat === strtoupper($u->umecod) ? 'SUNAT '.$sunat : 'a SUNAT va como NIU (unidad)' }}</option>
                             @endforeach
                         </select>
-                        <p class="text-xs text-gray-400 mt-1">Unidad predeterminada de venta y stock.</p>
+                        <p class="text-xs text-gray-400 mt-1">Unidad predeterminada de venta y stock. En el ticket sale con su nombre; a SUNAT siempre va un código vigente.</p>
                     </div>
 
                     <div>

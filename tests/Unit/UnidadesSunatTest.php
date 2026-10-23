@@ -30,6 +30,23 @@ class UnidadesSunatTest extends TestCase
         $this->assertSame($esperado, Unidades::sunat($umecod));
     }
 
+    /** @return array<string, array{string, string}> */
+    public static function plurales(): array
+    {
+        return [
+            'vocal' => ['Botella', 'Botellas'], 'termina en ón' => ['Galón', 'Galones'], 'termina en d' => ['Unidad', 'Unidades'],
+            'termina en l' => ['Barril', 'Barriles'], 'préstamo del inglés' => ['Pack', 'Packs'], 'táper' => ['Taper', 'Tapers'],
+            'dos palabras' => ['Metro cúbico', 'Metros cúbicos'], 'con conector' => ['Kit o Juego', 'Kits o Juegos'],
+            'ya en plural' => ['Litros', 'Litros'], 'mes' => ['Mes', 'Meses'], 'mayúsculas' => ['CAJA', 'CAJAS'],
+        ];
+    }
+
+    #[DataProvider('plurales')]
+    public function test_plural_del_nombre_de_la_unidad(string $nombre, string $esperado): void
+    {
+        $this->assertSame($esperado, Unidades::plural($nombre));
+    }
+
     public function test_las_unidades_del_catalogo_que_son_vigentes_se_mandan_tal_cual(): void
     {
         foreach (array_keys(Unidades::CATALOGO) as $cod) {

@@ -67,19 +67,48 @@ class Unidades
         return in_array($cod, self::VIGENTES_SUNAT, true) ? $cod : 'NIU';
     }
 
-    /** @var array<string, string>|null abreviatura de cada unidad (la del ticket), leída una vez por petición */
-    private static ?array $abreviaturas = null;
+    /** @var array<string, string>|null nombre de cada unidad (Botella, Litro…), leído una vez por petición */
+    private static ?array $nombres = null;
 
-    public static function abreviatura(string $umecod): string
+    /** Nombre de la unidad para leerlo fácil: "Botella", y en plural si la cantidad no es 1 ("Botellas", "Galones") */
+    public static function nombre(string $umecod, ?float $cantidad = null): string
     {
-        self::$abreviaturas ??= Schema::hasTable('unidad_medida')
-            ? DB::table('unidad_medida')->pluck('umecin', 'umecod')->map(fn ($a) => (string) $a)->all() : [];
+        self::$nombres ??= Schema::hasTable('unidad_medida')
+            ? DB::table('unidad_medida')->pluck('umenom', 'umecod')->map(fn ($n) => trim((string) $n))->all() : [];
+        $nombre = (self::$nombres[$umecod] ?? '') ?: (self::CATALOGO[$umecod][0] ?? $umecod);
 
-        return (self::$abreviaturas[$umecod] ?? '') ?: (self::CATALOGO[$umecod][1] ?? $umecod);
+        return $cantidad !== null && abs($cantidad - 1) < 1e-9 ? $nombre : self::plural($nombre);
+    }
+
+    /** Botella → Botellas, Galón → Galones, Unidad → Unidades, Metro cúbico → Metros cúbicos (los conectores no cambian) */
+    public static function plural(string $nombre): string
+    {
+        return implode(' ', array_map(function (string $p) {
+            $minus = mb_strtolower($p);
+            $mayus = $p === mb_strtoupper($p);
+            if ($minus === 'mes') {
+                return $p.($mayus ? 'ES' : 'es');
+            }
+            if ($p === '' || in_array($minus, ['de', 'o', 'y', 'por', 'en', 'x'], true) || str_ends_with($minus, 's') || ! preg_match('/\pL$/u', $p) || mb_strlen($p) <= 2) {
+                return $p;
+            }
+            $fin = mb_substr($minus, -1);
+            $nuevo = match (true) {
+                in_array($fin, ['a', 'e', 'i', 'o', 'u', 'á', 'é', 'í', 'ó', 'ú'], true) => $p.'s',
+                str_ends_with($minus, 'ón') => mb_substr($p, 0, -2).($mayus ? 'ONES' : 'ones'),
+                $fin === 'z' => mb_substr($p, 0, -1).($mayus ? 'CES' : 'ces'),
+                // Españolas terminadas en l, r, n, d, j: Barril → Barriles, Unidad → Unidades (táper es préstamo: Tapers)
+                in_array($fin, ['l', 'r', 'n', 'd', 'j'], true) && $minus !== 'taper' => $p.($mayus ? 'ES' : 'es'),
+                // Préstamos del inglés: Kit → Kits, Pack → Packs, Display → Displays
+                default => $p.($mayus ? 'S' : 's'),
+            };
+
+            return $mayus ? mb_strtoupper($nuevo) : $nuevo;
+        }, explode(' ', $nombre)));
     }
 
     /**
-     * Cantidad en la unidad principal y su equivalente: 4.08 botellas (1 botella = 25 onzas) → "4 BOT + 2 ONZ".
+     * Cantidad en la unidad principal y su equivalente: 4.08 botellas (1 botella = 25 onzas) → "4 Botellas + 2 Onzas".
      * Null si el producto no tiene unidad equivalente (se muestra el número de siempre).
      */
     public static function mixto(float $cantidad, string $ume, ?string $umeEquivalente, float $factor): ?string
@@ -95,10 +124,20 @@ class Unidades
             $enteras++;
             $resto = 0.0;
         }
-        $num = fn (float $n) => rtrim(rtrim(number_format($n, 2, '.', ''), '0'), '.');
-        $partes = array_filter([$enteras ? $enteras.' '.self::abreviatura($ume) : null, $resto > 0 ? $num($resto).' '.self::abreviatura($umeEquivalente) : null]);
+        $partes = array_filter([$enteras ? $enteras.' '.self::nombre($ume, $enteras) : null, $resto > 0 ? self::numero($resto).' '.self::nombre($umeEquivalente, $resto) : null]);
 
-        return $partes ? $signo.implode(' + ', $partes) : '0 '.self::abreviatura($ume);
+        return $partes ? $signo.implode(' + ', $partes) : '0 '.self::nombre($ume, 0);
+    }
+
+    /** La cantidad lista para leer: "538 Botellas", "1 Caja" o, con unidad equivalente, "3 Litros + 2 Onzas" */
+    public static function texto(float $cantidad, string $ume, ?string $umeEquivalente = null, float $factor = 0): string
+    {
+        return self::mixto($cantidad, $ume, $umeEquivalente, $factor) ?? self::numero($cantidad).' '.self::nombre($ume, $cantidad);
+    }
+
+    private static function numero(float $n): string
+    {
+        return rtrim(rtrim(number_format($n, 3, '.', ','), '0'), '.');
     }
 
     /** Agrega a la tabla las unidades del catálogo que falten (no cambia las que ya existen) */

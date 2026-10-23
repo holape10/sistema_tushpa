@@ -10,8 +10,9 @@
             'kardex' => isset($conMovimientos[$p->IdProducto]),
             // Insumo con unidad equivalente (1 botella = 25 onzas): se cuenta en las dos unidades
             'factor' => $p->ume_equivalente && $p->ume_equivalente !== $p->umecod && (float) $p->factor_equivalente > 1 ? (float) $p->factor_equivalente : 0,
-            'abr' => \App\Support\Unidades::abreviatura($p->umecod ?: 'NIU'),
-            'abrEq' => $p->ume_equivalente ? \App\Support\Unidades::abreviatura($p->ume_equivalente) : '',
+            'abr' => \App\Support\Unidades::nombre($p->umecod ?: 'NIU'), 'abr1' => \App\Support\Unidades::nombre($p->umecod ?: 'NIU', 1),
+            'abrEq' => $p->ume_equivalente ? \App\Support\Unidades::nombre($p->ume_equivalente) : '',
+            'abrEq1' => $p->ume_equivalente ? \App\Support\Unidades::nombre($p->ume_equivalente, 1) : '',
         ])->values();
     @endphp
 
@@ -82,7 +83,7 @@
                             <tr :class="contado(p) ? 'bg-indigo-50/40' : ''">
                                 <td class="px-3 py-1.5 text-gray-500" x-text="p.cod"></td>
                                 <td class="px-3 py-1.5"><span class="font-medium text-gray-700" x-text="p.nom"></span>
-                                    <span class="block text-xs text-gray-400" x-text="p.tipo + (p.cat ? ' · ' + p.cat : '') + ' · ' + p.ume + (p.factor ? ' (1 ' + p.abr + ' = ' + num(p.factor) + ' ' + p.abrEq + ')' : '')"></span></td>
+                                    <span class="block text-xs text-gray-400" x-text="p.tipo + (p.cat ? ' · ' + p.cat : '') + ' · ' + p.abr + (p.factor ? ' (1 ' + p.abr1 + ' = ' + num(p.factor) + ' ' + p.abrEq + ')' : '')"></span></td>
                                 <td class="px-3 py-1.5 text-right whitespace-nowrap" x-text="mostrar(p, p.stock)"></td>
                                 <td class="px-3 py-1.5">
                                     {{-- Con unidad equivalente: botellas + onzas (se guarda como 4 + 2/25 = 4.08 botellas) --}}
@@ -90,11 +91,11 @@
                                         <div class="flex items-center gap-1">
                                             <input type="number" step="any" min="0" class="w-16 rounded-lg border-gray-300 text-sm text-right" placeholder="0"
                                                    :value="conteo[p.id]?.ent ?? ''" @input="fijarMixto(p, 'ent', $event.target.value)">
-                                            <span class="text-[10px] text-gray-500" x-text="p.abr"></span>
+                                            <span class="text-xs text-gray-600" x-text="p.abr"></span>
                                             <span class="text-gray-400">+</span>
                                             <input type="number" step="any" min="0" class="w-16 rounded-lg border-gray-300 text-sm text-right" placeholder="0"
                                                    :value="conteo[p.id]?.frac ?? ''" @input="fijarMixto(p, 'frac', $event.target.value)">
-                                            <span class="text-[10px] text-gray-500" x-text="p.abrEq"></span>
+                                            <span class="text-xs text-gray-600" x-text="p.abrEq"></span>
                                         </div>
                                     </template>
                                     <template x-if="!p.factor">
@@ -143,13 +144,14 @@
                 num(n) { return Number(n).toLocaleString('es-PE', { maximumFractionDigits: 3 }); },
                 contado(p) { return this.conteo[p.id] && this.conteo[p.id].cantidad !== '' && this.conteo[p.id].cantidad != null; },
                 diferencia(p) { return this.contado(p) ? Math.round((parseFloat(this.conteo[p.id].cantidad) - p.stock) * 100000) / 100000 : 0; },
-                // 4.08 botellas (1 botella = 25 onzas) → "4 BOT + 2 ONZ"; sin equivalencia, el número de siempre
+                // 4.08 botellas (1 botella = 25 onzas) → "4 Botellas + 2 Onzas"; sin equivalencia, "24 Unidades"
                 mostrar(p, n) {
-                    if (!p.factor) return this.num(n);
+                    const nombre = (c, uno, varios) => Math.abs(c) === 1 ? uno : varios;
+                    if (!p.factor) return this.num(n) + ' ' + nombre(n, p.abr1, p.abr);
                     const signo = n < 0 ? '-' : '', total = Math.abs(n);
                     let ent = Math.floor(total + 1e-9), resto = Math.round((total - ent) * p.factor * 100) / 100;
                     if (resto >= p.factor - 0.005) { ent++; resto = 0; }
-                    const partes = [ent ? ent + ' ' + p.abr : '', resto ? this.num(resto) + ' ' + p.abrEq : ''].filter(Boolean);
+                    const partes = [ent ? ent + ' ' + nombre(ent, p.abr1, p.abr) : '', resto ? this.num(resto) + ' ' + nombre(resto, p.abrEq1, p.abrEq) : ''].filter(Boolean);
                     return partes.length ? signo + partes.join(' + ') : '0 ' + p.abr;
                 },
                 fijarMixto(p, campo, valor) {

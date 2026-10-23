@@ -216,7 +216,7 @@ class InventarioController extends Controller
             $equivalente = Unidades::mixto(0, $p->umecod ?: 'NIU', $p->ume_equivalente, (float) $p->factor_equivalente) !== null;
 
             return [$p->IdProducto, (string) $p->procod, $p->pronom, $p->umecod, $p->cat_nom ?? '', (float) $p->stock, '', (float) $p->costo, '',
-                $equivalente ? Unidades::abreviatura($p->ume_equivalente).' (1 '.Unidades::abreviatura($p->umecod).' = '.(float) $p->factor_equivalente.')' : ''];
+                $equivalente ? Unidades::nombre($p->ume_equivalente).' (1 '.Unidades::nombre($p->umecod, 1).' = '.(float) $p->factor_equivalente.')' : ''];
         })->all();
 
         $ruta = (new Excel)

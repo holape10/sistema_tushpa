@@ -35,8 +35,8 @@
                 @foreach ($productos as $p)
                     @php $conEq = \App\Support\Unidades::mixto(0, $p->umecod ?: 'NIU', $p->ume_equivalente, (float) $p->factor_equivalente) !== null; @endphp
                     <option data-id="{{ $p->IdProducto }}" data-costo="{{ $p->costo }}" data-lote="{{ $p->control_lote ? 1 : 0 }}" data-serie="{{ $p->control_serie ? 1 : 0 }}"
-                            data-factor="{{ $conEq ? (float) $p->factor_equivalente : 0 }}" data-abr="{{ \App\Support\Unidades::abreviatura($p->umecod ?: 'NIU') }}"
-                            data-abreq="{{ $conEq ? \App\Support\Unidades::abreviatura($p->ume_equivalente) : '' }}" value="{{ $p->pronom }}">{{ $p->procod }}</option>
+                            data-factor="{{ $conEq ? (float) $p->factor_equivalente : 0 }}" data-abr="{{ \App\Support\Unidades::nombre($p->umecod ?: 'NIU') }}"
+                            data-abreq="{{ $conEq ? \App\Support\Unidades::nombre($p->ume_equivalente) : '' }}" value="{{ $p->pronom }}">{{ $p->procod }}</option>
                 @endforeach
             </datalist>
             <button type="button" id="btn_agregar" class="px-4 rounded-lg bg-indigo-600 text-white text-sm font-semibold">Agregar</button>
@@ -108,9 +108,9 @@
                     <input type="hidden" name="items[${i}][cantidad]" value="1" class="total">
                     <div class="flex items-center gap-1">
                         <input type="number" step="any" min="0" value="1" class="cant mixto w-16 rounded-lg border-gray-300 text-sm text-right">
-                        <span class="abr text-[10px] text-gray-500"></span><span class="text-gray-400">+</span>
+                        <span class="abr text-xs text-gray-600"></span><span class="text-gray-400">+</span>
                         <input type="number" step="any" min="0" value="0" class="frac mixto w-16 rounded-lg border-gray-300 text-sm text-right">
-                        <span class="abreq text-[10px] text-gray-500"></span>
+                        <span class="abreq text-xs text-gray-600"></span>
                     </div>` : `
                     <input type="number" step="any" min="0.00001" required name="items[${i}][cantidad]" value="1" class="cant w-full rounded-lg border-gray-300 text-sm">`}</td>
                 <td class="px-3 py-2"><input type="number" step="0.01" min="0" name="items[${i}][costo]" value="${parseFloat(op.dataset.costo || 0).toFixed(2)}" class="w-full rounded-lg border-gray-300 text-sm"></td>

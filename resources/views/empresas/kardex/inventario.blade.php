@@ -105,8 +105,7 @@
                         </td>
                         <td class="px-3 py-2 text-gray-500">{{ $f['categoria'] }}</td>
                         @if ($idAlmacen)<td class="px-3 py-2 text-gray-500">{{ $f['almacen'] }}</td>@endif
-                        <td class="px-3 py-2 text-right font-semibold {{ $f['cantidad'] < 0 ? 'text-red-600' : '' }}">{{ $num($f['cantidad']) }} <span class="text-xs text-gray-400">{{ $f['unidad'] }}</span>
-                            @if ($f['equivalente'])<span class="block text-xs font-normal text-gray-500">{{ $f['equivalente'] }}</span>@endif</td>
+                        <td class="px-3 py-2 text-right font-semibold {{ $f['cantidad'] < 0 ? 'text-red-600' : '' }}">{{ $f['equivalente'] ?? $num($f['cantidad']).' '.\App\Support\Unidades::nombre($f['unidad'] ?: 'NIU', (float) $f['cantidad']) }}</td>
                         <td class="px-3 py-2 text-right">{{ number_format($f['costo'], 2) }}</td>
                         <td class="px-3 py-2 text-right font-bold {{ $f['cantidad'] < 0 ? 'text-red-600' : '' }}">{{ number_format($f['valor'], 2) }}</td>
                         <td class="px-3 py-2 text-right print:hidden">

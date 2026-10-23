@@ -89,7 +89,7 @@
                 <tbody class="divide-y divide-gray-100">
                     @forelse ($resumen as $f)
                         <tr class="hover:bg-gray-50">
-                            <td class="px-3 py-2"><span class="font-medium">{{ $f['nombre'] }}</span> <span class="text-xs text-gray-400">{{ $f['codigo'] }} · {{ $f['unidad'] }}</span></td>
+                            <td class="px-3 py-2"><span class="font-medium">{{ $f['nombre'] }}</span> <span class="text-xs text-gray-400">{{ $f['codigo'] }} · {{ \App\Support\Unidades::nombre($f['unidad'] ?: 'NIU') }}</span></td>
                             <td class="px-3 py-2 text-right">{{ $num($f['inicial']['cantidad']) }}</td>
                             @if ($vista === 'valorizado')<td class="px-3 py-2 text-right text-gray-500">{{ number_format($f['inicial']['valor'], 2) }}</td>@endif
                             <td class="px-3 py-2 text-right text-green-700 font-semibold">{{ $f['entradas']['cantidad'] ? $num($f['entradas']['cantidad']) : '' }}</td>
@@ -128,12 +128,12 @@
             @php $k = $valorizado; @endphp
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
                 <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Saldo al {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }}</p>
-                    <p class="text-xl font-bold">{{ $soles($k['inicial']['valor']) }}</p><p class="text-xs text-gray-400">{{ $num($k['inicial']['cantidad']) }} {{ $producto->umecod }}</p></div>
+                    <p class="text-xl font-bold">{{ $soles($k['inicial']['valor']) }}</p><p class="text-xs text-gray-400">{{ \App\Support\Unidades::texto((float) $k['inicial']['cantidad'], $producto->umecod ?: 'NIU', $producto->ume_equivalente, (float) $producto->factor_equivalente) }}</p></div>
                 <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Entradas</p><p class="text-xl font-bold text-green-700">{{ $soles($k['entradas']) }}</p></div>
                 <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Salidas (costo)</p><p class="text-xl font-bold text-red-600">{{ $soles($k['salidas']) }}</p></div>
                 <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Saldo al {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }}</p>
                     <p class="text-xl font-bold text-indigo-700">{{ $soles($k['final']['valor']) }}</p>
-                    <p class="text-xs text-gray-400">{{ $num($k['final']['cantidad']) }} {{ $producto->umecod }} · C.U. {{ number_format($k['final']['costo'], 2) }}</p></div>
+                    <p class="text-xs text-gray-400">{{ \App\Support\Unidades::texto((float) $k['final']['cantidad'], $producto->umecod ?: 'NIU', $producto->ume_equivalente, (float) $producto->factor_equivalente) }} · C.U. {{ number_format($k['final']['costo'], 2) }}</p></div>
             </div>
 
             <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
@@ -191,7 +191,7 @@
             <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Saldo al {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }}</p><p class="text-xl font-bold">{{ rtrim(rtrim(number_format($saldoInicial, 2), '0'), '.') }}</p></div>
             <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Entradas</p><p class="text-xl font-bold text-green-700">{{ rtrim(rtrim(number_format($entradas, 2), '0'), '.') }}</p></div>
             <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Salidas</p><p class="text-xl font-bold text-red-600">{{ rtrim(rtrim(number_format($salidas, 2), '0'), '.') }}</p></div>
-            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Stock actual</p><p class="text-xl font-bold {{ $stockActual < 0 ? 'text-red-600' : 'text-indigo-700' }}">{{ $num($stockActual, 3) }} {{ $producto->umecod }}</p>{!! $conEq($stockActual) !!}</div>
+            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Stock actual</p><p class="text-xl font-bold {{ $stockActual < 0 ? 'text-red-600' : 'text-indigo-700' }}">{{ \App\Support\Unidades::texto((float) $stockActual, $producto->umecod ?: 'NIU', $producto->ume_equivalente, (float) $producto->factor_equivalente) }}</p></div>
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">

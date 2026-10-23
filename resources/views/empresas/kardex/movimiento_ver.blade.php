@@ -52,17 +52,14 @@
                         <td class="px-4 py-2"><span class="font-medium text-gray-800">{{ $m->pronom }}</span>
                             @if ($m->series)<span class="block text-xs text-sky-700 font-mono">Series: {{ $m->series }}</span>@endif</td>
                         <td class="px-4 py-2 text-right font-semibold {{ $ingreso ? 'text-green-700' : 'text-red-600' }}">
-                            {{ $num($m->cantidad) }} <span class="text-xs text-gray-400">{{ $m->umecod }}</span>
-                            @if ($m->equivalente)<span class="block text-xs font-normal text-gray-500">{{ $m->equivalente }}</span>@endif</td>
+                            {{ $m->equivalente ?? $num($m->cantidad).' '.\App\Support\Unidades::nombre($m->umecod ?: 'NIU', (float) $m->cantidad) }}
+                            @if ($m->equivalente)<span class="block text-xs font-normal text-gray-400">{{ $num($m->cantidad) }} {{ \App\Support\Unidades::nombre($m->umecod ?: 'NIU', (float) $m->cantidad) }}</span>@endif</td>
                         <td class="px-4 py-2 text-right">{{ number_format((float) $m->costo, 2) }}</td>
                         <td class="px-4 py-2 text-right font-semibold">{{ number_format((float) $m->cantidad * (float) $m->costo, 2) }}</td>
                         @if ($ingreso)
                             <td class="px-4 py-2 text-xs">{{ $m->mov_lote ?: '—' }}@if ($m->mov_vencimiento) · {{ \Carbon\Carbon::parse($m->mov_vencimiento)->format('d/m/Y') }}@endif</td>
                         @endif
-                        <td class="px-4 py-2 text-right text-gray-500">{{ $num($m->stock) }}
-                            @if ($eq = \App\Support\Unidades::mixto((float) $m->stock, $m->umecod ?: 'NIU', $m->ume_equivalente, (float) $m->factor_equivalente))
-                                <span class="block text-xs">{{ $eq }}</span>
-                            @endif</td>
+                        <td class="px-4 py-2 text-right text-gray-500">{{ \App\Support\Unidades::texto((float) $m->stock, $m->umecod ?: 'NIU', $m->ume_equivalente, (float) $m->factor_equivalente) }}</td>
                     </tr>
                 @empty
                     <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">Sin productos.</td></tr>
