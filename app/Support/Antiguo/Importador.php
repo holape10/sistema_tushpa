@@ -46,7 +46,7 @@ class Importador
         'mesas' => 'Pisos y mesas',
         'usuarios' => 'Usuarios y empleados (con sus mismas contraseñas y rol)',
         // Al final: necesita clientes, productos, proveedores y medios de pago ya importados para enlazarlos
-        'historial' => 'Historial: ventas, notas de crédito, compras y cuentas por cobrar/pagar (con estado SUNAT y correlativos)',
+        'historial' => 'Historial: ventas, notas de crédito, compras, cuentas por cobrar/pagar y guías de remisión (con estado SUNAT y correlativos)',
     ];
 
     private const TIPOS = [0 => 0, 1 => 0, 2 => 2, 3 => 6, 4 => 4, 6 => 6];
@@ -125,6 +125,7 @@ class Importador
             'Ventas (comprobantes)' => $contar('cpe_cabecera', fn ($q) => $q->whereIn('tdocod', Historial::VENTAS)),
             'Vales y proformas (no se importan)' => $contar('cpe_cabecera', fn ($q) => $q->whereNotIn('tdocod', Historial::VENTAS)),
             'Compras' => $contar('compras_cabecera'),
+            'Guías de remisión' => $contar('guias_remision'),
         ];
     }
 
@@ -671,8 +672,8 @@ class Importador
         ))->importar();
 
         $this->reporte['historial'] = ['creados' => $r['ventas'] + $r['compras'], 'actualizados' => 0, 'omitidos' => $r['repetidos'],
-            'ventas' => $r['ventas'], 'compras' => $r['compras'], 'cuentas' => $r['cuentas']];
-        $this->aviso("Historial: {$r['ventas']} comprobantes con {$r['detalle']} líneas y {$r['medios']} pagos; {$r['compras']} compras; {$r['cuentas']} cuentas por cobrar/pagar"
+            'ventas' => $r['ventas'], 'compras' => $r['compras'], 'cuentas' => $r['cuentas'], 'guias' => $r['guias']];
+        $this->aviso("Historial: {$r['ventas']} comprobantes con {$r['detalle']} líneas y {$r['medios']} pagos; {$r['compras']} compras; {$r['cuentas']} cuentas por cobrar/pagar; {$r['guias']} guías de remisión"
             .($r['repetidos'] ? "; {$r['repetidos']} ya estaban (no se duplicaron)." : '.'));
     }
 

@@ -191,7 +191,7 @@ class TurnoController extends Controller
 
             $r = self::resumen($turno);
 
-            // Arqueo: si contó billetes y monedas se usa esa suma; si no, el monto escrito
+            // Arqueo: si contó billetes y monedas se usa esa suma; si no, el monto escrito; vacío = no se contó (sin faltante ni sobrante)
             $datos = [];
             $sumaArqueo = 0;
             foreach (Turno::DENOMINACIONES as $campo => $valor) {
@@ -199,7 +199,7 @@ class TurnoController extends Controller
                 $datos[$campo] = $cant;
                 $sumaArqueo += $cant * $valor;
             }
-            $montocierre = $sumaArqueo > 0 ? round($sumaArqueo, 2) : round((float) $request->input('montocierre', 0), 2);
+            $montocierre = $sumaArqueo > 0 ? round($sumaArqueo, 2) : ($request->filled('montocierre') ? round((float) $request->input('montocierre'), 2) : null);
 
             $mesas = Mesa::where('id_empresa_negocio', $user->id_empresa_negocio)->get();
 

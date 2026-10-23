@@ -35,14 +35,19 @@
             <tbody class="divide-y divide-gray-100">
                 @php $total = 0; @endphp
                 @foreach ($detalle as $d)
-                    @php $valor = $d->diferencia * $d->costo; $total += $valor; @endphp
+                    @php
+                        $valor = $d->diferencia * $d->costo; $total += $valor;
+                        // Insumos con unidad equivalente: "4 BOT + 2 ONZ"
+                        $cant = fn ($n) => \App\Support\Unidades::mixto((float) $n, $d->umecod ?: 'NIU', $d->ume_equivalente, (float) $d->factor_equivalente)
+                            ?? rtrim(rtrim(number_format($n, 3), '0'), '.');
+                    @endphp
                     <tr>
                         <td class="px-4 py-2 text-gray-500">{{ $d->procod }}</td>
                         <td class="px-4 py-2 font-medium text-gray-700">{{ $d->pronom }} <span class="text-xs text-gray-400">{{ $d->umecod }}</span></td>
-                        <td class="px-4 py-2 text-right">{{ rtrim(rtrim(number_format($d->stock_sistema, 3), '0'), '.') }}</td>
-                        <td class="px-4 py-2 text-right">{{ rtrim(rtrim(number_format($d->stock_fisico, 3), '0'), '.') }}</td>
+                        <td class="px-4 py-2 text-right whitespace-nowrap">{{ $cant($d->stock_sistema) }}</td>
+                        <td class="px-4 py-2 text-right whitespace-nowrap">{{ $cant($d->stock_fisico) }}</td>
                         <td class="px-4 py-2 text-right font-semibold {{ $d->diferencia > 0 ? 'text-green-600' : ($d->diferencia < 0 ? 'text-red-600' : 'text-gray-400') }}">
-                            {{ $d->diferencia > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format($d->diferencia, 3), '0'), '.') }}
+                            {{ $d->diferencia > 0 ? '+' : '' }}{{ $cant($d->diferencia) }}
                         </td>
                         <td class="px-4 py-2 text-right">{{ number_format($d->costo, 2) }}</td>
                         <td class="px-4 py-2 text-right">{{ number_format($valor, 2) }}</td>

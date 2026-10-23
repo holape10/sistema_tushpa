@@ -79,7 +79,9 @@
         <tr><td>(+) Otros ingresos</td><td class="r">{{ number_format($r['ingresos'], 2) }}</td></tr>
         <tr><td>(-) Egresos</td><td class="r">{{ number_format($r['egresos'], 2) }}</td></tr>
         <tr class="b"><td>EFECTIVO ESPERADO</td><td class="r">{{ number_format($r['efectivoEsperado'], 2) }}</td></tr>
-        @if ($turno->estado == 'CERRADO')
+        @if ($turno->estado == 'CERRADO' && $turno->montocierre === null)
+            <tr class="b"><td>EFECTIVO CONTADO</td><td class="r">NO SE CONTÓ</td></tr>
+        @elseif ($turno->estado == 'CERRADO')
             @php $dif = round($turno->montocierre - $r['efectivoEsperado'], 2); @endphp
             <tr class="b"><td>EFECTIVO CONTADO</td><td class="r">{{ number_format($turno->montocierre, 2) }}</td></tr>
             <tr class="b {{ $dif == 0 ? 'ok' : 'mal' }}"><td>{{ $dif < 0 ? 'FALTANTE' : ($dif > 0 ? 'SOBRANTE' : 'CUADRE EXACTO') }}</td><td class="r">{{ number_format($dif, 2) }}</td></tr>

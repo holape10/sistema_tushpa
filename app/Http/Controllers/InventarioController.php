@@ -8,6 +8,7 @@ use App\Support\Excel;
 use App\Support\ExcelLector;
 use App\Support\Kardex;
 use App\Support\Recetas;
+use App\Support\Unidades;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +41,7 @@ class InventarioController extends Controller
             ->leftJoin('categorias as c', 'c.cat_id', '=', 'productos.cat_id')
             ->orderBy('productos.pronom')
             ->get(['productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod', 'productos.costo',
-                'productos.promocion', 'c.cat_nom', DB::raw('COALESCE(ps.stock, 0) as stock')]);
+                'productos.promocion', 'productos.ume_equivalente', 'productos.factor_equivalente', 'c.cat_nom', DB::raw('COALESCE(ps.stock, 0) as stock')]);
     }
 
     private function almacen(int $id): Almacen
@@ -181,7 +182,7 @@ class InventarioController extends Controller
         $detalle = DB::table('inventario_detalle as d')
             ->join('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
             ->where('d.inv_cab_id', $id)->orderBy('p.pronom')
-            ->select('d.*', 'p.procod', 'p.pronom', 'p.umecod')->get();
+            ->select('d.*', 'p.procod', 'p.pronom', 'p.umecod', 'p.ume_equivalente', 'p.factor_equivalente')->get();
 
         return view('empresas.inventarios.show', compact('inventario', 'detalle'));
     }
@@ -192,12 +193,14 @@ class InventarioController extends Controller
         $vista = $this->show($id);
         ['inventario' => $inv, 'detalle' => $detalle] = $vista->getData();
 
+        $mixto = fn ($d, $n) => Unidades::mixto((float) $n, $d->umecod ?: 'NIU', $d->ume_equivalente, (float) $d->factor_equivalente) ?? '';
         $filas = $detalle->map(fn ($d) => [$d->procod, $d->pronom, $d->umecod, (float) $d->stock_sistema, (float) $d->stock_fisico,
             (float) $d->diferencia, (float) $d->costo, round($d->diferencia * $d->costo, 2),
-            $d->cod_tip_ope === '16' ? 'SALDO INICIAL' : 'AJUSTE'])->all();
+            $d->cod_tip_ope === '16' ? 'SALDO INICIAL' : 'AJUSTE', $mixto($d, $d->stock_fisico), $mixto($d, $d->diferencia)])->all();
 
         $ruta = (new Excel)->hoja('Inventario '.$id,
-            ['Código', 'Producto', 'Unidad', 'Stock sistema', 'Stock físico', 'Diferencia', 'Costo unit.', 'Valor ajuste', 'Tipo'], $filas)->guardar();
+            ['Código', 'Producto', 'Unidad', 'Stock sistema', 'Stock físico', 'Diferencia', 'Costo unit.', 'Valor ajuste', 'Tipo',
+                'Stock físico (unidad + equivalente)', 'Diferencia (unidad + equivalente)'], $filas)->guardar();
 
         return response()->download($ruta, "inventario_{$id}_".str_replace(' ', '_', $inv->almacen).'.xlsx',
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend();
@@ -209,18 +212,22 @@ class InventarioController extends Controller
         $this->autorizar();
         $almacen = $this->almacen((int) $request->get('almacen'));
 
-        $filas = $this->productos($almacen->id_almacen)->map(fn ($p) => [
-            $p->IdProducto, (string) $p->procod, $p->pronom, $p->umecod, $p->cat_nom ?? '', (float) $p->stock, '', (float) $p->costo,
-        ])->all();
+        $filas = $this->productos($almacen->id_almacen)->map(function ($p) {
+            $equivalente = Unidades::mixto(0, $p->umecod ?: 'NIU', $p->ume_equivalente, (float) $p->factor_equivalente) !== null;
+
+            return [$p->IdProducto, (string) $p->procod, $p->pronom, $p->umecod, $p->cat_nom ?? '', (float) $p->stock, '', (float) $p->costo, '',
+                $equivalente ? Unidades::abreviatura($p->ume_equivalente).' (1 '.Unidades::abreviatura($p->umecod).' = '.(float) $p->factor_equivalente.')' : ''];
+        })->all();
 
         $ruta = (new Excel)
-            ->hoja('Conteo', ['ID', 'Código', 'Producto', 'Unidad', 'Categoría', 'Stock sistema', 'Stock físico', 'Costo unitario'], $filas)
+            ->hoja('Conteo', ['ID', 'Código', 'Producto', 'Unidad', 'Categoría', 'Stock sistema', 'Stock físico', 'Costo unitario', 'Equivalente', 'Unidad equivalente'], $filas)
             ->hoja('Instrucciones', ['Paso', 'Detalle'], [
                 ['1', 'Escribe en la columna "Stock físico" la cantidad que contaste de cada producto.'],
                 ['2', 'Deja vacía la celda de los productos que no contaste: no se modificarán.'],
                 ['3', 'Si contaste 0, escribe 0: el stock del producto quedará en cero.'],
                 ['4', '"Costo unitario" es opcional; si lo cambias, se actualiza el costo del producto.'],
                 ['5', 'No cambies las columnas ID ni Código: con ellas se identifica cada producto.'],
+                ['', 'Insumos con unidad equivalente (columna "Unidad equivalente"): pon las enteras en "Stock físico" y lo suelto en "Equivalente". Ej.: 4 botellas y 2 onzas = 4 y 2.'],
                 ['6', 'Guarda el archivo y súbelo en Inventarios > Nuevo inventario > Cargar Excel.'],
             ])->guardar();
 
@@ -247,12 +254,13 @@ class InventarioController extends Controller
         $cNom = $col(['producto', 'nombre', 'descripcion']);
         $cCant = $col(['stock fisico', 'conteo', 'cantidad', 'stock']);
         $cCosto = $col(['costo unitario', 'costo']);
+        $cEq = $col(['equivalente', 'stock fisico equivalente']);
         if ($cCant === null || ($cId === null && $cCod === null && $cNom === null)) {
             return response()->json(['message' => 'El Excel debe tener la columna "Stock físico" y una columna para identificar el producto (ID, Código o Producto). Usa la plantilla.'], 422);
         }
 
         $productos = Producto::where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->whereIn('promocion', [0, 4])
-            ->get(['IdProducto', 'procod', 'pronom']);
+            ->get(['IdProducto', 'procod', 'pronom', 'umecod', 'ume_equivalente', 'factor_equivalente']);
         $porId = $productos->keyBy('IdProducto');
         $porCodigo = $productos->filter(fn ($p) => $p->procod !== '')->keyBy(fn ($p) => mb_strtoupper(trim($p->procod)));
         $porNombre = $productos->keyBy(fn ($p) => mb_strtoupper(trim($p->pronom)));
@@ -262,7 +270,8 @@ class InventarioController extends Controller
         foreach (array_slice($filas, 1) as $i => $f) {
             $n = $i + 2;
             $cant = str_replace(',', '.', $f[$cCant] ?? '');
-            if ($cant === '') {
+            $eq = $cEq !== null ? str_replace(',', '.', $f[$cEq] ?? '') : '';
+            if ($cant === '' && $eq === '') {
                 continue; // producto no contado
             }
             $prod = ($cId !== null ? $porId[(int) ($f[$cId] ?? 0)] ?? null : null)
@@ -271,11 +280,16 @@ class InventarioController extends Controller
 
             if (! $prod) {
                 $errores[] = "Fila {$n}: producto no encontrado (".($f[$cCod] ?? $f[$cNom] ?? $f[$cId] ?? '').').';
-            } elseif (! is_numeric($cant) || $cant < 0) {
-                $errores[] = "Fila {$n}: el stock físico \"{$cant}\" no es una cantidad válida.";
+            } elseif (($cant !== '' && (! is_numeric($cant) || $cant < 0)) || ($eq !== '' && (! is_numeric($eq) || $eq < 0))) {
+                $errores[] = "Fila {$n}: el stock físico \"{$cant}\"".($eq !== '' ? " + \"{$eq}\"" : '').' no es una cantidad válida.';
             } else {
+                // Lo suelto (onzas) se pasa a la unidad principal: 4 botellas + 2 onzas = 4 + 2/25
+                $factor = Unidades::mixto(0, $prod->umecod ?: 'NIU', $prod->ume_equivalente, (float) $prod->factor_equivalente) !== null ? (float) $prod->factor_equivalente : 0;
+                if ($eq !== '' && (float) $eq > 0 && ! $factor) {
+                    $errores[] = "Fila {$n}: {$prod->pronom} no tiene unidad equivalente; solo se tomó el stock físico.";
+                }
                 $costo = $cCosto !== null ? str_replace(',', '.', $f[$cCosto] ?? '') : '';
-                $items[$prod->IdProducto] = ['cantidad' => (float) $cant, 'costo' => is_numeric($costo) ? (float) $costo : null];
+                $items[$prod->IdProducto] = ['cantidad' => round((float) $cant + ($factor ? (float) $eq / $factor : 0), 5), 'costo' => is_numeric($costo) ? (float) $costo : null];
             }
         }
 

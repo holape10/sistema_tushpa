@@ -6,8 +6,10 @@ use App\Http\Controllers\SucursalController;
 use App\Models\Producto;
 use App\Models\User;
 use App\Support\Kardex;
+use App\Support\Unidades;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * Historial del sistema antiguo: ventas (facturas, boletas, notas de venta, notas de crédito/débito) con su detalle,
@@ -40,7 +42,7 @@ class Historial
 
     private array $mapaCompra = [];
 
-    private array $resumen = ['ventas' => 0, 'detalle' => 0, 'medios' => 0, 'compras' => 0, 'cuentas' => 0, 'repetidos' => 0];
+    private array $resumen = ['ventas' => 0, 'detalle' => 0, 'medios' => 0, 'compras' => 0, 'cuentas' => 0, 'guias' => 0, 'repetidos' => 0];
 
     /** Comprobantes electrónicos que el sistema antiguo nunca envió a SUNAT (fecha del más antiguo) */
     private array $sinEnviar = ['n' => 0, 'desde' => null];
@@ -78,6 +80,9 @@ class Historial
             }
             $this->cuentas('cobrar');
             $this->cuentas('pagar');
+            if (($this->hay)('guias_remision') && Schema::hasTable('gre_cabecera')) {
+                $this->guias();
+            }
         } finally {
             DB::statement('SET SESSION sql_mode = ?', [$modo]);
         }
@@ -341,6 +346,131 @@ class Historial
             }
             $this->aviso('Correlativos actualizados: '.implode(' · ', $texto).'.');
         }
+    }
+
+    // ------------------------------------------------------------------ guías de remisión
+
+    /**
+     * Guías de remisión del sistema antiguo (guias_remision) con sus productos, estado en SUNAT y la venta que las originó.
+     * Las ya aceptadas quedan como aceptadas (no se reenvían); el correlativo de guías sigue después de la última.
+     */
+    private function guias(): void
+    {
+        $suc = (int) $this->user->id_empresa_negocio;
+        $motivos = ($this->hay)('motivo_traslado') ? ($this->src)('motivo_traslado')->pluck('motivo', 'IdMotivo')->map(fn ($m) => trim((string) $m)) : collect();
+        $existentes = DB::table('gre_cabecera')->where('id_empresa_negocio', $suc)->get(['serie', 'numero'])->map(fn ($g) => $g->serie.'-'.(int) $g->numero)->flip();
+        $hayDetalle = ($this->hay)('guias_remision_detalle');
+        $sinEnviar = 0;
+
+        ($this->filtro)(($this->src)('guias_remision'), 'guias_remision')->orderBy('IdCpe_guia')
+            ->chunk(self::LOTE, function ($lote) use ($suc, $motivos, &$existentes, $hayDetalle, &$sinEnviar) {
+                $detalles = $hayDetalle ? ($this->src)('guias_remision_detalle')->whereIn('IdCpe_guia', $lote->pluck('IdCpe_guia'))->get()->groupBy('IdCpe_guia') : collect();
+                foreach ($lote as $g) {
+                    $serie = strtoupper(trim((string) $g->serieguia));
+                    $clave = $serie.'-'.(int) $g->numeroguia;
+                    if (isset($existentes[$clave])) {
+                        $this->resumen['repetidos']++;
+
+                        continue;
+                    }
+                    if ($serie === '' || ! (int) $g->numeroguia) {
+                        continue;
+                    }
+                    $estado = self::estadoGuia($g);
+                    $sinEnviar += $estado === 'PENDIENTE' ? 1 : 0;
+                    $id = DB::table('gre_cabecera')->insertGetId(self::filaGuia($g, $estado, $motivos) + [
+                        'IdCpe_cabecera' => $this->mapaCpe[$g->IdCpe_cabecera ?? 0] ?? null, 'token' => Str::random(32),
+                        'IdUsuario' => $this->user->IdUsuario, 'IdEmpresa' => $this->user->IdEmpresa, 'id_empresa_negocio' => $suc,
+                    ]);
+                    $existentes[$clave] = true;
+                    $filas = [];
+                    foreach ($detalles[$g->IdCpe_guia] ?? [] as $d) {
+                        $filas[] = ['gre_id' => $id, 'IdProducto' => $this->productoDe($d->IdProducto, $d->IdProducto_rel ?? null)?->IdProducto,
+                            'codigo' => self::texto($d->procod, 30), 'descripcion' => mb_strtoupper(mb_substr((string) ($d->pronom ?: '-'), 0, 250)),
+                            'umecod' => Unidades::codigo($d->umecod) ?? 'NIU', 'cantidad' => round((float) $d->cantidad, 3)];
+                    }
+                    $this->insertar('gre_detalle', $filas);
+                    $this->resumen['guias']++;
+                }
+            });
+
+        $this->correlativoGuias($suc);
+        if ($sinEnviar) {
+            $this->aviso("{$sinEnviar} guía(s) de remisión del sistema antiguo no figuran como enviadas a SUNAT: revísalas en Guías de remisión.");
+        }
+    }
+
+    private static function texto($v, int $largo): ?string
+    {
+        $v = trim((string) $v);
+
+        return $v === '' ? null : mb_substr($v, 0, $largo);
+    }
+
+    /** Columnas de gre_cabecera a partir de la fila antigua */
+    private static function filaGuia(object $g, string $estado, $motivos): array
+    {
+        $fecha = $g->fechaemision && $g->fechaemision !== '0000-00-00' ? $g->fechaemision : now()->toDateString();
+        $hora = preg_match('/^\d{2}:\d{2}(:\d{2})?$/', (string) ($g->hora ?? '')) ? $g->hora : '00:00:00';
+        $referencia = self::texto($g->serie_num_ref ?? null, 15)
+            ?? (trim((string) ($g->serieref ?? '')) !== '' ? strtoupper(trim($g->serieref)).'-'.(int) $g->numeroref : null);
+        $peso = Unidades::sunat($g->umecod ?: 'KGM');
+
+        return [
+            'serie' => strtoupper(trim((string) $g->serieguia)), 'numero' => (int) $g->numeroguia, 'fecha_emision' => $fecha, 'hora_emision' => $hora,
+            'fecha_traslado' => $g->fechatraslado && $g->fechatraslado !== '0000-00-00' ? $g->fechatraslado : $fecha,
+            'motivo' => str_pad((string) ($g->IdMotivo ?: '01'), 2, '0', STR_PAD_LEFT), 'motivo_desc' => self::texto($motivos[$g->IdMotivo] ?? null, 100),
+            'modalidad' => str_pad((string) ($g->IdModalidad ?: '01'), 2, '0', STR_PAD_LEFT),
+            'peso' => round((float) $g->pesobruto, 3), 'unidad_peso' => $peso === 'NIU' ? 'KGM' : $peso, 'bultos' => $g->bultos !== null ? (int) $g->bultos : null,
+            'dest_tdicod' => (string) ($g->tdicod ?: (strlen((string) $g->ruccliente) === 11 ? '6' : '1')), 'dest_num' => (string) ($g->ruccliente ?: '-'),
+            'dest_nom' => mb_strtoupper(mb_substr((string) ($g->nomcliente ?: '-'), 0, 150)),
+            'partida_ubigeo' => substr((string) $g->ubigeopartida, 0, 6), 'partida_direccion' => mb_strtoupper(mb_substr((string) ($g->direccionpartida ?: '-'), 0, 200)),
+            'partida_codlocal' => self::texto($g->cod_local_part ?? null, 4),
+            'llegada_ubigeo' => substr((string) $g->ubigeollegada, 0, 6), 'llegada_direccion' => mb_strtoupper(mb_substr((string) ($g->direccionllegada ?: '-'), 0, 200)),
+            'llegada_codlocal' => self::texto($g->cod_local_dest ?? null, 4),
+            'transp_ruc' => self::texto($g->ructransportista, 11), 'transp_nom' => self::texto($g->nombretransportista, 150), 'transp_mtc' => self::texto($g->mtc ?? null, 20),
+            'cond_tdicod' => self::texto($g->tdicodconductor, 1), 'cond_num' => self::texto($g->rucconductor, 15), 'cond_nombres' => self::texto($g->nomconductor, 100),
+            'cond_apellidos' => self::texto($g->apeconductor ?? null, 100), 'cond_licencia' => self::texto($g->licencia, 15),
+            'placa' => self::texto(str_replace([' ', '-'], '', strtoupper((string) $g->placa)), 10), 'vehiculo_m1l' => 0,
+            'doc_tdocod' => self::texto($g->tdocodref ?? null, 2), 'doc_numero' => $referencia, 'observacion' => self::texto($g->observacion ?? null, 250),
+            'est_sunat' => $estado, 'ticket' => self::texto($g->numTicket ?? null, 60), 'cod_respuesta' => self::texto($g->codRespuesta ?? $g->ccasunrescod ?? null, 10),
+            'mensaje' => self::texto(($g->desError ?? null) ?: ($g->ccadessun ?? null), 500), 'qr' => self::texto(($g->cadena_qr ?? null) ?: ($g->ccaqr ?? null), 300),
+            'hash' => self::texto(($g->codigo_hash ?? null) ?: ($g->codhash ?? null), 100), 'creado' => $fecha.' '.$hora,
+        ];
+    }
+
+    /** Estado de la guía en el sistema nuevo según lo que guardó el antiguo */
+    private static function estadoGuia(object $g): string
+    {
+        $cod = trim((string) (($g->codRespuesta ?? null) ?? ($g->ccasunrescod ?? '')));
+        if (! empty($g->ccabaj)) {
+            return 'ANULADO';
+        }
+        if ($cod === '0' || (int) ($g->indCdrGenerado ?? 0) === 1) {
+            return 'ACEPTADO';
+        }
+        if ($cod !== '' || trim((string) ($g->desError ?? '')) !== '') {
+            return 'RECHAZADO';
+        }
+
+        return ! empty($g->numTicket) ? 'ENVIADO' : 'PENDIENTE';
+    }
+
+    /** El correlativo de guías sigue después de la última importada (la serie configurada o, si no se usó, la del sistema antiguo) */
+    private function correlativoGuias(int $suc): void
+    {
+        $series = DB::table('gre_cabecera')->where('id_empresa_negocio', $suc)->groupBy('serie')->selectRaw('serie, MAX(numero) AS ultimo, COUNT(*) AS n')->get();
+        if ($series->isEmpty()) {
+            return;
+        }
+        $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first();
+        $propia = $series->firstWhere('serie', strtoupper((string) $negocio->SerGuia));
+        $elegida = $propia ?? $series->sortByDesc('n')->first();
+        if (! preg_match('/^T[A-Z0-9]{3}$/', $elegida->serie) || ($propia && (int) $propia->ultimo <= (int) $negocio->NumGuia)) {
+            return;
+        }
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->update(['SerGuia' => $elegida->serie, 'NumGuia' => (int) $elegida->ultimo]);
+        $this->aviso("Guías de remisión: siguen en {$elegida->serie}-".str_pad((string) ((int) $elegida->ultimo + 1), 8, '0', STR_PAD_LEFT).'.');
     }
 
     // ------------------------------------------------------------------ compras

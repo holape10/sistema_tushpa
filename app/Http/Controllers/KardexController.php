@@ -9,6 +9,7 @@ use App\Support\Excel;
 use App\Support\Kardex;
 use App\Support\KardexValorizado;
 use App\Support\Series;
+use App\Support\Unidades;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -204,13 +205,13 @@ class KardexController extends Controller
         $filas = $this->filasInventario($filtros);
         $porAlmacen = (bool) $filtros['idAlmacen'];
         $datos = $filas->map(fn ($f) => array_merge([(string) $f['codigo'], $f['nombre'], (string) $f['categoria'], $f['unidad']],
-            $porAlmacen ? [$f['almacen']] : [], [$f['cantidad'], $f['costo'], $f['valor']]))->all();
+            $porAlmacen ? [$f['almacen']] : [], [$f['cantidad'], $f['costo'], $f['valor'], (string) $f['equivalente']]))->all();
         $positivos = $filas->filter(fn ($f) => $f['cantidad'] > 0);
         $datos[] = array_merge(['', 'TOTAL (solo stock positivo)', '', ''], $porAlmacen ? [''] : [], [round($positivos->sum('cantidad'), 4), '', round($positivos->sum('valor'), 2)]);
         $titulo = 'Inventario al '.Carbon::parse($filtros['fecha'])->format('d/m/Y').' · '.($filtros['metodo'] === 'ultimo' ? 'último costo' : 'costo promedio')
             .' · '.($porAlmacen ? $this->almacenes()->firstWhere('id_almacen', $filtros['idAlmacen'])?->descripcion : 'todos los almacenes');
         $ruta = (new Excel)->hoja('Inventario', [[$titulo], array_merge(['Código', 'Producto', 'Categoría', 'Unidad'], $porAlmacen ? ['Almacén'] : [],
-            ['Stock', 'Costo unitario', 'Valor S/'])], $datos)->guardar();
+            ['Stock', 'Costo unitario', 'Valor S/', 'Stock (unidad + equivalente)'])], $datos)->guardar();
 
         return response()->download($ruta, 'inventario_valorizado_'.str_replace('-', '', $filtros['fecha']).'.xlsx',
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend();
@@ -241,7 +242,8 @@ class KardexController extends Controller
             ->leftJoin('categorias as c', 'c.cat_id', '=', 'productos.cat_id')
             ->when($f['categoria'], fn ($q) => $q->where('productos.cat_id', $f['categoria']))
             ->tap(fn ($q) => Buscar::palabras($q, $f['q'], ['productos.pronom'], ['productos.procod', 'productos.codigo_barra']))
-            ->get(['productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod', 'productos.costo', 'productos.stock_min', 'c.cat_nom']);
+            ->get(['productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod', 'productos.costo', 'productos.stock_min', 'c.cat_nom',
+                'productos.ume_equivalente', 'productos.factor_equivalente']);
 
         // Existencias y costo promedio según el kardex a esa fecha; hoy, la cantidad es el stock actual de cada almacén
         $kardex = KardexValorizado::existencias($sucursal, $f['idAlmacen'], $f['fecha']);
@@ -266,7 +268,8 @@ class KardexController extends Controller
             $filas->push(['id' => $p->IdProducto, 'codigo' => $p->procod, 'nombre' => $p->pronom, 'categoria' => $p->cat_nom ?: 'SIN CATEGORÍA',
                 'unidad' => $p->umecod, 'almacen' => $f['idAlmacen'] ? $almacenes->first() : $almacenes->count().' almacén(es)',
                 'cantidad' => $cantidad, 'valor' => $valor, 'costo' => abs($cantidad) > 0.0001 ? round($valor / $cantidad, 4) : (float) $p->costo,
-                'minimo' => (float) $p->stock_min]);
+                'minimo' => (float) $p->stock_min,
+                'equivalente' => Unidades::mixto($cantidad, $p->umecod ?: 'NIU', $p->ume_equivalente, (float) $p->factor_equivalente)]);
         }
 
         return $filas;
@@ -284,7 +287,8 @@ class KardexController extends Controller
             })
             ->tap(fn ($qq) => Buscar::palabras($qq, $q, ['productos.pronom'], ['productos.procod', 'productos.codigo_barra']))
             ->select('productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod',
-                'productos.promocion', 'productos.stock_min', 'productos.costo', DB::raw('COALESCE(ps.stock, 0) as stock'))
+                'productos.promocion', 'productos.stock_min', 'productos.costo', 'productos.ume_equivalente', 'productos.factor_equivalente',
+                DB::raw('COALESCE(ps.stock, 0) as stock'))
             ->paginate(30)->withQueryString();
 
         return view('empresas.kardex.stock', compact('productos', 'almacenes', 'idAlmacen', 'q'));

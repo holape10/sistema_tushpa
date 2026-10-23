@@ -67,6 +67,40 @@ class Unidades
         return in_array($cod, self::VIGENTES_SUNAT, true) ? $cod : 'NIU';
     }
 
+    /** @var array<string, string>|null abreviatura de cada unidad (la del ticket), leída una vez por petición */
+    private static ?array $abreviaturas = null;
+
+    public static function abreviatura(string $umecod): string
+    {
+        self::$abreviaturas ??= Schema::hasTable('unidad_medida')
+            ? DB::table('unidad_medida')->pluck('umecin', 'umecod')->map(fn ($a) => (string) $a)->all() : [];
+
+        return (self::$abreviaturas[$umecod] ?? '') ?: (self::CATALOGO[$umecod][1] ?? $umecod);
+    }
+
+    /**
+     * Cantidad en la unidad principal y su equivalente: 4.08 botellas (1 botella = 25 onzas) → "4 BOT + 2 ONZ".
+     * Null si el producto no tiene unidad equivalente (se muestra el número de siempre).
+     */
+    public static function mixto(float $cantidad, string $ume, ?string $umeEquivalente, float $factor): ?string
+    {
+        if (! $umeEquivalente || $umeEquivalente === $ume || $factor <= 1) {
+            return null;
+        }
+        $signo = $cantidad < 0 ? '-' : '';
+        $total = abs($cantidad);
+        $enteras = (int) floor($total + 1e-9);
+        $resto = round(($total - $enteras) * $factor, 2);
+        if ($resto >= $factor - 0.005) {
+            $enteras++;
+            $resto = 0.0;
+        }
+        $num = fn (float $n) => rtrim(rtrim(number_format($n, 2, '.', ''), '0'), '.');
+        $partes = array_filter([$enteras ? $enteras.' '.self::abreviatura($ume) : null, $resto > 0 ? $num($resto).' '.self::abreviatura($umeEquivalente) : null]);
+
+        return $partes ? $signo.implode(' + ', $partes) : '0 '.self::abreviatura($ume);
+    }
+
     /** Agrega a la tabla las unidades del catálogo que falten (no cambia las que ya existen) */
     public static function completar(): int
     {

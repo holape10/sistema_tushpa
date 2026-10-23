@@ -158,8 +158,8 @@
             @endif
             <form method="POST" action="{{ route('turnos.cerrar') }}" onsubmit="return confirm('¿Cerrar el turno? Ya no podrás cobrar hasta abrir otro.')">
                 @csrf
-                <label class="block text-sm text-gray-700 mb-1">Efectivo contado (S/)</label>
-                <input type="number" step="0.01" min="0" name="montocierre" x-model="contado" required placeholder="0.00"
+                <label class="block text-sm text-gray-700 mb-1">Efectivo contado (S/) <span class="text-xs text-gray-400">opcional</span></label>
+                <input type="number" step="0.01" min="0" name="montocierre" x-model="contado" placeholder="Si no lo cuentas, déjalo vacío"
                        :readonly="verArqueo" :class="verArqueo ? 'bg-gray-50' : ''"
                        class="w-full rounded-lg border-gray-300 text-lg font-bold text-center mb-2">
 
@@ -179,7 +179,7 @@
                 </div>
                 <div class="text-sm space-y-1 mb-4">
                     <div class="flex justify-between"><span>Esperado</span><span class="font-semibold">S/ <span x-text="esperado.toFixed(2)"></span></span></div>
-                    <div class="flex justify-between"><span>Diferencia</span>
+                    <div class="flex justify-between" x-show="contado !== ''"><span>Diferencia</span>
                         <span class="font-bold" :class="dif() < 0 ? 'text-red-600' : (dif() > 0 ? 'text-amber-600' : 'text-green-700')">
                             S/ <span x-text="dif().toFixed(2)"></span>
                         </span>

@@ -8,6 +8,10 @@
             'id' => $p->IdProducto, 'cod' => $p->procod, 'nom' => $p->pronom, 'ume' => $p->umecod, 'cat' => $p->cat_nom ?? '',
             'tipo' => (int) $p->promocion === 4 ? 'Insumo' : 'Producto', 'stock' => (float) $p->stock, 'costo' => (float) $p->costo,
             'kardex' => isset($conMovimientos[$p->IdProducto]),
+            // Insumo con unidad equivalente (1 botella = 25 onzas): se cuenta en las dos unidades
+            'factor' => $p->ume_equivalente && $p->ume_equivalente !== $p->umecod && (float) $p->factor_equivalente > 1 ? (float) $p->factor_equivalente : 0,
+            'abr' => \App\Support\Unidades::abreviatura($p->umecod ?: 'NIU'),
+            'abrEq' => $p->ume_equivalente ? \App\Support\Unidades::abreviatura($p->ume_equivalente) : '',
         ])->values();
     @endphp
 
@@ -67,7 +71,7 @@
                             <th class="px-3 py-2 text-left">Código</th>
                             <th class="px-3 py-2 text-left">Producto</th>
                             <th class="px-3 py-2 text-right">Stock sistema</th>
-                            <th class="px-3 py-2 w-32">Stock físico</th>
+                            <th class="px-3 py-2 w-44">Stock físico</th>
                             <th class="px-3 py-2 text-right">Diferencia</th>
                             <th class="px-3 py-2 w-28">Costo unit.</th>
                             <th class="px-3 py-2 text-left">Tipo</th>
@@ -78,15 +82,29 @@
                             <tr :class="contado(p) ? 'bg-indigo-50/40' : ''">
                                 <td class="px-3 py-1.5 text-gray-500" x-text="p.cod"></td>
                                 <td class="px-3 py-1.5"><span class="font-medium text-gray-700" x-text="p.nom"></span>
-                                    <span class="block text-xs text-gray-400" x-text="p.tipo + (p.cat ? ' · ' + p.cat : '') + ' · ' + p.ume"></span></td>
-                                <td class="px-3 py-1.5 text-right" x-text="num(p.stock)"></td>
+                                    <span class="block text-xs text-gray-400" x-text="p.tipo + (p.cat ? ' · ' + p.cat : '') + ' · ' + p.ume + (p.factor ? ' (1 ' + p.abr + ' = ' + num(p.factor) + ' ' + p.abrEq + ')' : '')"></span></td>
+                                <td class="px-3 py-1.5 text-right whitespace-nowrap" x-text="mostrar(p, p.stock)"></td>
                                 <td class="px-3 py-1.5">
-                                    <input type="number" step="any" min="0" class="w-full rounded-lg border-gray-300 text-sm text-right"
-                                           :value="conteo[p.id]?.cantidad ?? ''" @input="fijar(p, 'cantidad', $event.target.value)">
+                                    {{-- Con unidad equivalente: botellas + onzas (se guarda como 4 + 2/25 = 4.08 botellas) --}}
+                                    <template x-if="p.factor">
+                                        <div class="flex items-center gap-1">
+                                            <input type="number" step="any" min="0" class="w-16 rounded-lg border-gray-300 text-sm text-right" placeholder="0"
+                                                   :value="conteo[p.id]?.ent ?? ''" @input="fijarMixto(p, 'ent', $event.target.value)">
+                                            <span class="text-[10px] text-gray-500" x-text="p.abr"></span>
+                                            <span class="text-gray-400">+</span>
+                                            <input type="number" step="any" min="0" class="w-16 rounded-lg border-gray-300 text-sm text-right" placeholder="0"
+                                                   :value="conteo[p.id]?.frac ?? ''" @input="fijarMixto(p, 'frac', $event.target.value)">
+                                            <span class="text-[10px] text-gray-500" x-text="p.abrEq"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="!p.factor">
+                                        <input type="number" step="any" min="0" class="w-full rounded-lg border-gray-300 text-sm text-right"
+                                               :value="conteo[p.id]?.cantidad ?? ''" @input="fijar(p, 'cantidad', $event.target.value)">
+                                    </template>
                                 </td>
-                                <td class="px-3 py-1.5 text-right font-semibold"
+                                <td class="px-3 py-1.5 text-right font-semibold whitespace-nowrap"
                                     :class="diferencia(p) > 0 ? 'text-green-600' : (diferencia(p) < 0 ? 'text-red-600' : 'text-gray-400')"
-                                    x-text="contado(p) ? (diferencia(p) > 0 ? '+' : '') + num(diferencia(p)) : ''"></td>
+                                    x-text="contado(p) ? (diferencia(p) > 0 ? '+' : '') + mostrar(p, diferencia(p)) : ''"></td>
                                 <td class="px-3 py-1.5">
                                     <input type="number" step="0.01" min="0" class="w-full rounded-lg border-gray-300 text-sm text-right"
                                            :value="conteo[p.id]?.costo ?? p.costo.toFixed(2)" @input="fijar(p, 'costo', $event.target.value)">
@@ -124,7 +142,28 @@
                 productos, conteo: {}, filtro: '', soloContados: false, soloDiferencias: false, errores: [], cargando: false,
                 num(n) { return Number(n).toLocaleString('es-PE', { maximumFractionDigits: 3 }); },
                 contado(p) { return this.conteo[p.id] && this.conteo[p.id].cantidad !== '' && this.conteo[p.id].cantidad != null; },
-                diferencia(p) { return this.contado(p) ? Math.round((parseFloat(this.conteo[p.id].cantidad) - p.stock) * 1000) / 1000 : 0; },
+                diferencia(p) { return this.contado(p) ? Math.round((parseFloat(this.conteo[p.id].cantidad) - p.stock) * 100000) / 100000 : 0; },
+                // 4.08 botellas (1 botella = 25 onzas) → "4 BOT + 2 ONZ"; sin equivalencia, el número de siempre
+                mostrar(p, n) {
+                    if (!p.factor) return this.num(n);
+                    const signo = n < 0 ? '-' : '', total = Math.abs(n);
+                    let ent = Math.floor(total + 1e-9), resto = Math.round((total - ent) * p.factor * 100) / 100;
+                    if (resto >= p.factor - 0.005) { ent++; resto = 0; }
+                    const partes = [ent ? ent + ' ' + p.abr : '', resto ? this.num(resto) + ' ' + p.abrEq : ''].filter(Boolean);
+                    return partes.length ? signo + partes.join(' + ') : '0 ' + p.abr;
+                },
+                fijarMixto(p, campo, valor) {
+                    const actual = { ent: '', frac: '', costo: null, ...(this.conteo[p.id] || {}), [campo]: valor };
+                    const vacio = actual.ent === '' && actual.frac === '';
+                    actual.cantidad = vacio ? '' : String(Math.round(((parseFloat(actual.ent) || 0) + (parseFloat(actual.frac) || 0) / p.factor) * 100000) / 100000);
+                    this.conteo = { ...this.conteo, [p.id]: actual };
+                },
+                // Al cargar una cantidad (Excel o "copiar stock") se reparte en las dos unidades
+                partir(p, cantidad) {
+                    if (!p.factor || cantidad === '' || cantidad == null) return { cantidad: String(cantidad) };
+                    const c = parseFloat(cantidad), ent = Math.floor(c + 1e-9);
+                    return { cantidad: String(c), ent: String(ent), frac: String(Math.round((c - ent) * p.factor * 100) / 100) };
+                },
                 fijar(p, campo, valor) {
                     const actual = this.conteo[p.id] || { cantidad: '', costo: null };
                     this.conteo = { ...this.conteo, [p.id]: { ...actual, [campo]: valor } };
@@ -153,7 +192,7 @@
                 },
                 igualarStock() {
                     const nuevo = { ...this.conteo };
-                    this.productos.forEach(p => { if (!this.contado(p)) nuevo[p.id] = { cantidad: String(p.stock), costo: null }; });
+                    this.productos.forEach(p => { if (!this.contado(p)) nuevo[p.id] = { ...this.partir(p, p.stock), costo: null }; });
                     this.conteo = nuevo;
                 },
                 async cargarExcel(e) {
@@ -168,7 +207,10 @@
                         const j = await r.json();
                         if (!r.ok) { alert(j.message || 'No se pudo leer el Excel.'); return; }
                         const nuevo = { ...this.conteo };
-                        Object.entries(j.items).forEach(([id, v]) => { nuevo[id] = { cantidad: String(v.cantidad), costo: v.costo }; });
+                        Object.entries(j.items).forEach(([id, v]) => {
+                            const p = this.productos.find(x => String(x.id) === String(id));
+                            nuevo[id] = { ...(p ? this.partir(p, v.cantidad) : { cantidad: String(v.cantidad) }), costo: v.costo };
+                        });
                         this.conteo = nuevo;
                         this.errores = j.errores;
                         this.soloContados = true;

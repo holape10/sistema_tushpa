@@ -47,7 +47,7 @@ class LineaTiempo
                 $agregar($t->apertura, $t->IdUsuario, 'caja', '🔓', 'Abrió la caja (turno N° '.($t->turno ?? $t->id_turno).')', 'Fondo inicial', (float) $t->monto);
             }
             if ($t->cierre && $t->cierre >= $desde && $t->cierre <= $hasta) {
-                $agregar($t->cierre, $t->IdUsuario, 'caja', '🔒', 'Cerró la caja (turno N° '.($t->turno ?? $t->id_turno).')', 'Efectivo contado', (float) $t->montocierre);
+                $agregar($t->cierre, $t->IdUsuario, 'caja', '🔒', 'Cerró la caja (turno N° '.($t->turno ?? $t->id_turno).')', $t->montocierre !== null ? 'Efectivo contado' : 'Sin contar el efectivo', $t->montocierre !== null ? (float) $t->montocierre : null);
             }
         }
 

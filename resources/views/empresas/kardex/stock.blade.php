@@ -37,7 +37,10 @@
                         <td class="px-4 py-3">{{ $p->tipo_nombre }}</td>
                         <td class="px-4 py-3 text-right">{{ rtrim(rtrim(number_format($p->stock_min, 2), '0'), '.') }}</td>
                         <td class="px-4 py-3 text-right font-bold {{ $p->stock < 0 ? 'text-red-600' : ($bajo ? 'text-amber-600' : 'text-gray-800') }}">
-                            {{ rtrim(rtrim(number_format($p->stock, 2), '0'), '.') }} {{ $p->umecod }}
+                            {{ rtrim(rtrim(number_format($p->stock, 3), '0'), '.') }} {{ $p->umecod }}
+                            @if ($eq = \App\Support\Unidades::mixto((float) $p->stock, $p->umecod ?: 'NIU', $p->ume_equivalente, (float) $p->factor_equivalente))
+                                <span class="block text-xs font-normal text-gray-500">{{ $eq }}</span>
+                            @endif
                             @if ($bajo)<span title="Stock bajo">⚠️</span>@endif
                         </td>
                         <td class="px-4 py-3 text-right text-gray-500">{{ number_format($p->stock * $p->costo, 2) }}</td>
