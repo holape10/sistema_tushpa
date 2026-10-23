@@ -31,6 +31,8 @@
                     Escribe qué ingredientes lleva cada plato y cuánto. El sistema te dice <b class="text-white">cuánto te cuesta prepararlo</b>,
                     <b class="text-white">cuánto ganas</b> y <b class="text-white">descuenta los ingredientes del almacén</b> cada vez que lo vendes.
                 </p>
+                <a href="{{ route('recetas.rentabilidad') }}" class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-indigo-700 text-sm font-black shadow hover:bg-indigo-50">
+                    📊 Rentabilidad del negocio: ingeniería de menú, food cost real, pérdidas y compras</a>
                 <div class="mt-4 rounded-2xl bg-white/10 p-4 text-sm">
                     <p class="font-bold">¿Qué es el food cost?</p>
                     <p class="text-indigo-100 mt-1">Es la parte del precio que se va en ingredientes. Un plato de <b class="text-white">S/ 25</b> que gasta

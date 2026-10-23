@@ -68,6 +68,7 @@ use App\Http\Controllers\PvGrifoController;
 use App\Http\Controllers\PvTactilController;
 use App\Http\Controllers\PwaController;
 use App\Http\Controllers\RecetaController;
+use App\Http\Controllers\RentabilidadController;
 use App\Http\Controllers\RepartidorController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ReservaController;
@@ -658,6 +659,8 @@ Route::middleware('auth')->prefix('mermas')->name('mermas.')->controller(MermaCo
 // Recetas y food cost de los platos (Administrador)
 Route::middleware('auth')->prefix('recetas')->name('recetas.')->controller(RecetaController::class)->group(function () {
     Route::get('/', 'index')->name('index');
+    Route::get('/rentabilidad', [RentabilidadController::class, 'index'])->name('rentabilidad');
+    Route::get('/rentabilidad/excel', [RentabilidadController::class, 'excel'])->name('rentabilidad.excel');
     Route::get('/insumos', 'insumos')->name('insumos');
     Route::post('/insumos', 'crearInsumo')->name('insumo.crear');
     Route::get('/{id}', 'editar')->whereNumber('id')->name('editar');
