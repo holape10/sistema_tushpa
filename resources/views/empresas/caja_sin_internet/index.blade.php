@@ -35,7 +35,7 @@
                 p: null, cargando: true, online: navigator.onLine, agente: null, pendientes: 0, errores: 0, nombrePc: '', subiendo: false,
                 vista: 'venta', busqueda: '', categoria: null, carrito: [], mesasAbiertas: [], mesa: null, elegirPresentacion: null,
                 cobro: null, ventas: [], aviso: null, avisoTipo: 'ok', procesando: false, volvio: false, subidasAlVolver: 0,
-                ultima: null, pvResultados: [], pvActivo: 0, pvAbierto: false, pvMedio: null, pvMonto: '',
+                ultima: null, enviarCocina: true, pisoActual: null, pvResultados: [], pvActivo: 0, pvAbierto: false, pvMedio: null, pvMonto: '',
 
                 async init() {
                     this.p = await C.paquete().catch(() => null);
@@ -51,7 +51,7 @@
                     if (this.p) {
                         let guardada = null;
                         try { guardada = localStorage.getItem('tushpa_caja_vista'); } catch (e) { /* sin almacenamiento */ }
-                        this.irA(['pv', 'venta'].includes(guardada) ? guardada : (this.p.mesas.length ? 'venta' : 'pv'));
+                        this.irA(['pv', 'venta', 'mesas'].includes(guardada) ? guardada : (this.p.mesas.length ? 'mesas' : 'pv'));
                     }
                     await this.refrescar();
                     this.agente = await C.agenteDisponible();
@@ -163,18 +163,19 @@
                 // ---------------------------------------------------------------- vista punto de venta (como la del sistema)
 
                 irA(vista) {
-                    if (vista === 'pv') {
+                    if (vista === 'pv' || vista === 'venta') {
                         this.mesa = null;
                         if (!this.cobro || this.cobro.modal) this.pvNuevo();
-                        this.$nextTick(() => this.$refs.pvBuscador?.focus());
+                        if (vista === 'pv') this.$nextTick(() => this.$refs.pvBuscador?.focus());
                     } else if (this.cobro && !this.cobro.modal) {
                         this.cobro = null;
                     }
-                    if (['pv', 'venta'].includes(vista)) { try { localStorage.setItem('tushpa_caja_vista', vista); } catch (e) { /* sin almacenamiento */ } }
+                    if (['pv', 'venta', 'mesas'].includes(vista)) { try { localStorage.setItem('tushpa_caja_vista', vista); } catch (e) { /* sin almacenamiento */ } }
                     this.vista = vista;
                 },
 
                 get pvComprobantes() { return ['01', '03', '13'].filter((t) => this.p?.series[t]); },
+                tipoComprobante(t) { return C.TIPOS[t]; },
                 nombreComprobante(t) { return { '01': 'Factura', '03': 'Boleta', '13': 'N. Venta' }[t]; },
 
                 pvNuevo() {
@@ -244,8 +245,10 @@
                         return;
                     }
                     const pagos = this.cobro.pagos;
+                    const aCocina = this.vista === 'venta' && this.enviarCocina ? this.carrito.filter((i) => i.id).map((i) => ({ ...i })) : [];
                     if (this.pvRestante > 0.009) this.cobro.pagos = [...pagos, { medio: Number(this.pvMedio), monto: this.pvRestante, operacion: '' }];
-                    if (!(await this.confirmarCobro(imprimir)) && this.cobro) this.cobro.pagos = pagos;
+                    if (!(await this.confirmarCobro(imprimir))) { if (this.cobro) this.cobro.pagos = pagos; return; }
+                    if (aCocina.length) await this.imprimirComandas(aCocina, false);
                 },
 
                 pvCancelar() {
@@ -269,8 +272,10 @@
                 get pisos() { return [...new Set((this.p?.mesas || []).map((m) => m.piso || 'Salón'))]; },
 
                 async abrirMesa(m) {
+                    if (this.cobro && !this.cobro.modal) this.cobro = null;
                     this.mesa = this.estadoMesa(m) ? JSON.parse(JSON.stringify(this.estadoMesa(m))) : { id: m.id, nombre: m.nombre, items: [], abierta: Date.now() };
-                    this.vista = 'venta';
+                    this.busqueda = '';
+                    this.vista = 'mesa';
                 },
 
                 async guardarMesaActual() {
@@ -319,7 +324,7 @@
                 },
 
                 htmlComanda(lineas, anulacion) {
-                    return `<div class="c"><b>${anulacion ? 'ANULACIÓN' : 'COMANDA'}<br><span style="font-size:20px">${this.esc(this.mesa ? this.mesa.nombre : 'PARA LLEVAR')}</span></b><br>SIN INTERNET · ${new Date().toLocaleTimeString('es-PE').slice(0, 5)}<br>Atiende: ${this.esc(this.p.usuario.nombre)}</div><hr>`
+                    return `<div class="c"><b>${anulacion ? 'ANULACIÓN' : 'COMANDA'}<br><span style="font-size:20px">${this.esc(this.mesa ? this.mesa.nombre : 'PARA LLEVAR')}</span></b><br>SIN INTERNET · ${new Date().toTimeString().slice(0, 5)}<br>Atiende: ${this.esc(this.p.usuario.nombre)}</div><hr>`
                         + lineas.map((l) => `<p style="font-size:15px;margin:4px 0"><b>${l.cantidad} ${this.esc(l.nombre)}</b>${l.observacion ? '<br>&nbsp;&nbsp;&gt;&gt; ' + this.esc(l.observacion) : ''}</p>`).join('') + '<hr>';
                 },
 
@@ -501,9 +506,8 @@
             <section class="flex-1 flex flex-col min-w-0">
                 <nav class="flex gap-1 px-3 pt-3">
                     <button type="button" @click="irA('pv')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'pv' ? 'bg-white text-indigo-700' : 'text-gray-500'">Punto de venta</button>
-                    <button type="button" @click="irA('venta')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'venta' ? 'bg-white text-indigo-700' : 'text-gray-500'"
-                            x-text="mesa ? 'Productos · ' + mesa.nombre : 'Venta rápida'"></button>
-                    <button type="button" x-show="p.mesas.length" @click="irA('mesas')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'mesas' ? 'bg-white text-indigo-700' : 'text-gray-500'">
+                    <button type="button" x-show="p.mesas.length" @click="irA('venta')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'venta' ? 'bg-white text-indigo-700' : 'text-gray-500'">PV Restaurante</button>
+                    <button type="button" x-show="p.mesas.length" @click="mesa ? (vista = 'mesa') : irA('mesas')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'mesas' || vista === 'mesa' ? 'bg-white text-indigo-700' : 'text-gray-500'">
                         Mesas <span class="text-xs" x-show="mesasAbiertas.length" x-text="'(' + mesasAbiertas.length + ')'"></span></button>
                     <button type="button" @click="irA('ventas'); refrescar()" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'ventas' ? 'bg-white text-indigo-700' : 'text-gray-500'">Ventas de esta PC</button>
                 </nav>
@@ -698,41 +702,200 @@
                     </template>
                 </div>
 
-                <div x-show="vista === 'venta'" class="flex-1 flex flex-col min-h-0 bg-white mx-3 mb-3 rounded-b-xl rounded-tr-xl p-3 gap-2">
-                    <input x-model="busqueda" @keydown.enter.prevent="buscarEnter()" placeholder="Buscar producto o escanear código…" class="rounded-lg border-gray-300 text-sm" autofocus>
-                    <div class="flex flex-wrap gap-1">
-                        <button type="button" @click="categoria = null" class="px-3 py-1 rounded-full text-xs font-bold" :class="!categoria ? 'bg-indigo-600 text-white' : 'bg-gray-100'">Todas</button>
-                        <template x-for="c in p.categorias" :key="c.id">
-                            <button type="button" @click="categoria = c.id" class="px-3 py-1 rounded-full text-xs font-bold" :class="categoria === c.id ? 'bg-indigo-600 text-white' : 'bg-gray-100'" x-text="c.nombre"></button>
-                        </template>
-                    </div>
-                    <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 content-start">
-                        <template x-for="x in productos" :key="x.id">
-                            <button type="button" @click="tocar(x)" class="text-left rounded-xl border p-2 hover:bg-indigo-50 border-l-4" :style="'border-left-color:' + color(x.categoria)">
-                                <span class="block text-sm font-semibold leading-tight line-clamp-2" x-text="x.nombre"></span>
-                                <span class="block text-xs text-indigo-700 font-bold mt-1" x-text="'S/ ' + x.precio.toFixed(2) + (x.presentaciones.length ? ' +' : '')"></span>
-                            </button>
-                        </template>
-                        <p x-show="!productos.length" class="col-span-full text-center text-sm text-gray-400 py-8">No hay productos con ese nombre.</p>
-                    </div>
-                </div>
+                {{-- PV Restaurante: como la pantalla del sistema (datos del comprobante arriba; productos y cobro abajo) --}}
+                <div x-show="vista === 'venta'" class="flex-1 overflow-y-auto px-3 pb-3 pt-2">
+                    <template x-if="cobro && !cobro.modal">
+                        <div class="space-y-4 max-w-[1600px] mx-auto">
+                            <section class="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <div class="flex items-center gap-2 px-4 py-3 bg-slate-700 text-white text-sm font-bold uppercase">
+                                    <span class="flex-1">Datos del comprobante
+                                        <span class="ml-2 normal-case text-[11px] px-2 py-0.5 rounded-full bg-emerald-500" x-text="p.turno ? 'Turno N° ' + p.turno.numero + ' abierto' : 'Sin turno'"></span></span>
+                                </div>
+                                <div class="p-4 grid sm:grid-cols-3 gap-3 text-sm">
+                                    <label>
+                                        <span class="text-xs font-bold text-slate-600">Comprobante</span>
+                                        <select x-model="cobro.tdocod" @change="pvElegirComprobante(cobro.tdocod)" class="mt-1 w-full h-9 rounded border-slate-300 text-sm">
+                                            <template x-for="t in pvComprobantes" :key="t"><option :value="t" x-text="tipoComprobante(t)" :selected="cobro.tdocod === t"></option></template>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span class="text-xs font-bold text-slate-600">Estado pago</span>
+                                        <input type="text" value="CONTADO" readonly class="mt-1 w-full h-9 rounded border-slate-300 bg-slate-50 text-sm">
+                                    </label>
+                                    <label>
+                                        <span class="text-xs font-bold text-slate-600">F. emisión</span>
+                                        <input type="text" :value="new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })" readonly class="mt-1 w-full h-9 rounded border-slate-300 bg-slate-50 text-sm">
+                                    </label>
+                                    <label>
+                                        <span class="text-xs font-bold text-slate-600">Tipo</span>
+                                        <select x-model="cobro.tdicod" class="mt-1 w-full h-9 rounded border-slate-300 text-sm"><option value="1">DNI</option><option value="6">RUC</option></select>
+                                    </label>
+                                    <label>
+                                        <span class="text-xs font-bold text-slate-600">DNI / RUC</span>
+                                        <input type="text" inputmode="numeric" maxlength="11" x-model="cobro.clinum" @focus="$event.target.select()" class="mt-1 w-full h-9 rounded border-slate-300 text-sm">
+                                    </label>
+                                    <label>
+                                        <span class="text-xs font-bold text-slate-600">Nombre o razón social <span class="font-normal text-slate-400">(sin internet se escribe a mano)</span></span>
+                                        <input type="text" x-model="cobro.clinom" @focus="$event.target.select()" class="mt-1 w-full h-9 rounded border-slate-300 text-sm uppercase">
+                                    </label>
+                                    <label class="sm:col-span-3">
+                                        <span class="text-xs font-bold text-slate-600">Dirección</span>
+                                        <input type="text" x-model="cobro.clidir" maxlength="150" class="mt-1 w-full h-9 rounded border-slate-300 text-sm">
+                                    </label>
+                                    <label class="sm:col-span-3">
+                                        <span class="text-xs font-bold text-slate-600">Observaciones</span>
+                                        <textarea x-model="cobro.observaciones" rows="2" maxlength="90" class="mt-1 w-full rounded border-slate-300 text-sm"></textarea>
+                                    </label>
+                                </div>
+                            </section>
 
-                <div x-show="vista === 'mesas'" class="flex-1 overflow-y-auto bg-white mx-3 mb-3 rounded-b-xl rounded-tr-xl p-3 space-y-4">
-                    <p class="text-xs text-gray-500">Son las mesas atendidas en esta PC sin internet. Las que ya estaban abiertas en el sistema se cobran cuando vuelva el internet.</p>
-                    <template x-for="piso in pisos" :key="piso">
-                        <div>
-                            <h3 class="text-sm font-bold text-gray-600 mb-2" x-text="piso"></h3>
-                            <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-2">
-                                <template x-for="m in p.mesas.filter((x) => (x.piso || 'Salón') === piso)" :key="m.id">
-                                    <button type="button" @click="abrirMesa(m)" class="rounded-xl p-3 text-center font-bold text-sm"
-                                            :class="estadoMesa(m) ? 'bg-orange-500 text-white' : 'bg-green-100 text-green-800'">
-                                        <span x-text="m.nombre"></span>
-                                        <span class="block text-xs font-normal" x-text="estadoMesa(m) ? 'S/ ' + totalMesa(estadoMesa(m)) : 'Libre'"></span>
-                                    </button>
-                                </template>
-                            </div>
+                            <section class="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <div class="flex items-center gap-2 px-4 py-3 bg-slate-700 text-white text-sm font-bold uppercase">
+                                    <span class="px-2 py-0.5 rounded bg-orange-500 text-xs">Punto de venta</span>
+                                    <span class="flex-1">Venta directa</span>
+                                    <label class="flex items-center gap-1.5 normal-case text-xs"><input type="checkbox" x-model="enviarCocina" class="rounded text-indigo-600"> Enviar a cocina</label>
+                                </div>
+                                <div class="p-4 grid lg:grid-cols-12 gap-4">
+                                    <div class="lg:col-span-7 space-y-3 min-w-0">
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <button type="button" @click="categoria = null" class="px-3 py-1.5 rounded-md text-xs font-bold text-white shadow-sm" :class="!categoria ? 'bg-slate-800 ring-2 ring-amber-400' : 'bg-slate-500'">TODAS</button>
+                                            <template x-for="c in p.categorias" :key="c.id">
+                                                <button type="button" @click="categoria = c.id" class="px-3 py-1.5 rounded-md text-xs font-bold text-white uppercase shadow-sm"
+                                                        :class="categoria === c.id ? 'ring-2 ring-amber-400' : ''" :style="'background:' + color(c.id)" x-text="c.nombre"></button>
+                                            </template>
+                                        </div>
+                                        <input x-model="busqueda" @keydown.enter.prevent="buscarEnter()" placeholder="Buscar producto…" class="w-full h-9 rounded border-slate-300 text-sm">
+                                        <div class="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-2 max-h-72 overflow-y-auto p-0.5">
+                                            <template x-for="x in productos" :key="x.id">
+                                                <button type="button" @click="tocar(x)" class="rounded-lg border border-slate-200 bg-white px-1 py-2 text-center min-h-[78px] flex flex-col justify-center hover:-translate-y-0.5 hover:shadow-md hover:border-sky-400 transition">
+                                                    <span class="block text-[11px] font-bold uppercase leading-tight line-clamp-2" x-text="x.nombre"></span>
+                                                    <span class="block text-xs text-slate-500 mt-1" x-text="'S/ ' + x.precio.toFixed(2)"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+                                        <table class="w-full text-xs">
+                                            <thead class="bg-slate-700 text-white"><tr><th class="py-1.5 px-2 text-left">PRODUCTO</th><th class="w-28">CANT.</th><th class="w-20">PRECIO</th><th class="w-20">TOTAL</th><th class="w-8"></th></tr></thead>
+                                            <tbody class="divide-y">
+                                                <template x-for="(it, i) in carrito" :key="it.clave">
+                                                    <tr>
+                                                        <td class="py-1.5 px-2 font-semibold uppercase" x-text="it.nombre"></td>
+                                                        <td>
+                                                            <div class="flex items-center justify-center gap-1">
+                                                                <button type="button" @click="cambiar(it, -1)" class="w-6 h-6 rounded bg-purple-600 text-white font-bold">−</button>
+                                                                <input type="number" step="any" min="0.01" x-model.number="it.cantidad" class="w-12 h-6 px-1 rounded border-slate-300 text-center text-xs">
+                                                                <button type="button" @click="cambiar(it, 1)" class="w-6 h-6 rounded bg-purple-600 text-white font-bold">+</button>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-center" x-text="Number(it.precio).toFixed(2)"></td>
+                                                        <td class="text-center font-bold" x-text="((Number(it.cantidad) || 0) * it.precio).toFixed(2)"></td>
+                                                        <td><button type="button" @click="carrito.splice(i, 1)" class="text-rose-500 font-bold px-1" aria-label="Quitar">✕</button></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                        <p x-show="!carrito.length" class="text-center text-xs text-slate-400 py-2">Toca un producto para agregarlo.</p>
+                                    </div>
+
+                                    <div class="lg:col-span-5 lg:border-l-2 lg:border-dashed lg:border-slate-300 lg:pl-4 space-y-3 text-sm">
+                                        <div class="rounded-md bg-amber-50 border-l-4 border-amber-400 px-3 py-2 text-lg text-rose-700">Por cobrar: <b x-text="'S/ ' + total.toFixed(2)"></b></div>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <label>
+                                                <span class="text-xs font-bold text-slate-600">PAGA CON S/</span>
+                                                <input type="number" step="any" min="0" x-model.number="cobro.paga" placeholder="0.00" class="mt-1 w-full h-10 rounded border-slate-300 text-center text-lg font-bold">
+                                            </label>
+                                            <div>
+                                                <span class="text-xs font-bold text-slate-600">VUELTO S/</span>
+                                                <p class="mt-1 h-10 rounded bg-slate-100 flex items-center justify-center text-lg font-bold" :class="cobro.paga > 0 && cobro.paga < total ? 'text-rose-600' : 'text-emerald-600'"
+                                                   x-text="cobro.paga > 0 ? (cobro.paga - total).toFixed(2) : '0.00'"></p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs font-bold text-slate-600">MEDIOS DE PAGO</span>
+                                            <select x-model.number="pvMedio" class="mt-1 w-full h-9 rounded border-slate-300 text-sm">
+                                                <template x-for="m in p.medios" :key="m.id"><option :value="m.id" x-text="m.nombre" :selected="m.id === pvMedio"></option></template>
+                                            </select>
+                                            <div class="flex gap-2 mt-2">
+                                                <input type="number" step="any" min="0" x-model="pvMonto" @keydown.enter.prevent="pvAgregarMedio()" :placeholder="Math.max(0, pvRestante).toFixed(2)" class="flex-1 h-9 rounded border-slate-300 text-sm text-right">
+                                                <button type="button" @click="pvAgregarMedio()" class="px-3 h-9 rounded bg-sky-600 text-white text-xs font-bold">+ AGREGAR</button>
+                                            </div>
+                                            <template x-for="(m, i) in cobro.pagos" :key="i">
+                                                <div class="flex items-center gap-2 mt-1.5 text-xs">
+                                                    <span class="flex-1 font-semibold" x-text="nombreMedio(m.medio)"></span>
+                                                    <input x-show="nombreMedio(m.medio).toUpperCase() !== 'EFECTIVO'" type="text" maxlength="30" x-model="m.operacion" placeholder="N° operación" class="w-28 h-7 rounded border-slate-300 text-xs uppercase">
+                                                    <span class="w-16 text-right font-bold" x-text="Number(m.monto).toFixed(2)"></span>
+                                                    <button type="button" @click="cobro.pagos.splice(i, 1)" class="text-rose-500" aria-label="Quitar medio">✕</button>
+                                                </div>
+                                            </template>
+                                            <p x-show="carrito.length && pvRestante > 0.009" class="mt-2 text-xs text-slate-500">
+                                                <span x-text="cobro.pagos.length ? 'Lo que falta' : 'Todo'"></span> (<b x-text="'S/ ' + pvRestante.toFixed(2)"></b>) se cobra con <b x-text="nombreMedio(pvMedio)"></b>.
+                                            </p>
+                                        </div>
+                                        <button type="button" @click="pvRegistrar(true)" :disabled="procesando" class="w-full h-11 rounded bg-emerald-500 hover:bg-emerald-600 text-white font-bold uppercase disabled:opacity-50"
+                                                x-text="procesando ? 'Registrando…' : 'Registrar venta'"></button>
+                                        <button type="button" @click="pvCancelar()" class="w-full h-9 rounded border border-slate-300 text-slate-700 text-xs font-bold uppercase hover:bg-slate-50">Cancelar</button>
+                                        <template x-if="ultima">
+                                            <div class="flex items-center justify-between gap-2 rounded bg-slate-50 px-3 py-2 text-xs">
+                                                <span>Última: <b x-text="ultima.serie + '-' + String(ultima.numero).padStart(8, '0')"></b> · <span x-text="'S/ ' + Number(ultima.total).toFixed(2)"></span></span>
+                                                <button type="button" @click="reimprimir(ultima)" class="font-semibold text-indigo-700 hover:underline">Reimprimir</button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </section>
                         </div>
                     </template>
+                </div>
+
+                {{-- Mesas: elegir la mesa (como la pantalla de Comandas) --}}
+                <div x-show="vista === 'mesas'" class="flex-1 overflow-y-auto px-3 pb-3 pt-2 space-y-4">
+                    <div>
+                        <h1 class="text-2xl font-extrabold text-slate-800">Elige la mesa o el tipo de pedido</h1>
+                        <p class="text-xs text-slate-500" x-text="p.usuario.nombre"></p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="piso in pisos" :key="piso">
+                            <button type="button" @click="pisoActual = piso" class="px-4 py-2.5 rounded-full text-sm font-bold uppercase shadow-sm"
+                                    :class="(pisoActual || pisos[0]) === piso ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700'" x-text="piso"></button>
+                        </template>
+                    </div>
+                    <div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                        <template x-for="m in p.mesas.filter((x) => (x.piso || 'Salón') === (pisoActual || pisos[0]))" :key="m.id">
+                            <button type="button" @click="abrirMesa(m)" class="h-[70px] rounded-2xl text-center text-white shadow-sm hover:brightness-110"
+                                    :class="estadoMesa(m) ? 'bg-orange-500' : 'bg-emerald-700'">
+                                <span class="block text-lg font-extrabold" x-text="m.nombre"></span>
+                                <span class="block text-xs font-semibold" x-text="estadoMesa(m) ? 'S/ ' + totalMesa(estadoMesa(m)) : 'Libre'"></span>
+                            </button>
+                        </template>
+                    </div>
+                    <div class="grid sm:grid-cols-2 gap-3">
+                        <button type="button" @click="enviarCocina = true; irA('venta')" class="h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-extrabold shadow-sm">🥡 PARA LLEVAR</button>
+                        <button type="button" @click="irA('venta')" class="h-14 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-lg font-extrabold shadow-sm">🧾 PUNTO DE VENTA</button>
+                    </div>
+                    <p class="text-xs text-slate-500">Son las mesas atendidas en esta PC sin internet. Las que ya estaban abiertas en el sistema se cobran cuando vuelva el internet.</p>
+                </div>
+
+                {{-- Pedido de la mesa (como la pantalla de comanda): productos a la izquierda, pedido a la derecha --}}
+                <div x-show="vista === 'mesa'" class="flex-1 flex flex-col min-h-0 px-3 pb-3 pt-2 gap-3">
+                    <div class="flex items-center gap-3 bg-white rounded-xl shadow-sm px-3 py-2">
+                        <button type="button" @click="salirMesa()" class="px-3 py-1.5 rounded-lg bg-slate-100 text-sm font-semibold hover:bg-slate-200">← Mesas</button>
+                        <h2 class="text-lg font-extrabold uppercase" x-text="'Mesa ' + (mesa ? (p.mesas.find((x) => x.id === mesa.id)?.piso || '') + ' - ' + mesa.nombre : '')"></h2>
+                    </div>
+                    <input x-model="busqueda" @keydown.enter.prevent="buscarEnter()" placeholder="🔎 Buscar producto…" class="h-11 rounded-xl border-slate-200 shadow-sm text-sm">
+                    <div class="grid grid-rows-2 grid-flow-col auto-cols-max gap-2 overflow-x-auto pb-1">
+                        <button type="button" @click="categoria = null" class="px-4 py-2 rounded-full text-sm font-semibold shadow-sm" :class="!categoria ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700'">TODAS</button>
+                        <template x-for="c in p.categorias" :key="c.id">
+                            <button type="button" @click="categoria = c.id" class="px-4 py-2 rounded-full text-sm font-semibold uppercase shadow-sm" :class="categoria === c.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700'" x-text="c.nombre"></button>
+                        </template>
+                    </div>
+                    <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 content-start">
+                        <template x-for="x in productos" :key="x.id">
+                            <button type="button" @click="tocar(x)" class="text-left rounded-xl bg-white shadow-sm p-3 hover:ring-2 hover:ring-indigo-300 min-h-[84px] flex flex-col">
+                                <span class="block text-sm font-bold uppercase leading-tight line-clamp-2 flex-1" x-text="x.nombre"></span>
+                                <span class="block text-sm text-indigo-700 font-bold mt-2" x-text="'S/ ' + x.precio.toFixed(2) + (x.presentaciones.length ? ' +' : '')"></span>
+                            </button>
+                        </template>
+                        <p x-show="!productos.length" class="col-span-full text-center text-sm text-slate-400 py-8">No hay productos con ese nombre.</p>
+                    </div>
                 </div>
 
                 <div x-show="vista === 'ventas'" class="flex-1 overflow-y-auto bg-white mx-3 mb-3 rounded-b-xl rounded-tr-xl p-3">
@@ -764,11 +927,10 @@
             </section>
 
             {{-- Derecha: pedido --}}
-            <aside x-show="vista !== 'pv'" class="w-80 xl:w-96 bg-white border-l flex flex-col">
+            <aside x-show="vista === 'mesa' && mesa" class="w-80 xl:w-96 bg-white border-l flex flex-col">
                 <div class="p-3 border-b flex items-center gap-2">
-                    <h2 class="font-bold flex-1" x-text="mesa ? mesa.nombre : 'Pedido'"></h2>
-                    <button type="button" x-show="mesa" @click="salirMesa()" class="text-xs text-gray-500 hover:underline">Volver a mesas</button>
-                    <button type="button" x-show="!mesa && carrito.length" @click="carrito = []" class="text-xs text-red-600 hover:underline">Vaciar</button>
+                    <h2 class="font-bold flex-1">🧾 Pedido</h2>
+                    <span class="font-extrabold text-emerald-700" x-text="'S/ ' + total.toFixed(2)"></span>
                 </div>
                 <div class="flex-1 overflow-y-auto divide-y">
                     <template x-for="i in lista" :key="i.clave + '-' + lista.indexOf(i)">
