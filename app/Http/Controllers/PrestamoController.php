@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Support\Prestamos;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -146,7 +148,8 @@ class PrestamoController extends Controller
         $d = $request->validate([
             'pcl_id' => 'required|integer', 'plan_id' => 'nullable|integer', 'monto' => 'required|numeric|min:1|max:9999999',
             'interes_pct' => 'required|numeric|min:0|max:500', 'cuotas' => 'required|integer|min:1|max:400', 'frecuencia' => 'required|in:'.implode(',', array_keys(Prestamos::FRECUENCIAS)),
-            'fecha' => 'nullable|date|before_or_equal:today|after:'.now()->subDays(60)->toDateString(), 'cobrador_id' => 'nullable|integer',
+            'fecha' => 'nullable|date|before_or_equal:today|after:'.now()->subDays(60)->toDateString(),
+            'cobrador_id' => ['nullable', 'integer', Rule::in(self::cobradores($this->suc())->pluck('IdUsuario')->map(fn ($u) => (int) $u)->all())],
             'medio_entrega' => 'nullable|in:'.implode(',', Prestamos::MEDIOS), 'renueva_pre_id' => 'nullable|integer', 'obs' => 'nullable|string|max:255',
         ], ['fecha.after' => 'La fecha del préstamo no puede ser de hace más de 60 días.'], ['interes_pct' => 'interés', 'cuotas' => 'número de cuotas']);
 
@@ -186,6 +189,7 @@ class PrestamoController extends Controller
 
         return view('empresas.prestamos.ver', self::detalle($p) + [
             'cfg' => Prestamos::config($this->suc()), 'esAdmin' => $u->esAdmin(), 'gestiona' => Prestamos::gestiona($u),
+            'cobradores' => Prestamos::gestiona($u) ? self::cobradores($this->suc()) : collect(),
             'negocio' => $this->negocio(), 'otros' => DB::table('prestamos')->where('pcl_id', $p->pcl_id)->where('pre_id', '!=', $p->pre_id)->orderByDesc('pre_id')->limit(10)
                 ->get(['pre_id', 'numero', 'monto', 'total', 'estado', 'fecha']),
         ]);
@@ -256,15 +260,32 @@ class PrestamoController extends Controller
         });
     }
 
-    /** Cambiar el cobrador o la nota del préstamo */
+    /**
+     * Editar el préstamo: caja cambia el cobrador o la nota; el administrador además corrige monto, interés,
+     * cuotas, frecuencia y fecha (se rehace el cronograma y lo pagado se vuelve a aplicar).
+     */
     public function editar(Request $request, int $id): JsonResponse
     {
         $this->gestiona();
         $p = $this->prestamo($id);
-        $d = $request->validate(['cobrador_id' => 'nullable|integer', 'obs' => 'nullable|string|max:255']);
-        DB::table('prestamos')->where('pre_id', $p->pre_id)->update(['cobrador_id' => $d['cobrador_id'] ?? null, 'obs' => $d['obs'] ?? null]);
+        $cobradores = self::cobradores($this->suc())->pluck('IdUsuario')->map(fn ($u) => (int) $u)->all();
+        $reglas = ['cobrador_id' => ['nullable', 'integer', Rule::in($cobradores)], 'obs' => 'nullable|string|max:255'];
+        $esAdmin = Auth::user()->esAdmin();
+        if ($esAdmin) {
+            $reglas += ['monto' => 'required|numeric|min:1|max:9999999', 'interes_pct' => 'required|numeric|min:0|max:500', 'cuotas' => 'required|integer|min:1|max:400',
+                'frecuencia' => 'required|in:'.implode(',', array_keys(Prestamos::FRECUENCIAS)), 'fecha' => 'required|date|before_or_equal:today'];
+        }
+        $d = $request->validate($reglas, ['cobrador_id.in' => 'Ese cobrador no es de esta sucursal.'], ['interes_pct' => 'interés', 'cuotas' => 'número de cuotas']);
 
-        return response()->json(['ok' => true, 'mensaje' => 'Guardado.']);
+        return $this->json(function () use ($p, $d, $esAdmin) {
+            if ($esAdmin) {
+                Prestamos::corregir(Auth::user(), (int) $p->pre_id, ['fecha' => Carbon::parse($d['fecha'])->toDateString()] + $d);
+            } else {
+                DB::table('prestamos')->where('pre_id', $p->pre_id)->update(['cobrador_id' => $d['cobrador_id'] ?? null, 'obs' => $d['obs'] ?? null]);
+            }
+
+            return ['mensaje' => 'Préstamo actualizado.'];
+        });
     }
 
     // ------------------------------------------------------------------ impresos

@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -83,10 +84,11 @@ class PrestamoClienteController extends Controller
             'pcl_id' => 'nullable|integer', 'clinum' => 'required|string|regex:/^\d{8,11}$/', 'clinom' => 'required|string|max:150',
             'telefono' => 'nullable|string|max:20', 'direccion' => 'nullable|string|max:200', 'referencia' => 'nullable|string|max:200',
             'zona' => 'nullable|string|max:60', 'negocio' => 'nullable|string|max:120', 'aval_nombre' => 'nullable|string|max:150',
-            'aval_dni' => 'nullable|string|max:15', 'aval_telefono' => 'nullable|string|max:20', 'cobrador_id' => 'nullable|integer',
+            'aval_dni' => 'nullable|string|max:15', 'aval_telefono' => 'nullable|string|max:20',
+            'cobrador_id' => ['nullable', 'integer', Rule::in(PrestamoController::cobradores($this->suc())->pluck('IdUsuario')->map(fn ($u) => (int) $u)->all())],
             'limite' => 'nullable|numeric|min:0|max:9999999', 'estado' => 'nullable|in:ACTIVO,BLOQUEADO', 'obs' => 'nullable|string|max:2000',
             'lat' => 'nullable|numeric|between:-90,90', 'lng' => 'nullable|numeric|between:-180,180',
-        ], ['clinum.regex' => 'El DNI tiene 8 números (o el RUC 11).'], ['clinum' => 'DNI', 'clinom' => 'nombre']);
+        ], ['clinum.regex' => 'El DNI tiene 8 números (o el RUC 11).', 'cobrador_id.in' => 'Ese cobrador no es de esta sucursal.'], ['clinum' => 'DNI', 'clinom' => 'nombre']);
         $user = Auth::user();
         $suc = $this->suc();
 

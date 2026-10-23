@@ -322,6 +322,57 @@ class Prestamos
         });
     }
 
+    /**
+     * El administrador corrige un préstamo ya registrado (monto, interés, cuotas, frecuencia o fecha): se rehace el cronograma
+     * y lo ya pagado se vuelve a aplicar a las nuevas cuotas. Queda anotado qué tenía antes.
+     *
+     * @param  array{monto: float, interes_pct: float, cuotas: int, frecuencia: string, fecha: string, cobrador_id?: ?int, obs?: ?string}  $d
+     */
+    public static function corregir(User $user, int $preId, array $d): void
+    {
+        DB::transaction(function () use ($user, $preId, $d) {
+            $p = DB::table('prestamos')->where('pre_id', $preId)->where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
+            if (! $p || $p->estado === 'ANULADO') {
+                throw new \RuntimeException('Préstamo no encontrado o anulado.');
+            }
+            $cfg = self::config((int) $p->id_empresa_negocio);
+            $sim = self::simular((float) $d['monto'], (float) $d['interes_pct'], (int) $d['cuotas'], $d['frecuencia'], $cfg->dias, $d['fecha'], $cfg->lista_feriados);
+            if ((float) $p->pagado > $sim['total'] + 0.009) {
+                throw new \RuntimeException('El nuevo total (S/ '.number_format($sim['total'], 2).') es menor que lo que ya pagó (S/ '.number_format((float) $p->pagado, 2).').');
+            }
+            // Si era una renovación, lo entregado cambia en lo mismo que cambia el monto (el saldo del anterior no cambia)
+            $entregado = round((float) $p->entregado + $sim['monto'] - (float) $p->monto, 2);
+            if ($entregado <= 0) {
+                throw new \RuntimeException('Con ese monto no se le entregaría nada (es una renovación: el monto debe cubrir el saldo del préstamo anterior).');
+            }
+            $cambio = $sim['monto'] != (float) $p->monto || $sim['interes_pct'] != (float) $p->interes_pct || $sim['cuotas'] !== (int) $p->cuotas
+                || $sim['frecuencia'] !== $p->frecuencia || $d['fecha'] !== $p->fecha;
+            $obs = trim((string) ($d['obs'] ?? $p->obs));
+            if ($cambio) {
+                $antes = 'Corregido '.now()->format('d/m/Y H:i').' por '.($user->apeusu ?: $user->name).'. Antes: S/ '.number_format((float) $p->monto, 2)
+                    .' al '.(float) $p->interes_pct.'% en '.$p->cuotas.' cuotas '.mb_strtolower(self::FRECUENCIAS[$p->frecuencia] ?? $p->frecuencia)
+                    .' desde '.Carbon::parse($p->fecha)->format('d/m/Y');
+                $obs = trim($antes.($obs !== '' ? ' · '.$obs : ''));
+            }
+            DB::table('prestamos')->where('pre_id', $preId)->update([
+                'monto' => $sim['monto'], 'interes_pct' => $sim['interes_pct'], 'interes' => $sim['interes'], 'total' => $sim['total'], 'cuotas' => $sim['cuotas'],
+                'cuota' => $sim['cuota'], 'frecuencia' => $sim['frecuencia'], 'dias_cobro' => implode(',', $cfg->dias), 'fecha' => $d['fecha'],
+                'primera_cuota' => $sim['primera'], 'ultima_cuota' => $sim['ultima'], 'entregado' => $entregado,
+                'cobrador_id' => array_key_exists('cobrador_id', $d) ? ($d['cobrador_id'] ?: null) : $p->cobrador_id,
+                'obs' => $obs !== '' ? mb_substr($obs, 0, 255) : null,
+            ]);
+            if ($cambio) {
+                DB::table('prestamo_cuotas')->where('pre_id', $preId)->delete();
+                DB::table('prestamo_cuotas')->insert(array_map(fn ($c) => $c + ['pre_id' => $preId], $sim['fechas']));
+            }
+            // Con el nuevo total puede quedar pagado o volver a tener saldo
+            if ($p->estado === 'PAGADO' && $sim['total'] > (float) $p->pagado + 0.009) {
+                DB::table('prestamos')->where('pre_id', $preId)->update(['estado' => 'VIGENTE', 'cancelado' => null]);
+            }
+            self::recalcular($preId);
+        });
+    }
+
     public static function recalcular(int $preId): void
     {
         $suma = DB::table('prestamo_pagos')->where('pre_id', $preId)->where('anulado', 0)->selectRaw('COALESCE(SUM(monto), 0) as m, COALESCE(SUM(mora), 0) as mo')->first();

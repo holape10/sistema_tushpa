@@ -2,6 +2,7 @@
 
 // Panel multi-empresa (base central). Se carga desde bootstrap/app.php con dominio admin.{dominio} y prefijo TENANCY_ADMIN_RUTA.
 
+use App\Http\Controllers\Admin\AccesoController;
 use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\AnuncioController;
 use App\Http\Controllers\Admin\ClienteController;
@@ -63,6 +64,8 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/prospectos', [ProspectoController::class, 'index'])->name('prospectos.index');
     Route::get('/prospectos/excel', [ProspectoController::class, 'excel'])->name('prospectos.excel');
     Route::post('/prospectos/carta/{id}/contactado', [ProspectoController::class, 'contactado'])->whereNumber('id')->name('prospectos.contactado');
+    Route::get('/clientes/{cliente}/accesos', [AccesoController::class, 'index'])->whereNumber('cliente')->name('clientes.accesos');
+    Route::post('/clientes/{cliente}/accesos/{usuario}', [AccesoController::class, 'clave'])->whereNumber(['cliente', 'usuario'])->middleware('throttle:20,1')->name('clientes.accesos.clave');
     Route::get('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'index'])->whereNumber('cliente')->name('clientes.comprobantes');
     Route::post('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'accion'])->whereNumber('cliente')->name('clientes.comprobantes.accion');
     Route::post('/cartas/{id}/estado', [VisitaController::class, 'cartaEstado'])->whereNumber('id')->name('cartas.estado');

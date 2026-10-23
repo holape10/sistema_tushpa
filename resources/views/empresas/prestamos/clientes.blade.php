@@ -59,7 +59,11 @@
                 <template x-if="form">
                     <div class="grid sm:grid-cols-2 gap-3">
                         <label class="block text-xs font-semibold text-gray-500">DNI *
-                            <input x-model="form.clinum" @change="buscarDni()" @keydown.enter.prevent="buscarDni()" inputmode="numeric" maxlength="11" class="{{ $in }} mt-1 text-lg font-bold">
+                            <span class="mt-1 flex gap-2">
+                                <input x-model="form.clinum" @input="if (String(form.clinum).replace(/\D/g, '').length === 8) buscarDni()" @keydown.enter.prevent="buscarDni(true)"
+                                       inputmode="numeric" maxlength="11" class="{{ $in }} text-lg font-bold">
+                                <button type="button" @click="buscarDni(true)" class="shrink-0 px-4 rounded-lg bg-emerald-600 text-white font-bold" title="Buscar DNI"><i class="fas fa-magnifying-glass"></i></button>
+                            </span>
                             <span class="text-[11px] font-normal" :class="dniMsg.startsWith('✔') ? 'text-emerald-600' : 'text-gray-400'" x-text="dniMsg || 'Escribe el DNI y el nombre sale solo'"></span></label>
                         <label class="block text-xs font-semibold text-gray-500">Nombre completo *<input x-model="form.clinom" class="{{ $in }} mt-1 uppercase"></label>
                         <label class="block text-xs font-semibold text-gray-500">Celular / WhatsApp<input x-model="form.telefono" inputmode="tel" maxlength="20" class="{{ $in }} mt-1"></label>
@@ -161,7 +165,7 @@
             const vacio = () => ({ pcl_id: null, clinum: '', clinom: '', telefono: '', direccion: '', referencia: '', zona: '', negocio: '', aval_nombre: '', aval_dni: '',
                 aval_telefono: '', cobrador_id: '', limite: '', estado: 'ACTIVO', obs: '', lat: null, lng: null });
             return {
-                lista: @js($clientes), q: '', zona: '', estado: '', form: null, ficha: null, ocupado: false, dniMsg: '',
+                lista: @js($clientes), q: '', zona: '', estado: '', form: null, ficha: null, ocupado: false, dniMsg: '', nombreDeDni: '',
                 tarjetas: [{ e: 'AL_DIA', n: 'Al día', t: 'text-emerald-600', borde: 'border-emerald-400' }, { e: 'ATRASADO', n: 'Atrasados', t: 'text-amber-500', borde: 'border-amber-400' },
                     { e: 'MOROSO', n: 'Morosos', t: 'text-rose-600', borde: 'border-rose-400' }, { e: 'SIN_DEUDA', n: 'Sin deuda', t: 'text-sky-600', borde: 'border-sky-400' },
                     { e: 'BLOQUEADO', n: 'Bloqueados', t: 'text-gray-500', borde: 'border-gray-400' }],
@@ -177,17 +181,19 @@
                     return this.lista.filter(c => (!this.estado || c.estado === this.estado) && (!this.zona || c.zona === this.zona)
                         && (!q || [c.nombre, c.dni, c.telefono, c.negocio, c.zona].join(' ').toLowerCase().includes(q)));
                 },
-                nuevo() { this.form = vacio(); this.dniMsg = ''; },
+                nuevo() { this.form = vacio(); this.dniMsg = ''; this.nombreDeDni = ''; },
                 editar(c) {
                     this.ficha = null;
                     this.form = Object.assign(vacio(), Object.fromEntries(Object.keys(vacio()).map(k => [k, c[k] ?? vacio()[k]])), { cobrador_id: c.cobrador_id ? String(c.cobrador_id) : '' });
                 },
-                async buscarDni() {
+                // Sola al completar los 8 números (sin pisar un nombre escrito a mano) o con el botón 🔍 (en el celular no hay Enter)
+                async buscarDni(forzar = false) {
                     const d = String(this.form.clinum || '').trim();
-                    if (!/^\d{8}$/.test(d) || this.form.clinom) return;
+                    if (!/^\d{8}$/.test(d)) { if (forzar) this.dniMsg = 'El DNI tiene 8 números.'; return; }
+                    if (!forzar && this.form.clinom && this.form.clinom !== this.nombreDeDni) return;
                     this.dniMsg = 'Buscando…';
                     const r = await fetch('{{ url('cobros/cliente') }}/' + d, { headers: { Accept: 'application/json' } }).then(x => x.json()).catch(() => ({}));
-                    if (r && r.nom) { this.form.clinom = r.nom; this.form.telefono ||= r.tel || ''; this.dniMsg = '✔ Encontrado'; } else this.dniMsg = 'No se encontró: escribe el nombre.';
+                    if (r && r.nom) { this.form.clinom = this.nombreDeDni = r.nom; this.form.telefono ||= r.tel || ''; this.dniMsg = '✔ Encontrado'; } else this.dniMsg = 'No se encontró: escribe el nombre.';
                 },
                 ubicar() {
                     if (!navigator.geolocation) return tushpaAviso('Este equipo no tiene GPS.', 'error');

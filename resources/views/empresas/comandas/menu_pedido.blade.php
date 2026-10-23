@@ -3,6 +3,10 @@
 @section('content')
     <style>
         .no-scroll::-webkit-scrollbar { display: none; } .no-scroll { scrollbar-width: none; }
+        /* PC: categorías en 2 filas que se deslizan a los lados (como en el celular) en vez de llenar la pantalla */
+        @media (min-width: 1024px) {
+            #categorias.dos-filas { display: grid; grid-template-rows: repeat(2, auto); grid-auto-flow: column; grid-auto-columns: max-content; }
+        }
         /* Modales de presentaciones y opciones (los arma el JavaScript) */
         .pres-fondo { position: fixed; inset: 0; background: rgba(15,23,42,.6); z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
         @media (min-width: 640px) { .pres-fondo { align-items: center; padding: 16px; } }
@@ -83,13 +87,19 @@
                         <input type="search" id="buscar_producto" placeholder="Buscar producto…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"
                                class="h-12 w-full rounded-2xl border-gray-300 bg-white pl-10 pr-3 text-base text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     </label>
-                    <div class="no-scroll -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0" id="categorias">
+                    <div class="relative" id="categorias_caja">
+                    <button type="button" id="cat_izq" aria-label="Ver categorías anteriores"
+                            class="absolute left-1 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-lg font-black text-gray-700 shadow-md ring-1 ring-gray-200 hover:bg-gray-50">‹</button>
+                    <button type="button" id="cat_der" aria-label="Ver más categorías"
+                            class="absolute right-1 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white text-lg font-black text-gray-700 shadow-md ring-1 ring-gray-200 hover:bg-gray-50">›</button>
+                    <div class="no-scroll -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0 {{ count($categorias) > 6 ? 'dos-filas' : 'lg:flex-wrap' }}" id="categorias">
                         @foreach ($categorias as $cat)
                             <button type="button" data-cat-id="{{ $cat->cat_id }}"
                                     class="btn-categoria h-10 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-bold ring-1 transition {{ $cat->cat_id == $cat_default_id ? 'bg-indigo-600 text-white ring-indigo-600' : 'bg-white text-gray-700 ring-gray-200' }}">
                                 {{ $cat->cat_nom }}
                             </button>
                         @endforeach
+                    </div>
                     </div>
                 </div>
                 <div id="productos_grid" class="grid grid-cols-2 gap-2.5 px-4 pt-1 sm:grid-cols-3 xl:grid-cols-4 lg:px-0">
@@ -287,7 +297,39 @@
     // Se abrió con /comandas/menu?tipo=…: la dirección queda limpia (al recargar no se vuelve a abrir el pedido)
     if (location.search) history.replaceState(null, '', location.pathname);
 
+    // PC: flechas, rueda del mouse y arrastre para mover las categorías a los lados
+    (() => {
+        const barra = $('categorias'), izq = $('cat_izq'), der = $('cat_der');
+        const enPc = () => window.matchMedia('(min-width: 1024px)').matches && barra.classList.contains('dos-filas');
+        const flechas = () => {
+            const hay = enPc() && barra.scrollWidth > barra.clientWidth + 4;
+            izq.classList.toggle('hidden', !hay || barra.scrollLeft <= 4); izq.classList.toggle('flex', hay && barra.scrollLeft > 4);
+            const fin = barra.scrollLeft + barra.clientWidth >= barra.scrollWidth - 4;
+            der.classList.toggle('hidden', !hay || fin); der.classList.toggle('flex', hay && !fin);
+        };
+        izq.addEventListener('click', () => barra.scrollBy({ left: -barra.clientWidth * 0.8, behavior: 'smooth' }));
+        der.addEventListener('click', () => barra.scrollBy({ left: barra.clientWidth * 0.8, behavior: 'smooth' }));
+        barra.addEventListener('scroll', flechas, { passive: true });
+        window.addEventListener('resize', flechas);
+        barra.addEventListener('wheel', (e) => {
+            if (!enPc() || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+            e.preventDefault();
+            barra.scrollLeft += e.deltaY;
+        }, { passive: false });
+        let arrastre = null;
+        barra.addEventListener('pointerdown', (e) => { if (enPc() && e.pointerType === 'mouse') arrastre = { x: e.clientX, left: barra.scrollLeft, movio: false }; });
+        window.addEventListener('pointermove', (e) => {
+            if (!arrastre) return;
+            const dx = e.clientX - arrastre.x;
+            if (Math.abs(dx) > 5) arrastre.movio = true;
+            if (arrastre.movio) barra.scrollLeft = arrastre.left - dx;
+        });
+        window.addEventListener('pointerup', () => { if (arrastre?.movio) barra.dataset.arrastro = '1'; arrastre = null; setTimeout(() => delete barra.dataset.arrastro, 0); });
+        flechas();
+    })();
+
     $('categorias').addEventListener('click', (e) => {
+        if ($('categorias').dataset.arrastro) return;
         const b = e.target.closest('.btn-categoria');
         if (!b) return;
         document.querySelectorAll('.btn-categoria').forEach((x) => {

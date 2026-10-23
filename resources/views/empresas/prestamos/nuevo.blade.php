@@ -24,7 +24,30 @@
                                         <b x-text="s.clinom"></b> <span class="text-xs text-gray-500" x-text="s.clinum + (s.zona ? ' · ' + s.zona : '') + (s.estado !== 'ACTIVO' ? ' · ' + s.estado : '')"></span></button>
                                 </template>
                             </div>
-                            <p class="text-xs text-gray-500 mt-2">¿Cliente nuevo? <a href="{{ route('prestamos.clientes') }}" class="text-emerald-700 font-bold underline">Regístralo aquí</a> (con su DNI) y vuelve.</p>
+                            <button type="button" x-show="!alta" @click="abrirAlta()" class="mt-3 w-full py-3 rounded-xl border-2 border-dashed border-emerald-300 text-emerald-700 font-bold text-sm">
+                                <i class="fas fa-user-plus"></i> Cliente nuevo</button>
+                            {{-- Registrar al cliente aquí mismo, sin salir del préstamo --}}
+                            <div x-show="alta" x-cloak class="mt-3 rounded-2xl bg-emerald-50 p-4 space-y-2">
+                                <p class="text-sm font-bold text-emerald-800">Cliente nuevo</p>
+                                <div class="flex gap-2">
+                                    <input x-model="alta.clinum" @input="if (String(alta.clinum).length === 8) buscarDni()" @keydown.enter.prevent="buscarDni(true)"
+                                           inputmode="numeric" maxlength="8" placeholder="DNI" class="{{ $in }} text-lg font-bold">
+                                    <button type="button" @click="buscarDni(true)" class="shrink-0 px-4 rounded-lg bg-emerald-600 text-white font-bold"><i class="fas fa-magnifying-glass"></i></button>
+                                </div>
+                                <p class="text-[11px]" :class="dniMsg.startsWith('✔') ? 'text-emerald-700' : 'text-gray-500'" x-text="dniMsg || 'Escribe el DNI: el nombre sale solo'"></p>
+                                <input x-model="alta.clinom" placeholder="Nombre completo *" class="{{ $in }} uppercase">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input x-model="alta.telefono" inputmode="tel" maxlength="20" placeholder="Celular" class="{{ $in }}">
+                                    <input x-model="alta.zona" placeholder="Zona / ruta" class="{{ $in }} uppercase">
+                                </div>
+                                <input x-model="alta.direccion" placeholder="Dirección de cobro" class="{{ $in }} uppercase">
+                                <input x-model="alta.negocio" placeholder="Negocio o trabajo (opcional)" class="{{ $in }} uppercase">
+                                <div class="flex gap-2 pt-1">
+                                    <button type="button" @click="alta = null" class="px-4 py-2.5 rounded-xl bg-white text-sm font-semibold">Cancelar</button>
+                                    <button type="button" @click="registrar()" :disabled="ocupado" class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold disabled:opacity-40">Registrar y continuar</button>
+                                </div>
+                                <p class="text-[11px] text-gray-500">Más datos (aval, GPS, límite) los completas luego en <a href="{{ route('prestamos.clientes') }}" class="underline">Clientes</a>.</p>
+                            </div>
                         </div>
                     </template>
                     <template x-if="cliente">
@@ -144,7 +167,36 @@
             const inicial = @js($cliente);
             const plan0 = planes.find(p => inicial?.esPrimero && Number(p.primer_prestamo)) || planes.find(p => !Number(p.primer_prestamo) && p.frecuencia === 'DIARIA') || planes.find(p => !Number(p.primer_prestamo)) || planes[0] || { plan_id: null, interes: 20, cuotas: 24, frecuencia: 'DIARIA', monto_min: 100 };
             return {
-                planes, cliente: inicial, q: '', sugerencias: [], renovar: null, ocupado: false,
+                planes, cliente: inicial, q: '', sugerencias: [], renovar: null, ocupado: false, alta: null, dniMsg: '', nombreDeDni: '',
+                abrirAlta() {
+                    // Si escribió un DNI en el buscador, se usa
+                    const dni = /^\d{8}$/.test(this.q.trim()) ? this.q.trim() : '';
+                    this.alta = { clinum: dni, clinom: '', telefono: '', zona: '', direccion: '', negocio: '' }; this.dniMsg = ''; this.nombreDeDni = '';
+                    if (dni) this.buscarDni(true);
+                },
+                async buscarDni(forzar = false) {
+                    const d = String(this.alta.clinum || '').trim();
+                    if (!/^\d{8}$/.test(d)) { if (forzar) this.dniMsg = 'El DNI tiene 8 números.'; return; }
+                    if (!forzar && this.alta.clinom && this.alta.clinom !== this.nombreDeDni) return;
+                    // ¿Ya es cliente de préstamos? Se elige directo
+                    const ya = await fetch('{{ route('prestamos.clientes.buscar') }}?q=' + d, { headers: { Accept: 'application/json' } }).then(r => r.json()).catch(() => []);
+                    const mismo = ya.find(x => x.clinum === d);
+                    if (mismo) { tushpaAviso('Ese DNI ya es cliente: ' + mismo.clinom, 'ok'); this.alta = null; return this.elegir(mismo.pcl_id); }
+                    this.dniMsg = 'Buscando…';
+                    const r = await fetch('{{ url('cobros/cliente') }}/' + d, { headers: { Accept: 'application/json' } }).then(x => x.json()).catch(() => ({}));
+                    if (r && r.nom) { this.alta.clinom = this.nombreDeDni = r.nom; this.alta.telefono ||= r.tel || ''; this.dniMsg = '✔ Encontrado'; } else this.dniMsg = 'No se encontró: escribe el nombre.';
+                },
+                async registrar() {
+                    this.ocupado = true;
+                    const r = await fetch('{{ route('prestamos.clientes.guardar') }}', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF },
+                        body: JSON.stringify(Object.fromEntries(Object.entries(this.alta).map(([k, v]) => [k, v === '' ? null : v]))) });
+                    const j = await r.json().catch(() => ({}));
+                    this.ocupado = false;
+                    if (!(r.ok && j.ok)) return tushpaAviso(j.mensaje || Object.values(j.errors || {}).flat()[0] || 'No se pudo registrar.', 'error');
+                    this.alta = null;
+                    await this.elegir(j.pcl_id);
+                    tushpaAviso('Cliente registrado. Ahora elige el monto.', 'ok');
+                },
                 plan: plan0.plan_id, monto: Number(plan0.monto_min) || 100, interes: Number(plan0.interes), cuotas: Number(plan0.cuotas), frecuencia: plan0.frecuencia,
                 fecha: @js(now()->toDateString()), medio: 'EFECTIVO', cobrador: '', obs: '',
                 cal: { emerald: 'bg-emerald-100 text-emerald-700', sky: 'bg-sky-100 text-sky-700', amber: 'bg-amber-100 text-amber-800', rose: 'bg-rose-100 text-rose-700', slate: 'bg-slate-100 text-slate-600' },

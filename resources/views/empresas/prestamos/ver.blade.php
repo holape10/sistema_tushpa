@@ -49,6 +49,9 @@
                 @if ($gestiona && ! $vigente)
                     <a href="{{ route('prestamos.nuevo', ['cliente' => $prestamo->pcl_id]) }}" class="px-4 py-3 rounded-xl bg-white/15 font-bold text-sm"><i class="fas fa-plus"></i> Nuevo préstamo</a>
                 @endif
+                @if ($gestiona && $prestamo->estado !== 'ANULADO')
+                    <button type="button" @click="abrirEdicion()" class="px-4 py-3 rounded-xl bg-white/15 font-bold text-sm"><i class="fas fa-pen"></i> Editar</button>
+                @endif
             </div>
         </div>
 
@@ -175,6 +178,44 @@
                 </div>
             </div>
         </div>
+        {{-- Editar: caja cambia cobrador y nota; el administrador también corrige las condiciones --}}
+        <div x-show="edicion" x-cloak class="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4">
+            <div class="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl shadow-xl p-5 max-h-[92vh] overflow-y-auto" @click.outside="edicion = null">
+                <template x-if="edicion">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between"><h3 class="font-black text-lg">Editar préstamo N° {{ $num }}</h3><button type="button" @click="edicion = null" class="text-gray-400 text-xl">✕</button></div>
+                        @if ($esAdmin)
+                            @if ((float) $prestamo->pagado > 0)
+                                <p class="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Ya pagó {{ $soles($prestamo->pagado) }}: se rehace el cronograma y ese pago se aplica a las nuevas cuotas. El total no puede quedar menor a lo pagado.</p>
+                            @endif
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="text-xs font-semibold text-gray-500">Monto prestado S/<input type="number" step="0.01" min="1" x-model.number="edicion.monto" class="{{ $in }} mt-1 text-right"></label>
+                                <label class="text-xs font-semibold text-gray-500">Interés %<input type="number" step="0.01" min="0" x-model.number="edicion.interes_pct" class="{{ $in }} mt-1 text-right"></label>
+                                <label class="text-xs font-semibold text-gray-500">N° de cuotas<input type="number" min="1" max="400" x-model.number="edicion.cuotas" class="{{ $in }} mt-1 text-right"></label>
+                                <label class="text-xs font-semibold text-gray-500">Frecuencia
+                                    <select x-model="edicion.frecuencia" class="{{ $in }} mt-1">
+                                        @foreach (\App\Support\Prestamos::FRECUENCIAS as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach
+                                    </select></label>
+                                <label class="col-span-2 text-xs font-semibold text-gray-500">Fecha del préstamo (las cuotas empiezan al día siguiente)
+                                    <input type="date" x-model="edicion.fecha" max="{{ now()->toDateString() }}" class="{{ $in }} mt-1"></label>
+                            </div>
+                            <div class="rounded-xl bg-gray-50 p-3 text-sm grid grid-cols-3 gap-2 text-center">
+                                <div><p class="text-[11px] text-gray-400">Interés</p><p class="font-bold" x-text="soles(previa().interes)"></p></div>
+                                <div><p class="text-[11px] text-gray-400">Total</p><p class="font-black" x-text="soles(previa().total)"></p></div>
+                                <div><p class="text-[11px] text-gray-400">Cuota aprox.</p><p class="font-bold" x-text="soles(previa().cuota)"></p></div>
+                            </div>
+                        @endif
+                        <label class="block text-xs font-semibold text-gray-500">Cobrador
+                            <select x-model="edicion.cobrador_id" class="{{ $in }} mt-1">
+                                <option value="">Sin cobrador</option>
+                                @foreach ($cobradores as $c)<option value="{{ $c->IdUsuario }}">{{ $c->nombre }}</option>@endforeach
+                            </select></label>
+                        <label class="block text-xs font-semibold text-gray-500">Nota<input x-model="edicion.obs" maxlength="255" class="{{ $in }} mt-1"></label>
+                        <button type="button" @click="guardarEdicion()" :disabled="ocupado" class="w-full py-3 rounded-2xl bg-emerald-600 text-white font-black disabled:opacity-50">Guardar cambios</button>
+                    </div>
+                </template>
+            </div>
+        </div>
         {{-- No pagó --}}
         <div x-show="gestion" x-cloak class="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center sm:p-4">
             <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-xl p-5 space-y-3" @click.outside="gestion = null">
@@ -202,7 +243,25 @@
                 .then(async r => { const j = await r.json().catch(() => ({})); return r.status === 422 ? { ok: false, mensaje: Object.values(j.errors || {}).flat()[0] } : j; })
                 .catch(() => ({ ok: false, mensaje: 'Sin conexión.' }));
             return {
-                cobro: null, gestion: null, hecho: null, ocupado: false,
+                cobro: null, gestion: null, hecho: null, ocupado: false, edicion: null,
+                abrirEdicion() {
+                    this.edicion = { monto: {{ (float) $prestamo->monto }}, interes_pct: {{ (float) $prestamo->interes_pct }}, cuotas: {{ (int) $prestamo->cuotas }},
+                        frecuencia: @js($prestamo->frecuencia), fecha: @js($prestamo->fecha), cobrador_id: @js((string) ($prestamo->cobrador_id ?? '')), obs: @js((string) $prestamo->obs) };
+                },
+                previa() {
+                    const e = this.edicion || {}, monto = Number(e.monto) || 0, interes = Math.round(monto * (Number(e.interes_pct) || 0)) / 100;
+                    return { interes, total: monto + interes, cuota: (monto + interes) / Math.max(1, Number(e.cuotas) || 1) };
+                },
+                async guardarEdicion() {
+                    @if ($esAdmin)
+                        if (!confirm('¿Guardar los cambios? Se rehará el cronograma del préstamo.')) return;
+                    @endif
+                    this.ocupado = true;
+                    const r = await post('{{ route('prestamos.editar', $prestamo->pre_id) }}', { ...this.edicion, cobrador_id: this.edicion.cobrador_id || null });
+                    this.ocupado = false;
+                    tushpaAviso(r.mensaje || 'Error', r.ok ? 'ok' : 'error');
+                    if (r.ok) setTimeout(() => location.reload(), 700);
+                },
                 soles: n => 'S/ ' + (Number(n) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                 abrirCobro() { this.cobro = { monto: {{ $s['cobrar_hoy'] > 0 ? $s['cobrar_hoy'] : min((float) $prestamo->cuota, $s['saldo']) }}, mora: {{ $s['mora_sugerida'] }}, medio: 'EFECTIVO', operacion: '', obs: '' }; },
                 async pagar() {
