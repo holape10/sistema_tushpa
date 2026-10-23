@@ -53,7 +53,7 @@
                             @if ($m->series)<span class="block text-xs text-sky-700 font-mono">Series: {{ $m->series }}</span>@endif</td>
                         <td class="px-4 py-2 text-right font-semibold {{ $ingreso ? 'text-green-700' : 'text-red-600' }}">
                             {{ $m->equivalente ?? $num($m->cantidad).' '.\App\Support\Unidades::nombre($m->umecod ?: 'NIU', (float) $m->cantidad) }}
-                            @if ($m->equivalente)<span class="block text-xs font-normal text-gray-400">{{ $num($m->cantidad) }} {{ \App\Support\Unidades::nombre($m->umecod ?: 'NIU', (float) $m->cantidad) }}</span>@endif</td>
+                            @if ($m->equivalente)<span class="block text-xs font-normal text-gray-400">1 {{ \App\Support\Unidades::nombre($m->umecod ?: 'NIU', 1) }} = {{ $num($m->factor_equivalente) }} {{ \App\Support\Unidades::nombre($m->ume_equivalente) }}</span>@endif</td>
                         <td class="px-4 py-2 text-right">{{ number_format((float) $m->costo, 2) }}</td>
                         <td class="px-4 py-2 text-right font-semibold">{{ number_format((float) $m->cantidad * (float) $m->costo, 2) }}</td>
                         @if ($ingreso)
