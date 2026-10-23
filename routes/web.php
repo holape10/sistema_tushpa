@@ -70,6 +70,7 @@ use App\Http\Controllers\PvGrifoController;
 use App\Http\Controllers\PvTactilController;
 use App\Http\Controllers\PwaController;
 use App\Http\Controllers\RecetaController;
+use App\Http\Controllers\RecetaExportarController;
 use App\Http\Controllers\RentabilidadController;
 use App\Http\Controllers\RepartidorController;
 use App\Http\Controllers\ReporteController;
@@ -667,6 +668,10 @@ Route::middleware('auth')->prefix('recetas')->name('recetas.')->controller(Recet
     Route::get('/', 'index')->name('index');
     Route::get('/rentabilidad', [RentabilidadController::class, 'index'])->name('rentabilidad');
     Route::get('/rentabilidad/excel', [RentabilidadController::class, 'excel'])->name('rentabilidad.excel');
+    Route::get('/exportar/excel', [RecetaExportarController::class, 'excel'])->name('exportar.excel');
+    Route::get('/exportar/pdf', [RecetaExportarController::class, 'pdf'])->name('exportar.pdf');
+    Route::post('/exportar/ticket', [RecetaExportarController::class, 'ticket'])->name('exportar.ticket');
+    Route::get('/exportar/ticket', [RecetaExportarController::class, 'ticketNavegador'])->name('exportar.ticket.navegador');
     Route::get('/insumos', 'insumos')->name('insumos');
     Route::post('/insumos', 'crearInsumo')->name('insumo.crear');
     Route::get('/{id}', 'editar')->whereNumber('id')->name('editar');

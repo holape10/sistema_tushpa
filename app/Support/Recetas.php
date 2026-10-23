@@ -203,6 +203,23 @@ class Recetas
     }
 
     /**
+     * Fichas de receta para imprimir o exportar: los platos pedidos (con receta) con sus ingredientes.
+     *
+     * @param  array<int, int>  $ids  vacío = todos los platos con receta
+     * @return Collection<int, object>
+     */
+    public static function fichas(int $sucursal, array $ids = []): Collection
+    {
+        return self::platos($sucursal)->where('promocion', 2)->where('tiene_receta', true)
+            ->when($ids, fn ($c) => $c->whereIn('IdProducto', $ids))
+            ->map(function ($p) {
+                $p->lineas = self::de($p->IdProducto);
+
+                return $p;
+            })->values();
+    }
+
+    /**
      * Platos de la sucursal con su costo, precio vigente y food cost.
      *
      * @return Collection<int, object>

@@ -18,6 +18,21 @@
             const q = this.norm(this.q.trim());
             return this.platos.filter(p => (!q || this.norm(p.nombre + ' ' + p.cat).includes(q))
                 && (this.ver === '' || (this.ver === 'sin' && !p.receta) || (this.ver === 'con' && p.receta) || (this.ver === 'alto' && p.nivel === 'alto') || (this.ver === 'incompleto' && p.nivel === 'incompleto')));
+        },
+        {{-- Imprimir / descargar: un plato (su botón) o los que se ven en la lista y tienen receta --}}
+        menu: null, imprimiendo: false,
+        get conReceta() { return this.lista.filter(p => p.receta).map(p => p.id); },
+        enlace(tipo, ids) { return { excel: @js(route('recetas.exportar.excel')), pdf: @js(route('recetas.exportar.pdf')), navegador: @js(route('recetas.exportar.ticket.navegador')) }[tipo] + '?ids=' + ids.join(','); },
+        descargar(tipo, ids) { this.menu = null; if (!ids.length) return tushpaAviso('No hay platos con receta en esta lista.', 'error'); window.open(this.enlace(tipo, ids), '_blank'); },
+        async imprimir(ids) {
+            this.menu = null;
+            if (!ids.length) return tushpaAviso('No hay platos con receta en esta lista.', 'error');
+            this.imprimiendo = true;
+            try {
+                const r = await fetch(@js(route('recetas.exportar.ticket')), { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) }, body: JSON.stringify({ ids: ids.join(',') }) });
+                const d = await r.json().catch(() => ({}));
+                if (d.directa) tushpaAviso(d.mensaje, 'ok'); else window.open(this.enlace('navegador', ids), '_blank');
+            } finally { this.imprimiendo = false; }
         } }">
     @include('empresas.partials.alert')
 
@@ -107,11 +122,19 @@
                     @endforeach
                 </div>
                 <input type="search" x-model="q" placeholder="Buscar plato…" class="flex-1 min-w-48 h-10 rounded-xl border-gray-300 text-sm">
+                {{-- Las recetas que se ven en la lista (según el filtro y la búsqueda) --}}
+                <div class="flex flex-wrap items-center gap-1.5 w-full lg:w-auto">
+                    <span class="text-xs text-gray-400 mr-1" x-text="conReceta.length + (conReceta.length === 1 ? ' receta' : ' recetas') + ':'"></span>
+                    <button type="button" @click="imprimir(conReceta)" :disabled="imprimiendo || !conReceta.length" class="h-9 px-3 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 disabled:opacity-40">🖨 Imprimir todas</button>
+                    <button type="button" @click="descargar('pdf', conReceta)" :disabled="!conReceta.length" class="h-9 px-3 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 disabled:opacity-40">PDF</button>
+                    <button type="button" @click="descargar('excel', conReceta)" :disabled="!conReceta.length" class="h-9 px-3 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-40">Excel</button>
+                </div>
             </div>
 
             <div class="divide-y divide-gray-100">
                 <template x-for="p in lista" :key="p.id">
-                    <a :href="p.url" class="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-2 px-4 py-3 hover:bg-indigo-50/50 transition">
+                    <div class="flex items-center hover:bg-indigo-50/50 transition">
+                    <a :href="p.url" class="flex-1 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-2 pl-4 py-3">
                         <div class="flex-1 min-w-48">
                             <p class="font-bold text-gray-800" x-text="p.nombre"></p>
                             <p class="text-xs text-gray-400"><span x-text="p.cat"></span> · <span x-text="p.receta ? p.ingredientes + ' ingrediente(s)' : 'sin receta'"></span></p>
@@ -132,6 +155,17 @@
                             </template>
                         </div>
                     </a>
+                    {{-- Receta de este plato: ticket, PDF o Excel --}}
+                    <div class="w-14 shrink-0 flex justify-center relative" @click.outside="menu === p.id && (menu = null)">
+                        <button type="button" x-show="p.receta" @click="menu = menu === p.id ? null : p.id" title="Imprimir o descargar la receta"
+                                class="w-9 h-9 rounded-xl bg-gray-100 text-gray-600 hover:bg-indigo-100 hover:text-indigo-700">🖨</button>
+                        <div x-show="menu === p.id" x-cloak x-transition class="absolute right-2 top-11 z-20 w-44 rounded-xl bg-white shadow-xl ring-1 ring-black/5 py-1 text-sm">
+                            <button type="button" @click="imprimir([p.id])" class="w-full text-left px-3 py-2 hover:bg-gray-50">🖨 Imprimir ticket</button>
+                            <button type="button" @click="descargar('pdf', [p.id])" class="w-full text-left px-3 py-2 hover:bg-gray-50">📄 Descargar PDF</button>
+                            <button type="button" @click="descargar('excel', [p.id])" class="w-full text-left px-3 py-2 hover:bg-gray-50">📊 Descargar Excel</button>
+                        </div>
+                    </div>
+                    </div>
                 </template>
                 <p x-show="!lista.length" class="p-8 text-center text-gray-400 text-sm">No hay platos con ese filtro.</p>
             </div>
