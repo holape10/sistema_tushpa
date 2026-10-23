@@ -413,6 +413,8 @@
         if (!pcLocal()) return; // esta PC no se activó como caja sin internet
         const ciclo = async () => {
             if (!navigator.onLine || document.hidden) return;
+            // Si la pantalla de la caja no quedó guardada en la PC (o se borró), se guarda de nuevo
+            if ('caches' in window && !(await caches.match(CFG.pagina, { ignoreSearch: true, ignoreVary: true }).catch(() => null))) guardarPantalla();
             const fecha = await leer('kv', 'paquete_fecha').catch(() => 0);
             if (!fecha || Date.now() - fecha > 10 * 60000) await actualizarPaquete().catch(() => {});
             await sincronizar().catch(() => {});

@@ -10,7 +10,7 @@
  * - Caja sin internet: su pantalla se guarda aparte (la guarda la misma página mientras hay internet) y sin conexión
  *   se abre desde la PC.
  */
-const VERSION = 'tushpa-v3';
+const VERSION = 'tushpa-v4';
 const CAJA = 'tushpa-caja';
 const BASE = new URL('./', self.location).pathname;
 const OFFLINE = BASE + 'offline.html';
@@ -58,7 +58,10 @@ self.addEventListener('fetch', (e) => {
                 }
                 return res;
             } catch (error) {
-                return (await caches.match(url.pathname, { cacheName: CAJA, ignoreSearch: true })) || (await caches.match(OFFLINE)) || Response.error();
+                // ignoreVary: el servidor manda "Vary: Accept-Encoding" y con eso la copia guardada a veces no se encuentra
+                const opciones = { ignoreSearch: true, ignoreVary: true };
+                return (await caches.match(url.pathname, { ...opciones, cacheName: CAJA })) || (await caches.match(req, opciones))
+                    || (await caches.match(OFFLINE)) || Response.error();
             }
         })());
         return;
