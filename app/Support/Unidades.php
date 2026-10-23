@@ -15,7 +15,7 @@ class Unidades
     public const CATALOGO = [
         // Cantidad
         'NIU' => ['Unidad', 'UNI'], 'ZZ' => ['Servicio', 'SER'], 'DZN' => ['Docena', 'DOC'], 'CEN' => ['Ciento', 'CIE'], 'MIL' => ['Millar', 'MIL'],
-        'NPR' => ['Par', 'PAR'], 'SET' => ['Juego', 'JGO'], 'KT' => ['Kit', 'KIT'],
+        'PR' => ['Par', 'PAR'], 'SET' => ['Juego', 'JGO'], 'KT' => ['Kit', 'KIT'],
         // Peso
         'KGM' => ['Kilogramo', 'KG'], 'GRM' => ['Gramo', 'GR'], 'TNE' => ['Tonelada', 'TN'], 'LBR' => ['Libra', 'LB'], 'ONZ' => ['Onza', 'OZ'],
         // Volumen
@@ -39,8 +39,33 @@ class Unidades
         'LT' => 'LTR', 'L' => 'LTR', 'LTS' => 'LTR', 'ML' => 'MLT', 'GL' => 'GLL', 'GAL' => 'GLL', 'M3' => 'MTQ',
         'M' => 'MTR', 'MT' => 'MTR', 'MTS' => 'MTR', 'CM' => 'CMT', 'MM' => 'MMT', 'PLG' => 'INH', 'PUL' => 'INH', 'PIE' => 'FOT', 'M2' => 'MTK', 'P2' => 'FTK',
         'BOL' => 'BG', 'CJA' => 'BX', 'CJ' => 'BX', 'CAJ' => 'BX', 'SAC' => 'SA', 'BOT' => 'BO', 'LAT' => 'CA', 'FCO' => 'FR', 'BAL' => 'BJ',
-        'PAQ' => 'NMP', 'PQT' => 'NMP', 'PAK' => 'PK', 'ROL' => 'RO', 'DOC' => 'DZN', 'PAR' => 'NPR', 'JGO' => 'SET', 'HR' => 'HUR', 'DIA' => 'DAY',
+        'PAQ' => 'NMP', 'PQT' => 'NMP', 'PAK' => 'PK', 'ROL' => 'RO', 'DOC' => 'DZN', 'PAR' => 'PR', 'NPR' => 'PR', 'JGO' => 'SET', 'HR' => 'HUR', 'DIA' => 'DAY',
     ];
+
+    /**
+     * Códigos vigentes del catálogo 03 (UN/ECE Recomendación 20): los únicos que se mandan a SUNAT tal cual.
+     * Los de envases (BX caja, BG bolsa, PK pack, SA saco…) figuran como eliminados en la recomendación y los inventados
+     * (TAP, POR…) no existen: en el sistema y en el ticket siguen saliendo con su nombre, pero en el XML van como NIU.
+     */
+    public const VIGENTES_SUNAT = [
+        'NIU', 'ZZ', 'C62', 'DZN', 'DZP', 'CEN', 'MIL', 'GRO', 'PR', 'SET', 'KT', 'NMP', 'RM', 'LEF', 'SR',
+        'KGM', 'GRM', 'MGM', 'TNE', 'STN', 'LTN', 'LBR', 'ONZ',
+        'LTR', 'MLT', 'HLT', 'GLL', 'GLI', 'MTQ', 'CMQ', 'MMQ', 'FTQ', 'BLL',
+        'MTR', 'KMT', 'CMT', 'MMT', 'INH', 'FOT', 'YRD', 'MTK', 'CMK', 'MMK', 'FTK',
+        'SEC', 'MIN', 'HUR', 'DAY', 'WEE', 'MON', 'ANN', 'KWH', 'MWH',
+    ];
+
+    /** Códigos antiguos que tienen un reemplazo vigente */
+    private const REEMPLAZO_SUNAT = ['NPR' => 'PR', 'KTM' => 'KMT', 'UND' => 'NIU', 'UNI' => 'NIU'];
+
+    /** El código que va en el XML para SUNAT: el vigente equivalente o NIU (unidad) si no tiene uno */
+    public static function sunat(?string $umecod): string
+    {
+        $cod = strtoupper(trim((string) $umecod));
+        $cod = self::REEMPLAZO_SUNAT[$cod] ?? $cod;
+
+        return in_array($cod, self::VIGENTES_SUNAT, true) ? $cod : 'NIU';
+    }
 
     /** Agrega a la tabla las unidades del catálogo que falten (no cambia las que ya existen) */
     public static function completar(): int

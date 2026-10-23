@@ -5,6 +5,7 @@ namespace App\Support\Sunat;
 use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Models\User;
+use App\Support\Unidades;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -279,7 +280,7 @@ class GuiaRemision
         foreach ($detalle->values() as $i => $d) {
             $x->startElement('cac:DespatchLine');
             $cbc('ID', (string) ($i + 1));
-            $cbc('DeliveredQuantity', rtrim(rtrim(number_format((float) $d->cantidad, 3, '.', ''), '0'), '.'), ['unitCode' => $d->umecod ?: 'NIU']);
+            $cbc('DeliveredQuantity', rtrim(rtrim(number_format((float) $d->cantidad, 3, '.', ''), '0'), '.'), ['unitCode' => Unidades::sunat($d->umecod)]);
             $x->startElement('cac:OrderLineReference');
             $cbc('LineID', (string) ($i + 1));
             $x->endElement();

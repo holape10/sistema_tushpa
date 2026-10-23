@@ -6,6 +6,7 @@ use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Support\AnulacionVenta;
 use App\Support\Comprobante;
+use App\Support\Unidades;
 use DateTime;
 use DateTimeZone;
 use Greenter\Model\Client\Client;
@@ -243,7 +244,8 @@ class SunatService
             $valor = (float) $d->cdepve;            // valor de venta de la línea (sin IGV)
             $igv = (float) $d->cdeigv;
             $afecto = (string) $d->tigcod ?: '20';
-            $unidad = strtoupper((string) $d->umecod);
+            // Código vigente del catálogo 03 (Caja, Taper, Porción… salen en el ticket con su nombre, pero SUNAT recibe NIU)
+            $unidad = Unidades::sunat($d->umecod);
 
             // Cortesía: operación gratuita (no se cobra). Va con su valor referencial y, si es gravada (13), el IGV que
             // correspondería; no suma al total ni al IGV cobrado (TaxScheme 9996 GRA y leyenda 1002)
@@ -256,7 +258,7 @@ class SunatService
                 $igvGratuitas += $igvRef;
                 $items[] = (new SaleDetail)
                     ->setCodProducto($d->procod ?: 'P'.$d->IdProducto)
-                    ->setUnidad(in_array($unidad, ['', 'UNI', 'UND'], true) ? 'NIU' : $unidad)
+                    ->setUnidad($unidad)
                     ->setCantidad($cant)
                     ->setDescripcion(mb_substr((string) $d->cdedes, 0, 250))
                     ->setMtoValorUnitario(0)
@@ -274,7 +276,7 @@ class SunatService
 
             $items[] = (new SaleDetail)
                 ->setCodProducto($d->procod ?: 'P'.$d->IdProducto)
-                ->setUnidad(in_array($unidad, ['', 'UNI', 'UND'], true) ? 'NIU' : $unidad)
+                ->setUnidad($unidad)
                 ->setCantidad($cant)
                 ->setDescripcion(mb_substr((string) $d->cdedes, 0, 250))
                 ->setMtoBaseIgv($valor)
