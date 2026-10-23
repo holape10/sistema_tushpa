@@ -23,7 +23,22 @@
         <h1>Sin conexión a internet</h1>
         <p>Revisa tu WiFi o tus datos móviles. Tus ventas están seguras: en cuanto vuelva la conexión, sigue trabajando.</p>
         <button onclick="location.reload()">Reintentar</button>
+        <a id="caja" href="#" style="display:none;margin-top:12px;border-radius:14px;background:#059669;color:#fff;font-weight:bold;font-size:16px;padding:14px 24px;text-decoration:none">Abrir caja sin internet</a>
     </div>
-    <script>window.addEventListener('online', () => location.reload());</script>
+    <script>
+        window.addEventListener('online', () => location.reload());
+        // Si esta PC tiene guardada la caja sin internet, se ofrece abrirla
+        if ('caches' in window && navigator.serviceWorker) {
+            navigator.serviceWorker.getRegistration().then(async (r) => {
+                if (!r) return;
+                const ruta = new URL(r.scope).pathname + 'caja-sin-internet';
+                if (await caches.match(ruta, { cacheName: 'tushpa-caja' })) {
+                    const a = document.getElementById('caja');
+                    a.href = ruta;
+                    a.style.display = 'block';
+                }
+            }).catch(() => {});
+        }
+    </script>
 </body>
 </html>

@@ -4,6 +4,7 @@ use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AlmacenController;
 use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\CajaSinInternetController;
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ClinicaArchivoController;
@@ -493,6 +494,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/cobrarmesa/{ped_id}/separadas', [CobroController::class, 'separadas'])->name('cobros.separadas');
     Route::get('/comandas/punto-venta', [CobroController::class, 'directa'])->name('cobros.directa');
     Route::post('/comandas/punto-venta', [CobroController::class, 'registrarDirecta'])->name('cobros.directa.registrar');
+    // Caja sin internet: la pantalla queda guardada en la PC; el paquete se baja con internet y las ventas suben al volver
+    Route::get('/caja-sin-internet', [CajaSinInternetController::class, 'index'])->name('offline.index');
+    Route::get('/caja-sin-internet/paquete', [CajaSinInternetController::class, 'paquete'])->name('offline.paquete');
+    Route::post('/caja-sin-internet/sincronizar', [CajaSinInternetController::class, 'sincronizar'])->middleware('throttle:60,1')->name('offline.sincronizar');
     Route::get('/cobros/clientes', [CobroController::class, 'sugerirClientes'])->name('cobros.clientes');
     Route::post('/cobros/registrar', [CobroController::class, 'registrar'])->name('cobros.registrar');
     Route::get('/cobros/cliente/{doc}', [CobroController::class, 'buscarCliente'])->name('cobros.cliente');

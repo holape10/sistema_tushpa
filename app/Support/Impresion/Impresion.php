@@ -123,6 +123,15 @@ class Impresion
         ]);
     }
 
+    /** Encabezado del ticket ya armado (logo, nombre, RUC, dirección) para la caja sin internet: ella agrega el resto */
+    public static function encabezadoBytes(int $sucursal, int $columnas): string
+    {
+        $p = new Escpos($columnas);
+        self::encabezado($p, $sucursal);
+
+        return $p->bytes();
+    }
+
     private static function encabezado(Escpos $p, int $sucursal): void
     {
         $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->first();

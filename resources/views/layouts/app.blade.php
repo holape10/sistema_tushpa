@@ -303,6 +303,33 @@
     })();
 </script>
 
+@if (auth()->user()->esAdminOCaja())
+    {{-- Caja sin internet: si esta PC se activó, mantiene sus datos al día, sube lo vendido sin conexión y avisa si se cae el internet --}}
+    <script>window.TUSHPA_CAJA = { paquete: @json(route('offline.paquete')), sincronizar: @json(route('offline.sincronizar')), pagina: @json(route('offline.index')) };</script>
+    <script src="{{ asset('js/caja-sin-internet.js') }}?v={{ filemtime(public_path('js/caja-sin-internet.js')) }}"></script>
+    <div id="aviso-sin-internet" style="display:none" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white rounded-2xl shadow-xl px-5 py-3 flex items-center gap-3 text-sm font-semibold">
+        <span>Se cayó el internet.</span>
+        <a href="{{ route('offline.index') }}" class="px-3 py-1.5 rounded-lg bg-white text-red-700 font-bold">Abrir caja sin internet</a>
+    </div>
+    @php
+        // Con turno abierto en una computadora, la PC se activa sola como caja sin internet
+        $turnoAbiertoCaja = \App\Models\Turno::where('IdUsuario', auth()->user()->IdUsuario)
+            ->where('id_empresa_negocio', auth()->user()->id_empresa_negocio)->where('estado', 'ABIERTO')->exists();
+    @endphp
+    <script>
+        (async function () {
+            if (!window.CajaOffline) return;
+            const activa = CajaOffline.pcLocal() || (@json($turnoAbiertoCaja) && await CajaOffline.activarSola().catch(() => false));
+            if (!activa) return;
+            CajaOffline.mantener();
+            const aviso = document.getElementById('aviso-sin-internet');
+            const mostrar = () => { aviso.style.display = navigator.onLine ? 'none' : 'flex'; };
+            window.addEventListener('online', mostrar);
+            window.addEventListener('offline', mostrar);
+            mostrar();
+        })();
+    </script>
+@endif
 @stack('scripts')
 @include('partials.aviso_servicio')
 </body>

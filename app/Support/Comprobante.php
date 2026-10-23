@@ -79,10 +79,15 @@ class Comprobante
         [$colSerie, $colNum] = self::SERIES[$tdocod];
 
         $sucursal = EmpresaNegocio::where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
-        $numero = $sucursal->$colNum + 1;
-        $serie = $sucursal->$colSerie;
-        $sucursal->$colNum = $numero;
-        $sucursal->save();
+        if (! empty($datos['serie_offline'])) {
+            // Venta hecha sin internet: ya salió impresa con el número de la serie propia de esa caja
+            [$serie, $numero] = CajaSinInternet::validarNumero($user, $tdocod, (string) $datos['serie_offline']['serie'], (int) $datos['serie_offline']['numero']);
+        } else {
+            $numero = $sucursal->$colNum + 1;
+            $serie = $sucursal->$colSerie;
+            $sucursal->$colNum = $numero;
+            $sucursal->save();
+        }
 
         // ---- Totales ----
         $gravado = $sucursal->tip_igv_pred === '10';

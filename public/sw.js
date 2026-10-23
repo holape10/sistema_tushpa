@@ -7,8 +7,11 @@
  *   y se sirven desde ahí. El resto (imágenes, fuentes) lo maneja la caché normal del navegador.
  * - La caché tiene tope: no crece sin límite con cada actualización.
  * - Nunca guarda POST ni respuestas de datos (JSON).
+ * - Caja sin internet: su pantalla se guarda aparte (la guarda la misma página mientras hay internet) y sin conexión
+ *   se abre desde la PC.
  */
-const VERSION = 'tushpa-v2';
+const VERSION = 'tushpa-v3';
+const CAJA = 'tushpa-caja';
 const BASE = new URL('./', self.location).pathname;
 const OFFLINE = BASE + 'offline.html';
 const MAXIMO = 60;
@@ -22,7 +25,7 @@ self.addEventListener('activate', (e) => {
     e.waitUntil((async () => {
         // Borra la caché anterior (la v1 guardaba cada imagen y versión sin límite)
         const llaves = await caches.keys();
-        await Promise.all(llaves.filter((k) => k !== VERSION).map((k) => caches.delete(k)));
+        await Promise.all(llaves.filter((k) => k !== VERSION && k !== CAJA).map((k) => caches.delete(k)));
         if (self.registration.navigationPreload) {
             await self.registration.navigationPreload.enable();
         }
@@ -45,6 +48,21 @@ self.addEventListener('fetch', (e) => {
     if (url.origin !== self.location.origin) return;
 
     // Pantallas: internet primero (con la petición adelantada); sin conexión, la página de aviso
+    if (req.mode === 'navigate' && url.pathname === BASE + 'caja-sin-internet') {
+        e.respondWith((async () => {
+            try {
+                const res = (await e.preloadResponse) || await fetch(req);
+                if (res.ok && !res.redirected) {
+                    const copia = res.clone();
+                    e.waitUntil(caches.open(CAJA).then((c) => c.put(url.pathname, copia)));
+                }
+                return res;
+            } catch (error) {
+                return (await caches.match(url.pathname, { cacheName: CAJA, ignoreSearch: true })) || (await caches.match(OFFLINE)) || Response.error();
+            }
+        })());
+        return;
+    }
     if (req.mode === 'navigate') {
         e.respondWith((async () => {
             try {

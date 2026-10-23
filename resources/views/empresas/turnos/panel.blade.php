@@ -10,6 +10,7 @@
         </div>
         <div class="flex gap-2">
             <a href="{{ route('comandas.seleccion') }}" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Ir a Comandas</a>
+            <a href="{{ route('offline.index') }}" title="Para vender en esta PC si se cae el internet (actívala una vez con internet)" class="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-700 text-sm font-semibold hover:bg-emerald-200">Caja sin internet</a>
             <a href="{{ route('turnos.show', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Ver reporte</a>
             <a href="{{ route('turnos.productos', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 text-sm font-semibold hover:bg-sky-200">Productos</a>
             <a href="{{ route('turnos.categorias', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 text-sm font-semibold hover:bg-sky-200">Categorías</a>
@@ -156,7 +157,15 @@
                     ⚠️ Hay {{ $pedidosAbiertos }} pedido(s) sin cobrar en la sucursal.
                 </div>
             @endif
-            <form method="POST" action="{{ route('turnos.cerrar') }}" onsubmit="return confirm('¿Cerrar el turno? Ya no podrás cobrar hasta abrir otro.')">
+            {{-- Ventas hechas sin internet en esta PC que aún no suben: el cierre no las contaría --}}
+            <div x-data="{ offline: 0 }" x-init="window.CajaOffline && CajaOffline.pendientes().then((l) => offline = l.filter((v) => !v.usuario || v.usuario === {{ (int) auth()->user()->IdUsuario }}).length).catch(() => {})" x-show="offline" x-cloak
+                 class="mb-3 rounded-lg bg-red-50 border border-red-200 text-red-800 px-3 py-2 text-xs">
+                ⚠️ Esta PC tiene <b x-text="offline"></b> venta(s) hechas sin internet que aún no suben.
+                <a href="{{ route('offline.index') }}" class="underline font-bold">Súbelas</a> antes de cerrar el turno.
+            </div>
+            <form method="POST" action="{{ route('turnos.cerrar') }}"
+                  onsubmit="if (window.CajaOffline && this.dataset.offline > 0) { alert('Primero sube las ventas hechas sin internet en esta PC (botón Caja sin internet).'); return false; } return confirm('¿Cerrar el turno? Ya no podrás cobrar hasta abrir otro.')"
+                  x-init="window.CajaOffline && CajaOffline.pendientes().then((l) => $el.dataset.offline = l.filter((v) => !v.usuario || v.usuario === {{ (int) auth()->user()->IdUsuario }}).length).catch(() => {})">
                 @csrf
                 <label class="block text-sm text-gray-700 mb-1">Efectivo contado (S/) <span class="text-xs text-gray-400">opcional</span></label>
                 <input type="number" step="0.01" min="0" name="montocierre" x-model="contado" placeholder="Si no lo cuentas, déjalo vacío"

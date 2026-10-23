@@ -25,7 +25,10 @@ define('LOG', CARPETA.DIRECTORY_SEPARATOR.'agente.log');
 function registro($mensaje)
 {
     $linea = '['.date('d/m/Y H:i:s').'] '.$mensaje.PHP_EOL;
-    echo $linea;
+    // En local.php la salida es la respuesta al navegador: ahí solo se anota en agente.log
+    if (! defined('AGENTE_SOLO_FUNCIONES')) {
+        echo $linea;
+    }
     // agente.log: para revisar qué pasó cuando corre oculto (se reinicia al pasar 1 MB)
     if (@filesize(LOG) > 1048576) {
         @rename(LOG, LOG.'.anterior');
@@ -319,6 +322,11 @@ function revisarConexion(&$s, $r)
 }
 
 // ------------------------------------------------------------------ bucle
+
+// local.php (impresión sin internet) usa las mismas funciones de impresión, sin este bucle
+if (defined('AGENTE_SOLO_FUNCIONES')) {
+    return;
+}
 
 registro('Agente de impresión iniciado (PHP '.PHP_VERSION.').');
 while (true) {

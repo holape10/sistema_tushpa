@@ -69,9 +69,10 @@ Type: files; Name: "{commonstartup}\Agente Impresion HolaPE.lnk"
 
 [Files]
 ; PHP portátil y SumatraPDF (sin la configuración ni los registros de esta PC)
-Source: "{#RUNTIME}\*"; DestDir: "{app}"; Excludes: "config.ini,*.log,unins*,worker.php,iniciar.bat,invisible.vbs,holape.bat,LEEME.txt"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#RUNTIME}\*"; DestDir: "{app}"; Excludes: "config.ini,*.log,unins*,worker.php,local.php,iniciar.bat,invisible.vbs,holape.bat,LEEME.txt"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; El agente (siempre la versión del sistema)
 Source: "{#STUBS}\worker.php"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#STUBS}\local.php"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#STUBS}\iniciar.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#STUBS}\invisible.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#STUBS}\LEEME.txt"; DestDir: "{app}"; Flags: ignoreversion
@@ -84,7 +85,7 @@ Name: "{commonstartup}\Agente de impresion TUSHPA"; Filename: "{app}\invisible.v
 #endif
 
 [UninstallRun]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*worker.php*' -or $_.CommandLine -like '*iniciar.bat*' } | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"""; Flags: runhidden; RunOnceId: "DetenerAgente"
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*worker.php*' -or $_.CommandLine -like '*local.php*' -or $_.CommandLine -like '*iniciar.bat*' } | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"""; Flags: runhidden; RunOnceId: "DetenerAgente"
 
 [Code]
 var
@@ -163,7 +164,7 @@ var
   R: Integer;
 begin
 #ifndef PRUEBA
-  Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like ''*worker.php*'' -or $_.CommandLine -like ''*iniciar.bat*'' -or $_.CommandLine -like ''*holape.bat*'' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"',
+  Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like ''*worker.php*'' -or $_.CommandLine -like ''*local.php*'' -or $_.CommandLine -like ''*iniciar.bat*'' -or $_.CommandLine -like ''*holape.bat*'' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"',
     '', SW_HIDE, ewWaitUntilTerminated, R);
 #endif
 end;
