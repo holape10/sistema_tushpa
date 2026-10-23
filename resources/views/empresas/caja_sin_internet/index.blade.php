@@ -34,7 +34,7 @@
             return {
                 p: null, cargando: true, online: navigator.onLine, agente: null, pendientes: 0, errores: 0, nombrePc: '', subiendo: false,
                 vista: 'venta', busqueda: '', categoria: null, carrito: [], mesasAbiertas: [], mesa: null, elegirPresentacion: null,
-                cobro: null, ventas: [], aviso: null, avisoTipo: 'ok', procesando: false,
+                cobro: null, ventas: [], aviso: null, avisoTipo: 'ok', procesando: false, volvio: false, subidasAlVolver: 0,
 
                 async init() {
                     this.p = await C.paquete().catch(() => null);
@@ -48,7 +48,12 @@
                     this.cargando = false;
                     await this.refrescar();
                     this.agente = await C.agenteDisponible();
-                    window.addEventListener('online', () => { this.online = true; setTimeout(() => this.subir(), 1500); });
+                    // Volvió el internet: sube lo vendido y ofrece volver al sistema normal
+                    window.addEventListener('online', () => {
+                        this.online = true;
+                        this.volvio = true;
+                        setTimeout(async () => { const antes = this.pendientes; await this.subir(true); this.subidasAlVolver = Math.max(0, antes - this.pendientes); }, 1500);
+                    });
                     window.addEventListener('offline', () => { this.online = false; });
                     window.addEventListener('caja-offline-sincronizada', () => this.refrescar());
                     setInterval(async () => { this.agente = await C.agenteDisponible(); if (this.online) this.subir(true); }, 60000);
@@ -495,6 +500,28 @@
             </aside>
         </div>
     </template>
+
+    {{-- Volvió el internet --}}
+    <div x-show="volvio && online" x-transition class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md text-center space-y-3">
+            <div class="w-16 h-16 mx-auto rounded-full bg-green-100 flex items-center justify-center">
+                <svg class="w-9 h-9 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.5 16.5a5 5 0 017 0M5 13a10 10 0 0114 0M2 8.8a15 15 0 0120 0M12 20h.01"/></svg>
+            </div>
+            <h2 class="text-xl font-extrabold text-gray-800">¡Volvió el internet!</h2>
+            <p class="text-sm text-gray-600" x-show="subiendo">Subiendo tus ventas al sistema…</p>
+            <p class="text-sm text-gray-600" x-show="!subiendo && !pendientes && !errores">Tus ventas ya están en el sistema<span x-show="subidasAlVolver" x-text="' (' + subidasAlVolver + ' subidas)'"></span>. Se enviarán a SUNAT.</p>
+            <p class="text-sm text-amber-700 font-semibold" x-show="!subiendo && (pendientes || errores)">Quedan <span x-text="pendientes + errores"></span> venta(s) sin subir: revísalas en "Ventas de esta PC".</p>
+            <div x-show="mesasAbiertas.length" class="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm px-3 py-2 text-left">
+                Tienes <b x-text="mesasAbiertas.length"></b> mesa(s) abiertas en esta PC. <b>Cóbralas aquí</b> antes de volver: en el sistema normal no aparecen.
+            </div>
+            <div class="grid gap-2 pt-1">
+                <a href="{{ url('/') }}" x-show="!mesasAbiertas.length" class="block py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700">Volver al sistema normal</a>
+                <button type="button" @click="volvio = false; if (mesasAbiertas.length) vista = 'mesas'" class="py-3 rounded-xl font-bold"
+                        :class="mesasAbiertas.length ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-700'"
+                        x-text="mesasAbiertas.length ? 'Cobrar las mesas abiertas' : 'Seguir en esta pantalla'"></button>
+            </div>
+        </div>
+    </div>
 
     {{-- Elegir presentación --}}
     <div x-show="elegirPresentacion" class="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4" @click.self="elegirPresentacion = null">
