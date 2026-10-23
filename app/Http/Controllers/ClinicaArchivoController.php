@@ -11,12 +11,15 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Radiografías, fotos (antes / después) y documentos del paciente. Se guardan privados (storage/app/clinica/archivos)
- * y solo los ve el personal de la clínica con sesión iniciada.
+ * Radiografías, fotos (antes / después), documentos y la historia en papel de antes del sistema (hojas fotografiadas o
+ * escaneadas, con la fecha que tiene el papel). Se guardan privados (storage/app/clinica/archivos) y solo los ve el
+ * personal de la clínica con sesión iniciada.
  */
 class ClinicaArchivoController extends Controller
 {
-    public const TIPOS = ['RADIOGRAFIA' => 'Radiografía', 'FOTO' => 'Foto', 'DOCUMENTO' => 'Documento'];
+    public const TIPOS = ['RADIOGRAFIA' => 'Radiografía', 'FOTO' => 'Foto', 'DOCUMENTO' => 'Documento', 'PAPEL' => 'Historia en papel'];
+
+    private const MENSAJES = ['fecha_doc.before_or_equal' => 'La fecha de la hoja no puede ser una fecha futura.', 'fecha_doc.after' => 'Revisa el año de la fecha de la hoja.'];
 
     private function suc(): int
     {
@@ -59,8 +62,9 @@ class ClinicaArchivoController extends Controller
             'archivos.*' => 'file|max:20480|mimes:jpg,jpeg,png,webp,gif,bmp,pdf',
             'tipo' => 'required|in:'.implode(',', array_keys(self::TIPOS)),
             'descripcion' => 'nullable|string|max:200',
+            'fecha_doc' => 'nullable|date|after:1900-01-01|before_or_equal:today',
             'ate_cli_id' => 'nullable|integer',
-        ], [], ['archivos.*' => 'archivo', 'archivos' => 'archivos']);
+        ], self::MENSAJES, ['archivos.*' => 'archivo', 'archivos' => 'archivos', 'fecha_doc' => 'fecha de la hoja']);
         $ateId = ! empty($d['ate_cli_id']) && DB::table('atencion_clinica')->where('ate_cli_id', $d['ate_cli_id'])->where('his_cli_id', $hisId)->exists()
             ? (int) $d['ate_cli_id'] : null;
         foreach ($request->file('archivos') as $f) {
@@ -70,7 +74,7 @@ class ClinicaArchivoController extends Controller
                 'his_cli_id' => $hisId, 'ate_cli_id' => $ateId, 'tipo' => $d['tipo'], 'ruta' => $ruta,
                 'nombre' => mb_substr($f->getClientOriginalName(), 0, 150), 'mime' => $f->getMimeType() ?: 'application/octet-stream',
                 'tamano' => (int) $f->getSize(), 'descripcion' => trim((string) ($d['descripcion'] ?? '')) ?: null,
-                'IdUsuario' => Auth::id(), 'id_empresa_negocio' => $this->suc(), 'creado' => now(),
+                'fecha_doc' => $d['fecha_doc'] ?? null, 'IdUsuario' => Auth::id(), 'id_empresa_negocio' => $this->suc(), 'creado' => now(),
             ]);
         }
         $n = count($request->file('archivos'));
@@ -92,8 +96,13 @@ class ClinicaArchivoController extends Controller
     public function editar(Request $request, int $id): JsonResponse
     {
         $a = $this->archivo($id);
-        $d = $request->validate(['tipo' => 'required|in:'.implode(',', array_keys(self::TIPOS)), 'descripcion' => 'nullable|string|max:200']);
-        DB::table('clinica_archivos')->where('arc_id', $a->arc_id)->update(['tipo' => $d['tipo'], 'descripcion' => trim((string) ($d['descripcion'] ?? '')) ?: null]);
+        $d = $request->validate([
+            'tipo' => 'required|in:'.implode(',', array_keys(self::TIPOS)), 'descripcion' => 'nullable|string|max:200',
+            'fecha_doc' => 'nullable|date|after:1900-01-01|before_or_equal:today',
+        ], self::MENSAJES, ['fecha_doc' => 'fecha de la hoja']);
+        DB::table('clinica_archivos')->where('arc_id', $a->arc_id)->update([
+            'tipo' => $d['tipo'], 'descripcion' => trim((string) ($d['descripcion'] ?? '')) ?: null, 'fecha_doc' => $d['fecha_doc'] ?? null,
+        ]);
 
         return response()->json(['ok' => true, 'mensaje' => 'Guardado.']);
     }

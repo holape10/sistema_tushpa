@@ -13,6 +13,10 @@
             </div>
             <div class="flex flex-wrap gap-2">
                 <button type="button" @click="nuevo()" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700"><i class="fas fa-user-plus"></i> Nuevo paciente</button>
+                @if ($veClinico)
+                    <button type="button" @click="nuevo(true)" title="Paciente de antes del sistema: regístralo y sube las hojas de su historia en papel"
+                            class="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600">📜 Pasar historia en papel</button>
+                @endif
                 <a href="{{ route('clinica.tratamientos.index') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fas fa-file-invoice-dollar"></i> Registro de tratamientos</a>
                 <a href="{{ route('clinica.recordatorios') }}" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-semibold"><i class="fab fa-whatsapp"></i> Recordatorios</a>
                 @if ($esAdmin)
@@ -50,6 +54,7 @@
                             <td class="px-4 py-2 font-mono font-bold text-gray-600" x-text="p.his_cli_cod"></td>
                             <td class="px-4 py-2"><span class="font-semibold" x-text="p.nombre"></span>
                                 <span x-show="p.tipo === 'MASCOTA'" class="ml-1 text-xs text-amber-700" x-text="p.especie ? '🐾 ' + p.especie : '🐾'"></span>
+                                <span x-show="p.papel" class="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold" :title="'Historia en papel: ' + p.papel + ' hoja(s)'" x-text="'📜 ' + p.papel"></span>
                                 <span class="block">
                                     <template x-for="id in p.esp" :key="id"><span class="inline-block mr-1 mt-0.5 px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 text-[10px] font-bold" x-text="nombreEsp(id)"></span></template>
                                 </span></td>
@@ -73,7 +78,9 @@
         {{-- Nuevo paciente --}}
         <div x-show="modal === 'nuevo'" x-cloak class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 space-y-4" @click.outside="modal = null">
-                <h3 class="font-bold text-gray-800">Nuevo paciente</h3>
+                <h3 class="font-bold text-gray-800" x-text="papel ? '📜 Pasar historia en papel' : 'Nuevo paciente'"></h3>
+                <p x-show="papel" class="rounded-lg bg-amber-50 text-amber-800 text-xs px-3 py-2">Registra al paciente con sus datos y luego, en su historia, fotografía o sube las hojas.
+                    Si el paciente ya está en el sistema, búscalo en la lista y abre su historia: ahí está "📜 Historia en papel".</p>
                 @include('empresas.clinica._paciente_form')
                 <div class="flex justify-end gap-2">
                     <button type="button" @click="modal = null" class="px-4 py-2 rounded-xl bg-gray-100 text-sm font-semibold">Cancelar</button>
@@ -90,7 +97,7 @@
         function pacientes() {
             const CSRF = '{{ csrf_token() }}';
             return {
-                lista: @js($pacientes), texto: '', espFiltro: '', modal: null, ocupado: false, aviso: '', ok: true,
+                lista: @js($pacientes), texto: '', espFiltro: '', modal: null, ocupado: false, aviso: '', ok: true, papel: false,
                 especialidades: @js($especialidades->pluck('esp_des', 'esp_id')),
                 nombreEsp(id) { return this.especialidades[id] || ''; },
                 p: {},
@@ -105,7 +112,7 @@
                     const j = await r.json().catch(() => ({}));
                     return r.status === 422 ? { ok: false, mensaje: Object.values(j.errors || {}).flat()[0] } : j;
                 },
-                nuevo() { this.p = { tipo: 'PERSONA', tdicod: '1', clinum: '', clinom: '', telefono: '', mascota: '', especie: '', raza: '', sexo: '', fecha_nac: '', origen: '', msg: '' }; this.modal = 'nuevo'; },
+                nuevo(papel = false) { this.papel = papel; this.p = { tipo: 'PERSONA', tdicod: '1', clinum: '', clinom: '', telefono: '', mascota: '', especie: '', raza: '', sexo: '', fecha_nac: '', origen: '', msg: '' }; this.modal = 'nuevo'; },
                 async buscarDoc() {
                     const d = (this.p.clinum || '').trim();
                     if (!/^\d{8}$|^\d{11}$/.test(d)) return;
@@ -119,7 +126,7 @@
                     const r = await this.post('{{ route('clinica.paciente') }}', this.p);
                     this.ocupado = false;
                     if (!r.ok) return this.avisar(r.mensaje || 'Revisa los datos.', false);
-                    @if ($veClinico) location.href = '{{ url('clinica/historia') }}/' + r.his_cli_id; @else this.avisar(r.mensaje); setTimeout(() => location.reload(), 900); @endif
+                    @if ($veClinico) location.href = '{{ url('clinica/historia') }}/' + r.his_cli_id + (this.papel ? '#papel' : ''); @else this.avisar(r.mensaje); setTimeout(() => location.reload(), 900); @endif
                 },
             };
         }

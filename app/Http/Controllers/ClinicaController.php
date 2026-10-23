@@ -72,16 +72,20 @@ class ClinicaController extends Controller
         $espDe = DB::table('atencion_clinica')->where('id_empresa_negocio', $suc)->whereNotNull('esp_id')->select('his_cli_id', 'esp_id')
             ->union(DB::table('clinica_tratamientos')->where('id_empresa_negocio', $suc)->whereNotNull('esp_id')->select('his_cli_id', 'esp_id'))
             ->get()->groupBy('his_cli_id')->map(fn ($g) => $g->pluck('esp_id')->map(fn ($i) => (int) $i)->unique()->values()->all());
+        // Hojas de la historia en papel (antes del sistema) que ya se pasaron
+        $hojasPapel = DB::table('clinica_archivos')->where('id_empresa_negocio', $suc)->where('tipo', 'PAPEL')
+            ->groupBy('his_cli_id')->selectRaw('his_cli_id, COUNT(*) as hojas')->pluck('hojas', 'his_cli_id');
 
         $pacientes = DB::table('historia_clinica as h')->join('cliente as c', 'c.clicod', '=', 'h.clicod')
             ->where('h.id_empresa_negocio', $suc)->orderByDesc('h.his_cli_id')
             ->get(['h.his_cli_id', 'h.his_cli_cod', 'h.tipo', 'h.mascota', 'h.especie', 'h.sexo', 'h.fecha_nac', 'h.origen', 'c.clinom', 'c.clinum', 'c.telefono'])
-            ->map(function ($p) use ($ultima, $espDe) {
+            ->map(function ($p) use ($ultima, $espDe, $hojasPapel) {
                 $p->nombre = Clinica::nombre($p);
                 $p->edad = Clinica::edad($p->fecha_nac);
                 $p->ultima = $ultima[$p->his_cli_id]->ultima ?? null;
                 $p->atenciones = (int) ($ultima[$p->his_cli_id]->atenciones ?? 0);
                 $p->esp = $espDe[$p->his_cli_id] ?? [];
+                $p->papel = (int) ($hojasPapel[$p->his_cli_id] ?? 0);
 
                 return $p;
             });

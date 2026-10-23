@@ -170,6 +170,20 @@ class Clinica
         return $lineas;
     }
 
+    /** Lo más pesado que acepta una subida de archivos (20 MB o menos si el servidor PHP permite menos) */
+    public static function limiteSubida(): int
+    {
+        $bytes = function (string $v): int {
+            $n = (float) $v;
+
+            return (int) match (strtolower(substr(trim($v), -1))) {
+                'g' => $n * 1073741824, 'm' => $n * 1048576, 'k' => $n * 1024, default => $n
+            };
+        };
+
+        return min(20 * 1048576, $bytes((string) ini_get('upload_max_filesize')) ?: PHP_INT_MAX, $bytes((string) ini_get('post_max_size')) ?: PHP_INT_MAX);
+    }
+
     public static function esDoctor(User $u): bool
     {
         return $u->tieneRol([self::ROL_DOCTOR]);

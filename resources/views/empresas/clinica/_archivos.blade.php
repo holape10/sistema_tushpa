@@ -2,16 +2,11 @@
     Radiografías, fotos y documentos del paciente: se suben desde la PC o con la cámara del celular/tablet.
     Las fotos grandes se achican en el navegador (máx. 2400 px) para que suban rápido sin perder detalle.
 --}}
-@php
-    $bytes = function (string $v): int {
-        $n = (float) $v;
-        return (int) match (strtolower(substr(trim($v), -1))) { 'g' => $n * 1073741824, 'm' => $n * 1048576, 'k' => $n * 1024, default => $n };
-    };
-    $limiteSubida = min(20 * 1048576, $bytes((string) ini_get('upload_max_filesize')) ?: PHP_INT_MAX, $bytes((string) ini_get('post_max_size')) ?: PHP_INT_MAX);
-@endphp
+@php $limiteSubida = \App\Support\Clinica::limiteSubida(); @endphp
 @once
 <script>
-    window.archivosClinica = function (hisId, limite) {
+    /** soloTipo = 'PAPEL': la historia en papel (sus hojas aparte, ordenadas por la fecha del papel); si no, el resto de archivos */
+    window.archivosClinica = function (hisId, limite, soloTipo = null) {
         const CSRF = '{{ csrf_token() }}';
         // Achica fotos grandes (las radiografías siguen nítidas a 2400 px)
         const achicar = (f) => new Promise((ok) => {
@@ -28,13 +23,29 @@
             img.src = URL.createObjectURL(f);
         });
         return {
-            lista: [], filtro: '', tipo: 'RADIOGRAFIA', descripcion: '', subiendo: false, progreso: 0, visor: null,
-            TIPOS: @js(\App\Http\Controllers\ClinicaArchivoController::TIPOS),
+            lista: [], filtro: '', tipo: soloTipo || 'RADIOGRAFIA', descripcion: '', fechaDoc: '', subiendo: false, progreso: 0, visor: null,
+            TIPOS: @js(collect(\App\Http\Controllers\ClinicaArchivoController::TIPOS)->except('PAPEL')),
             get visibles() { return this.lista.filter(a => !this.filtro || a.tipo === this.filtro); },
-            fecha(f) { return f ? new Date(String(f).replace(' ', 'T')).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''; },
+            // Una fecha sola (2019-03-15) se lee como hora local: si no, en Perú saldría el día anterior
+            fecha(f) { if (!f) return ''; const t = String(f).replace(' ', 'T'); return new Date(t.length === 10 ? t + 'T00:00' : t).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }); },
+            /** Hojas en papel agrupadas por su fecha (la más reciente arriba); dentro, en el orden en que se subieron */
+            get grupos() {
+                const g = [];
+                for (const a of this.visibles) {
+                    const k = a.fecha_doc || '';
+                    let grupo = g.find((x) => x.fecha === k);
+                    if (!grupo) g.push(grupo = { fecha: k, hojas: [] });
+                    grupo.hojas.push(a);
+                }
+                return g;
+            },
+            hoja(a) { const v = this.visibles; return (v.indexOf(a) + 1) + ' de ' + v.length; },
             async cargar() {
                 const r = await fetch('{{ url('clinica/historia') }}/' + hisId + '/archivos', { headers: { Accept: 'application/json' } });
-                this.lista = r.ok ? await r.json() : [];
+                const todos = r.ok ? await r.json() : [];
+                this.lista = soloTipo
+                    ? todos.filter(a => a.tipo === soloTipo).sort((x, y) => (y.fecha_doc || '').localeCompare(x.fecha_doc || '') || x.arc_id - y.arc_id)
+                    : todos.filter(a => a.tipo !== 'PAPEL');
             },
             async subir(ev) {
                 const elegidos = [...ev.target.files]; ev.target.value = '';
@@ -46,7 +57,7 @@
                     if (g.size > limite) { tushpaAviso('"' + f.name + '" pesa más de ' + Math.floor(limite / 1048576) + ' MB.', 'error'); this.subiendo = false; return; }
                     fd.append('archivos[]', g, g.name);
                 }
-                fd.append('tipo', this.tipo); fd.append('descripcion', this.descripcion);
+                fd.append('tipo', this.tipo); fd.append('descripcion', this.descripcion); fd.append('fecha_doc', this.fechaDoc);
                 const x = new XMLHttpRequest();
                 x.open('POST', '{{ url('clinica/historia') }}/' + hisId + '/archivos');
                 x.setRequestHeader('X-CSRF-TOKEN', CSRF); x.setRequestHeader('Accept', 'application/json');
@@ -56,15 +67,18 @@
                     let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {}
                     const ok = x.status < 300 && j.ok;
                     tushpaAviso(j.mensaje || Object.values(j.errors || {}).flat()[0] || (x.status === 413 ? 'El archivo es muy pesado para el servidor.' : 'No se pudo subir.'), ok ? 'ok' : 'error');
-                    if (ok) { this.descripcion = ''; this.cargar(); }
+                    // En papel se sigue fotografiando hojas de la misma fecha: la fecha y la nota se quedan
+                    if (ok) { if (!soloTipo) this.descripcion = ''; this.cargar(); }
                 };
                 x.onerror = () => { this.subiendo = false; tushpaAviso('Sin conexión: no se pudo subir.', 'error'); };
                 x.send(fd);
             },
             async guardarVisor() {
                 const a = this.visor;
-                const r = await fetch('{{ url('clinica/archivos') }}/' + a.arc_id, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF }, body: JSON.stringify({ tipo: a.tipo, descripcion: a.descripcion }) });
-                const j = await r.json().catch(() => ({})); tushpaAviso(j.mensaje || 'Error', j.ok ? 'ok' : 'error');
+                const r = await fetch('{{ url('clinica/archivos') }}/' + a.arc_id, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF }, body: JSON.stringify({ tipo: a.tipo, descripcion: a.descripcion, fecha_doc: a.fecha_doc || null }) });
+                const j = await r.json().catch(() => ({})); tushpaAviso(j.mensaje || Object.values(j.errors || {}).flat()[0] || 'Error', j.ok ? 'ok' : 'error');
+                // En papel la fecha cambia el orden: se vuelve a cargar y el visor sigue en la misma hoja
+                if (j.ok && soloTipo) { await this.cargar(); this.visor = this.lista.find(x => x.arc_id === a.arc_id) || null; }
             },
             async borrar(a) {
                 if (!confirm('¿Borrar "' + (a.descripcion || a.nombre) + '"? No se puede recuperar.')) return;
