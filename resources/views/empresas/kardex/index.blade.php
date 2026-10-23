@@ -8,7 +8,11 @@
         $soles = fn ($n) => 'S/ '.number_format((float) $n, 2);
         $documento = fn ($m) => $m->IdCpe_cabecera
             ? '<a href="'.route('cobros.voucher', $m->IdCpe_cabecera).'" target="_blank" class="text-indigo-600 hover:underline">'.e($m->serie.'-'.str_pad($m->numero, 8, '0', STR_PAD_LEFT)).'</a>'
-            : ($m->mov_cab_id ? 'MOV-'.$m->mov_cab_id : '');
+            : ($m->mov_cab_id ? '<a href="'.route('kardex.movimiento.ver', $m->mov_cab_id).'" class="text-indigo-600 hover:underline">MOV-'.$m->mov_cab_id.'</a>' : '');
+        // Insumos con unidad equivalente: debajo del número sale "4 BOT + 2 ONZ"
+        $eq = fn ($n) => isset($producto) && $producto
+            ? \App\Support\Unidades::mixto((float) $n, $producto->umecod ?: 'NIU', $producto->ume_equivalente, (float) $producto->factor_equivalente) : null;
+        $conEq = fn ($n) => ($t = $eq($n)) ? '<span class="block text-[11px] font-normal text-gray-500">'.e($t).'</span>' : '';
     @endphp
 
     <div class="flex flex-wrap items-center gap-3 mb-4">
@@ -168,7 +172,7 @@
                                 <td class="px-2 py-2 text-right text-red-600 font-semibold">{{ $entra ? '' : $num($f['cantidad']) }}</td>
                                 <td class="px-2 py-2 text-right text-red-600">{{ $entra ? '' : number_format($f['costo'], 2) }}</td>
                                 <td class="px-2 py-2 text-right text-red-600">{{ $entra ? '' : number_format($f['total'], 2) }}</td>
-                                <td class="px-2 py-2 text-right font-bold {{ $f['saldo']['cantidad'] < 0 ? 'text-red-600' : '' }}">{{ $num($f['saldo']['cantidad']) }}</td>
+                                <td class="px-2 py-2 text-right font-bold {{ $f['saldo']['cantidad'] < 0 ? 'text-red-600' : '' }}">{{ $num($f['saldo']['cantidad'], 3) }}{!! $conEq($f['saldo']['cantidad']) !!}</td>
                                 <td class="px-2 py-2 text-right">{{ number_format($f['saldo']['costo'], 2) }}</td>
                                 <td class="px-2 py-2 text-right font-semibold">{{ number_format($f['saldo']['valor'], 2) }}</td>
                             </tr>
@@ -187,7 +191,7 @@
             <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Saldo al {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }}</p><p class="text-xl font-bold">{{ rtrim(rtrim(number_format($saldoInicial, 2), '0'), '.') }}</p></div>
             <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Entradas</p><p class="text-xl font-bold text-green-700">{{ rtrim(rtrim(number_format($entradas, 2), '0'), '.') }}</p></div>
             <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Salidas</p><p class="text-xl font-bold text-red-600">{{ rtrim(rtrim(number_format($salidas, 2), '0'), '.') }}</p></div>
-            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Stock actual</p><p class="text-xl font-bold {{ $stockActual < 0 ? 'text-red-600' : 'text-indigo-700' }}">{{ rtrim(rtrim(number_format($stockActual, 2), '0'), '.') }} {{ $producto->umecod }}</p></div>
+            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Stock actual</p><p class="text-xl font-bold {{ $stockActual < 0 ? 'text-red-600' : 'text-indigo-700' }}">{{ $num($stockActual, 3) }} {{ $producto->umecod }}</p>{!! $conEq($stockActual) !!}</div>
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
@@ -214,7 +218,7 @@
                                 @if ($m->IdCpe_cabecera)
                                     <a href="{{ route('cobros.voucher', $m->IdCpe_cabecera) }}" target="_blank" class="text-indigo-600 hover:underline">{{ $m->serie }}-{{ str_pad($m->numero, 8, '0', STR_PAD_LEFT) }}</a>
                                 @elseif ($m->mov_cab_id)
-                                    MOV-{{ $m->mov_cab_id }}
+                                    <a href="{{ route('kardex.movimiento.ver', $m->mov_cab_id) }}" class="text-indigo-600 hover:underline">MOV-{{ $m->mov_cab_id }}</a>
                                 @endif
                             </td>
                             <td class="px-3 py-2">
@@ -223,9 +227,9 @@
                                 @if ($m->apeusu)<div class="text-xs text-gray-400">{{ $m->apeusu }}</div>@endif
                             </td>
                             <td class="px-3 py-2 text-right text-gray-500">{{ rtrim(rtrim(number_format($m->stock_inicial, 2), '0'), '.') }}</td>
-                            <td class="px-3 py-2 text-right text-green-700 font-semibold">{{ $m->mov_tip == 'I' ? rtrim(rtrim(number_format($m->cantidad, 2), '0'), '.') : '' }}</td>
-                            <td class="px-3 py-2 text-right text-red-600 font-semibold">{{ $m->mov_tip == 'E' ? rtrim(rtrim(number_format($m->cantidad, 2), '0'), '.') : '' }}</td>
-                            <td class="px-3 py-2 text-right font-bold {{ $m->stock < 0 ? 'text-red-600' : '' }}">{{ rtrim(rtrim(number_format($m->stock, 2), '0'), '.') }}</td>
+                            <td class="px-3 py-2 text-right text-green-700 font-semibold">@if ($m->mov_tip == 'I'){{ $num($m->cantidad, 3) }}{!! $conEq($m->cantidad) !!}@endif</td>
+                            <td class="px-3 py-2 text-right text-red-600 font-semibold">@if ($m->mov_tip == 'E'){{ $num($m->cantidad, 3) }}{!! $conEq($m->cantidad) !!}@endif</td>
+                            <td class="px-3 py-2 text-right font-bold {{ $m->stock < 0 ? 'text-red-600' : '' }}">{{ $num($m->stock, 3) }}{!! $conEq($m->stock) !!}</td>
                             <td class="px-3 py-2 text-right text-gray-500">{{ number_format($m->costo, 2) }}</td>
                         </tr>
                     @empty

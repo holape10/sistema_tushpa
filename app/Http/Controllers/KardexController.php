@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class KardexController extends Controller
 {
@@ -315,6 +316,54 @@ class KardexController extends Controller
         return view('empresas.kardex.movimiento', compact('tipo', 'productos', 'almacenes', 'operaciones', 'recientes'));
     }
 
+    /** Todos los ingresos y salidas manuales (con filtros) para volver a verlos */
+    public function movimientos(Request $request)
+    {
+        $tipo = in_array($request->get('tipo'), ['I', 'E'], true) ? $request->get('tipo') : null;
+        $desde = $request->get('desde', now()->startOfMonth()->toDateString());
+        $hasta = $request->get('hasta', now()->toDateString());
+
+        $lista = DB::table('movimientos_cabecera as mc')
+            ->leftJoin('tipo_operacion_sunat as t', 't.cod_tip_ope', '=', 'mc.cod_tip_ope')
+            ->leftJoin('users as u', 'u.IdUsuario', '=', 'mc.usu_ent')
+            ->leftJoin('almacenes as a', 'a.id_almacen', '=', DB::raw('COALESCE(mc.des_alm, mc.part_alm)'))
+            ->where('mc.id_empresa_negocio', Auth::user()->id_empresa_negocio)
+            ->whereIn('mc.mov_tip', $tipo ? [$tipo] : ['I', 'E'])
+            ->whereBetween('mc.fecha', [$desde, $hasta])
+            ->orderByDesc('mc.mov_cab_id')
+            ->select('mc.*', 't.des_tip_ope', 'u.apeusu', 'a.descripcion as almacen',
+                DB::raw('(SELECT COUNT(*) FROM movimientos_productos mp WHERE mp.mov_cab_id = mc.mov_cab_id) as items'),
+                DB::raw('(SELECT COALESCE(SUM(mp.cantidad * mp.costo), 0) FROM movimientos_productos mp WHERE mp.mov_cab_id = mc.mov_cab_id) as total'))
+            ->paginate(30)->withQueryString();
+
+        return view('empresas.kardex.movimientos', compact('lista', 'tipo', 'desde', 'hasta'));
+    }
+
+    /** Detalle de un ingreso o salida (MOV-N): sus productos con cantidad, costo, lote y series */
+    public function verMovimiento(int $id)
+    {
+        $cab = DB::table('movimientos_cabecera as mc')
+            ->leftJoin('tipo_operacion_sunat as t', 't.cod_tip_ope', '=', 'mc.cod_tip_ope')
+            ->leftJoin('users as u', 'u.IdUsuario', '=', 'mc.usu_ent')
+            ->leftJoin('almacenes as a', 'a.id_almacen', '=', DB::raw('COALESCE(mc.des_alm, mc.part_alm)'))
+            ->where('mc.mov_cab_id', $id)->where('mc.id_empresa_negocio', Auth::user()->id_empresa_negocio)
+            ->first(['mc.*', 't.des_tip_ope', 'u.apeusu', 'a.descripcion as almacen']);
+        abort_unless($cab, 404);
+
+        $items = DB::table('movimientos_productos as mp')->join('productos as p', 'p.IdProducto', '=', 'mp.IdProducto')
+            ->where('mp.mov_cab_id', $id)->orderBy('mp.mov_pro_id')
+            ->get(['mp.*', 'p.procod', 'p.pronom', 'p.umecod', 'p.ume_equivalente', 'p.factor_equivalente'])
+            ->map(function ($m) {
+                $m->equivalente = Unidades::mixto((float) $m->cantidad, $m->umecod ?: 'NIU', $m->ume_equivalente, (float) $m->factor_equivalente);
+                $m->series = Schema::hasTable('producto_series')
+                    ? DB::table('producto_series')->where('IdProducto', $m->IdProducto)->where('mov_cab_id', $m->mov_cab_id)->pluck('serie')->implode(', ') : '';
+
+                return $m;
+            });
+
+        return view('empresas.kardex.movimiento_ver', compact('cab', 'items'));
+    }
+
     public function guardarMovimiento(Request $request)
     {
         $user = Auth::user();
@@ -360,7 +409,7 @@ class KardexController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $user, $tipo, $almacen, $productos) {
+            $cabId = DB::transaction(function () use ($request, $user, $tipo, $almacen, $productos) {
                 $cabId = DB::table('movimientos_cabecera')->insertGetId([
                     'mov_tip' => $tipo, 'cod_tip_ope' => $request->cod_tip_ope,
                     'fecha' => $request->fecha, 'observaciones' => $request->observaciones,
@@ -396,12 +445,14 @@ class KardexController extends Controller
                         Producto::where('IdProducto', $prod->IdProducto)->update(['costo' => $costo]);
                     }
                 }
+
+                return $cabId;
             });
         } catch (\RuntimeException $e) {
             return back()->withInput()->withErrors(['items' => $e->getMessage()]);
         }
 
-        return redirect()->route('kardex.movimiento', ['tipo' => $tipo])
+        return redirect()->route('kardex.movimiento.ver', $cabId)
             ->with('success', ($tipo === 'I' ? 'Ingreso' : 'Salida').' registrado y kardex actualizado.');
     }
 }

@@ -56,14 +56,20 @@
     </form>
 
     <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
-        <h3 class="font-semibold text-gray-700 p-4 pb-0">Últimos {{ $tipo === 'I' ? 'ingresos' : 'salidas' }}</h3>
+        <div class="flex items-center p-4 pb-0">
+            <h3 class="font-semibold text-gray-700 mr-auto">Últimos {{ $tipo === 'I' ? 'ingresos' : 'salidas' }}</h3>
+            <a href="{{ route('kardex.movimientos', ['tipo' => $tipo]) }}" class="text-sm font-semibold text-indigo-600 hover:underline">Ver todos →</a>
+        </div>
         <table class="w-full text-sm">
-            <thead class="text-gray-500 text-xs uppercase"><tr><th class="px-4 py-2 text-left">N°</th><th class="px-4 py-2 text-left">Fecha</th><th class="px-4 py-2 text-left">Operación</th><th class="px-4 py-2 text-left">Observación</th><th class="px-4 py-2 text-right">Ítems</th><th class="px-4 py-2 text-left">Usuario</th></tr></thead>
+            <thead class="text-gray-500 text-xs uppercase"><tr><th class="px-4 py-2 text-left">N°</th><th class="px-4 py-2 text-left">Fecha</th><th class="px-4 py-2 text-left">Operación</th><th class="px-4 py-2 text-left">Observación</th><th class="px-4 py-2 text-right">Ítems</th><th class="px-4 py-2 text-left">Usuario</th><th></th></tr></thead>
             <tbody class="divide-y divide-gray-100">
                 @forelse ($recientes as $r)
-                    <tr><td class="px-4 py-2">MOV-{{ $r->mov_cab_id }}</td><td class="px-4 py-2">{{ \Carbon\Carbon::parse($r->fecha)->format('d/m/Y') }}</td><td class="px-4 py-2">{{ $r->des_tip_ope }}</td><td class="px-4 py-2">{{ $r->observaciones }}</td><td class="px-4 py-2 text-right">{{ $r->items }}</td><td class="px-4 py-2">{{ $r->apeusu }}</td></tr>
+                    <tr class="hover:bg-gray-50"><td class="px-4 py-2"><a href="{{ route('kardex.movimiento.ver', $r->mov_cab_id) }}" class="font-semibold text-indigo-600 hover:underline">MOV-{{ $r->mov_cab_id }}</a></td>
+                        <td class="px-4 py-2">{{ \Carbon\Carbon::parse($r->fecha)->format('d/m/Y') }}</td><td class="px-4 py-2">{{ $r->des_tip_ope }}</td><td class="px-4 py-2">{{ $r->observaciones }}</td>
+                        <td class="px-4 py-2 text-right">{{ $r->items }}</td><td class="px-4 py-2">{{ $r->apeusu }}</td>
+                        <td class="px-4 py-2 text-right"><a href="{{ route('kardex.movimiento.ver', $r->mov_cab_id) }}" class="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-xs font-semibold hover:bg-gray-200">Ver</a></td></tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-4 text-center text-gray-400">Sin registros.</td></tr>
+                    <tr><td colspan="7" class="px-4 py-4 text-center text-gray-400">Sin registros.</td></tr>
                 @endforelse
             </tbody>
         </table>

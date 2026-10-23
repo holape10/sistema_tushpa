@@ -481,6 +481,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/kardex/inventario/excel', [KardexController::class, 'inventarioExcel'])->name('kardex.inventario.excel');
     Route::get('/kardex/movimiento', [KardexController::class, 'movimiento'])->name('kardex.movimiento');
     Route::post('/kardex/movimiento', [KardexController::class, 'guardarMovimiento'])->name('kardex.guardar_movimiento');
+    Route::get('/kardex/movimientos', [KardexController::class, 'movimientos'])->name('kardex.movimientos');
+    Route::get('/kardex/movimientos/{id}', [KardexController::class, 'verMovimiento'])->whereNumber('id')->name('kardex.movimiento.ver');
 });
 
 Route::middleware('auth')->group(function () {
