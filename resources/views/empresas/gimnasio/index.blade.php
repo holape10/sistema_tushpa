@@ -22,6 +22,7 @@
             <div class="flex flex-wrap gap-2">
                 <button type="button" @click="nuevo()" class="{{ $btn }} bg-orange-500 text-white hover:bg-orange-600"><i class="fas fa-user-plus"></i> Nuevo cliente</button>
                 <a href="{{ route('gimnasio.acceso') }}" target="_blank" class="{{ $btn }} bg-gray-900 text-white hover:bg-black"><i class="fas fa-door-open"></i> Control de ingreso</a>
+                <a href="{{ route('gimnasio.asistencia') }}" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50" title="Quiénes entraron cada día, con hora de ingreso y salida"><i class="fas fa-clipboard-list"></i> Ingresos del día</a>
                 @if ($verReporte)
                     <a href="{{ route('gimnasio.reporte') }}" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"><i class="fas fa-chart-column"></i> Reporte</a>
                 @endif

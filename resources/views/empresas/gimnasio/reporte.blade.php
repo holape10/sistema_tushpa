@@ -117,16 +117,17 @@
 
         {{-- Asistencia --}}
         <section class="bg-white rounded-2xl shadow-sm p-5">
-            <h2 class="font-bold text-gray-800 mb-3">📈 Personas por día</h2>
+            <h2 class="font-bold text-gray-800 mb-3 flex items-center justify-between">📈 Personas por día
+                <span class="text-xs font-normal text-gray-400">Toca un día para ver quiénes entraron</span></h2>
             @php $maxDia = $max($porDia, 'personas'); @endphp
             <div class="flex items-end gap-1 h-40 overflow-x-auto">
                 @foreach ($porDia as $d)
                     @php $c = \Carbon\Carbon::parse($d->dia); @endphp
-                    <div class="flex-1 min-w-[14px] flex flex-col items-center justify-end h-full" title="{{ $c->format('d/m') }}: {{ $d->personas }} persona(s)">
+                    <a href="{{ route('gimnasio.asistencia', ['fecha' => $c->toDateString()]) }}" class="flex-1 min-w-[14px] flex flex-col items-center justify-end h-full hover:opacity-70" title="{{ $c->format('d/m') }}: {{ $d->personas }} persona(s) · ver quiénes entraron">
                         <span class="text-[9px] text-gray-500">{{ $d->personas ?: '' }}</span>
                         <div class="w-full rounded-t {{ $c->isWeekend() ? 'bg-orange-300' : 'bg-orange-500' }}" style="height: {{ max(2, $d->personas / $maxDia * 100) }}%"></div>
                         <span class="text-[9px] text-gray-400 mt-0.5">{{ $c->format('d') }}</span>
-                    </div>
+                    </a>
                 @endforeach
             </div>
         </section>

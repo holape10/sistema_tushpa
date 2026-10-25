@@ -34,7 +34,7 @@
                 <div class="relative flex-1">
                     <i class="fas fa-qrcode absolute left-5 top-1/2 -translate-y-1/2 text-white/30 text-2xl"></i>
                     <input x-ref="lector" x-model="texto" autocomplete="off" autofocus
-                           placeholder="Escanea tu carnet, escribe tu DNI o pon tu huella"
+                           placeholder="Escanea tu carnet, escribe tu DNI o código (al salir, márcalo otra vez)"
                            class="w-full h-16 pl-16 pr-4 rounded-2xl bg-white/5 border-2 border-orange-500/60 text-2xl font-bold tracking-wider placeholder:text-white/25 placeholder:text-lg placeholder:font-normal focus:border-orange-400 focus:ring-4 focus:ring-orange-500/30">
                 </div>
                 <button class="h-16 px-7 rounded-2xl bg-orange-500 hover:bg-orange-600 text-xl font-black" :disabled="enviando"><i class="fas fa-arrow-right-to-bracket"></i></button>
@@ -42,7 +42,7 @@
 
             {{-- Resultado --}}
             <div class="rounded-[2rem] overflow-hidden min-h-[420px] flex items-center justify-center transition-colors duration-300"
-                 :class="!r ? 'bg-white/5' : (r.permitido ? 'bg-gradient-to-br from-emerald-500 to-emerald-700' : (r.encontrado ? 'bg-gradient-to-br from-rose-500 to-rose-700' : 'bg-gradient-to-br from-neutral-700 to-neutral-800'))">
+                 :class="!r ? 'bg-white/5' : (r.salida ? 'bg-gradient-to-br from-sky-500 to-indigo-700' : (r.permitido ? 'bg-gradient-to-br from-emerald-500 to-emerald-700' : (r.encontrado ? 'bg-gradient-to-br from-rose-500 to-rose-700' : 'bg-gradient-to-br from-neutral-700 to-neutral-800')))">
                 <div x-show="!r" class="text-center text-white/40 p-10">
                     <i class="fas fa-dumbbell text-7xl"></i>
                     <p class="mt-4 text-2xl font-bold">¡Bienvenido!</p>
@@ -55,8 +55,8 @@
                             <template x-if="!r.foto"><div class="w-60 h-60 rounded-[2rem] bg-black/20 ring-8 ring-white/20 flex items-center justify-center text-8xl font-black" x-text="(r.nombre || '?').charAt(0)"></div></template>
                         </div>
                         <div class="text-center md:text-left">
-                            <p class="text-6xl font-black tracking-tight"><i class="fas" :class="r.permitido ? 'fa-circle-check' : 'fa-circle-xmark'"></i>
-                                <span x-text="r.permitido ? 'ADELANTE' : (r.encontrado ? 'NO PUEDE PASAR' : 'NO ENCONTRADO')"></span></p>
+                            <p class="text-6xl font-black tracking-tight"><i class="fas" :class="r.salida ? 'fa-door-open' : (r.permitido ? 'fa-circle-check' : 'fa-circle-xmark')"></i>
+                                <span x-text="r.salida ? 'HASTA LUEGO' : (r.permitido ? 'ADELANTE' : (r.encontrado ? 'NO PUEDE PASAR' : 'NO ENCONTRADO'))"></span></p>
                             <p class="mt-3 text-3xl font-extrabold uppercase" x-text="r.nombre"></p>
                             <p class="mt-1 text-lg opacity-90" x-show="r.plan" x-text="r.plan + (r.vence ? ' · vence ' + r.vence : '')"></p>
                             <p class="mt-4 text-xl font-semibold leading-snug" x-text="r.mensaje"></p>
@@ -70,7 +70,8 @@
                     </div>
                 </template>
             </div>
-            <p class="text-xs text-white/30"><i class="fas fa-fingerprint"></i> Lector de huella: registra en la ficha del cliente el número con el que quedó en el lector; al poner el dedo, el lector lo escribe aquí.</p>
+            <p class="text-xs text-white/30"><i class="fas fa-fingerprint"></i> Lector de huella: registra en la ficha del cliente el número con el que quedó en el lector; al poner el dedo, el lector lo escribe aquí.
+                <i class="fas fa-door-open ml-2"></i> Al irse, el cliente marca otra vez y queda su hora de salida (desde {{ \App\Support\Gimnasio::MINUTOS_PARA_SALIDA }} minutos después de entrar).</p>
         </section>
 
         {{-- Ingresos de hoy --}}
@@ -83,7 +84,7 @@
                         <template x-if="!i.foto"><span class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center font-bold" x-text="i.nombre.charAt(0)"></span></template>
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-semibold truncate" x-text="i.nombre"></p>
-                            <p class="text-[11px] text-white/40" x-text="i.hora + ' · ' + i.metodo"></p>
+                            <p class="text-[11px] text-white/40" x-text="(i.salida ? 'Entró ' + i.hora + ' · salió ' + i.salida : i.hora) + ' · ' + i.metodo"></p>
                         </div>
                         <i class="fas" :class="i.resultado === 'PERMITIDO' ? 'fa-circle-check text-emerald-400' : 'fa-circle-xmark text-rose-400'"></i>
                     </div>

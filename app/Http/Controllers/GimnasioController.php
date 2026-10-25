@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MedioPago;
 use App\Models\Turno;
+use App\Support\Excel;
 use App\Support\ExcelLector;
 use App\Support\Gimnasio;
 use App\Support\GimnasioImportar;
@@ -446,11 +447,64 @@ class GimnasioController extends Controller
         $this->recepcion();
         $filas = DB::table('gym_asistencias as a')->join('socios as s', 's.soc_id', '=', 'a.soc_id')->join('cliente as c', 'c.clicod', '=', 's.clicod')
             ->where('a.id_empresa_negocio', $this->sucursal())->whereBetween('a.fecha_hora', [now()->startOfDay(), now()->endOfDay()])
-            ->orderByDesc('a.asi_id')->limit(40)->get(['a.fecha_hora', 'a.resultado', 'a.metodo', 'c.clinom', 's.foto'])
-            ->map(fn ($a) => ['hora' => Carbon::parse($a->fecha_hora)->format('H:i'), 'resultado' => $a->resultado, 'metodo' => $a->metodo,
-                'nombre' => $a->clinom, 'foto' => self::urlFoto($a->foto)]);
+            ->orderByDesc('a.asi_id')->limit(40)->get(['a.fecha_hora', 'a.salida', 'a.resultado', 'a.metodo', 'c.clinom', 's.foto'])
+            ->map(fn ($a) => ['hora' => Carbon::parse($a->fecha_hora)->format('H:i'), 'salida' => $a->salida ? Carbon::parse($a->salida)->format('H:i') : null,
+                'resultado' => $a->resultado, 'metodo' => $a->metodo, 'nombre' => $a->clinom, 'foto' => self::urlFoto($a->foto)]);
 
         return request()->expectsJson() ? response()->json($filas) : $filas;
+    }
+
+    /**
+     * Quiénes entraron un día (como las hojas diarias que llevaban en Excel): código, cliente, plan, hora de entrada y
+     * de salida y cuánto estuvo; también los que no pudieron pasar y por qué.
+     */
+    private function asistenciaDe(string $fecha)
+    {
+        $dia = Carbon::parse($fecha);
+
+        return DB::table('gym_asistencias as a')->join('socios as s', 's.soc_id', '=', 'a.soc_id')->join('cliente as c', 'c.clicod', '=', 's.clicod')
+            ->leftJoin('gym_membresias as m', 'm.mem_id', '=', 'a.mem_id')
+            ->where('a.id_empresa_negocio', $this->sucursal())->whereBetween('a.fecha_hora', [$dia->copy()->startOfDay(), $dia->copy()->endOfDay()])
+            ->orderBy('a.fecha_hora')
+            ->get(['a.fecha_hora', 'a.salida', 'a.resultado', 'a.metodo', 'a.motivo', 's.codigo', 'c.clinom', 'c.clinum', 'm.plan', 'm.fin'])
+            ->map(function ($a) {
+                $entro = Carbon::parse($a->fecha_hora);
+
+                return (object) ['codigo' => $a->codigo, 'nombre' => $a->clinom, 'doc' => $a->clinum, 'plan' => $a->plan, 'vence' => $a->fin,
+                    'entro' => $entro->format('H:i'), 'salio' => $a->salida ? Carbon::parse($a->salida)->format('H:i') : null,
+                    'estuvo' => $a->salida ? Gimnasio::permanencia($entro, Carbon::parse($a->salida)) : null,
+                    'minutos' => $a->salida ? (int) $entro->diffInMinutes(Carbon::parse($a->salida)) : null,
+                    'metodo' => $a->metodo, 'permitido' => $a->resultado === 'PERMITIDO', 'motivo' => $a->motivo];
+            });
+    }
+
+    public function asistencia(Request $request)
+    {
+        $this->recepcion();
+        $fecha = Carbon::parse($request->get('fecha', now()->toDateString()))->toDateString();
+        $filas = $this->asistenciaDe($fecha);
+        $pasaron = $filas->where('permitido', true);
+
+        return view('empresas.gimnasio.asistencia', [
+            'fecha' => $fecha, 'filas' => $filas,
+            'resumen' => ['personas' => $pasaron->unique('codigo')->count(), 'ingresos' => $pasaron->count(),
+                'salidas' => $pasaron->whereNotNull('salio')->count(), 'denegados' => $filas->where('permitido', false)->count(),
+                'promedio' => $pasaron->whereNotNull('minutos')->avg('minutos')],
+        ]);
+    }
+
+    public function asistenciaExcel(Request $request)
+    {
+        $this->recepcion();
+        $fecha = Carbon::parse($request->get('fecha', now()->toDateString()))->toDateString();
+        $filas = $this->asistenciaDe($fecha)->map(fn ($a) => [$a->codigo, $a->nombre, $a->doc, $a->plan, $a->vence ? Carbon::parse($a->vence)->format('d/m/Y') : '',
+            $a->entro, $a->salio, $a->estuvo, $a->metodo, $a->permitido ? 'PASÓ' : 'NO PASÓ', $a->permitido ? '' : $a->motivo])->all();
+        $ruta = (new Excel)->hoja('Ingresos '.Carbon::parse($fecha)->format('d-m-Y'),
+            [['Ingresos del '.Carbon::parse($fecha)->locale('es')->isoFormat('dddd D [de] MMMM [de] YYYY')],
+                ['Código', 'Cliente', 'DNI', 'Membresía', 'Vence', 'Hora de ingreso', 'Hora de salida', 'Estuvo', 'Cómo marcó', 'Resultado', 'Motivo']], $filas)->guardar();
+
+        return response()->download($ruta, 'ingresos_gimnasio_'.$fecha.'.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend();
     }
 
     /** DNI, QR del carnet, código de huella o código de cliente */
@@ -505,7 +559,7 @@ class GimnasioController extends Controller
         $proximo = $sit['proximo'] ?? null;
 
         return [
-            'ok' => true, 'encontrado' => true, 'permitido' => $r['permitido'], 'requiere_aprobacion' => $r['requiere_aprobacion'],
+            'ok' => true, 'encontrado' => true, 'permitido' => $r['permitido'], 'requiere_aprobacion' => $r['requiere_aprobacion'], 'salida' => $r['salida'] ?? false,
             'mensaje' => $r['mensaje'], 'soc_id' => $socio->soc_id, 'nombre' => $cli->clinom ?? '', 'doc' => $cli->clinum ?? '',
             'foto' => self::urlFoto($socio->foto), 'plan' => $sit['membresia']->plan ?? null, 'estado' => $sit['texto'],
             'vence' => $sit['vence'] ? Carbon::parse($sit['vence'])->format('d/m/Y') : null, 'dias' => $sit['dias'],

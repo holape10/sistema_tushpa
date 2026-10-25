@@ -339,6 +339,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/importar/cancelar', 'importarCancelar')->name('importar.cancelar');
         Route::get('/acceso', 'acceso')->name('acceso');
         Route::get('/acceso/hoy', 'ingresosHoy')->name('acceso.hoy');
+        Route::get('/asistencia', 'asistencia')->name('asistencia');
+        Route::get('/asistencia/excel', 'asistenciaExcel')->name('asistencia.excel');
         Route::post('/acceso/marcar', 'marcar')->middleware('throttle:120,1')->name('acceso.marcar');
         Route::post('/acceso/aprobar', 'aprobar')->middleware('throttle:30,1')->name('acceso.aprobar');
     });

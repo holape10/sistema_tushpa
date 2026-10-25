@@ -388,6 +388,17 @@ class Gimnasio
         return [null, ''];
     }
 
+    /** Quien ya entró y vuelve a marcar después de estos minutos, marca su salida (antes, es un doble marcado) */
+    public const MINUTOS_PARA_SALIDA = 10;
+
+    /** Cuánto tiempo estuvo: "1 h 25 min", "40 min" */
+    public static function permanencia(Carbon $entro, Carbon $salio): string
+    {
+        $min = (int) $entro->diffInMinutes($salio);
+
+        return ($min >= 60 ? intdiv($min, 60).' h ' : '').($min % 60).' min';
+    }
+
     /**
      * Registra el intento de ingreso y dice si puede pasar.
      *
@@ -398,12 +409,19 @@ class Gimnasio
         $suc = (int) $socio->id_empresa_negocio;
         $sit = self::situacionDe((int) $socio->soc_id, $suc);
 
-        // Escaneó dos veces seguidas (lector o QR): no se registra otro ingreso
-        $reciente = DB::table('gym_asistencias')->where('soc_id', $socio->soc_id)->where('resultado', 'PERMITIDO')
-            ->where('fecha_hora', '>=', now()->subMinute())->orderByDesc('asi_id')->first();
-        if ($reciente && ! $aprobadoPor) {
-            return ['permitido' => true, 'mensaje' => 'Ya registró su ingreso hace un momento ('.Carbon::parse($reciente->fecha_hora)->format('H:i').').',
-                'situacion' => $sit, 'requiere_aprobacion' => false, 'repetido' => true];
+        // Ya está adentro (entró hoy y no marcó salida): volver a marcar es su SALIDA; si fue hace muy poco, es un doble marcado
+        $adentro = DB::table('gym_asistencias')->where('soc_id', $socio->soc_id)->where('resultado', 'PERMITIDO')->whereNull('salida')
+            ->where('fecha_hora', '>=', now()->startOfDay())->orderByDesc('asi_id')->first();
+        if ($adentro && ! $aprobadoPor) {
+            $entro = Carbon::parse($adentro->fecha_hora);
+            if ($entro->gt(now()->subMinutes(self::MINUTOS_PARA_SALIDA))) {
+                return ['permitido' => true, 'mensaje' => 'Ya registró su ingreso a las '.$entro->format('H:i').'.',
+                    'situacion' => $sit, 'requiere_aprobacion' => false, 'repetido' => true];
+            }
+            DB::table('gym_asistencias')->where('asi_id', $adentro->asi_id)->update(['salida' => now()]);
+
+            return ['permitido' => true, 'salida' => true, 'situacion' => $sit, 'requiere_aprobacion' => false,
+                'mensaje' => 'Hasta luego. Entró a las '.$entro->format('H:i').' y estuvo '.self::permanencia($entro, now()).'.'];
         }
         $permitido = in_array($sit['estado'], ['VIGENTE', 'POR_VENCER'], true) && $socio->estado === 'ACTIVO';
         $requiere = false;
