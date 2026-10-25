@@ -22,6 +22,7 @@ use App\Http\Controllers\ComandasController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ConcarController;
 use App\Http\Controllers\ConsultaCpeController;
+use App\Http\Controllers\ConsumoCajasController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContabilidadRegistroController;
 use App\Http\Controllers\ContactoController;
@@ -125,6 +126,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/comandas/mozo', [ComandasController::class, 'asignarMozo'])->name('comandas.mozo');
     Route::get('/promotores', [PromotorController::class, 'index'])->name('promotores.index');
     Route::get('/reportes/descuentos-cortesias', [DescuentosCortesiasController::class, 'index'])->name('descuentos.reporte');
+    Route::get('/reportes/consumo-cajas', [ConsumoCajasController::class, 'index'])->name('consumo_cajas.index');
+    Route::get('/reportes/consumo-cajas/excel', [ConsumoCajasController::class, 'excel'])->name('consumo_cajas.excel');
     Route::post('/comandas/carrito/vaciar', [ComandasController::class, 'clearCart'])->name('comandas.clear_cart');
     Route::get('/comandas/pedido/{ped_id}', [ComandasController::class, 'getPedidoDetails'])->name('comandas.pedido_details');
     Route::get('/comandas/activos-llevar-delivery', [ComandasController::class, 'activosLlevarDelivery'])->name('comandas.activos_llevar_delivery');

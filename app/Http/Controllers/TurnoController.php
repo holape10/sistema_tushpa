@@ -258,6 +258,7 @@ class TurnoController extends Controller
 
         return view('empresas.turnos.productos', $this->cabeceraReporte($turno) + [
             'modo' => 'productos', 'productos' => $productos, 'total' => round($productos->sum('total'), 2),
+            'cortesias' => self::cortesias($turno),
         ]);
     }
 
@@ -273,6 +274,7 @@ class TurnoController extends Controller
             'categorias' => $productos->groupBy('categoria')->sortKeys()
                 ->map(fn ($g) => ['productos' => $g->values(), 'cantidad' => round($g->sum('cantidad'), 2), 'total' => round($g->sum('total'), 2)]),
             'total' => round($productos->sum('total'), 2),
+            'cortesias' => self::cortesias($turno),
         ]);
     }
 
@@ -283,29 +285,48 @@ class TurnoController extends Controller
         return ['turno' => $turno, 'negocio' => $negocio, 'empresa' => DB::table('empresa')->where('IdEmpresa', $negocio->IdEmpresa)->first()];
     }
 
+    /** Detalle de los comprobantes vigentes del turno (las notas de débito no son productos vendidos) */
+    private static function detalleTurno(Turno $turno)
+    {
+        return DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
+            ->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
+            ->leftJoin('categorias as cat', 'cat.cat_id', '=', 'p.cat_id')
+            ->where('c.id_turno', $turno->id_turno)->whereNull('c.ccabaj')->where('c.tdocod', '!=', '08');
+    }
+
     /**
-     * Productos vendidos en el turno (comprobantes vigentes; las notas de crédito restan), agrupados por cómo se
-     * vendieron, con su categoría.
+     * Productos vendidos (cobrados) en el turno, con su categoría: una línea por cada precio al que se vendieron
+     * (si un producto se vendió a S/ 10 y a S/ 8 salen dos líneas, nunca un promedio con decimales).
+     * Las cortesías van aparte (ver cortesias()). Las notas de crédito restan.
      *
      * @return Collection<int, object{nombre: string, categoria: string, cantidad: float, precio: float, total: float}>
      */
     public static function vendidos(Turno $turno): Collection
     {
-        return DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
-            ->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
-            ->leftJoin('categorias as cat', 'cat.cat_id', '=', 'p.cat_id')
-            ->where('c.id_turno', $turno->id_turno)->whereNull('c.ccabaj')->where('c.tdocod', '!=', '08')
-            ->groupBy('d.cdedes', 'cat.cat_nom')
-            ->orderBy('d.cdedes')
-            ->get(['d.cdedes', 'cat.cat_nom',
+        return self::detalleTurno($turno)->where('d.cortesia', 0)
+            ->groupBy('d.cdedes', 'cat.cat_nom', 'd.cdepuni')
+            ->orderBy('d.cdedes')->orderByDesc('d.cdepuni')
+            ->get(['d.cdedes', 'cat.cat_nom', 'd.cdepuni',
                 DB::raw("SUM(CASE WHEN c.tdocod = '07' THEN -d.cdecan ELSE d.cdecan END) as cantidad"),
                 DB::raw("SUM(CASE WHEN c.tdocod = '07' THEN -d.cdevve ELSE d.cdevve END) as total")])
             ->filter(fn ($r) => abs((float) $r->cantidad) > 0.0001 || abs((float) $r->total) > 0.001)
             ->map(fn ($r) => (object) [
                 'nombre' => $r->cdedes, 'categoria' => $r->cat_nom ?: 'OTROS',
-                'cantidad' => round((float) $r->cantidad, 2), 'total' => round((float) $r->total, 2),
-                'precio' => (float) $r->cantidad != 0 ? round((float) $r->total / (float) $r->cantidad, 2) : 0,
+                'cantidad' => round((float) $r->cantidad, 2), 'total' => round((float) $r->total, 2), 'precio' => (float) $r->cdepuni,
             ])->values();
+    }
+
+    /**
+     * Cortesías del turno (lo que se regaló, no se cobró): cantidad y cuánto valía a su precio de lista.
+     *
+     * @return Collection<int, object{nombre: string, cantidad: float, valor: float}>
+     */
+    public static function cortesias(Turno $turno): Collection
+    {
+        return self::detalleTurno($turno)->where('d.cortesia', 1)->where('c.tdocod', '!=', '07')
+            ->groupBy('d.cdedes')->orderBy('d.cdedes')
+            ->get(['d.cdedes', DB::raw('SUM(d.cdecan) as cantidad'), DB::raw('SUM(d.cdecan * COALESCE(d.precio_lista, 0)) as valor')])
+            ->map(fn ($r) => (object) ['nombre' => $r->cdedes, 'cantidad' => round((float) $r->cantidad, 2), 'valor' => round((float) $r->valor, 2)]);
     }
 
     public function show($id)

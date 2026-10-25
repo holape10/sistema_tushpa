@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\Almacen;
 use App\Models\Producto;
 use App\Models\UnidadMedida;
 use App\Models\User;
@@ -60,9 +59,10 @@ class CatalogoVenta
         return collect(self::formatear($productos, $almacenId))->keyBy('id');
     }
 
+    /** El stock que se muestra al vender es el del almacén de esta caja (o el predeterminado) */
     private static function almacen($sucursal): ?int
     {
-        return Almacen::where('id_empresa_negocio', $sucursal)->where('predeterminado', 1)->value('id_almacen');
+        return Kardex::almacenDeVenta((int) $sucursal)?->id_almacen;
     }
 
     private static function consulta($sucursal, ?int $almacenId)

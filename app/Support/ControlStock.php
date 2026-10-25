@@ -162,7 +162,7 @@ class ControlStock
     /** Stock − reservado contra lo que se necesita */
     private static function comparar(int $sucursal, string $nivel, array $necesita, bool $bloquear): ?string
     {
-        $almacen = Kardex::almacenPredeterminado($sucursal);
+        $almacen = Kardex::almacenDeVenta($sucursal);
         if (! $almacen || ! $necesita) {
             return null;
         }

@@ -2,6 +2,9 @@
 
 namespace App\Support;
 
+use App\Models\Mesa;
+use App\Models\Pedido;
+use App\Models\PedidoDetalle;
 use App\Models\Producto;
 use App\Models\Turno;
 use App\Models\User;
@@ -148,6 +151,8 @@ class CajaSinInternet
                 'presentaciones' => ($presentaciones[$p->IdProducto] ?? collect())->map(fn ($r) => ['id' => (int) $r->id_presentacion, 'nombre' => $r->nombre,
                     'factor' => (float) $r->factor, 'precio' => (float) $r->precio])->values()])->values(),
             'mesas' => $mesas->map(fn ($m) => ['id' => (int) $m->mes_id, 'nombre' => $m->mes_nom, 'piso' => $m->pis_nom])->values(),
+            // Mesas ya abiertas en el sistema con lo que falta cobrar: si se cae el internet se ven ocupadas y se pueden cobrar
+            'pedidos' => self::pedidosAbiertos($suc),
             'impresoras' => $impresoras->map(fn ($i) => ['id' => (int) $i->Id, 'nombre' => $i->descripcion, 'ruta' => $i->ruta ?: $i->descripcion,
                 'conexion' => $i->tip_conex_imp, 'columnas' => (int) $i->columnas ?: 42])->values(),
             'impresora_caja' => $caja && $caja->tip_conex_imp !== 'WINDOWS' ? (int) $caja->Id : null,
@@ -155,6 +160,63 @@ class CajaSinInternet
             'encabezado' => $caja && $caja->tip_conex_imp !== 'WINDOWS' ? base64_encode(Impresion::encabezadoBytes($suc, (int) $caja->columnas ?: 42)) : null,
             'copias' => ['comprobante' => Impresion::copias($suc, 'copias_comprobante'), 'comanda' => Impresion::copias($suc, 'copias_comanda')],
         ];
+    }
+
+    /**
+     * Pedidos de mesa abiertos con lo que aún falta cobrar (una línea por producto, presentación y precio).
+     *
+     * @return array<int, array{ped_id: int, mesa: int, mozo: ?int, items: array}>
+     */
+    public static function pedidosAbiertos(int $suc): array
+    {
+        $pedidos = DB::table('pedidos')->where('id_empresa_negocio', $suc)->where('ped_est', 'Aperturado')->whereNotNull('mes_id')
+            ->where('ped_tip', '!=', 'Hotel')->orderBy('ped_id')->get(['ped_id', 'mes_id', 'mozo'])->unique('mes_id');
+        $items = DB::table('pedidos_detalle as d')->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
+            ->whereIn('d.ped_id', $pedidos->pluck('ped_id')->all() ?: [0])->where('d.estadoitem', '!=', 'Eliminado')
+            ->whereRaw('(d.ped_det_can - IFNULL(d.item_facturado, 0)) > 0')
+            ->get(['d.ped_id', 'd.IdProducto', 'd.id_presentacion', 'd.descripcion', 'd.ped_det_pre', 'p.cat_id',
+                DB::raw('d.ped_det_can - IFNULL(d.item_facturado, 0) as pendiente')])
+            ->groupBy('ped_id');
+
+        return $pedidos->map(fn ($p) => [
+            'ped_id' => (int) $p->ped_id, 'mesa' => (int) $p->mes_id, 'mozo' => $p->mozo ? (int) $p->mozo : null,
+            'items' => ($items[$p->ped_id] ?? collect())->groupBy(fn ($i) => $i->IdProducto.'|'.$i->id_presentacion.'|'.$i->ped_det_pre)
+                ->map(fn ($g) => ['id' => (int) $g->first()->IdProducto, 'nombre' => $g->first()->descripcion, 'precio' => (float) $g->first()->ped_det_pre,
+                    'presentacion' => $g->first()->id_presentacion ? (int) $g->first()->id_presentacion : null, 'categoria' => (int) $g->first()->cat_id,
+                    'cantidad' => round($g->sum('pendiente'), 2)])->values()->all(),
+        ])->filter(fn ($p) => $p['items'])->values()->all();
+    }
+
+    /**
+     * Un pedido del sistema cobrado sin internet: lo cobrado se descuenta de sus líneas y, si ya no queda nada, se cierra
+     * el pedido y se libera la mesa (igual que al cobrar la mesa con internet).
+     */
+    private static function cerrarPedido(Pedido $pedido, array $items): void
+    {
+        $lineas = PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')
+            ->whereRaw('(ped_det_can - IFNULL(item_facturado, 0)) > 0')->orderBy('ped_det_id')->get();
+        foreach ($items as $it) {
+            $resta = (float) $it['cantidad'];
+            foreach ($lineas->where('IdProducto', (int) ($it['id'] ?? 0)) as $linea) {
+                $toma = min($resta, (float) $linea->ped_det_can - (float) $linea->item_facturado);
+                if ($toma > 0) {
+                    $linea->increment('item_facturado', $toma);
+                    $resta = round($resta - $toma, 2);
+                }
+                if ($resta <= 0) {
+                    break;
+                }
+            }
+        }
+        $quedan = PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')
+            ->whereRaw('(ped_det_can - IFNULL(item_facturado, 0)) > 0')->exists();
+        if (! $quedan) {
+            $pedido->update(['ped_est' => 'Cerrado', 'fecha_hora_modificacion' => now()]);
+            Mesa::where('mes_id', $pedido->mes_id)->update(['mes_est' => 'Libre']);
+            MesasUnidas::liberar($pedido->ped_id);
+        } else {
+            $pedido->update(['fecha_hora_modificacion' => now()]);
+        }
     }
 
     /**
@@ -180,6 +242,9 @@ class CajaSinInternet
                 }
                 $lineas = VentaDirecta::lineas($user, collect($v['items']));
                 $mesa = ! empty($v['mesa']) ? DB::table('mesas')->where('mes_id', $v['mesa'])->where('id_empresa_negocio', $user->id_empresa_negocio)->first() : null;
+                // La mesa ya estaba abierta en el sistema: se cobra ese pedido (si nadie lo cobró ya con internet)
+                $pedido = ! empty($v['pedido']) ? Pedido::where('ped_id', $v['pedido'])->where('id_empresa_negocio', $user->id_empresa_negocio)
+                    ->where('ped_est', 'Aperturado')->lockForUpdate()->first() : null;
                 $datos = [
                     'tdocod' => $v['tdocod'], 'estadopago' => (int) DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)->where('cre_dia_tip', 'CONTADO')->value('cre_dia_id'),
                     'fecEmi' => substr((string) $v['fecha'], 0, 10), 'tdicod' => $v['tdicod'], 'clinum' => $v['clinum'], 'clinom' => $v['clinom'],
@@ -190,10 +255,15 @@ class CajaSinInternet
                     'serie_offline' => ['serie' => $v['serie'], 'numero' => (int) $v['numero']],
                 ];
 
-                return Comprobante::emitir($user, $turno, $datos, $lineas, array_filter([
-                    'ped_tip' => $mesa ? 'SALON' : ($v['origen'] ?? 'PV'), 'IdUsuario_ven' => $user->IdUsuario, 'fecha_hora' => $v['fecha'],
-                    'mes_id' => $mesa?->mes_id, 'pis_id' => $mesa?->pis_id ?? null, 'mozo' => $v['mozo'] ?? null,
+                $cabId = Comprobante::emitir($user, $turno, $datos, $lineas, array_filter([
+                    'ped_tip' => $mesa ? 'SALON' : ($v['origen'] ?? 'PV'), 'IdUsuario_ven' => $pedido?->mozo ?? $user->IdUsuario, 'fecha_hora' => $v['fecha'],
+                    'mes_id' => $mesa?->mes_id, 'pis_id' => $mesa?->pis_id ?? null, 'mozo' => $v['mozo'] ?? $pedido?->mozo, 'ped_id' => $pedido?->ped_id,
                 ], fn ($x) => $x !== null));
+                if ($pedido) {
+                    self::cerrarPedido($pedido, $v['items']);
+                }
+
+                return $cabId;
             });
         } catch (\Throwable $e) {
             if (! $e instanceof \RuntimeException) {

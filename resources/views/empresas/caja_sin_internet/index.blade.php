@@ -34,7 +34,7 @@
             return {
                 p: null, cargando: true, online: navigator.onLine, agente: null, pendientes: 0, errores: 0, nombrePc: '', subiendo: false,
                 vista: 'venta', busqueda: '', categoria: null, carrito: [], mesasAbiertas: [], mesa: null, elegirPresentacion: null,
-                cobro: null, ventas: [], aviso: null, avisoTipo: 'ok', procesando: false, volvio: false, subidasAlVolver: 0,
+                cobro: null, ventas: [], aviso: null, avisoTipo: 'ok', procesando: false, volvio: false, subidasAlVolver: 0, pedidosCobrados: [],
                 ultima: null, enviarCocina: true, pisoActual: null, pvResultados: [], pvActivo: 0, pvAbierto: false, pvMedio: null, pvMonto: '',
 
                 async init() {
@@ -78,7 +78,10 @@
                     this.pendientes = pend.filter((v) => v.estado === 'PENDIENTE').length;
                     this.errores = pend.filter((v) => v.estado === 'ERROR').length;
                     this.mesasAbiertas = (await C.mesas()).filter((m) => m.items.length);
-                    this.ventas = (await C.ventas()).slice(0, 50);
+                    const todas = await C.ventas();
+                    this.ventas = todas.slice(0, 50);
+                    // Pedidos del sistema que ya se cobraron en esta PC: no se vuelven a mostrar como mesa abierta
+                    this.pedidosCobrados = todas.map((v) => v.pedido).filter(Boolean);
                 },
 
                 async subir(silencio = false) {
@@ -267,7 +270,16 @@
 
                 // ---------------------------------------------------------------- mesas
 
-                estadoMesa(m) { return this.mesasAbiertas.find((x) => x.id === m.id); },
+                /** La mesa abierta en esta PC o, si no, el pedido que ya estaba abierto en el sistema (con lo que falta cobrar) */
+                estadoMesa(m) {
+                    const local = this.mesasAbiertas.find((x) => x.id === m.id);
+                    if (local) return local;
+                    const ped = (this.p?.pedidos || []).find((x) => x.mesa === m.id && !this.pedidosCobrados.includes(x.ped_id));
+                    return ped ? { id: m.id, nombre: m.nombre, ped_id: ped.ped_id, mozo: ped.mozo, delSistema: true, abierta: Date.now(),
+                        // Ya salió a cocina/barra con internet: no se vuelve a mandar
+                        items: ped.items.map((i, n) => ({ clave: 'S' + ped.ped_id + '-' + n, id: i.id, nombre: i.nombre, precio: i.precio, presentacion: i.presentacion,
+                            categoria: i.categoria, cantidad: i.cantidad, enviado: i.cantidad, observacion: '' })) } : null;
+                },
                 totalMesa(m) { return C.totales(m.items, false, 1).total.toFixed(2); },
                 get pisos() { return [...new Set((this.p?.mesas || []).map((m) => m.piso || 'Salón'))]; },
 
@@ -379,7 +391,7 @@
                         const { serie, numero } = await C.siguienteNumero(c.tdocod);
                         const venta = {
                             uuid: uuid(), usuario: this.p.usuario.id, tdocod: c.tdocod, serie, numero, fecha: ahora(), id_turno: this.p.turno.id, origen: this.p.empresa.origen,
-                            mesa: this.mesa?.id || null, mesa_nombre: this.mesa?.nombre || null, mozo: null, ...cliente,
+                            mesa: this.mesa?.id || null, mesa_nombre: this.mesa?.nombre || null, mozo: this.mesa?.mozo || null, pedido: this.mesa?.ped_id || null, ...cliente,
                             observaciones: c.observaciones.trim().slice(0, 90) || null, total, paga: Number(c.paga || 0),
                             items: this.lista.map((i) => ({ id: i.id, descripcion: String(i.nombre).trim().toUpperCase(), cantidad: i.cantidad, precio: i.precio, presentacion: i.presentacion })),
                             pagos: c.pagos.filter((x) => Number(x.monto) > 0).map((x) => ({ medio: Number(x.medio), monto: r2(x.monto), operacion: x.operacion || null,
@@ -863,7 +875,7 @@
                             <button type="button" @click="abrirMesa(m)" class="h-[70px] rounded-2xl text-center text-white shadow-sm hover:brightness-110"
                                     :class="estadoMesa(m) ? 'bg-orange-500' : 'bg-emerald-700'">
                                 <span class="block text-lg font-extrabold" x-text="m.nombre"></span>
-                                <span class="block text-xs font-semibold" x-text="estadoMesa(m) ? 'S/ ' + totalMesa(estadoMesa(m)) : 'Libre'"></span>
+                                <span class="block text-xs font-semibold" x-text="estadoMesa(m) ? 'S/ ' + totalMesa(estadoMesa(m)) + (estadoMesa(m).delSistema ? ' · del sistema' : '') : 'Libre'"></span>
                             </button>
                         </template>
                     </div>
@@ -871,7 +883,8 @@
                         <button type="button" @click="enviarCocina = true; irA('venta')" class="h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-extrabold shadow-sm">🥡 PARA LLEVAR</button>
                         <button type="button" @click="irA('venta')" class="h-14 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-lg font-extrabold shadow-sm">🧾 PUNTO DE VENTA</button>
                     </div>
-                    <p class="text-xs text-slate-500">Son las mesas atendidas en esta PC sin internet. Las que ya estaban abiertas en el sistema se cobran cuando vuelva el internet.</p>
+                    <p class="text-xs text-slate-500">Las mesas que ya estaban abiertas en el sistema salen ocupadas con lo que falta cobrar ("del sistema"): se pueden seguir atendiendo y cobrar aquí.
+                        Al volver el internet, ese pedido se cierra solo y la mesa queda libre.</p>
                 </div>
 
                 {{-- Pedido de la mesa (como la pantalla de comanda): productos a la izquierda, pedido a la derecha --}}

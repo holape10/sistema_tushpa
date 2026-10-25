@@ -416,7 +416,8 @@
             // Si la pantalla de la caja no quedó guardada en la PC (o se borró), se guarda de nuevo
             if ('caches' in window && !(await caches.match(CFG.pagina, { ignoreSearch: true, ignoreVary: true }).catch(() => null))) guardarPantalla();
             const fecha = await leer('kv', 'paquete_fecha').catch(() => 0);
-            if (!fecha || Date.now() - fecha > 10 * 60000) await actualizarPaquete().catch(() => {});
+            // Cada 2 minutos: las mesas abiertas en el sistema deben estar al día si se cae el internet
+            if (!fecha || Date.now() - fecha > 2 * 60000) await actualizarPaquete().catch(() => {});
             await sincronizar().catch(() => {});
         };
         setTimeout(ciclo, 3000);

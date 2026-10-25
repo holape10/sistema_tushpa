@@ -30,6 +30,9 @@
     <a href="{{ route('turnos.show', $turno->id_turno) }}">Reporte de caja</a>
     <a href="{{ route($modo === 'categorias' ? 'turnos.productos' : 'turnos.categorias', $turno->id_turno) }}">{{ $modo === 'categorias' ? 'Productos' : 'Categorías' }}</a>
     <a href="{{ route('turnos.listado') }}">Listado de turnos</a>
+    @if (auth()->user()->esAdmin())
+        <a href="{{ route('descuentos.reporte', ['desde' => $turno->apertura?->toDateString(), 'hasta' => ($turno->cierre ?? now())->toDateString(), 'cajero' => $turno->IdUsuario]) }}">Descuentos y cortesías</a>
+    @endif
 </div>
 <div class="hoja">
     <p class="c" style="margin:0">
@@ -73,6 +76,19 @@
         @endforelse
         <hr>
         <table><tr class="b"><td>GRAN TOTAL GENERAL:</td><td class="r">{{ $n($total) }}</td></tr></table>
+    @endif
+
+    {{-- Lo que se regaló: no suma en la venta, pero salió del almacén --}}
+    @if ($cortesias->isNotEmpty())
+        <div class="titulo">CORTESÍAS (NO COBRADAS)</div>
+        <table>
+            <tr class="b"><td>PRODUCTO</td><td class="r">CANT.</td><td class="r">VALOR</td></tr>
+            @foreach ($cortesias as $c)
+                <tr><td>{{ $c->nombre }}</td><td class="r">{{ $cant($c->cantidad) }}</td><td class="r">{{ $n($c->valor) }}</td></tr>
+            @endforeach
+        </table>
+        <hr>
+        <table><tr class="b"><td>TOTAL REGALADO:</td><td class="r">{{ $n($cortesias->sum('valor')) }}</td></tr></table>
     @endif
     <p class="c" style="margin-top:8px">Impreso: {{ now()->format('d-m-Y H:i') }}</p>
 </div>

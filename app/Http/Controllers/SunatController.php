@@ -49,7 +49,8 @@ class SunatController extends Controller
             ->orderByDesc('c.ccafem')->orderByDesc('c.IdCpe_cabecera')
             ->select('c.IdCpe_cabecera', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccafem', 'c.ccandi', 'c.ccanom', 'c.ccaitv',
                 'c.est_sunat', 'c.ccasunrescod', 'c.ccadessun', 'c.res_id', 'c.serie_ref', 'c.num_ref', 't.tdodes')
-            ->paginate(50)->withQueryString();
+            // "Por enviar": hasta 500 en una página para enviarlos todos de una vez
+            ->paginate($estado === 'pendientes' ? 500 : 50)->withQueryString();
 
         $empresa = DB::table('empresa')->where('IdEmpresa', Auth::user()->IdEmpresa)->first();
         $tieneCertificado = is_file(storage_path('app/certificados/'.Auth::user()->IdEmpresa.'.pem'));

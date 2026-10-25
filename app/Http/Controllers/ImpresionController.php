@@ -73,6 +73,8 @@ class ImpresionController extends Controller
                 ->get(['id', 'impresora', 'tipo', 'referencia', 'estado', 'intentos', 'error', 'creado', 'impreso']),
             'categorias' => DB::table('categorias')->where('id_empresa_negocio', $sucursal)->orderBy('cat_nom')->get(['cat_id', 'cat_nom', 'impresora', 'impresora2']),
             'usuarios' => DB::table('users')->where('id_empresa_negocio', $sucursal)->where('estusu', 1)->orderBy('apeusu')->get(['IdUsuario', 'apeusu', 'terminal', 'impresora_barra']),
+            // Varias barras con su almacén: cada PC de caja descuenta del suyo
+            'almacenes' => DB::table('almacenes')->where('id_empresa_negocio', $sucursal)->orderByDesc('predeterminado')->orderBy('descripcion')->get(['id_almacen', 'descripcion', 'predeterminado']),
         ]);
     }
 
@@ -193,9 +195,14 @@ class ImpresionController extends Controller
             ]);
         }
         $barrasEquipo = (array) $request->input('equipo_barra', []);
+        $almacenesEquipo = (array) $request->input('equipo_almacen', []);
+        $almacenes = DB::table('almacenes')->where('id_empresa_negocio', $sucursal)->pluck('id_almacen')->map(fn ($v) => (int) $v)->all();
         foreach ((array) $request->input('equipo_caja', []) as $pc => $imp) {
-            DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)->where('pc', $pc)
-                ->update(['impresora_caja' => $limpiar($imp), 'impresora_barra' => $limpiar($barrasEquipo[$pc] ?? null)]);
+            $almacen = (int) ($almacenesEquipo[$pc] ?? 0);
+            DB::table('impresion_agentes')->where('id_empresa_negocio', $sucursal)->where('pc', $pc)->update([
+                'impresora_caja' => $limpiar($imp), 'impresora_barra' => $limpiar($barrasEquipo[$pc] ?? null),
+                'id_almacen' => in_array($almacen, $almacenes, true) ? $almacen : null,
+            ]);
         }
         $barras = (array) $request->input('barra', []);
         foreach ((array) $request->input('usuario', []) as $usu => $imp) {

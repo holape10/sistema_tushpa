@@ -99,7 +99,7 @@ class VentaController extends Controller
         $ventas = (clone $q)
             ->orderByDesc('c.fecha_hora')->orderByDesc('c.IdCpe_cabecera')
             ->select('c.*', 't.tdodes', 'u.apeusu as usuario', 'm.mes_nom')
-            ->paginate(50)->withQueryString();
+            ->paginate(100)->withQueryString();
 
         // Medios de pago de las ventas de la página
         $medios = DB::table('venta_medio_pago as v')->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'v.id_med_pag')

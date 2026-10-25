@@ -174,6 +174,7 @@
                         <h3 class="font-bold text-gray-800"><i class="fas fa-desktop text-indigo-500"></i> Cajas: ¿qué imprime cada PC?</h3>
                         <p class="text-xs text-gray-400 mb-3">Para locales con varias cajas. Lo que se cobra en una PC sale en <b>su</b> ticketera de comprobantes.
                             @if ($negocio->comanda_al_cobrar ?? false)Al cobrar, la comanda sale solo en <b>su barra</b>, sin importar el usuario.@else Las comandas que se envían desde esa PC salen en <b>su barra</b>.@endif
+                            @if ($almacenes->count() > 1)Con <b>Almacén</b>, lo que se cobra en esa PC descuenta stock de ese almacén (una barra, un almacén).@endif
                             Después, en cada PC de caja toca <b>"Esta PC es…"</b> una sola vez (o elígela arriba, junto a tu nombre de sucursal).</p>
                         <div class="space-y-2">
                             @foreach ($agentes as $a)
@@ -188,6 +189,12 @@
                                         <option value="">Barra: por categoría</option>
                                         @foreach ($impresoras as $i)<option value="{{ $i->Id }}" @selected($a->impresora_barra == $i->Id)>Barra: {{ $i->descripcion }}</option>@endforeach
                                     </select>
+                                    @if ($almacenes->count() > 1)
+                                        <select name="equipo_almacen[{{ $a->pc }}]" class="w-48 rounded-lg border-gray-300 text-sm" title="Lo que se cobra en esta PC descuenta stock de este almacén">
+                                            <option value="">Almacén: {{ $almacenes->firstWhere('predeterminado', 1)->descripcion ?? 'predeterminado' }}</option>
+                                            @foreach ($almacenes as $al)<option value="{{ $al->id_almacen }}" @selected(($a->id_almacen ?? null) == $al->id_almacen)>Almacén: {{ $al->descripcion }}</option>@endforeach
+                                        </select>
+                                    @endif
                                     @if (($a->impresora_caja || $a->impresora_barra) && $equipoActual !== $a->pc)
                                         <button form="form-equipo" name="pc" value="{{ $a->pc }}" class="px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-700 text-xs font-semibold hover:bg-indigo-50">Esta PC es {{ $a->pc }}</button>
                                     @endif

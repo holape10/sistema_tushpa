@@ -9,6 +9,7 @@ use App\Models\MedioPago;
 use App\Models\Producto;
 use App\Models\Turno;
 use App\Models\User;
+use App\Support\Impresion\Impresion;
 use App\Support\Sunat\EnvioAutomatico;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -97,14 +98,16 @@ class Comprobante
 
         $fecEmi = $datos['fecEmi'];
         $fecVen = self::vencimiento($datos, $fecEmi, $esContado);
-        $almacen = Almacen::where('id_empresa_negocio', $user->id_empresa_negocio)->where('predeterminado', 1)->first();
+        // Varias cajas/barras: sale del almacén de la PC donde se cobra, y queda anotado en qué caja se cobró
+        $almacen = Kardex::almacenDeVenta((int) $user->id_empresa_negocio);
+        $equipo = Impresion::equipo((int) $user->id_empresa_negocio)?->pc;
 
         $cabId = DB::table('cpe_cabecera')->insertGetId($extra + self::cabecera($datos, $cliente, $cre, $totales, $gravado, $factorIgv) + [
             'tdocod' => $tdocod, 'serdoc' => $serie, 'numdoc' => $numero,
             'ccafem' => $fecEmi, 'ccafve' => $fecVen,
             'IdUsuario' => $user->IdUsuario,
             'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $user->id_empresa_negocio,
-            'id_almacen' => $almacen?->id_almacen, 'id_turno' => $turno->id_turno,
+            'id_almacen' => $almacen?->id_almacen, 'id_turno' => $turno->id_turno, 'equipo' => $equipo,
             'est_sunat' => $tdocod === '13' ? null : 'PENDIENTE',
         ]);
 

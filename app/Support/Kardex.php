@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Almacen;
 use App\Models\Combo;
 use App\Models\Producto;
+use App\Support\Impresion\Impresion;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -212,5 +213,17 @@ class Kardex
     public static function almacenPredeterminado(int $idEmpresaNegocio): ?Almacen
     {
         return Almacen::where('id_empresa_negocio', $idEmpresaNegocio)->orderByDesc('predeterminado')->first();
+    }
+
+    /**
+     * Almacén del que sale lo que se vende: el de la PC de caja donde se cobra (varias barras, cada una con su almacén;
+     * se elige en Impresión › Cajas) o, si esa PC no tiene, el predeterminado de la sucursal.
+     */
+    public static function almacenDeVenta(int $idEmpresaNegocio): ?Almacen
+    {
+        $propio = (int) (Impresion::equipo($idEmpresaNegocio)->id_almacen ?? 0);
+
+        return ($propio ? Almacen::where('id_empresa_negocio', $idEmpresaNegocio)->find($propio) : null)
+            ?? self::almacenPredeterminado($idEmpresaNegocio);
     }
 }

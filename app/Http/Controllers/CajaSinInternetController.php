@@ -55,6 +55,7 @@ class CajaSinInternetController extends Controller
             'ventas.*.id_turno' => 'nullable|integer',
             'ventas.*.origen' => 'nullable|in:PV,PVCOMANDA',
             'ventas.*.mesa' => 'nullable|integer',
+            'ventas.*.pedido' => 'nullable|integer',
             'ventas.*.mozo' => 'nullable|integer',
             'ventas.*.tdicod' => 'required|string|size:1',
             'ventas.*.clinum' => 'required|string|max:15',
