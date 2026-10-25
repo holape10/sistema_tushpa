@@ -52,6 +52,17 @@
             <option value="promotor" @selected(request('agrupar') === 'promotor')>Promotor</option>
         </select></label>
 @endif
+@if (in_array('jornada', $usa, true))
+    {{-- Discotecas y bares: lo vendido de madrugada cuenta en la noche en que se atendió --}}
+    <label class="text-sm" title="Jornada: la noche del 23 son las ventas del 23 a las 6:00 am hasta el 24 a las 5:59 am">Contar el día
+        <select name="jornada" class="block rounded-lg border-gray-300 text-sm">
+            <option value="">Calendario (00:00 a 23:59)</option>
+            <option value="1" @selected(request('jornada'))>Jornada de noche ({{ \App\Support\Reportes::CORTE_JORNADA }} am a {{ \App\Support\Reportes::CORTE_JORNADA }} am)</option>
+        </select></label>
+@endif
+@if (in_array('por_dia', $usa, true))
+    <label class="text-sm flex items-center gap-2 pb-2"><input type="checkbox" name="por_dia" value="1" @checked(request('por_dia')) class="rounded"> Separar por día</label>
+@endif
 @if (in_array('agrupar_rent', $usa, true))
     <label class="text-sm">Ver por
         <select name="agrupar" class="block rounded-lg border-gray-300 text-sm">

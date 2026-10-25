@@ -60,7 +60,7 @@ class Reportes
         $r['totales'] ??= self::sumar($r['columnas'], $r['filas']);
         // Filtros comunes de todos los reportes de ventas
         if ($r['grupo'] === 'Ventas') {
-            $r['usa'] = array_values(array_unique(array_merge(['vendedor', 'tipo', 'medio', 'cliente'], $r['usa'] ?? [])));
+            $r['usa'] = array_values(array_unique(array_merge(['vendedor', 'tipo', 'medio', 'cliente', 'jornada'], $r['usa'] ?? [])));
         }
 
         return $r;
@@ -102,16 +102,41 @@ class Reportes
             });
     }
 
+    /** La jornada de noche (discotecas, bares) va de esta hora a la misma hora del día siguiente */
+    public const CORTE_JORNADA = 6;
+
+    /**
+     * Fechas del reporte. Por día calendario (la fecha del comprobante) o por jornada: la noche del 23 son las ventas del
+     * 23 a las 6:00 hasta el 24 a las 5:59 (así lo vendido después de medianoche cuenta en la noche en que se atendió).
+     */
+    private static function enFechas($q, array $f)
+    {
+        if (! empty($f['jornada'])) {
+            return $q->whereBetween('c.fecha_hora', [
+                Carbon::parse($f['desde'])->setTime(self::CORTE_JORNADA, 0),
+                Carbon::parse($f['hasta'])->addDay()->setTime(self::CORTE_JORNADA, 0)->subSecond(),
+            ]);
+        }
+
+        return $q->whereBetween('c.ccafem', [$f['desde'], $f['hasta']]);
+    }
+
+    /** El día al que pertenece cada venta: su fecha, o su jornada (lo de la madrugada cuenta en la noche anterior) */
+    private static function diaSql(array $f): string
+    {
+        return ! empty($f['jornada']) ? 'DATE(DATE_SUB(c.fecha_hora, INTERVAL '.self::CORTE_JORNADA.' HOUR))' : 'c.ccafem';
+    }
+
     private static function cpe(array $f)
     {
-        return self::filtrosComunes(DB::table('cpe_cabecera as c')->whereIn('c.id_empresa_negocio', $f['sucursales'])
-            ->whereBetween('c.ccafem', [$f['desde'], $f['hasta']])->whereNull('c.ccabaj'), $f);
+        return self::filtrosComunes(self::enFechas(DB::table('cpe_cabecera as c')->whereIn('c.id_empresa_negocio', $f['sucursales'])
+            ->whereNull('c.ccabaj'), $f), $f);
     }
 
     private static function detalle(array $f)
     {
-        return self::filtrosComunes(DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
-            ->whereIn('c.id_empresa_negocio', $f['sucursales'])->whereBetween('c.ccafem', [$f['desde'], $f['hasta']])->whereNull('c.ccabaj'), $f);
+        return self::filtrosComunes(self::enFechas(DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
+            ->whereIn('c.id_empresa_negocio', $f['sucursales'])->whereNull('c.ccabaj'), $f), $f);
     }
 
     // ================================================================== VENTAS
@@ -153,20 +178,24 @@ class Reportes
         $porMozo = $agrupar === 'mozo';
         $porPromotor = $agrupar === 'promotor';
         $campo = $porMozo ? 'c.mozo' : ($porPromotor ? 'c.promotor_id' : 'COALESCE(c.IdUsuario_ven, c.IdUsuario)');
+        // Separar por día (o por jornada): cuánto vendió cada uno cada noche, para su pago o su comisión
+        $porDia = ! empty($f['por_dia']);
+        $dia = self::diaSql($f);
         $rows = self::cpe($f)->leftJoin('users as u', 'u.IdUsuario', '=', DB::raw($campo))
             ->when($porMozo, fn ($w) => $w->whereNotNull('c.mozo'))
             ->when($porPromotor, fn ($w) => $w->whereNotNull('c.promotor_id'))
-            ->groupBy(DB::raw($campo), 'u.name', 'u.apeusu')
-            ->select('u.name', 'u.apeusu', DB::raw("SUM(c.tdocod NOT IN ('07','08')) as docs"), DB::raw('SUM('.self::SIGNO.' * c.ccaitv) as total'),
-                DB::raw('MIN(c.ccafem) as primera'), DB::raw('MAX(c.ccafem) as ultima'))
-            ->orderByDesc('total')->get();
+            ->groupBy(array_merge($porDia ? [DB::raw($dia)] : [], [DB::raw($campo), 'u.name', 'u.apeusu']))
+            ->select(array_merge($porDia ? [DB::raw($dia.' as dia')] : [], ['u.name', 'u.apeusu', DB::raw("SUM(c.tdocod NOT IN ('07','08')) as docs"),
+                DB::raw('SUM('.self::SIGNO.' * c.ccaitv) as total'), DB::raw('MIN(c.ccafem) as primera'), DB::raw('MAX(c.ccafem) as ultima')]))
+            ->when($porDia, fn ($w) => $w->orderBy('dia'))->orderByDesc('total')->get();
         $total = max(0.01, (float) $rows->sum('total'));
-        $filas = $rows->map(fn ($r) => ['vendedor' => ($r->apeusu ?: $r->name) ?: 'SIN ASIGNAR', 'docs' => (int) $r->docs,
+        $filas = $rows->map(fn ($r) => ($porDia ? ['dia' => $r->dia] : []) + ['vendedor' => ($r->apeusu ?: $r->name) ?: 'SIN ASIGNAR', 'docs' => (int) $r->docs,
             'total' => (float) $r->total, 'ticket' => $r->docs ? (float) $r->total / $r->docs : 0, 'participacion' => (float) $r->total / $total * 100])->all();
 
-        return ['columnas' => ['vendedor' => [$porMozo ? 'Mozo' : ($porPromotor ? 'Promotor' : 'Vendedor / cajero'), 'text'], 'docs' => ['Ventas', 'num'], 'total' => ['Total vendido', 'money'],
-            'ticket' => ['Ticket promedio', 'money'], 'participacion' => ['% del total', 'pct']], 'filas' => $filas, 'usa' => ['agrupar'],
-            'grafico' => ['etiqueta' => 'vendedor', 'valor' => 'total']];
+        return ['columnas' => ($porDia ? ['dia' => [! empty($f['jornada']) ? 'Jornada (noche del)' : 'Día', 'date']] : [])
+            + ['vendedor' => [$porMozo ? 'Mozo' : ($porPromotor ? 'Promotor' : 'Vendedor / cajero'), 'text'], 'docs' => ['Ventas', 'num'], 'total' => ['Total vendido', 'money'],
+                'ticket' => ['Ticket promedio', 'money'], 'participacion' => ['% del total', 'pct']], 'filas' => $filas, 'usa' => ['agrupar', 'por_dia'],
+            'grafico' => $porDia ? null : ['etiqueta' => 'vendedor', 'valor' => 'total']];
     }
 
     private static function delivery(array $f): array

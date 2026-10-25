@@ -92,6 +92,7 @@ use App\Http\Controllers\TransferenciaController;
 use App\Http\Controllers\TratamientoClinicoController;
 use App\Http\Controllers\TributoController;
 use App\Http\Controllers\TurnoController;
+use App\Http\Controllers\TurnoExportarController;
 use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\VentaController;
 use App\Http\Controllers\VentaMasivaController;
@@ -149,6 +150,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/turnos/movimiento', [TurnoController::class, 'movimiento'])->name('turnos.movimiento');
     Route::post('/turnos/movimiento/{id}/anular', [TurnoController::class, 'anularMovimiento'])->name('turnos.anular_movimiento');
     Route::get('/turnos/listado', [TurnoController::class, 'listado'])->name('turnos.listado');
+    Route::get('/turnos/listado/excel', [TurnoExportarController::class, 'listadoExcel'])->name('turnos.listado.excel');
+    Route::get('/turnos/listado/pdf', [TurnoExportarController::class, 'listadoPdf'])->name('turnos.listado.pdf');
+    Route::get('/turnos/{id}/excel', [TurnoExportarController::class, 'turnoExcel'])->whereNumber('id')->name('turnos.excel');
+    Route::get('/turnos/{id}/pdf', [TurnoExportarController::class, 'turnoPdf'])->whereNumber('id')->name('turnos.pdf');
     Route::get('/turnos/{id}', [TurnoController::class, 'show'])->whereNumber('id')->name('turnos.show');
     Route::get('/turnos/{id}/productos', [TurnoController::class, 'productos'])->whereNumber('id')->name('turnos.productos');
     Route::get('/turnos/{id}/categorias', [TurnoController::class, 'categorias'])->whereNumber('id')->name('turnos.categorias');

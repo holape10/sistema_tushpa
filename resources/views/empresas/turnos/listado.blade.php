@@ -6,6 +6,9 @@
         <label class="text-sm">Desde<input type="date" name="desde" value="{{ $desde }}" class="block rounded-lg border-gray-300 text-sm"></label>
         <label class="text-sm">Hasta<input type="date" name="hasta" value="{{ $hasta }}" class="block rounded-lg border-gray-300 text-sm"></label>
         <button class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">Filtrar</button>
+        {{-- Los turnos del rango con sus totales --}}
+        <a href="{{ route('turnos.listado.excel', ['desde' => $desde, 'hasta' => $hasta]) }}" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">📊 Excel</a>
+        <a href="{{ route('turnos.listado.pdf', ['desde' => $desde, 'hasta' => $hasta]) }}" target="_blank" class="px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700">📄 PDF</a>
         <a href="{{ route('turnos.index') }}" class="ml-auto px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Mi turno actual</a>
     </form>
     <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
@@ -34,6 +37,8 @@
                             <a href="{{ route('turnos.show', $t->id_turno) }}" class="text-indigo-600 hover:underline">Reporte</a>
                             <a href="{{ route('turnos.productos', $t->id_turno) }}" target="_blank" class="ml-3 text-sky-600 hover:underline">Productos</a>
                             <a href="{{ route('turnos.categorias', $t->id_turno) }}" target="_blank" class="ml-3 text-sky-600 hover:underline">Categorías</a>
+                            <a href="{{ route('turnos.excel', $t->id_turno) }}" class="ml-3 text-emerald-600 hover:underline" title="El turno completo en Excel">Excel</a>
+                            <a href="{{ route('turnos.pdf', $t->id_turno) }}" target="_blank" class="ml-3 text-rose-600 hover:underline" title="El turno completo en PDF">PDF</a>
                         </td>
                     </tr>
                 @empty
