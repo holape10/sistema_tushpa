@@ -108,7 +108,7 @@
                                 <label class="col-span-2">Número
                                     <div class="flex gap-2 mt-1">
                                         <input x-model="form.doc" @input="autoTipo()" @keydown.enter.prevent="consultar()" maxlength="15" inputmode="numeric" required class="flex-1 min-w-0 rounded-lg border-gray-300 font-semibold">
-                                        <button type="button" @click="consultar()" :disabled="buscando" title="Buscar en SUNAT (RUC)" class="px-3 rounded-lg bg-indigo-600 text-white disabled:opacity-50">
+                                        <button type="button" @click="consultar()" :disabled="buscando" title="Buscar por DNI o RUC" class="px-3 rounded-lg bg-indigo-600 text-white disabled:opacity-50">
                                             <i class="fas" :class="buscando ? 'fa-spinner fa-spin' : 'fa-magnifying-glass'"></i></button>
                                     </div></label>
                             </div>
@@ -182,20 +182,22 @@
                 editar(id, datos) { this.id = id; this.form = { ...vacio(), ...datos }; this.error = ''; this.sunat = ''; },
                 autoTipo() {
                     const d = this.form.doc.trim();
+                    // Al completar el DNI (8) o el RUC (11) se busca solo, si aún no tiene nombre
                     if (/^\d{11}$/.test(d)) { this.form.tdicod = '6'; if (!this.form.nombre) this.consultar(); }
-                    else if (/^\d{8}$/.test(d)) this.form.tdicod = '1';
+                    else if (/^\d{8}$/.test(d)) { this.form.tdicod = '1'; if (!this.form.nombre) this.consultar(); }
                 },
                 async consultar() {
                     const d = this.form.doc.trim();
-                    if (!/^\d{11}$/.test(d)) { this.sunatOk = false; this.sunat = 'La búsqueda en SUNAT es por RUC (11 dígitos).'; return; }
-                    this.buscando = true; this.sunat = 'Consultando SUNAT…'; this.sunatOk = true;
+                    if (!/^\d{8}$|^\d{11}$/.test(d)) { this.sunatOk = false; this.sunat = 'Escribe un DNI (8 dígitos) o un RUC (11 dígitos).'; return; }
+                    const dni = d.length === 8;
+                    this.buscando = true; this.sunat = dni ? 'Consultando DNI…' : 'Consultando SUNAT…'; this.sunatOk = true;
                     try {
                         const r = await (await fetch(@js(url('contactos/sunat')) + '/' + d, { headers: { Accept: 'application/json' } })).json();
                         if (r.error) { this.sunatOk = false; this.sunat = r.error; return; }
                         this.form.nombre = r.nombre; this.form.direccion = r.direccion || this.form.direccion;
                         this.sunatOk = !r.estado || r.estado === 'ACTIVO';
-                        this.sunat = '✔ Encontrado en SUNAT' + (r.estado ? ` · ${r.estado}` : '') + (r.condicion ? ` · ${r.condicion}` : '');
-                    } catch (e) { this.sunatOk = false; this.sunat = 'No se pudo consultar SUNAT.'; }
+                        this.sunat = (dni ? '✔ DNI encontrado' : '✔ Encontrado en SUNAT') + (r.estado ? ` · ${r.estado}` : '') + (r.condicion ? ` · ${r.condicion}` : '');
+                    } catch (e) { this.sunatOk = false; this.sunat = dni ? 'No se pudo consultar el DNI.' : 'No se pudo consultar SUNAT.'; }
                     finally { this.buscando = false; }
                 },
                 async guardar() {
