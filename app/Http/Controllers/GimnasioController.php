@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\MedioPago;
 use App\Models\Turno;
+use App\Support\ExcelLector;
 use App\Support\Gimnasio;
+use App\Support\GimnasioImportar;
 use App\Support\Impresion\Impresion;
 use App\Support\VentaDirecta;
 use Carbon\Carbon;
@@ -13,6 +15,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Gimnasio (recepción y administración): clientes con foto y huella, planes, venta de membresías,
@@ -66,6 +70,66 @@ class GimnasioController extends Controller
         return DB::table('users as u')->join('role_user as r', 'r.user_IdUsuario', '=', 'u.IdUsuario')
             ->where('r.role_id', Gimnasio::ROL_ENTRENADOR)->where('u.IdEmpresa', Auth::user()->IdEmpresa)->where('u.estusu', 1)
             ->orderBy('u.apeusu')->get(['u.IdUsuario', 'u.apeusu']);
+    }
+
+    // ------------------------------------------------------------------ importar clientes desde Excel
+
+    /** Pantalla para subir el Excel; si ya se subió uno, muestra su revisión (nada guardado aún) */
+    public function importar(Request $request)
+    {
+        $this->soloAdmin();
+        $ruta = session('gym_importar');
+        $revision = null;
+        $error = null;
+        if ($ruta && Storage::disk('local')->exists($ruta)) {
+            try {
+                $revision = GimnasioImportar::revisar(ExcelLector::filas(Storage::disk('local')->path($ruta), pathinfo($ruta, PATHINFO_EXTENSION), GimnasioImportar::HOJA), $this->sucursal());
+            } catch (\RuntimeException $e) {
+                $error = $e->getMessage();
+            }
+        }
+
+        return view('empresas.gimnasio.importar', ['revision' => $revision, 'error' => $error, 'archivo' => session('gym_importar_nombre')]);
+    }
+
+    public function importarSubir(Request $request)
+    {
+        $this->soloAdmin();
+        $request->validate(['excel' => 'required|file|max:20480|mimes:xlsx,csv,txt'], ['excel.mimes' => 'Sube el Excel (.xlsx) o un .csv.'], ['excel' => 'archivo']);
+        $this->importarLimpiar();
+        $f = $request->file('excel');
+        $ruta = $f->storeAs('importar', Str::uuid().'.'.strtolower($f->getClientOriginalExtension() ?: 'xlsx'), 'local');
+        session(['gym_importar' => $ruta, 'gym_importar_nombre' => $f->getClientOriginalName()]);
+
+        return redirect()->route('gimnasio.importar');
+    }
+
+    public function importarConfirmar()
+    {
+        $this->soloAdmin();
+        $ruta = session('gym_importar');
+        abort_unless($ruta && Storage::disk('local')->exists($ruta), 404, 'Vuelve a subir el Excel.');
+        $revision = GimnasioImportar::revisar(ExcelLector::filas(Storage::disk('local')->path($ruta), pathinfo($ruta, PATHINFO_EXTENSION), GimnasioImportar::HOJA), $this->sucursal());
+        $r = GimnasioImportar::importar(Auth::user(), $revision['clientes']);
+        $this->importarLimpiar();
+
+        return redirect()->route('gimnasio.index')->with('success', "Listo: {$r['creados']} clientes nuevos, {$r['actualizados']} ya estaban (se completaron sus datos) y {$r['membresias']} membresías registradas.");
+    }
+
+    public function importarCancelar()
+    {
+        $this->soloAdmin();
+        $this->importarLimpiar();
+
+        return redirect()->route('gimnasio.importar');
+    }
+
+    private function importarLimpiar(): void
+    {
+        if ($ruta = session('gym_importar')) {
+            Storage::disk('local')->delete($ruta);
+        }
+        session()->forget(['gym_importar', 'gym_importar_nombre']);
     }
 
     // ------------------------------------------------------------------ pantalla principal

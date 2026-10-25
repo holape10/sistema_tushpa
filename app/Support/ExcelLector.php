@@ -1,23 +1,25 @@
 <?php
+
 namespace App\Support;
 
 /**
- * Lee la primera hoja de un .xlsx (o un .csv) y devuelve sus filas como arrays de textos, sin librerías externas.
- * Las celdas vacías intermedias se respetan (la columna C siempre es el índice 2).
+ * Lee una hoja de un .xlsx (o un .csv) y devuelve sus filas como arrays de textos, sin librerías externas: la primera,
+ * o la que se pida por nombre (si existe). Las celdas vacías intermedias se respetan (la columna C siempre es el índice 2).
  */
 class ExcelLector
 {
     /** @return array<int, array<int, string>> */
-    public static function filas(string $ruta, string $extension): array
+    public static function filas(string $ruta, string $extension, ?string $hoja = null): array
     {
         $extension = strtolower($extension);
-        $filas = in_array($extension, ['csv', 'txt']) ? self::csv($ruta) : self::xlsx($ruta);
+        $filas = in_array($extension, ['csv', 'txt']) ? self::csv($ruta) : self::xlsx($ruta, $hoja);
 
         // Quita filas totalmente vacías del final y espacios sobrantes
-        $filas = array_map(fn($f) => array_map(fn($v) => trim((string) $v), $f), $filas);
+        $filas = array_map(fn ($f) => array_map(fn ($v) => trim((string) $v), $f), $filas);
         while ($filas && implode('', end($filas)) === '') {
             array_pop($filas);
         }
+
         return $filas;
     }
 
@@ -25,7 +27,7 @@ class ExcelLector
     {
         $texto = file_get_contents($ruta);
         $texto = preg_replace('/^\xEF\xBB\xBF/', '', $texto);           // BOM
-        if (!mb_check_encoding($texto, 'UTF-8')) {
+        if (! mb_check_encoding($texto, 'UTF-8')) {
             $texto = mb_convert_encoding($texto, 'UTF-8', 'Windows-1252'); // CSV guardado por Excel en Windows
         }
         $primera = strtok($texto, "\n");
@@ -39,12 +41,13 @@ class ExcelLector
             $filas[] = $f;
         }
         fclose($h);
+
         return $filas;
     }
 
-    private static function xlsx(string $ruta): array
+    private static function xlsx(string $ruta, ?string $nombreHoja = null): array
     {
-        $zip = new \ZipArchive();
+        $zip = new \ZipArchive;
         if ($zip->open($ruta) !== true) {
             throw new \RuntimeException('El archivo no es un Excel (.xlsx) válido.');
         }
@@ -57,7 +60,7 @@ class ExcelLector
             }
         }
 
-        $hoja = $zip->getFromName(self::rutaPrimeraHoja($zip));
+        $hoja = $zip->getFromName(self::rutaHoja($zip, $nombreHoja));
         $zip->close();
         if ($hoja === false) {
             throw new \RuntimeException('No se encontró ninguna hoja en el Excel.');
@@ -70,10 +73,10 @@ class ExcelLector
                 $col = self::indiceColumna((string) $c['r']);
                 $tipo = (string) $c['t'];
                 $valor = match ($tipo) {
-                    's'         => $compartidos[(int) $c->v] ?? '',
+                    's' => $compartidos[(int) $c->v] ?? '',
                     'inlineStr' => self::texto($c->is),
-                    'b'         => (string) $c->v === '1' ? 'VERDADERO' : 'FALSO',
-                    default     => self::numero((string) $c->v),
+                    'b' => (string) $c->v === '1' ? 'VERDADERO' : 'FALSO',
+                    default => self::numero((string) $c->v),
                 };
                 $fila[$col ?? count($fila)] = $valor;
             }
@@ -90,32 +93,45 @@ class ExcelLector
             $filas += array_fill(0, max(array_keys($filas)) + 1, []);
             ksort($filas);
         }
+
         return array_values($filas);
     }
 
-    /** Sigue workbook.xml → relaciones para hallar la primera hoja (no siempre es sheet1.xml) */
-    private static function rutaPrimeraHoja(\ZipArchive $zip): string
+    /**
+     * Sigue workbook.xml → relaciones para hallar la hoja (no siempre es sheet1.xml): la de ese nombre (sin importar
+     * mayúsculas ni espacios) o, si no hay, la primera.
+     */
+    private static function rutaHoja(\ZipArchive $zip, ?string $nombre = null): string
     {
         $libro = $zip->getFromName('xl/workbook.xml');
         $rels = $zip->getFromName('xl/_rels/workbook.xml.rels');
         if ($libro && $rels) {
             $wb = simplexml_load_string($libro);
             $hoja = $wb->sheets->sheet[0] ?? null;
+            $buscar = $nombre !== null ? mb_strtoupper(trim($nombre)) : null;
+            foreach ($buscar !== null ? $wb->sheets->sheet : [] as $s) {
+                if (mb_strtoupper(trim((string) $s['name'])) === $buscar) {
+                    $hoja = $s;
+                    break;
+                }
+            }
             $rId = $hoja ? (string) $hoja->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships')['id'] : '';
             foreach (simplexml_load_string($rels)->Relationship as $r) {
                 if ((string) $r['Id'] === $rId) {
                     $target = ltrim((string) $r['Target'], '/');
-                    return str_starts_with($target, 'xl/') ? $target : 'xl/' . $target;
+
+                    return str_starts_with($target, 'xl/') ? $target : 'xl/'.$target;
                 }
             }
         }
+
         return 'xl/worksheets/sheet1.xml';
     }
 
     /** Texto de un <si> o <is>: simple (<t>) o con formato (<r><t>) */
     private static function texto(?\SimpleXMLElement $nodo): string
     {
-        if (!$nodo) {
+        if (! $nodo) {
             return '';
         }
         if (isset($nodo->t)) {
@@ -125,28 +141,31 @@ class ExcelLector
         foreach ($nodo->r as $r) {
             $s .= (string) $r->t;
         }
+
         return $s;
     }
 
     /** Evita notaciones como 2.9999999999999996 o 1E+15 en números guardados por Excel */
     private static function numero(string $v): string
     {
-        if ($v === '' || !is_numeric($v)) {
+        if ($v === '' || ! is_numeric($v)) {
             return $v;
         }
         $n = (float) $v;
+
         return floor($n) == $n && abs($n) < 1e15 ? number_format($n, 0, '.', '') : rtrim(rtrim(number_format(round($n, 6), 6, '.', ''), '0'), '.');
     }
 
     private static function indiceColumna(string $ref): ?int
     {
-        if (!preg_match('/^([A-Z]+)/', strtoupper($ref), $m)) {
+        if (! preg_match('/^([A-Z]+)/', strtoupper($ref), $m)) {
             return null;
         }
         $n = 0;
         foreach (str_split($m[1]) as $l) {
             $n = $n * 26 + (ord($l) - 64);
         }
+
         return $n - 1;
     }
 }

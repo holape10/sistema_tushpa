@@ -35,11 +35,14 @@ class GimnasioReporteController extends Controller
         ] + $this->ventas($suc, $rango) + $this->asistencia($suc, $rango, $desde, $hasta) + $this->clientes($suc, $rango));
     }
 
-    /** Ventas de planes vigentes (las anuladas no cuentan) */
+    /**
+     * Ventas de planes vigentes (las anuladas no cuentan). Las membresías traídas del Excel (sin comprobante) no son ventas
+     * del sistema, pero sí cuentan como historia: el siguiente pago de ese cliente es renovación, no cliente nuevo.
+     */
     private function ventas(int $suc, array $rango): array
     {
         $ventas = DB::table('gym_membresias as m')->leftJoin('users as u', 'u.IdUsuario', '=', 'm.IdUsuario')
-            ->where('m.id_empresa_negocio', $suc)->where('m.estado', 'ACTIVA')->whereBetween('m.creado', $rango)
+            ->where('m.id_empresa_negocio', $suc)->where('m.estado', 'ACTIVA')->whereNotNull('m.IdCpe_cabecera')->whereBetween('m.creado', $rango)
             ->get(['m.mem_id', 'm.soc_id', 'm.plan', 'm.dias', 'm.precio', 'm.IdCpe_cabecera', 'u.apeusu as cajero']);
 
         // Primera membresía (de varios días) de cada cliente: si es la que se vendió, es cliente nuevo; si no, renovación

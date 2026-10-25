@@ -333,6 +333,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/congelamientos/{id}/anular', 'anularCongelamiento')->whereNumber('id')->name('congelamiento.anular');
         Route::post('/congelamientos/{id}/levantar', 'levantarCongelamiento')->whereNumber('id')->name('congelamiento.levantar');
         Route::post('/planes', 'guardarPlan')->name('plan');
+        Route::get('/importar', 'importar')->name('importar');
+        Route::post('/importar', 'importarSubir')->name('importar.subir');
+        Route::post('/importar/confirmar', 'importarConfirmar')->name('importar.confirmar');
+        Route::post('/importar/cancelar', 'importarCancelar')->name('importar.cancelar');
         Route::get('/acceso', 'acceso')->name('acceso');
         Route::get('/acceso/hoy', 'ingresosHoy')->name('acceso.hoy');
         Route::post('/acceso/marcar', 'marcar')->middleware('throttle:120,1')->name('acceso.marcar');

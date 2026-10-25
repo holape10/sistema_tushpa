@@ -27,6 +27,7 @@
                 @endif
                 @if ($esAdmin)
                     <button type="button" @click="modal = 'planes'" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"><i class="fas fa-tags"></i> Planes</button>
+                    <a href="{{ route('gimnasio.importar') }}" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50" title="Pasar al sistema los clientes que llevabas en Excel"><i class="fas fa-file-excel"></i> Importar desde Excel</a>
                 @endif
             </div>
         </div>
