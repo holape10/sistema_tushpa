@@ -117,10 +117,13 @@ class Comprobante
         }
         if ($esContado && $total > 0) {
             self::registrarMedios($user, $turno, $cabId, $total,
-                (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []), (array) ($datos['op_med_pag'] ?? []));
+                (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []), (array) ($datos['op_med_pag'] ?? []),
+                (array) ($datos['usd_med_pag'] ?? []));
         } elseif (! $esContado) {
             Cuentas::abrirPorCobrar($cabId);
         }
+        // Propina del cliente: aparte del comprobante
+        Propinas::registrar($user, $turno, $cabId, $datos);
 
         // ---- Detalle: una línea por producto, con su salida de stock ----
         self::registrarDetalle($user, $cabId, $lineas, $sucursal, $almacen, $gravado, $factorIgv, [
@@ -206,7 +209,8 @@ class Comprobante
 
         if ($esContado && $total > 0) {
             self::registrarMedios($user, $turno, $cabId, $total,
-                (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []), (array) ($datos['op_med_pag'] ?? []));
+                (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []), (array) ($datos['op_med_pag'] ?? []),
+                (array) ($datos['usd_med_pag'] ?? []));
         } elseif (! $esContado) {
             Cuentas::abrirPorCobrar($cabId);
         }
@@ -323,6 +327,8 @@ class Comprobante
         $esContado = $cre->cre_dia_tip === 'CONTADO';
         $total = $totales['ccaitv'];
         $paga = (float) ($datos['paga'] ?? 0);
+        // Con lo que paga el cliente también se cubre la propina: el vuelto es lo que sobra de las dos
+        $propina = round(max(0, (float) ($datos['propina'] ?? 0)), 2);
 
         return [
             'tdicod' => $datos['tdicod'], 'ccandi' => trim($datos['clinum']), 'ccanom' => strtoupper(trim($datos['clinom'])),
@@ -332,7 +338,7 @@ class Comprobante
             'ccatexo' => $totales['ccatexo'], 'ccaitv' => $total,
             'ccagra' => $totales['ccagra'] ?? 0, 'ccaigvgra' => $totales['ccaigvgra'] ?? 0,
             'totalcontado' => $esContado ? $total : 0, 'totalcredito' => $esContado ? 0 : $total,
-            'paga' => $paga, 'vuelto' => $esContado ? max(0, round($paga - $total, 2)) : 0,
+            'paga' => $paga, 'vuelto' => $esContado ? max(0, round($paga - $total - $propina, 2)) : 0,
             'estadopago' => $esContado ? 'CONTADO' : 'CREDITO', 'cre_dia_id' => $cre->cre_dia_id,
             'ccaobs' => $datos['observaciones'] ?? null, 'consumo' => (int) ($datos['consumo'] ?? 0),
         ];
@@ -430,14 +436,20 @@ class Comprobante
      * Medios de pago de una venta al contado; sin medios elegidos se cobra todo con el predeterminado.
      * $operaciones: número de operación de cada medio (tarjeta, Yape, transferencia...); obligatorio para los que no son
      * EFECTIVO cuando la sucursal lo exige (empresa_negocios.exigir_operacion).
+     * $dolares: qué medios pagó el cliente en dólares (1/0 por medio). El monto sigue en soles; se anota cuántos dólares
+     * son con el tipo de cambio de la sucursal, para que la caja sepa cuántos dólares debe tener.
      */
-    private static function registrarMedios(User $user, Turno $turno, int $cabId, float $total, array $ids, array $montos, array $operaciones = []): void
+    private static function registrarMedios(User $user, Turno $turno, int $cabId, float $total, array $ids, array $montos, array $operaciones = [], array $dolares = []): void
     {
-        $fila = fn ($idMedio, $monto, $operacion = null) => [
+        $tipoCambio = Descuentos::config((int) $user->id_empresa_negocio)->tipoCambio;
+        if (array_filter($dolares) && ! $tipoCambio) {
+            throw new \RuntimeException('Para cobrar en dólares, el administrador debe poner el tipo de cambio en la sucursal.');
+        }
+        $fila = fn ($idMedio, $monto, $operacion = null, $enDolares = false) => [
             'IdCpe_cabecera' => $cabId, 'id_med_pag' => $idMedio, 'monto' => $monto,
             'id_turno' => $turno->id_turno, 'id_empresa_negocio' => $user->id_empresa_negocio,
             'num_operacion' => trim((string) $operacion) !== '' ? mb_substr(trim((string) $operacion), 0, 30) : null,
-        ];
+        ] + ($enDolares ? ['moneda' => 'USD', 'monto_usd' => round((float) $monto / $tipoCambio, 2), 'tipo_cambio' => $tipoCambio] : []);
         $exige = (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $user->id_empresa_negocio)->value('exigir_operacion');
         $nombres = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->pluck('nom_med_pag', 'id_med_pag');
         $revisar = function ($idMedio, $operacion) use ($exige, $nombres) {
@@ -453,7 +465,7 @@ class Comprobante
                 throw new \RuntimeException('No hay medios de pago configurados.');
             }
             $revisar($medio->id_med_pag, null);
-            DB::table('venta_medio_pago')->insert($fila($medio->id_med_pag, $total));
+            DB::table('venta_medio_pago')->insert($fila($medio->id_med_pag, $total, null, ! empty($dolares[0])));
 
             return;
         }
@@ -493,7 +505,7 @@ class Comprobante
             $operaciones[$k] = $op;
         }
         foreach ($ids as $k => $idMedio) {
-            DB::table('venta_medio_pago')->insert($fila($idMedio, $montos[$k], $operaciones[$k] ?? null));
+            DB::table('venta_medio_pago')->insert($fila($idMedio, $montos[$k], $operaciones[$k] ?? null, ! empty($dolares[$k])));
         }
     }
 }

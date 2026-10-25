@@ -55,6 +55,26 @@
             @endif
         </div>
 
+        @if ($miMeta)
+            {{-- Meta de venta del mozo: cuánto lleva y cuánto le falta --}}
+            <div class="grid gap-2 sm:grid-cols-3">
+                @foreach ($miMeta as $periodo => $a)
+                    @php $ok = $a['pct'] >= 100; @endphp
+                    <div class="rounded-2xl bg-white p-3 shadow-sm ring-1 {{ $ok ? 'ring-emerald-300' : 'ring-gray-200' }}">
+                        <div class="flex items-baseline justify-between gap-2">
+                            <p class="text-xs font-bold uppercase text-gray-500">🎯 Meta {{ ['dia' => 'de hoy', 'semana' => 'de la semana', 'mes' => 'del mes'][$periodo] }}</p>
+                            <p class="text-sm font-black {{ $ok ? 'text-emerald-600' : 'text-indigo-700' }}">{{ $a['pct'] }}%</p>
+                        </div>
+                        <div class="mt-1 h-2.5 overflow-hidden rounded-full bg-gray-100">
+                            <div class="h-2.5 rounded-full {{ $ok ? 'bg-emerald-500' : ($a['pct'] >= 70 ? 'bg-amber-400' : 'bg-indigo-500') }}" style="width: {{ min(100, $a['pct']) }}%"></div>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-600">Llevas <b>S/ {{ number_format($a['vendido'], 2) }}</b> de S/ {{ number_format($a['meta'], 2) }}
+                            · {{ $ok ? '¡Cumpliste! 🎉' : 'te faltan S/ '.number_format($a['falta'], 2) }}</p>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
         @if (session('error'))
             <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-800">{{ session('error') }}</div>
         @endif
@@ -680,5 +700,8 @@
     cargarActivos();
     cadaSiVisible(cargarActivos, 15000);
 </script>
+@if ($cartaMesa)
+    @include('empresas.comandas.partials.solicitudes_carta')
+@endif
 @include('partials.aviso_servicio')
 @endpush

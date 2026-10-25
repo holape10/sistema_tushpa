@@ -3,6 +3,8 @@
     // "CHILCANO DE MARACUYÁ" → "Chilcano de Maracuyá"
     $titulo = fn ($t) => preg_replace_callback('/(?<=\s)(De|Del|La|Las|Los|El|Con|Y|A|Al|En|Por)(?=\s)/u', fn ($m) => mb_strtolower($m[1]), \Illuminate\Support\Str::title(mb_strtolower($t)));
     $total = collect($categorias)->sum(fn ($c) => count($c['productos']));
+    // Se arma un pedido: delivery (carta general) o desde el QR de la mesa
+    $pide = $delivery || $pedidoMesa;
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -44,6 +46,14 @@
             <p class="text-white/75 text-sm mt-0.5">Nuestra carta · {{ $total }} {{ $total === 1 ? 'opción' : 'opciones' }}</p>
             @if ($mesa)
                 <span class="inline-flex items-center gap-1.5 mt-3 rounded-full bg-white text-slate-800 px-4 py-1.5 text-sm font-extrabold shadow">🍽️ {{ $mesa }}</span>
+            @endif
+            @if ($pedidoMesa)
+                {{-- Desde la mesa: llamar al mozo o pedir la cuenta --}}
+                <div class="grid grid-cols-2 gap-2 mt-4 max-w-sm mx-auto">
+                    <button type="button" @click="enviarMesa('MOZO')" :disabled="enviando" class="h-12 rounded-2xl bg-white/15 ring-1 ring-white/30 font-black text-sm active:scale-95 transition">🙋 Llamar al mozo</button>
+                    <button type="button" @click="enviarMesa('CUENTA')" :disabled="enviando" class="h-12 rounded-2xl bg-white/15 ring-1 ring-white/30 font-black text-sm active:scale-95 transition">🧾 Pedir la cuenta</button>
+                </div>
+                <p class="text-white/80 text-xs mt-2">Toca <b>+ Agregar</b> en lo que quieras: tu pedido le llega al mozo.</p>
             @endif
             @if ($negocio->carta_mensaje)
                 <p class="mt-3 text-sm text-white/90 whitespace-pre-line">{{ $negocio->carta_mensaje }}</p>
@@ -105,7 +115,7 @@
                                 @else
                                     <span class="precio rounded-lg px-2.5 py-1 text-sm font-black">{{ $soles($p['precio']) }}</span>
                                 @endif
-                                @if ($delivery)
+                                @if ($pide)
                                     <button type="button" @click.stop="agregar({{ $p['id'] }})"
                                             class="h-9 px-3 rounded-xl bg-acento text-white text-sm font-black shadow active:scale-95 transition">
                                         <span x-show="!cantidadDe({{ $p['id'] }})">+ Agregar</span>
@@ -126,7 +136,7 @@
         </p>
     </main>
 
-    <footer class="text-center text-xs text-slate-400 {{ $delivery ? 'pb-28' : 'pb-8' }} px-4 space-y-1">
+    <footer class="text-center text-xs text-slate-400 {{ $pide ? 'pb-28' : 'pb-8' }} px-4 space-y-1">
         @if ($negocio->direccion)<p>📍 {{ $negocio->direccion }}</p>@endif
         @if ($negocio->telefono)<p>📞 <a href="tel:{{ preg_replace('/\D/', '', $negocio->telefono) }}" class="underline">{{ $negocio->telefono }}</a></p>@endif
         <p class="pt-2">Precios en soles, incluyen impuestos · Carta digital por <b class="text-slate-500">TUSHPA</b></p>
@@ -148,12 +158,12 @@
         </div>
     </div>
 
-    @if ($delivery)
+    @if ($pide)
         {{-- Barra del pedido --}}
         <div x-show="carrito.length && !abierto" x-cloak x-transition class="fixed bottom-0 inset-x-0 z-30 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
             <button type="button" @click="abrirPedido()" class="max-w-3xl mx-auto w-full h-14 rounded-2xl bg-acento text-white shadow-2xl flex items-center px-5 font-black">
                 <span class="w-8 h-8 rounded-full bg-white/25 flex items-center justify-center text-sm" x-text="unidades()"></span>
-                <span class="flex-1 text-left ml-3">🛵 Ver mi pedido delivery</span>
+                <span class="flex-1 text-left ml-3">{{ $pedidoMesa ? '🍽️ Ver mi pedido' : '🛵 Ver mi pedido delivery' }}</span>
                 <span x-text="soles(subtotal())"></span>
             </button>
         </div>
@@ -169,7 +179,59 @@
                 </template>
             </div>
         </div>
+    @endif
 
+    @if ($pedidoMesa)
+        {{-- Lo que pidió desde la mesa y si el mozo ya lo aceptó --}}
+        <div x-show="solicitudes.length" x-cloak class="fixed top-3 inset-x-0 z-30 px-3 pointer-events-none">
+            <div class="max-w-md mx-auto space-y-2">
+                <template x-for="s in solicitudes.slice(-3)" :key="s.token">
+                    <div class="pointer-events-auto rounded-2xl shadow-xl px-4 py-3 text-sm font-bold flex items-center gap-3"
+                         :class="{ 'bg-amber-50 text-amber-900 ring-1 ring-amber-200': s.estado === 'PENDIENTE', 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200': s.estado === 'ACEPTADA' || s.estado === 'ATENDIDA', 'bg-rose-50 text-rose-900 ring-1 ring-rose-200': s.estado === 'RECHAZADA' || s.estado === 'VENCIDA' }">
+                        <span class="text-2xl" x-text="s.estado === 'PENDIENTE' ? '⏳' : ((s.estado === 'ACEPTADA' || s.estado === 'ATENDIDA') ? '✅' : '❌')"></span>
+                        <span class="flex-1" x-text="textoSolicitud(s)"></span>
+                        <button type="button" @click="quitarSolicitud(s.token)" class="text-xl leading-none opacity-50">&times;</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        {{-- Mi pedido en la mesa --}}
+        <div x-show="abierto" x-cloak class="fixed inset-0 z-40 bg-slate-900/60 flex items-end sm:items-center justify-center sm:p-4" @keydown.escape.window="abierto = false">
+            <div class="bg-slate-50 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[94vh] overflow-y-auto">
+                <div class="sticky top-0 z-10 bg-white px-5 py-4 flex items-center border-b">
+                    <h2 class="flex-1 text-lg font-black text-slate-800">🍽️ Mi pedido · {{ $mesa }}</h2>
+                    <button type="button" @click="abierto = false" class="text-3xl leading-none text-slate-400">&times;</button>
+                </div>
+                <form @submit.prevent="enviarMesa('PEDIDO')" class="p-4 space-y-3">
+                    <div class="bg-white rounded-2xl ring-1 ring-slate-200 divide-y">
+                        <template x-for="(it, i) in carrito" :key="it.clave">
+                            <div class="p-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-bold text-slate-800 leading-tight" x-text="it.nombre"></p>
+                                        <p class="text-xs text-slate-500" x-text="soles(it.precio) + ' c/u'"></p>
+                                    </div>
+                                    <button type="button" @click="cambiar(i, -1)" class="w-8 h-8 rounded-full bg-slate-100 font-black">−</button>
+                                    <span class="w-6 text-center font-black" x-text="it.cantidad"></span>
+                                    <button type="button" @click="cambiar(i, 1)" class="w-8 h-8 rounded-full bg-slate-100 font-black">+</button>
+                                </div>
+                                <input x-model="it.nota" maxlength="80" placeholder="Indicación (ej.: sin cebolla)" class="mt-2 w-full h-9 rounded-lg border-slate-200 text-sm">
+                            </div>
+                        </template>
+                    </div>
+                    <input x-model="nombreMesa" maxlength="60" placeholder="Tu nombre (opcional)" class="w-full h-11 rounded-xl border-slate-300 text-sm" autocomplete="given-name">
+                    <div class="bg-white rounded-2xl ring-1 ring-slate-200 p-4 flex justify-between text-lg font-black text-slate-900"><span>Total</span><span x-text="soles(subtotal())"></span></div>
+                    <p class="text-xs text-slate-500 text-center">El mozo confirma tu pedido y lo pasa a cocina. Pagas al final, como siempre.</p>
+                    <p x-show="error" x-text="error" class="text-sm text-rose-600 font-semibold"></p>
+                    <button :disabled="enviando" class="w-full h-14 rounded-2xl bg-acento text-white text-lg font-black shadow-lg disabled:opacity-50"
+                            x-text="enviando ? 'Enviando…' : 'Enviar pedido · ' + soles(subtotal())"></button>
+                </form>
+            </div>
+        </div>
+    @endif
+
+    @if ($delivery)
         {{-- Mi pedido: productos y datos de entrega --}}
         <div x-show="abierto" x-cloak class="fixed inset-0 z-40 bg-slate-900/60 flex items-end sm:items-center justify-center sm:p-4" @keydown.escape.window="abierto = false">
             <div class="bg-slate-50 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[94vh] overflow-y-auto">
@@ -247,9 +309,11 @@
     <script>
         function carta() {
             const n = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-            const PRODUCTOS = @js($delivery ? collect($categorias)->flatMap(fn ($c) => $c['productos'])->mapWithKeys(fn ($p) => [$p['id'] => ['nombre' => $p['nombre'], 'precio' => $p['precio'], 'presentaciones' => $p['presentaciones']]]) : []);
+            const PRODUCTOS = @js($pide ? collect($categorias)->flatMap(fn ($c) => $c['productos'])->mapWithKeys(fn ($p) => [$p['id'] => ['nombre' => $p['nombre'], 'precio' => $p['precio'], 'presentaciones' => $p['presentaciones']]]) : []);
             const LOCAL = @js($local ?? null);
-            const CLAVE = 'carta-pedido-{{ $negocio->id_empresa_negocio }}';
+            // Pedido desde la mesa: { id, k } (el QR firmado de la mesa)
+            const MESA = @js($pedidoMesa);
+            const CLAVE = 'carta-pedido-{{ $negocio->id_empresa_negocio }}' + (MESA ? '-mesa-' + MESA.id : '');
             const leer = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
             const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
             let mapa = null, pin = null;
@@ -288,7 +352,7 @@
                 abrirPedido() {
                     this.abierto = true;
                     this.error = '';
-                    if (this.datos.lat) this.$nextTick(() => this.mostrarMapa(this.datos.lat, this.datos.lng));
+                    if (!MESA && this.datos.lat) this.$nextTick(() => this.mostrarMapa(this.datos.lat, this.datos.lng));
                 },
                 miUbicacion() {
                     this.errorUbicacion = '';
@@ -353,6 +417,56 @@
                         .finally(() => this.enviando = false);
                 },
 
+                // Desde la mesa: pedido, llamar al mozo o pedir la cuenta; el cliente ve si ya lo atendieron
+                nombreMesa: leer('carta-nombre') || '',
+                solicitudes: (leer(CLAVE + '-sol') || []).filter(s => Date.now() - s.hora < 3 * 3600 * 1000),
+                enviarMesa(tipo) {
+                    if (!MESA || this.enviando) return;
+                    this.error = '';
+                    this.enviando = true;
+                    const cuerpo = { k: MESA.k, tipo, nombre: this.nombreMesa };
+                    if (tipo === 'PEDIDO') cuerpo.items = this.carrito.map(i => ({ id: i.id, cantidad: i.cantidad, presentacion: i.presentacion, nota: i.nota }));
+                    fetch(@js(url('/carta/'.$negocio->id_empresa_negocio.'/mesa')) + '/' + MESA.id, { method: 'POST', headers: this.cabeceras(), body: JSON.stringify(cuerpo) })
+                        .then(async r => {
+                            const d = await r.json().catch(() => ({}));
+                            const aviso = r.status === 419 ? 'La página estuvo abierta mucho tiempo. Recárgala y vuelve a intentarlo.'
+                                : (r.status === 429 ? 'Muchos intentos seguidos. Espera un momento.' : (!r.ok ? (d.message || 'No se pudo enviar. Llama al mozo, por favor.') : null));
+                            if (aviso) { if (tipo === 'PEDIDO') this.error = aviso; else alert(aviso); return; }
+                            guardar('carta-nombre', this.nombreMesa);
+                            if (!this.solicitudes.some(s => s.token === d.token)) this.solicitudes.push({ token: d.token, tipo, estado: 'PENDIENTE', total: d.total, hora: Date.now() });
+                            guardar(CLAVE + '-sol', this.solicitudes);
+                            if (tipo === 'PEDIDO') { this.carrito = []; guardar(CLAVE, []); this.abierto = false; }
+                        })
+                        .catch(() => { const m = 'Sin conexión. Revisa tu internet e intenta de nuevo.'; if (tipo === 'PEDIDO') this.error = m; else alert(m); })
+                        .finally(() => this.enviando = false);
+                },
+                textoSolicitud(s) {
+                    const t = { PEDIDO: 'Tu pedido' + (s.total ? ' de ' + this.soles(s.total) : ''), MOZO: 'Llamaste al mozo', CUENTA: 'Pediste la cuenta' }[s.tipo];
+                    if (s.estado === 'PENDIENTE') return t + ': ' + (s.tipo === 'PEDIDO' ? 'esperando que el mozo lo confirme…' : 'ya le avisamos…');
+                    if (s.estado === 'ACEPTADA') return t + ': confirmado, ya va a cocina 👨‍🍳';
+                    if (s.estado === 'ATENDIDA') return t + (s.tipo === 'CUENTA' ? ': ya te la llevan' : ': ya viene');
+                    if (s.estado === 'RECHAZADA') return t + ': no se pudo aceptar' + (s.motivo ? ' (' + s.motivo.toLowerCase() + ')' : '') + '. Habla con el mozo.';
+                    return t + ': no se atendió a tiempo. Llama al mozo, por favor.';
+                },
+                quitarSolicitud(token) {
+                    this.solicitudes = this.solicitudes.filter(s => s.token !== token);
+                    guardar(CLAVE + '-sol', this.solicitudes);
+                },
+                seguirSolicitudes() {
+                    setInterval(() => {
+                        if (document.hidden) return;
+                        this.solicitudes.filter(s => s.estado === 'PENDIENTE').forEach(s => {
+                            fetch(@js(url('/carta/'.$negocio->id_empresa_negocio.'/solicitud')) + '/' + s.token, { headers: { Accept: 'application/json' } })
+                                .then(r => r.ok ? r.json() : null).then(d => {
+                                    if (!d || d.estado === s.estado) return;
+                                    Object.assign(s, { estado: d.estado, motivo: d.motivo });
+                                    if (navigator.vibrate) navigator.vibrate(200);
+                                    guardar(CLAVE + '-sol', this.solicitudes);
+                                }).catch(() => {});
+                        });
+                    }, 6000);
+                },
+
                 q: '', activa: null, foto: null,
                 todo: @js(collect($categorias)->flatMap(fn ($c) => collect($c['productos'])->map(fn ($p) => $p['nombre'].' '.$p['descripcion'].' '.$c['nombre']))->values()),
                 ver(t) { return !this.q.trim() || n(t).includes(n(this.q.trim())); },
@@ -363,6 +477,7 @@
                 },
                 // Marca la categoría que se está viendo y mueve su botón a la vista
                 iniciar() {
+                    if (MESA) this.seguirSolicitudes();
                     const secciones = [...document.querySelectorAll('section[data-cat]')];
                     if (!secciones.length) return;
                     this.activa = +secciones[0].dataset.cat;

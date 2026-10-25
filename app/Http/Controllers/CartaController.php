@@ -6,6 +6,7 @@ use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Models\Producto;
 use App\Support\Carta;
+use App\Support\CartaMesa;
 use App\Support\Delivery;
 use App\Support\PedidoCarta;
 use Illuminate\Http\JsonResponse;
@@ -28,16 +29,18 @@ class CartaController extends Controller
         if (! $negocio) {
             abort(response()->view('carta.no_disponible', [], 404));
         }
-        $mesa = $request->integer('mesa')
-            ? DB::table('mesas')->where('mes_id', $request->integer('mesa'))->where('id_empresa_negocio', $negocio->id_empresa_negocio)->value('mes_nom')
-            : null;
+        $fila = $request->integer('mesa') ? $this->mesa($negocio, $request->integer('mesa')) : null;
+        $mesa = $fila?->mes_nom;
 
         // Pedido delivery desde la carta (no en el QR de una mesa: ahí el cliente ya está en el local)
         $delivery = $negocio->carta_delivery && ! $mesa;
+        // Desde el QR de su mesa el cliente pide, llama al mozo o pide la cuenta (si la sucursal lo permite)
+        $pedidoMesa = CartaMesa::permite($negocio, $fila, $request->query('k'));
 
         return view('carta.ver', $this->datos($negocio) + [
             'categorias' => Carta::categorias($negocio->id_empresa_negocio),
             'mesa' => $mesa,
+            'pedidoMesa' => $pedidoMesa ? ['id' => (int) $fila->mes_id, 'k' => (string) $request->query('k')] : null,
             'delivery' => $delivery,
             'mediosPago' => array_diff_key(Delivery::MEDIOS_PAGO, ['PAGADO' => 1]),
             'conTarifas' => $delivery && Delivery::tarifas($negocio->id_empresa_negocio),
@@ -88,6 +91,44 @@ class CartaController extends Controller
         return response()->json($pedido);
     }
 
+    /** Desde el QR de su mesa: pedir platos, llamar al mozo o pedir la cuenta */
+    public function solicitarMesa(Request $request, int $sucursal, int $mesa): JsonResponse
+    {
+        $negocio = Carta::sucursal($sucursal);
+        abort_unless($negocio, 404);
+        $fila = $this->mesa($negocio, $mesa);
+        if (! CartaMesa::permite($negocio, $fila, $request->input('k'))) {
+            return response()->json(['message' => 'Por ahora no se puede pedir desde esta mesa. Llama al mozo, por favor.'], 422);
+        }
+        $d = $request->validate([
+            'tipo' => 'required|in:'.implode(',', CartaMesa::TIPOS),
+            'items' => 'required_if:tipo,PEDIDO|array|max:40',
+            'items.*.id' => 'required|integer',
+            'items.*.cantidad' => 'required|integer|min:1|max:30',
+            'items.*.presentacion' => 'nullable|integer',
+            'items.*.nota' => 'nullable|string|max:80',
+            'nombre' => 'nullable|string|max:60',
+            'nota' => 'nullable|string|max:150',
+        ], ['items.required_if' => 'Agrega al menos un producto.']);
+
+        try {
+            $r = CartaMesa::solicitar($negocio, $fila, $d['tipo'], $d['items'] ?? [], $d['nombre'] ?? null, $d['nota'] ?? null);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($r);
+    }
+
+    /** El cliente ve si el mozo ya aceptó su pedido */
+    public function estadoSolicitud(int $sucursal, string $token): JsonResponse
+    {
+        $estado = CartaMesa::estado($sucursal, $token);
+        abort_unless($estado, 404);
+
+        return response()->json($estado);
+    }
+
     public function configuracion(): View
     {
         $negocio = $this->negocioDelAdmin();
@@ -110,7 +151,8 @@ class CartaController extends Controller
             'carta_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'delivery_minimo' => 'nullable|numeric|min:0|max:99999',
         ], [], ['carta_mensaje' => 'mensaje', 'carta_color' => 'color', 'delivery_minimo' => 'pedido mínimo']);
-        $negocio->update($datos + ['carta_activa' => $request->boolean('carta_activa'), 'carta_delivery' => $request->boolean('carta_delivery')]);
+        $negocio->update($datos + ['carta_activa' => $request->boolean('carta_activa'), 'carta_delivery' => $request->boolean('carta_delivery'),
+            'carta_pedido_mesa' => $request->boolean('carta_pedido_mesa')]);
 
         return back()->with('success', $request->boolean('carta_activa') ? 'Carta digital publicada.' : 'Carta digital desactivada.');
     }
@@ -137,6 +179,11 @@ class CartaController extends Controller
         abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador configura la carta digital.');
 
         return EmpresaNegocio::findOrFail(Auth::user()->id_empresa_negocio);
+    }
+
+    private function mesa(EmpresaNegocio $negocio, int $mesId): ?object
+    {
+        return DB::table('mesas')->where('mes_id', $mesId)->where('id_empresa_negocio', $negocio->id_empresa_negocio)->first(['mes_id', 'mes_nom']);
     }
 
     private function mesas(int $sucursal): Collection

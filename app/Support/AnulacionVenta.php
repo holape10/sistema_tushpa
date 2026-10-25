@@ -33,6 +33,7 @@ class AnulacionVenta
             Fidelizacion::revertir($cabId);        // los puntos que ganó con esta compra
             Porciones::revertir($cabId);           // las porciones del día que se vendieron
             Series::revertirVenta($cabId);         // los equipos vendidos (número de serie) vuelven a estar disponibles
+            Cupones::devolver($cabId);             // el uso del cupón de descuento vuelve a quedar libre
 
             // El stock que salió con esta venta vuelve al almacén
             return Kardex::revertirVenta($cabId, [

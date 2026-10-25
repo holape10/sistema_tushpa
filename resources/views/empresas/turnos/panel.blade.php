@@ -33,6 +33,26 @@
         @endforeach
     </div>
 
+    @if ($r['dolaresUsd'] > 0 || $r['propinas']->isNotEmpty())
+        {{-- Lo que hay en caja además de los soles: dólares y propinas (no son venta) --}}
+        <div class="flex flex-wrap gap-3 mb-6 -mt-3">
+            @if ($r['dolaresUsd'] > 0)
+                <div class="flex-1 min-w-56 rounded-2xl bg-green-50 ring-1 ring-green-200 p-4">
+                    <p class="text-xs text-green-700 uppercase font-semibold">💵 Efectivo en dólares</p>
+                    <p class="text-xl font-bold text-green-800">US$ {{ number_format($r['dolaresUsd'], 2) }}</p>
+                    <p class="text-xs text-green-700">Equivale a S/ {{ number_format($r['dolaresSoles'], 2) }}. Se cuenta aparte: no está en el efectivo esperado en soles.</p>
+                </div>
+            @endif
+            @if ($r['propinas']->isNotEmpty())
+                <div class="flex-1 min-w-56 rounded-2xl bg-pink-50 ring-1 ring-pink-200 p-4">
+                    <p class="text-xs text-pink-700 uppercase font-semibold">💝 Propinas del turno</p>
+                    <p class="text-xl font-bold text-pink-800">S/ {{ number_format($r['propinas']->sum('monto'), 2) }}</p>
+                    <p class="text-xs text-pink-700">{{ $r['propinas']->map(fn ($p) => ($p->nom_med_pag ?? 'PAGO').' S/ '.number_format($p->monto, 2))->implode(' · ') }}. No son venta: se entregan a los mozos.</p>
+                </div>
+            @endif
+        </div>
+    @endif
+
     <div class="grid lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 space-y-6">
             {{-- Ventas por medio de pago --}}

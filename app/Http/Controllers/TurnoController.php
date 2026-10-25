@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Mesa;
 use App\Models\Pedido;
 use App\Models\Turno;
+use App\Support\Propinas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -73,13 +74,25 @@ class TurnoController extends Controller
         $ingresos = round((float) $activos->where('tipo', 'ENTRADA')->sum('importe'), 2);
         $egresos = round((float) $activos->where('tipo', 'SALIDA')->sum('importe'), 2);
 
+        // Efectivo cobrado en dólares: esos billetes no son soles; la caja los cuenta aparte
+        $dolares = DB::table('venta_medio_pago as v')
+            ->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'v.IdCpe_cabecera')
+            ->leftJoin('medios_pagos as m', 'm.id_med_pag', '=', 'v.id_med_pag')
+            ->where('v.id_turno', $turno->id_turno)->whereNull('c.ccabaj')->where('v.moneda', 'USD')
+            ->whereRaw("UPPER(TRIM(m.nom_med_pag)) = 'EFECTIVO'")
+            ->first([DB::raw('COALESCE(SUM(v.monto_usd), 0) as usd'), DB::raw('COALESCE(SUM(v.monto), 0) as soles')]);
+        $dolaresUsd = round((float) $dolares->usd, 2);
+        $dolaresSoles = round((float) $dolares->soles, 2);
+        // Propinas de los clientes: no son venta, se entregan a los mozos
+        $propinas = Propinas::delTurno($turno->id_turno);
+
         $ventasEfectivo = round((float) $ventasPorMedio->filter(fn ($v) => strtoupper((string) $v->nom_med_pag) === 'EFECTIVO')->sum('monto'), 2);
         $ventasTotal = round((float) $comprobantes->sum('total'), 2);
         $ventasCredito = round((float) $comprobantes->sum('credito'), 2);
-        $efectivoEsperado = round((float) $turno->monto + $ventasEfectivo + $ingresos - $egresos, 2);
+        $efectivoEsperado = round((float) $turno->monto + $ventasEfectivo - $dolaresSoles + $ingresos - $egresos, 2);
 
         return compact('ventasPorMedio', 'ventas', 'comprobantes', 'movimientos', 'ingresos', 'egresos',
-            'ventasEfectivo', 'ventasTotal', 'ventasCredito', 'efectivoEsperado');
+            'ventasEfectivo', 'ventasTotal', 'ventasCredito', 'efectivoEsperado', 'dolaresUsd', 'dolaresSoles', 'propinas');
     }
 
     public function index()

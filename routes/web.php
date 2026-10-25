@@ -4,6 +4,7 @@ use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AlmacenController;
 use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\AutoservicioController;
 use App\Http\Controllers\CajaSinInternetController;
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\CategoriaController;
@@ -27,11 +28,13 @@ use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContabilidadRegistroController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\CuentaController;
+use App\Http\Controllers\CuponController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DeliveryLiquidacionController;
 use App\Http\Controllers\DescuentosCortesiasController;
 use App\Http\Controllers\EmpresaController;
+use App\Http\Controllers\EncuestaController;
 use App\Http\Controllers\EntradaController;
 use App\Http\Controllers\EntrenadorController;
 use App\Http\Controllers\EstacionamientoController;
@@ -51,6 +54,7 @@ use App\Http\Controllers\LoteController;
 use App\Http\Controllers\MedioPagoController;
 use App\Http\Controllers\MermaController;
 use App\Http\Controllers\MesaController;
+use App\Http\Controllers\MetaMozoController;
 use App\Http\Controllers\MotorizadoController;
 use App\Http\Controllers\NotaController;
 use App\Http\Controllers\PanelDuenoController;
@@ -66,6 +70,7 @@ use App\Http\Controllers\PrestamoReporteController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProformaController;
 use App\Http\Controllers\PromotorController;
+use App\Http\Controllers\PropinaController;
 use App\Http\Controllers\PuntoVentaController;
 use App\Http\Controllers\PvGrifoController;
 use App\Http\Controllers\PvTactilController;
@@ -82,6 +87,7 @@ use App\Http\Controllers\SerieController;
 use App\Http\Controllers\SireController;
 use App\Http\Controllers\SocioController;
 use App\Http\Controllers\SocioPortalController;
+use App\Http\Controllers\SolicitudCartaController;
 use App\Http\Controllers\SoporteController;
 use App\Http\Controllers\SucursalController;
 use App\Http\Controllers\SunatController;
@@ -128,8 +134,21 @@ Route::middleware('auth')->group(function () {
     Route::get('/promotores', [PromotorController::class, 'index'])->name('promotores.index');
     Route::get('/reportes/descuentos-cortesias', [DescuentosCortesiasController::class, 'index'])->name('descuentos.reporte');
     Route::get('/reportes/consumo-cajas', [ConsumoCajasController::class, 'index'])->name('consumo_cajas.index');
+    Route::get('/reportes/propinas', [PropinaController::class, 'index'])->name('propinas.reporte');
+    Route::get('/autoservicio', [AutoservicioController::class, 'index'])->name('autoservicio.index');
+    Route::post('/autoservicio/pedido', [AutoservicioController::class, 'pedir'])->middleware('throttle:30,1')->name('autoservicio.pedir');
+    Route::get('/encuestas', [EncuestaController::class, 'index'])->name('encuestas.index');
+    Route::post('/encuestas/activar', [EncuestaController::class, 'activar'])->name('encuestas.activar');
+    Route::get('/metas-mozos', [MetaMozoController::class, 'index'])->name('metas_mozo.index');
+    Route::post('/metas-mozos', [MetaMozoController::class, 'guardar'])->name('metas_mozo.guardar');
+    Route::get('/cupones', [CuponController::class, 'index'])->name('cupones.index');
+    Route::post('/cupones/{id?}', [CuponController::class, 'guardar'])->whereNumber('id')->name('cupones.guardar');
+    Route::post('/cupones/{id}/estado', [CuponController::class, 'estado'])->whereNumber('id')->name('cupones.estado');
     Route::get('/reportes/consumo-cajas/excel', [ConsumoCajasController::class, 'excel'])->name('consumo_cajas.excel');
     Route::post('/comandas/carrito/vaciar', [ComandasController::class, 'clearCart'])->name('comandas.clear_cart');
+    Route::get('/comandas/solicitudes', [SolicitudCartaController::class, 'index'])->name('comandas.solicitudes');
+    Route::post('/comandas/solicitudes/{id}/aceptar', [SolicitudCartaController::class, 'aceptar'])->whereNumber('id')->name('comandas.solicitudes.aceptar');
+    Route::post('/comandas/solicitudes/{id}/rechazar', [SolicitudCartaController::class, 'rechazar'])->whereNumber('id')->name('comandas.solicitudes.rechazar');
     Route::get('/comandas/pedido/{ped_id}', [ComandasController::class, 'getPedidoDetails'])->name('comandas.pedido_details');
     Route::get('/comandas/activos-llevar-delivery', [ComandasController::class, 'activosLlevarDelivery'])->name('comandas.activos_llevar_delivery');
     Route::post('/comandas/carrito/reducir-autorizado', [ComandasController::class, 'reducirItemAutorizado'])->name('comandas.reducir_autorizado');
@@ -514,6 +533,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/caja-sin-internet/paquete', [CajaSinInternetController::class, 'paquete'])->name('offline.paquete');
     Route::post('/caja-sin-internet/sincronizar', [CajaSinInternetController::class, 'sincronizar'])->middleware('throttle:60,1')->name('offline.sincronizar');
     Route::get('/cobros/clientes', [CobroController::class, 'sugerirClientes'])->name('cobros.clientes');
+    Route::get('/cobros/cupon', [CobroController::class, 'cupon'])->middleware('throttle:30,1')->name('cobros.cupon');
     Route::post('/cobros/registrar', [CobroController::class, 'registrar'])->name('cobros.registrar');
     Route::get('/cobros/cliente/{doc}', [CobroController::class, 'buscarCliente'])->name('cobros.cliente');
     Route::get('/voucher/{id}', [CobroController::class, 'voucher'])->name('cobros.voucher');
@@ -737,6 +757,14 @@ Route::middleware('auth')->prefix('carta')->name('carta.')->controller(CartaCont
 Route::get('/carta/{sucursal?}', [CartaController::class, 'ver'])->whereNumber('sucursal')->middleware('throttle:120,1')->name('carta.ver');
 Route::post('/carta/{sucursal}/envio', [CartaController::class, 'envio'])->whereNumber('sucursal')->middleware('throttle:30,1,carta-envio')->name('carta.envio');
 Route::post('/carta/{sucursal}/pedido', [CartaController::class, 'pedir'])->whereNumber('sucursal')->middleware('throttle:10,10,carta-pedido')->name('carta.pedir');
+// Desde el QR de la mesa: pedir, llamar al mozo o pedir la cuenta, y ver si el mozo ya lo atendió
+Route::post('/carta/{sucursal}/mesa/{mesa}', [CartaController::class, 'solicitarMesa'])->whereNumber(['sucursal', 'mesa'])->middleware('throttle:12,5,carta-mesa')->name('carta.mesa');
+Route::get('/carta/{sucursal}/solicitud/{token}', [CartaController::class, 'estadoSolicitud'])->whereNumber('sucursal')->where('token', '[A-Za-z0-9]{32}')
+    ->middleware('throttle:60,1,carta-solicitud')->name('carta.solicitud');
+
+// Encuesta de satisfacción: el cliente la abre con el QR de su ticket (sin sesión)
+Route::get('/encuesta/{codigo}', [EncuestaController::class, 'ver'])->where('codigo', '\d+-[a-f0-9]{10}')->middleware('throttle:60,1,encuesta')->name('encuesta.ver');
+Route::post('/encuesta/{codigo}', [EncuestaController::class, 'responder'])->where('codigo', '\d+-[a-f0-9]{10}')->middleware('throttle:10,1,encuesta-responder')->name('encuesta.responder');
 
 // Tienda virtual pública de la empresa: {subdominio}/tiendavirtual (sin sesión del sistema)
 Route::prefix('tiendavirtual')->name('tienda.')->controller(TiendaController::class)->group(function () {

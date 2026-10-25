@@ -131,10 +131,17 @@
     <table class="medios" style="margin-top:6px;">
         @foreach ($medios as $m)
             <tr><td>{{ mb_strtoupper($m->nom_med_pag ?? 'PAGO') }} S/</td><td class="r">{{ number_format($m->monto, 2) }}</td></tr>
+            @if (($m->moneda ?? null) === 'USD')
+                <tr><td style="font-size:11px;">&nbsp; EN DÓLARES (T.C. {{ rtrim(rtrim(number_format((float) $m->tipo_cambio, 3), '0'), '.') }})</td><td class="r" style="font-size:11px;">US$ {{ number_format((float) $m->monto_usd, 2) }}</td></tr>
+            @endif
         @endforeach
         @if ($cab->paga > 0 && $cab->vuelto > 0)
             <tr><td style="font-size:11px;">PAGA CON S/</td><td class="r" style="font-size:11px;">{{ number_format($cab->paga, 2) }}</td></tr>
             <tr><td style="font-size:11px;">VUELTO S/</td><td class="r" style="font-size:11px;">{{ number_format($cab->vuelto, 2) }}</td></tr>
+        @endif
+        @php $propina = \App\Support\Propinas::delComprobante((int) $cab->IdCpe_cabecera); @endphp
+        @if ($propina > 0)
+            <tr><td style="font-size:11px;">PROPINA S/ <small>(no es parte del comprobante)</small></td><td class="r" style="font-size:11px;">{{ number_format($propina, 2) }}</td></tr>
         @endif
     </table>
     {{-- Fidelización: los puntos que ganó con esta compra y su saldo en ese momento --}}
@@ -151,6 +158,15 @@
             @if ($fid['premio'])
                 <div class="c b" style="margin-top:4px; border-top:1px dashed #000; padding-top:4px;">🎁 PREMIO ENTREGADO:<br>{{ $fid['cantidad'] ? rtrim(rtrim(number_format($fid['cantidad'], 3), '0'), '.').' × ' : '' }}{{ $fid['premio'] }}</div>
             @endif
+        </div>
+    @endif
+    @php $encuesta = \App\Support\Encuestas::paraTicket($cab); @endphp
+    @if ($encuesta)
+        {{-- Encuesta de satisfacción: el cliente escanea y califica --}}
+        <div class="c" style="margin-top:8px; border-top:1px dashed #000; padding-top:6px;">
+            <div class="b">¿QUÉ TAL TE ATENDIMOS?</div>
+            <div class="qr">{!! \App\Support\Carta::qr($encuesta, 110) !!}</div>
+            <div style="font-size:11px;">Escanea y califícanos</div>
         </div>
     @endif
     <div class="c" style="margin-top:8px; font-size:8px; color:#555;">{{ config('soporte.firma_comprobante') }}</div>

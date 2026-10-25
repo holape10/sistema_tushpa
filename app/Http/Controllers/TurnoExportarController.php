@@ -43,6 +43,8 @@ class TurnoExportarController extends Controller
                 ['Ventas en efectivo', $r['ventasEfectivo']], ['Otros ingresos', $r['ingresos']], ['Egresos / gastos', $r['egresos']],
                 ['Efectivo esperado', $r['efectivoEsperado']], ['Efectivo contado', $contado ?? 'No se contó'],
                 ['Diferencia (contado - esperado)', $contado !== null ? round($contado - $r['efectivoEsperado'], 2) : ''],
+                ...($r['dolaresUsd'] > 0 ? [['Efectivo en dólares (US$, aparte)', $r['dolaresUsd']]] : []),
+                ...($r['propinas']->isNotEmpty() ? [['Propinas (no son venta)', round($r['propinas']->sum('monto'), 2)]] : []),
             ],
         ];
     }

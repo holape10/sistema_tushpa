@@ -6,8 +6,10 @@ use App\Models\Mesa;
 use App\Support\ConsultaCpe;
 use App\Support\Delivery;
 use App\Support\Descuentos;
+use App\Support\Encuestas;
 use App\Support\Fidelizacion;
 use App\Support\NombreCorto;
+use App\Support\Propinas;
 use App\Support\Sunat\CodigoQr;
 use App\Support\Sunat\NumeroLetras;
 use Carbon\Carbon;
@@ -318,6 +320,7 @@ class Impresion
         if ($cab->vuelto > 0) {
             $p->dosColumnas('VUELTO', number_format($cab->vuelto, 2));
         }
+        self::extrasDelCobro($p, $cab);
         $p->parrafo(NumeroLetras::convertir((float) $cab->ccaitv));
         // Fidelización: puntos ganados con esta compra y saldo
         if ($fid = Fidelizacion::delComprobante((int) $cab->IdCpe_cabecera)) {
@@ -442,6 +445,7 @@ class Impresion
         if ($cab->paga > 0 || $cab->vuelto > 0) {
             $p->texto($juntos('PAGA CON: S/ '.$soles($cab->paga), 'VUELTO: S/ '.$soles($cab->vuelto)));
         }
+        self::extrasDelCobro($p, $cab);
         $p->parrafo('Son: '.preg_replace('/^SON\s+/i', '', NumeroLetras::convertir((float) $cab->ccaitv)));
 
         if ($fid = Fidelizacion::delComprobante((int) $cab->IdCpe_cabecera)) {
@@ -535,6 +539,7 @@ class Impresion
         if ($cab->vuelto > 0) {
             $p->dosColumnas('VUELTO: S/', $soles($cab->vuelto));
         }
+        self::extrasDelCobro($p, $cab);
         $p->texto()->parrafo('Son: '.preg_replace('/^SON\s+/i', '', NumeroLetras::convertir((float) $cab->ccaitv)));
 
         if ($fid = Fidelizacion::delComprobante((int) $cab->IdCpe_cabecera)) {
@@ -568,6 +573,25 @@ class Impresion
     private static function firma(Escpos $p): void
     {
         $p->alinear('centro')->fuente('b')->parrafo((string) config('soporte.firma_comprobante'), $p->columnasFuenteB())->fuente();
+    }
+
+    /** Lo que se recibió en dólares y la propina (no es parte del comprobante: va aparte, después del vuelto) */
+    private static function extrasDelCobro(Escpos $p, object $cab): void
+    {
+        $dolares = DB::table('venta_medio_pago')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->where('moneda', 'USD')
+            ->get(['monto_usd', 'tipo_cambio']);
+        if ($dolares->isNotEmpty()) {
+            $p->dosColumnas('RECIBIDO EN US$', number_format((float) $dolares->sum('monto_usd'), 2))
+                ->texto('T.C. '.rtrim(rtrim(number_format((float) $dolares->first()->tipo_cambio, 3), '0'), '.'));
+        }
+        if (($propina = Propinas::delComprobante((int) $cab->IdCpe_cabecera)) > 0) {
+            $p->dosColumnas('PROPINA S/', number_format($propina, 2))->texto('(Propina voluntaria: no forma parte del comprobante)');
+        }
+        // Encuesta de satisfacción: QR para calificar la atención
+        if ($url = Encuestas::paraTicket($cab)) {
+            $p->linea()->alinear('centro')->negrita()->texto('¿QUE TAL TE ATENDIMOS?')->negrita(false)
+                ->qr($url, 4)->texto('Escanea y califícanos')->alinear('izq')->linea();
+        }
     }
 
     /** Consumo y descuento a la cuenta, y el valor de las cortesías (operaciones gratuitas) */

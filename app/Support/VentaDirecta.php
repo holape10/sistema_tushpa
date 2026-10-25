@@ -49,6 +49,12 @@ class VentaDirecta
         'descuento_valor' => 'nullable|numeric|min:0|max:999999',
         'descuento_motivo' => 'nullable|string|max:80',
         'clave_admin' => 'nullable|string|max:100',
+        // Cupón de descuento, propina (aparte del comprobante) y medios pagados en dólares
+        'cupon' => 'nullable|string|max:30',
+        'propina' => 'nullable|numeric|min:0|max:'.Propinas::MAXIMO,
+        'propina_medio' => 'nullable|integer',
+        'usd_med_pag' => 'nullable|array|max:10',
+        'usd_med_pag.*' => 'nullable|boolean',
     ];
 
     public const MENSAJES = ['items.required' => 'El carrito está vacío.'];

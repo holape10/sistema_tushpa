@@ -113,6 +113,8 @@ class SucursalController extends Controller
             'permite_descuentos' => 'nullable|boolean',
             'permite_cortesias' => 'nullable|boolean',
             'descuento_max_cajero' => 'nullable|numeric|min:0|max:100',
+            'permite_propina' => 'nullable|boolean',
+            'tipo_cambio_usd' => 'nullable|numeric|min:0|max:20',
         ];
         $nombres = ['nombre_comercial' => 'Nombre comercial', 'codigofiscal' => 'Código de establecimiento',
             'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión', 'control_stock' => 'Venta con o sin stock'];
@@ -174,6 +176,8 @@ class SucursalController extends Controller
         $datos['permite_descuentos'] = $request->boolean('permite_descuentos');
         $datos['permite_cortesias'] = $request->boolean('permite_cortesias');
         $datos['descuento_max_cajero'] = (float) ($datos['descuento_max_cajero'] ?? 10);
+        $datos['permite_propina'] = $request->boolean('permite_propina');
+        $datos['tipo_cambio_usd'] = (float) ($datos['tipo_cambio_usd'] ?? 0) > 0 ? round((float) $datos['tipo_cambio_usd'], 3) : null;
 
         DB::transaction(function () use ($sucursal, $datos) {
             // Bloqueo: si en este momento alguien está cobrando, se espera a que termine

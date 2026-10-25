@@ -18,7 +18,11 @@ class Descuentos
 {
     public const MOTIVO_CORTESIA = 'CORTESÍA DE LA CASA';
 
-    /** @return object{descuentos: bool, cortesias: bool, max: float} */
+    /**
+     * Lo que el cobro del restaurante permite en la sucursal: descuentos, cortesías, cupones, propina y pago en dólares.
+     *
+     * @return object{descuentos: bool, cortesias: bool, max: float, cupones: bool, propina: bool, tipoCambio: ?float}
+     */
     public static function config(int $sucursal): object
     {
         $n = DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->first();
@@ -27,6 +31,9 @@ class Descuentos
             'descuentos' => (bool) ($n->permite_descuentos ?? false),
             'cortesias' => (bool) ($n->permite_cortesias ?? false),
             'max' => (float) ($n->descuento_max_cajero ?? 10),
+            'cupones' => Cupones::hayActivos($sucursal),
+            'propina' => (bool) ($n->permite_propina ?? false),
+            'tipoCambio' => (float) ($n->tipo_cambio_usd ?? 0) > 0 ? (float) $n->tipo_cambio_usd : null,
         ];
     }
 
@@ -48,7 +55,8 @@ class Descuentos
         $cortesias = collect($lineas)->filter(fn ($l) => ! empty($l['cortesia']));
         $tipo = in_array($datos['descuento_tipo'] ?? null, ['S', 'P'], true) ? $datos['descuento_tipo'] : null;
         $valor = round((float) ($datos['descuento_valor'] ?? 0), 2);
-        if ($cortesias->isEmpty() && (! $tipo || $valor <= 0)) {
+        $codigoCupon = Cupones::normalizar((string) ($datos['cupon'] ?? ''));
+        if ($cortesias->isEmpty() && $codigoCupon === '' && (! $tipo || $valor <= 0)) {
             return [$lineas, []];
         }
         $config = self::config((int) $user->id_empresa_negocio);
@@ -63,15 +71,25 @@ class Descuentos
         }
         unset($l);
 
-        if (! $tipo || $valor <= 0) {
-            return [$lineas, []];
-        }
-        if (! $config->descuentos) {
-            throw new \RuntimeException('Esta sucursal no tiene activados los descuentos.');
-        }
         $cobradas = array_keys(array_filter($lineas, fn ($l) => empty($l['cortesia'])));
         $totalDe = fn ($l) => isset($l['importe']) ? round((float) $l['importe'], 2) : round($l['cantidad'] * $l['precio'], 2);
         $bruto = round(array_sum(array_map(fn ($k) => $totalDe($lineas[$k]), $cobradas)), 2);
+
+        // Cupón: su descuento manda (lo que diga la pantalla no cuenta) y no pide la clave del administrador
+        $cupon = $codigoCupon !== '' ? Cupones::vigente((int) $user->id_empresa_negocio, $codigoCupon, $bruto, true) : null;
+        if ($cupon) {
+            [$tipo, $valor] = [$cupon->tipo, round((float) $cupon->valor, 2)];
+            $datos['descuento_motivo'] = 'CUPÓN '.$cupon->codigo;
+        }
+        if (! $tipo || $valor <= 0) {
+            return [$lineas, []];
+        }
+        if (! $cupon && ! $config->descuentos) {
+            throw new \RuntimeException('Esta sucursal no tiene activados los descuentos.');
+        }
+        if (! $cobradas) {
+            throw new \RuntimeException('Toda la cuenta es cortesía: no hay nada a qué aplicarle el descuento.');
+        }
         if ($tipo === 'P' && $valor >= 100) {
             throw new \RuntimeException('El descuento no puede ser del 100%: para no cobrar un producto márcalo como cortesía.');
         }
@@ -81,9 +99,9 @@ class Descuentos
         }
         $porcentaje = $bruto > 0 ? $monto / $bruto * 100 : 0;
 
-        // Más del máximo del cajero: solo el administrador, o con la clave de un administrador
+        // Más del máximo del cajero: solo el administrador, o con la clave de un administrador (un cupón ya viene autorizado)
         $autoriza = $user->esAdmin() ? (int) $user->IdUsuario : null;
-        if (! $autoriza && $porcentaje > $config->max + 0.001) {
+        if (! $autoriza && ! $cupon && $porcentaje > $config->max + 0.001) {
             $autoriza = self::claveAdministrador($user, (string) ($datos['clave_admin'] ?? ''), $porcentaje, $config->max);
         }
 
@@ -99,12 +117,15 @@ class Descuentos
             $lineas[$k] = self::descontar($lineas[$k], $parte, $totalDe($lineas[$k]));
         }
         $lineas[$mayor] = self::descontar($lineas[$mayor], round($monto - $repartido, 2), $totalDe($lineas[$mayor]));
+        if ($cupon) {
+            Cupones::usar((int) $cupon->id);
+        }
 
         return [$lineas, [
             'descuento' => $monto, 'descuento_tipo' => $tipo, 'descuento_valor' => $valor,
             'descuento_motivo' => mb_strtoupper(mb_substr(trim((string) ($datos['descuento_motivo'] ?? '')), 0, 80)) ?: null,
             'IdUsuario_descuento' => $autoriza,
-        ]];
+        ] + ($cupon ? ['cupon_id' => (int) $cupon->id] : [])];
     }
 
     private static function descontar(array $l, float $parte, float $total): array

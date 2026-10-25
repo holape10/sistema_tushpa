@@ -18,6 +18,7 @@ use App\Support\ControlStock;
 use App\Support\Delivery;
 use App\Support\Impresion\Impresion;
 use App\Support\MesasUnidas;
+use App\Support\MetasMozo;
 use App\Support\NombreCorto;
 use App\Support\OpcionesPlato;
 use App\Support\Porciones;
@@ -57,8 +58,12 @@ class ComandasController extends Controller
         // El mozo solo toma pedidos: no ve los botones de cobro
         $puedeCobrar = Auth::user()->esAdminOCaja();
         $permisos = self::permisos();
+        // El mozo ve cómo va con su meta de venta (si el administrador puso metas)
+        $miMeta = Auth::user()->esMozo() ? MetasMozo::delMozo((int) $id_empresa_negocio, (int) Auth::id()) : null;
+        // Pedidos, llamadas y cuentas que piden los clientes desde el QR de su mesa
+        $cartaMesa = (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $id_empresa_negocio)->value('carta_pedido_mesa');
 
-        return view('empresas.comandas.seleccion_servicio', compact('pisos', 'mesas', 'primerPisoId', 'puedeCobrar', 'permisos'));
+        return view('empresas.comandas.seleccion_servicio', compact('pisos', 'mesas', 'primerPisoId', 'puedeCobrar', 'permisos', 'miMeta', 'cartaMesa'));
     }
 
     /**

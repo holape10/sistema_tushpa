@@ -78,6 +78,12 @@
                     <input type="number" name="delivery_minimo" min="0" step="0.10" value="{{ old('delivery_minimo', $negocio->delivery_minimo) }}" placeholder="0.00"
                            class="mt-1 w-40 rounded-xl border-gray-300 text-sm"></label>
             </div>
+            <label class="flex items-start gap-3 p-4 rounded-xl border border-violet-200 bg-violet-50 cursor-pointer">
+                <input type="checkbox" name="carta_pedido_mesa" value="1" @checked($negocio->carta_pedido_mesa) class="mt-0.5 rounded text-violet-600">
+                <span><span class="font-bold text-violet-900">🍽️ Pedir desde la mesa con el QR</span>
+                    <span class="block text-sm text-violet-700">Con el QR de su mesa el cliente arma su pedido, llama al mozo o pide la cuenta desde su celular. Al mozo le suena un aviso en
+                        su pantalla de mesas y él acepta el pedido: recién ahí se suma a la mesa y va a cocina. <b>Vuelve a imprimir los QR de mesa</b> (los antiguos solo muestran la carta).</span></span>
+            </label>
             <label class="block text-sm font-medium text-gray-700">Mensaje en la portada (opcional)
                 <textarea name="carta_mensaje" rows="3" maxlength="300" placeholder="Atendemos de 7:00 a.m. a 11:00 p.m. · WiFi: ABBYCAFE / clave 12345"
                           class="mt-1 w-full rounded-xl border-gray-300 text-sm">{{ old('carta_mensaje', $negocio->carta_mensaje) }}</textarea>
@@ -103,7 +109,7 @@
               x-data="{ todas: true }">
             <input type="hidden" name="tipo" value="mesas">
             <h2 class="font-bold text-gray-800">2. QR por mesa</h2>
-            <p class="text-sm text-gray-500">Imprime una tarjeta por mesa: al escanearla, la carta muestra el nombre de la mesa. Recórtalas y ponlas en un portacarta o pégalas en la mesa.</p>
+            <p class="text-sm text-gray-500">Imprime una tarjeta por mesa: al escanearla, la carta muestra el nombre de la mesa{{ $negocio->carta_pedido_mesa ? ' y el cliente puede pedir desde ahí' : '' }}. Recórtalas y ponlas en un portacarta o pégalas en la mesa.</p>
             @if ($mesas->isEmpty())
                 <p class="text-sm text-amber-700">Aún no tienes mesas. Créalas en <a href="{{ url('/mesas') }}" class="underline font-semibold">Mesas</a>, o imprime el afiche general.</p>
             @else

@@ -79,6 +79,9 @@
     <table>
         <tr><td>Fondo inicial</td><td class="r">{{ number_format($turno->monto, 2) }}</td></tr>
         <tr><td>(+) Ventas en efectivo</td><td class="r">{{ number_format($r['ventasEfectivo'], 2) }}</td></tr>
+        @if ($r['dolaresSoles'] > 0)
+            <tr><td>(-) Cobrado en dólares (US$ {{ number_format($r['dolaresUsd'], 2) }})</td><td class="r">{{ number_format($r['dolaresSoles'], 2) }}</td></tr>
+        @endif
         <tr><td>(+) Otros ingresos</td><td class="r">{{ number_format($r['ingresos'], 2) }}</td></tr>
         <tr><td>(-) Egresos</td><td class="r">{{ number_format($r['egresos'], 2) }}</td></tr>
         <tr class="b"><td>EFECTIVO ESPERADO</td><td class="r">{{ number_format($r['efectivoEsperado'], 2) }}</td></tr>
@@ -90,6 +93,18 @@
             <tr class="b {{ $dif == 0 ? 'ok' : 'mal' }}"><td>{{ $dif < 0 ? 'FALTANTE' : ($dif > 0 ? 'SOBRANTE' : 'CUADRE EXACTO') }}</td><td class="r">{{ number_format($dif, 2) }}</td></tr>
         @endif
     </table>
+    @if ($r['dolaresUsd'] > 0)
+        <p class="b">Además, en dólares: US$ {{ number_format($r['dolaresUsd'], 2) }}</p>
+    @endif
+    @if ($r['propinas']->isNotEmpty())
+        <div class="tit">Propinas (no son venta: para los mozos)</div>
+        <table>
+            @foreach ($r['propinas'] as $p)
+                <tr><td>{{ $p->nom_med_pag ?? 'PAGO' }} ({{ $p->cobros }})</td><td class="r">{{ number_format($p->monto, 2) }}</td></tr>
+            @endforeach
+            <tr class="b"><td>TOTAL PROPINAS</td><td class="r">{{ number_format($r['propinas']->sum('monto'), 2) }}</td></tr>
+        </table>
+    @endif
     @if ($turno->estado == 'CERRADO')
         @php $conteo = collect($denominaciones)->filter(fn($v, $campo) => $turno->$campo > 0); @endphp
         @if ($conteo->isNotEmpty())

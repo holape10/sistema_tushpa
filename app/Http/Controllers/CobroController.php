@@ -16,11 +16,13 @@ use App\Support\ClienteDirecciones;
 use App\Support\Cocina;
 use App\Support\Comprobante;
 use App\Support\ConsultaPeru;
+use App\Support\Cupones;
 use App\Support\Descuentos;
 use App\Support\Fidelizacion;
 use App\Support\Impresion\Impresion;
 use App\Support\MesasUnidas;
 use App\Support\OpcionesPlato;
+use App\Support\Propinas;
 use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -264,6 +266,22 @@ class CobroController extends Controller
         return response()->json($respuesta + ['impreso' => $impreso]);
     }
 
+    /** El cajero escribe un cupón: si vale para esta cuenta, cuánto descuenta (al cobrar se vuelve a revisar) */
+    public function cupon(Request $request)
+    {
+        $this->autorizar();
+        $d = $request->validate(['codigo' => 'required|string|max:30', 'total' => 'required|numeric|min:0']);
+        try {
+            $cupon = Cupones::vigente((int) Auth::user()->id_empresa_negocio, $d['codigo'], round((float) $d['total'], 2));
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+
+        return response()->json(['ok' => true, 'codigo' => $cupon->codigo, 'tipo' => $cupon->tipo, 'valor' => (float) $cupon->valor,
+            'monto' => Cupones::monto($cupon, round((float) $d['total'], 2)),
+            'mensaje' => 'Cupón '.$cupon->codigo.': '.Cupones::texto($cupon).' de descuento'.($cupon->descripcion ? ' · '.$cupon->descripcion : '')]);
+    }
+
     /** Búsqueda predictiva de clientes por nombre o número de documento (solo la BD propia) */
     public function sugerirClientes(Request $request)
     {
@@ -331,6 +349,11 @@ class CobroController extends Controller
             'descuento_valor' => 'nullable|numeric|min:0|max:999999',
             'descuento_motivo' => 'nullable|string|max:80',
             'clave_admin' => 'nullable|string|max:100',
+            'cupon' => 'nullable|string|max:30',
+            'propina' => 'nullable|numeric|min:0|max:'.Propinas::MAXIMO,
+            'propina_medio' => 'nullable|integer',
+            'usd_med_pag' => 'nullable|array|max:10',
+            'usd_med_pag.*' => 'nullable|boolean',
         ], [], [
             'clinum' => 'DNI / RUC', 'clinom' => 'Nombre o razón social', 'fecEmi' => 'Fecha de emisión',
         ]);

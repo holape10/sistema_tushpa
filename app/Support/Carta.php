@@ -64,7 +64,8 @@ class Carta
     /** Enlace público de la carta (con la mesa, si es el QR de una mesa) */
     public static function url(int $sucursal, ?int $mesa = null): string
     {
-        return url('/carta/'.$sucursal).($mesa ? '?mesa='.$mesa : '');
+        // El QR de la mesa va firmado: con la firma, el cliente puede pedir desde su mesa (si la sucursal lo permite)
+        return url('/carta/'.$sucursal).($mesa ? '?mesa='.$mesa.'&k='.CartaMesa::firma($mesa) : '');
     }
 
     /** Código QR en SVG (sin internet ni JavaScript) */

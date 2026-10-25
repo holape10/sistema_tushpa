@@ -52,6 +52,8 @@
         .cort-info { display: block; color: #d35400; font-weight: bold; }
         tr.es-cortesia td { background: #fff8e1; }
         .dscto-box { background: #eef6ff; border-left: 4px solid #3c8dbc; padding: 8px 10px; border-radius: 5px; margin-bottom: 10px; }
+        .propina-box { background: #fdf2f8; border-left: 4px solid #db2777; padding: 8px 10px; border-radius: 5px; margin-bottom: 10px; }
+        .btn-propina.activa { background: #db2777; border-color: #be185d; color: #fff; }
         #lbl_desglose { font-size: 9pt; color: #555; }
         .mc-fondo { position: fixed; inset: 0; z-index: 2000; background: rgba(15, 23, 42, .6); display: flex; align-items: center; justify-content: center; padding: 15px; }
         .mc-caja { background: #fff; border-radius: 14px; width: 100%; max-width: 420px; padding: 18px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
@@ -325,9 +327,25 @@
                                 <div id="lbl_desglose"></div>
                             </div>
 
-                            @if ($descuentos->descuentos)
+                            @if ($descuentos->descuentos || $descuentos->cupones)
                                 {{-- Descuento a la cuenta: el cajero hasta el máximo de la sucursal; más que eso, con la clave del administrador --}}
                                 <div class="dscto-box">
+                                    @if ($descuentos->cupones)
+                                        {{-- Cupón: el descuento lo pone el cupón (ya autorizado por el administrador) --}}
+                                        <label>🎟️ CUPÓN DE DESCUENTO</label>
+                                        <div class="input-group input-group-sm" id="cupon_box">
+                                            <input type="text" id="cupon_codigo" maxlength="30" class="form-control" placeholder="Escribe el código" autocomplete="off" style="text-transform:uppercase;">
+                                            <span class="input-group-btn">
+                                                <button type="button" class="btn btn-primary" id="btn_cupon">Aplicar</button>
+                                            </span>
+                                        </div>
+                                        <div id="cupon_info" style="display:none; margin-top:4px; font-size:12px; font-weight:bold; color:#16a34a;">
+                                            <span id="cupon_texto"></span> <button type="button" id="btn_cupon_quitar" class="btn btn-default btn-xs">Quitar</button>
+                                        </div>
+                                        <small id="cupon_error" class="text-danger" style="display:none;"></small>
+                                    @endif
+                                    @if ($descuentos->descuentos)
+                                    <div id="dscto_manual" @if ($descuentos->cupones) style="margin-top:8px;" @endif>
                                     <label>DESCUENTO A LA CUENTA</label>
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-btn">
@@ -343,14 +361,46 @@
                                         <input type="password" id="clave_admin" maxlength="100" autocomplete="new-password" class="form-control input-sm" placeholder="Clave del administrador">
                                         <small class="text-danger">Pasa el {{ rtrim(rtrim(number_format($descuentos->max, 2), '0'), '.') }}% permitido a caja: necesita la clave de un administrador.</small>
                                     </div>
+                                    </div>
+                                    @endif
                                     <div id="dscto_info" style="font-size:11px; font-weight:bold; color:#2c6fa3; margin-top:3px;"></div>
+                                </div>
+                            @endif
+
+                            @if ($descuentos->propina)
+                                {{-- Propina: la deja el cliente para el mozo. No va en el comprobante ni suma a la venta --}}
+                                <div class="propina-box">
+                                    <label>💝 PROPINA <small style="font-weight:normal; color:#777;">(no va en el comprobante)</small></label>
+                                    <div style="display:flex; gap:4px; margin-bottom:5px;">
+                                        @foreach ([5, 10, 15] as $pct)
+                                            <button type="button" class="btn btn-default btn-sm btn-propina" data-pct="{{ $pct }}" style="flex:1;">{{ $pct }}%</button>
+                                        @endforeach
+                                        <button type="button" class="btn btn-default btn-sm" id="propina_quitar" style="flex:1;">Sin</button>
+                                    </div>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-addon">S/</span>
+                                        <input type="number" step="any" min="0" id="propina" class="form-control" placeholder="0.00" autocomplete="off">
+                                        <span class="input-group-btn">
+                                            <select id="propina_medio" class="form-control input-sm" style="width:120px;" title="¿Cómo pagó la propina?">
+                                                @foreach ($mediospagos as $m)
+                                                    <option value="{{ $m->id_med_pag }}" @selected($m->predeterminado == '1')>{{ $m->nom_med_pag }}</option>
+                                                @endforeach
+                                            </select>
+                                        </span>
+                                    </div>
+                                    <div id="propina_info" style="font-size:11px; font-weight:bold; color:#be185d; margin-top:3px;"></div>
                                 </div>
                             @endif
 
                             <div class="row">
                                 <div class="col-xs-6">
-                                    <label>PAGA CON S/:</label>
+                                    <label>PAGA CON <span id="paga_moneda">S/</span>:
+                                        @if ($descuentos->tipoCambio)
+                                            <label style="font-weight:normal; font-size:11px; margin-left:4px; cursor:pointer;"><input type="checkbox" id="paga_usd"> en US$</label>
+                                        @endif
+                                    </label>
                                     <input type="number" step="any" id="paga" class="form-control big" value="0.00" style="color:#555;">
+                                    <small id="paga_equiv" style="display:none; color:#15803d; font-weight:bold;"></small>
                                 </div>
                                 <div class="col-xs-6">
                                     <label>VUELTO S/:</label>
@@ -376,6 +426,13 @@
                                     {{-- Tarjeta, Yape, transferencia...: número de operación obligatorio --}}
                                     <input type="text" id="op_med_pag" maxlength="30" class="form-control input-sm" style="margin-bottom:5px; display:none;"
                                            placeholder="N° de operación (obligatorio)">
+                                @endif
+                                @if ($descuentos->tipoCambio)
+                                    {{-- Pago en dólares: el monto sigue en soles; se anota cuántos dólares recibe la caja --}}
+                                    <label style="font-weight:normal; font-size:12px; cursor:pointer; margin-bottom:5px;">
+                                        <input type="checkbox" id="med_usd"> 💵 Paga en dólares <small class="text-muted">(T.C. {{ rtrim(rtrim(number_format($descuentos->tipoCambio, 3), '0'), '.') }})</small>
+                                        <b id="med_usd_equiv" style="color:#15803d; margin-left:4px;"></b>
+                                    </label>
                                 @endif
                                 <div class="input-group input-group-sm">
                                     <input type="number" step="any" id="mon_med_pag" class="form-control" value="{{ number_format($separadas ? 0 : $total, 2, '.', '') }}">
@@ -440,6 +497,11 @@
     const CORTESIAS = {{ $descuentos->cortesias ? 'true' : 'false' }};
     const ES_ADMIN = {{ auth()->user()->esAdmin() ? 'true' : 'false' }};
     const MAX_CAJERO = {{ (float) $descuentos->max }};
+    // Cupones, propina (aparte del comprobante) y pago en dólares (con el tipo de cambio de la sucursal)
+    const CUPONES = {{ $descuentos->cupones ? 'true' : 'false' }};
+    const PROPINA = {{ $descuentos->propina ? 'true' : 'false' }};
+    const TC = {{ $descuentos->tipoCambio ?? 'null' }};
+    let cupon = null;       // { codigo, tipo, valor } del cupón aplicado
     let BRUTO = TOTAL;      // lo que se cobra antes del descuento (sin las cortesías)
     let GRATIS = 0;         // valor de las cortesías
     const cortesias = {};   // cobrar mesa: { clave: { cantidad, motivo } }
@@ -470,6 +532,7 @@
 
     // ---------- Descuento a la cuenta ----------
     function montoDescuento() {
+        if (cupon) return Math.round((cupon.tipo === 'P' ? BRUTO * cupon.valor / 100 : cupon.valor) * 100) / 100;
         if (!DSCTO) return 0;
         const v = parseFloat(el('dscto_valor').value) || 0;
         if (v <= 0) return 0;
@@ -481,10 +544,10 @@
         TOTAL = Math.max(0, Math.round((BRUTO - d) * 100) / 100);
         el('lbl_total').textContent = fmt(TOTAL);
         el('total_comp').value = fmt(TOTAL);
-        if (DSCTO) {
+        if (DSCTO || CUPONES) {
             const pct = BRUTO > 0 ? d / BRUTO * 100 : 0;
-            el('dscto_clave_box').style.display = (!ES_ADMIN && pct > MAX_CAJERO + 0.001) ? 'block' : 'none';
-            el('dscto_info').textContent = d > 0 ? `Descuento: -S/ ${fmt(d)} (${pct.toFixed(1)}%)` + (d >= BRUTO ? ' · es mayor que la cuenta' : '') : '';
+            if (DSCTO) el('dscto_clave_box').style.display = (!cupon && !ES_ADMIN && pct > MAX_CAJERO + 0.001) ? 'block' : 'none';
+            el('dscto_info').textContent = d > 0 ? (cupon ? `Cupón ${cupon.codigo}: ` : 'Descuento: ') + `-S/ ${fmt(d)} (${pct.toFixed(1)}%)` + (d >= BRUTO ? ' · es mayor que la cuenta' : '') : '';
         }
         const partes = [];
         if (d > 0) partes.push(`Consumo S/ ${fmt(BRUTO)} − descuento S/ ${fmt(d)}`);
@@ -492,11 +555,90 @@
         el('lbl_desglose').textContent = partes.join(' · ');
         medios = [];
         renderMedios();
-        el('vuelto').value = fmt(Math.max(0, (parseFloat(el('paga').value) || 0) - TOTAL));
+        pintarPropina();
     }
     if (DSCTO) {
         ['dscto_valor', 'dscto_tipo'].forEach(id => el(id).addEventListener('input', aplicarDescuento));
         el('dscto_tipo').addEventListener('change', aplicarDescuento);
+    }
+
+    // ---------- Cupón ----------
+    async function aplicarCupon() {
+        const codigo = el('cupon_codigo').value.trim().toUpperCase();
+        if (!codigo) { el('cupon_codigo').focus(); return; }
+        el('cupon_error').style.display = 'none';
+        el('btn_cupon').disabled = true;
+        const r = await fetch(@json(route('cobros.cupon')) + `?codigo=${encodeURIComponent(codigo)}&total=${BRUTO}`, { headers: { Accept: 'application/json' } })
+            .then(x => x.json()).catch(() => ({ ok: false, mensaje: 'Error de conexión con el servidor.' }));
+        el('btn_cupon').disabled = false;
+        if (!r.ok) {
+            el('cupon_error').textContent = r.mensaje || (r.errors ? Object.values(r.errors)[0][0] : 'No se pudo revisar el cupón.');
+            el('cupon_error').style.display = 'block';
+            return;
+        }
+        cupon = { codigo: r.codigo, tipo: r.tipo, valor: r.valor };
+        el('cupon_texto').textContent = '✔ ' + r.mensaje;
+        el('cupon_box').style.display = 'none';
+        el('cupon_info').style.display = 'block';
+        if (DSCTO) { el('dscto_manual').style.display = 'none'; el('dscto_valor').value = ''; el('clave_admin').value = ''; }
+        aplicarDescuento();
+    }
+    function quitarCupon() {
+        if (!CUPONES) return;
+        cupon = null;
+        el('cupon_codigo').value = '';
+        el('cupon_error').style.display = 'none';
+        el('cupon_box').style.display = '';
+        el('cupon_info').style.display = 'none';
+        if (DSCTO) el('dscto_manual').style.display = '';
+        aplicarDescuento();
+    }
+    if (CUPONES) {
+        el('btn_cupon').addEventListener('click', aplicarCupon);
+        el('btn_cupon_quitar').addEventListener('click', quitarCupon);
+        el('cupon_codigo').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); aplicarCupon(); } });
+    }
+
+    // ---------- Propina (aparte del comprobante) y vuelto ----------
+    const montoPropina = () => PROPINA ? Math.max(0, Math.round((parseFloat(el('propina').value) || 0) * 100) / 100) : 0;
+    function pintarPropina() {
+        if (PROPINA) {
+            const p = montoPropina();
+            el('propina_info').textContent = p > 0 ? `El cliente paga S/ ${fmt(TOTAL + p)} (cuenta S/ ${fmt(TOTAL)} + propina S/ ${fmt(p)})` : '';
+        }
+        actualizarVuelto();
+    }
+    function limpiarPropina() {
+        if (!PROPINA) return;
+        el('propina').value = '';
+        document.querySelectorAll('.btn-propina').forEach(b => b.classList.remove('activa'));
+        pintarPropina();
+    }
+    if (PROPINA) {
+        document.querySelectorAll('.btn-propina').forEach(b => b.addEventListener('click', () => {
+            document.querySelectorAll('.btn-propina').forEach(x => x.classList.remove('activa'));
+            b.classList.add('activa');
+            el('propina').value = fmt(TOTAL * Number(b.dataset.pct) / 100);
+            pintarPropina();
+        }));
+        el('propina_quitar').addEventListener('click', limpiarPropina);
+        el('propina').addEventListener('input', () => { document.querySelectorAll('.btn-propina').forEach(x => x.classList.remove('activa')); pintarPropina(); });
+    }
+    // "Paga con" en dólares: el vuelto sale en soles
+    const pagaEnDolares = () => TC && el('paga_usd') && el('paga_usd').checked;
+    const pagaSoles = () => {
+        const v = parseFloat(el('paga').value) || 0;
+        return pagaEnDolares() ? Math.round(v * TC * 100) / 100 : v;
+    };
+    function actualizarVuelto() {
+        el('vuelto').value = fmt(Math.max(0, pagaSoles() - TOTAL - montoPropina()));
+        if (TC) {
+            el('paga_equiv').style.display = pagaEnDolares() && pagaSoles() > 0 ? 'block' : 'none';
+            el('paga_equiv').textContent = `= S/ ${fmt(pagaSoles())}`;
+        }
+    }
+    if (TC) {
+        el('paga_usd').addEventListener('change', () => { el('paga_moneda').textContent = pagaEnDolares() ? 'US$' : 'S/'; actualizarVuelto(); });
     }
 
     // ---------- Modal de cortesía ----------
@@ -533,9 +675,7 @@
     }
 
     // Vuelto
-    el('paga').addEventListener('input', function () {
-        el('vuelto').value = fmt(Math.max(0, (parseFloat(this.value) || 0) - TOTAL));
-    });
+    el('paga').addEventListener('input', actualizarVuelto);
 
     // Medios de pago. Con EXIGE_OP, los que no son EFECTIVO piden el número de operación
     const esEfectivo = opt => (opt?.dataset.nom || '').trim().toUpperCase() === 'EFECTIVO';
@@ -553,25 +693,38 @@
         tb.innerHTML = '';
         medios.forEach((m, i) => {
             tb.insertAdjacentHTML('beforeend',
-                `<tr><td><span class="label label-success">${m.nom}</span> S/ ${fmt(m.monto)}${m.op ? ` <small class="text-muted">Op. ${m.op.replace(/[<>&"]/g, '')}</small>` : ''}</td>
+                `<tr><td><span class="label label-success">${m.nom}</span> S/ ${fmt(m.monto)}${m.usd ? ` <b style="color:#15803d">(US$ ${fmt(m.monto / TC)})</b>` : ''}${m.op ? ` <small class="text-muted">Op. ${m.op.replace(/[<>&"]/g, '')}</small>` : ''}</td>
                  <td style="width:30px"><button type="button" class="btn btn-danger btn-xs" onclick="quitarMedio(${i})">&times;</button></td></tr>`);
         });
         const suma = medios.reduce((a, m) => a + m.monto, 0);
         el('lbl_restante').textContent = fmt(TOTAL - suma);
         el('mon_med_pag').value = fmt(Math.max(0, TOTAL - suma));
+        equivalenteDolares();
     }
     function quitarMedio(i) { medios.splice(i, 1); renderMedios(); }
+    // Medio pagado en dólares: cuántos US$ son
+    function equivalenteDolares() {
+        if (!TC) return;
+        const monto = parseFloat(el('mon_med_pag').value) || 0;
+        el('med_usd_equiv').textContent = el('med_usd').checked && monto > 0 ? `= US$ ${fmt(monto / TC)}` : '';
+    }
+    if (TC) {
+        el('med_usd').addEventListener('change', equivalenteDolares);
+        el('mon_med_pag').addEventListener('input', equivalenteDolares);
+    }
 
     el('btn_agregar_medio').addEventListener('click', function () {
         const sel = el('med_pag');
         const monto = parseFloat(el('mon_med_pag').value) || 0;
+        const usd = !!(TC && el('med_usd').checked);
         if (monto <= 0) return;
-        if (medios.some(m => m.id == sel.value)) { alert('EL MEDIO DE PAGO YA SE ENCUENTRA AGREGADO'); return; }
+        if (medios.some(m => m.id == sel.value && m.usd === usd)) { alert('EL MEDIO DE PAGO YA SE ENCUENTRA AGREGADO'); return; }
         const op = EXIGE_OP ? el('op_med_pag').value.trim() : '';
         if (EXIGE_OP && !esEfectivo(sel.selectedOptions[0]) && !op) { alert('Escribe el número de operación del pago con ' + sel.selectedOptions[0].dataset.nom + '.'); el('op_med_pag').focus(); return; }
         if (op && medios.some(m => (m.op || '').toUpperCase() === op.toUpperCase())) { alert('El N° de operación ' + op + ' ya está en este cobro.'); el('op_med_pag').focus(); return; }
-        medios.push({ id: sel.value, nom: sel.selectedOptions[0].dataset.nom, monto: monto, op: op });
+        medios.push({ id: sel.value, nom: sel.selectedOptions[0].dataset.nom + (usd ? ' US$' : ''), monto: monto, op: op, usd: usd });
         if (EXIGE_OP) el('op_med_pag').value = '';
+        if (TC) el('med_usd').checked = false;
         renderMedios();
     });
 
@@ -854,7 +1007,10 @@
             pintarCarrito();
             el('paga').value = '0.00';
             el('observaciones').value = '';
-            if (DSCTO) { el('dscto_valor').value = ''; el('dscto_motivo').value = ''; el('clave_admin').value = ''; aplicarDescuento(); }
+            if (DSCTO) { el('dscto_valor').value = ''; el('dscto_motivo').value = ''; el('clave_admin').value = ''; }
+            if (PROPINA) { el('propina').value = ''; document.querySelectorAll('.btn-propina').forEach(b => b.classList.remove('activa')); }
+            if (TC) { el('paga_usd').checked = false; el('paga_moneda').textContent = 'S/'; el('med_usd').checked = false; }
+            if (CUPONES) quitarCupon(); else aplicarDescuento();
             llenarCliente({ num: '00000000', nom: 'VENTA AL PORTADOR', dir: '--', tdicod: '1' });
             el('msg_cliente').textContent = '';
             restaurar();
@@ -916,7 +1072,8 @@
             return;
         }
         if (DIRECTA && !carrito.length) { alert('Agrega al menos un producto.'); return; }
-        if (DSCTO && montoDescuento() > 0) {
+        if (CUPONES && !cupon && el('cupon_codigo').value.trim()) { alert('Escribiste un cupón pero no lo aplicaste: toca "Aplicar" o bórralo.'); el('cupon_codigo').focus(); return; }
+        if (!cupon && DSCTO && montoDescuento() > 0) {
             if (montoDescuento() >= BRUTO) { alert('El descuento no puede ser igual o mayor que la cuenta.'); el('dscto_valor').focus(); return; }
             if (el('dscto_clave_box').style.display !== 'none' && !el('clave_admin').value) { alert('Este descuento necesita la clave de un administrador.'); el('clave_admin').focus(); return; }
         }
@@ -942,20 +1099,22 @@
             clicor: el('clicor').value,
             telefono: el('telefono').value,
             observaciones: el('observaciones').value,
-            paga: parseFloat(el('paga').value) || 0,
+            paga: pagaSoles(),
             imprimir: el('imprimir').checked ? 1 : 0,
             // Si no agregó medios, se cobra todo con el medio que está seleccionado en la lista (no con el predeterminado)
             id_med_pag: contado ? (medios.length ? medios.map(m => m.id) : [el('med_pag').value]) : [],
             mon_med_pag: contado ? (medios.length ? medios.map(m => m.monto) : [TOTAL]) : [],
             op_med_pag: contado ? (medios.length ? medios.map(m => m.op || '') : [EXIGE_OP ? el('op_med_pag').value.trim() : '']) : [],
+            usd_med_pag: contado && TC ? (medios.length ? medios.map(m => m.usd ? 1 : 0) : [el('med_usd').checked ? 1 : 0]) : [],
+            ...(montoPropina() > 0 ? { propina: montoPropina(), propina_medio: el('propina_medio').value } : {}),
             // Cuentas separadas: { clave: cantidad } de lo que paga esta persona (null = todo lo pendiente)
             separadas: SEPARADAS ? seleccionSeparada() : null,
             // Cortesías de la mesa y descuento a la cuenta (el servidor revisa permisos y la clave del administrador)
             cortesias: cortesias,
-            ...(DSCTO && montoDescuento() > 0 ? {
+            ...(cupon ? { cupon: cupon.codigo } : (DSCTO && montoDescuento() > 0 ? {
                 descuento_tipo: el('dscto_tipo').value, descuento_valor: parseFloat(el('dscto_valor').value) || 0,
                 descuento_motivo: el('dscto_motivo').value.trim(), clave_admin: el('clave_admin').value || null,
-            } : {}),
+            } : {})),
         };
 
         if (DIRECTA) {

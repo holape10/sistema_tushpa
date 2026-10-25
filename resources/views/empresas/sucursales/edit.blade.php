@@ -242,12 +242,24 @@
                                 <span><span class="font-semibold text-gray-800">Permitir cortesías 🎁</span>
                                     <span class="block text-xs text-gray-500">El producto va gratis con su motivo. Ante SUNAT es una operación gratuita y sí descuenta el stock. Todo sale en el reporte "Descuentos y Cortesías".</span></span>
                             </label>
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input type="checkbox" name="permite_propina" value="1" @checked($campo('permite_propina')) class="mt-0.5 rounded text-indigo-600">
+                                <span><span class="font-semibold text-gray-800">Recibir propina 💝</span>
+                                    <span class="block text-xs text-gray-500">Al cobrar se puede anotar la propina (5%, 10% o un monto). No va en el comprobante ni suma a la venta; sale en el turno y en el reporte "Propinas" por mozo.</span></span>
+                            </label>
+                            <label class="flex flex-wrap items-center gap-3 text-sm text-gray-700">💵 <span class="font-semibold text-gray-800">Cobrar en dólares:</span> tipo de cambio
+                                <span class="flex items-center gap-1">S/ <input type="number" name="tipo_cambio_usd" min="0" max="20" step="0.001"
+                                    value="{{ old('tipo_cambio_usd', $sucursal->tipo_cambio_usd !== null ? rtrim(rtrim(number_format((float) $sucursal->tipo_cambio_usd, 3, '.', ''), '0'), '.') : '') }}"
+                                    placeholder="3.75" class="w-24 h-9 rounded-lg border-gray-300 text-sm text-center"></span>
+                                <span class="block w-full text-xs text-gray-500">Vacío = no se cobra en dólares. La venta sigue en soles; la caja ve cuántos dólares recibió. Actualízalo cuando cambie.</span>
+                            </label>
                         </div>
                         @else
                             {{-- Opciones de restaurante: este negocio no las usa, se guardan como están --}}
-                            @foreach (['comandas_solo_mesas', 'permite_descuentos', 'permite_cortesias'] as $opcion)
+                            @foreach (['comandas_solo_mesas', 'permite_descuentos', 'permite_cortesias', 'permite_propina'] as $opcion)
                                 @if ($campo($opcion))<input type="hidden" name="{{ $opcion }}" value="1">@endif
                             @endforeach
+                            <input type="hidden" name="tipo_cambio_usd" value="{{ $sucursal->tipo_cambio_usd }}">
                             <input type="hidden" name="descuento_max_cajero" value="{{ (float) ($sucursal->descuento_max_cajero ?? 10) }}">
                             <input type="hidden" name="ip_mozos" value="{{ $sucursal->ip_mozos }}">
                         @endif
