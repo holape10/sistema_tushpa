@@ -69,6 +69,24 @@
                                 <li><b>Windows</b> ("Windows protegió su PC"): toca <b>"Más información"</b> y luego <b>"Ejecutar de todas formas"</b>.</li>
                             </ol>
                         </details>
+                        {{-- Instalar con un comando: se baja desde este servidor (no por el navegador), así no salen esos avisos --}}
+                        <div class="w-full sm:max-w-md" x-data="{ comando: '', copiado: false, error: '' }">
+                            <button type="button" class="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-700"
+                                    title="Para técnicos: instala sin los avisos de Chrome y Windows"
+                                    @click="error = ''; fetch(@js(route('impresion.agente.comando')), { method: 'POST', headers: { 'X-CSRF-TOKEN': @js(csrf_token()), 'Accept': 'application/json' } })
+                                        .then(r => r.ok ? r.json() : Promise.reject()).then(d => { comando = d.comando; navigator.clipboard?.writeText(d.comando).then(() => copiado = true); })
+                                        .catch(() => error = 'No se pudo generar el comando. Intenta de nuevo.')"><i class="fas fa-terminal"></i> Copiar comando de instalación</button>
+                            <p x-show="error" x-cloak class="mt-1 text-xs text-rose-600" x-text="error"></p>
+                            <div x-show="comando" x-cloak class="mt-2 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-700 space-y-1.5">
+                                <p class="font-semibold text-emerald-700" x-show="copiado">✔ Comando copiado (vale una vez, por 3 días)</p>
+                                <ol class="list-decimal list-inside space-y-0.5">
+                                    <li>En la PC de las impresoras, clic derecho en el botón Inicio de Windows y elige <b>"Windows PowerShell"</b> (o <b>"Terminal"</b>).</li>
+                                    <li>Pega el comando con <b>clic derecho</b> (o Ctrl+V) y presiona <b>Enter</b>.</li>
+                                    <li>Acepta cuando Windows pregunte si permites cambios. Se instala igual que con el instalador.</li>
+                                </ol>
+                                <textarea readonly rows="3" x-text="comando" @focus="$event.target.select()" class="w-full rounded-lg border-slate-300 font-mono text-[10px] bg-white"></textarea>
+                            </div>
+                        </div>
                     @endif
                     <form method="POST" action="{{ route('impresion.agente') }}" class="flex flex-wrap gap-2 justify-end"
                           >

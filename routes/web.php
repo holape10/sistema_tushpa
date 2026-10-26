@@ -469,6 +469,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/impresoras/copias', [ImpresionController::class, 'copias'])->name('impresion.copias');
     Route::post('/impresoras/agente', [ImpresionController::class, 'descargarAgente'])->name('impresion.agente');
     Route::post('/impresoras/agente/codigo', [ImpresionController::class, 'codigoAgente'])->name('impresion.agente.codigo');
+    Route::post('/impresoras/agente/comando', [ImpresionController::class, 'comandoAgente'])->name('impresion.agente.comando');
     Route::post('/impresoras/cola/{id}/reintentar', [ImpresionController::class, 'reintentar'])->whereNumber('id')->name('impresion.reintentar');
     Route::post('/impresoras/{id}', [ImpresionController::class, 'guardarImpresora'])->whereNumber('id')->name('impresion.actualizar');
     Route::post('/impresoras/{id}/prueba', [ImpresionController::class, 'prueba'])->whereNumber('id')->name('impresion.prueba');

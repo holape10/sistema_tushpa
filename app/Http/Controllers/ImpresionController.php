@@ -339,6 +339,29 @@ class ImpresionController extends Controller
     }
 
     /**
+     * Comando de PowerShell que descarga el instalador desde este servidor y lo ejecuta, con el nombre que lleva la
+     * dirección y un código de un solo uso. Al no bajarse con el navegador, no salen los avisos de Chrome ni de Windows.
+     */
+    public function comandoAgente()
+    {
+        $this->soloAdmin();
+        abort_unless(is_file(self::rutaInstalador()), 404, 'El instalador aún no está disponible.');
+        $archivo = 'Instalar_Agente_TUSHPA@'.request()->getHost().'@'.$this->codigoInstalacion($this->sucursal()).'.exe';
+        $comando = "[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; \$f = \"\$env:TEMP\\{$archivo}\"; "
+            ."Invoke-WebRequest -UseBasicParsing '".route('impresion.agente.exe')."' -OutFile \$f; Start-Process \$f -Wait";
+
+        return response()->json(['comando' => $comando]);
+    }
+
+    /** El instalador (.exe) sin sesión, para el comando de PowerShell. Es el mismo para todas las empresas y no lleva claves */
+    public function instaladorExe()
+    {
+        abort_unless(is_file(self::rutaInstalador()), 404);
+
+        return response()->download(self::rutaInstalador(), 'Instalar_Agente_TUSHPA.exe', ['Content-Type' => 'application/octet-stream']);
+    }
+
+    /**
      * El instalador canjea su código por el bloque de config.ini (con una clave nueva). Sin sesión; el código es de un
      * solo uso y vence a los 3 días.
      */
