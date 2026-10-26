@@ -17,7 +17,10 @@ class Cliente extends Model
 
     protected $guarded = [];
 
-    protected $casts = ['vence_el' => 'date', 'prueba_hasta' => 'date', 'suspendido_el' => 'date'];
+    /** sol_clave: clave SOL principal (referencia), guardada cifrada */
+    protected $casts = ['vence_el' => 'date', 'prueba_hasta' => 'date', 'suspendido_el' => 'date', 'sol_clave' => 'encrypted'];
+
+    protected $hidden = ['sol_clave'];
 
     /** (la columna `plan` guarda el nombre como texto; la relación tiene otro nombre para no chocar) */
     public function planContratado()

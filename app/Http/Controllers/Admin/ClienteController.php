@@ -174,7 +174,10 @@ class ClienteController extends Controller
         $this->autorizar($cliente);
         $d = $request->validate($this->reglas() + ['creado_por' => 'nullable|integer|exists:central.superadmins,id',
             'rubro' => ['nullable', Rule::in(array_keys(Rubros::RUBROS))],
-            'cambiar_menu' => 'nullable|boolean', 'modulos' => 'nullable|array', 'modulos.*' => 'string|max:100'], $this->mensajes(), $this->nombres());
+            'cambiar_menu' => 'nullable|boolean', 'modulos' => 'nullable|array', 'modulos.*' => 'string|max:100',
+            'sol_usuario' => 'nullable|string|max:20', 'sol_clave' => 'nullable|string|max:60'], $this->mensajes(), $this->nombres());
+        $d['sol_usuario'] = mb_strtoupper(trim((string) ($d['sol_usuario'] ?? ''))) ?: null;
+        $d['sol_clave'] = ($d['sol_clave'] ?? null) ?: null;
         if (! $this->esDueno()) {
             unset($d['creado_por']);   // solo el dueño reasigna empresas
         }

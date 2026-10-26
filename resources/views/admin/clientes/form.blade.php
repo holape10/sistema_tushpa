@@ -139,6 +139,27 @@
                         <span class="text-xs text-slate-400">Ese usuario la verá en su panel. Tú (dueño) ves todas.</span>
                     </label>
                 @endif
+                @if ($cliente->exists)
+                    {{-- Clave SOL principal: solo de referencia, se guarda cifrada --}}
+                    <div class="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3" x-data="{ ver: false }">
+                        <p class="text-sm font-semibold text-amber-900">🔐 Clave SOL principal <span class="font-normal text-xs text-amber-700">(solo de referencia; se guarda cifrada)</span></p>
+                        <div class="grid sm:grid-cols-2 gap-3 mt-2">
+                            <label class="block">
+                                <span class="text-xs font-semibold text-slate-600">Usuario SOL</span>
+                                <input type="text" name="sol_usuario" value="{{ old('sol_usuario', $cliente->sol_usuario) }}" maxlength="20" autocomplete="off"
+                                       class="mt-1 w-full rounded-xl border-slate-300 uppercase">
+                            </label>
+                            <label class="block">
+                                <span class="text-xs font-semibold text-slate-600">Contraseña SOL</span>
+                                <span class="mt-1 flex gap-1">
+                                    <input :type="ver ? 'text' : 'password'" name="sol_clave" value="{{ old('sol_clave', $cliente->sol_clave) }}" maxlength="60" autocomplete="new-password"
+                                           class="flex-1 min-w-0 rounded-xl border-slate-300">
+                                    <button type="button" @click="ver = !ver" class="px-3 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-600" x-text="ver ? 'Ocultar' : 'Ver'"></button>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                @endif
                 <label class="block sm:col-span-2">
                     <span class="text-sm font-semibold text-slate-600">Notas</span>
                     <textarea name="notas" rows="2" class="mt-1 w-full rounded-xl border-slate-300">{{ old('notas', $cliente->notas) }}</textarea>
