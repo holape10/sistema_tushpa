@@ -16,7 +16,10 @@ use Illuminate\View\View;
  */
 class PanelDuenoController extends Controller
 {
-    public const VISTAS = ['panel' => ['Cómo va mi negocio', '📊'], 'horas' => ['Horas pico', '🔥'], 'equipo' => ['Mi equipo', '👥'], 'alertas' => ['Alertas', '🚨']];
+    public const VISTAS = ['panel' => ['Cómo va mi negocio', '📊'], 'turno' => ['Ventas del turno', '🕒'], 'horas' => ['Horas pico', '🔥'], 'equipo' => ['Mi equipo', '👥'], 'alertas' => ['Alertas', '🚨']];
+
+    /** Qué se mira en "Ventas del turno" */
+    public const PERIODOS = ['jornada' => 'Esta jornada', 'anterior' => 'Jornada anterior', 'hoy' => 'Hoy (00:00 a 23:59)', 'abiertos' => 'Turnos de caja abiertos'];
 
     private function sucursal(): int
     {
@@ -51,8 +54,34 @@ class PanelDuenoController extends Controller
             'resumen' => $ver === 'panel' ? PanelDueno::resumen($suc) : null,
             'mapa' => $ver === 'horas' ? PanelDueno::mapaCalor($suc, $desde, $hasta) : null,
             'equipo' => $ver === 'equipo' ? PanelDueno::equipo($suc, $desde, $hasta) : null,
+            'turno' => $ver === 'turno' ? $this->ventasDelTurno($request, $suc) : null,
             'config' => DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['meta_mensual', 'gastos_fijos_mes', 'whatsapp_dueno']),
         ]);
+    }
+
+    /**
+     * Ventas por mozo, cajero y promotor de la jornada (mediodía a mediodía: lo de madrugada cuenta en la noche que se
+     * atendió), de hoy, de los turnos de caja abiertos o de un turno elegido.
+     */
+    private function ventasDelTurno(Request $request, int $suc): array
+    {
+        $turnos = PanelDueno::turnosRecientes($suc);
+        $elegido = $request->integer('turno') ? $turnos->firstWhere('id_turno', $request->integer('turno')) : null;
+        $periodo = $elegido ? 'turno' : (array_key_exists($request->get('periodo'), self::PERIODOS) ? $request->get('periodo') : 'jornada');
+        [$desde, $hasta, $ids, $texto] = match ($periodo) {
+            'turno' => [null, null, [(int) $elegido->id_turno], 'Turno N° '.$elegido->turno.' de '.$elegido->cajero.' · desde el '.Carbon::parse($elegido->apertura)->format('d/m H:i')
+                .($elegido->cierre ? ' hasta el '.Carbon::parse($elegido->cierre)->format('d/m H:i') : ' (abierto)')],
+            'abiertos' => [null, null, $turnos->where('estado', 'ABIERTO')->pluck('id_turno')->map(fn ($id) => (int) $id)->all(),
+                $turnos->where('estado', 'ABIERTO')->map(fn ($t) => 'N° '.$t->turno.' '.$t->cajero)->implode(' · ') ?: 'No hay turnos abiertos'],
+            'hoy' => [now()->startOfDay(), now(), null, 'Hoy '.now()->format('d/m').' desde las 00:00'],
+            default => (function () use ($periodo) {
+                [$d, $h] = PanelDueno::jornada($periodo === 'anterior' ? 1 : 0);
+
+                return [$d, $h, null, 'Noche del '.$d->locale('es')->translatedFormat('l d/m').': desde el '.$d->format('d/m H:i').' hasta '.($periodo === 'anterior' ? 'el '.$h->format('d/m H:i') : 'ahora')];
+            })(),
+        };
+
+        return PanelDueno::ventasDelTurno($suc, $desde, $hasta, $ids) + ['periodo' => $periodo, 'texto' => $texto, 'turnos' => $turnos, 'elegido' => $elegido?->id_turno];
     }
 
     /** El resumen del día listo para WhatsApp (texto y enlace al número del dueño) */

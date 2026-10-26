@@ -34,7 +34,7 @@
         @endforeach
     </nav>
 
-    @if ($ver !== 'panel')
+    @if (! in_array($ver, ['panel', 'turno'], true))
         <form class="flex flex-wrap items-end gap-2 text-xs">
             <input type="hidden" name="ver" value="{{ $ver }}">
             <label class="font-semibold text-gray-500">Desde<input type="date" name="desde" value="{{ $desde }}" class="mt-1 block h-9 rounded-lg border-gray-300 text-sm"></label>
@@ -183,6 +183,64 @@
         @else
             <p class="bg-white rounded-2xl shadow-sm p-10 text-center text-gray-400">Sin ventas en estas fechas.</p>
         @endif
+    @endif
+
+    {{-- ===================================================== Ventas del turno --}}
+    @if ($ver === 'turno')
+        @php $t = $turno; @endphp
+        <div class="flex flex-wrap items-center gap-2">
+            @foreach (PanelDuenoController::PERIODOS as $clave => $nombre)
+                <a href="{{ route('dueno.index', ['ver' => 'turno', 'periodo' => $clave]) }}"
+                   class="h-9 px-3 inline-flex items-center rounded-full text-sm font-bold {{ $t['periodo'] === $clave ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 shadow-sm' }}">{{ $nombre }}</a>
+            @endforeach
+            <form class="ml-auto">
+                <input type="hidden" name="ver" value="turno">
+                <select name="turno" onchange="this.form.submit()" class="h-9 rounded-lg border-gray-300 text-sm {{ $t['elegido'] ? 'ring-2 ring-indigo-500' : '' }}">
+                    <option value="">Elegir un turno de caja…</option>
+                    @foreach ($t['turnos'] as $tu)
+                        <option value="{{ $tu->id_turno }}" @selected($t['elegido'] == $tu->id_turno)>
+                            N° {{ $tu->turno }} · {{ $tu->cajero }} · {{ \Carbon\Carbon::parse($tu->apertura)->format('d/m H:i') }}{{ $tu->estado === 'ABIERTO' ? ' (abierto)' : '' }}</option>
+                    @endforeach
+                </select>
+            </form>
+        </div>
+        <p class="text-sm text-gray-600">🕒 {{ $t['texto'] }}
+            @if ($t['periodo'] === 'jornada')<span class="text-gray-400">· La jornada va de mediodía a mediodía: lo vendido de madrugada cuenta en la noche que se atendió.</span>@endif
+            <a href="{{ request()->fullUrl() }}" class="ml-1 text-indigo-600 font-semibold">↻ Actualizar</a></p>
+
+        <div class="grid grid-cols-3 gap-3">
+            <div class="rounded-2xl shadow-sm p-4 bg-indigo-600 text-white"><p class="text-xs font-semibold text-indigo-100">Vendido</p><p class="text-2xl font-black">{{ $soles($t['total']->total) }}</p></div>
+            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs font-semibold text-gray-500">Ventas</p><p class="text-2xl font-black text-gray-800">{{ $t['total']->tickets }}</p></div>
+            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs font-semibold text-gray-500">Ticket promedio</p><p class="text-2xl font-black text-gray-800">{{ $soles($t['total']->promedio) }}</p></div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-4 items-start">
+            @foreach ([['mozos', '🍽️ Por mozo', 'Las mesas que atendió cada uno'], ['cajeros', '💰 Por cajero', 'Lo que cobró cada uno en caja'], ['promotores', '📣 Por promotor', 'Lo que trajo cada promotor']] as [$clave, $titulo, $ayuda])
+                <section class="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <div class="px-4 py-3 border-b"><p class="font-bold text-gray-800">{{ $titulo }}</p><p class="text-xs text-gray-400">{{ $ayuda }}</p></div>
+                    <div class="divide-y divide-gray-100">
+                        @forelse ($t[$clave] as $i => $p)
+                            <div class="px-4 py-2.5">
+                                <div class="flex items-baseline gap-2">
+                                    <span class="w-6 text-sm">{{ ['🥇', '🥈', '🥉'][$i] ?? ($i + 1) }}</span>
+                                    <span class="flex-1 min-w-0 truncate text-sm font-semibold text-gray-800">{{ $p->nombre }}</span>
+                                    <span class="text-sm font-black text-gray-900">{{ $soles($p->total) }}</span>
+                                </div>
+                                <div class="ml-8 mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div class="h-1.5 rounded-full bg-indigo-500" style="width: {{ min(100, $p->participacion) }}%"></div></div>
+                                <p class="ml-8 mt-0.5 text-[11px] text-gray-500">{{ $p->tickets }} {{ $p->tickets === 1 ? 'venta' : 'ventas' }} · ticket {{ $soles($p->promedio) }} · {{ $p->participacion }}%
+                                    · {{ \Carbon\Carbon::parse($p->primera)->format('H:i') }}–{{ \Carbon\Carbon::parse($p->ultima)->format('H:i') }}</p>
+                            </div>
+                        @empty
+                            <p class="px-4 py-6 text-center text-sm text-gray-400">Sin ventas.</p>
+                        @endforelse
+                        @if ($clave === 'mozos' && $t['sinMozo'] > 0)
+                            <p class="px-4 py-2.5 text-xs text-gray-500">Sin mozo (venta directa en caja): <b>{{ $soles($t['sinMozo']) }}</b></p>
+                        @endif
+                    </div>
+                </section>
+            @endforeach
+        </div>
+        <p class="text-xs text-gray-400">Para un mes o fechas más largas, usa <a href="{{ url('/reportes/ventas-vendedor') }}" class="text-indigo-600 underline">Reportes → Ventas por Vendedor</a>. Las anuladas no cuentan; las notas de crédito restan.</p>
     @endif
 
     {{-- ===================================================== Mi equipo --}}

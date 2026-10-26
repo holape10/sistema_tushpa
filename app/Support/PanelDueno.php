@@ -165,6 +165,68 @@ class PanelDueno
         })->sortByDesc(fn ($u) => $u->vendio ?: $u->cobro / 1000)->values();
     }
 
+    /**
+     * La jornada en curso (discotecas y bares venden de noche hasta la madrugada): de mediodía a mediodía, como el reporte
+     * de ventas por vendedor. $atras = 1 es la jornada anterior.
+     *
+     * @return array{0: Carbon, 1: Carbon} inicio y fin (el fin de la jornada en curso es ahora)
+     */
+    public static function jornada(int $atras = 0, ?Carbon $ahora = null): array
+    {
+        $ahora ??= now();
+        $inicio = $ahora->copy()->setTime(Reportes::CORTE_JORNADA, 0);
+        if ($ahora->lt($inicio)) {
+            $inicio->subDay();
+        }
+        $inicio->subDays($atras);
+
+        return [$inicio, $atras ? $inicio->copy()->addDay()->subSecond() : $ahora->copy()];
+    }
+
+    /**
+     * Ventas de un turno o una jornada por persona: cuánto vendió cada mozo (sus mesas), cuánto cobró cada cajero y
+     * cuánto trajo cada promotor. Con $turnos, solo las ventas cobradas en esos turnos de caja.
+     *
+     * @param  array<int, int>|null  $turnos
+     * @return array{total: object, mozos: Collection, cajeros: Collection, promotores: Collection}
+     */
+    public static function ventasDelTurno(int $suc, ?Carbon $desde, ?Carbon $hasta, ?array $turnos = null): array
+    {
+        $base = fn () => self::ventas($suc)
+            ->when($turnos !== null, fn ($q) => $q->whereIn('c.id_turno', $turnos ?: [0]))
+            ->when($turnos === null, fn ($q) => $q->whereBetween('c.fecha_hora', [$desde, $hasta]));
+        $total = $base()->selectRaw('COALESCE(SUM('.self::SIGNO.' * c.ccaitv), 0) as total, SUM(c.tdocod NOT IN (\'07\',\'08\')) as tickets')->first();
+        $suma = round((float) $total->total, 2);
+        $por = function (string $columna) use ($base, $suma) {
+            $filas = $base()->whereNotNull($columna)->groupBy($columna)
+                ->selectRaw($columna.' as usuario, SUM('.self::SIGNO.' * c.ccaitv) as total, SUM(c.tdocod NOT IN (\'07\',\'08\')) as tickets, MIN(c.fecha_hora) as primera, MAX(c.fecha_hora) as ultima')
+                ->get();
+            $nombres = DB::table('users')->whereIn('IdUsuario', $filas->pluck('usuario'))->get(['IdUsuario', 'apeusu', 'name'])->keyBy('IdUsuario');
+
+            return $filas->map(fn ($f) => (object) [
+                'nombre' => trim((string) ($nombres[$f->usuario]->apeusu ?? '')) ?: (string) ($nombres[$f->usuario]->name ?? 'Usuario '.$f->usuario),
+                'total' => round((float) $f->total, 2), 'tickets' => (int) $f->tickets,
+                'promedio' => $f->tickets ? round((float) $f->total / $f->tickets, 2) : 0.0,
+                'participacion' => $suma > 0 ? round((float) $f->total / $suma * 100, 1) : 0.0,
+                'primera' => $f->primera, 'ultima' => $f->ultima,
+            ])->sortByDesc('total')->values();
+        };
+
+        return [
+            'total' => (object) ['total' => $suma, 'tickets' => (int) $total->tickets, 'promedio' => $total->tickets ? round($suma / $total->tickets, 2) : 0.0],
+            'mozos' => $por('c.mozo'), 'cajeros' => $por('c.IdUsuario'), 'promotores' => $por('c.promotor_id'),
+            'sinMozo' => round((float) $base()->whereNull('c.mozo')->sum(DB::raw(self::SIGNO.' * c.ccaitv')), 2),
+        ];
+    }
+
+    /** Turnos de caja recientes de la sucursal (para elegir uno), los abiertos primero */
+    public static function turnosRecientes(int $suc, int $cuantos = 20): Collection
+    {
+        return DB::table('turnos as t')->leftJoin('users as u', 'u.IdUsuario', '=', 't.IdUsuario')
+            ->where('t.id_empresa_negocio', $suc)->orderByRaw("t.estado = 'ABIERTO' DESC")->orderByDesc('t.id_turno')->limit($cuantos)
+            ->get(['t.id_turno', 't.turno', 't.estado', 't.apertura', 't.cierre', DB::raw("COALESCE(NULLIF(u.apeusu, ''), u.name) as cajero")]);
+    }
+
     /** Turnos cerrados con el efectivo contado: diferencia contra lo que debía haber (negativo = faltó) */
     public static function diferenciasCaja(int $suc, string $desde, string $hasta): Collection
     {
