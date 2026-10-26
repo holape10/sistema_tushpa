@@ -316,6 +316,9 @@ class SunatService
         if (! in_array($cab->est_sunat ?? 'PENDIENTE', self::ESTADOS_REENVIABLES, true)) {
             throw new RuntimeException("El comprobante {$cab->serdoc}-{$cab->numdoc} ya está {$cab->est_sunat}.");
         }
+        if ($cab->ccabaj) {
+            throw new RuntimeException("El comprobante {$cab->serdoc}-{$cab->numdoc} está anulado en el sistema: ya no se envía a SUNAT.");
+        }
 
         $doc = $this->construirComprobante($cab);
         $see = $this->see();
@@ -335,6 +338,7 @@ class SunatService
         // 1033 = "ya fue registrado anteriormente": el primer envío sí llegó, pero la respuesta se perdió (internet).
         // Se pide a SUNAT su constancia (CDR) original; si no se puede, se toma como aceptado.
         $r = $this->resolver1033($r, $cab, $doc->getName());
+        $r = $this->resolver1032($r);
 
         DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update([
             'est_sunat' => $r['estado'],
@@ -356,6 +360,17 @@ class SunatService
 
         return $this->consultarCdr($cab, $nombre) ?? ['ok' => true, 'estado' => 'ACEPTADO', 'codigo' => '1033',
             'mensaje' => 'SUNAT indica que ya fue registrado anteriormente (1033): el primer envío sí llegó. Se toma como ACEPTADO.'];
+    }
+
+    /** 1032 = SUNAT ya tiene ese número como anulado o rechazado: reenviarlo no sirve, hay que anularlo en el sistema */
+    private function resolver1032(array $r): array
+    {
+        if ($r['ok'] || (int) preg_replace('/\D/', '', (string) $r['codigo']) !== 1032) {
+            return $r;
+        }
+
+        return ['ok' => false, 'estado' => 'RECHAZADO', 'codigo' => '1032',
+            'mensaje' => 'SUNAT ya tiene este número como anulado o rechazado (1032): no se puede volver a enviar. Anúlalo en el sistema y, si la venta es válida, emite un comprobante nuevo.'];
     }
 
     /**

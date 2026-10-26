@@ -37,18 +37,19 @@ class SunatController extends Controller
             ->whereIn('c.tdocod', SunatService::TIPOS_ELECTRONICOS)
             ->whereBetween('c.ccafem', [$desde, $hasta]);
 
-        // Contadores por estado (sin filtrar por estado)
+        // Contadores por estado (sin filtrar por estado); los anulados en el sistema que no llegaron a SUNAT ya no cuentan como pendientes
         $conteo = (clone $base)->when($tipo, fn ($q) => $q->where('c.tdocod', $tipo))
+            ->where(fn ($q) => $q->whereNull('c.ccabaj')->orWhereNotIn('c.est_sunat', SunatService::ESTADOS_REENVIABLES))
             ->groupBy('c.est_sunat')->pluck(DB::raw('COUNT(*)'), 'c.est_sunat');
 
         $comprobantes = (clone $base)
             ->leftJoin('tipo_documento as t', 't.tdocod', '=', 'c.tdocod')
             ->when($tipo, fn ($q) => $q->where('c.tdocod', $tipo))
-            ->when($estado === 'pendientes', fn ($q) => $q->whereIn('c.est_sunat', SunatService::ESTADOS_REENVIABLES))
+            ->when($estado === 'pendientes', fn ($q) => $q->whereIn('c.est_sunat', SunatService::ESTADOS_REENVIABLES)->whereNull('c.ccabaj'))
             ->when($estado && $estado !== 'pendientes' && $estado !== 'todos', fn ($q) => $q->where('c.est_sunat', $estado))
             ->orderByDesc('c.ccafem')->orderByDesc('c.IdCpe_cabecera')
             ->select('c.IdCpe_cabecera', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccafem', 'c.ccandi', 'c.ccanom', 'c.ccaitv',
-                'c.est_sunat', 'c.ccasunrescod', 'c.ccadessun', 'c.res_id', 'c.serie_ref', 'c.num_ref', 't.tdodes')
+                'c.est_sunat', 'c.ccasunrescod', 'c.ccadessun', 'c.res_id', 'c.serie_ref', 'c.num_ref', 'c.ccabaj', 't.tdodes')
             // "Por enviar": hasta 500 en una página para enviarlos todos de una vez
             ->paginate($estado === 'pendientes' ? 500 : 50)->withQueryString();
 

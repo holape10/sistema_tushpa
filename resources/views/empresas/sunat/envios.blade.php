@@ -71,7 +71,7 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
                 @forelse ($comprobantes as $c)
-                    @php $reenviable = in_array($c->est_sunat, \App\Support\Sunat\SunatService::ESTADOS_REENVIABLES, true); @endphp
+                    @php $reenviable = ! $c->ccabaj && in_array($c->est_sunat, \App\Support\Sunat\SunatService::ESTADOS_REENVIABLES, true); @endphp
                     <tr class="hover:bg-gray-50 align-top" data-id="{{ $c->IdCpe_cabecera }}">
                         <td class="px-3 py-3">@if ($reenviable)<input type="checkbox" class="chk" value="{{ $c->IdCpe_cabecera }}">@endif</td>
                         <td class="px-3 py-3 whitespace-nowrap">{{ \Carbon\Carbon::parse($c->ccafem)->format('d/m/Y') }}</td>
@@ -84,6 +84,7 @@
                         <td class="px-3 py-3 text-right font-semibold whitespace-nowrap">S/ {{ number_format($c->ccaitv, 2) }}</td>
                         <td class="px-3 py-3 max-w-md">
                             <span class="celda-estado">@include('empresas.sunat._estado', ['estado' => $c->est_sunat])</span>
+                            @if ($c->ccabaj)<span class="block text-xs font-semibold text-rose-600 mt-1">{{ $c->ccabaj }} en el sistema</span>@endif
                             <span class="celda-msg block text-xs text-gray-500 mt-1 break-words">{{ $c->ccadessun }}</span>
                         </td>
                         <td class="px-3 py-3 text-right whitespace-nowrap space-x-2">
