@@ -481,6 +481,8 @@ Route::middleware('auth')->group(function () {
     // Venta masiva: comprobantes mensuales de los clientes con facturación mensual
     Route::get('/ventas/masiva', [VentaMasivaController::class, 'index'])->name('ventas.masiva');
     Route::post('/ventas/masiva/emitir', [VentaMasivaController::class, 'emitir'])->name('ventas.masiva.emitir');
+    Route::post('/ventas/masiva/extra', [VentaMasivaController::class, 'extraAgregar'])->name('ventas.masiva.extra');
+    Route::post('/ventas/masiva/extra/{id}/quitar', [VentaMasivaController::class, 'extraQuitar'])->whereNumber('id')->name('ventas.masiva.extra.quitar');
     Route::get('/ventas/masiva/zip', [VentaMasivaController::class, 'zip'])->name('ventas.masiva.zip');
     Route::get('/ventas/masiva/pdf/{id}', [VentaMasivaController::class, 'pdf'])->whereNumber('id')->name('ventas.masiva.pdf');
     Route::get('/ventas/{id}/detalle', [VentaController::class, 'detalle'])->whereNumber('id')->name('ventas.detalle');

@@ -38,7 +38,7 @@
                 <input type="date" x-model="fecVen" :min="fecha" class="mt-1 w-full h-11 rounded-xl border-gray-300 text-sm">
             </label>
             <div class="md:col-span-4 flex flex-col justify-end gap-2 text-sm">
-                <label class="flex items-center gap-2"><input type="checkbox" x-model="guardar" class="rounded text-indigo-600"> Guardar montos y comprobantes cambiados como predeterminados</label>
+                <label class="flex items-center gap-2"><input type="checkbox" x-model="guardar" class="rounded text-indigo-600"> Guardar montos, comprobantes y detalles cambiados como predeterminados</label>
                 <label class="flex items-center gap-2"><input type="checkbox" x-model="enviarSunat" class="rounded text-indigo-600"> Enviar las facturas a SUNAT al terminar</label>
             </div>
         </div>
@@ -48,51 +48,72 @@
     <section class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
         <div class="col-span-2 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-500 text-white p-4 shadow-sm">
             <p class="text-xs font-semibold uppercase opacity-80">Total a emitir</p>
-            <p class="text-3xl font-black" x-text="soles(totalSeleccion)"></p>
-            <p class="text-xs opacity-80" x-text="seleccionados.length + ' de ' + filas.length + ' clientes seleccionados'"></p>
+            <p class="text-3xl font-black" x-text="soles(resumen.total)"></p>
+            <p class="text-xs opacity-80" x-text="resumen.n + ' comprobante(s) para ' + resumen.clientes + ' cliente(s) · ' + cfg.totalClientes + ' clientes mensuales'"></p>
         </div>
         <template x-for="t in tipos" :key="t.cod">
-            <button type="button" @click="filtro = filtro === t.cod ? '' : t.cod" :class="filtro === t.cod ? 'ring-2 ring-indigo-500' : ''"
-                    class="bg-white rounded-2xl shadow-sm p-4 text-left">
+            <button type="button" @click="tipo = tipo === t.cod ? '' : t.cod" :class="tipo === t.cod ? 'ring-2 ring-indigo-500' : ''"
+                    class="bg-white rounded-2xl shadow-sm p-4 text-left" :title="'Ver solo ' + t.nombre.toLowerCase()">
                 <p class="text-xs font-semibold uppercase text-gray-500" x-text="t.nombre"></p>
-                <p class="text-xl font-extrabold text-gray-800" x-text="resumenTipo(t.cod).n"></p>
-                <p class="text-xs text-gray-400" x-text="soles(resumenTipo(t.cod).total)"></p>
+                <p class="text-xl font-extrabold text-gray-800" x-text="resumen.tipos[t.cod].n"></p>
+                <p class="text-xs text-gray-400" x-text="soles(resumen.tipos[t.cod].total)"></p>
             </button>
         </template>
     </section>
 
     {{-- Lista --}}
-    <section class="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <section class="bg-white rounded-2xl shadow-sm">
         <div class="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
             <div class="relative flex-1 min-w-[200px]">
                 <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
-                <input type="search" x-model="busqueda" placeholder="Buscar por nombre o RUC / DNI…" class="w-full h-10 pl-10 rounded-xl border-gray-200 text-sm">
+                <input type="search" x-model.debounce.150ms="busqueda" placeholder="Buscar por nombre, RUC / DNI o sucursal…" class="w-full h-10 pl-10 rounded-xl border-gray-200 text-sm">
             </div>
             <button type="button" @click="marcar(true)" :disabled="emitiendo" class="h-10 px-3 rounded-xl bg-gray-100 text-sm font-semibold">Marcar visibles</button>
             <button type="button" @click="marcar(false)" :disabled="emitiendo" class="h-10 px-3 rounded-xl bg-gray-100 text-sm font-semibold">Desmarcar</button>
             <a href="{{ route('contactos.index', 'clientes') }}" class="h-10 px-3 rounded-xl text-sm font-semibold text-indigo-600 inline-flex items-center">Editar clientes →</a>
+        </div>
+        {{-- Filtro por estado --}}
+        <div class="flex flex-wrap gap-1.5 px-3 py-2 border-b border-gray-100 text-xs">
+            <template x-for="e in estados" :key="e.cod">
+                <button type="button" @click="estado = e.cod" :class="estado === e.cod ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                        class="px-3 h-7 rounded-full font-semibold" x-text="e.nombre + ' (' + conteo[e.cod] + ')'"></button>
+            </template>
         </div>
 
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="bg-slate-700 text-white text-xs uppercase">
                     <tr>
-                        <th class="px-3 py-2 w-10"><input type="checkbox" :checked="visibles.length && visibles.every(f => f.sel)" @change="marcar($event.target.checked)" :disabled="emitiendo" class="rounded"></th>
-                        <th class="px-3 py-2 text-left">Cliente</th>
+                        <th class="px-3 py-2 w-10"><input type="checkbox" :checked="visibles.length && visibles.every(f => f.sel || f.estado === 'ok')" @change="marcar($event.target.checked)" :disabled="emitiendo" class="rounded"></th>
+                        <th class="px-3 py-2 text-left">Cliente <span class="normal-case font-normal opacity-70">· sucursal o detalle</span></th>
                         <th class="px-3 py-2 text-left w-40">Comprobante</th>
                         <th class="px-3 py-2 text-right w-32">Monto S/</th>
                         <th class="px-3 py-2 text-left w-56">Estado</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                    <template x-for="f in visibles" :key="f.id">
-                        <tr :class="f.estado === 'ok' ? 'bg-emerald-50' : (f.estado === 'error' ? 'bg-rose-50' : (f.emitido ? 'bg-amber-50/60' : ''))">
-                            <td class="px-3 py-2 text-center"><input type="checkbox" x-model="f.sel" :disabled="emitiendo || f.estado === 'ok'" class="rounded"></td>
+                    <template x-for="f in visibles" :key="f.key">
+                        <tr :class="[f.estado === 'ok' ? 'bg-emerald-50' : (f.estado === 'error' ? 'bg-rose-50' : (f.emitido ? 'bg-amber-50/60' : '')), f.extra !== null ? 'border-t-0' : '']">
+                            <td class="px-3 py-2 text-center align-top pt-3"><input type="checkbox" x-model="f.sel" :disabled="emitiendo || f.estado === 'ok'" class="rounded"></td>
                             <td class="px-3 py-2">
-                                <p class="font-semibold text-gray-800" x-text="f.nombre"></p>
-                                <p class="text-xs text-gray-400"><span x-text="(f.tdicod === '6' ? 'RUC ' : 'DOC ') + f.doc"></span><span x-show="f.dir" x-text="' · ' + f.dir"></span></p>
+                                <template x-if="f.extra === null">
+                                    <div>
+                                        <p class="font-semibold text-gray-800" x-text="f.nombre"></p>
+                                        <p class="text-xs text-gray-400"><span x-text="(f.tdicod === '6' ? 'RUC ' : 'DOC ') + f.doc"></span><span x-show="f.dir" x-text="' · ' + f.dir"></span></p>
+                                    </div>
+                                </template>
+                                <p x-show="f.extra !== null" class="text-xs font-semibold text-violet-700">↳ Otro comprobante de <span x-text="f.nombre"></span></p>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <input type="text" x-model="f.etiqueta" maxlength="80" :disabled="emitiendo || f.estado === 'ok'" :id="'et_' + f.key"
+                                           placeholder="Sucursal o detalle (opcional)" class="flex-1 min-w-0 h-8 rounded-lg border-gray-200 text-xs uppercase placeholder:normal-case">
+                                    <button type="button" x-show="f.extra === null" @click="agregarOtro(f)" :disabled="emitiendo" title="Agregar otro comprobante mensual para este cliente (ej. su otra sucursal)"
+                                            class="shrink-0 h-8 px-2 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold hover:bg-violet-100">+ Otro</button>
+                                    <button type="button" x-show="f.extra !== null && f.estado !== 'ok'" @click="quitarOtro(f)" :disabled="emitiendo" title="Quitar este comprobante mensual"
+                                            class="shrink-0 h-8 px-2 rounded-lg text-rose-600 text-xs font-bold hover:bg-rose-50">Quitar</button>
+                                </div>
+                                <p x-show="f.etiqueta.trim()" class="text-[11px] text-gray-400 mt-0.5 truncate" x-text="'Detalle: ' + descripcion(f)"></p>
                             </td>
-                            <td class="px-3 py-2">
+                            <td class="px-3 py-2 align-top pt-3">
                                 <select x-model="f.tdocod" :disabled="emitiendo || f.estado === 'ok'" class="w-full h-9 rounded-lg border-gray-200 text-xs font-bold"
                                         :class="{ '01': 'text-emerald-700', '03': 'text-blue-700', '13': 'text-sky-600' }[f.tdocod]">
                                     <template x-for="t in tipos" :key="t.cod">
@@ -100,13 +121,14 @@
                                     </template>
                                 </select>
                             </td>
-                            <td class="px-3 py-2">
+                            <td class="px-3 py-2 align-top pt-3">
                                 <input type="number" step="0.01" min="0.01" x-model.number="f.monto" :disabled="emitiendo || f.estado === 'ok'"
-                                       class="w-full h-9 rounded-lg border-gray-200 text-right font-bold text-emerald-700">
+                                       @keydown.enter.prevent="siguienteMonto($event)" @focus="$event.target.select()"
+                                       class="monto w-full h-9 rounded-lg border-gray-200 text-right font-bold text-emerald-700">
                             </td>
-                            <td class="px-3 py-2 text-xs">
+                            <td class="px-3 py-2 text-xs align-top pt-4">
                                 <template x-if="f.estado === 'ok'">
-                                    <span class="flex items-center gap-2">
+                                    <span class="flex flex-wrap items-center gap-2">
                                         <span class="font-bold text-emerald-700" x-text="'✔ ' + f.numero"></span>
                                         <a :href="f.pdf" target="_blank" class="text-indigo-600 font-semibold hover:underline">PDF</a>
                                         <span x-show="f.sunat" class="text-gray-500" x-text="f.sunat"></span>
@@ -124,6 +146,7 @@
             <p x-show="!filas.length" class="py-12 text-center text-gray-400">
                 No hay clientes con <strong>facturación mensual</strong>. Márcala al editar un cliente (Contactos &gt; Clientes) o impórtala del sistema antiguo.
             </p>
+            <p x-show="filas.length && !visibles.length" x-cloak class="py-10 text-center text-gray-400">Nada con estos filtros.</p>
         </div>
     </section>
 
@@ -134,20 +157,21 @@
                 <template x-if="emitiendo || hechos">
                     <div>
                         <div class="flex justify-between text-xs font-semibold text-gray-600 mb-1">
-                            <span x-text="emitiendo ? 'Emitiendo ' + progreso.hecho + ' de ' + progreso.total + '…' : 'Terminado: ' + resultado.ok + ' emitidos' + (resultado.error ? ', ' + resultado.error + ' con error' : '')"></span>
+                            <span x-text="emitiendo ? (progreso.hecho < progreso.total ? 'Emitiendo ' + progreso.hecho + ' de ' + progreso.total + '…' : 'Enviando facturas a SUNAT…') : 'Terminado: ' + resultado.ok + ' emitidos' + (resultado.error ? ', ' + resultado.error + ' con error' : '')"></span>
                             <span x-text="Math.round(progreso.total ? progreso.hecho / progreso.total * 100 : 0) + '%'"></span>
                         </div>
                         <div class="h-2.5 rounded-full bg-gray-200 overflow-hidden"><div class="h-full bg-emerald-500 transition-all" :style="`width:${progreso.total ? progreso.hecho / progreso.total * 100 : 0}%`"></div></div>
                     </div>
                 </template>
-                <p x-show="!emitiendo && !hechos" class="text-sm text-gray-500"><strong x-text="seleccionados.length"></strong> comprobantes por <strong x-text="soles(totalSeleccion)"></strong></p>
+                <p x-show="!emitiendo && !hechos" class="text-sm text-gray-500"><strong x-text="resumen.n"></strong> comprobantes por <strong x-text="soles(resumen.total)"></strong></p>
             </div>
             <button type="button" x-show="emitiendo" @click="detener = true" class="h-12 px-5 rounded-xl bg-rose-50 text-rose-700 font-bold">Detener</button>
+            <button type="button" x-show="!emitiendo && conteo.error" x-cloak @click="reintentar()" class="h-12 px-5 rounded-xl bg-amber-50 text-amber-800 font-bold">↻ Reintentar fallidos</button>
             <a x-show="!emitiendo && idsEmitidos.length" x-cloak :href="cfg.rutas.zip + '?ids=' + idsEmitidos.join(',')"
                class="h-12 px-5 rounded-xl bg-indigo-50 text-indigo-700 font-bold inline-flex items-center">⬇ Descargar ZIP (PDF)</a>
-            <button type="button" @click="emitir()" :disabled="emitiendo || !seleccionados.length"
+            <button type="button" @click="emitir()" :disabled="emitiendo || !resumen.n"
                     class="h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold shadow disabled:opacity-50"
-                    x-text="emitiendo ? 'Emitiendo…' : 'Emitir ' + seleccionados.length + ' comprobantes'"></button>
+                    x-text="emitiendo ? 'Emitiendo…' : 'Emitir ' + resumen.n + ' comprobantes'"></button>
         </div>
     </div>
 </div>
@@ -157,12 +181,18 @@
 <script>
     function ventaMasiva() {
         const CFG = {
-            clientes: @json($clientes), concepto: @json($concepto), meses: @json($meses), estadopagos: @json($estadopagos),
-            comprobantes: @json($comprobantes), csrf: @json(csrf_token()),
-            rutas: { emitir: @json(route('ventas.masiva.emitir')), zip: @json(route('ventas.masiva.zip')), base: @json(route('ventas.masiva')), sunat: @json(url('sunat/enviar')) },
+            filas: @json($filas), concepto: @json($concepto), meses: @json($meses), estadopagos: @json($estadopagos),
+            comprobantes: @json($comprobantes), csrf: @json(csrf_token()), porLote: @json(\App\Http\Controllers\VentaMasivaController::POR_LOTE),
+            rutas: { emitir: @json(route('ventas.masiva.emitir')), zip: @json(route('ventas.masiva.zip')), base: @json(route('ventas.masiva')),
+                     sunat: @json(url('sunat/enviar')), extra: @json(route('ventas.masiva.extra')), quitar: @json(url('ventas/masiva/extra')) },
         };
+        CFG.totalClientes = new Set(CFG.filas.map(f => f.clicod)).size;
         const NOMBRES = { '01': 'Factura', '03': 'Boleta', '13': 'Nota de venta' };
         const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+        const sinTildes = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        const nuevaFila = f => ({ ...f, sel: !f.emitido && f.monto > 0, estado: '', numero: '', pdf: '', error: '', sunat: '', idCpe: null, nuevo: false,
+                                 original: { tdocod: f.tdocod, monto: f.monto, etiqueta: f.etiqueta } });
+        const post = (url, datos) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CFG.csrf }, body: JSON.stringify(datos || {}) });
         return {
             cfg: CFG,
             fecha: @json($fecha),
@@ -172,10 +202,11 @@
             guardar: true,
             enviarSunat: false,
             busqueda: '',
-            filtro: '',
+            tipo: '',
+            estado: '',
+            estados: [{ cod: '', nombre: 'Todos' }, { cod: 'pendiente', nombre: 'Por emitir' }, { cod: 'emitido', nombre: 'Ya emitidos' }, { cod: 'error', nombre: 'Con error' }],
             // Los ya emitidos este mes quedan desmarcados para no duplicar
-            filas: CFG.clientes.map(c => ({ ...c, sel: !c.emitido && c.monto > 0, estado: '', numero: '', pdf: '', error: '', sunat: '', idCpe: null,
-                                           tdocodOriginal: c.tdocod, montoOriginal: c.monto })),
+            filas: CFG.filas.map(nuevaFila),
             emitiendo: false,
             detener: false,
             hechos: false,
@@ -185,28 +216,49 @@
             iniciar() {
                 const contado = CFG.estadopagos.find(e => e.cre_dia_tip === 'CONTADO') || CFG.estadopagos[0];
                 this.estadopago = contado?.cre_dia_id ?? null;
+                // No salir de la página a medio emitir
+                window.addEventListener('beforeunload', e => { if (this.emitiendo) { e.preventDefault(); e.returnValue = ''; } });
             },
             get tipos() {
                 return ['01', '03', '13'].filter(c => CFG.comprobantes[c] !== undefined || c === '13').map(c => ({ cod: c, nombre: NOMBRES[c] }));
             },
+            estadoDe(f) { return f.estado === 'error' ? 'error' : (f.estado === 'ok' || f.emitido ? 'emitido' : 'pendiente'); },
+            get conteo() {
+                const c = { '': this.filas.length, pendiente: 0, emitido: 0, error: 0 };
+                this.filas.forEach(f => c[this.estadoDe(f)]++);
+                return c;
+            },
             get visibles() {
-                const q = this.busqueda.trim().toLowerCase();
-                return this.filas.filter(f => (!this.filtro || f.tdocod === this.filtro) && (!q || f.nombre.toLowerCase().includes(q) || f.doc.includes(q)));
+                const q = sinTildes(this.busqueda.trim());
+                return this.filas.filter(f => (!this.tipo || f.tdocod === this.tipo) && (!this.estado || this.estadoDe(f) === this.estado)
+                    && (!q || sinTildes(f.nombre).includes(q) || f.doc.includes(q) || sinTildes(f.etiqueta).includes(q)));
             },
             get seleccionados() { return this.filas.filter(f => f.sel && f.estado !== 'ok'); },
-            get totalSeleccion() { return r2(this.seleccionados.reduce((s, f) => s + (Number(f.monto) || 0), 0)); },
+            // Un solo recorrido para todos los números de arriba
+            get resumen() {
+                const r = { n: 0, total: 0, clientes: 0, tipos: { '01': { n: 0, total: 0 }, '03': { n: 0, total: 0 }, '13': { n: 0, total: 0 } } };
+                const clientes = new Set();
+                for (const f of this.seleccionados) {
+                    const m = Number(f.monto) || 0;
+                    r.n++; r.total += m; clientes.add(f.clicod);
+                    r.tipos[f.tdocod].n++; r.tipos[f.tdocod].total += m;
+                }
+                r.clientes = clientes.size; r.total = r2(r.total);
+                return r;
+            },
             get idsEmitidos() { return this.filas.filter(f => f.idCpe).map(f => f.idCpe); },
             get esContado() {
                 const e = CFG.estadopagos.find(x => x.cre_dia_id == this.estadopago);
                 return !e || e.cre_dia_tip === 'CONTADO';
             },
-            resumenTipo(cod) {
-                const s = this.seleccionados.filter(f => f.tdocod === cod);
-                return { n: s.length, total: r2(s.reduce((t, f) => t + (Number(f.monto) || 0), 0)) };
-            },
             soles(n) { return 'S/ ' + (Number(n) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+            descripcion(f) { return (this.concepto.trim() + (f.etiqueta.trim() ? ' - ' + f.etiqueta.trim() : '')).toUpperCase(); },
 
             marcar(v) { this.visibles.forEach(f => { if (f.estado !== 'ok') f.sel = v; }); },
+            siguienteMonto(ev) {
+                const todos = [...document.querySelectorAll('input.monto:not(:disabled)')];
+                todos[todos.indexOf(ev.target) + 1]?.focus();
+            },
             agregarMes(m) {
                 const base = this.concepto.replace(/\s+(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SETIEMBRE|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\s+\d{4}$/i, '');
                 this.concepto = (base.trim() + ' ' + m).slice(0, 150);
@@ -224,53 +276,92 @@
                 }
             },
 
-            async emitir() {
-                const lista = this.seleccionados;
+            // Otro comprobante mensual para el mismo cliente (ej. su segunda sucursal): queda guardado para los próximos meses
+            async agregarOtro(f) {
+                try {
+                    const r = await post(CFG.rutas.extra, { clicod: f.clicod, etiqueta: '', tdocod: f.tdocod, monto: f.monto || 0 });
+                    if (!r.ok) throw new Error();
+                    const { id } = await r.json();
+                    const fila = nuevaFila({ ...f, key: 'e' + id, extra: id, etiqueta: '', emitido: null, monto: f.monto });
+                    fila.nuevo = true;
+                    const ultima = this.filas.map(x => x.clicod).lastIndexOf(f.clicod);
+                    this.filas.splice(ultima + 1, 0, fila);
+                    this.$nextTick(() => document.getElementById('et_' + fila.key)?.focus());
+                } catch (e) { alert('No se pudo agregar. Revisa tu conexión.'); }
+            },
+            async quitarOtro(f) {
+                if (!confirm('¿Quitar este comprobante mensual de ' + f.nombre + (f.etiqueta ? ' (' + f.etiqueta.toUpperCase() + ')' : '') + '?\nLos comprobantes ya emitidos no se tocan.')) return;
+                try {
+                    const r = await post(CFG.rutas.quitar + '/' + f.extra + '/quitar');
+                    if (!r.ok) throw new Error();
+                    this.filas.splice(this.filas.indexOf(f), 1);
+                } catch (e) { alert('No se pudo quitar. Revisa tu conexión.'); }
+            },
+
+            async emitir(soloEstos = null) {
+                const lista = soloEstos || this.seleccionados;
                 if (!lista.length) return;
                 if (!this.concepto.trim()) { alert('Escribe la descripción del detalle.'); return; }
                 const malos = lista.filter(f => !(f.monto > 0));
                 if (malos.length) { alert('Revisa el monto de: ' + malos.map(f => f.nombre).slice(0, 5).join(', ')); return; }
-                const dup = lista.filter(f => f.emitido).length;
-                const resumen = this.tipos.map(t => this.resumenTipo(t.cod)).map((r, i) => r.n ? `${r.n} ${this.tipos[i].nombre.toLowerCase()}(s)` : '').filter(Boolean).join(', ');
-                if (!confirm(`Se emitirán ${lista.length} comprobantes (${resumen}) por ${this.soles(this.totalSeleccion)} con fecha ${this.fecha.split('-').reverse().join('/')}.`
-                    + (dup ? `\n\n⚠ ${dup} cliente(s) YA tienen comprobante este mes.` : '') + '\n\n¿Continuar?')) return;
+                if (!soloEstos) {
+                    const dup = lista.filter(f => f.emitido).length;
+                    const resumen = this.tipos.map(t => this.resumen.tipos[t.cod].n ? `${this.resumen.tipos[t.cod].n} ${t.nombre.toLowerCase()}(s)` : '').filter(Boolean).join(', ');
+                    if (!confirm(`Se emitirán ${lista.length} comprobantes (${resumen}) por ${this.soles(this.resumen.total)} con fecha ${this.fecha.split('-').reverse().join('/')}.`
+                        + (dup ? `\n\n⚠ ${dup} comprobante(s) YA se emitieron este mes.` : '') + '\n\n¿Continuar?')) return;
+                }
 
                 this.emitiendo = true; this.detener = false; this.hechos = false;
                 this.progreso = { hecho: 0, total: lista.length };
                 this.resultado = { ok: 0, error: 0 };
-                for (const f of lista) {
-                    if (this.detener) break;
-                    f.estado = 'emitiendo';
-                    const cambio = f.tdocod !== f.tdocodOriginal || r2(f.monto) !== r2(f.montoOriginal);
+                // Por lotes: varios comprobantes en cada pedido al servidor (los números salen en orden)
+                for (let i = 0; i < lista.length && !this.detener; i += CFG.porLote) {
+                    const lote = lista.slice(i, i + CFG.porLote);
+                    lote.forEach(f => { f.estado = 'emitiendo'; f.error = ''; });
+                    const lineas = lote.map(f => ({
+                        key: f.key, clicod: f.clicod, extra: f.extra, etiqueta: f.etiqueta.trim(), tdocod: f.tdocod, monto: f.monto,
+                        guardar: f.nuevo || (this.guardar && (f.tdocod !== f.original.tdocod || r2(f.monto) !== r2(f.original.monto) || f.etiqueta.trim().toUpperCase() !== (f.original.etiqueta || '').toUpperCase())),
+                    }));
+                    let resultados = {};
                     try {
-                        const r = await fetch(CFG.rutas.emitir, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CFG.csrf },
-                            body: JSON.stringify({ clicod: f.id, tdocod: f.tdocod, monto: f.monto, fecha: this.fecha, concepto: this.concepto,
-                                estadopago: this.estadopago, fecVen: this.esContado ? null : this.fecVen, guardar: this.guardar && cambio }),
-                        });
-                        if (r.status === 419) { f.estado = 'error'; f.error = 'La sesión expiró. Recarga la página.'; this.detener = true; }
+                        const r = await post(CFG.rutas.emitir, { lineas, fecha: this.fecha, concepto: this.concepto, estadopago: this.estadopago, fecVen: this.esContado ? null : this.fecVen });
+                        if (r.status === 419) { lote.forEach(f => resultados[f.key] = { estado: 'error', mensaje: 'La sesión expiró. Recarga la página.' }); this.detener = true; }
                         else {
                             const d = await r.json();
-                            if (r.status === 422) { f.estado = 'error'; f.error = Object.values(d.errors)[0][0]; }
-                            else if (d.estado !== 'success') { f.estado = 'error'; f.error = d.mensaje || 'No se pudo emitir.'; }
-                            else { f.estado = 'ok'; f.numero = d.numero; f.pdf = d.pdf; f.idCpe = d.id; f.sel = false; }
+                            if (r.status === 422) { const m = Object.values(d.errors)[0][0]; lote.forEach(f => resultados[f.key] = { estado: 'error', mensaje: m }); }
+                            else resultados = d.resultados || {};
                         }
                     } catch (e) {
-                        f.estado = 'error'; f.error = 'Sin conexión.';
+                        lote.forEach(f => resultados[f.key] = { estado: 'error', mensaje: 'Sin conexión.' });
                     }
-                    f.estado === 'ok' ? this.resultado.ok++ : this.resultado.error++;
-                    this.progreso.hecho++;
+                    for (const f of lote) {
+                        const d = resultados[f.key] || { estado: 'error', mensaje: 'No se pudo emitir.' };
+                        if (d.estado === 'success') {
+                            Object.assign(f, { estado: 'ok', numero: d.numero, pdf: d.pdf, idCpe: d.id, sel: false, nuevo: false });
+                            this.resultado.ok++;
+                        } else {
+                            Object.assign(f, { estado: 'error', error: d.mensaje || 'No se pudo emitir.' });
+                            this.resultado.error++;
+                        }
+                        this.progreso.hecho++;
+                    }
                 }
+                lista.filter(f => f.estado === 'emitiendo').forEach(f => f.estado = '');
                 if (this.enviarSunat) await this.enviarFacturas();
                 this.emitiendo = false;
                 this.hechos = true;
+            },
+            reintentar() {
+                const fallidos = this.filas.filter(f => f.estado === 'error');
+                fallidos.forEach(f => f.sel = true);
+                this.emitir(fallidos);
             },
 
             async enviarFacturas() {
                 for (const f of this.filas.filter(x => x.estado === 'ok' && x.tdocod === '01' && !x.sunat)) {
                     f.sunat = 'Enviando a SUNAT…';
                     try {
-                        const d = await (await fetch(CFG.rutas.sunat + '/' + f.idCpe, { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': CFG.csrf } })).json();
+                        const d = await (await post(CFG.rutas.sunat + '/' + f.idCpe)).json();
                         f.sunat = d.success ? 'SUNAT: ' + (d.estado || 'ACEPTADO') : 'SUNAT: ' + (d.mensaje || 'no enviado');
                     } catch (e) { f.sunat = 'SUNAT: sin conexión'; }
                 }
