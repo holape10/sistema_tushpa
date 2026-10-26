@@ -168,9 +168,14 @@
                                                 'estado' => $v->est_sunat ?: 'PENDIENTE',
                                                 'guia' => !$anulada,
                                                 'descartar' => !$anulada && auth()->user()->esAdmin() && $v->est_sunat === 'RECHAZADO' && in_array($v->tdocod, ['01', '03', '07', '08'], true),
-                                                'baja' => in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja && $turnoAbierto
-                                                    && in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true)
-                                                    && $v->ccafem >= now()->subDays(\App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS)->toDateString(),
+                                                'baja' => $puedeBaja = in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja
+                                                    && in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
+                                                // Por qué no se puede dar de baja (la opción se ve, pero apagada)
+                                                'bajaNo' => ! $puedeBaja ? null : match (true) {
+                                                    $v->ccafem < now()->subDays(\App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS)->toDateString() => 'Pasaron más de '.\App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS.' días: usa nota de crédito',
+                                                    ! $turnoAbierto => 'El turno de esta venta ya se cerró: usa nota de crédito',
+                                                    default => null,
+                                                },
                                             ]))"><i class="fas fa-ellipsis-vertical"></i></button>
                                 </div>
                             </td>
@@ -199,10 +204,11 @@
                             class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-amber-50 disabled:opacity-40 disabled:hover:bg-transparent">
                         <i class="fas fa-file-circle-plus text-amber-600 w-4"></i>
                         <span><span class="font-semibold">Nota de débito</span><span class="block text-[11px] text-gray-400">Intereses, penalidad, aumento</span></span></button>
-                    <button type="button" x-show="menu.venta.baja" @click="menu.abierto = false; abrirAnular(menu.venta.id, menu.venta.numero, true)"
-                            class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-red-50">
-                        <i class="fas fa-ban text-red-600 w-4"></i>
-                        <span><span class="font-semibold">Comunicación de baja</span><span class="block text-[11px] text-gray-400">Anular ante SUNAT sin nota de crédito</span></span></button>
+                    <button type="button" x-show="menu.venta.baja" :disabled="!!menu.venta.bajaNo" @click="menu.abierto = false; abrirAnular(menu.venta.id, menu.venta.numero, true)"
+                            class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-red-50 disabled:hover:bg-transparent">
+                        <i class="fas fa-ban w-4" :class="menu.venta.bajaNo ? 'text-gray-300' : 'text-red-600'"></i>
+                        <span><span class="font-semibold" :class="menu.venta.bajaNo && 'text-gray-400'">Comunicación de baja</span>
+                            <span class="block text-[11px]" :class="menu.venta.bajaNo ? 'text-amber-700' : 'text-gray-400'" x-text="menu.venta.bajaNo || 'Anular ante SUNAT sin nota de crédito'"></span></span></button>
                     <button type="button" x-show="menu.venta.descartar" @click="menu.abierto = false; descartar(menu.venta.id, menu.venta.numero)"
                             class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50">
                         <i class="fas fa-ban text-gray-600 w-4"></i>

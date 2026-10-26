@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\PromocionController;
 use App\Http\Controllers\Admin\ProspectoController;
 use App\Http\Controllers\Admin\RespaldoController;
+use App\Http\Controllers\Admin\TableroController;
 use App\Http\Controllers\Admin\TicketController;
 use App\Http\Controllers\Admin\TutorialController;
 use App\Http\Controllers\Admin\UsuarioController;
@@ -28,6 +29,7 @@ Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:1
 Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
+    Route::get('/tablero', [TableroController::class, 'index'])->name('tablero');
     Route::get('/clientes', [ClienteController::class, 'index'])->name('clientes.index');
     Route::get('/clientes/nuevo', [ClienteController::class, 'create'])->name('clientes.create');
     Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');

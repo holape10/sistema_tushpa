@@ -21,61 +21,114 @@
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased min-h-screen">
     @auth('superadmin')
-        {{-- En celular el menú se abre con el botón ☰ (en PC va en una sola fila) --}}
-        <header class="bg-slate-900 text-white" x-data="{ menu: false }">
-            <div class="@yield('ancho', 'max-w-6xl') mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-                <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-8 h-8 rounded-lg bg-white p-1">
-                <a href="{{ route('admin.clientes.index') }}" class="font-bold">TUSHPA <span class="font-normal text-slate-400 hidden sm:inline">· Panel de clientes</span></a>
-                <button type="button" @click="menu = !menu" class="lg:hidden ml-auto px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700" aria-label="Menú">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
-                </button>
-                <nav :class="menu ? 'flex' : 'hidden'" class="order-last lg:order-none w-full lg:w-auto lg:ml-4 lg:flex flex-col lg:flex-row lg:flex-wrap gap-1 text-sm">
-                    <a href="{{ route('admin.clientes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.clientes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Clientes</a>
-                    @php $ticketsNuevos = \App\Http\Controllers\Admin\TicketController::sinLeer(); @endphp
-                    <a href="{{ route('admin.tickets.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.tickets.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">
-                        Tickets @if ($ticketsNuevos)<span class="ml-1 px-1.5 rounded-full bg-rose-500 text-[11px] font-bold">{{ $ticketsNuevos }}</span>@endif
-                    </a>
-                    <a href="{{ route('admin.planes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.planes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Planes</a>
-                    @unless (auth('superadmin')->user()->es_dueno)
-                        <a href="{{ route('admin.cobros.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.cobros.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Mis datos de cobro</a>
-                    @endunless
-                    @if (auth('superadmin')->user()->es_dueno || auth('superadmin')->user()->puede_crear_usuarios)
-                        <a href="{{ route('admin.usuarios.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.usuarios.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Usuarios</a>
-                    @endif
-                    @if (auth('superadmin')->user()->es_dueno)
-                        @php $mensajesNuevos = \Illuminate\Support\Facades\DB::connection('central')->table('web_contactos')->where('atendido', false)->count(); @endphp
-                        <a href="{{ route('admin.mensajes.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.mensajes.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">
-                            Mensajes web @if ($mensajesNuevos)<span class="ml-1 px-1.5 rounded-full bg-rose-500 text-[11px] font-bold">{{ $mensajesNuevos }}</span>@endif
-                        </a>
-                        <a href="{{ route('admin.anuncios.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.anuncios.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Anuncios</a>
-                        <a href="{{ route('admin.promociones.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.promociones.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Promociones</a>
-                        <a href="{{ route('admin.tutoriales.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.tutoriales.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Tutoriales</a>
-                        <a href="{{ route('admin.certificados.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.certificados.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Certificados</a>
-                        <a href="{{ route('admin.prospectos.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.prospectos.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Prospectos</a>
-                        <a href="{{ route('admin.visitas.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.visitas.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Visitas</a>
-                        <a href="{{ route('admin.logos.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.logos.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Logos web</a>
-                        <a href="{{ route('admin.agente.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.agente.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Agente</a>
-                        <a href="{{ route('admin.respaldos.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.respaldos.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Respaldos</a>
-                    @endif
+        @php
+            $yo = auth('superadmin')->user();
+            $ticketsNuevos = \App\Http\Controllers\Admin\TicketController::sinLeer();
+            $mensajesNuevos = $yo->es_dueno ? \Illuminate\Support\Facades\DB::connection('central')->table('web_contactos')->where('atendido', false)->count() : 0;
+            // Menú por grupos, como el del sistema de ventas: [nombre, ruta, patrón de ruta activa, aviso, ícono (path SVG)]
+            $grupos = array_filter([
+                'Principal' => [
+                    ['Tablero', 'admin.tablero', 'admin.tablero', 0, 'M4 13h6V4H4v9zm0 7h6v-5H4v5zm10 0h6v-9h-6v9zm0-16v5h6V4h-6z'],
+                    ['Clientes', 'admin.clientes.index', 'admin.clientes.*', 0, 'M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m6-4.13a4 4 0 11-8 0 4 4 0 018 0zm6 2a3 3 0 11-6 0 3 3 0 016 0z'],
+                    ['Tickets', 'admin.tickets.index', 'admin.tickets.*', $ticketsNuevos, 'M8 10h8M8 14h5m-9 6l3-3h10a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14z'],
+                ],
+                'Ventas' => array_filter([
+                    ['Planes', 'admin.planes.index', 'admin.planes.*', 0, 'M9 12l2 2 4-4M7 4h10a2 2 0 012 2v14l-7-3-7 3V6a2 2 0 012-2z'],
+                    $yo->es_dueno ? ['Promociones', 'admin.promociones.index', 'admin.promociones.*', 0, 'M7 7h.01M3 11l8.59 8.59a2 2 0 002.82 0l6.18-6.18a2 2 0 000-2.82L12 2H3v9z'] : null,
+                    $yo->es_dueno ? ['Prospectos', 'admin.prospectos.index', 'admin.prospectos.*', 0, 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'] : null,
+                    $yo->es_dueno ? ['Certificados', 'admin.certificados.index', 'admin.certificados.*', 0, 'M12 15l-3 6 3-1.5L15 21l-3-6zm0 0a6 6 0 100-12 6 6 0 000 12z'] : null,
+                    ! $yo->es_dueno ? ['Mis datos de cobro', 'admin.cobros.index', 'admin.cobros.*', 0, 'M3 10h18M7 15h2m4 0h4M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z'] : null,
+                ]),
+                'Página web' => $yo->es_dueno ? [
+                    ['Mensajes web', 'admin.mensajes.index', 'admin.mensajes.*', $mensajesNuevos, 'M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
+                    ['Anuncios', 'admin.anuncios.index', 'admin.anuncios.*', 0, 'M11 5L6 9H2v6h4l5 4V5zm4.54 3.46a5 5 0 010 7.07'],
+                    ['Tutoriales', 'admin.tutoriales.index', 'admin.tutoriales.*', 0, 'M12 6.25C10.5 5 8.5 4.5 6 4.5v13c2.5 0 4.5.5 6 1.75m0-13c1.5-1.25 3.5-1.75 6-1.75v13c-2.5 0-4.5.5-6 1.75m0-13v13'],
+                    ['Visitas', 'admin.visitas.index', 'admin.visitas.*', 0, 'M15 12a3 3 0 11-6 0 3 3 0 016 0zm-3-7C7 5 3 12 3 12s4 7 9 7 9-7 9-7-4-7-9-7z'],
+                    ['Logos web', 'admin.logos.index', 'admin.logos.*', 0, 'M4 16l4.59-4.59a2 2 0 012.82 0L16 16m-2-2l1.59-1.59a2 2 0 012.82 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'],
+                ] : [],
+                'Sistema' => array_filter([
+                    $yo->es_dueno || $yo->puede_crear_usuarios ? ['Usuarios', 'admin.usuarios.index', 'admin.usuarios.*', 0, 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'] : null,
+                    $yo->es_dueno ? ['Agente', 'admin.agente.index', 'admin.agente.*', 0, 'M9 17v2m6-2v2M5 7h14a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2zm7-4v4'] : null,
+                    $yo->es_dueno ? ['Respaldos', 'admin.respaldos.index', 'admin.respaldos.*', 0, 'M4 7v10c0 2 3.6 3 8 3s8-1 8-3V7M4 7c0 2 3.6 3 8 3s8-1 8-3M4 7c0-2 3.6-3 8-3s8 1 8 3m-16 5c0 2 3.6 3 8 3s8-1 8-3'] : null,
+                ]),
+            ]);
+            $grupoActual = collect($grupos)->search(fn ($items) => collect($items)->contains(fn ($i) => request()->routeIs($i[2])));
+        @endphp
+        <div x-data="{ abierto: false, grupo: @js($grupoActual ?: null) }" @keydown.escape.window="abierto = false">
+            {{-- Menú lateral: fijo en PC, en celular se abre con ☰ --}}
+            <aside :class="abierto ? 'translate-x-0' : '-translate-x-full'"
+                   class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full lg:translate-x-0 bg-indigo-950 text-white transition-transform duration-200 shadow-2xl flex flex-col isolate">
+                <div class="kene kene-meandro absolute inset-0 -z-10 text-white/[0.04]" aria-hidden="true"></div>
+                <div class="px-4 pt-4 pb-3 flex items-center gap-2 shrink-0">
+                    <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-9 h-9 rounded-lg bg-white p-1">
+                    <div class="min-w-0 flex-1">
+                        <p class="font-bold text-sm leading-tight">TUSHPA</p>
+                        <p class="text-xs text-indigo-300 leading-tight truncate">Panel · {{ $yo->nombre }}</p>
+                    </div>
+                    <button type="button" @click="abierto = false" class="lg:hidden p-1.5 rounded-lg text-indigo-300 hover:bg-indigo-800" aria-label="Cerrar menú">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div class="kene kene-franja h-3 mx-3 shrink-0 text-indigo-400/50" aria-hidden="true"></div>
+
+                <nav class="flex-1 overflow-y-auto overscroll-contain px-2 py-3 text-sm space-y-0.5 [scrollbar-width:thin] [scrollbar-color:#6366f1_transparent]">
+                    @foreach ($grupos as $nombreGrupo => $items)
+                        @php
+                            $enlace = fn ($i, $chico = false) => '<a href="'.e(route($i[1])).'" class="flex items-center gap-3 px-3 '.($chico ? 'py-1.5 text-[13px]' : 'py-2 font-medium').' rounded-lg transition '
+                                .(request()->routeIs($i[2]) ? 'bg-white text-indigo-950 font-semibold' : 'text-indigo-100 hover:bg-indigo-800 hover:text-white').'">'
+                                .'<svg class="w-4 h-4 shrink-0 opacity-80" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="'.$i[4].'"/></svg>'
+                                .'<span class="flex-1">'.e($i[0]).'</span>'
+                                .($i[3] ? '<span class="px-1.5 rounded-full bg-rose-500 text-white text-[11px] font-bold">'.$i[3].'</span>' : '').'</a>';
+                            $avisos = array_sum(array_column($items, 3));
+                        @endphp
+                        @if ($nombreGrupo === 'Principal')
+                            @foreach ($items as $i){!! $enlace($i) !!}@endforeach
+                            <div class="kene kene-franja h-3 my-2 mx-1 text-indigo-400/40" aria-hidden="true"></div>
+                        @else
+                            <button type="button" @click="grupo = grupo === @js($nombreGrupo) ? null : @js($nombreGrupo)"
+                                    class="w-full flex items-center px-3 py-2 rounded-lg font-medium transition hover:bg-indigo-800 {{ $nombreGrupo === $grupoActual ? 'text-white' : 'text-indigo-100' }}">
+                                <span class="flex-1 text-left">{{ $nombreGrupo }}</span>
+                                @if ($avisos)<span x-show="grupo !== @js($nombreGrupo)" class="mr-2 px-1.5 rounded-full bg-rose-500 text-[11px] font-bold">{{ $avisos }}</span>@endif
+                                <span class="mr-2 text-[10px] font-semibold text-indigo-300">{{ count($items) }}</span>
+                                <svg :class="grupo === @js($nombreGrupo) ? 'rotate-90' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                            </button>
+                            <div x-show="grupo === @js($nombreGrupo)" x-collapse @if ($nombreGrupo !== $grupoActual) x-cloak @endif class="pl-3 space-y-0.5 pb-1">
+                                @foreach ($items as $i){!! $enlace($i, true) !!}@endforeach
+                            </div>
+                        @endif
+                    @endforeach
                 </nav>
-                <span class="lg:ml-auto text-sm text-slate-400 hidden lg:inline">{{ auth('superadmin')->user()->nombre }}</span>
-                <form method="POST" action="{{ route('admin.logout') }}">
+
+                <form method="POST" action="{{ route('admin.logout') }}" class="p-3 shrink-0 border-t border-indigo-800/70">
                     @csrf
-                    <button class="text-sm px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700">Salir</button>
+                    <button class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-indigo-900 hover:bg-rose-600 text-sm font-semibold transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Salir</button>
                 </form>
-            </div>
-        </header>
+            </aside>
+            <div x-show="abierto" x-transition.opacity x-cloak @click="abierto = false" class="fixed inset-0 bg-black/40 z-30 lg:hidden"></div>
+
+            {{-- Barra superior en celular --}}
+            <header class="lg:hidden sticky top-0 z-20 bg-indigo-950 text-white px-3 py-2.5 flex items-center gap-3 shadow">
+                <button type="button" @click="abierto = true" class="p-2 rounded-lg bg-indigo-900 hover:bg-indigo-800 relative" aria-label="Menú">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    @if ($ticketsNuevos + $mensajesNuevos)<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500"></span>@endif
+                </button>
+                <p class="font-bold">TUSHPA <span class="font-normal text-indigo-300">· @yield('title', 'Panel')</span></p>
+            </header>
+        </div>
     @endauth
 
-    <main class="@yield('ancho', 'max-w-6xl') mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        @if (session('ok'))
-            <div class="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm">{{ session('ok') }}</div>
-        @endif
-        @if (session('error'))
-            <div class="mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ session('error') }}</div>
-        @endif
-        @yield('content')
-    </main>
+    <div class="{{ auth('superadmin')->check() ? 'lg:pl-64' : '' }}">
+        <main class="@yield('ancho', 'max-w-6xl') mx-auto px-3 sm:px-4 py-4 sm:py-6">
+            @if (session('ok'))
+                <div class="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm">{{ session('ok') }}</div>
+            @endif
+            @if (session('error'))
+                <div class="mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ session('error') }}</div>
+            @endif
+            @yield('content')
+        </main>
+    </div>
 @include('partials.avisos')
 </body>
 </html>
