@@ -219,11 +219,17 @@ class PanelDueno
         ];
     }
 
-    /** Turnos de caja recientes de la sucursal (para elegir uno), los abiertos primero */
-    public static function turnosRecientes(int $suc, int $cuantos = 20): Collection
+    /**
+     * Turnos de caja de la sucursal para elegir uno: los recientes (los abiertos primero), o los que se abrieron
+     * alrededor de una fecha pasada (ese día y el siguiente), o uno en particular.
+     */
+    public static function turnosRecientes(int $suc, int $cuantos = 20, ?Carbon $fecha = null, ?int $id = null): Collection
     {
         return DB::table('turnos as t')->leftJoin('users as u', 'u.IdUsuario', '=', 't.IdUsuario')
-            ->where('t.id_empresa_negocio', $suc)->orderByRaw("t.estado = 'ABIERTO' DESC")->orderByDesc('t.id_turno')->limit($cuantos)
+            ->where('t.id_empresa_negocio', $suc)
+            ->when($id, fn ($q) => $q->where('t.id_turno', $id))
+            ->when($fecha && ! $id, fn ($q) => $q->whereBetween('t.apertura', [$fecha->copy()->startOfDay(), $fecha->copy()->addDay()->endOfDay()]))
+            ->orderByRaw("t.estado = 'ABIERTO' DESC")->orderByDesc('t.id_turno')->limit($cuantos)
             ->get(['t.id_turno', 't.turno', 't.estado', 't.apertura', 't.cierre', DB::raw("COALESCE(NULLIF(u.apeusu, ''), u.name) as cajero")]);
     }
 

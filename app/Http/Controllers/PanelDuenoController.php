@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\PanelDueno;
+use App\Support\Reportes;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,10 +66,30 @@ class PanelDuenoController extends Controller
      */
     private function ventasDelTurno(Request $request, int $suc): array
     {
-        $turnos = PanelDueno::turnosRecientes($suc);
-        $elegido = $request->integer('turno') ? $turnos->firstWhere('id_turno', $request->integer('turno')) : null;
-        $periodo = $elegido ? 'turno' : (array_key_exists($request->get('periodo'), self::PERIODOS) ? $request->get('periodo') : 'jornada');
+        // Una noche pasada: la jornada de esa fecha (desde ese día a mediodía hasta el día siguiente a mediodía)
+        try {
+            $fecha = $request->filled('fecha') ? Carbon::parse((string) $request->get('fecha'))->startOfDay() : null;
+        } catch (\Throwable) {
+            $fecha = null;
+        }
+        if ($fecha && $fecha->isFuture()) {
+            $fecha = null;
+        }
+        $turnos = PanelDueno::turnosRecientes($suc, 20, $fecha);
+        $elegido = $request->integer('turno') ? ($turnos->firstWhere('id_turno', $request->integer('turno'))
+            ?? PanelDueno::turnosRecientes($suc, 1, null, $request->integer('turno'))->first()) : null;
+        $periodo = $elegido ? 'turno' : ($fecha ? 'fecha' : (array_key_exists($request->get('periodo'), self::PERIODOS) ? $request->get('periodo') : 'jornada'));
         [$desde, $hasta, $ids, $texto] = match ($periodo) {
+            'fecha' => (function () use ($fecha) {
+                $d = $fecha->copy()->setTime(Reportes::CORTE_JORNADA, 0);
+                if ($d->isFuture()) {
+                    // Hoy antes del mediodía: la noche de hoy aún no empieza, se ve la que está en curso
+                    [$d] = PanelDueno::jornada();
+                }
+                $h = min($d->copy()->addDay()->subSecond(), now());
+
+                return [$d, $h, null, 'Noche del '.$d->locale('es')->translatedFormat('l d/m/Y').': desde el '.$d->format('d/m H:i').' hasta el '.$h->format('d/m H:i')];
+            })(),
             'turno' => [null, null, [(int) $elegido->id_turno], 'Turno N° '.$elegido->turno.' de '.$elegido->cajero.' · desde el '.Carbon::parse($elegido->apertura)->format('d/m H:i')
                 .($elegido->cierre ? ' hasta el '.Carbon::parse($elegido->cierre)->format('d/m H:i') : ' (abierto)')],
             'abiertos' => [null, null, $turnos->where('estado', 'ABIERTO')->pluck('id_turno')->map(fn ($id) => (int) $id)->all(),
@@ -81,7 +102,8 @@ class PanelDuenoController extends Controller
             })(),
         };
 
-        return PanelDueno::ventasDelTurno($suc, $desde, $hasta, $ids) + ['periodo' => $periodo, 'texto' => $texto, 'turnos' => $turnos, 'elegido' => $elegido?->id_turno];
+        return PanelDueno::ventasDelTurno($suc, $desde, $hasta, $ids) + ['periodo' => $periodo, 'texto' => $texto, 'turnos' => $turnos,
+            'elegido' => $elegido?->id_turno, 'fecha' => $fecha?->toDateString()];
     }
 
     /** El resumen del día listo para WhatsApp (texto y enlace al número del dueño) */

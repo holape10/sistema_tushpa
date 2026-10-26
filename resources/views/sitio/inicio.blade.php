@@ -385,6 +385,7 @@
 </section>
 
 @include('sitio.partials.planes')
+@include('sitio.partials.certificados')
 
 {{-- Clientes --}}
 <section id="clientes" class="seccion overflow-hidden">

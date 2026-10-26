@@ -193,10 +193,18 @@
                 <a href="{{ route('dueno.index', ['ver' => 'turno', 'periodo' => $clave]) }}"
                    class="h-9 px-3 inline-flex items-center rounded-full text-sm font-bold {{ $t['periodo'] === $clave ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 shadow-sm' }}">{{ $nombre }}</a>
             @endforeach
+            {{-- Una noche pasada: elige la fecha (y, si quieres, uno de los turnos de esa noche) --}}
+            <form class="flex items-center gap-1.5 text-sm">
+                <input type="hidden" name="ver" value="turno">
+                <label class="font-semibold text-gray-600">Noche del</label>
+                <input type="date" name="fecha" value="{{ $t['fecha'] }}" max="{{ now()->toDateString() }}" onchange="this.form.submit()"
+                       class="h-9 rounded-lg border-gray-300 text-sm {{ $t['periodo'] === 'fecha' ? 'ring-2 ring-indigo-500' : '' }}">
+            </form>
             <form class="ml-auto">
                 <input type="hidden" name="ver" value="turno">
+                @if ($t['fecha'])<input type="hidden" name="fecha" value="{{ $t['fecha'] }}">@endif
                 <select name="turno" onchange="this.form.submit()" class="h-9 rounded-lg border-gray-300 text-sm {{ $t['elegido'] ? 'ring-2 ring-indigo-500' : '' }}">
-                    <option value="">Elegir un turno de caja…</option>
+                    <option value="">{{ $t['fecha'] ? 'Turnos de esa noche…' : 'Elegir un turno de caja…' }}</option>
                     @foreach ($t['turnos'] as $tu)
                         <option value="{{ $tu->id_turno }}" @selected($t['elegido'] == $tu->id_turno)>
                             N° {{ $tu->turno }} · {{ $tu->cajero }} · {{ \Carbon\Carbon::parse($tu->apertura)->format('d/m H:i') }}{{ $tu->estado === 'ABIERTO' ? ' (abierto)' : '' }}</option>
@@ -240,7 +248,7 @@
                 </section>
             @endforeach
         </div>
-        <p class="text-xs text-gray-400">Para un mes o fechas más largas, usa <a href="{{ url('/reportes/ventas-vendedor') }}" class="text-indigo-600 underline">Reportes → Ventas por Vendedor</a>. Las anuladas no cuentan; las notas de crédito restan.</p>
+        <p class="text-xs text-gray-400">Para ver una noche pasada, elige su fecha en "Noche del". Para un mes o fechas más largas, usa <a href="{{ url('/reportes/ventas-vendedor') }}" class="text-indigo-600 underline">Reportes → Ventas por Vendedor</a>. Las anuladas no cuentan; las notas de crédito restan.</p>
     @endif
 
     {{-- ===================================================== Mi equipo --}}

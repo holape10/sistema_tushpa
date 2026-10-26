@@ -5,6 +5,7 @@
 use App\Http\Controllers\Admin\AccesoController;
 use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\AnuncioController;
+use App\Http\Controllers\Admin\CertificadoController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\ComprobanteController;
 use App\Http\Controllers\Admin\DatosCobroController;
@@ -62,6 +63,9 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/promociones/{id?}', [PromocionController::class, 'guardar'])->whereNumber('id')->name('promociones.guardar');
     Route::post('/promociones/{id}/estado', [PromocionController::class, 'estado'])->whereNumber('id')->name('promociones.estado');
     Route::post('/promociones/{id}/eliminar', [PromocionController::class, 'eliminar'])->whereNumber('id')->name('promociones.eliminar');
+    Route::get('/certificados', [CertificadoController::class, 'index'])->name('certificados.index');
+    Route::post('/certificados/{id?}', [CertificadoController::class, 'guardar'])->whereNumber('id')->name('certificados.guardar');
+    Route::post('/certificados/{id}/eliminar', [CertificadoController::class, 'eliminar'])->whereNumber('id')->name('certificados.eliminar');
     Route::get('/prospectos', [ProspectoController::class, 'index'])->name('prospectos.index');
     Route::get('/prospectos/excel', [ProspectoController::class, 'excel'])->name('prospectos.excel');
     Route::post('/prospectos/carta/{id}/contactado', [ProspectoController::class, 'contactado'])->whereNumber('id')->name('prospectos.contactado');

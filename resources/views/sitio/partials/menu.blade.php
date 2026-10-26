@@ -34,6 +34,9 @@
                         </ul>
                     </li>
                     <li class="nav-item"><a class="nav-link" href="{{ $ancla('planes') }}">Planes</a></li>
+                    @if (\App\Support\Certificados::activos()->isNotEmpty())
+                        <li class="nav-item"><a class="nav-link" href="{{ $ancla('certificados') }}">Certificado digital</a></li>
+                    @endif
                     <li class="nav-item dropdown">
                         <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Recursos <i class="fas fa-chevron-down small ms-1"></i></a>
                         <ul class="dropdown-menu menu-sub">
