@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\Gimnasio;
+use App\Support\GimnasioRutina;
 use App\Support\Impresion\ComprobantePdf;
 use App\Support\Socios;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -189,6 +190,26 @@ class SocioPortalController extends Controller
                 ->where('fecha_hora', '>=', now()->startOfMonth())->value(DB::raw('COUNT(DISTINCT DATE(fecha_hora))')),
             'nutricion' => GimnasioController::nutricionDe((int) $s->soc_id)->map(fn ($n) => $n + ['fecha_txt' => $f($n['fecha'])])->values(),
             'carnet' => $this->qr(route('socios.verificar', $s->token)),
+            // Plan en promoción: sus condiciones
+            'condiciones' => ! empty($mem->promocion) ? $mem->condiciones : null,
+            // Rutina del mes que le armó su entrenador (o la última) y sus medidas
+            'rutina' => (function () use ($s) {
+                $rutinas = GimnasioRutina::rutinas((int) $s->soc_id);
+                $r = $rutinas->firstWhere('vigente', true) ?? $rutinas->first();
+
+                return $r ? ['mes' => ucfirst(Carbon::parse($r['desde'])->locale('es')->translatedFormat('F Y')), 'vigente' => $r['vigente'], 'objetivo' => $r['objetivo'],
+                    'entrenador' => $r['entrenador'], 'indicaciones' => $r['indicaciones'], 'dias' => $r['dias'],
+                    // En el orden de la hoja (caminadora, elíptica, bicicleta, escaladora)
+                    'calentamiento' => collect(GimnasioRutina::CALENTAMIENTO)->filter(fn ($nombre, $k) => ! empty($r['calentamiento'][$k]))
+                        ->map(fn ($nombre, $k) => ['nombre' => $nombre, 'min' => $r['calentamiento'][$k]])->values()] : null;
+            })(),
+            'medidas' => GimnasioRutina::medidas((int) $s->soc_id)->take(12)->map(fn ($m) => $m + ['fecha_txt' => $f($m['fecha'])])->values(),
+            // Lo que debe de lo que pagó por partes
+            'deuda' => (function () use ($s, $suc, $f) {
+                $d = Gimnasio::deuda((int) $s->soc_id, $suc);
+
+                return ['total' => $d['total'], 'vence' => $f($d['vence']), 'vencido' => $d['vencido']];
+            })(),
             'actualizado' => now()->format('H:i:s'),
         ];
     }

@@ -55,6 +55,11 @@ class VentaDirecta
         'propina_medio' => 'nullable|integer',
         'usd_med_pag' => 'nullable|array|max:10',
         'usd_med_pag.*' => 'nullable|boolean',
+        // Pago por partes: al crédito, con lo que paga hoy como primer abono
+        'fecVen' => 'nullable|date',
+        'partes' => 'nullable|boolean',
+        'a_cuenta' => 'nullable|numeric|min:0|max:999999',
+        'a_cuenta_medio' => 'nullable|integer',
     ];
 
     public const MENSAJES = ['items.required' => 'El carrito está vacío.'];
@@ -83,6 +88,13 @@ class VentaDirecta
                 Proformas::bloquearPendiente($user, $proformaId);
             }
 
+            // Pago por partes: va al crédito (con lo que paga hoy como primer abono) y el resto hasta la fecha que se eligió
+            if (! empty($datos['partes'])) {
+                $datos['estadopago'] = Comprobante::creditoDe($user);
+                $datos['fecVen'] = ($datos['fecVen'] ?? null) ?: now()->addDays(Gimnasio::DIAS_SALDO)->toDateString();
+                $datos['id_med_pag'] = $datos['mon_med_pag'] = [];
+                $datos['paga'] = 0;
+            }
             $lineas = self::lineas($user, collect($datos['items']));
             if ($recargos) {
                 [$lineas, $datos] = self::aplicarRecargos($user, $lineas, $datos);

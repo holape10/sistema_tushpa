@@ -23,6 +23,8 @@
                 <button type="button" @click="nuevo()" class="{{ $btn }} bg-orange-500 text-white hover:bg-orange-600"><i class="fas fa-user-plus"></i> Nuevo cliente</button>
                 <a href="{{ route('gimnasio.acceso') }}" target="_blank" class="{{ $btn }} bg-gray-900 text-white hover:bg-black"><i class="fas fa-door-open"></i> Control de ingreso</a>
                 <a href="{{ route('gimnasio.asistencia') }}" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50" title="Quiénes entraron cada día, con hora de ingreso y salida"><i class="fas fa-clipboard-list"></i> Ingresos del día</a>
+                <button type="button" @click="abrirAvisos()" class="{{ $btn }} bg-green-600 text-white hover:bg-green-700" title="Avisar por WhatsApp a quienes se les vence el plan">
+                    <i class="fab fa-whatsapp"></i> Avisar vencimientos <span x-show="cuenta('POR_VENCER')" class="px-1.5 rounded-full bg-white text-green-700 text-xs font-black" x-text="cuenta('POR_VENCER')"></span></button>
                 @if ($verReporte)
                     <a href="{{ route('gimnasio.reporte') }}" class="{{ $btn }} bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"><i class="fas fa-chart-column"></i> Reporte</a>
                 @endif
@@ -90,6 +92,7 @@
                             <p class="font-semibold text-gray-700 truncate" x-text="c.plan || '—'"></p>
                             <p class="text-xs text-gray-500" x-show="c.vence" x-text="(c.estado === 'CONGELADO' ? 'Congelado hasta ' + fecha(c.congelado_hasta) + ' · ' : '') + 'vence ' + fecha(c.vence)"></p>
                         </div>
+                        <span x-show="c.debe > 0" class="px-2 py-1 rounded-full text-[11px] font-black whitespace-nowrap bg-rose-600 text-white" title="Saldo de lo que pagó por partes" x-text="'DEBE ' + soles(c.debe)"></span>
                         <span class="px-2.5 py-1 rounded-full text-[11px] font-black whitespace-nowrap" :class="chip(c.color)"
                               x-text="c.estado === 'VIGENTE' || c.estado === 'POR_VENCER' ? c.texto + ' · ' + c.dias + 'd' : c.texto"></span>
                         <a x-show="recordatorio(c)" :href="recordatorio(c)" target="_blank" rel="noopener" title="Recordarle por WhatsApp que renueve"
@@ -176,7 +179,7 @@
                             <button @click="cerrarFicha()" class="text-gray-400 text-3xl leading-none">&times;</button>
                         </div>
                         <div class="px-5 pt-3 flex gap-1 overflow-x-auto border-b">
-                            <template x-for="t in [['vender', 'Vender plan'], ['membresias', 'Membresías'], ['congelar', 'Congelamientos'], ['ingresos', 'Ingresos'], ['nutricion', 'Nutrición'], ['cuenta', 'Portal y estado']]">
+                            <template x-for="t in [['vender', 'Vender plan'], ...(ficha.deuda.total > 0 ? [['saldo', 'Saldo S/ ' + Number(ficha.deuda.total).toFixed(2)]] : []), ['membresias', 'Membresías'], ['congelar', 'Congelamientos'], ['ingresos', 'Ingresos'], ['nutricion', 'Nutrición'], ['cuenta', 'Portal y estado']]">
                                 <button type="button" @click="tab = t[0]" class="px-3 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px"
                                         :class="tab === t[0] ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'" x-text="t[1]"></button>
                             </template>
@@ -190,8 +193,10 @@
                                     <template x-for="p in ficha.planes" :key="p.plan_id">
                                         <button type="button" @click="elegirPlan(p)" class="text-left rounded-xl border-2 p-3 transition"
                                                 :class="venta.plan_id === p.plan_id ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'">
-                                            <p class="font-bold text-gray-800 text-sm" x-text="p.nombre"></p>
-                                            <p class="text-xs text-gray-500" x-text="p.dias + (p.dias === 1 ? ' día' : ' días') + (p.congelar_max ? ' · congela ' + p.congelar_max + 'd' : '')"></p>
+                                            <p class="font-bold text-gray-800 text-sm"><span x-text="p.nombre"></span>
+                                                <span x-show="p.promocion" class="ml-1 px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-black">PROMO</span>
+                                                <span x-show="p.vip" class="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-black">⭐ VIP</span></p>
+                                            <p class="text-xs text-gray-500" x-text="p.dias + (p.dias === 1 ? ' día' : ' días') + (p.promocion ? ' · no se congela' : (p.congelar_max ? ' · congela ' + p.congelar_max + 'd' : ''))"></p>
                                             <p class="font-black text-orange-600" x-text="soles(p.precio)"></p>
                                         </button>
                                     </template>
@@ -204,6 +209,11 @@
                                         <input type="number" step="0.10" min="0.1" x-model.number="venta.precio" class="{{ $in }} mt-1 {{ $esAdmin ? '' : 'bg-gray-100' }}"
                                                @unless ($esAdmin) readonly title="Solo el administrador cambia el precio del plan" @endunless></label>
                                     <p class="col-span-2 text-xs text-gray-500" x-show="venta.dias > 1" x-text="'Vigente del ' + fecha(venta.inicio) + ' al ' + fecha(sumarDias(venta.inicio, venta.dias - 1))"></p>
+                                </div>
+                                {{-- Promoción: avisar las condiciones antes de cobrar --}}
+                                <div x-show="planElegido()?.promocion" class="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-900">
+                                    <p class="font-black">🏷️ Plan de promoción · condiciones (díselas al cliente):</p>
+                                    <p class="mt-1" x-text="planElegido()?.condiciones"></p>
                                 </div>
                             </div>
                             <div class="space-y-3" x-show="venta.plan_id">
@@ -225,12 +235,45 @@
                                 </div>
                                 <label x-show="pideOperacion()" class="block">N° de operación <span class="text-rose-600">*</span>
                                     <input x-model="venta.operacion" maxlength="30" placeholder="Del voucher de Yape, tarjeta o transferencia" class="{{ $in }} mt-1 uppercase"></label>
-                                <p x-show="venta.paga > venta.precio" class="text-sm">Vuelto: <b x-text="soles(venta.paga - venta.precio)"></b></p>
+                                {{-- Pago por partes: hoy paga una parte y el resto hasta una fecha --}}
+                                <div class="rounded-xl border-2 p-3 space-y-2" :class="venta.partes ? 'border-violet-400 bg-violet-50' : 'border-gray-200'">
+                                    <label class="flex items-center gap-2 font-bold text-violet-900 cursor-pointer"><input type="checkbox" x-model="venta.partes" @change="if (venta.partes && !venta.a_cuenta) venta.a_cuenta = Math.round(venta.precio / 2)" class="rounded"> Pago por partes</label>
+                                    <div x-show="venta.partes" class="grid grid-cols-2 gap-2">
+                                        <label>Paga hoy S/<input type="number" step="0.10" min="0" x-model.number="venta.a_cuenta" class="{{ $in }} mt-1"></label>
+                                        <label>El resto hasta el<input type="date" x-model="venta.vence_saldo" :min="sumarDias(hoyIso, 1)" class="{{ $in }} mt-1"></label>
+                                        <p class="col-span-2 text-xs text-violet-900" x-text="'Queda debiendo ' + soles(Math.max(0, venta.precio - (venta.a_cuenta || 0))) + '. El plan corre desde ya; al entrar se le recuerda el saldo.'"></p>
+                                    </div>
+                                </div>
+                                <p x-show="!venta.partes && venta.paga > venta.precio" class="text-sm">Vuelto: <b x-text="soles(venta.paga - venta.precio)"></b></p>
                                 <label class="flex items-center gap-2"><input type="checkbox" x-model="venta.imprimir" class="rounded"> Imprimir comprobante</label>
                                 <button type="button" @click="vender()" :disabled="ocupado || {{ $turno ? 'false' : 'true' }}" class="w-full py-3 rounded-xl bg-orange-500 text-white font-black hover:bg-orange-600 disabled:opacity-50"
-                                        x-text="ocupado ? 'Registrando…' : 'COBRAR ' + soles(venta.precio)"></button>
+                                        x-text="ocupado ? 'Registrando…' : (venta.partes ? 'COBRAR ' + soles(venta.a_cuenta || 0) + ' A CUENTA' : 'COBRAR ' + soles(venta.precio))"></button>
                                 @if (!$turno)<p class="text-xs text-amber-700">Apertura tu turno de caja para cobrar.</p>@endif
                             </div>
+                        </div>
+
+                        {{-- Saldo de lo pagado por partes --}}
+                        <div x-show="tab === 'saldo'" class="p-5 space-y-4 text-sm">
+                            <div class="rounded-xl p-4" :class="ficha.deuda.vencido ? 'bg-rose-50 border border-rose-200' : 'bg-violet-50 border border-violet-200'">
+                                <p class="text-xs font-bold uppercase" :class="ficha.deuda.vencido ? 'text-rose-700' : 'text-violet-700'" x-text="ficha.deuda.vencido ? 'Saldo vencido' : 'Saldo pendiente'"></p>
+                                <p class="text-3xl font-black" x-text="soles(ficha.deuda.total)"></p>
+                            </div>
+                            <template x-for="cu in ficha.deuda.cuentas" :key="cu.cue_cob_id">
+                                <div class="border rounded-xl p-4 space-y-3">
+                                    <div class="flex flex-wrap justify-between gap-2">
+                                        <div><p class="font-bold" x-text="cu.comprobante + (cu.detalle ? ' · ' + cu.detalle : '')"></p>
+                                            <p class="text-xs text-gray-500" x-text="'Total ' + soles(cu.total) + ' · pagado ' + soles(cu.pagado) + ' · pagar hasta el ' + fecha(cu.vence)"></p></div>
+                                        <p class="text-lg font-black text-rose-600" x-text="'Debe ' + soles(cu.saldo)"></p>
+                                    </div>
+                                    <div class="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                                        <label>Abona S/<input type="number" step="0.10" min="0.1" :max="cu.saldo" x-model.number="abono[cu.cue_cob_id]" :placeholder="Number(cu.saldo).toFixed(2)" class="{{ $in }} mt-1"></label>
+                                        <label>Medio de pago
+                                            <select x-model="abonoMedio" class="{{ $in }} mt-1">@foreach ($mediospagos as $m)<option value="{{ $m->id_med_pag }}">{{ $m->nom_med_pag }}</option>@endforeach</select></label>
+                                        <button type="button" @click="abonar(cu)" :disabled="ocupado" class="h-10 px-4 rounded-lg bg-violet-600 text-white font-bold disabled:opacity-50">Abonar</button>
+                                    </div>
+                                </div>
+                            </template>
+                            <p class="text-xs text-gray-500">Cada abono saca su recibo. También se ve en Cuentas por cobrar.</p>
                         </div>
 
                         {{-- Membresías --}}
@@ -241,7 +284,9 @@
                                     <tbody class="divide-y">
                                         <template x-for="m in ficha.membresias" :key="m.mem_id">
                                             <tr :class="m.estado === 'ANULADA' ? 'opacity-50 line-through' : ''">
-                                                <td class="px-3 py-2 font-semibold" x-text="m.plan"></td>
+                                                <td class="px-3 py-2 font-semibold"><span x-text="m.plan"></span>
+                                                    <span x-show="m.promocion" class="ml-1 px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-black" :title="m.condiciones">PROMO</span>
+                                                    <p x-show="m.promocion && m.condiciones" class="text-[11px] font-normal text-rose-700" x-text="m.condiciones"></p></td>
                                                 <td class="px-3 py-2" x-text="fecha(m.inicio)"></td>
                                                 <td class="px-3 py-2"><span x-text="fecha(m.fin)"></span>
                                                     <span x-show="diasEntre(m.inicio, m.fin) + 1 > m.dias" class="text-xs text-sky-600" x-text="'(+' + (diasEntre(m.inicio, m.fin) + 1 - m.dias) + 'd congelados)'"></span></td>
@@ -363,11 +408,13 @@
                             <tbody class="divide-y">
                                 <template x-for="p in planes" :key="p.plan_id">
                                     <tr :class="p.activo ? '' : 'opacity-50'">
-                                        <td class="px-3 py-2 font-semibold" x-text="p.nombre + (p.activo ? '' : ' (inactivo)')"></td>
+                                        <td class="px-3 py-2 font-semibold"><span x-text="p.nombre + (p.activo ? '' : ' (inactivo)')"></span>
+                                            <span x-show="p.promocion" class="ml-1 px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-black">PROMO</span>
+                                            <span x-show="p.vip" class="ml-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-black">⭐ VIP</span></td>
                                         <td class="px-3 py-2 text-center" x-text="p.dias"></td>
                                         <td class="px-3 py-2 text-right" x-text="soles(p.precio)"></td>
                                         <td class="px-3 py-2 text-center" x-text="p.congelar_max ? p.congelar_max + ' días' : 'No'"></td>
-                                        <td class="px-3 py-2 text-right"><button type="button" @click="plan = { ...p, activo: !!p.activo }" class="text-orange-600 font-semibold">Editar</button></td>
+                                        <td class="px-3 py-2 text-right"><button type="button" @click="plan = { ...p, activo: !!p.activo, promocion: !!p.promocion, vip: !!p.vip, condiciones: p.condiciones || '' }" class="text-orange-600 font-semibold">Editar</button></td>
                                     </tr>
                                 </template>
                             </tbody>
@@ -376,8 +423,16 @@
                             <label class="sm:col-span-2">Nombre<input x-model="plan.nombre" maxlength="80" placeholder="MENSUAL" class="{{ $in }} mt-1 uppercase"></label>
                             <label>Días<input type="number" min="1" x-model.number="plan.dias" class="{{ $in }} mt-1"></label>
                             <label>Precio S/<input type="number" step="0.10" min="0.1" x-model.number="plan.precio" class="{{ $in }} mt-1"></label>
-                            <label :class="plan.dias > 1 ? '' : 'opacity-40'">Congela (días)<input type="number" min="0" x-model.number="plan.congelar_max" :disabled="plan.dias <= 1" class="{{ $in }} mt-1"></label>
+                            <label :class="plan.dias > 1 && !plan.promocion ? '' : 'opacity-40'">Congela (días)<input type="number" min="0" x-model.number="plan.congelar_max" :disabled="plan.dias <= 1 || plan.promocion" class="{{ $in }} mt-1"></label>
                             <label class="flex items-center gap-2 pb-2"><input type="checkbox" x-model="plan.activo" class="rounded"> Activo</label>
+                            <label class="sm:col-span-3 flex items-start gap-2 rounded-lg bg-white p-2 cursor-pointer">
+                                <input type="checkbox" x-model="plan.promocion" @change="if (plan.promocion && !plan.condiciones) plan.condiciones = @js(\App\Support\Gimnasio::CONDICIONES_PROMOCION)" class="rounded mt-0.5">
+                                <span><b>🏷️ Promoción</b><span class="block text-xs text-gray-500">No se puede congelar. Las condiciones se muestran al vender, en la ficha y en el portal del cliente.</span></span></label>
+                            <label class="sm:col-span-3 flex items-start gap-2 rounded-lg bg-white p-2 cursor-pointer">
+                                <input type="checkbox" x-model="plan.vip" class="rounded mt-0.5">
+                                <span><b>⭐ VIP</b><span class="block text-xs text-gray-500">El entrenador ve a estos clientes marcados para armarles su rutina del mes.</span></span></label>
+                            <label x-show="plan.promocion" class="sm:col-span-6">Condiciones de la promoción
+                                <input x-model="plan.condiciones" maxlength="300" class="{{ $in }} mt-1 uppercase"></label>
                             <div class="sm:col-span-6 flex gap-2">
                                 <button type="button" @click="guardarPlan()" :disabled="ocupado" class="px-4 py-2 rounded-lg bg-orange-500 text-white font-bold disabled:opacity-50" x-text="plan.plan_id ? 'Guardar cambios' : 'Agregar plan'"></button>
                                 <button type="button" x-show="plan.plan_id" @click="plan = planVacio()" class="px-4 py-2 rounded-lg bg-white text-gray-600 font-semibold">Nuevo</button>
@@ -389,6 +444,34 @@
             </div>
         @endif
 
+        {{-- ============================================================ Modal: avisar vencimientos por WhatsApp --}}
+        <div x-show="modal === 'avisos'" x-cloak class="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-3 overflow-y-auto" @keydown.escape.window="modal = null">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-4">
+                <div class="px-5 py-3 border-b flex justify-between items-center">
+                    <h3 class="font-bold text-gray-800"><i class="fab fa-whatsapp text-green-600"></i> Planes que vencen en los próximos {{ \App\Support\Gimnasio::DIAS_AVISO }} días</h3>
+                    <button @click="modal = null" class="text-gray-400 text-2xl leading-none">&times;</button>
+                </div>
+                <div class="p-5 text-sm space-y-3">
+                    <p class="text-gray-500">Toca <b>Avisar</b>: se abre WhatsApp con el mensaje listo, solo presiona enviar. Queda marcado como avisado para no repetirlo.</p>
+                    <div class="divide-y border rounded-xl">
+                        <template x-for="a in avisos" :key="a.mem_id">
+                            <div class="p-3 flex flex-wrap items-center gap-3" :class="a.avisado ? 'bg-gray-50' : ''">
+                                <div class="flex-1 min-w-[200px]">
+                                    <p class="font-bold" x-text="a.nombre"></p>
+                                    <p class="text-xs text-gray-500" x-text="'N° ' + a.codigo + ' · ' + a.plan + ' · vence ' + a.vence + (a.dias === 0 ? ' (HOY)' : a.dias === 1 ? ' (mañana)' : ' (en ' + a.dias + ' días)')"></p>
+                                    <p x-show="a.avisado" class="text-xs text-green-700" x-text="'✔ Avisado el ' + a.avisado"></p>
+                                </div>
+                                <a x-show="a.whatsapp" :href="a.whatsapp" target="_blank" rel="noopener" @click="marcarAvisado(a)"
+                                   class="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-bold"><i class="fab fa-whatsapp"></i> <span x-text="a.avisado ? 'Avisar otra vez' : 'Avisar'"></span></a>
+                                <span x-show="!a.whatsapp" class="text-xs text-gray-400">Sin celular registrado</span>
+                            </div>
+                        </template>
+                        <p x-show="!avisos.length" class="p-8 text-center text-gray-400">Nadie tiene su plan por vencer. 🎉</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{-- Aviso --}}
         <div x-show="aviso.visible" x-cloak x-transition class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl shadow-2xl text-white text-sm font-semibold max-w-md text-center"
              :class="aviso.ok ? 'bg-emerald-600' : 'bg-rose-600'" x-text="aviso.texto"></div>
@@ -399,8 +482,9 @@
             const RUTA = @json(url('gimnasio'));
             const CSRF = @json(csrf_token());
             const hoyIso = @json(now()->toDateString());
-            const planVacio = () => ({ plan_id: null, nombre: '', dias: 30, precio: null, congelar_max: 0, activo: true });
+            const planVacio = () => ({ plan_id: null, nombre: '', dias: 30, precio: null, congelar_max: 0, activo: true, promocion: false, vip: false, condiciones: '' });
             return {
+                avisos: [], abono: {}, abonoMedio: @json((string) ($mediospagos->first()->id_med_pag ?? '')),
                 clientes: @js($clientes), planes: @js($planes), q: '', filtro: '', mostrar: 100, modal: null, tab: 'vender', ocupado: false,
                 ficha: null, form: {}, venta: {}, cong: {}, plan: planVacio(), planVacio, estadoManual: 'ACTIVO', camara: null, hoyIso,
                 aviso: { visible: false, ok: true, texto: '' },
@@ -518,12 +602,38 @@
                     if (!d) return this.avisar('No se pudo abrir la ficha.', false);
                     this.ficha = d; this.estadoManual = d.cliente.estado;
                     this.tab = tab || (['VENCIDO', 'SIN_PLAN', 'POR_VENCER'].includes(d.situacion.estado) ? 'vender' : 'membresias');
-                    this.venta = { plan_id: null, dias: 0, inicio: hoyIso, precio: 0, tdocod: '03', tdicod: '1', clinum: '', clinom: '', medio: @json((string) ($mediospagos->first()->id_med_pag ?? '')), operacion: '', paga: null, imprimir: true };
+                    this.venta = { plan_id: null, dias: 0, inicio: hoyIso, precio: 0, tdocod: '03', tdicod: '1', clinum: '', clinom: '', medio: @json((string) ($mediospagos->first()->id_med_pag ?? '')), operacion: '', paga: null, imprimir: true,
+                        partes: false, a_cuenta: null, vence_saldo: this.sumarDias(hoyIso, {{ \App\Support\Gimnasio::DIAS_SALDO }}) };
+                    this.abono = {};
                     this.datosEnVenta(); this.limpiarCong();
                     this.modal = 'ficha';
                 },
                 cerrarFicha() { this.modal = null; this.ficha = null; },
                 elegirPlan(p) { Object.assign(this.venta, { plan_id: p.plan_id, dias: p.dias, inicio: p.inicio, precio: Number(p.precio) }); },
+                planElegido() { return (this.ficha?.planes || []).find(p => p.plan_id === this.venta.plan_id); },
+                // ---- saldo de lo pagado por partes
+                async abonar(cu) {
+                    const monto = Number(this.abono[cu.cue_cob_id] || cu.saldo);
+                    if (!(monto > 0)) return this.avisar('Escribe cuánto abona.', false);
+                    if (!confirm(`¿Registrar un abono de ${this.soles(monto)}?`)) return;
+                    this.ocupado = true;
+                    const r = await this.post(RUTA + '/clientes/' + this.ficha.cliente.soc_id + '/abonar', { cue_cob_id: cu.cue_cob_id, monto, id_med_pag: this.abonoMedio });
+                    this.ocupado = false;
+                    this.avisar(r.mensaje, r.ok);
+                    if (!r.ok) return;
+                    if (r.recibo) window.open(r.recibo, '_blank');
+                    await this.recargarLista();
+                    await this.abrirFicha(this.ficha.cliente.soc_id, r.mensaje.includes('ya no debe') ? 'membresias' : 'saldo');
+                },
+                // ---- avisos de vencimiento
+                async abrirAvisos() {
+                    this.modal = 'avisos';
+                    this.avisos = await fetch(RUTA + '/por-vencer', { headers: { 'Accept': 'application/json' } }).then(r => r.json()).catch(() => []);
+                },
+                marcarAvisado(a) {
+                    a.avisado = new Date().toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                    this.post(RUTA + '/por-vencer/' + a.mem_id + '/avisado');
+                },
                 datosEnVenta() { const c = this.ficha?.cliente; if (!c) return; this.venta.clinum = c.clinum; this.venta.clinom = c.clinom; this.venta.tdicod = c.clinum.length === 11 ? '6' : '1'; },
                 async buscarDocVenta() {
                     const doc = (this.venta.clinum || '').trim();
@@ -535,10 +645,13 @@
                     const v = this.venta;
                     if (v.tdocod === '01' && !/^\d{11}$/.test(v.clinum)) return this.avisar('Para factura escribe el RUC.', false);
                     if (this.pideOperacion() && !String(v.operacion || '').trim()) return this.avisar('Escribe el N° de operación del pago.', false);
+                    if (v.partes && !(v.a_cuenta < v.precio)) return this.avisar('Por partes, lo que paga hoy debe ser menor al precio (si paga todo, desmarca "Pago por partes").', false);
+                    if (this.planElegido()?.promocion && !confirm('Es una PROMOCIÓN: ' + this.planElegido().condiciones + '.\n\n¿El cliente está de acuerdo?')) return;
                     this.ocupado = true;
                     const r = await this.post(RUTA + '/clientes/' + this.ficha.cliente.soc_id + '/vender', {
                         plan_id: v.plan_id, inicio: v.inicio, precio: v.precio, tdocod: v.tdocod, clinum: v.clinum, clinom: v.clinom, tdicod: v.tdicod, clidir: v.clidir || '',
                         id_med_pag: [v.medio], mon_med_pag: [v.precio], op_med_pag: [String(v.operacion || '').trim()], paga: v.paga || v.precio, imprimir: v.imprimir ? 1 : 0,
+                        ...(v.partes ? { partes: 1, a_cuenta: v.a_cuenta || 0, vence_saldo: v.vence_saldo } : {}),
                     });
                     this.ocupado = false;
                     this.avisar(r.ok ? `${r.mensaje} ${r.numero}` + (r.vuelto > 0 ? ` · vuelto ${this.soles(r.vuelto)}` : '') : r.mensaje, r.ok);
@@ -581,7 +694,7 @@
                 async guardarPlan() {
                     if (!this.plan.nombre.trim() || !this.plan.dias || !this.plan.precio) return this.avisar('Completa nombre, días y precio.', false);
                     this.ocupado = true;
-                    const r = await this.post(RUTA + '/planes', { ...this.plan, activo: this.plan.activo ? 1 : 0 });
+                    const r = await this.post(RUTA + '/planes', { ...this.plan, activo: this.plan.activo ? 1 : 0, promocion: this.plan.promocion ? 1 : 0, vip: this.plan.vip ? 1 : 0 });
                     this.ocupado = false;
                     this.avisar(r.mensaje, r.ok);
                     if (r.ok) { this.planes = r.planes; this.plan = planVacio(); }

@@ -29,6 +29,10 @@ document.addEventListener('alpine:init', () => {
         intento: false,
         avisos: [],
         _cierre: null,
+        // Pago por partes: lo que paga hoy y hasta cuándo paga el resto
+        partes: false,
+        aCuenta: null,
+        venceSaldo: (() => { const d = new Date(CFG.hoy + 'T12:00:00'); d.setDate(d.getDate() + 15); return d.toISOString().slice(0, 10); })(),
 
         iniciar() {
             try {
@@ -66,7 +70,7 @@ document.addEventListener('alpine:init', () => {
         get esEfectivo() { return /efectivo/i.test(this.medioActual?.nombre || ''); },
         get billetes() { return [10, 20, 50, 100, 200].filter(b => b > this.totalCobrar).slice(0, 3); },
         // Hay datos de cliente para el comprobante: documento válido y su nombre
-        get conDoc() { return this.tdocod !== '13' && /^(\d{8}|\d{11})$/.test(this.doc.trim()) && this.nombre.trim().length >= 3; },
+        get conDoc() { return (this.tdocod !== '13' || this.partes) && /^(\d{8}|\d{11})$/.test(this.doc.trim()) && this.nombre.trim().length >= 3; },
         get faltaDoc() { return this.intento && !!this.validarCliente(); },
         validarCliente() {
             const d = this.doc.trim();
@@ -179,6 +183,11 @@ document.addEventListener('alpine:init', () => {
             if (!this.carrito.length) return 'El pedido está vacío.';
             const errorCliente = this.validarCliente();
             if (errorCliente) return errorCliente;
+            if (this.partes) {
+                if (!this.conDoc) return 'Para pagar por partes escribe el DNI y el nombre del cliente.';
+                if (!((Number(this.aCuenta) || 0) < this.total)) return 'Por partes, lo que paga hoy debe ser menor al total.';
+                if (!this.venceSaldo || this.venceSaldo <= CFG.hoy) return 'Elige hasta cuándo paga el resto (después de hoy).';
+            }
             if (!CFG.contado) return 'No hay forma de pago CONTADO configurada.';
             return null;
         },
@@ -189,7 +198,7 @@ document.addEventListener('alpine:init', () => {
             const error = this.validar();
             if (error) { this.pedidoAbierto = true; this.sonido(false); this.aviso(error, 'error'); return; }
 
-            const paga = this.esEfectivo ? (Number(this.paga) || 0) : 0;
+            const paga = this.esEfectivo && !this.partes ? (Number(this.paga) || 0) : 0;
             if (paga > 0 && paga < this.totalCobrar && !confirm(`Paga ${this.soles(paga)} y el total es ${this.soles(this.totalCobrar)}. ¿Continuar?`)) return;
 
             const conDoc = this.conDoc;
@@ -205,6 +214,8 @@ document.addEventListener('alpine:init', () => {
                 // Monto sin recargo: el servidor calcula y suma la comisión del medio
                 id_med_pag: [this.medio],
                 mon_med_pag: [this.total],
+                // Por partes: al crédito; lo que paga hoy (con el medio elegido) es el primer abono
+                ...(this.partes ? { partes: 1, a_cuenta: Number(this.aCuenta) || 0, a_cuenta_medio: this.medio, fecVen: this.venceSaldo } : {}),
             };
 
             this.procesando = true;
@@ -276,6 +287,7 @@ document.addEventListener('alpine:init', () => {
             this.venta = null;
             this.nombre = ''; this.paga = null; this.doc = ''; this.docNombre = ''; this.docOk = false; this._ultimoDoc = '';
             this.intento = false;
+            this.partes = false; this.aCuenta = null;
             this.medio = CFG.medios[0]?.id ?? null;
             this.tdocod = CFG.comprobantes.some(c => c.tdocod === CFG.tdocodPred) ? CFG.tdocodPred : (CFG.comprobantes[0]?.tdocod || '13');
             this.busqueda = '';

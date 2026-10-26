@@ -347,6 +347,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/clientes/{id}/estado', 'estado')->whereNumber('id')->name('estado');
         Route::post('/clientes/{id}/clave', 'restablecerClave')->whereNumber('id')->name('clave');
         Route::post('/clientes/{id}/vender', 'vender')->whereNumber('id')->name('vender');
+        Route::post('/clientes/{id}/abonar', 'abonar')->whereNumber('id')->name('abonar');
+        Route::get('/por-vencer', 'porVencer')->name('por_vencer');
+        Route::post('/por-vencer/{memId}/avisado', 'avisado')->whereNumber('memId')->name('avisado');
         Route::post('/clientes/{id}/congelar', 'congelar')->whereNumber('id')->name('congelar');
         Route::post('/congelamientos/{id}', 'editarCongelamiento')->whereNumber('id')->name('congelamiento');
         Route::post('/congelamientos/{id}/anular', 'anularCongelamiento')->whereNumber('id')->name('congelamiento.anular');
@@ -370,6 +373,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/clientes/{id}/asignar', 'asignar')->whereNumber('id')->name('asignar');
         Route::post('/clientes/{id}/nutricion', 'guardarNutricion')->whereNumber('id')->name('nutricion');
         Route::post('/nutricion/{id}/quitar', 'quitarNutricion')->whereNumber('id')->name('nutricion.quitar');
+        Route::post('/clientes/{id}/ficha', 'guardarFicha')->whereNumber('id')->name('ficha');
+        Route::post('/clientes/{id}/medidas', 'guardarMedida')->whereNumber('id')->name('medidas');
+        Route::post('/medidas/{id}/quitar', 'quitarMedida')->whereNumber('id')->name('medidas.quitar');
+        Route::post('/clientes/{id}/rutina', 'guardarRutina')->whereNumber('id')->name('rutina');
+        Route::post('/rutinas/{id}/quitar', 'quitarRutina')->whereNumber('id')->name('rutina.quitar');
+        Route::get('/clientes/{id}/hoja', 'hoja')->whereNumber('id')->name('hoja');
     });
 
     // Préstamos (cobro diario "gota a gota", semanal o mensual)

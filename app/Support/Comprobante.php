@@ -121,6 +121,7 @@ class Comprobante
                 (array) ($datos['usd_med_pag'] ?? []));
         } elseif (! $esContado) {
             Cuentas::abrirPorCobrar($cabId);
+            self::adelanto($user, $cabId, $total, $datos);
         }
         // Propina del cliente: aparte del comprobante
         Propinas::registrar($user, $turno, $cabId, $datos);
@@ -223,6 +224,39 @@ class Comprobante
 
         Fidelizacion::acumular($cabId);
         EnvioAutomatico::programar($cabId);
+    }
+
+    /**
+     * Pago por partes: la venta va al crédito y lo que el cliente paga hoy queda como primer abono de su cuenta por cobrar
+     * (con su recibo; si es en efectivo entra a la caja del turno).
+     *
+     * @param  array  $datos  a_cuenta (monto que paga hoy), a_cuenta_medio (id_med_pag; vacío = el predeterminado)
+     */
+    private static function adelanto(User $user, int $cabId, float $total, array $datos): void
+    {
+        $monto = round((float) ($datos['a_cuenta'] ?? 0), 2);
+        if ($monto <= 0) {
+            return;
+        }
+        if ($monto >= $total) {
+            throw new \RuntimeException('Lo que paga hoy (S/ '.number_format($monto, 2).') cubre todo: cóbralo al contado.');
+        }
+        $medio = (int) ($datos['a_cuenta_medio'] ?? 0)
+            ?: (int) MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->orderByDesc('predeterminado')->value('id_med_pag');
+        $cuenta = (int) DB::table('cuentas_cobrar')->where('IdCpe_cabecera', $cabId)->value('cue_cob_id');
+        Cuentas::registrarPago($user, 'cobrar', $cuenta, [
+            'fecha' => now()->toDateString(), 'medios' => [['id' => $medio, 'monto' => $monto]], 'comentario' => 'A CUENTA AL MOMENTO DE LA VENTA',
+        ]);
+    }
+
+    /** Forma de pago al crédito de la sucursal (se crea si no existe) para las ventas por partes */
+    public static function creditoDe(User $user): int
+    {
+        $id = DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)->where('cre_dia_tip', '!=', 'CONTADO')
+            ->orderBy('cre_dia_id')->value('cre_dia_id');
+
+        return (int) ($id ?: DB::table('credito_dias')->insertGetId(['IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $user->id_empresa_negocio,
+            'cre_dia_nom' => 'CREDITO', 'cre_dia_fac' => 0, 'cre_dia_tip' => 'PERSONALIZADO']));
     }
 
     private static function credito(User $user, $creDiaId): object

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MedioPago;
 use App\Models\Turno;
+use App\Support\Cuentas;
 use App\Support\Excel;
 use App\Support\ExcelLector;
 use App\Support\Gimnasio;
@@ -167,11 +168,15 @@ class GimnasioController extends Controller
         $mems = Gimnasio::membresiasVigentes($suc);
         $cong = Gimnasio::congelamientosVigentes($mems->flatten()->pluck('mem_id')->all());
         $entrenadores = $this->entrenadores()->pluck('apeusu', 'IdUsuario');
+        // Saldos de lo pagado por partes, por cliente
+        $deudas = DB::table('cuentas_cobrar as cc')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'cc.IdCpe_cabecera')
+            ->where('cc.id_empresa_negocio', $suc)->whereIn('cc.estado_cob', ['PENDIENTE', 'PARCIAL'])->whereNull('c.ccabaj')
+            ->groupBy('cc.clicod')->select('cc.clicod', DB::raw('SUM(cc.saldo) as saldo'))->pluck('saldo', 'clicod');
 
         $clientes = DB::table('socios as s')->join('cliente as c', 'c.clicod', '=', 's.clicod')
             ->where('s.id_empresa_negocio', $suc)->whereNotIn('s.estado', ['FALLECIDO'])->orderBy('c.clinom')
-            ->get(['s.soc_id', 's.codigo', 's.estado', 's.foto', 's.huella', 's.entrenador_id', 's.fecha_nac', 'c.clinum', 'c.clinom', 'c.telefono'])
-            ->map(function ($s) use ($mems, $cong, $entrenadores) {
+            ->get(['s.soc_id', 's.codigo', 's.estado', 's.foto', 's.huella', 's.entrenador_id', 's.fecha_nac', 's.clicod', 'c.clinum', 'c.clinom', 'c.telefono'])
+            ->map(function ($s) use ($mems, $cong, $entrenadores, $deudas) {
                 $sit = Gimnasio::situacion($mems->get($s->soc_id, collect()), $cong);
 
                 return [
@@ -182,6 +187,7 @@ class GimnasioController extends Controller
                     'estado' => $sit['estado'], 'texto' => $sit['texto'], 'color' => $sit['color'],
                     'plan' => $sit['membresia']->plan ?? null, 'vence' => $sit['vence'], 'dias' => $sit['dias'],
                     'congelado_hasta' => $sit['congelamiento']->hasta ?? null,
+                    'debe' => round((float) ($deudas[$s->clicod] ?? 0), 2), 'promocion' => ! empty($sit['membresia']->promocion),
                 ];
             })->values();
 
@@ -206,7 +212,15 @@ class GimnasioController extends Controller
             'membresias' => DB::table('gym_membresias as m')->leftJoin('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'm.IdCpe_cabecera')
                 ->where('m.soc_id', $id)->orderByDesc('m.inicio')->orderByDesc('m.mem_id')->limit(40)
                 ->get(['m.mem_id', 'm.plan', 'm.dias', 'm.inicio', 'm.fin', 'm.precio', 'm.estado', 'm.congelar_max', 'm.IdCpe_cabecera',
-                    DB::raw("CONCAT(c.serdoc, '-', LPAD(c.numdoc, 8, '0')) as comprobante")]),
+                    'm.promocion', 'm.condiciones', 'm.vip', DB::raw("CONCAT(c.serdoc, '-', LPAD(c.numdoc, 8, '0')) as comprobante")]),
+            // Lo que debe de planes o productos pagados por partes
+            'deuda' => (function () use ($id) {
+                $d = Gimnasio::deuda($id, $this->sucursal());
+
+                return ['total' => $d['total'], 'vence' => $d['vence'], 'vencido' => $d['vencido'], 'cuentas' => $d['cuentas']->map(fn ($c) => [
+                    'cue_cob_id' => $c->cue_cob_id, 'comprobante' => $c->serdoc.'-'.str_pad($c->numdoc, 8, '0', STR_PAD_LEFT), 'detalle' => $c->ccaobs,
+                    'total' => (float) $c->total, 'pagado' => (float) $c->abono, 'saldo' => (float) $c->saldo, 'vence' => $c->fec_ven])->values()];
+            })(),
             'congelamientos' => DB::table('gym_congelamientos as g')->leftJoin('users as u', 'u.IdUsuario', '=', 'g.IdUsuario')
                 ->where('g.soc_id', $id)->orderByDesc('g.desde')->limit(40)->get(['g.*', 'u.apeusu']),
             'asistencias' => DB::table('gym_asistencias')->where('soc_id', $id)->orderByDesc('fecha_hora')->limit(60)
@@ -303,10 +317,15 @@ class GimnasioController extends Controller
         $d = $request->validate([
             'plan_id' => 'nullable|integer', 'nombre' => 'required|string|max:80', 'dias' => 'required|integer|min:1|max:1095',
             'precio' => 'required|numeric|min:0.1|max:99999', 'congelar_max' => 'nullable|integer|min:0|max:365', 'activo' => 'nullable|boolean',
+            'promocion' => 'nullable|boolean', 'condiciones' => 'nullable|string|max:300', 'vip' => 'nullable|boolean',
         ], [], ['dias' => 'días', 'congelar_max' => 'días que puede congelar']);
         $suc = $this->sucursal();
+        // Promoción: no se congela y lleva sus condiciones (intransferible, sin devolución...)
+        $promocion = ! empty($d['promocion']);
         $fila = ['nombre' => mb_strtoupper(trim($d['nombre'])), 'dias' => $d['dias'], 'precio' => $d['precio'],
-            'congelar_max' => (int) $d['dias'] > 1 ? (int) ($d['congelar_max'] ?? 0) : 0, 'activo' => (int) ($d['activo'] ?? 1)];
+            'congelar_max' => (int) $d['dias'] > 1 && ! $promocion ? (int) ($d['congelar_max'] ?? 0) : 0, 'activo' => (int) ($d['activo'] ?? 1),
+            'promocion' => $promocion, 'vip' => ! empty($d['vip']),
+            'condiciones' => $promocion ? (mb_strtoupper(trim((string) ($d['condiciones'] ?? ''))) ?: Gimnasio::CONDICIONES_PROMOCION) : null];
 
         return $this->json(function () use ($d, $suc, $fila) {
             return DB::transaction(function () use ($d, $suc, $fila) {
@@ -341,7 +360,9 @@ class GimnasioController extends Controller
             'id_med_pag' => 'nullable|array|max:5', 'mon_med_pag' => 'nullable|array|max:5', 'paga' => 'nullable|numeric|min:0',
             'op_med_pag' => 'nullable|array|max:5', 'op_med_pag.*' => 'nullable|string|max:30',
             'imprimir' => 'nullable|boolean',
-        ], ['inicio.after_or_equal' => 'La fecha de inicio no puede ser de hace más de 7 días.']);
+            // Pago por partes: lo que paga hoy y hasta cuándo paga el resto
+            'partes' => 'nullable|boolean', 'a_cuenta' => 'nullable|numeric|min:0|max:99999', 'vence_saldo' => 'nullable|date|after:today',
+        ], ['inicio.after_or_equal' => 'La fecha de inicio no puede ser de hace más de 7 días.', 'vence_saldo.after' => 'La fecha para pagar el saldo debe ser después de hoy.']);
         $this->socio($id);
 
         try {
@@ -364,6 +385,54 @@ class GimnasioController extends Controller
         }
 
         return response()->json(['ok' => true, 'impreso' => $impreso, 'mensaje' => 'Plan vendido.'] + VentaDirecta::respuesta($r['cabId']));
+    }
+
+    /** Abono al saldo de un plan o producto pagado por partes */
+    public function abonar(Request $request, int $id)
+    {
+        $this->recepcion();
+        $d = $request->validate(['cue_cob_id' => 'required|integer', 'monto' => 'required|numeric|min:0.1|max:99999', 'id_med_pag' => 'required|integer',
+            'num_oper' => 'nullable|string|max:50']);
+        $this->socio($id);
+        $cuenta = Gimnasio::deuda($id, $this->sucursal())['cuentas']->firstWhere('cue_cob_id', (int) $d['cue_cob_id']);
+        if (! $cuenta) {
+            return response()->json(['ok' => false, 'mensaje' => 'Esa deuda no es de este cliente o ya está pagada.']);
+        }
+        try {
+            $detId = Cuentas::registrarPago(Auth::user(), 'cobrar', (int) $cuenta->cue_cob_id, [
+                'fecha' => now()->toDateString(), 'medios' => [['id' => (int) $d['id_med_pag'], 'monto' => (float) $d['monto']]],
+                'num_oper' => $d['num_oper'] ?? null, 'comentario' => 'ABONO EN GIMNASIO',
+            ]);
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+        $saldo = Gimnasio::deuda($id, $this->sucursal())['total'];
+
+        return response()->json(['ok' => true, 'recibo' => route('cuentas.recibo', ['cobrar', $detId]),
+            'mensaje' => $saldo > 0 ? 'Abono registrado. Le queda un saldo de S/ '.number_format($saldo, 2).'.' : 'Abono registrado: ya no debe nada.']);
+    }
+
+    /** Clientes cuyo plan vence pronto: con su mensaje de WhatsApp listo para enviar */
+    public function porVencer()
+    {
+        $this->recepcion();
+        $suc = $this->sucursal();
+        $negocio = (string) (DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('nombre_comercial') ?: 'el gimnasio');
+
+        return response()->json(Gimnasio::porVencer($suc)->map(fn ($m) => [
+            'mem_id' => $m->mem_id, 'soc_id' => $m->soc_id, 'codigo' => $m->codigo, 'nombre' => $m->clinom, 'plan' => $m->plan,
+            'vence' => Carbon::parse($m->fin)->format('d/m/Y'), 'dias' => $m->dias, 'avisado' => $m->avisado ? Carbon::parse($m->avisado)->format('d/m H:i') : null,
+            'whatsapp' => ($cel = Gimnasio::whatsapp($m->telefono)) ? 'https://wa.me/'.$cel.'?text='.rawurlencode(Gimnasio::mensajeVence($m, $negocio)) : null,
+        ]));
+    }
+
+    /** Se le avisó por WhatsApp: queda anotado para no avisar dos veces */
+    public function avisado(int $memId)
+    {
+        $this->recepcion();
+        DB::table('gym_membresias')->where('mem_id', $memId)->where('id_empresa_negocio', $this->sucursal())->update(['avisado' => now()]);
+
+        return response()->json(['ok' => true]);
     }
 
     // ------------------------------------------------------------------ congelamientos (administrador)

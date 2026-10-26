@@ -170,8 +170,8 @@
                 </template>
             </div>
 
-            {{-- Datos del comprobante: DNI o RUC (el nombre se busca solo) y nombre o razón social --}}
-            <div x-show="tdocod !== '13'" x-cloak class="space-y-2">
+            {{-- Datos del comprobante: DNI o RUC (el nombre se busca solo) y nombre o razón social (por partes, siempre) --}}
+            <div x-show="tdocod !== '13' || partes" x-cloak class="space-y-2">
                 <div class="grid grid-cols-[1fr_auto] gap-2 items-end">
                     <label class="text-[11px] font-semibold text-slate-500" x-text="tdocod === '01' ? 'RUC del cliente' : 'DNI o RUC del cliente'"></label>
                     <span class="text-[11px] max-w-[160px] truncate text-right" :class="docOk ? 'text-emerald-600' : 'text-slate-400'"
@@ -187,7 +187,18 @@
             </div>
 
             <div data-fidelizacion data-doc="doc" data-total="total"></div>
-            <label class="block text-[11px] font-semibold text-slate-500">Paga con
+            {{-- Pago por partes: paga una parte hoy y el resto hasta una fecha (queda en Cuentas por cobrar) --}}
+            <div class="rounded-xl p-2 space-y-2" :class="partes ? 'bg-violet-50 ring-2 ring-violet-300' : ''">
+                <label class="flex items-center gap-2 text-sm font-bold text-violet-800"><input type="checkbox" x-model="partes" @change="if (partes && !aCuenta) aCuenta = Math.round(total / 2)" class="rounded"> Pago por partes</label>
+                <div x-show="partes" x-cloak class="grid grid-cols-2 gap-2">
+                    <label class="text-[11px] font-semibold text-slate-500">Paga hoy S/
+                        <input type="number" inputmode="decimal" step="0.10" min="0" x-model.number="aCuenta" class="mt-0.5 w-full h-10 rounded-xl border-violet-300 text-right font-bold select-text"></label>
+                    <label class="text-[11px] font-semibold text-slate-500">El resto hasta el
+                        <input type="date" x-model="venceSaldo" :min="cfg.hoy" class="mt-0.5 w-full h-10 rounded-xl border-violet-300 text-sm select-text"></label>
+                    <p class="col-span-2 text-[11px] text-violet-800" x-text="'Queda debiendo ' + soles(Math.max(0, total - (aCuenta || 0))) + '. Escribe su DNI y nombre.'"></p>
+                </div>
+            </div>
+            <label x-show="!partes" class="block text-[11px] font-semibold text-slate-500">Paga con
                 <input type="number" inputmode="decimal" step="0.10" min="0" x-model.number="paga" placeholder="0.00"
                        class="mt-0.5 w-full h-11 rounded-xl border-emerald-300 text-right text-lg font-bold select-text">
             </label>
@@ -218,7 +229,7 @@
             <button type="button" @click="cobrar()" :disabled="procesando || !carrito.length"
                     class="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-400 text-white text-lg font-black tracking-wide shadow-lg shadow-emerald-500/30 active:scale-[.98] disabled:opacity-40 flex items-center justify-center gap-2">
                 <span x-show="procesando" x-cloak class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                <span x-text="procesando ? 'EMITIENDO…' : 'COBRAR E IMPRIMIR ' + soles(totalCobrar)"></span>
+                <span x-text="procesando ? 'EMITIENDO…' : (partes ? 'COBRAR ' + soles(aCuenta || 0) + ' A CUENTA' : 'COBRAR E IMPRIMIR ' + soles(totalCobrar))"></span>
             </button>
         </div>
     </section>

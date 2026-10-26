@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Gimnasio: membresías, congelamientos, ingreso y nutrición.
@@ -29,6 +30,12 @@ class Gimnasio
 
     /** Días que avisa "por vencer" */
     public const DIAS_AVISO = 5;
+
+    /** Condiciones de un plan en promoción (el administrador puede escribir otras) */
+    public const CONDICIONES_PROMOCION = 'NO ES TRANSFERIBLE A OTRA PERSONA · NO SE PUEDE CONGELAR · NO HAY DEVOLUCIÓN';
+
+    /** Días para pagar el saldo de un plan pagado por partes (se puede cambiar al vender) */
+    public const DIAS_SALDO = 15;
 
     public static function esEntrenador(User $u): bool
     {
@@ -110,6 +117,62 @@ class Gimnasio
         return self::situacion($mems, self::congelamientosVigentes($mems->pluck('mem_id')->all()));
     }
 
+    /**
+     * Lo que debe el cliente de lo que pagó por partes (planes o productos), con el pago más próximo a vencer.
+     *
+     * @return array{total: float, vence: ?string, vencido: bool, cuentas: Collection}
+     */
+    public static function deuda(int $socId, int $suc): array
+    {
+        $clicod = DB::table('socios')->where('soc_id', $socId)->value('clicod');
+        $cuentas = $clicod ? DB::table('cuentas_cobrar as cc')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'cc.IdCpe_cabecera')
+            ->where('cc.clicod', $clicod)->where('cc.id_empresa_negocio', $suc)->whereIn('cc.estado_cob', ['PENDIENTE', 'PARCIAL'])->whereNull('c.ccabaj')
+            ->orderBy('cc.fec_ven')->get(['cc.cue_cob_id', 'cc.total', 'cc.abono', 'cc.saldo', 'cc.fec_ven', 'c.serdoc', 'c.numdoc', 'c.ccaobs', 'c.fecha_hora'])
+            : collect();
+        $vence = $cuentas->min('fec_ven');
+
+        return ['total' => round((float) $cuentas->sum('saldo'), 2), 'vence' => $vence, 'vencido' => $vence && $vence < now()->toDateString(), 'cuentas' => $cuentas];
+    }
+
+    /**
+     * Clientes cuyo plan vence en los próximos días y aún no renovaron (para avisarles por WhatsApp).
+     *
+     * @return Collection<int, object>
+     */
+    public static function porVencer(int $suc, int $dias = self::DIAS_AVISO): Collection
+    {
+        $hoy = now()->toDateString();
+        // El último plan de cada cliente (sin rutinas del día): si termina pronto y no compró otro después
+        $ultimos = DB::table('gym_membresias')->where('id_empresa_negocio', $suc)->where('estado', 'ACTIVA')->where('dias', '>', 1)
+            ->groupBy('soc_id')->select('soc_id', DB::raw('MAX(fin) as fin'));
+
+        return DB::table('gym_membresias as m')->joinSub($ultimos, 'u', fn ($j) => $j->on('u.soc_id', '=', 'm.soc_id')->on('u.fin', '=', 'm.fin'))
+            ->join('socios as s', 's.soc_id', '=', 'm.soc_id')->join('cliente as c', 'c.clicod', '=', 's.clicod')
+            ->where('m.id_empresa_negocio', $suc)->where('m.estado', 'ACTIVA')->where('s.estado', 'ACTIVO')
+            ->whereBetween('m.fin', [$hoy, now()->addDays($dias)->toDateString()])
+            ->orderBy('m.fin')->get(['m.mem_id', 'm.plan', 'm.fin', 'm.avisado', 's.soc_id', 's.codigo', 'c.clinom', 'c.telefono'])
+            ->unique('soc_id')->values()
+            ->each(fn ($m) => $m->dias = (int) Carbon::parse($hoy)->diffInDays(Carbon::parse($m->fin)));
+    }
+
+    /** Mensaje de WhatsApp para avisar que el plan vence */
+    public static function mensajeVence(object $m, string $negocio): string
+    {
+        $nombre = Str::of(explode(' ', trim($m->clinom))[0] ?? '')->title();
+        $cuando = $m->dias === 0 ? 'vence HOY' : ($m->dias === 1 ? 'vence MAÑANA' : 'vence en '.$m->dias.' días ('.Carbon::parse($m->fin)->format('d/m').')');
+
+        return "Hola {$nombre} 👋, te saludamos de {$negocio}. Tu plan {$m->plan} {$cuando}. "
+            .'Renueva a tiempo para seguir entrenando sin parar 💪. ¡Te esperamos!';
+    }
+
+    /** Celular con código de Perú para wa.me (9 dígitos → 51…), o null */
+    public static function whatsapp(?string $telefono): ?string
+    {
+        $n = preg_replace('/\D/', '', (string) $telefono);
+
+        return strlen($n) === 9 && str_starts_with($n, '9') ? '51'.$n : (strlen($n) >= 11 ? $n : null);
+    }
+
     /** fin = inicio + días del plan - 1 + días congelados (activos) */
     public static function recalcularFin(int $memId): void
     {
@@ -156,6 +219,9 @@ class Gimnasio
                 ->lockForUpdate()->first();
             if (! $mem) {
                 throw new \RuntimeException('No hay una membresía vigente en esa fecha para congelar.');
+            }
+            if (! empty($mem->promocion) && ! $editar) {
+                throw new \RuntimeException('Es un plan de promoción ('.$mem->plan.'): no se puede congelar.');
             }
             if ($desde < $mem->inicio) {
                 throw new \RuntimeException('La membresía empieza el '.Carbon::parse($mem->inicio)->format('d/m/Y').'.');
@@ -304,23 +370,40 @@ class Gimnasio
             }
             $inicio = $plan->dias <= 1 ? now()->toDateString() : Carbon::parse($inicio)->toDateString();
             $fin = Carbon::parse($inicio)->addDays($plan->dias - 1)->toDateString();
+            $promocion = ! empty($plan->promocion);
 
-            $contado = DB::table('credito_dias')->where('id_empresa_negocio', $suc)->where('cre_dia_tip', 'CONTADO')->value('cre_dia_id');
+            // Pago por partes: el plan va al crédito; lo que paga hoy es el primer abono y el resto queda como saldo
+            $partes = ! empty($datos['partes']);
             $doc = trim((string) ($datos['clinum'] ?? '')) ?: ($socio->clinum ?: '00000000');
+            if ($partes && ($doc === '00000000' || $doc === '')) {
+                throw new \RuntimeException('Para pagar por partes el cliente debe tener su DNI registrado.');
+            }
+            $venceSaldo = $partes ? Carbon::parse($datos['vence_saldo'] ?? now()->addDays(self::DIAS_SALDO))->toDateString() : null;
+            if ($partes && $venceSaldo <= now()->toDateString()) {
+                throw new \RuntimeException('La fecha para pagar el saldo debe ser después de hoy.');
+            }
+            $observaciones = ($plan->dias > 1 ? 'GIMNASIO: DEL '.Carbon::parse($inicio)->format('d/m/Y').' AL '.Carbon::parse($fin)->format('d/m/Y') : 'GIMNASIO')
+                .($promocion ? ' · PROMOCIÓN' : '');
             $cabId = Comprobante::emitir($user, $turno, [
-                'tdocod' => $datos['tdocod'], 'estadopago' => $contado, 'fecEmi' => now()->toDateString(),
+                'tdocod' => $datos['tdocod'], 'fecEmi' => now()->toDateString(),
+                'estadopago' => $partes ? Comprobante::creditoDe($user)
+                    : DB::table('credito_dias')->where('id_empresa_negocio', $suc)->where('cre_dia_tip', 'CONTADO')->value('cre_dia_id'),
+                'fecVen' => $venceSaldo,
                 'tdicod' => $datos['tdicod'] ?? ($socio->tdicod ?: (strlen($doc) === 11 ? '6' : '1')), 'clinum' => $doc,
                 'clinom' => ($datos['clinom'] ?? null) ?: $socio->clinom, 'clidir' => ($datos['clidir'] ?? null) ?: $socio->clidir,
-                'clicor' => $socio->clicor, 'telefono' => $socio->telefono,
-                'observaciones' => $plan->dias > 1 ? 'GIMNASIO: DEL '.Carbon::parse($inicio)->format('d/m/Y').' AL '.Carbon::parse($fin)->format('d/m/Y') : 'GIMNASIO',
-                'id_med_pag' => $datos['id_med_pag'] ?? [], 'op_med_pag' => $datos['op_med_pag'] ?? [], 'paga' => $datos['paga'] ?? 0,
+                'clicor' => $socio->clicor, 'telefono' => $socio->telefono, 'observaciones' => mb_substr($observaciones, 0, 100),
+                'id_med_pag' => $partes ? [] : ($datos['id_med_pag'] ?? []), 'op_med_pag' => $datos['op_med_pag'] ?? [], 'paga' => $partes ? 0 : ($datos['paga'] ?? 0),
                 // El monto es siempre el precio que se cobra (no el que llegue de la pantalla)
-                'mon_med_pag' => ! empty($datos['id_med_pag']) ? [$precio] : [],
+                'mon_med_pag' => ! $partes && ! empty($datos['id_med_pag']) ? [$precio] : [],
+                'a_cuenta' => $partes ? ($datos['a_cuenta'] ?? 0) : 0, 'a_cuenta_medio' => ((array) ($datos['id_med_pag'] ?? []))[0] ?? null,
             ], [['IdProducto' => $plan->IdProducto, 'cantidad' => 1, 'precio' => $precio, 'descripcion' => mb_substr($plan->nombre.($plan->dias > 1 ? ' ('.Carbon::parse($inicio)->format('d/m').' - '.Carbon::parse($fin)->format('d/m/Y').')' : ''), 0, 150)]],
                 ['ped_tip' => 'GIMNASIO', 'IdUsuario_ven' => $user->IdUsuario]);
 
             $memId = DB::table('gym_membresias')->insertGetId([
-                'soc_id' => $socId, 'plan_id' => $plan->plan_id, 'plan' => $plan->nombre, 'dias' => $plan->dias, 'congelar_max' => $plan->congelar_max,
+                'soc_id' => $socId, 'plan_id' => $plan->plan_id, 'plan' => $plan->nombre, 'dias' => $plan->dias,
+                // Promoción: no se congela; queda con las condiciones con que se vendió
+                'congelar_max' => $promocion ? 0 : $plan->congelar_max, 'promocion' => $promocion,
+                'condiciones' => $promocion ? ($plan->condiciones ?: self::CONDICIONES_PROMOCION) : null, 'vip' => ! empty($plan->vip),
                 'inicio' => $inicio, 'fin' => $fin, 'precio' => $precio, 'IdCpe_cabecera' => $cabId, 'estado' => 'ACTIVA',
                 'IdUsuario' => $user->IdUsuario, 'creado' => now(), 'id_empresa_negocio' => $suc,
             ]);
@@ -449,6 +532,12 @@ class Gimnasio
             $permitido = true;
             $mensaje = 'Ingreso aprobado por el administrador'.($motivoAprobacion ? ': '.$motivoAprobacion : '').'.';
             $requiere = false;
+        }
+        // Pagó por partes: se le recuerda el saldo (entra igual)
+        $deuda = self::deuda((int) $socio->soc_id, $suc);
+        if ($permitido && $deuda['total'] > 0) {
+            $mensaje .= ' Tiene un saldo de S/ '.number_format($deuda['total'], 2)
+                .($deuda['vencido'] ? ' VENCIDO: pase por caja.' : ' (pagar hasta el '.Carbon::parse($deuda['vence'])->format('d/m/Y').').');
         }
 
         DB::table('gym_asistencias')->insert([
