@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\PromocionController;
 use App\Http\Controllers\Admin\ProspectoController;
 use App\Http\Controllers\Admin\RespaldoController;
 use App\Http\Controllers\Admin\TicketController;
+use App\Http\Controllers\Admin\TutorialController;
 use App\Http\Controllers\Admin\UsuarioController;
 use App\Http\Controllers\Admin\VisitaController;
 use App\Http\Middleware\PanelActivo;
@@ -63,6 +64,9 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/promociones/{id?}', [PromocionController::class, 'guardar'])->whereNumber('id')->name('promociones.guardar');
     Route::post('/promociones/{id}/estado', [PromocionController::class, 'estado'])->whereNumber('id')->name('promociones.estado');
     Route::post('/promociones/{id}/eliminar', [PromocionController::class, 'eliminar'])->whereNumber('id')->name('promociones.eliminar');
+    Route::get('/tutoriales', [TutorialController::class, 'index'])->name('tutoriales.index');
+    Route::post('/tutoriales/{id?}', [TutorialController::class, 'guardar'])->whereNumber('id')->name('tutoriales.guardar');
+    Route::post('/tutoriales/{id}/eliminar', [TutorialController::class, 'eliminar'])->whereNumber('id')->name('tutoriales.eliminar');
     Route::get('/certificados', [CertificadoController::class, 'index'])->name('certificados.index');
     Route::post('/certificados/{id?}', [CertificadoController::class, 'guardar'])->whereNumber('id')->name('certificados.guardar');
     Route::post('/certificados/{id}/eliminar', [CertificadoController::class, 'eliminar'])->whereNumber('id')->name('certificados.eliminar');

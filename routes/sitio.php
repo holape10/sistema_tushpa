@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [SitioController::class, 'inicio'])->name('inicio');
 Route::get('/tutorial', [SitioController::class, 'tutorial'])->name('tutorial');
+Route::get('/tutorial/{slug}', [SitioController::class, 'tutorialVer'])->where('slug', '[a-z0-9-]+')->name('tutorial.ver');
 
 // SEO: una página por ciudad (se agregan en config/ciudades.php) y el sitemap para Google
 Route::get('/sistema-de-facturacion-electronica-{ciudad}', [SitioController::class, 'ciudad'])

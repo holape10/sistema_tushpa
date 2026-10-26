@@ -49,6 +49,7 @@
                         </a>
                         <a href="{{ route('admin.anuncios.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.anuncios.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Anuncios</a>
                         <a href="{{ route('admin.promociones.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.promociones.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Promociones</a>
+                        <a href="{{ route('admin.tutoriales.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.tutoriales.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Tutoriales</a>
                         <a href="{{ route('admin.certificados.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.certificados.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Certificados</a>
                         <a href="{{ route('admin.prospectos.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.prospectos.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Prospectos</a>
                         <a href="{{ route('admin.visitas.index') }}" class="px-3 py-1.5 rounded-lg {{ request()->routeIs('admin.visitas.*') ? 'bg-slate-700' : 'hover:bg-slate-800' }}">Visitas</a>

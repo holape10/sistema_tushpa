@@ -30,17 +30,17 @@ class ImagenProducto
     }
 
     /**
-     * Guarda la foto subida ya optimizada.
+     * Guarda la foto subida ya optimizada ($lado: lado mayor en px; las capturas de los tutoriales usan más para leerse bien).
      *
      * @return string ruta relativa a public/
      */
-    public static function guardar(UploadedFile $archivo, string $carpeta, string $base): string
+    public static function guardar(UploadedFile $archivo, string $carpeta, string $base, int $lado = self::LADO): string
     {
         if (! is_dir(public_path($carpeta))) {
             @mkdir(public_path($carpeta), 0775, true);
         }
         $destino = $carpeta.'/'.$base.'.webp';
-        if (self::redimensionar($archivo->getRealPath(), public_path($destino), self::LADO, self::orientacion($archivo->getRealPath()))) {
+        if (self::redimensionar($archivo->getRealPath(), public_path($destino), $lado, self::orientacion($archivo->getRealPath()))) {
             self::redimensionar(public_path($destino), public_path(self::rutaMini($destino)), self::LADO_MINI);
 
             return $destino;

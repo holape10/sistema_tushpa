@@ -1,803 +1,167 @@
+@php
+    // Tutoriales por rubro: se crean en admin.tushpa.app › Tutoriales
+    $conTutoriales = $tutoriales->groupBy('rubro');
+    $chips = collect($rubros)->filter(fn ($r, $clave) => $conTutoriales->has($clave));
+    $preguntas = [
+        ['fa-download', '¿Necesito instalar algo?', 'No. TUSHPA funciona en la nube: entras desde el navegador de tu PC, tablet o celular. Solo necesitas internet.'],
+        ['fa-shield-halved', '¿Cómo consigo mi certificado digital?', 'Te lo vendemos como partner de LLAMA.PE, a sus mismos precios, y te ayudamos a instalarlo. Míralo en la sección "Certificado digital" de la página principal.'],
+        ['fa-headset', '¿Y si me quedo atascado?', 'Escríbenos por WhatsApp al '.config('soporte.telefono').': te ayudamos paso a paso. Desde tu sistema también puedes abrir un ticket con el botón de ayuda (?).'],
+    ];
+@endphp
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centro de Tutoriales | TUSHPA</title>
-    <link rel="icon" type="image/png" href="{{ asset('web/img/favicon.ico') }}">
+    <title>Tutoriales por rubro | TUSHPA</title>
+    <meta name="description" content="Aprende a usar TUSHPA con guías paso a paso para tu rubro: restaurantes, comercios, gimnasios, hoteles y más. Facturación electrónica SUNAT, caja e inventario.">
+    <link rel="canonical" href="{{ route('sitio.tutorial') }}">
+    <meta name="theme-color" content="#1e40af">
+    <link rel="icon" href="{{ asset('web/img/favicon.ico') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ asset('web/css/style.css') }}?v={{ filemtime(public_path('web/css/style.css')) }}">
-    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="{{ asset('web/css/sitio.css') }}?v={{ filemtime(public_path('web/css/sitio.css')) }}">
     <style>
-        :root {
-            --primary-color: #2563eb;
-            --secondary-color: #1e40af;
-            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --transition: all 0.3s ease;
-        }
-        
-        .tutorial-hero {
-            position: relative;
-            background: var(--gradient-primary);
-            padding: 10rem 0 6rem;
-            color: white;
-            overflow: hidden;
-        }
-        .tutorial-hero::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.2);
-        }
-        .tutorial-hero .container {
-            position: relative;
-            z-index: 2;
-        }
-        .search-box {
-            max-width: 700px;
-            margin: 0 auto;
-            position: relative;
-        }
-        .search-box input {
-            border-radius: 50px;
-            padding: 1.2rem 1.5rem 1.2rem 3.5rem;
-            border: none;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            font-size: 1.1rem;
-        }
-        .search-box i {
-            position: absolute;
-            left: 1.5rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #64748b;
-        }
-        
-        /* Tabs */
-        .nav-tabs {
-        border: none;
-        margin-bottom: 2rem;
-        }
-
-        .nav-tabs .nav-link {
-            border: none;
-            color: #64748b !important;  /* Color gris oscuro legible */
-            font-weight: 600;
-            padding: 1rem 2.5rem;
-            margin: 0 0.5rem;
-            border-radius: 50px;
-            transition: all 0.3s ease;
-            background: white;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            position: relative;
-            overflow: hidden;
-        }
-        .nav-tabs .nav-link.active {
-            color: white !important;  /* Texto blanco en activo */
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-        }
-        .nav-tabs .nav-link:hover:not(.active) {
-            background: #f8fafc;
-            color: var(--primary-color);
-            transform: translateY(-2px);
-        }
-
-        .nav-tabs .nav-link:hover {
-            color: var(--primary-color) !important;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
-        }
-        
-        /* Cards */
-        .tutorial-card {
-            transition: var(--transition);
-            border: none;
-            overflow: hidden;
-            height: 100%;
-        }
-        .tutorial-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15) !important;
-        }
-        .video-thumbnail {
-            position: relative;
-            height: 200px;
-            background: var(--gradient-primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .video-thumbnail i {
-            font-size: 4rem;
-            color: rgba(255,255,255,0.3);
-        }
-        .play-button {
-            position: absolute;
-            width: 70px;
-            height: 70px;
-            background: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--primary-color);
-            font-size: 1.5rem;
-            transition: var(--transition);
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-        .tutorial-card:hover .play-button {
-            transform: scale(1.1);
-            background: var(--primary-color);
-            color: white;
-        }
-        .duration-badge {
-            position: absolute;
-            bottom: 15px;
-            right: 15px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.85rem;
-        }
-        
-        /* Guías Escritas - Contenido */
-        .tutorial-content {
-            background: white;
-            border-radius: 1rem;
-            padding: 3rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            margin-bottom: 3rem;
-        }
-        .tutorial-content img {
-            max-width: 100%;
-            border-radius: 0.75rem;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
-            margin: 2rem 0;
-            border: 2px solid #e2e8f0;
-        }
-        .step-number {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 40px;
-            height: 40px;
-            background: var(--gradient-primary);
-            color: white;
-            border-radius: 50%;
-            font-weight: 700;
-            margin-right: 1rem;
-        }
-        .code-block {
-            background: #1e293b;
-            color: #e2e8f0;
-            padding: 1.5rem;
-            border-radius: 0.75rem;
-            font-family: 'Courier New', monospace;
-            margin: 1.5rem 0;
-            border-left: 4px solid var(--primary-color);
-        }
-        .download-pdf {
-            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-            color: white;
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 50px;
-            font-weight: 600;
-            transition: var(--transition);
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .download-pdf:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 25px rgba(220, 38, 38, 0.4);
-            color: white;
-        }
-        
-        /* FAQ */
-        .faq-section {
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-        }
-        .accordion-item {
-            border: none;
-            margin-bottom: 1rem;
-            border-radius: 1rem !important;
-            overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-        .accordion-button {
-            background: white;
-            color: #1e293b;
-            font-weight: 600;
-            padding: 1.5rem;
-            border: none;
-        }
-        .accordion-button:not(.collapsed) {
-            background: var(--gradient-primary);
-            color: white;
-            box-shadow: none;
-        }
-        .accordion-button:not(.collapsed)::after {
-            filter: brightness(0) invert(1);
-        }
-        .accordion-body {
-            background: white;
-            padding: 1.5rem;
-            color: #64748b;
-        }
-        
-        /* Video Modal */
-        .video-modal .modal-dialog {
-            max-width: 900px;
-        }
-        .video-modal .modal-content {
-            border: none;
-            border-radius: 1rem;
-            overflow: hidden;
-        }
-        .video-modal .modal-header {
-            background: var(--gradient-primary);
-            color: white;
-            border: none;
-        }
-        .video-modal .btn-close {
-            filter: brightness(0) invert(1);
-        }
-        .video-container {
-            position: relative;
-            padding-bottom: 56.25%;
-            height: 0;
-            background: #000;
-        }
-        .video-container iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        
-        /* CTA */
-        .tutorial-cta {
-            background: var(--gradient-primary);
-            position: relative;
-            overflow: hidden;
-        }
-        .tutorial-cta::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -10%;
-            width: 500px;
-            height: 500px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-        }
+        .tut-hero { padding: 8rem 0 4.5rem; }
+        .tut-buscar { position: relative; max-width: 560px; margin: 1.75rem auto 0; }
+        .tut-buscar i { position: absolute; left: 1.2rem; top: 50%; transform: translateY(-50%); color: #64748b; }
+        .tut-buscar input { width: 100%; height: 58px; border: 0; border-radius: 999px; padding: 0 1.25rem 0 3.1rem; font-size: 1rem; box-shadow: 0 20px 45px -15px rgba(0, 0, 0, .45); }
+        .tut-chips { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; margin-bottom: 2rem; }
+        .tut-chip { border: 0; background: #fff; color: var(--tinta); border-radius: 999px; padding: .55rem 1.1rem; font-weight: 600; font-size: .92rem; box-shadow: 0 6px 16px -10px rgba(15, 23, 42, .5); }
+        .tut-chip i { color: var(--selva-500); margin-right: .35rem; }
+        .tut-chip.activo { background: var(--selva-600); color: #fff; }
+        .tut-chip.activo i { color: var(--huito); }
+        .tut-card { display: flex; flex-direction: column; height: 100%; background: #fff; border-radius: 1.25rem; overflow: hidden; text-decoration: none; color: inherit;
+                    border: 1px solid rgba(30, 41, 59, .07); transition: transform .2s, box-shadow .2s; }
+        .tut-card:hover { transform: translateY(-4px); box-shadow: 0 22px 45px -20px rgba(15, 23, 42, .45); color: inherit; }
+        .tut-portada { aspect-ratio: 16 / 9; background: linear-gradient(135deg, var(--selva-600), var(--rio)); display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, .85); font-size: 2.6rem; position: relative; }
+        .tut-portada img { width: 100%; height: 100%; object-fit: cover; }
+        .tut-portada .tut-video { position: absolute; right: .75rem; bottom: .75rem; background: rgba(0, 0, 0, .55); color: #fff; font-size: .75rem; font-weight: 600; padding: .25rem .6rem; border-radius: 999px; }
+        .tut-cuerpo { padding: 1.25rem 1.35rem 1.4rem; display: flex; flex-direction: column; flex: 1; }
+        .tut-rubro { font-size: .75rem; font-weight: 700; text-transform: uppercase; color: var(--selva-500); }
+        .tut-cuerpo h3 { font-size: 1.12rem; font-weight: 700; margin: .35rem 0 .45rem; }
+        .tut-meta { margin-top: auto; padding-top: .8rem; font-size: .82rem; color: var(--gris); }
+        .tut-vacio { display: none; }
     </style>
 </head>
 <body>
+@include('sitio.partials.menu', ['enPortada' => false])
 
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
-        <div class="container">
-            <a class="navbar-brand" href="{{ route('sitio.inicio') }}">
-                <!--<img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" height="50">-->
-                <img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" height="50" id="navLogo">
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="{{ route('sitio.inicio') }}">Inicio</a></li>
-                    <li class="nav-item"><a class="nav-link active" href="{{ route('sitio.tutorial') }}">Tutorial</a></li>
-                    <li class="nav-item"><a class="nav-link" href="index.php#about">Nosotros</a></li>
-                    <li class="nav-item"><a class="nav-link" href="index.php#services">Servicios</a></li>
-                    <li class="nav-item"><a class="nav-link" href="index.php#contact">Contacto</a></li>
-                </ul>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <section class="tutorial-hero text-center">
-        <div class="container">
-            <h1 class="display-4 fw-bold mb-3" data-aos="fade-down">
-                Centro de Aprendizaje <span style="color: #ffd700;">TUSHPA</span>
-            </h1>
-            <p class="lead mb-5 opacity-90" data-aos="fade-down" data-aos-delay="100">
-                Domina nuestro sistema de facturación y gestión con guías paso a paso
-            </p>
-            
-            <div class="search-box" data-aos="fade-up" data-aos-delay="200">
-                <i class="fas fa-search"></i>
-                <input type="text" id="tutorialSearch" class="form-control form-control-lg" 
-                       placeholder="¿Qué quieres aprender hoy? (Ej: emitir factura, configurar...)">
-            </div>
-        </div>
-    </section>
-
-    <!-- Tabs Navigation -->
-    <section class="py-5 bg-light">
-        <div class="container">
-            <ul class="nav nav-tabs justify-content-center border-0" id="tutorialTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="videos-tab" data-bs-toggle="tab" 
-                            data-bs-target="#videos" type="button" role="tab">
-                        <i class="fas fa-video me-2"></i>Videos Tutoriales
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="guias-tab" data-bs-toggle="tab" 
-                            data-bs-target="#guias" type="button" role="tab">
-                        <i class="fas fa-book me-2"></i>Guías con Imágenes
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="faq-tab" data-bs-toggle="tab" 
-                            data-bs-target="#faq" type="button" role="tab">
-                        <i class="fas fa-question-circle me-2"></i>Preguntas Frecuentes
-                    </button>
-                </li>
-            </ul>
-        </div>
-    </section>
-
-    <!-- Tab Content -->
-    <div class="tab-content" id="tutorialTabContent">
-        
-        <!-- VIDEOS -->
-        <div class="tab-pane fade show active" id="videos" role="tabpanel">
-            <section class="py-5">
-                <div class="container">
-                    <div class="text-center mb-5" data-aos="fade-up">
-                        <h6 class="text-primary text-uppercase mb-2">Aprende Visualmente</h6>
-                        <h2 class="display-6 fw-bold">Videos Tutoriales</h2>
-                    </div>
-                    
-                    <div class="row g-4">
-                        <!-- Video 1 -->
-                        <div class="col-md-6 col-lg-4 tutorial-item" data-aos="fade-up" data-category="facturacion" 
-                             data-bs-toggle="modal" data-bs-target="#videoModal1">
-                            <div class="card tutorial-card h-100 bg-white rounded-3 shadow-sm">
-                                <div class="video-thumbnail">
-                                    <i class="fas fa-file-invoice-dollar"></i>
-                                    <div class="play-button"><i class="fas fa-play ms-1"></i></div>
-                                    <span class="duration-badge"><i class="far fa-clock me-1"></i>5:30</span>
-                                </div>
-                                <div class="card-body p-4">
-                                    <span class="badge bg-primary bg-opacity-10 text-primary mb-3">Facturación</span>
-                                    <h5 class="fw-bold mb-2">Cómo emitir tu primera factura</h5>
-                                    <p class="text-muted small mb-3">Aprende paso a paso a crear y enviar facturas electrónicas.</p>
-                                    <button class="btn btn-outline-primary btn-sm w-100 rounded-pill">
-                                        <i class="fas fa-play me-1"></i>Ver Video
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Video 2 -->
-                        <div class="col-md-6 col-lg-4 tutorial-item" data-aos="fade-up" data-aos-delay="100" 
-                             data-category="configuracion" data-bs-toggle="modal" data-bs-target="#videoModal2">
-                            <div class="card tutorial-card h-100 bg-white rounded-3 shadow-sm">
-                                <div class="video-thumbnail">
-                                    <i class="fas fa-cogs"></i>
-                                    <div class="play-button"><i class="fas fa-play ms-1"></i></div>
-                                    <span class="duration-badge"><i class="far fa-clock me-1"></i>8:15</span>
-                                </div>
-                                <div class="card-body p-4">
-                                    <span class="badge bg-success bg-opacity-10 text-success mb-3">Configuración</span>
-                                    <h5 class="fw-bold mb-2">Configuración inicial del sistema</h5>
-                                    <p class="text-muted small mb-3">Configura tu empresa, usuarios y permisos.</p>
-                                    <button class="btn btn-outline-success btn-sm w-100 rounded-pill">
-                                        <i class="fas fa-play me-1"></i>Ver Video
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Video 3 -->
-                        <div class="col-md-6 col-lg-4 tutorial-item" data-aos="fade-up" data-aos-delay="200" 
-                             data-category="reportes" data-bs-toggle="modal" data-bs-target="#videoModal3">
-                            <div class="card tutorial-card h-100 bg-white rounded-3 shadow-sm">
-                                <div class="video-thumbnail">
-                                    <i class="fas fa-chart-bar"></i>
-                                    <div class="play-button"><i class="fas fa-play ms-1"></i></div>
-                                    <span class="duration-badge"><i class="far fa-clock me-1"></i>6:45</span>
-                                </div>
-                                <div class="card-body p-4">
-                                    <span class="badge bg-info bg-opacity-10 text-info mb-3">Reportes</span>
-                                    <h5 class="fw-bold mb-2">Generación de reportes de ventas</h5>
-                                    <p class="text-muted small mb-3">Aprende a generar y exportar reportes.</p>
-                                    <button class="btn btn-outline-info btn-sm w-100 rounded-pill">
-                                        <i class="fas fa-play me-1"></i>Ver Video
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </div>
-
-        <!-- GUÍAS ESCRITAS CON IMÁGENES -->
-        <div class="tab-pane fade" id="guias" role="tabpanel">
-            <section class="py-5">
-                <div class="container">
-                    <div class="text-center mb-5" data-aos="fade-up">
-                        <h6 class="text-primary text-uppercase mb-2">Documentación Completa</h6>
-                        <h2 class="display-6 fw-bold">Guías con Imágenes y PDFs</h2>
-                    </div>
-                    
-                    <!-- GUÍA 1 -->
-                    <div class="tutorial-item" data-aos="fade-up" data-category="certificado">
-                        <div class="tutorial-content">
-                            <div class="d-flex align-items-center mb-4">
-                                <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 me-3">
-                                    <i class="fas fa-file-alt me-1"></i> Guía Completa
-                                </span>
-                                <span class="text-muted"><i class="far fa-clock me-2"></i>15 min</span>
-                                <span class="text-muted ms-3"><i class="fas fa-signal me-2"></i>Nivel: Básico</span>
-                            </div>
-                            
-                            <h2 class="fw-bold mb-4">Cómo Configurar tu Certificado Digital</h2>
-                            
-                            <div class="alert alert-info d-flex align-items-center">
-                                <i class="fas fa-info-circle me-2"></i>
-                                <div>El certificado digital es necesario para emitir facturas electrónicas válidas ante SUNAT</div>
-                            </div>
-
-                            <div class="mb-4">
-                                <h5 class="fw-bold mb-3">
-                                    <span class="step-number">1</span>
-                                    Obtener el Certificado Digital
-                                </h5>
-                                <p class="text-muted">
-                                    Puedes obtenerlo de estas entidades autorizadas por SUNAT:
-                                </p>
-                                <div class="row g-3 mb-3">
-                                    <div class="col-md-4">
-                                        <div class="p-3 bg-light rounded-3 text-center border">
-                                            <i class="fas fa-shield-alt fa-2x text-primary mb-2"></i>
-                                            <p class="mb-0 fw-bold">IZENPE</p>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="p-3 bg-light rounded-3 text-center border">
-                                            <i class="fas fa-shield-alt fa-2x text-primary mb-2"></i>
-                                            <p class="mb-0 fw-bold">ENTRUST</p>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="p-3 bg-light rounded-3 text-center border">
-                                            <i class="fas fa-shield-alt fa-2x text-primary mb-2"></i>
-                                            <p class="mb-0 fw-bold">ECERTPERU</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- IMAGEN 1 -->
-                                <div class="bg-light p-4 rounded-3 text-center border border-dashed">
-                                    <i class="fas fa-image fa-3x text-muted mb-3"></i>
-                                    <p class="text-muted mb-2"><strong>Imagen: Formulario de solicitud</strong></p>
-                                    <small class="text-muted">Reemplazar con: images/tutoriales/certificado-paso1.jpg</small>
-                                    <!-- Cuando tengas la imagen real, usa: -->
-                                    <!-- <img src="images/tutoriales/certificado-paso1.jpg" alt="Paso 1" class="img-fluid"> -->
-                                </div>
-                            </div>
-
-                            <div class="mb-4">
-                                <h5 class="fw-bold mb-3">
-                                    <span class="step-number">2</span>
-                                    Instalar en tu Navegador
-                                </h5>
-                                <ol class="text-muted ps-4">
-                                    <li class="mb-2">Abre Google Chrome</li>
-                                    <li class="mb-2">Ve a Configuración → Privacidad y seguridad</li>
-                                    <li class="mb-2">Click en "Seguridad" → "Gestionar certificados"</li>
-                                    <li class="mb-2">Click en "Importar" y selecciona tu archivo .pfx</li>
-                                </ol>
-                                <!-- IMAGEN 2 -->
-                                <div class="bg-light p-4 rounded-3 text-center border border-dashed">
-                                    <i class="fas fa-image fa-3x text-muted mb-3"></i>
-                                    <p class="text-muted mb-2"><strong>Imagen: Instalación en Chrome</strong></p>
-                                    <small class="text-muted">Reemplazar con: images/tutoriales/certificado-paso2.jpg</small>
-                                </div>
-                            </div>
-
-                            <div class="mb-4">
-                                <h5 class="fw-bold mb-3">
-                                    <span class="step-number">3</span>
-                                    Configurar en TUSHPA
-                                </h5>
-                                <div class="code-block">
-Menú Principal → Configuración → Certificado Digital<br>
-→ Seleccionar archivo .pfx<br>
-→ Ingresar contraseña<br>
-→ Click en "Guardar"
-                                </div>
-                                <!-- IMAGEN 3 -->
-                                <div class="bg-light p-4 rounded-3 text-center border border-dashed">
-                                    <i class="fas fa-image fa-3x text-muted mb-3"></i>
-                                    <p class="text-muted mb-2"><strong>Imagen: Configuración en TUSHPA</strong></p>
-                                    <small class="text-muted">Reemplazar con: images/tutoriales/certificado-paso3.jpg</small>
-                                </div>
-                            </div>
-
-                            <div class="alert alert-success d-flex align-items-center">
-                                <i class="fas fa-check-circle me-2"></i>
-                                <div><strong>¡Listo!</strong> Ya puedes emitir facturas electrónicas.</div>
-                            </div>
-
-                            <div class="text-center mt-5 pt-4 border-top">
-                                <p class="text-muted mb-3">¿Descargar esta guía en PDF?</p>
-                                <a href="downloads/guia-certificado-digital.pdf" class="download-pdf" download>
-                                    <i class="fas fa-download"></i> Descargar PDF
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- GUÍA 2 -->
-                    <div class="tutorial-item" data-aos="fade-up" data-category="reportes">
-                        <div class="tutorial-content">
-                            <div class="d-flex align-items-center mb-4">
-                                <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 me-3">
-                                    <i class="fas fa-file-alt me-1"></i> Guía Completa
-                                </span>
-                                <span class="text-muted"><i class="far fa-clock me-2"></i>10 min</span>
-                                <span class="text-muted ms-3"><i class="fas fa-signal me-2"></i>Nivel: Intermedio</span>
-                            </div>
-                            
-                            <h2 class="fw-bold mb-4">Cómo Generar Reportes de Ventas</h2>
-
-                            <div class="mb-4">
-                                <h5 class="fw-bold mb-3">
-                                    <span class="step-number">1</span>
-                                    Acceder al Módulo
-                                </h5>
-                                <div class="code-block">Reportes → Ventas → Reporte General</div>
-                                <div class="bg-light p-4 rounded-3 text-center border border-dashed">
-                                    <i class="fas fa-image fa-3x text-muted mb-3"></i>
-                                    <p class="text-muted mb-2"><strong>Imagen: Menú de reportes</strong></p>
-                                    <small class="text-muted">Reemplazar con: images/tutoriales/reporte-paso1.jpg</small>
-                                </div>
-                            </div>
-
-                            <div class="mb-4">
-                                <h5 class="fw-bold mb-3">
-                                    <span class="step-number">2</span>
-                                    Filtrar por Fechas
-                                </h5>
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <div class="p-3 border rounded-3">
-                                            <i class="fas fa-calendar-day text-primary me-2"></i>
-                                            <strong>Hoy</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="p-3 border rounded-3">
-                                            <i class="fas fa-calendar-week text-primary me-2"></i>
-                                            <strong>Esta semana</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="p-3 border rounded-3">
-                                            <i class="fas fa-calendar-alt text-primary me-2"></i>
-                                            <strong>Este mes</strong>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="p-3 border rounded-3">
-                                            <i class="fas fa-calendar-check text-primary me-2"></i>
-                                            <strong>Personalizado</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mb-4">
-                                <h5 class="fw-bold mb-3">
-                                    <span class="step-number">3</span>
-                                    Exportar
-                                </h5>
-                                <div class="d-flex gap-3 flex-wrap justify-content-center">
-                                    <button class="btn btn-outline-primary btn-lg">
-                                        <i class="fas fa-file-excel me-2"></i>Excel
-                                    </button>
-                                    <button class="btn btn-outline-danger btn-lg">
-                                        <i class="fas fa-file-pdf me-2"></i>PDF
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="text-center mt-5 pt-4 border-top">
-                                <a href="downloads/guia-reportes-ventas.pdf" class="download-pdf" download>
-                                    <i class="fas fa-download"></i> Descargar PDF
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-            </section>
-        </div>
-
-        <!-- FAQ -->
-        <div class="tab-pane fade" id="faq" role="tabpanel">
-            <section class="faq-section py-5">
-                <div class="container">
-                    <div class="text-center mb-5" data-aos="fade-up">
-                        <h6 class="text-primary text-uppercase mb-2">Preguntas Frecuentes</h6>
-                        <h2 class="display-5 fw-bold">¿Tienes dudas rápidas?</h2>
-                    </div>
-                    
-                    <div class="row justify-content-center">
-                        <div class="col-lg-8" data-aos="fade-up">
-                            <div class="accordion" id="faqAccordion">
-                                <div class="accordion-item">
-                                    <h2 class="accordion-header">
-                                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
-                                            <i class="fas fa-download me-3"></i>¿Necesito instalar algo?
-                                        </button>
-                                    </h2>
-                                    <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
-                                        <div class="accordion-body">
-                                            No, TUSHPA es 100% en la nube. Solo necesitas un navegador y conexión a internet.
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="accordion-item">
-                                    <h2 class="accordion-header">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-                                            <i class="fas fa-certificate me-3"></i>¿Cómo obtengo mi certificado digital?
-                                        </button>
-                                    </h2>
-                                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                        <div class="accordion-body">
-                                            De entidades como IZENPE, ENTRUST o ECERTPERU. Toma 24-48 horas.
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="accordion-item">
-                                    <h2 class="accordion-header">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
-                                            <i class="fas fa-headset me-3"></i>¿Soporte técnico?
-                                        </button>
-                                    </h2>
-                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                        <div class="accordion-body">
-                                            Disponible 24/7 por WhatsApp: +51 928 396 147 o email: holapesac@gmail.com
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
+<section class="portada tut-hero text-center">
+    <div class="kene kene-laberinto kene-fondo" style="--k:1.4"></div>
+    <div class="container">
+        <span class="etiqueta" style="color: var(--huito)">Centro de aprendizaje</span>
+        <h1 class="fw-bold mt-2">Aprende a usar <span class="resalte">TUSHPA</span> en tu rubro</h1>
+        <p class="bajada mx-auto">Guías cortas, paso a paso y con imágenes: desde abrir tu caja hasta cobrar una mesa o vender un plan del gimnasio.</p>
+        <div class="tut-buscar">
+            <i class="fas fa-magnifying-glass"></i>
+            <input type="search" id="tutBuscar" placeholder="¿Qué quieres aprender? (ej.: cobrar, factura, caja)" autocomplete="off">
         </div>
     </div>
+</section>
 
-    <!-- CTA -->
-    <section class="tutorial-cta py-5">
-        <div class="container py-4 text-center position-relative" style="z-index: 2;">
-            <h2 class="display-5 fw-bold text-white mb-3">¿Necesitas ayuda personalizada?</h2>
-            <p class="lead text-white-50 mb-4">Agenda una capacitación gratuita con nuestro equipo</p>
-            <div class="d-flex justify-content-center gap-3 flex-wrap">
-                <a href="index.php#contact" class="btn btn-light btn-lg px-5 rounded-pill">
-                    <i class="fas fa-calendar-check me-2"></i>Agendar Capacitación
-                </a>
-                <a href="https://wa.me/51928396147" target="_blank" class="btn btn-success btn-lg px-5 rounded-pill">
-                    <i class="fab fa-whatsapp me-2"></i>WhatsApp
-                </a>
+<section class="seccion seccion-arena" style="padding-top: 3rem">
+    <div class="container">
+        @if ($tutoriales->isEmpty())
+            <p class="text-center texto-gris py-5">Muy pronto publicaremos los tutoriales. Mientras tanto, <a href="https://wa.me/{{ config('soporte.whatsapp') }}" target="_blank" rel="noopener">escríbenos por WhatsApp</a>.</p>
+        @else
+            <div class="tut-chips" role="tablist">
+                <button type="button" class="tut-chip activo" data-rubro=""><i class="fas fa-layer-group"></i>Todos</button>
+                @foreach ($chips as $clave => $r)
+                    <button type="button" class="tut-chip" data-rubro="{{ $clave }}"><i class="fas {{ $r['icono'] }}"></i>{{ $r['nombre'] }}</button>
+                @endforeach
             </div>
-        </div>
-    </section>
-
-    <!-- MODALES VIDEO -->
-    <div class="modal fade video-modal" id="videoModal1" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Cómo emitir tu primera factura</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-0">
-                    <div class="video-container">
-                        <iframe src="https://www.youtube.com/embed/27T0zYOROmk" frameborder="0" allowfullscreen></iframe>
+            <div class="row g-4" id="tutLista">
+                @foreach ($tutoriales as $t)
+                    @php $portada = collect($t->pasos)->pluck('imagen')->filter()->first(); @endphp
+                    <div class="col-sm-6 col-lg-4 tut-item" data-rubro="{{ $t->rubro }}"
+                         data-texto="{{ \Illuminate\Support\Str::lower(\Illuminate\Support\Str::ascii($t->titulo.' '.$t->resumen.' '.collect($t->pasos)->pluck('titulo')->implode(' ').' '.($rubros[$t->rubro]['nombre'] ?? ''))) }}">
+                        <a class="tut-card" href="{{ route('sitio.tutorial.ver', $t->slug) }}">
+                            <div class="tut-portada">
+                                @if ($portada)<img src="{{ asset($portada) }}" alt="" loading="lazy">@else<i class="fas {{ $rubros[$t->rubro]['icono'] ?? 'fa-book-open' }}"></i>@endif
+                                @if (\App\Support\Tutoriales::youtube($t->video_url))<span class="tut-video"><i class="fas fa-play me-1"></i>Con video</span>@endif
+                            </div>
+                            <div class="tut-cuerpo">
+                                <span class="tut-rubro"><i class="fas {{ $rubros[$t->rubro]['icono'] ?? 'fa-star' }} me-1"></i>{{ $rubros[$t->rubro]['nombre'] ?? $t->rubro }}</span>
+                                <h3>{{ $t->titulo }}</h3>
+                                @if ($t->resumen)<p class="texto-gris small mb-0">{{ $t->resumen }}</p>@endif
+                                <div class="tut-meta"><i class="far fa-clock me-1"></i>{{ $t->minutos }} min · {{ count($t->pasos) }} pasos</div>
+                            </div>
+                        </a>
                     </div>
+                @endforeach
+            </div>
+            <p class="text-center texto-gris py-5 tut-vacio" id="tutVacio">No encontramos ese tema. <a href="https://wa.me/{{ config('soporte.whatsapp') }}" target="_blank" rel="noopener">Pregúntanos por WhatsApp</a>.</p>
+        @endif
+    </div>
+</section>
+
+<section class="seccion">
+    <div class="container">
+        <div class="seccion-titulo">
+            <span class="etiqueta">Preguntas frecuentes</span>
+            <h2>¿Tienes dudas rápidas?</h2>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="accordion" id="preguntasTut">
+                    @foreach ($preguntas as [$icono, $pregunta, $respuesta])
+                        <div class="accordion-item">
+                            <h3 class="accordion-header">
+                                <button class="accordion-button {{ $loop->first ? '' : 'collapsed' }}" type="button" data-bs-toggle="collapse" data-bs-target="#pt{{ $loop->index }}">
+                                    <i class="fas {{ $icono }} me-3" style="color: var(--selva-500)"></i>{{ $pregunta }}</button>
+                            </h3>
+                            <div id="pt{{ $loop->index }}" class="accordion-collapse collapse {{ $loop->first ? 'show' : '' }}" data-bs-parent="#preguntasTut">
+                                <div class="accordion-body">{{ $respuesta }}</div>
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
             </div>
         </div>
     </div>
+</section>
 
-    <div class="modal fade video-modal" id="videoModal2" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Configuración inicial</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-0">
-                    <div class="video-container">
-                        <iframe src="https://www.youtube.com/embed/DEF456uvw" frameborder="0" allowfullscreen></iframe>
-                    </div>
-                </div>
-            </div>
-        </div>
+<section class="seccion seccion-oscura text-center">
+    <div class="container">
+        <h2 class="fw-bold mb-3">¿Prefieres que te enseñemos en vivo?</h2>
+        <p class="mb-4" style="color: rgba(255,255,255,.75)">Agenda una capacitación con nuestro equipo por videollamada.</p>
+        <a href="https://wa.me/{{ config('soporte.whatsapp') }}?text={{ rawurlencode('Hola, quiero una capacitación de TUSHPA') }}" target="_blank" rel="noopener" class="btn btn-achiote btn-lg">
+            <i class="fab fa-whatsapp me-2"></i>Agendar por WhatsApp</a>
     </div>
+</section>
 
-    <div class="modal fade video-modal" id="videoModal3" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Reportes de ventas</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-0">
-                    <div class="video-container">
-                        <iframe src="https://www.youtube.com/embed/GHI789rst" frameborder="0" allowfullscreen></iframe>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+@include('sitio.partials.pie')
 
-    <!-- Footer -->
-    <footer class="footer bg-dark text-white py-5">
-        <div class="container">
-            <div class="text-center">
-                <p class="mb-0">&copy; {{ date('Y') }} TUSHPA. Todos los derechos reservados.</p>
-            </div>
-        </div>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
-    <script>
-        AOS.init({ duration: 1000, once: true });
-        
-        window.addEventListener('scroll', function() {
-            const navbar = document.getElementById('mainNav');
-            if (window.scrollY > 50) {
-                navbar.classList.add('scrolled');
-            } else {
-                navbar.classList.remove('scrolled');
-            }
-        });
-        
-        document.getElementById('tutorialSearch').addEventListener('keyup', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
-            const items = document.querySelectorAll('.tutorial-item');
-            items.forEach(item => {
-                const text = item.textContent.toLowerCase();
-                item.style.display = text.includes(searchTerm) ? 'block' : 'none';
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ asset('web/js/sitio.js') }}?v={{ filemtime(public_path('web/js/sitio.js')) }}"></script>
+<script>
+    // Filtro por rubro y búsqueda (sin recargar)
+    (function () {
+        const items = [...document.querySelectorAll('.tut-item')];
+        if (!items.length) return;
+        const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        let rubro = new URLSearchParams(location.search).get('rubro') || '';
+        const buscar = document.getElementById('tutBuscar');
+        function filtrar() {
+            const q = norm(buscar.value.trim());
+            let visibles = 0;
+            items.forEach(el => {
+                const ok = (!rubro || el.dataset.rubro === rubro || el.dataset.rubro === 'TODOS') && (!q || q.split(/\s+/).every(p => el.dataset.texto.includes(p)));
+                el.style.display = ok ? '' : 'none';
+                // Con un rubro elegido, primero los suyos y después los que sirven para todos
+                el.style.order = rubro && el.dataset.rubro === 'TODOS' ? 1 : 0;
+                visibles += ok;
             });
-        });
-
-        document.querySelectorAll('.video-modal').forEach(modal => {
-            modal.addEventListener('hidden.bs.modal', function () {
-                const iframes = this.querySelectorAll('iframe');
-                iframes.forEach(iframe => {
-                    const src = iframe.src;
-                    iframe.src = '';
-                    setTimeout(() => { iframe.src = src; }, 100);
-                });
-            });
-        });
-    </script>
+            document.getElementById('tutVacio').style.display = visibles ? 'none' : 'block';
+            document.querySelectorAll('.tut-chip').forEach(c => c.classList.toggle('activo', c.dataset.rubro === rubro));
+        }
+        document.querySelectorAll('.tut-chip').forEach(c => c.addEventListener('click', () => { rubro = c.dataset.rubro; filtrar(); }));
+        buscar.addEventListener('input', filtrar);
+        filtrar();
+    })();
+</script>
 @include('sitio.partials.extras')
 </body>
 </html>

@@ -74,6 +74,10 @@ class SeoSitio
         foreach (self::slugsCiudades() as $slug) {
             $paginas[] = ['loc' => self::url(self::rutaCiudad($slug)), 'lastmod' => $fecha($vista('ciudad'), config_path('ciudades.php'))];
         }
+        // Cada tutorial (se crean en el panel)
+        foreach (Tutoriales::activos() as $t) {
+            $paginas[] = ['loc' => self::url('/tutorial/'.$t->slug), 'lastmod' => date('Y-m-d', strtotime((string) $t->updated_at) ?: time())];
+        }
 
         return $paginas;
     }

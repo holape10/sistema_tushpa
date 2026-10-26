@@ -10,6 +10,7 @@ use App\Support\Rubros;
 use App\Support\SeoSitio;
 use App\Support\Tenancy\RegistroWeb;
 use App\Support\Tenancy\Tenancy;
+use App\Support\Tutoriales;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,9 +35,22 @@ class SitioController extends Controller
         return view('sitio.inicio', ['planes' => $this->planes()]);
     }
 
+    /** Tutoriales por rubro (se crean en el panel › Tutoriales) */
     public function tutorial(): View
     {
-        return view('sitio.tutorial');
+        return view('sitio.tutorial', ['tutoriales' => Tutoriales::activos(), 'rubros' => Tutoriales::rubros()]);
+    }
+
+    /** Un tutorial paso a paso, con otros del mismo rubro */
+    public function tutorialVer(string $slug): View
+    {
+        $todos = Tutoriales::activos();
+        $t = $todos->firstWhere('slug', $slug);
+        abort_unless($t, 404);
+        Tutoriales::db()->where('id', $t->id)->increment('vistas');
+
+        return view('sitio.tutorial_ver', ['t' => $t, 'rubros' => Tutoriales::rubros(),
+            'otros' => $todos->where('rubro', $t->rubro)->where('id', '!=', $t->id)->take(6)->values()]);
     }
 
     /** Página de SEO local de una ciudad (se define en config/ciudades.php) */
