@@ -60,6 +60,15 @@
                                         .then(r => r.json()).then(d => { codigo = d.codigo; navigator.clipboard?.writeText(d.codigo); })"><i class="fas fa-copy"></i> Copiar código</button>
                             <p x-show="codigo" x-cloak class="w-full text-right text-xs text-gray-600">Código copiado: <b class="font-mono" x-text="codigo"></b> (vale 3 días, una vez)</p>
                         </form>
+                        {{-- Chrome y Windows avisan con los programas poco descargados: se explica cómo seguir --}}
+                        <details class="w-full sm:max-w-md text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                            <summary class="cursor-pointer font-semibold">⚠️ ¿Chrome o Windows dicen que "no es seguro"?</summary>
+                            <p class="mt-1.5">Es normal: avisan con todo programa que <b>pocas personas descargan</b>. El instalador es de TUSHPA (HOLAPE E.I.R.L.) y no tiene virus.</p>
+                            <ol class="list-decimal list-inside mt-1 space-y-0.5">
+                                <li><b>Chrome</b> (descarga bloqueada): toca el ícono de descargas ⬇, luego la flecha <b>›</b> del archivo y <b>"Descargar archivo sospechoso"</b>.</li>
+                                <li><b>Windows</b> ("Windows protegió su PC"): toca <b>"Más información"</b> y luego <b>"Ejecutar de todas formas"</b>.</li>
+                            </ol>
+                        </details>
                     @endif
                     <form method="POST" action="{{ route('impresion.agente') }}" class="flex flex-wrap gap-2 justify-end"
                           >

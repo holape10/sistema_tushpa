@@ -15,13 +15,21 @@
         </button>
 
         <div x-show="abierto" x-cloak x-transition
-             class="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-            <div class="px-4 py-3 border-b border-gray-100">
+             class="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden flex flex-col max-h-[calc(100vh-6rem)]">
+            <div class="px-4 py-3 border-b border-gray-100 shrink-0">
                 <p class="font-semibold text-gray-800 text-sm">Comprobantes pendientes de SUNAT</p>
                 @if ($notifSunat['vencidas'] > 0)
                     <p class="text-xs text-red-600 mt-0.5">⚠️ {{ $notifSunat['vencidas'] }} con 5 días o más: envíalos antes de que venza el plazo.</p>
                 @endif
             </div>
+            {{-- Los botones para ir a enviar van arriba: con muchos pendientes la lista ya no los tapa --}}
+            @if ($notifSunat['total'] > 0)
+                <div class="grid grid-cols-2 gap-2 p-2 border-b border-gray-100 shrink-0 text-xs font-bold">
+                    <a href="{{ route('sunat.resumenes') }}" class="py-2 rounded-lg text-center bg-indigo-600 text-white hover:bg-indigo-700">📦 Resumen diario <span class="block font-normal text-[10px] opacity-80">boletas</span></a>
+                    <a href="{{ route('sunat.envios') }}" class="py-2 rounded-lg text-center bg-indigo-50 text-indigo-700 hover:bg-indigo-100">📤 Envío individual <span class="block font-normal text-[10px] opacity-80">facturas y notas</span></a>
+                </div>
+            @endif
+            <div class="overflow-y-auto overscroll-contain">
             @forelse ($notifSunat['items'] as $n)
                 @php
                     $esResumen = $n->tdocod === '03' || (in_array($n->tdocod, ['07', '08']) && str_starts_with($n->serdoc, 'B'));
@@ -40,15 +48,10 @@
             @empty
                 <p class="px-4 py-6 text-center text-sm text-gray-400">✔ Todo enviado a SUNAT.</p>
             @endforelse
-            @if ($notifSunat['total'] > 0)
-                <div class="grid grid-cols-2 text-center text-xs font-semibold">
-                    <a href="{{ route('sunat.envios') }}" class="py-2.5 text-indigo-600 hover:bg-indigo-50 border-r border-gray-100">Envío individual</a>
-                    <a href="{{ route('sunat.resumenes') }}" class="py-2.5 text-indigo-600 hover:bg-indigo-50">Resumen diario</a>
-                </div>
-                @if ($notifSunat['total'] > count($notifSunat['items']))
-                    <p class="text-center text-xs text-gray-400 pb-2">y {{ $notifSunat['total'] - count($notifSunat['items']) }} más…</p>
-                @endif
+            @if ($notifSunat['total'] > count($notifSunat['items']))
+                <p class="text-center text-xs text-gray-400 py-2">y {{ $notifSunat['total'] - count($notifSunat['items']) }} más…</p>
             @endif
+            </div>
         </div>
     </div>
 @endif

@@ -27,37 +27,40 @@
     $fecha = fn($f) => $f ? \Carbon\Carbon::parse($f)->format('d-m-Y') : '-';
 @endphp
 <style>
-    .a4 { font-family: 'DejaVu Sans', 'Segoe UI', Tahoma, sans-serif; color: #2c3e50; font-size: 9px; }
+    /* print-color-adjust: el navegador imprime los fondos (cabecera oscura, recuadro azul) aunque no esté marcado
+       "Gráficos de fondo"; sin esto, en blanco y negro el comprobante sale casi vacío. Bordes oscuros para que se noten. */
+    .a4, .a4 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .a4 { font-family: 'DejaVu Sans', 'Segoe UI', Tahoma, sans-serif; color: #1f2937; font-size: 9px; }
     .a4 table { width: 100%; border-collapse: collapse; }
     .a4 .r { text-align: right; } .a4 .c { text-align: center; }
-    .a4 .cab { background: #f1f3f5; border-bottom: 3px solid #007bff; }
+    .a4 .cab { background: #eef0f3; border-bottom: 3px solid #007bff; }
     .a4 .cab td { vertical-align: middle; padding: 10px; }
     .a4 .empresa { font-size: 17px; font-weight: bold; color: #2c3e50; }
-    .a4 .razon { font-size: 10px; font-weight: bold; color: #6c757d; margin-top: 2px; }
-    .a4 .info { font-size: 8.5px; color: #6c757d; line-height: 1.45; margin-top: 4px; }
+    .a4 .razon { font-size: 10px; font-weight: bold; color: #4b5563; margin-top: 2px; }
+    .a4 .info { font-size: 8.5px; color: #4b5563; line-height: 1.45; margin-top: 4px; }
     .a4 .numeracion { background: #fff; border: 2px solid #007bff; border-radius: 12px; text-align: center; padding: 10px 8px; }
     .a4 .numeracion .ruc { font-size: 11px; font-weight: bold; color: #495057; }
     .a4 .numeracion .tipo { background: #007bff; color: #fff; font-size: 11.5px; font-weight: bold; border-radius: 6px; padding: 8px 4px; margin: 7px 0; }
     .a4 .numeracion .num { font-size: 13px; font-weight: bold; color: #007bff; }
     .a4 .cliente { background: #f8f9fa; border-left: 4px solid #007bff; padding: 9px 12px; margin-top: 12px; line-height: 1.6; }
     .a4 .lbl { font-weight: bold; color: #2c3e50; }
-    .a4 .caja { border: 2px solid #dee2e6; border-radius: 10px; padding: 8px; margin-top: 10px; }
+    .a4 .caja { border: 2px solid #8f969e; border-radius: 10px; padding: 8px; margin-top: 10px; }
     .a4 .caja th { background: #6c757d; color: #fff; font-size: 8.5px; padding: 7px 6px; }
     .a4 .caja td { text-align: center; padding: 7px 6px; font-size: 8.5px; }
-    .a4 .nc { border: 2px solid #dee2e6; border-left: 5px solid #dc3545; border-radius: 10px; padding: 8px 12px; margin-top: 10px; }
+    .a4 .nc { border: 2px solid #8f969e; border-left: 5px solid #dc3545; border-radius: 10px; padding: 8px 12px; margin-top: 10px; }
     .a4 .nc .titulo { color: #dc3545; font-weight: bold; font-size: 8.5px; text-transform: uppercase; border-bottom: 1px solid #f1f3f5; padding-bottom: 4px; margin-bottom: 4px; }
     .a4 .nc .k { display: block; color: #6c757d; font-size: 7.5px; font-weight: bold; text-transform: uppercase; }
     .a4 .nc .v { font-weight: bold; font-size: 9px; }
-    .a4 .det { margin-top: 12px; border: 2px solid #dee2e6; }
+    .a4 .det { margin-top: 12px; border: 2px solid #8f969e; }
     .a4 .det th { background: #495057; color: #fff; font-size: 9.5px; padding: 9px 6px; text-align: center; }
-    .a4 .det td { padding: 8px 6px; font-size: 8.5px; border-right: 1px solid #dee2e6; border-bottom: 1px solid #dee2e6; }
+    .a4 .det td { padding: 8px 6px; font-size: 8.5px; border-right: 1px solid #aeb5bd; border-bottom: 1px solid #aeb5bd; }
     .a4 .det tr.par td { background: #f8f9fa; }
-    .a4 .tot { margin-top: 14px; border: 2px solid #dee2e6; }
+    .a4 .tot { margin-top: 14px; border: 2px solid #8f969e; }
     .a4 .letras { background: #f8f9fa; border-left: 4px solid #007bff; border-radius: 6px; padding: 7px; font-size: 8px; margin-bottom: 8px; }
-    .a4 .tot td.tt { background: #f1f3f5; padding: 6px 4px; font-size: 9px; border-bottom: 1px solid #dee2e6; vertical-align: middle; }
+    .a4 .tot td.tt { background: #f1f3f5; padding: 6px 4px; font-size: 9px; border-bottom: 1px solid #aeb5bd; vertical-align: middle; }
     .a4 .tot tr.final td.tt { border-bottom: 2px solid #007bff; font-weight: bold; color: #007bff; font-size: 10.5px; }
     .a4 .representacion { background: #6c757d; color: #fff; font-weight: bold; font-size: 8px; border-radius: 6px; padding: 7px; text-align: center; margin-top: 8px; }
-    .a4 .pie { background: #f1f3f5; border-radius: 6px; padding: 10px; text-align: center; font-size: 7.5px; color: #6c757d; margin-top: 14px; }
+    .a4 .pie { background: #f1f3f5; border-radius: 6px; padding: 10px; text-align: center; font-size: 7.5px; color: #4b5563; margin-top: 14px; }
     .a4 .pie a { color: #007bff; font-weight: bold; text-decoration: none; }
     .a4 .anulado { border: 2px solid #dc3545; color: #dc3545; font-weight: bold; text-align: center; padding: 6px; margin-top: 10px; border-radius: 6px; }
 </style>
@@ -171,11 +174,11 @@
         @foreach ($filas as $k => [$etiqueta, $monto])
             <tr>
                 @if ($k === 0)
-                    <td rowspan="{{ $n }}" style="width:28%; border-right:2px solid #dee2e6; vertical-align:top; padding:10px">
+                    <td rowspan="{{ $n }}" style="width:28%; border-right:2px solid #8f969e; vertical-align:top; padding:10px">
                         <div class="letras"><span class="lbl">SON:</span> {{ \App\Support\Sunat\NumeroLetras::convertir((float) $cab->ccaitv) }}</div>
                         @if ($qr)<div class="c"><img src="data:image/svg+xml;base64,{{ base64_encode($qr) }}" style="width:85px; height:85px"></div>@endif
                     </td>
-                    <td rowspan="{{ $n }}" style="width:40%; border-right:2px solid #dee2e6; vertical-align:top; padding:10px" class="c">
+                    <td rowspan="{{ $n }}" style="width:40%; border-right:2px solid #8f969e; vertical-align:top; padding:10px" class="c">
                         @if ($qrPago && !$esNota)<img src="{{ $qrPago }}" style="max-width:200px; max-height:130px">@endif
                         <div class="representacion">REPRESENTACIÓN IMPRESA DE LA {{ $tdodes }}</div>
                     </td>
