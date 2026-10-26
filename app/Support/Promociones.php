@@ -119,6 +119,23 @@ class Promociones
     }
 
     /** A dónde lleva el botón: su enlace, o su propia página de oferta */
+    /** ¿La imagen se muestra entera (afiche) en vez de recortada? */
+    public static function imagenCompleta(object $p): bool
+    {
+        return ($p->imagen_ajuste ?? 'RECORTAR') === 'COMPLETA';
+    }
+
+    /** Estilo de la imagen: entera, o recortada mostrando la parte elegida en el panel */
+    public static function estiloImagen(object $p): string
+    {
+        if (self::imagenCompleta($p)) {
+            return 'object-fit: contain; background: #0f172a;';
+        }
+        [$x, $y] = array_map('intval', explode(' ', (string) ($p->imagen_pos ?? '50 50')) + [50, 50]);
+
+        return 'object-fit: cover; object-position: '.max(0, min(100, $x)).'% '.max(0, min(100, $y)).'%;';
+    }
+
     public static function destino(object $p): ?string
     {
         return $p->boton_url ?: ($p->con_pagina && $p->slug ? route('sitio.oferta', $p->slug) : null);

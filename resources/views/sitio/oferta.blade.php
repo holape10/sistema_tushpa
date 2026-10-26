@@ -11,7 +11,8 @@
     <div class="row justify-content-center">
         <div class="col-lg-8 col-xl-7">
             <article class="card tarjeta overflow-hidden">
-                @if ($p->imagen)<img src="{{ asset($p->imagen) }}" alt="{{ $p->titulo }}" class="w-100" style="max-height: 420px; object-fit: cover">@endif
+                @if ($p->imagen)<img src="{{ asset($p->imagen) }}" alt="{{ $p->titulo }}" class="w-100 d-block"
+                     style="max-height: {{ \App\Support\Promociones::imagenCompleta($p) ? '80vh' : '420px' }}; {{ \App\Support\Promociones::estiloImagen($p) }}">@endif
                 <div class="p-4 p-md-5">
                     <span class="badge rounded-pill mb-2" style="background: {{ $p->color }}">OFERTA</span>
                     <h1 class="fw-bold">{{ $p->titulo }}</h1>

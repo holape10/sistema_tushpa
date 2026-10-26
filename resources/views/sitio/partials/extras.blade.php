@@ -21,6 +21,9 @@
                     transform: translateY(20px) scale(.97); transition: transform .25s; }
         .tp-fondo.tp-ver .tp-modal { transform: none; }
         .tp-modal img { width: 100%; max-height: 300px; object-fit: cover; display: block; }
+        /* Afiche completo: más alto, y si no entra en la pantalla la ventana se desplaza */
+        .tp-modal img.tp-completa { max-height: min(62vh, 560px); }
+        .tp-fondo .tp-modal { max-height: 94vh; overflow-y: auto; }
         .tp-modal .tp-cuerpo { padding: 20px 22px 22px; color: #0f172a; }
         .tp-modal h3 { margin: 0 0 6px; font-size: 22px; font-weight: 800; line-height: 1.2; }
         .tp-modal p { margin: 0 0 14px; color: #475569; font-size: 15px; white-space: pre-line; }
@@ -55,7 +58,8 @@
             <div class="tp-fondo" id="tp-promo-{{ $p->id }}" style="display: none" data-promo="{{ $p->id }}" data-frecuencia="{{ $p->frecuencia }}" data-retraso="{{ (int) $p->retraso }}">
                 <div class="tp-modal" role="dialog" aria-label="{{ $p->titulo }}">
                     <button type="button" class="tp-cerrar" aria-label="Cerrar" data-cerrar>×</button>
-                    @if ($p->imagen)<a href="{{ $botonGeneral ? $destino : '#' }}" @unless ($botonGeneral) onclick="return false" @endunless><img src="{{ asset($p->imagen) }}" alt="{{ $p->titulo }}"></a>@endif
+                    @if ($p->imagen)<a href="{{ $botonGeneral ? $destino : '#' }}" @unless ($botonGeneral) onclick="return false" @endunless><img src="{{ asset($p->imagen) }}" alt="{{ $p->titulo }}"
+                        class="{{ \App\Support\Promociones::imagenCompleta($p) ? 'tp-completa' : '' }}" style="{{ \App\Support\Promociones::estiloImagen($p) }}"></a>@endif
                     <div class="tp-cuerpo">
                         <h3>{{ $p->titulo }}</h3>
                         @if ($p->texto)<p>{{ $p->texto }}</p>@endif

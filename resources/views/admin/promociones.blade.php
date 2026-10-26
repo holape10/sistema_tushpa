@@ -26,6 +26,14 @@
               x-data="{ tipo: @js(old('tipo', $e->tipo ?? 'MODAL')), pagina: @js((bool) old('con_pagina', $e->con_pagina ?? false)), color: @js(old('color', $e->color ?? '#2563eb')),
                         titulo: @js(old('titulo', $e->titulo ?? '')), texto: @js(old('texto', $e->texto ?? '')), boton: @js(old('boton_texto', $e->boton_texto ?? 'Ver oferta')),
                         img: @js($e && $e->imagen ? asset($e->imagen) : null),
+                        ajuste: @js(old('imagen_ajuste', $e->imagen_ajuste ?? 'RECORTAR')),
+                        posX: {{ (int) explode(' ', old('imagen_pos', $e->imagen_pos ?? '50 50'))[0] }}, posY: {{ (int) (explode(' ', old('imagen_pos', $e->imagen_pos ?? '50 50'))[1] ?? 50) }},
+                        arrastre: null,
+                        // Arrastrar la imagen de la vista previa: se mueve hacia donde va el dedo o el mouse
+                        empezar(ev) { if (this.ajuste !== 'RECORTAR') return; this.arrastre = { x: ev.clientX, y: ev.clientY, px: this.posX, py: this.posY, w: ev.target.clientWidth, h: ev.target.clientHeight }; ev.target.setPointerCapture(ev.pointerId); },
+                        mover(ev) { const a = this.arrastre; if (!a) return;
+                            this.posX = Math.round(Math.min(100, Math.max(0, a.px - (ev.clientX - a.x) / a.w * 100)));
+                            this.posY = Math.round(Math.min(100, Math.max(0, a.py - (ev.clientY - a.y) / a.h * 100))); },
                         ciudades: @js(old('ciudades', $e ? collect(Promociones::ciudades($e))->map(fn ($c) => ['nombre' => $c['nombre'], 'whatsapp' => $c['whatsapp'] ? preg_replace('/^51(?=9\d{8}$)/', '', $c['whatsapp']) : ''])->all() : [])) }">
             @csrf
             <div class="flex items-center gap-2">
@@ -43,6 +51,21 @@
             <div x-show="tipo === 'MODAL'" class="text-sm">Imagen <span class="text-xs text-slate-400">(opcional, JPG/PNG/WEBP/GIF hasta 4 MB)</span>
                 <input type="file" name="imagen" accept="image/*" @change="const f = $event.target.files[0]; if (f) img = URL.createObjectURL(f)" class="mt-1 block w-full text-sm">
                 @if ($e && $e->imagen)<label class="mt-1 flex items-center gap-1 text-xs text-rose-600"><input type="checkbox" name="quitar_imagen" value="1" @change="img = $event.target.checked ? null : @js(asset($e->imagen))" class="rounded"> Quitar imagen</label>@endif
+                {{-- Cómo se ve la imagen: entera (afiche) o recortada eligiendo qué parte se ve --}}
+                <input type="hidden" name="imagen_ajuste" :value="ajuste">
+                <input type="hidden" name="imagen_pos" :value="posX + ' ' + posY">
+                <div x-show="img" class="mt-2 rounded-xl bg-slate-50 border border-slate-200 p-2.5 space-y-2">
+                    <div class="grid grid-cols-2 gap-1 p-1 bg-slate-200/70 rounded-lg text-xs font-bold">
+                        <button type="button" @click="ajuste = 'COMPLETA'" :class="ajuste === 'COMPLETA' ? 'bg-white shadow text-indigo-700' : 'text-slate-500'" class="py-1.5 rounded-md">🖼 Completa <span class="block font-normal text-[10px]">se ve entera (afiches)</span></button>
+                        <button type="button" @click="ajuste = 'RECORTAR'" :class="ajuste === 'RECORTAR' ? 'bg-white shadow text-indigo-700' : 'text-slate-500'" class="py-1.5 rounded-md">✂️ Recortar <span class="block font-normal text-[10px]">llena el espacio</span></button>
+                    </div>
+                    <div x-show="ajuste === 'RECORTAR'" class="space-y-1 text-xs text-slate-600">
+                        <p>👆 <b>Arrastra la imagen</b> en la vista previa, o usa las barras:</p>
+                        <label class="flex items-center gap-2">↕ Arriba / abajo <input type="range" min="0" max="100" x-model.number="posY" class="flex-1"></label>
+                        <label class="flex items-center gap-2">↔ Izquierda / derecha <input type="range" min="0" max="100" x-model.number="posX" class="flex-1"></label>
+                        <button type="button" @click="posX = 50; posY = 50" class="text-indigo-600 underline">Centrar</button>
+                    </div>
+                </div>
             </div>
             <div class="grid grid-cols-2 gap-2">
                 <label class="block text-sm">Texto del botón<input name="boton_texto" x-model="boton" maxlength="60" class="{{ $in }}"></label>
@@ -93,7 +116,10 @@
             <div class="rounded-xl bg-slate-100 p-3">
                 <p class="text-[11px] font-semibold text-slate-500 mb-2">VISTA PREVIA</p>
                 <div x-show="tipo === 'MODAL'" class="mx-auto max-w-xs bg-white rounded-2xl overflow-hidden shadow-lg text-center">
-                    <template x-if="img"><img :src="img" alt="" class="w-full max-h-40 object-cover"></template>
+                    {{-- Misma proporción que la ventana real (440 px de ancho, hasta 300 de alto al recortar) --}}
+                    <template x-if="img"><img :src="img" alt="" draggable="false" @pointerdown="empezar($event)" @pointermove="mover($event)" @pointerup="arrastre = null" @pointercancel="arrastre = null"
+                                              class="w-full block select-none touch-none" :class="ajuste === 'RECORTAR' ? 'cursor-move max-h-[218px]' : 'max-h-[380px]'"
+                                              :style="ajuste === 'RECORTAR' ? `object-fit: cover; object-position: ${posX}% ${posY}%` : 'object-fit: contain; background: #0f172a'"></template>
                     <div class="p-4"><p class="font-black text-lg leading-tight" x-text="titulo || 'Título de tu oferta'"></p>
                         <p class="text-xs text-slate-500 mt-1" x-text="texto"></p>
                         <p x-show="ciudades.some(c => (c.nombre || '').trim())" class="text-[11px] font-bold text-slate-600 mt-2" x-text="'📍 Válido en: ' + ciudades.filter(c => (c.nombre || '').trim()).map(c => (c.nombre || '').trim()).join(' · ')"></p>
@@ -117,7 +143,7 @@
                 @php $vigente = $p->activo && (! $p->hasta || $p->hasta >= now()->toDateString()) && (! $p->desde || $p->desde <= now()->toDateString()); @endphp
                 <div class="p-4 flex gap-3 {{ $vigente ? '' : 'opacity-60' }}">
                     <div class="w-16 h-16 rounded-xl shrink-0 overflow-hidden flex items-center justify-center text-2xl" style="background: {{ $p->color }}">
-                        @if ($p->imagen)<img src="{{ asset($p->imagen) }}" alt="" class="w-full h-full object-cover">@else{{ $p->tipo === 'BARRA' ? '📢' : '🪟' }}@endif</div>
+                        @if ($p->imagen)<img src="{{ asset($p->imagen) }}" alt="" class="w-full h-full" style="{{ Promociones::estiloImagen($p) }}">@else{{ $p->tipo === 'BARRA' ? '📢' : '🪟' }}@endif</div>
                     <div class="flex-1 min-w-0">
                         <p class="font-bold">{{ $p->titulo }}
                             <span class="ml-1 px-1.5 rounded text-[10px] font-bold {{ $vigente ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ $vigente ? 'SE VE AHORA' : ($p->activo ? 'FUERA DE FECHA' : 'PAUSADA') }}</span></p>

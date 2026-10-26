@@ -321,9 +321,10 @@ class ClienteController extends Controller
     // ------------------------------------------------------------------ dejar la empresa en cero
 
     /** Qué se borrará al reiniciar (para revisar antes de confirmar) */
+    /** El dueño reinicia cualquier empresa; los demás usuarios del panel, solo las que crearon */
     public function reiniciarPrevia(Cliente $cliente)
     {
-        abort_unless($this->esDueno(), 403, 'Solo el dueño del sistema reinicia empresas.');
+        $this->autorizar($cliente);
 
         return view('admin.clientes.reiniciar', ['cliente' => $cliente, 'previa' => Reiniciador::previa($cliente)]);
     }
@@ -331,7 +332,7 @@ class ClienteController extends Controller
     /** Borra los movimientos, deja el stock en 0 y reinicia los correlativos (con respaldo antes) */
     public function reiniciar(Request $request, Cliente $cliente)
     {
-        abort_unless($this->esDueno(), 403, 'Solo el dueño del sistema reinicia empresas.');
+        $this->autorizar($cliente);
         if (trim((string) $request->input('confirmacion')) !== $cliente->ruc) {
             return back()->with('error', 'No se reinició: el RUC escrito no coincide.');
         }
