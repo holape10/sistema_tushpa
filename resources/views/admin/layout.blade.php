@@ -54,10 +54,18 @@
             ]);
             $grupoActual = collect($grupos)->search(fn ($items) => collect($items)->contains(fn ($i) => request()->routeIs($i[2])));
         @endphp
-        <div x-data="{ abierto: false, grupo: @js($grupoActual ?: null) }" @keydown.escape.window="abierto = false">
-            {{-- Menú lateral: fijo en PC, en celular se abre con ☰ --}}
-            <aside :class="abierto ? 'translate-x-0' : '-translate-x-full'"
-                   class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full lg:translate-x-0 bg-indigo-950 text-white transition-transform duration-200 shadow-2xl flex flex-col isolate">
+        {{-- Menú lateral como el del sistema: escondido detrás de ☰ (se abre con clic o pasando el mouse); en PC se puede dejar fijo --}}
+        <div x-data="{
+                abierto: false,
+                grupo: @js($grupoActual ?: null),
+                fijo: (() => { try { return localStorage.getItem('panel_menu_fijo') === '1' } catch (e) { return false } })(),
+                grande: window.matchMedia('(min-width: 1024px)').matches,
+                get anclado() { return this.fijo && this.grande },
+                alternarFijo() { this.fijo = !this.fijo; this.abierto = false; try { localStorage.setItem('panel_menu_fijo', this.fijo ? '1' : '0') } catch (e) {} },
+             }" x-init="window.matchMedia('(min-width: 1024px)').addEventListener('change', e => grande = e.matches); $watch('anclado', v => document.body.classList.toggle('menu-anclado', v)); document.body.classList.toggle('menu-anclado', anclado)"
+             @keydown.escape.window="abierto = false">
+            <aside :class="abierto || anclado ? 'translate-x-0' : '-translate-x-full'" @mouseleave="if (!anclado) abierto = false"
+                   class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full bg-indigo-950 text-white transition-transform duration-200 shadow-2xl flex flex-col isolate">
                 <div class="kene kene-meandro absolute inset-0 -z-10 text-white/[0.04]" aria-hidden="true"></div>
                 <div class="px-4 pt-4 pb-3 flex items-center gap-2 shrink-0">
                     <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-9 h-9 rounded-lg bg-white p-1">
@@ -65,7 +73,11 @@
                         <p class="font-bold text-sm leading-tight">TUSHPA</p>
                         <p class="text-xs text-indigo-300 leading-tight truncate">Panel · {{ $yo->nombre }}</p>
                     </div>
-                    <button type="button" @click="abierto = false" class="lg:hidden p-1.5 rounded-lg text-indigo-300 hover:bg-indigo-800" aria-label="Cerrar menú">
+                    <button type="button" x-show="grande" @click="alternarFijo()" class="p-1.5 rounded-lg hover:bg-indigo-800"
+                            :class="fijo ? 'text-amber-300' : 'text-indigo-300'" :title="fijo ? 'Soltar el menú' : 'Dejar el menú fijo'" aria-label="Fijar menú">
+                        <svg class="w-5 h-5" :fill="fijo ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                    </button>
+                    <button type="button" x-show="!anclado" @click="abierto = false" class="p-1.5 rounded-lg text-indigo-300 hover:bg-indigo-800" aria-label="Cerrar menú">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
@@ -105,20 +117,22 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Salir</button>
                 </form>
             </aside>
-            <div x-show="abierto" x-transition.opacity x-cloak @click="abierto = false" class="fixed inset-0 bg-black/40 z-30 lg:hidden"></div>
+            <div x-show="abierto && !anclado" x-transition.opacity x-cloak @click="abierto = false" class="fixed inset-0 bg-black/30 z-30"></div>
 
-            {{-- Barra superior en celular --}}
-            <header class="lg:hidden sticky top-0 z-20 bg-indigo-950 text-white px-3 py-2.5 flex items-center gap-3 shadow">
-                <button type="button" @click="abierto = true" class="p-2 rounded-lg bg-indigo-900 hover:bg-indigo-800 relative" aria-label="Menú">
+            {{-- Barra de arriba con el botón ☰ (se esconde cuando el menú está fijo) --}}
+            <header x-show="!anclado" class="sticky top-0 z-20 bg-white shadow-sm px-3 py-2 flex items-center gap-3">
+                <button type="button" @mouseenter="if (grande) abierto = true" @click="abierto = !abierto"
+                        class="p-2.5 rounded-xl bg-indigo-950 text-white shadow hover:bg-indigo-800 relative" aria-label="Menú">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
-                    @if ($ticketsNuevos + $mensajesNuevos)<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500"></span>@endif
+                    @if ($ticketsNuevos + $mensajesNuevos)<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 ring-2 ring-white"></span>@endif
                 </button>
-                <p class="font-bold">TUSHPA <span class="font-normal text-indigo-300">· @yield('title', 'Panel')</span></p>
+                <p class="font-bold text-slate-800">TUSHPA <span class="font-normal text-slate-400">· @yield('title', 'Panel')</span></p>
             </header>
         </div>
+        <style>@media (min-width: 1024px) { body.menu-anclado .contenido-panel { padding-left: 16rem; } }</style>
     @endauth
 
-    <div class="{{ auth('superadmin')->check() ? 'lg:pl-64' : '' }}">
+    <div class="contenido-panel transition-[padding] duration-200">
         <main class="@yield('ancho', 'max-w-6xl') mx-auto px-3 sm:px-4 py-4 sm:py-6">
             @if (session('ok'))
                 <div class="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm">{{ session('ok') }}</div>

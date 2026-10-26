@@ -177,6 +177,8 @@ class TableroComprobantes
                 $empresas[] = [
                     'cliente' => $cl, 'total' => $total, 'tipos' => array_map(fn ($v) => $v['n'], $d['tipos']),
                     'monto' => ($d['tipos']['01']['monto'] ?? 0) + ($d['tipos']['03']['monto'] ?? 0),
+                    // Los que van a SUNAT (facturas, boletas, notas y guías vigentes): lo que cobraría un PSE
+                    'validos' => array_sum($d['sunat']),
                     'pendientes' => ($d['sunat']['pendientes'] ?? 0) + ($d['sunat']['rechazados'] ?? 0),
                 ];
             }

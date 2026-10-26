@@ -50,6 +50,12 @@
         </div>
     </div>
 
+    {{-- Precio por comprobante del PSE: lo escribe el dueño y se recuerda en este navegador --}}
+    <div x-data="{
+            precio: (() => { try { return parseFloat(localStorage.getItem('tablero_precio_pse')) || 0.01 } catch (e) { return 0.01 } })(),
+            guardar() { try { localStorage.setItem('tablero_precio_pse', this.precio) } catch (e) {} },
+            costo(n) { return 'S/ ' + (n * (parseFloat(this.precio) || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+         }">
     @if ($sinLeer)
         <p class="mb-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 text-sm">⚠️ No se pudo leer {{ $sinLeer }} empresa(s): no están sumadas.</p>
     @endif
@@ -83,6 +89,27 @@
             <p class="text-sm text-slate-500">Necesitan atención</p>
             <p class="text-3xl font-extrabold mt-1 {{ $sunat['pendientes'] + $sunat['rechazados'] ? 'text-rose-600' : 'text-slate-900' }}">{{ $n($sunat['pendientes'] + $sunat['rechazados']) }}</p>
             <p class="text-xs text-slate-400 mt-2">{{ $n($sunat['pendientes']) }} por enviar · {{ $n($sunat['rechazados']) }} rechazados · {{ $n($anulados) }} anulados</p>
+        </div>
+    </div>
+
+    {{-- Válidos para SUNAT: lo que cobraría un PSE --}}
+    <div class="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-lg p-5 mb-4 flex flex-wrap items-center gap-x-8 gap-y-4">
+        <div>
+            <p class="text-sm text-emerald-100">✅ Válidos para SUNAT</p>
+            <p class="text-4xl font-extrabold">{{ $n($electronicos) }}</p>
+            <p class="text-xs text-emerald-100 mt-1">Facturas, boletas, notas de crédito y débito y guías (sin anulados ni notas de venta)</p>
+        </div>
+        <div class="flex items-center gap-3 sm:ml-auto bg-white/10 rounded-xl px-4 py-3">
+            <label class="text-sm text-emerald-50">Precio del PSE<br><span class="text-xs text-emerald-200">por comprobante</span></label>
+            <div class="flex items-center bg-white rounded-lg text-slate-900 px-2">
+                <span class="text-sm text-slate-400">S/</span>
+                <input type="number" step="0.001" min="0" x-model="precio" @input="guardar()" class="w-24 border-0 focus:ring-0 text-sm font-bold">
+            </div>
+        </div>
+        <div class="text-right">
+            <p class="text-sm text-emerald-100">Pagarías al PSE</p>
+            <p class="text-3xl font-extrabold" x-text="costo({{ $electronicos }})"></p>
+            <p class="text-xs text-emerald-100 mt-1">en {{ \Illuminate\Support\Str::lower($nombre) }}</p>
         </div>
     </div>
 
@@ -176,6 +203,8 @@
                     <th class="px-3 py-2.5 text-left">Empresa</th>
                     <th class="px-3 py-2.5 text-left w-2/5">Comprobantes por tipo</th>
                     <th class="px-3 py-2.5 text-right">Total</th>
+                    <th class="px-3 py-2.5 text-right">Válidos SUNAT</th>
+                    <th class="px-3 py-2.5 text-right">Costo PSE</th>
                     <th class="px-3 py-2.5 text-right">Vendido (F + B)</th>
                     <th class="px-5 py-2.5 text-right">SUNAT</th>
                 </tr>
@@ -201,6 +230,8 @@
                             </p>
                         </td>
                         <td class="px-3 py-3 text-right font-extrabold text-slate-900" data-label="Total">{{ $n($e['total']) }}</td>
+                        <td class="px-3 py-3 text-right font-bold text-emerald-700" data-label="Válidos SUNAT">{{ $n($e['validos']) }}</td>
+                        <td class="px-3 py-3 text-right text-slate-600" data-label="Costo PSE" x-text="costo({{ $e['validos'] }})"></td>
                         <td class="px-3 py-3 text-right" data-label="Vendido">{{ $soles($e['monto']) }}</td>
                         <td class="px-5 py-3 text-right" data-label="SUNAT">
                             @if ($e['pendientes'])
@@ -211,9 +242,22 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-5 py-10 text-center text-slate-400">Ninguna empresa emitió comprobantes en este periodo.</td></tr>
+                    <tr><td colspan="8" class="px-5 py-10 text-center text-slate-400">Ninguna empresa emitió comprobantes en este periodo.</td></tr>
                 @endforelse
             </tbody>
+            @if ($empresas)
+                <tfoot class="bg-slate-50 font-bold">
+                    <tr>
+                        <td class="px-5 py-3" colspan="3">Total</td>
+                        <td class="px-3 py-3 text-right" data-label="Total">{{ $n($total) }}</td>
+                        <td class="px-3 py-3 text-right text-emerald-700" data-label="Válidos SUNAT">{{ $n($electronicos) }}</td>
+                        <td class="px-3 py-3 text-right" data-label="Costo PSE" x-text="costo({{ $electronicos }})"></td>
+                        <td class="px-3 py-3 text-right" data-label="Vendido">{{ $soles($vendido) }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            @endif
         </table>
+    </div>
     </div>
 @endsection
