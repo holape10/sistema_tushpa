@@ -15,7 +15,7 @@
         <input x-ref="imagen" type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="sr-only" @change="elegirImagen($event)">
     </label>
     <input type="hidden" name="quitar_imagen" :value="quitarImagen ? 1 : 0">
-    <p class="text-xs text-gray-400 mt-2 text-center">JPG, PNG o WEBP hasta 4 MB. Esta es la foto principal.</p>
+    <p class="text-xs text-gray-400 mt-2 text-center">JPG, PNG o WEBP hasta 8 MB (se achica sola para que cargue rápido). Esta es la foto principal.</p>
 
     {{-- Hasta 3 fotos más (4 en total): se ven en la tienda virtual al abrir el producto --}}
     <div class="mt-4">

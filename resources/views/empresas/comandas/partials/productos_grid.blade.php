@@ -10,7 +10,15 @@
         class="product-item-kiosko relative flex min-h-[96px] flex-col rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-gray-200 active:scale-[.97] transition-transform select-none {{ $q === 0.0 || $q === 0 ? 'opacity-60' : '' }}"
         data-id="{{ $p->IdProducto }}" data-nombre="{{ $p->pronom }}" data-precio="{{ $precioBase }}"
         @if ($pres->isNotEmpty()) data-presentaciones="{{ $presJson }}" @endif @if (isset($conOpciones[$p->IdProducto])) data-opciones="1" @endif>
-        <span class="text-sm font-bold leading-snug text-gray-800 line-clamp-3">{{ $p->pronom }}</span>
+        @if (isset($fotos[$p->IdProducto]))
+            {{-- Foto pequeña (miniatura liviana) al lado del nombre: el botón casi no crece --}}
+            <span class="flex items-start gap-2">
+                <span class="flex-1 min-w-0 text-sm font-bold leading-snug text-gray-800 line-clamp-3">{{ $p->pronom }}</span>
+                <img src="{{ $fotos[$p->IdProducto] }}" alt="" loading="lazy" decoding="async" width="44" height="44" class="h-11 w-11 shrink-0 rounded-xl object-cover bg-gray-100">
+            </span>
+        @else
+            <span class="text-sm font-bold leading-snug text-gray-800 line-clamp-3">{{ $p->pronom }}</span>
+        @endif
         <span class="mt-auto pt-1.5 text-base font-black text-indigo-700">S/ {{ number_format($precioBase, 2) }}</span>
         @if (isset($conOpciones[$p->IdProducto]))
             <span class="mt-1 self-start rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">🍽️ Elige opciones</span>

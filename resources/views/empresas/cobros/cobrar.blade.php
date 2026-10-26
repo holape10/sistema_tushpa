@@ -41,6 +41,7 @@
         .product-name-kiosko { font-size: 12px; font-weight: bold; color: #333; line-height: 1.2; }
         .product-price-kiosko { font-size: 13px; font-weight: bold; color: #2980b9; margin-top: 3px; }
         .product-stock-kiosko { font-size: 10px; color: #27ae60; }
+        .product-img-kiosko { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; margin: 0 auto 4px; background: #f1f5f9; }
         .cart-ctrl { display: flex; align-items: center; justify-content: center; gap: 3px; }
         .cart-ctrl button { width: 24px; height: 24px; padding: 0; border: none; border-radius: 4px; background: #3498db; color: #fff; font-weight: bold; }
         .cart-ctrl input { width: 46px; text-align: center; height: 24px; border: 1px solid #ccc; border-radius: 4px; }

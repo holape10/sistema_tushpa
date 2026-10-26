@@ -6,6 +6,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /** Promociones de la web pública (tushpa.app) que se administran desde el panel */
 class Promociones
@@ -46,6 +47,8 @@ class Promociones
             }
             $hoy = now()->toDateString();
 
+            $ciudad = self::ciudadDeRuta($ruta);
+
             return self::db()->where('activo', true)
                 ->where(fn ($q) => $q->whereNull('desde')->orWhere('desde', '<=', $hoy))
                 ->where(fn ($q) => $q->whereNull('hasta')->orWhere('hasta', '>=', $hoy))
@@ -55,11 +58,64 @@ class Promociones
 
                     return in_array('todas', $paginas, true) || in_array($pagina, $paginas, true);
                 })
+                // Por ciudad: en la página de una ciudad solo salen las que valen ahí (y solo con el WhatsApp de esa ciudad)
+                ->map(function ($p) use ($ciudad) {
+                    $p->ciudades_lista = self::ciudades($p);
+                    if ($ciudad && $p->ciudades_lista) {
+                        $p->ciudades_lista = array_values(array_filter($p->ciudades_lista, fn ($c) => self::slug($c['nombre']) === $ciudad));
+                        $p->fuera_de_ciudad = ! $p->ciudades_lista;
+                    }
+
+                    return $p;
+                })
+                ->reject(fn ($p) => ! empty($p->fuera_de_ciudad))
                 // Una ventana y una barra a la vez como máximo
                 ->groupBy('tipo')->map(fn ($g) => $g->first())->values();
         } catch (\Throwable $e) {
             return collect();
         }
+    }
+
+    /**
+     * Ciudades donde vale la promoción, con su WhatsApp.
+     *
+     * @return array<int, array{nombre: string, whatsapp: ?string}>
+     */
+    public static function ciudades(object $p): array
+    {
+        return json_decode((string) ($p->ciudades ?? ''), true) ?: [];
+    }
+
+    /**
+     * Ciudades que llegan del formulario: con nombre, sin repetir, y el WhatsApp con el código de Perú.
+     *
+     * @return array<int, array{nombre: string, whatsapp: ?string}>
+     */
+    public static function limpiarCiudades(array $filas): array
+    {
+        return collect($filas)->map(function ($c) {
+            $n = preg_replace('/\D/', '', (string) ($c['whatsapp'] ?? ''));
+
+            return ['nombre' => mb_convert_case(trim((string) ($c['nombre'] ?? '')), MB_CASE_TITLE),
+                'whatsapp' => $n === '' ? null : (strlen($n) === 9 ? '51'.$n : $n)];
+        })->filter(fn ($c) => $c['nombre'] !== '')->unique(fn ($c) => self::slug($c['nombre']))->values()->all();
+    }
+
+    /** La ciudad de la página de SEO local (tushpa.app/sistema-de-facturacion-electronica-piura → piura) */
+    public static function ciudadDeRuta(string $ruta): ?string
+    {
+        return preg_match('/^sistema-de-facturacion-electronica-([a-z0-9-]+)$/', trim($ruta, '/'), $m) ? $m[1] : null;
+    }
+
+    public static function slug(string $nombre): string
+    {
+        return Str::slug($nombre);
+    }
+
+    /** Enlace de WhatsApp de una ciudad, con el mensaje listo */
+    public static function whatsapp(object $p, array $ciudad): ?string
+    {
+        return $ciudad['whatsapp'] ? 'https://wa.me/'.$ciudad['whatsapp'].'?text='.rawurlencode('Hola, vi la promoción "'.$p->titulo.'" para '.$ciudad['nombre'].' y quiero más información.') : null;
     }
 
     /** A dónde lleva el botón: su enlace, o su propia página de oferta */

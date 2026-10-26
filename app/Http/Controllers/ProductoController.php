@@ -13,6 +13,7 @@ use App\Models\UnidadMedida;
 use App\Support\Buscar;
 use App\Support\Excel;
 use App\Support\ExcelLector;
+use App\Support\ImagenProducto;
 use App\Support\Kardex;
 use App\Support\Recetas;
 use App\Support\Rubros;
@@ -79,9 +80,10 @@ class ProductoController extends Controller
             'umecod' => 'nullable|exists:unidad_medida,umecod',
             'ume_equivalente' => 'nullable|exists:unidad_medida,umecod',
             'factor_equivalente' => 'nullable|required_with:ume_equivalente|numeric|min:0.0001|max:99999999',
-            'imagen' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+            // Fotos del celular de hasta 8 MB: al guardarse se achican a unos pocos KB
+            'imagen' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:8192',
             'fotos_extra' => 'nullable|array|max:'.(Producto::MAX_IMAGENES - 1),
-            'fotos_extra.*' => 'image|mimes:jpg,jpeg,png,webp|max:4096',
+            'fotos_extra.*' => 'image|mimes:jpg,jpeg,png,webp|max:8192',
             'quitar_extra' => 'nullable|array',
             'presentaciones' => 'nullable|array|max:20',
             'presentaciones.*.id' => 'nullable|integer',
@@ -144,24 +146,22 @@ class ProductoController extends Controller
         return $otraPres ? "El código {$otraPres->codigo_barra} ya lo usa la presentación {$otraPres->nombre} de {$otraPres->pronom}." : null;
     }
 
-    /** Guarda la imagen en public/imagenes/productos/{RUC}/ y borra la anterior (no en public/productos: chocaría con la ruta /productos) */
+    /**
+     * Guarda la imagen en public/imagenes/productos/{RUC}/ ya optimizada (WEBP liviano y su miniatura para los botones)
+     * y borra la anterior (no en public/productos: chocaría con la ruta /productos)
+     */
     private function guardarImagen(Request $request, Producto $producto): void
     {
         $anterior = $producto->imagenproducto;
         if ($request->hasFile('imagen')) {
-            $archivo = $request->file('imagen');
             $carpeta = 'imagenes/productos/'.preg_replace('/\D/', '', (string) Auth::user()->IdEmpresa);
-            $nombre = $producto->IdProducto.'_'.uniqid().'.'.strtolower($archivo->guessExtension() ?: 'jpg');
-            $archivo->move(public_path($carpeta), $nombre);
-            $producto->update(['imagenproducto' => $carpeta.'/'.$nombre]);
+            $producto->update(['imagenproducto' => ImagenProducto::guardar($request->file('imagen'), $carpeta, $producto->IdProducto.'_'.uniqid())]);
         } elseif ($request->boolean('quitar_imagen')) {
             $producto->update(['imagenproducto' => null]);
         } else {
             return;
         }
-        if ($anterior && str_starts_with($anterior, 'imagenes/productos/') && is_file(public_path($anterior))) {
-            @unlink(public_path($anterior));
-        }
+        ImagenProducto::borrar($anterior);
     }
 
     /** Fotos adicionales (hasta 3 más la principal): quita las marcadas y agrega las nuevas sin pasar el máximo */
@@ -173,18 +173,14 @@ class ProductoController extends Controller
         $libres = Producto::MAX_IMAGENES - 1 - count($quedan);
         $carpeta = 'imagenes/productos/'.preg_replace('/\D/', '', (string) Auth::user()->IdEmpresa);
         foreach (array_slice($request->file('fotos_extra', []), 0, max(0, $libres)) as $archivo) {
-            $nombre = $producto->IdProducto.'_'.uniqid().'.'.strtolower($archivo->guessExtension() ?: 'jpg');
-            $archivo->move(public_path($carpeta), $nombre);
-            $quedan[] = $carpeta.'/'.$nombre;
+            $quedan[] = ImagenProducto::guardar($archivo, $carpeta, $producto->IdProducto.'_'.uniqid());
         }
         if ($quedan === $actuales) {
             return;
         }
         $producto->update(['imagenes_extra' => $quedan ? json_encode($quedan) : null]);
         foreach ($quitar as $ruta) {
-            if (str_starts_with($ruta, 'imagenes/productos/') && is_file(public_path($ruta))) {
-                @unlink(public_path($ruta));
-            }
+            ImagenProducto::borrar($ruta);
         }
     }
 
@@ -459,9 +455,7 @@ class ProductoController extends Controller
         $producto->itemsCombo()->delete();
         ProductoPresentacion::where('IdProducto', $producto->IdProducto)->delete();
         ProductoPrecioDinamico::where('IdProducto', $producto->IdProducto)->delete();
-        if ($producto->imagenproducto && str_starts_with($producto->imagenproducto, 'imagenes/productos/') && is_file(public_path($producto->imagenproducto))) {
-            @unlink(public_path($producto->imagenproducto));
-        }
+        ImagenProducto::borrar($producto->imagenproducto);
         $producto->delete();
 
         return back()->with('success', 'Eliminado.');

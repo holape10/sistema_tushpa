@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Support\Promociones;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /** Promociones en tushpa.app: su página de oferta y el conteo de vistas y clics */
@@ -26,12 +27,16 @@ class PromocionWebController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /** Clic en el botón: se cuenta y se va a su destino */
-    public function clic(int $id): RedirectResponse
+    /** Clic en el botón: se cuenta y se va a su destino (o al WhatsApp de la ciudad elegida) */
+    public function clic(Request $request, int $id): RedirectResponse
     {
         $p = Promociones::db()->where('id', $id)->first();
         abort_unless($p, 404);
         Promociones::db()->where('id', $id)->increment('clics');
+        $ciudad = $request->filled('ciudad') ? collect(Promociones::ciudades($p))->first(fn ($c) => Promociones::slug($c['nombre']) === $request->get('ciudad')) : null;
+        if ($ciudad && ($wa = Promociones::whatsapp($p, $ciudad))) {
+            return redirect()->away($wa);
+        }
 
         return redirect()->to(Promociones::destino($p) ?: route('sitio.registro'));
     }

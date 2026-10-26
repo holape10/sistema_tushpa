@@ -56,7 +56,7 @@
             elegirFotosExtra(e) {
                 const libres = {{ \App\Models\Producto::MAX_IMAGENES - 1 }} - this.fotosExtra.length;
                 const archivos = [...e.target.files];
-                if (archivos.some(a => a.size > 4 * 1024 * 1024)) { alert('Cada foto debe pesar hasta 4 MB.'); e.target.value = ''; this.fotosNuevas = []; return; }
+                if (archivos.some(a => a.size > 8 * 1024 * 1024)) { alert('Cada foto debe pesar hasta 8 MB.'); e.target.value = ''; this.fotosNuevas = []; return; }
                 if (archivos.length > libres) { alert('Puedes agregar ' + libres + ' foto(s) más (4 en total con la principal).'); e.target.value = ''; this.fotosNuevas = []; return; }
                 this.fotosNuevas = archivos.map(a => URL.createObjectURL(a));
             },
@@ -67,7 +67,7 @@
             elegirImagen(e) {
                 const archivo = e.target.files[0];
                 if (!archivo) return;
-                if (archivo.size > 4 * 1024 * 1024) { alert('La imagen pesa más de 4 MB. Elige una más liviana.'); e.target.value = ''; return; }
+                if (archivo.size > 8 * 1024 * 1024) { alert('La imagen pesa más de 8 MB. Elige una más liviana.'); e.target.value = ''; return; }
                 this.vistaImagen = URL.createObjectURL(archivo);
                 this.quitarImagen = false;
             },

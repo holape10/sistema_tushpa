@@ -25,7 +25,8 @@
               class="lg:col-span-2 bg-white rounded-2xl shadow-sm p-5 space-y-3"
               x-data="{ tipo: @js(old('tipo', $e->tipo ?? 'MODAL')), pagina: @js((bool) old('con_pagina', $e->con_pagina ?? false)), color: @js(old('color', $e->color ?? '#2563eb')),
                         titulo: @js(old('titulo', $e->titulo ?? '')), texto: @js(old('texto', $e->texto ?? '')), boton: @js(old('boton_texto', $e->boton_texto ?? 'Ver oferta')),
-                        img: @js($e && $e->imagen ? asset($e->imagen) : null) }">
+                        img: @js($e && $e->imagen ? asset($e->imagen) : null),
+                        ciudades: @js(old('ciudades', $e ? collect(Promociones::ciudades($e))->map(fn ($c) => ['nombre' => $c['nombre'], 'whatsapp' => $c['whatsapp'] ? preg_replace('/^51(?=9\d{8}$)/', '', $c['whatsapp']) : ''])->all() : [])) }">
             @csrf
             <div class="flex items-center gap-2">
                 <p class="font-bold flex-1">{{ $e ? 'Editar promoción' : '➕ Nueva promoción' }}</p>
@@ -54,6 +55,21 @@
                 <textarea name="contenido" rows="4" maxlength="5000" placeholder="Detalles, condiciones, qué incluye…" class="{{ $in }}">{{ old('contenido', $e->contenido ?? '') }}</textarea>
                 @if ($e && $e->slug)<a href="{{ route('sitio.oferta', $e->slug) }}" target="_blank" class="text-xs text-indigo-600 underline">{{ route('sitio.oferta', $e->slug) }}</a>@endif</label>
 
+            {{-- Ciudades: dónde vale y el WhatsApp de cada una (en la ventana sale un botón verde por ciudad) --}}
+            <div class="text-sm rounded-xl border border-slate-200 p-3 space-y-2">
+                <p>📍 ¿En qué ciudades vale? <span class="text-xs text-slate-400">(vacío = en todas)</span></p>
+                <template x-for="(c, i) in ciudades" :key="i">
+                    <div class="grid grid-cols-[1fr_1fr_auto] gap-2">
+                        <input :name="'ciudades[' + i + '][nombre]'" x-model="c.nombre" list="lista_ciudades" maxlength="40" placeholder="Ciudad" class="rounded-lg border-slate-300 text-sm">
+                        <input :name="'ciudades[' + i + '][whatsapp]'" x-model="c.whatsapp" inputmode="tel" maxlength="15" placeholder="WhatsApp (9 dígitos)" class="rounded-lg border-slate-300 text-sm">
+                        <button type="button" @click="ciudades.splice(i, 1)" class="px-2 text-slate-400 hover:text-rose-600">&times;</button>
+                    </div>
+                </template>
+                <button type="button" @click="ciudades.push({ nombre: '', whatsapp: '' })" class="text-xs font-semibold text-indigo-600">+ Agregar ciudad</button>
+                <p class="text-[11px] text-slate-500">En la página de cada ciudad solo sale la promoción si vale ahí, con el WhatsApp de esa ciudad.</p>
+                <datalist id="lista_ciudades">@foreach (config('ciudades') as $c)<option value="{{ $c['nombre'] }}">@endforeach</datalist>
+            </div>
+
             <div class="text-sm">¿En qué páginas sale?
                 <div class="mt-1 grid grid-cols-2 gap-1">
                     @foreach (Promociones::PAGINAS as $valor => $nombre)
@@ -80,6 +96,12 @@
                     <template x-if="img"><img :src="img" alt="" class="w-full max-h-40 object-cover"></template>
                     <div class="p-4"><p class="font-black text-lg leading-tight" x-text="titulo || 'Título de tu oferta'"></p>
                         <p class="text-xs text-slate-500 mt-1" x-text="texto"></p>
+                        <p x-show="ciudades.some(c => (c.nombre || '').trim())" class="text-[11px] font-bold text-slate-600 mt-2" x-text="'📍 Válido en: ' + ciudades.filter(c => (c.nombre || '').trim()).map(c => (c.nombre || '').trim()).join(' · ')"></p>
+                        <div class="mt-2 flex flex-wrap justify-center gap-1.5">
+                            <template x-for="c in ciudades.filter(c => (c.nombre || '').trim() && (c.whatsapp || '').trim())">
+                                <span class="px-2.5 py-1 rounded-lg bg-green-600 text-white text-[11px] font-bold" x-text="'💬 ' + c.nombre"></span>
+                            </template>
+                        </div>
                         <span class="mt-3 inline-block px-4 py-2 rounded-xl text-white text-sm font-bold" :style="'background:' + color" x-text="boton || 'Ver oferta'"></span></div>
                 </div>
                 <div x-show="tipo === 'BARRA'" class="rounded-lg px-3 py-2 text-white text-sm flex items-center gap-2" :style="'background:' + color">
@@ -100,6 +122,7 @@
                         <p class="font-bold">{{ $p->titulo }}
                             <span class="ml-1 px-1.5 rounded text-[10px] font-bold {{ $vigente ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ $vigente ? 'SE VE AHORA' : ($p->activo ? 'FUERA DE FECHA' : 'PAUSADA') }}</span></p>
                         <p class="text-xs text-slate-500">{{ $p->tipo === 'BARRA' ? 'Barra' : 'Ventana' }} · {{ collect(json_decode((string) $p->paginas, true) ?: ['todas'])->map(fn ($x) => Promociones::PAGINAS[$x] ?? $x)->implode(', ') }}
+                            @if ($cs = Promociones::ciudades($p)) · 📍 {{ collect($cs)->pluck('nombre')->implode(', ') }} @endif
                             · {{ Promociones::FRECUENCIAS[$p->frecuencia] ?? $p->frecuencia }}{{ $p->desde || $p->hasta ? ' · '.($p->desde ? \Carbon\Carbon::parse($p->desde)->format('d/m') : '…').' al '.($p->hasta ? \Carbon\Carbon::parse($p->hasta)->format('d/m') : '…') : '' }}</p>
                         <p class="text-xs mt-1"><b>{{ number_format($p->vistas) }}</b> vistas · <b>{{ number_format($p->clics) }}</b> clics
                             @if ($p->vistas)<span class="text-slate-400">({{ round($p->clics / $p->vistas * 100, 1) }}%)</span>@endif

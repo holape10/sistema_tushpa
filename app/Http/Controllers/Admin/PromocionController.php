@@ -41,10 +41,15 @@ class PromocionController extends Controller
             'frecuencia' => ['required', Rule::in(array_keys(Promociones::FRECUENCIAS))], 'retraso' => 'required|integer|min:0|max:120',
             'color' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'], 'orden' => 'nullable|integer|min:0|max:999', 'activo' => 'nullable|boolean',
             'imagen' => 'nullable|image|mimes:jpg,jpeg,png,webp,gif|max:4096', 'quitar_imagen' => 'nullable|boolean',
-        ], [], ['boton_url' => 'enlace del botón', 'paginas' => 'páginas', 'retraso' => 'segundos']);
+            // Ciudades donde vale la promoción, con el WhatsApp de cada una
+            'ciudades' => 'nullable|array|max:20', 'ciudades.*.nombre' => 'nullable|string|max:40',
+            'ciudades.*.whatsapp' => ['nullable', 'regex:/^\+?[\d\s]{9,15}$/'],
+        ], ['ciudades.*.whatsapp.regex' => 'El WhatsApp de cada ciudad debe tener 9 dígitos (o con código de país).'],
+            ['boton_url' => 'enlace del botón', 'paginas' => 'páginas', 'retraso' => 'segundos']);
 
-        $fila = array_merge(collect($d)->except(['imagen', 'quitar_imagen', 'paginas'])->all(), [
+        $fila = array_merge(collect($d)->except(['imagen', 'quitar_imagen', 'paginas', 'ciudades'])->all(), [
             'paginas' => json_encode(in_array('todas', $d['paginas'], true) ? ['todas'] : array_values($d['paginas'])),
+            'ciudades' => ($ciudades = Promociones::limpiarCiudades($d['ciudades'] ?? [])) ? json_encode($ciudades, JSON_UNESCAPED_UNICODE) : null,
             'con_pagina' => $request->boolean('con_pagina'), 'activo' => $request->boolean('activo'), 'orden' => (int) ($d['orden'] ?? 0), 'updated_at' => now(),
         ]);
         // Su página de oferta: tushpa.app/ofertas/titulo-de-la-promo

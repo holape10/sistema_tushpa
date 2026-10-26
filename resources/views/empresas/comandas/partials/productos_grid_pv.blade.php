@@ -7,6 +7,9 @@
     @endphp
     <div class="product-item-kiosko" data-id="{{ $p->IdProducto }}" data-nombre="{{ $p->pronom }}" data-precio="{{ $precios[$p->IdProducto] ?? $p->propun }}"
          @if ($pres->isNotEmpty()) data-presentaciones="{{ $presJson }}" @endif @if (isset($conOpciones[$p->IdProducto])) data-opciones="1" @endif>
+        @if (isset($fotos[$p->IdProducto]))
+            <img src="{{ $fotos[$p->IdProducto] }}" alt="" loading="lazy" decoding="async" width="40" height="40" class="product-img-kiosko">
+        @endif
         <div class="product-name-kiosko">{{ $p->pronom }}</div>
         <div class="product-price-kiosko">S/. {{ number_format($precios[$p->IdProducto] ?? $p->propun, 2) }}</div>
         @if (isset($conOpciones[$p->IdProducto]))

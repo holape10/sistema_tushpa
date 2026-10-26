@@ -26,24 +26,48 @@
         .tp-modal p { margin: 0 0 14px; color: #475569; font-size: 15px; white-space: pre-line; }
         .tp-modal a.tp-btn { display: inline-block; color: #fff; padding: 12px 26px; border-radius: 14px; font-weight: 700; text-decoration: none; font-size: 16px; }
         .tp-modal .tp-cerrar { top: 10px; right: 10px !important; transform: none; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.9); color: #0f172a; font-size: 20px; }
+        /* Por ciudad: dónde vale y el WhatsApp de cada ciudad */
+        .tp-ciudades { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: #334155; }
+        .tp-wa { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 10px; }
+        .tp-wa a { display: inline-flex; align-items: center; gap: 6px; background: #16a34a; color: #fff; padding: 10px 16px; border-radius: 12px; font-weight: 700; text-decoration: none; font-size: 14px; }
+        .tp-barra .tp-wa { margin: 0; }
+        .tp-barra .tp-wa a { padding: 4px 12px; border-radius: 999px; font-size: 13px; }
     </style>
     @foreach ($promos as $p)
-        @php $destino = route('sitio.promo.clic', $p->id); @endphp
+        @php
+            $destino = route('sitio.promo.clic', $p->id);
+            $ciudades = $p->ciudades_lista ?? [];
+            $conWhatsapp = array_filter($ciudades, fn ($c) => $c['whatsapp']);
+            // Con WhatsApp por ciudad, el botón general solo sale si tiene su propio enlace o página
+            $botonGeneral = ! $conWhatsapp || \App\Support\Promociones::destino($p);
+        @endphp
         @if ($p->tipo === 'BARRA')
             <div class="tp-barra" id="tp-promo-{{ $p->id }}" style="background: {{ $p->color }}; display: none" data-promo="{{ $p->id }}" data-frecuencia="{{ $p->frecuencia }}" data-retraso="0">
                 <b>{{ $p->titulo }}</b>@if ($p->texto)<span style="opacity:.9">{{ $p->texto }}</span>@endif
-                @if (\App\Support\Promociones::destino($p) || $p->boton_texto)<a class="tp-btn" href="{{ $destino }}">{{ $p->boton_texto ?: 'Ver más' }}</a>@endif
+                @if ($ciudades)<span style="opacity:.9">📍 {{ collect($ciudades)->pluck('nombre')->implode(' · ') }}</span>@endif
+                @if ($conWhatsapp)
+                    <span class="tp-wa">@foreach ($conWhatsapp as $c)<a href="{{ $destino }}?ciudad={{ \App\Support\Promociones::slug($c['nombre']) }}" rel="nofollow">💬 {{ $c['nombre'] }}</a>@endforeach</span>
+                @endif
+                @if ($botonGeneral && (\App\Support\Promociones::destino($p) || $p->boton_texto))<a class="tp-btn" href="{{ $destino }}">{{ $p->boton_texto ?: 'Ver más' }}</a>@endif
                 <button type="button" class="tp-cerrar" aria-label="Cerrar" data-cerrar>×</button>
             </div>
         @else
             <div class="tp-fondo" id="tp-promo-{{ $p->id }}" style="display: none" data-promo="{{ $p->id }}" data-frecuencia="{{ $p->frecuencia }}" data-retraso="{{ (int) $p->retraso }}">
                 <div class="tp-modal" role="dialog" aria-label="{{ $p->titulo }}">
                     <button type="button" class="tp-cerrar" aria-label="Cerrar" data-cerrar>×</button>
-                    @if ($p->imagen)<a href="{{ $destino }}"><img src="{{ asset($p->imagen) }}" alt="{{ $p->titulo }}"></a>@endif
+                    @if ($p->imagen)<a href="{{ $botonGeneral ? $destino : '#' }}" @unless ($botonGeneral) onclick="return false" @endunless><img src="{{ asset($p->imagen) }}" alt="{{ $p->titulo }}"></a>@endif
                     <div class="tp-cuerpo">
                         <h3>{{ $p->titulo }}</h3>
                         @if ($p->texto)<p>{{ $p->texto }}</p>@endif
-                        <a class="tp-btn" href="{{ $destino }}" style="background: {{ $p->color }}">{{ $p->boton_texto ?: 'Ver oferta' }}</a>
+                        @if ($ciudades)<p class="tp-ciudades">📍 Válido en: {{ collect($ciudades)->pluck('nombre')->implode(' · ') }}</p>@endif
+                        @if ($conWhatsapp)
+                            <div class="tp-wa">
+                                @foreach ($conWhatsapp as $c)
+                                    <a href="{{ $destino }}?ciudad={{ \App\Support\Promociones::slug($c['nombre']) }}" rel="nofollow">💬 {{ count($conWhatsapp) > 1 ? $c['nombre'] : 'Escríbenos por WhatsApp' }}</a>
+                                @endforeach
+                            </div>
+                        @endif
+                        @if ($botonGeneral)<a class="tp-btn" href="{{ $destino }}" style="background: {{ $p->color }}">{{ $p->boton_texto ?: 'Ver oferta' }}</a>@endif
                     </div>
                 </div>
             </div>

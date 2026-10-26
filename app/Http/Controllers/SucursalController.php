@@ -177,6 +177,7 @@ class SucursalController extends Controller
         $datos['permite_cortesias'] = $request->boolean('permite_cortesias');
         $datos['descuento_max_cajero'] = (float) ($datos['descuento_max_cajero'] ?? 10);
         $datos['permite_propina'] = $request->boolean('permite_propina');
+        $datos['imagenes_venta'] = $request->boolean('imagenes_venta');
         $datos['tipo_cambio_usd'] = (float) ($datos['tipo_cambio_usd'] ?? 0) > 0 ? round((float) $datos['tipo_cambio_usd'], 3) : null;
 
         DB::transaction(function () use ($sucursal, $datos) {

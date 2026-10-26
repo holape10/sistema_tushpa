@@ -7,6 +7,7 @@ use App\Models\EmpresaNegocio;
 use App\Models\MedioPago;
 use App\Models\Producto;
 use App\Models\Turno;
+use App\Support\ImagenProducto;
 use App\Support\Precios;
 use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
@@ -49,10 +50,12 @@ class PvTactilController extends Controller
         // Precio vigente (precio dinámico) y presentaciones (SACO x 50, CAJA x 12…)
         $precios = Precios::vigentes($filas);
         $presentaciones = Precios::presentaciones($filas->pluck('IdProducto'));
+        // Fotos en los botones solo si la sucursal lo activó, y en miniatura liviana
+        $conFotos = ImagenProducto::enVentas((int) $suc);
         $productos = $filas->map(fn ($p) => [
             'id' => $p->IdProducto, 'nombre' => $p->pronom, 'precio' => $precios[$p->IdProducto], 'codigo' => $p->procod,
             'barra' => $p->codigo_barra, 'cat' => $p->cat_id, 'stock' => (int) $p->promocion === 0 ? (float) ($p->stock ?? 0) : null,
-            'img' => $p->imagenproducto ? asset($p->imagenproducto) : null,
+            'img' => $conFotos && $p->imagenproducto ? ImagenProducto::mini($p->imagenproducto) : null,
             'pres' => $presentaciones[$p->IdProducto] ?? [],
         ]);
 

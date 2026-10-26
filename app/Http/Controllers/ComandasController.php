@@ -16,6 +16,7 @@ use App\Support\Buscar;
 use App\Support\Cocina;
 use App\Support\ControlStock;
 use App\Support\Delivery;
+use App\Support\ImagenProducto;
 use App\Support\Impresion\Impresion;
 use App\Support\MesasUnidas;
 use App\Support\MetasMozo;
@@ -602,8 +603,12 @@ class ComandasController extends Controller
         $saldo = Porciones::saldo((int) $id_empresa_negocio, $controlados);
         $reservado = Porciones::reservado((int) $id_empresa_negocio, $controlados);
         $quedan = collect($controlados)->mapWithKeys(fn ($id) => [$id => ($saldo[$id] ?? 0) - ($reservado[$id] ?? 0)])->all();
+        // Fotos en los botones (si la sucursal lo activó): miniaturas livianas
+        $fotos = ImagenProducto::enVentas((int) $id_empresa_negocio)
+            ? $productos->filter(fn ($p) => $p->imagenproducto)->mapWithKeys(fn ($p) => [$p->IdProducto => ImagenProducto::mini($p->imagenproducto)])->filter()->all()
+            : [];
 
-        return view($pv ? 'empresas.comandas.partials.productos_grid_pv' : 'empresas.comandas.partials.productos_grid', compact('productos', 'precios', 'presentaciones', 'conOpciones', 'quedan'))->render();
+        return view($pv ? 'empresas.comandas.partials.productos_grid_pv' : 'empresas.comandas.partials.productos_grid', compact('productos', 'precios', 'presentaciones', 'conOpciones', 'quedan', 'fotos'))->render();
     }
 
     /** Porciones aún no enviadas de una entrada en el carrito */

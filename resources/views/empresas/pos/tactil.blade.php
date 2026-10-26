@@ -95,7 +95,7 @@
                         <span x-show="cantidadEn(p.id)" x-cloak x-text="cantidadEn(p.id)"
                               class="absolute top-2.5 right-2.5 min-w-7 h-7 px-1.5 rounded-full bg-indigo-600 text-white text-sm font-extrabold flex items-center justify-center shadow"></span>
                         <template x-if="p.img">
-                            <img :src="p.img" alt="" loading="lazy" class="mx-auto h-12 sm:h-14 w-full object-contain mt-1">
+                            <img :src="p.img" alt="" loading="lazy" decoding="async" class="mx-auto h-12 sm:h-14 w-full object-contain mt-1">
                         </template>
                         <span class="flex-1 flex items-center justify-center px-1">
                             <span class="font-bold text-[13px] sm:text-sm leading-tight uppercase" :class="p.img ? 'line-clamp-2' : 'line-clamp-3'" x-text="p.nombre"></span>

@@ -263,6 +263,13 @@
                             <input type="hidden" name="descuento_max_cajero" value="{{ (float) ($sucursal->descuento_max_cajero ?? 10) }}">
                             <input type="hidden" name="ip_mozos" value="{{ $sucursal->ip_mozos }}">
                         @endif
+                        {{-- Fotos de los productos en los botones de venta (miniaturas livianas) --}}
+                        <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
+                            <input type="checkbox" name="imagenes_venta" value="1" @checked($campo('imagenes_venta')) class="mt-0.5 rounded text-indigo-600">
+                            <span><span class="font-semibold text-gray-800">🖼️ Mostrar fotos de los productos al vender</span>
+                                <span class="block text-xs text-gray-500">En los botones de las comandas y de los puntos de venta sale una foto pequeña de cada producto (el que tiene foto).
+                                    Las fotos se achican solas al subirlas para que todo siga rápido, también en el celular.</span></span>
+                        </label>
                         <div>
                             <p class="text-sm font-medium text-gray-600 mb-2">Comprobante que sale seleccionado al cobrar</p>
                             <div class="grid grid-cols-3 gap-3">
