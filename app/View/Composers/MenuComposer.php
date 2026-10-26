@@ -10,11 +10,19 @@ use Illuminate\View\View;
 
 class MenuComposer
 {
+    /** Orden de los grupos del menú: primero lo del día a día, al final la configuración (los demás van después, por orden alfabético) */
+    public const ORDEN_GRUPOS = [
+        'Principal', 'Ventas', 'Restaurante', 'Hotel', 'Gimnasio', 'Clínica', 'Colegio', 'Estacionamiento', 'Préstamos', 'Fidelización',
+        'Compras', 'Almacén', 'Cuentas', 'Contactos', 'SUNAT', 'SIRE', 'Contabilidad', 'Planilla', 'Asistencia', 'Farmacias', 'Mantenimiento', 'Otros',
+    ];
+
     public function compose(View $view): void
     {
         if (Auth::check()) {
             $user = Auth::user();
-            $view->with('menu', Rubros::filtrarMenu($user->modulos()->orderBy('mod_id')->get())->groupBy('mod_gen'));
+            $grupos = Rubros::filtrarMenu($user->modulos()->orderBy('mod_id')->get())->groupBy('mod_gen');
+            $posicion = fn ($grupo) => ($i = array_search($grupo, self::ORDEN_GRUPOS, true)) === false ? 100 : $i;
+            $view->with('menu', $grupos->sortBy(fn ($mods, $grupo) => sprintf('%03d %s', $posicion($grupo), $grupo)));
             $view->with('usuario', $user);
             $view->with('notifSunat', $user->esAdminOCaja() ? self::pendientesSunat($user) : null);
             // Nombre de la sucursal en la cabecera, solo si la empresa tiene más de una

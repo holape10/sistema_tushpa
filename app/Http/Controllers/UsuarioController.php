@@ -38,7 +38,7 @@ class UsuarioController extends Controller
         13 => ['Inicio', 'Comandas', 'Ventas de Promotores'],
         10 => ['Inicio', 'Historias Clínicas', 'Agenda de Citas'],
         14 => ['Inicio', 'Cobranza del Día', 'Clientes de Préstamos'],
-        4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Envío de Comprobantes', 'Resumen Diario',
+        4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Cajas cerradas (turnos)', 'Envío de Comprobantes', 'Resumen Diario',
             'Kardex', 'Stock Productos', 'Clientes'],
         // Contador: reporte de ventas SUNAT, envío a SUNAT y, si la empresa los tiene, contabilidad, planilla y SIRE
         15 => ['Inicio', 'Reporte: SUNAT', 'Envío de Comprobantes', 'Resumen Diario',

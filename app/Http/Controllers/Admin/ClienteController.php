@@ -84,7 +84,7 @@ class ClienteController extends Controller
                 ->orWhere('razon_social', 'like', '%'.$q.'%')
                 ->orWhere('nombre_comercial', 'like', '%'.$q.'%')))
             ->orderByDesc('id')
-            ->paginate(20)->withQueryString();
+            ->paginate(100)->withQueryString();
 
         $totales = [
             'activos' => $base()->where('estado', 'ACTIVO')->count(),

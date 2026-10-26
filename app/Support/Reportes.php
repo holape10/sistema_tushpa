@@ -102,12 +102,15 @@ class Reportes
             });
     }
 
-    /** La jornada de noche (discotecas, bares) va de esta hora a la misma hora del día siguiente */
-    public const CORTE_JORNADA = 6;
+    /**
+     * La jornada de noche (discotecas, bares) va de esta hora a la misma hora del día siguiente. Al mediodía y no a las 6:
+     * hay noches que siguen vendiendo pasadas las 6 de la mañana y esas ventas son de la noche anterior.
+     */
+    public const CORTE_JORNADA = 12;
 
     /**
      * Fechas del reporte. Por día calendario (la fecha del comprobante) o por jornada: la noche del 23 son las ventas del
-     * 23 a las 6:00 hasta el 24 a las 5:59 (así lo vendido después de medianoche cuenta en la noche en que se atendió).
+     * 23 a las 12:00 hasta el 24 a las 11:59 (así lo vendido de madrugada cuenta en la noche en que se atendió).
      */
     private static function enFechas($q, array $f)
     {

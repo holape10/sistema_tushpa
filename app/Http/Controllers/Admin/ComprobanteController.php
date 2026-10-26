@@ -48,7 +48,7 @@ class ComprobanteController extends Controller
                 ->when($anio, fn ($w) => $w->whereYear('ccafem', $anio))
                 ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->whereRaw("CONCAT(serdoc, '-', numdoc) LIKE ?", ["%{$q}%"])->orWhere('ccanom', 'like', "%{$q}%")->orWhere('ccandi', $q)))
                 ->orderBy('ccafem')->orderBy('IdCpe_cabecera')
-                ->paginate(50, ['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem', 'ccanom', 'ccandi', 'ccaitv', 'est_sunat', 'ccadessun', 'ccasunrescod'], 'pagina', (int) $request->get('pagina', 1))
+                ->paginate(100, ['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem', 'ccanom', 'ccandi', 'ccaitv', 'est_sunat', 'ccadessun', 'ccasunrescod'], 'pagina', (int) $request->get('pagina', 1))
                 ->withQueryString();
             $conteo = [
                 'pendientes' => $base()->where(fn ($x) => $x->whereNull('est_sunat')->orWhereIn('est_sunat', ['PENDIENTE', 'ERROR', 'EN RESUMEN', 'GENERADO']))->count(),
