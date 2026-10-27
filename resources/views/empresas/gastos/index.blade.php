@@ -78,6 +78,10 @@
                                 @if ($g->forma_pago === 'CREDITO')<span class="block text-[10px] text-amber-600 font-semibold">CRÉDITO</span>@endif</td>
                             <td class="px-3 py-2 text-right whitespace-nowrap">
                                 @if ($g->estado === 'Registrado')
+                                    @if (in_array($g->tdocod, ['01', '03', '07', '08'], true) && $g->serie && $g->numero)
+                                        <span class="mr-2">@include('empresas.sunat._boton_consultar', ['url' => route('gastos.consultar_sunat', $g->id),
+                                            'estado' => $g->sunat_estado ?? null, 'consultado' => $g->sunat_consultado ?? null])</span>
+                                    @endif
                                     <button type="button" class="text-indigo-600 text-xs hover:underline" @click="editar({{ $g->id }}, @js(collect((array) $g)->only(['fecha', 'tdocod', 'serie', 'numero', 'prov_doc', 'prov_nombre', 'categoria_id', 'descripcion', 'moneda', 'tipo_cambio', 'base', 'igv', 'no_gravado', 'retencion', 'credito_fiscal', 'forma_pago', 'id_med_pag'])))">Editar</button>
                                     <form method="POST" action="{{ route('gastos.anular', $g->id) }}" class="inline" onsubmit="return confirm('¿Anular este gasto?')">@csrf<button class="text-rose-600 text-xs hover:underline ml-2">Anular</button></form>
                                 @else<span class="text-xs text-gray-400 no-underline">Anulado</span>@endif

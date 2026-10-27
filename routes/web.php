@@ -519,6 +519,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/sunat/resumenes', [SunatController::class, 'resumenes'])->name('sunat.resumenes');
     Route::post('/sunat/resumenes', [SunatController::class, 'resumenEnviar'])->name('sunat.resumen_enviar');
     Route::post('/sunat/resumenes/{id}/consultar', [SunatController::class, 'resumenConsultar'])->whereNumber('id')->name('sunat.resumen_consultar');
+    Route::get('/sunat/consulta-cpe', [SunatController::class, 'consultaCpe'])->name('sunat.consulta_cpe');
+    Route::post('/sunat/consulta-cpe', [SunatController::class, 'consultaCpeConsultar'])->middleware('throttle:30,1')->name('sunat.consulta_cpe.consultar');
     Route::get('/sunat/resumenes/{id}/{tipo}', [SunatController::class, 'resumenDescargar'])->whereNumber('id')->name('sunat.resumen_descargar');
 
     // Kardex y stock
@@ -599,6 +601,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/compras/{id}/editar', [CompraController::class, 'edit'])->whereNumber('id')->name('compras.edit');
     Route::put('/compras/{id}', [CompraController::class, 'update'])->whereNumber('id')->name('compras.update');
     Route::post('/compras/{id}/anular', [CompraController::class, 'anular'])->whereNumber('id')->name('compras.anular');
+    Route::post('/compras/{id}/consultar-sunat', [CompraController::class, 'consultarSunat'])->whereNumber('id')->middleware('throttle:30,1')->name('compras.consultar_sunat');
     Route::get('/compras/productos', [CompraController::class, 'productos'])->name('compras.productos');
     Route::post('/compras/producto-nuevo', [CompraController::class, 'productoRapido'])->name('compras.producto_nuevo');
     Route::get('/compras/proveedores', [CompraController::class, 'proveedores'])->name('compras.proveedores');
@@ -834,6 +837,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/gastos/reporte', [GastoController::class, 'reporte'])->name('gastos.reporte');
     Route::post('/gastos/{id?}', [GastoController::class, 'guardar'])->whereNumber('id')->name('gastos.guardar');
     Route::post('/gastos/{id}/anular', [GastoController::class, 'anular'])->whereNumber('id')->name('gastos.anular');
+    Route::post('/gastos/{id}/consultar-sunat', [GastoController::class, 'consultarSunat'])->whereNumber('id')->middleware('throttle:30,1')->name('gastos.consultar_sunat');
     Route::post('/gastos/categorias/{id?}', [GastoController::class, 'categoriaGuardar'])->whereNumber('id')->name('gastos.categoria');
     Route::get('/gastos/sire', [GastoController::class, 'sire'])->name('gastos.sire');
     Route::post('/gastos/sire', [GastoController::class, 'sireImportar'])->name('gastos.sire.importar');

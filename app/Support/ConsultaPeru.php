@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -46,6 +47,65 @@ class ConsultaPeru
             'estado' => mb_strtoupper((string) $d['comprobante_estado_descripcion']), 'codigo' => (string) ($d['comprobante_estado_codigo'] ?? ''),
             'empresa_estado' => $d['empresa_estado_descripcion'] ?? null, 'empresa_condicion' => $d['empresa_condicion_descripcion'] ?? null,
         ] : null;
+    }
+
+    /**
+     * Valida un comprobante en SUNAT (apiperu.dev /cpe) y explica el resultado, también cuando no se pudo consultar.
+     * Se guarda 10 minutos para no gastar consultas del plan si se pulsa otra vez.
+     *
+     * @return array{ok: bool, estado: ?string, color: string, mensaje: string, empresa_estado: ?string, empresa_condicion: ?string, observaciones: array<int, string>}
+     */
+    public static function validarCpe(string $ruc, string $tipo, string $serie, string $numero, string $fecha, float $total): array
+    {
+        $falla = fn (string $mensaje) => ['ok' => false, 'estado' => null, 'color' => 'slate', 'mensaje' => $mensaje,
+            'empresa_estado' => null, 'empresa_condicion' => null, 'observaciones' => []];
+        $token = config('services.apiperu.token');
+        if (! $token) {
+            return $falla('Falta el token de apiperu.dev (APIPERU_TOKEN en el archivo .env).');
+        }
+        $datos = ['ruc_emisor' => $ruc, 'codigo_tipo_documento' => $tipo, 'serie_documento' => mb_strtoupper(trim($serie)),
+            'numero_documento' => (string) (int) $numero, 'fecha_de_emision' => $fecha, 'total' => round($total, 2)];
+
+        $llave = 'cpe-validar:'.md5(json_encode($datos));
+        if ($guardado = Cache::get($llave)) {
+            return $guardado;
+        }
+        $resultado = (function () use ($datos, $token, $falla) {
+            try {
+                $r = Http::timeout(15)->withOptions(['verify' => false])->acceptJson()->withToken($token)
+                    ->post(rtrim(config('services.apiperu.url'), '/').'/cpe', $datos);
+            } catch (\Throwable $e) {
+                return $falla('No hubo conexión con el servicio de consulta. Intenta en unos segundos.');
+            }
+            $j = $r->json() ?? [];
+            if (empty($j['success']) || ! isset($j['data']['comprobante_estado_descripcion'])) {
+                return $falla(match (true) {
+                    $r->status() === 401 || $r->status() === 403 => 'El token de apiperu.dev no es válido o se acabaron las consultas del plan.',
+                    ! empty($j['retryable']) || $r->status() >= 500 => 'SUNAT no responde en este momento. Intenta en unos segundos.',
+                    ($j['code'] ?? '') === 'invalid_input' || $r->status() === 400 => 'SUNAT no acepta esos datos: revisa el RUC, la serie, el número, la fecha y el total.',
+                    default => $j['message'] ?? 'No se pudo consultar.',
+                });
+            }
+            $d = $j['data'];
+            $estado = mb_strtoupper(trim((string) $d['comprobante_estado_descripcion']));
+            [$color, $mensaje] = match (true) {
+                str_contains($estado, 'ACEPTADO') => ['emerald', 'El comprobante es válido: está informado y aceptado en SUNAT.'],
+                str_contains($estado, 'ANULADO') || str_contains($estado, 'BAJA') => ['rose', 'El comprobante fue anulado: ya no tiene validez.'],
+                str_contains($estado, 'NO EXISTE') => ['amber', 'SUNAT no lo tiene registrado: aún no fue enviado o los datos (fecha, total) no coinciden.'],
+                str_contains($estado, 'AUTORIZADO') => ['amber', 'Comprobante físico: SUNAT informa su autorización de impresión.'],
+                default => ['slate', 'Estado informado por SUNAT.'],
+            };
+
+            return ['ok' => true, 'estado' => $estado, 'color' => $color, 'mensaje' => $mensaje,
+                'empresa_estado' => $d['empresa_estado_descripcion'] ?? null, 'empresa_condicion' => $d['empresa_condicion_descripcion'] ?? null,
+                'observaciones' => array_values(array_filter((array) ($d['observaciones'] ?? []), 'is_string'))];
+        })();
+        // Solo se guarda una respuesta de SUNAT (un error de conexión se vuelve a intentar)
+        if ($resultado['ok']) {
+            Cache::put($llave, $resultado, 600);
+        }
+
+        return $resultado;
     }
 
     private static function holape(string $ruta): ?array

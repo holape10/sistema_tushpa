@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ConsultaPeru;
 use App\Support\Sunat\SunatService;
 use App\View\Composers\MenuComposer;
 use Illuminate\Http\Request;
@@ -104,6 +105,32 @@ class SunatController extends Controller
         abort_unless(is_file($ruta), 404, 'El archivo aún no existe (envía el comprobante primero).');
 
         return response()->download($ruta);
+    }
+
+    // ------------------------------------------------------------------ consulta de comprobantes en SUNAT
+
+    /** Consulta CPE individual: si un comprobante (propio o de un proveedor) está en SUNAT */
+    public function consultaCpe()
+    {
+        $this->autorizar();
+
+        return view('empresas.sunat.consulta_cpe', [
+            'rucPropio' => Auth::user()->IdEmpresa,
+            'conToken' => (bool) config('services.apiperu.token'),
+        ]);
+    }
+
+    public function consultaCpeConsultar(Request $request)
+    {
+        $this->autorizar();
+        $d = $request->validate([
+            'ruc' => ['required', 'regex:/^(10|15|17|20)\d{9}$/'], 'tipo' => 'required|in:01,03,07,08',
+            'serie' => ['required', 'regex:/^[A-Za-z0-9]{4}$/'], 'numero' => 'required|integer|min:1|max:99999999',
+            'fecha' => 'required|date|before_or_equal:today', 'total' => 'required|numeric|min:0|max:99999999',
+        ], ['ruc.regex' => 'El RUC debe tener 11 dígitos.', 'serie.regex' => 'La serie tiene 4 caracteres (ej. F001, B001, E001).'],
+            ['ruc' => 'RUC', 'serie' => 'serie', 'numero' => 'número', 'fecha' => 'fecha', 'total' => 'total']);
+
+        return response()->json(ConsultaPeru::validarCpe($d['ruc'], $d['tipo'], $d['serie'], (string) $d['numero'], $d['fecha'], (float) $d['total']));
     }
 
     // ------------------------------------------------------------------ resumen diario

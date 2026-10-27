@@ -1,17 +1,22 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Support\{Excel, Gastos};
+use App\Support\ConsultaPeru;
+use App\Support\Excel;
+use App\Support\Gastos;
 use App\Support\Sunat\Sire;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class GastoController extends Controller
 {
     private function ruc(bool $soloAdmin = false): string
     {
         abort_unless($soloAdmin ? Auth::user()->esAdmin() : Auth::user()->esAdminOCaja(), 403, 'No tienes permiso para los gastos.');
+
         return (string) Auth::user()->IdEmpresa;
     }
 
@@ -32,29 +37,31 @@ class GastoController extends Controller
 
         $base = DB::table('gastos as g')->leftJoin('gasto_categorias as c', 'c.id', '=', 'g.categoria_id')
             ->where('g.IdEmpresa', $ruc)->whereBetween('g.fecha', [$desde, $hasta])
-            ->when($request->filled('categoria'), fn($w) => $w->where('g.categoria_id', $request->categoria))
-            ->when($request->get('estado', 'Registrado') !== 'todos', fn($w) => $w->where('g.estado', $request->get('estado', 'Registrado')))
-            ->when($q !== '', fn($w) => $w->where(fn($x) => $x->where('g.prov_nombre', 'like', "%$q%")->orWhere('g.prov_doc', 'like', "$q%")
+            ->when($request->filled('categoria'), fn ($w) => $w->where('g.categoria_id', $request->categoria))
+            ->when($request->get('estado', 'Registrado') !== 'todos', fn ($w) => $w->where('g.estado', $request->get('estado', 'Registrado')))
+            ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('g.prov_nombre', 'like', "%$q%")->orWhere('g.prov_doc', 'like', "$q%")
                 ->orWhere('g.descripcion', 'like', "%$q%")->orWhere(DB::raw("CONCAT(g.serie, '-', g.numero)"), 'like', "%$q%")));
 
         $gastos = (clone $base)->orderByDesc('g.fecha')->orderByDesc('g.id')->select('g.*', 'c.nombre as categoria', 'c.color')->get();
 
         if ($request->get('excel')) {
-            $filas = $gastos->map(fn($g) => [Carbon::parse($g->fecha)->format('d/m/Y'), Gastos::DOCUMENTOS[$g->tdocod] ?? $g->tdocod,
-                trim(($g->serie ? $g->serie . '-' : '') . $g->numero, '-'), (string) $g->prov_doc, $g->prov_nombre, $g->categoria, $g->descripcion, $g->moneda,
+            $filas = $gastos->map(fn ($g) => [Carbon::parse($g->fecha)->format('d/m/Y'), Gastos::DOCUMENTOS[$g->tdocod] ?? $g->tdocod,
+                trim(($g->serie ? $g->serie.'-' : '').$g->numero, '-'), (string) $g->prov_doc, $g->prov_nombre, $g->categoria, $g->descripcion, $g->moneda,
                 (float) $g->base, (float) $g->igv, (float) $g->no_gravado, (float) $g->total, (float) $g->retencion, $g->credito_fiscal ? 'SÍ' : 'NO', $g->forma_pago, $g->estado])->all();
-            $ruta = (new Excel())->hoja('Gastos ' . $mes, ['Fecha', 'Documento', 'Número', 'RUC/DNI', 'Proveedor', 'Categoría', 'Descripción', 'Moneda',
+            $ruta = (new Excel)->hoja('Gastos '.$mes, ['Fecha', 'Documento', 'Número', 'RUC/DNI', 'Proveedor', 'Categoría', 'Descripción', 'Moneda',
                 'Base', 'IGV', 'No gravado', 'Total', 'Retención', 'Crédito fiscal', 'Pago', 'Estado'], $filas)->guardar();
+
             return response()->download($ruta, "gastos_{$mes}.xlsx")->deleteFileAfterSend();
         }
 
         $registrados = $gastos->where('estado', 'Registrado');
+
         return view('empresas.gastos.index', [
             'gastos' => $gastos, 'mes' => $mes, 'q' => $q,
             'categorias' => Gastos::categorias($ruc),
-            'porCategoria' => $registrados->groupBy('categoria')->map(fn($g) => ['total' => $g->sum(fn($x) => Gastos::soles($x)), 'color' => $g->first()->color])->sortByDesc('total'),
-            'totales' => ['total' => $registrados->sum(fn($x) => Gastos::soles($x)), 'igv' => $registrados->where('credito_fiscal', 1)->sum(fn($x) => Gastos::soles($x, 'igv')),
-                'n' => $registrados->count(), 'retencion' => $registrados->sum(fn($x) => Gastos::soles($x, 'retencion'))],
+            'porCategoria' => $registrados->groupBy('categoria')->map(fn ($g) => ['total' => $g->sum(fn ($x) => Gastos::soles($x)), 'color' => $g->first()->color])->sortByDesc('total'),
+            'totales' => ['total' => $registrados->sum(fn ($x) => Gastos::soles($x)), 'igv' => $registrados->where('credito_fiscal', 1)->sum(fn ($x) => Gastos::soles($x, 'igv')),
+                'n' => $registrados->count(), 'retencion' => $registrados->sum(fn ($x) => Gastos::soles($x, 'retencion'))],
             'medios' => DB::table('medios_pagos')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag']),
             'documentos' => Gastos::DOCUMENTOS,
             'solicitudesSire' => DB::table('sire_solicitudes')->where('IdEmpresa', $ruc)->where('libro', Sire::COMPRAS)->whereNotNull('archivo')
@@ -66,7 +73,7 @@ class GastoController extends Controller
     {
         $ruc = $this->ruc();
         $d = $request->validate(self::REGLAS, [], ['categoria_id' => 'categoría', 'tdocod' => 'tipo de documento']);
-        if (!DB::table('gasto_categorias')->where('id', $d['categoria_id'])->where('IdEmpresa', $ruc)->exists()) {
+        if (! DB::table('gasto_categorias')->where('id', $d['categoria_id'])->where('IdEmpresa', $ruc)->exists()) {
             return response()->json(['success' => false, 'message' => 'Categoría no válida.']);
         }
         if ($id) {
@@ -81,13 +88,31 @@ class GastoController extends Controller
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
+
         return response()->json(['success' => true, 'mes' => substr($d['fecha'], 0, 7)]);
+    }
+
+    /** Consulta en SUNAT si el comprobante del gasto es válido (apiperu.dev) y guarda lo que respondió */
+    public function consultarSunat(int $id)
+    {
+        $g = DB::table('gastos')->where('id', $id)->where('IdEmpresa', $this->ruc())->first();
+        abort_unless($g, 404);
+        if (! in_array($g->tdocod, ['01', '03', '07', '08'], true) || ! preg_match('/^\d{11}$/', (string) $g->prov_doc) || ! $g->serie || ! $g->numero) {
+            return response()->json(['ok' => false, 'estado' => null, 'color' => 'slate', 'mensaje' => 'Solo se consultan facturas, boletas y notas electrónicas con RUC del proveedor, serie y número.']);
+        }
+        $r = ConsultaPeru::validarCpe($g->prov_doc, $g->tdocod, $g->serie, $g->numero, (string) $g->fecha, (float) $g->total);
+        if ($r['ok']) {
+            DB::table('gastos')->where('id', $id)->update(['sunat_estado' => mb_substr($r['estado'], 0, 50), 'sunat_consultado' => now()]);
+        }
+
+        return response()->json($r);
     }
 
     public function anular(int $id)
     {
         $ruc = $this->ruc();
         DB::table('gastos')->where('id', $id)->where('IdEmpresa', $ruc)->update(['estado' => 'Anulado', 'updated_at' => now()]);
+
         return back()->with('success', 'Gasto anulado.');
     }
 
@@ -101,6 +126,7 @@ class GastoController extends Controller
         } else {
             DB::table('gasto_categorias')->insert($datos + ['IdEmpresa' => $ruc, 'created_at' => now()]);
         }
+
         return back()->with('success', 'Categoría guardada.');
     }
 
@@ -113,6 +139,7 @@ class GastoController extends Controller
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
+
         return response()->json(['success' => true] + $r);
     }
 
@@ -127,7 +154,7 @@ class GastoController extends Controller
         $errores = [];
         foreach ($request->filas as $f) {
             $p = $pendientes[$f['clave']] ?? null;
-            if (!$p || !isset($categorias[$f['categoria_id']])) {
+            if (! $p || ! isset($categorias[$f['categoria_id']])) {
                 continue;
             }
             try {
@@ -140,10 +167,11 @@ class GastoController extends Controller
                 ], null, 'SIRE');
                 $n++;
             } catch (\RuntimeException $e) {
-                $errores[] = "{$p['serie']}-{$p['numero']}: " . $e->getMessage();
+                $errores[] = "{$p['serie']}-{$p['numero']}: ".$e->getMessage();
             }
         }
-        return response()->json(['success' => true, 'message' => "Se importaron {$n} comprobantes como gastos." . ($errores ? ' Omitidos: ' . implode(' | ', $errores) : '')]);
+
+        return response()->json(['success' => true, 'message' => "Se importaron {$n} comprobantes como gastos.".($errores ? ' Omitidos: '.implode(' | ', $errores) : '')]);
     }
 
     /** Reporte anual: categoría × mes */
@@ -161,7 +189,8 @@ class GastoController extends Controller
             $matriz[$d->categoria]['color'] = $d->color ?? '#9ca3af';
             $matriz[$d->categoria]['meses'][$d->mes] = round((float) $d->total, 2);
         }
-        uasort($matriz, fn($a, $b) => array_sum($b['meses']) <=> array_sum($a['meses']));
+        uasort($matriz, fn ($a, $b) => array_sum($b['meses']) <=> array_sum($a['meses']));
+
         return view('empresas.gastos.reporte', compact('matriz', 'anio'));
     }
 }

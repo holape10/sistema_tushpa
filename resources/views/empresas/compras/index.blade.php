@@ -88,6 +88,10 @@
                             @if ($c->est_compra === 'Anulado')<span class="block text-[11px] font-semibold text-rose-600">ANULADA</span>@endif
                         </td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
+                            @if ($c->est_compra !== 'Anulado' && in_array($c->tdocod, ['01', '03', '07', '08'], true))
+                                <span class="mr-3">@include('empresas.sunat._boton_consultar', ['url' => route('compras.consultar_sunat', $c->com_cab_id),
+                                    'estado' => $c->sunat_consultado ?? null ? $c->sunat_estado : null, 'consultado' => $c->sunat_consultado ?? null])</span>
+                            @endif
                             <a href="{{ route('compras.edit', $c->com_cab_id) }}" class="text-xs font-semibold text-indigo-700 hover:underline mr-3">
                                 {{ $c->est_compra === 'Registrado' ? 'Editar' : 'Ver' }}
                             </a>

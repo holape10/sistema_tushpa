@@ -2,6 +2,7 @@
 @section('title', 'Mis comprobantes')
 
 @section('content')
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     @php
         $tipos = \App\Http\Controllers\MisComprobantesController::TIPOS;
         $colores = ['01' => 'bg-emerald-100 text-emerald-800', '03' => 'bg-blue-100 text-blue-800', '07' => 'bg-rose-100 text-rose-800', '08' => 'bg-amber-100 text-amber-800', '13' => 'bg-slate-100 text-slate-700'];

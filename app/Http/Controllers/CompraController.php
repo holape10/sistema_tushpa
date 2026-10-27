@@ -55,6 +55,26 @@ class CompraController extends Controller
         ]);
     }
 
+    /** Consulta en SUNAT si el comprobante del proveedor es válido (apiperu.dev) y guarda lo que respondió */
+    public function consultarSunat(int $id)
+    {
+        $this->autorizar();
+        $c = DB::table('compras_cabecera as c')->leftJoin('proveedor as p', 'p.prov_id', '=', 'c.prov_id')
+            ->where('c.com_cab_id', $id)->where('c.id_empresa_negocio', Auth::user()->id_empresa_negocio)
+            ->first(['c.com_cab_id', 'c.tdocod', 'c.com_doc_ser', 'c.com_doc_num', 'c.com_fec', 'c.total_com', 'c.prov_num', 'p.prov_ruc']);
+        abort_unless($c, 404);
+        $ruc = preg_match('/^\d{11}$/', (string) $c->prov_ruc) ? $c->prov_ruc : $c->prov_num;
+        if (! in_array($c->tdocod, ['01', '03', '07', '08'], true) || ! preg_match('/^\d{11}$/', (string) $ruc)) {
+            return response()->json(['ok' => false, 'estado' => null, 'color' => 'slate', 'mensaje' => 'Solo se consultan facturas, boletas y notas electrónicas de un proveedor con RUC.']);
+        }
+        $r = ConsultaPeru::validarCpe($ruc, $c->tdocod, (string) $c->com_doc_ser, (string) $c->com_doc_num, (string) $c->com_fec, (float) $c->total_com);
+        if ($r['ok']) {
+            DB::table('compras_cabecera')->where('com_cab_id', $id)->update(['sunat_estado' => mb_substr($r['estado'], 0, 50), 'sunat_consultado' => now()]);
+        }
+
+        return response()->json($r);
+    }
+
     public function create()
     {
         $this->autorizar();

@@ -20,7 +20,7 @@ class Rubros
         '/reportes/ventas', '/reportes/sunat', '/reportes/ventas-cliente', '/reportes/ventas-producto', '/reportes/productos-ranking',
         '/clientes', '/proveedores', '/usuarios', '/empresas', '/sucursales', '/mediospagos', '/categorias', '/productos',
         '/impresoras', '/compras', '/gastos', '/almacenes', '/kardex', '/kardex/stock', '/kardex/inventario', '/cuentas/cobrar', '/cuentas/pagar', '/soporte',
-        '/respaldo', '/mis-comprobantes',
+        '/respaldo', '/mis-comprobantes', '/sunat/consulta-cpe',
     ];
 
     /** Contabilidad completa: libros, registro de ventas y compras, SIRE, tributos, planilla, asistencia y CONCAR */
