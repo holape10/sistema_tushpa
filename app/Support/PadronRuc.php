@@ -6,7 +6,6 @@ use Illuminate\Database\Connection;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -26,6 +25,10 @@ class PadronRuc
     public const MINIMO = 1000000;
 
     private const LOTE = 2000;
+
+    private const INTENTOS = 6;
+
+    private const NAVEGADOR = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
     private const COLUMNAS = ['ruc', 'razon_social', 'estado', 'condicion', 'ubigeo', 'tipo_via', 'nombre_via', 'codigo_zona', 'tipo_zona',
         'numero', 'interior', 'lote', 'departamento', 'manzana', 'kilometro'];
@@ -123,11 +126,12 @@ class PadronRuc
      *
      * @return array{filas: int, segundos: int}
      */
-    public static function actualizar(?callable $avance = null, ?int $limite = null): array
+    public static function actualizar(?callable $avance = null, ?int $limite = null, ?callable $aviso = null): array
     {
         $inicio = time();
         self::crearBase();
-        $zip = self::descargar();
+        $zip = self::descargar($aviso);
+        $aviso && $aviso('Descargado ('.round(filesize($zip) / 1048576).' MB). Cargando los RUC…');
         try {
             $filas = self::cargar($zip, $avance, $limite);
         } finally {
@@ -151,19 +155,71 @@ class PadronRuc
         DB::connection('central')->statement("CREATE DATABASE IF NOT EXISTS `{$base}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     }
 
-    private static function descargar(): string
+    /**
+     * SUNAT suele cortar las descargas grandes ("Connection reset by peer"): se reintenta varias veces y cada intento
+     * continúa desde donde quedó el anterior (Range), presentándose como un navegador.
+     */
+    private static function descargar(?callable $aviso = null): string
     {
         $dir = storage_path('app/padron');
         @mkdir($dir, 0750, true);
         $zip = $dir.'/padron_reducido_ruc.zip';
         @unlink($zip);
-        $r = Http::timeout(1800)->withOptions(['sink' => $zip, 'verify' => false])->get(self::URL);
-        if (! $r->successful() || ! is_file($zip) || filesize($zip) < 1024 * 1024) {
+        $total = self::tamanoRemoto();
+        $ultimoError = '';
+
+        for ($intento = 1; $intento <= self::INTENTOS; $intento++) {
+            clearstatcache(true, $zip);
+            $desde = is_file($zip) ? filesize($zip) : 0;
+            if ($total && $desde >= $total) {
+                break;
+            }
+            $archivo = fopen($zip, $desde ? 'ab' : 'wb');
+            $curl = curl_init(self::URL);
+            curl_setopt_array($curl, [
+                CURLOPT_FILE => $archivo, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 30, CURLOPT_TIMEOUT => 1800,
+                CURLOPT_LOW_SPEED_LIMIT => 1024, CURLOPT_LOW_SPEED_TIME => 120, CURLOPT_FAILONERROR => true,
+                CURLOPT_USERAGENT => self::NAVEGADOR, CURLOPT_HTTPHEADER => ['Accept: */*', 'Connection: keep-alive'],
+            ] + ($desde ? [CURLOPT_RANGE => $desde.'-'] : []));
+            $ok = curl_exec($curl);
+            $ultimoError = $ok ? '' : curl_error($curl);
+            $codigo = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+            curl_close($curl);
+            fclose($archivo);
+            clearstatcache(true, $zip);
+
+            // Si SUNAT no aceptó continuar (devolvió el archivo entero desde el inicio), se empieza de cero
+            if ($desde && $codigo === 200) {
+                @unlink($zip);
+            }
+            if ($ok && (! $total || filesize($zip) >= $total)) {
+                break;
+            }
+            if ($aviso) {
+                $aviso('Intento '.$intento.' cortado ('.round(filesize($zip) / 1048576).' MB de '.($total ? round($total / 1048576) : '?').' MB): '.$ultimoError);
+            }
+            sleep(min(60, 10 * $intento));
+        }
+
+        clearstatcache(true, $zip);
+        if (! is_file($zip) || filesize($zip) < 1024 * 1024 || ($total && filesize($zip) < $total)) {
             @unlink($zip);
-            throw new \RuntimeException('No se pudo descargar el padrón de SUNAT (respuesta '.$r->status().').');
+            throw new \RuntimeException('No se pudo descargar el padrón de SUNAT después de '.self::INTENTOS.' intentos: '.($ultimoError ?: 'descarga incompleta').'.');
         }
 
         return $zip;
+    }
+
+    /** Tamaño del ZIP en SUNAT (para saber si la descarga quedó completa); null si no lo informa */
+    private static function tamanoRemoto(): ?int
+    {
+        $curl = curl_init(self::URL);
+        curl_setopt_array($curl, [CURLOPT_NOBODY => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_TIMEOUT => 30, CURLOPT_USERAGENT => self::NAVEGADOR]);
+        curl_exec($curl);
+        $tamano = (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
+        curl_close($curl);
+
+        return $tamano > 0 ? $tamano : null;
     }
 
     /** Lee el .txt dentro del ZIP línea por línea (RUC|NOMBRE|ESTADO|CONDICIÓN|UBIGEO|…, en ISO-8859-1) */

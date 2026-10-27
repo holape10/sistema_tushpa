@@ -188,7 +188,7 @@ Artisan::command('padron:actualizar {--limite= : Solo para pruebas: carga las pr
     $this->info('Descargando el padrón de SUNAT (unos 380 MB)…');
     $limite = $this->option('limite') ? (int) $this->option('limite') : null;
     try {
-        $r = PadronRuc::actualizar(fn (int $n) => $this->line('  '.number_format($n).' RUC cargados…'), $limite);
+        $r = PadronRuc::actualizar(fn (int $n) => $this->line('  '.number_format($n).' RUC cargados…'), $limite, fn (string $m) => $this->line($m));
     } catch (Throwable $e) {
         $this->error($e->getMessage());
 
