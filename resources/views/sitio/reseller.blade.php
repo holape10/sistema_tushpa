@@ -17,6 +17,20 @@
         ['fa-database', 'Copias de seguridad diarias', 'La información de tus clientes se respalda sola cada noche. Puedes venderles tranquilidad.'],
         ['fa-headset', 'Soporte y capacitación', 'Te enseñamos a usar y vender el sistema. Tutoriales por rubro y soporte técnico para ti y tus clientes.'],
     ];
+    // Marca blanca: a pedido, para resellers con volumen (se implementa con el caso real de cada reseller)
+    $marcaBlanca = [
+        ['fa-image', 'Tu logo y tu nombre', 'En el ingreso al sistema, en el menú y en los comprobantes de tus clientes.'],
+        ['fa-globe', 'Tu propio dominio', 'Tus clientes entran por cliente.tumarca.pe, con certificado https.'],
+        ['fa-brands fa-whatsapp', 'Tu WhatsApp y tus datos', 'La ayuda, los avisos de pago y el pie de los comprobantes llevan tu contacto.'],
+        ['fa-server', 'Mismo sistema, cero mantenimiento', 'Sigue funcionando en nuestros servidores: cada mejora le llega también a tu marca.'],
+    ];
+    $condiciones = [
+        'Disponible para resellers con un mínimo de clientes activos (lo conversamos según tu caso).',
+        'Un pago único de configuración y un monto mensual por la marca.',
+        'El dominio lo compras y renuevas tú; te guiamos para apuntarlo a nuestros servidores.',
+        'Se firma un acuerdo simple: precios, soporte y qué pasa con tus clientes si un día dejas de trabajar con nosotros.',
+        'Tus clientes siguen facturando con su propio RUC y certificado digital: para SUNAT no cambia nada.',
+    ];
     $perfiles = [['fa-calculator', 'Contadores'], ['fa-laptop-code', 'Técnicos en computación'], ['fa-bullhorn', 'Vendedores y asesores'], ['fa-building', 'Agencias y emprendedores']];
     $preguntas = [
         ['¿Necesito saber programar?', 'No. El sistema ya está hecho y lo mantenemos nosotros. Tú vendes, creas a tus clientes desde tu panel y los acompañas.'],
@@ -24,6 +38,7 @@
         ['¿Quién da el soporte técnico?', 'Nosotros: el sistema, los servidores y SUNAT. Tú atiendes a tu cliente en lo comercial y, si algo técnico se complica, nos lo pasas.'],
         ['¿Puedo vender en cualquier ciudad?', 'Sí. TUSHPA funciona en la nube: tus clientes entran desde la PC, la tablet o el celular, estén donde estén.'],
         ['¿Mis clientes necesitan instalar algo?', 'No. Solo internet. Para imprimir en ticketeras hay un agente que se instala con un clic.'],
+        ['¿Puedo vender con mi propia marca?', 'Sí, con la marca blanca: tu logo, tu dominio y tu contacto, a pedido para resellers con volumen. Se cobra aparte (configuración y un monto mensual); consúltalo por WhatsApp.'],
     ];
 @endphp
 <!DOCTYPE html>
@@ -170,7 +185,43 @@
     </div>
 </section>
 
-<section class="seccion">
+<section class="seccion" id="marca-blanca">
+    <div class="container">
+        <div class="seccion-titulo">
+            <span class="etiqueta">Marca blanca</span>
+            <h2>¿Vendes mucho? Véndelo con <span style="color: var(--selva-500)">tu propia marca</span></h2>
+            <p class="texto-gris mx-auto" style="max-width: 640px">Para resellers con una cartera grande armamos el sistema con tu identidad: tus clientes verán tu marca, no la nuestra.</p>
+        </div>
+        <div class="row g-4 mb-4">
+            @foreach ($marcaBlanca as [$icono, $titulo, $texto])
+                <div class="col-sm-6 col-lg-3">
+                    <div class="rs-beneficio">
+                        <div class="rs-ico" style="background: rgba(118, 75, 162, .12); color: var(--rio)"><i class="{{ str_starts_with($icono, 'fa-brands') ? $icono : 'fas '.$icono }}"></i></div>
+                        <h3>{{ $titulo }}</h3>
+                        <p class="texto-gris small mb-0">{{ $texto }}</p>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+        <div class="rs-lado" style="background: var(--arena-2); border: 1px solid rgba(118, 75, 162, .2)">
+            <div class="row g-4 align-items-center">
+                <div class="col-lg-8">
+                    <h3 class="h5 fw-bold mb-3"><i class="fas fa-file-signature me-2" style="color: var(--rio)"></i>Condiciones de la marca blanca</h3>
+                    <ul class="list-unstyled mb-0 texto-gris">
+                        @foreach ($condiciones as $c)<li><i class="fas fa-circle-check" style="color: var(--rio)"></i>{{ $c }}</li>@endforeach
+                    </ul>
+                </div>
+                <div class="col-lg-4 text-lg-center">
+                    <p class="small texto-gris mb-2">Se implementa a pedido, con tu logo y tu dominio.</p>
+                    <a href="https://wa.me/{{ config('soporte.whatsapp') }}?text={{ rawurlencode('Hola, soy reseller (o quiero serlo) y me interesa la marca blanca de TUSHPA. ¿Me cuentan las condiciones?') }}"
+                       target="_blank" rel="noopener" class="btn btn-lg text-white" style="background: var(--rio)"><i class="fab fa-whatsapp me-2"></i>Consultar marca blanca</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="seccion seccion-arena">
     <div class="container">
         <div class="seccion-titulo">
             <span class="etiqueta">Preguntas frecuentes</span>
