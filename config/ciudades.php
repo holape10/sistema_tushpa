@@ -49,10 +49,18 @@ return [
         'nombre' => 'Piura',
         'region' => 'Piura',
         'sede' => false,
+        // Partner en Piura: su contacto reemplaza al nuestro en esta página y para quien entra a la web desde Piura (ContactoWeb)
+        'contacto' => [
+            'nombre' => 'Gabriel Ríos',
+            'whatsapp' => '51964382212',
+            'telefonos' => ['964 382 212', '958 258 047'],
+            'direccion' => 'Urb. San Felipe, al costado de la Privada - Piura',
+            'lugar' => 'Piura · Perú',
+        ],
         'titulo' => 'Sistema de Facturación Electrónica en Piura | TUSHPA',
-        'descripcion' => 'Emite boletas y facturas SUNAT, controla stock y caja desde el celular. Atención en Piura por WhatsApp, sin instalar nada. Prueba gratis :dias días.',
+        'descripcion' => 'Emite boletas y facturas SUNAT, controla stock y caja desde el celular. Atención en Piura, en Urb. San Felipe y por WhatsApp. Prueba gratis :dias días.',
         'h1' => 'Sistema de facturación electrónica en Piura',
-        'bajada' => 'Emite boletas y facturas SUNAT, controla tu inventario y tu caja desde cualquier equipo. Te atendemos en Piura por WhatsApp, sin viajes ni instalaciones.',
+        'bajada' => 'Emite boletas y facturas SUNAT, controla tu inventario y tu caja desde cualquier equipo. Te atendemos en Piura, en persona o por WhatsApp, sin instalaciones.',
         'parrafos' => [
             'Piura es una de las plazas comerciales más movidas del norte del país, con comercios, distribuidoras, restaurantes, boticas, grifos y hospedajes que venden todos los días y necesitan comprobantes electrónicos al instante. TUSHPA te da facturación SUNAT, punto de venta, kardex y reportes en un solo sistema, sin comprar un servidor.',
             'Como el sistema es en línea, no instalas programas: creas tu cuenta con tu RUC, cargas tus productos (uno por uno o todos desde Excel) y empiezas a emitir. Tus datos viven en una base de datos propia para tu empresa, separada de la de otros negocios.',
@@ -64,11 +72,11 @@ return [
             ['fa-utensils', 'Restaurantes', 'Comandas desde el celular, mesas por zona y carta digital con QR.'],
         ],
         'atencion' => [
-            'titulo' => 'Atención remota para Piura',
-            'texto' => 'No tenemos oficina en Piura: nuestra oficina está en Iquitos y te atendemos por WhatsApp (+51 928 396 147) en horario de oficina. Te acompañamos a cargar tus productos, configurar tu impresora de tickets y emitir tu primer comprobante.',
+            'titulo' => 'Estamos en Piura',
+            'texto' => 'Te atiende Gabriel Ríos en Urb. San Felipe, al costado de la Privada, Piura, y por WhatsApp al 964 382 212 o al 958 258 047. Te acompañamos a cargar tus productos, configurar tu impresora de tickets y emitir tu primer comprobante.',
         ],
         'preguntas' => [
-            ['¿Atienden negocios de Piura?', 'Sí. La atención es remota por WhatsApp: no hace falta que viajemos ni que instales un servidor.'],
+            ['¿Atienden negocios de Piura?', 'Sí. Te atendemos en Piura, en Urb. San Felipe (al costado de la Privada), y por WhatsApp al 964 382 212 o al 958 258 047.'],
             ['¿Puedo cargar mi catálogo de productos desde Excel?', 'Sí. Puedes subir todos tus productos de una sola vez desde un archivo de Excel y empezar a vender.'],
             ['¿Sirve para boticas con control de lotes y vencimientos?', 'Sí. Cada lote lleva su fecha de vencimiento y el sistema te avisa lo que está por vencer.'],
             ['¿Emite guías de remisión electrónicas?', 'Sí. Puedes emitir guías de remisión electrónicas para tus traslados y envíos desde el mismo sistema.'],

@@ -34,9 +34,17 @@
             </div>
             <div class="col-lg-3">
                 <h5>Contacto</h5>
-                <p class="small mb-1">+51 928 396 147</p>
-                <p class="small mb-1">{{ config('soporte.correo') }}</p>
-                <p class="small mb-0">Iquitos, Loreto · Perú</p>
+                @if (! empty($contactoPartner))
+                    {{-- Partner de la ciudad (ej. Piura): sus teléfonos y su dirección --}}
+                    <p class="small mb-1 fw-semibold">{{ $contactoPartner['nombre'] }}</p>
+                    <p class="small mb-1">{{ collect($contactoPartner['telefonos'])->map(fn ($t) => '+51 '.$t)->implode(' · ') }}</p>
+                    <p class="small mb-1">{{ $contactoPartner['direccion'] }}</p>
+                    <p class="small mb-0">{{ $contactoPartner['lugar'] }}</p>
+                @else
+                    <p class="small mb-1">+51 928 396 147</p>
+                    <p class="small mb-1">{{ config('soporte.correo') }}</p>
+                    <p class="small mb-0">Iquitos, Loreto · Perú</p>
+                @endif
             </div>
         </div>
         @if (config('ciudades'))
@@ -51,6 +59,8 @@
         @endif
         <hr class="my-4" style="border-color:rgba(255,255,255,.12)">
         <p class="small text-center mb-0">&copy; {{ date('Y') }} TUSHPA · {{ config('soporte.nombre') }}. Todos los derechos reservados.</p>
+        {{-- La base de ubicación por IP (DB-IP Lite) pide citarla (licencia CC BY 4.0) --}}
+        <p class="text-center mb-0 mt-1" style="font-size:.7rem;opacity:.5"><a href="https://db-ip.com" target="_blank" rel="noopener" style="color:inherit">IP Geolocation by DB-IP</a></p>
     </div>
 </footer>
 

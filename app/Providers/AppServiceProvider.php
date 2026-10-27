@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\ContactoWeb;
 use App\Support\HoraLocal\ConexionMysql;
 use App\View\Composers\MenuComposer;
 use Illuminate\Database\Connection;
@@ -25,5 +26,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         View::composer('layouts.app', MenuComposer::class);
+        // Web pública: contacto del partner de la ciudad (Piura) o el nuestro
+        View::composer('sitio.*', fn ($vista) => $vista->with('contactoPartner', ContactoWeb::aplicar()));
     }
 }

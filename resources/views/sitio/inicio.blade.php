@@ -463,8 +463,15 @@
                 <span class="etiqueta">Contacto</span>
                 <h2 class="mt-3 mb-3" style="font-size:clamp(1.8rem,3.2vw,2.5rem)">Conversemos sobre tu negocio</h2>
                 <p class="mb-4" style="color:rgba(255,255,255,.75)">Te respondemos en menos de 24 horas. También hacemos <b>desarrollo de software a medida</b>.</p>
-                <div class="contacto-dato"><i class="fas fa-location-dot"></i><div><b>Dirección</b><br>Jr. Raúl Pillco Pérez 285, Iquitos, Perú</div></div>
-                <div class="contacto-dato"><i class="fab fa-whatsapp"></i><div><b>Celular / WhatsApp</b><br>+51 928 396 147 · +51 964 382 212</div></div>
+                @if (! empty($contactoPartner))
+                    {{-- Visita desde la región de un partner (ej. Piura): sus datos --}}
+                    <div class="contacto-dato"><i class="fas fa-user-tie"></i><div><b>Te atiende</b><br>{{ $contactoPartner['nombre'] }}</div></div>
+                    <div class="contacto-dato"><i class="fas fa-location-dot"></i><div><b>Dirección</b><br>{{ $contactoPartner['direccion'] }}</div></div>
+                    <div class="contacto-dato"><i class="fab fa-whatsapp"></i><div><b>Celular / WhatsApp</b><br>{{ collect($contactoPartner['telefonos'])->map(fn ($t) => '+51 '.$t)->implode(' · ') }}</div></div>
+                @else
+                    <div class="contacto-dato"><i class="fas fa-location-dot"></i><div><b>Dirección</b><br>Jr. Raúl Pillco Pérez 285, Iquitos, Perú</div></div>
+                    <div class="contacto-dato"><i class="fab fa-whatsapp"></i><div><b>Celular / WhatsApp</b><br>+51 928 396 147 · +51 964 382 212</div></div>
+                @endif
                 <div class="contacto-dato"><i class="fas fa-envelope"></i><div><b>Correo</b><br>{{ config('soporte.correo') }}</div></div>
                 <div class="contacto-dato"><i class="fas fa-clock"></i><div><b>Atención</b><br>Lunes a viernes, 9:00 a. m. a 6:00 p. m.</div></div>
             </div>

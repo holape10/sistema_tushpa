@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Consulta propia de RUC y DNI con el padrón reducido del RUC que SUNAT publica cada día (datos públicos), igual que
- * consultas.holape.app: todos los contribuyentes con su razón social, estado, condición y domicilio fiscal.
+ * Consulta propia de RUC y DNI con el padrón reducido del RUC que SUNAT publica cada día (datos públicos):
+ * todos los contribuyentes con su razón social, estado, condición y domicilio fiscal.
  * El DNI se obtiene de los RUC 10 (personas naturales con negocio: "10" + DNI + dígito verificador).
  *
  * Vive en su propia base (conexión "padron"), fuera de las copias de seguridad. Se actualiza cada madrugada:

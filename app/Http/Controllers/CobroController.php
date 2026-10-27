@@ -319,7 +319,7 @@ class CobroController extends Controller
             ]);
         }
 
-        // RUC: tu servicio consultas.holape.app · DNI: consultas.holape.app y, de respaldo, apiperu.dev
+        // RUC y DNI: el padrón de SUNAT propio y, de respaldo, apiperu.dev
         if ($r = ConsultaPeru::ruc($doc)) {
             return response()->json(['nom' => $r['nombre'], 'dir' => $r['direccion'], 'tdicod' => '6']);
         }

@@ -175,7 +175,7 @@ class UsuarioController extends Controller
         return $d;
     }
 
-    /** Nombre del DNI desde RENIEC (consultas.holape.app y, de respaldo, apiperu.dev) */
+    /** Nombre del DNI (padrón de SUNAT propio y, de respaldo, apiperu.dev) */
     public function consultarDni(string $dni): JsonResponse
     {
         $this->autorizar();

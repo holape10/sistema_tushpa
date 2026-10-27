@@ -9,14 +9,12 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Consultas a fuentes públicas:
- *  - RUC: el padrón de SUNAT cargado en el sistema (PadronRuc) y, de respaldo, consultas.holape.app.
- *  - DNI: el padrón (RUC 10), consultas.holape.app y, si no lo encuentra, apiperu.dev (token APIPERU_TOKEN en .env).
+ *  - RUC: el padrón de SUNAT cargado en el sistema (PadronRuc) y, de respaldo, apiperu.dev.
+ *  - DNI: el padrón (RUC 10) y, si no lo encuentra, apiperu.dev (token APIPERU_TOKEN en .env).
  *  - Tipo de cambio SUNAT: apiperu.dev, guardado en la tabla tipo_cambio para no gastar consultas del plan.
  */
 class ConsultaPeru
 {
-    private const HOLAPE = 'https://consultas.holape.app/api/v1';
-
     private static function apiperu(string $ruta, array $datos): ?array
     {
         $token = config('services.apiperu.token');
@@ -108,33 +106,23 @@ class ConsultaPeru
         return $resultado;
     }
 
-    private static function holape(string $ruta): ?array
-    {
-        try {
-            $r = Http::timeout(8)->withOptions(['verify' => false])->get(self::HOLAPE.'/'.$ruta)->json();
-
-            return ! empty($r['success']) ? ($r['data'] ?? null) : null;
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
     /** @return array{nombre:string, direccion:?string, estado:?string, condicion:?string, ubigeo:?string}|null */
     public static function ruc(string $ruc): ?array
     {
         if (! preg_match('/^\d{11}$/', $ruc)) {
             return null;
         }
-        // Primero el padrón de SUNAT cargado en el propio sistema; si no está, consultas.holape.app
+        // Primero el padrón de SUNAT cargado en el propio sistema; si no está (RUC nuevo de hoy), apiperu.dev
         if ($propio = PadronRuc::ruc($ruc)) {
             return $propio;
         }
-        if (! ($d = self::holape("ruc/{$ruc}"))) {
+        if (! ($d = self::apiperu('ruc', ['ruc' => $ruc])) || empty($d['nombre_o_razon_social'])) {
             return null;
         }
+        $direccion = trim(implode(' - ', array_filter([trim((string) ($d['direccion'] ?? '')), trim((string) ($d['departamento'] ?? ''))])));
 
-        return ['nombre' => $d['razon_social'], 'direccion' => $d['direccion'] ?? null, 'estado' => $d['estado'] ?? null, 'condicion' => $d['condicion'] ?? null,
-            'ubigeo' => $d['ubigeo'] ?? null];
+        return ['nombre' => trim($d['nombre_o_razon_social']), 'direccion' => $direccion !== '' && $direccion !== '-' ? $direccion : null,
+            'estado' => $d['estado'] ?? null, 'condicion' => $d['condicion'] ?? null, 'ubigeo' => null];
     }
 
     /** @return array{nombre:string, fuente:string}|null */
@@ -143,12 +131,9 @@ class ConsultaPeru
         if (! preg_match('/^\d{8}$/', $dni) || $dni === '00000000') {
             return null;
         }
-        // Personas con RUC 10 en el padrón propio; si no, consultas.holape.app y apiperu.dev
+        // Personas con RUC 10 en el padrón propio; si no, apiperu.dev (RENIEC)
         if ($propio = PadronRuc::dni($dni)) {
             return ['nombre' => $propio['nombre'], 'fuente' => 'padron'];
-        }
-        if (($d = self::holape("dni/{$dni}")) && ! empty($d['nombres'])) {
-            return ['nombre' => trim($d['nombres']), 'fuente' => 'holape'];
         }
         if (($d = self::apiperu('dni', ['dni' => $dni])) && ! empty($d['nombre_completo'])) {
             return ['nombre' => trim($d['nombre_completo']), 'fuente' => 'apiperu'];

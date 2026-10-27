@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Empresa;
+use App\Support\ConsultaPeru;
 use App\Support\EmpresaInicial;
 use App\Support\Sunat\Certificado;
 use App\Support\Sunat\Sire;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 
 class EmpresaController extends Controller
@@ -246,17 +246,9 @@ class EmpresaController extends Controller
         abort_unless($this->puedeRegistrar(), 403);
         abort_unless(preg_match('/^\d{11}$/', $ruc), 422);
 
-        $response = Http::withOptions(['verify' => false])
-            ->get("https://consultas.holape.app/api/v1/ruc/{$ruc}");
-
-        $data = $response->json();
-
-        if (! empty($data['success'])) {
-            return response()->json([
-                'nom' => $data['data']['razon_social'],
-                'dir' => $data['data']['direccion'],
-                'ubigeo' => $data['data']['ubigeo'],
-            ]);
+        // Padrón de SUNAT propio y, de respaldo, apiperu.dev
+        if ($d = ConsultaPeru::ruc($ruc)) {
+            return response()->json(['nom' => $d['nombre'], 'dir' => $d['direccion'], 'ubigeo' => $d['ubigeo']]);
         }
 
         return response()->json(['error' => 'RUC no encontrado o no válido'], 404);

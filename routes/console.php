@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\Antiguo\CargadorSql;
 use App\Support\ClinicaRecordatorios;
 use App\Support\DemoDatos;
+use App\Support\GeoIp;
 use App\Support\PadronRuc;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\Tenancy\Provisionador;
@@ -183,7 +184,8 @@ Artisan::command('respaldos:todas', function () {
 
 Schedule::command('respaldos:todas')->dailyAt('03:00')->withoutOverlapping(120);
 
-// Padrón reducido del RUC (SUNAT lo publica ~3:10 a. m.): consultas de RUC y DNI propias, sin depender de otra API
+// Padrón reducido del RUC (SUNAT lo publica ~3:08 a. m.): consultas de RUC y DNI propias, sin depender de otra API.
+// En el servidor tarda unas 2 h 30 min: empieza 3:15 para terminar antes de que abran los negocios
 Artisan::command('padron:actualizar {--limite= : Solo para pruebas: carga las primeras N filas}', function () {
     $this->info('Descargando el padrón de SUNAT (unos 380 MB)…');
     $limite = $this->option('limite') ? (int) $this->option('limite') : null;
@@ -197,7 +199,21 @@ Artisan::command('padron:actualizar {--limite= : Solo para pruebas: carga las pr
     $this->info('Listo: '.number_format($r['filas']).' RUC en '.gmdate('H:i:s', $r['segundos']).'.');
 })->purpose('Descarga el padrón reducido del RUC de SUNAT y lo carga para las consultas de RUC y DNI');
 
-Schedule::command('padron:actualizar')->dailyAt('04:30')->withoutOverlapping(240)->runInBackground();
+Schedule::command('padron:actualizar')->dailyAt('03:15')->withoutOverlapping(240)->runInBackground();
+
+// Ubicación aproximada por IP (DB-IP Lite, sale cada mes): para mostrar en la web el contacto del partner de cada región
+Artisan::command('geoip:actualizar', function () {
+    try {
+        $r = GeoIp::actualizar();
+    } catch (Throwable $e) {
+        $this->error($e->getMessage());
+
+        return 1;
+    }
+    $this->info("Listo: {$r['filas']} rangos de IP del Perú ({$r['archivo']}).");
+})->purpose('Descarga la base de ubicación por IP (DB-IP Lite) y carga los rangos del Perú');
+
+Schedule::command('geoip:actualizar')->monthlyOn(6, '05:30')->withoutOverlapping(60);
 
 // Advertencias de pago del panel: al pasar la fecha límite (si se marcó "suspender automáticamente") la empresa se suspende
 Artisan::command('clientes:suspender-vencidos', function () {

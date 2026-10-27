@@ -7,6 +7,7 @@ use App\Models\Central\Cliente;
 use App\Models\Central\Plan;
 use App\Models\Central\Superadmin;
 use App\Models\User;
+use App\Support\ConsultaPeru;
 use App\Support\LogosClientes;
 use App\Support\Rubros;
 use App\Support\Tenancy\Eliminador;
@@ -17,7 +18,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
@@ -472,16 +472,9 @@ class ClienteController extends Controller
 
     public function consultarRuc(string $ruc)
     {
-        try {
-            $r = Http::timeout(8)->withOptions(['verify' => false])
-                ->get("https://consultas.holape.app/api/v1/ruc/{$ruc}")->json();
-            if (! empty($r['success'])) {
-                return response()->json([
-                    'nom' => $r['data']['razon_social'], 'dir' => $r['data']['direccion'], 'ubigeo' => $r['data']['ubigeo'] ?? null,
-                ]);
-            }
-        } catch (\Throwable $e) {
-            // el servicio no respondió: se llena a mano
+        // Padrón de SUNAT propio y, de respaldo, apiperu.dev; si ninguno responde, se llena a mano
+        if ($d = ConsultaPeru::ruc($ruc)) {
+            return response()->json(['nom' => $d['nombre'], 'dir' => $d['direccion'], 'ubigeo' => $d['ubigeo']]);
         }
 
         return response()->json(['error' => 'No se encontró el RUC. Ingresa los datos manualmente.'], 404);
