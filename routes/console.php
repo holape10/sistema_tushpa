@@ -8,6 +8,7 @@ use App\Support\ClinicaRecordatorios;
 use App\Support\DemoDatos;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\Tenancy\Provisionador;
+use App\Support\Tenancy\Respaldos;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
@@ -165,6 +166,21 @@ Artisan::command('impresion:limpiar', function () {
 })->purpose('Vacía la cola de impresión (lo impreso y lo viejo) en todas las empresas');
 
 Schedule::command('impresion:limpiar')->dailyAt('04:00');
+
+// Copias de seguridad automáticas: cada noche, de todas las bases (sistema, panel y empresas); quedan las últimas 7 de cada una
+Artisan::command('respaldos:todas', function () {
+    $r = Respaldos::todas('automatica');
+    foreach ($r['ok'] as $ruta) {
+        $this->line('✔ '.basename($ruta));
+    }
+    foreach ($r['fallas'] as $base => $error) {
+        $this->error("✘ {$base}: {$error}");
+    }
+    $borradas = collect(array_keys(Respaldos::bases()))->sum(fn ($base) => Respaldos::limpiarAutomaticas($base));
+    $this->info(count($r['ok']).' copia(s) listas; '.$borradas.' automática(s) vieja(s) borradas.');
+})->purpose('Saca una copia de seguridad de todas las bases y borra las automáticas más viejas');
+
+Schedule::command('respaldos:todas')->dailyAt('03:00')->withoutOverlapping(120);
 
 // Advertencias de pago del panel: al pasar la fecha límite (si se marcó "suspender automáticamente") la empresa se suspende
 Artisan::command('clientes:suspender-vencidos', function () {

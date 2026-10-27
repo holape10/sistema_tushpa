@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Central\Cliente;
 use App\Support\Tenancy\Respaldos;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -21,7 +21,12 @@ class RespaldoController extends Controller
         $base = $request->get('base');
         $base = isset($bases[$base]) ? $base : array_key_first($bases);
 
-        return view('admin.respaldos', ['bases' => $bases, 'base' => $base, 'copias' => Respaldos::listar($base)]);
+        $ultimas = Respaldos::ultimas();
+        // La copia más vieja entre "la última de cada base": así se sabe desde cuándo está todo respaldado
+        $desde = collect($ultimas)->map(fn ($r) => filemtime($r))->min();
+
+        return view('admin.respaldos', ['bases' => $bases, 'base' => $base, 'copias' => Respaldos::listar($base),
+            'esCentral' => Respaldos::esCentral($base), 'conCopia' => count($ultimas), 'todasDesde' => $desde ? Carbon::createFromTimestamp($desde) : null]);
     }
 
     public function crear(Request $request)
@@ -65,6 +70,9 @@ class RespaldoController extends Controller
     public function restaurar(Request $request)
     {
         $base = $this->baseElegida($request);
+        if (Respaldos::esCentral($base)) {
+            return back()->with('error', 'La base del panel no se restaura desde aquí (es delicado): pídelo a soporte técnico con la copia descargada.');
+        }
         $request->validate([
             'confirmacion' => 'required|in:RESTAURAR',
             'archivo' => 'nullable|string|max:120',
@@ -96,16 +104,45 @@ class RespaldoController extends Controller
         return back()->with('ok', 'Información restaurada en '.$this->bases()[$base].'. Por si acaso, se guardó cómo estaba antes: '.$previa.'.');
     }
 
+    /** Copia de todas las bases ahora mismo (el sistema principal, el panel y cada empresa) */
+    public function crearTodas()
+    {
+        $this->bases();
+        set_time_limit(3600);
+        $r = Respaldos::todas();
+        $mensaje = count($r['ok']).' copia(s) listas.';
+        if ($r['fallas']) {
+            return back()->with('error', $mensaje.' Fallaron: '.collect($r['fallas'])->map(fn ($e, $b) => $b.' ('.mb_substr($e, 0, 80).')')->implode(' · '));
+        }
+
+        return back()->with('ok', $mensaje.' Ya puedes descargarlas todas juntas en un ZIP.');
+    }
+
+    /** ZIP con la copia más nueva de cada base (las copias ya van comprimidas: se guardan sin volver a comprimir) */
+    public function descargarTodas(): BinaryFileResponse
+    {
+        $this->bases();
+        $ultimas = Respaldos::ultimas();
+        abort_if(! $ultimas, 404, 'Todavía no hay copias. Saca una copia de todas primero.');
+        set_time_limit(1800);
+        $ruta = tempnam(sys_get_temp_dir(), 'respaldos');
+        $zip = new \ZipArchive;
+        $zip->open($ruta, \ZipArchive::OVERWRITE);
+        foreach ($ultimas as $archivo) {
+            $zip->addFile($archivo, basename($archivo));
+            $zip->setCompressionName(basename($archivo), \ZipArchive::CM_STORE);
+        }
+        $zip->close();
+
+        return response()->download($ruta, 'respaldos_tushpa_'.now()->format('Ymd_His').'.zip', ['Content-Type' => 'application/zip'])->deleteFileAfterSend();
+    }
+
     /** @return array<string, string> base => nombre visible */
     private function bases(): array
     {
         abort_unless((bool) Auth::guard('superadmin')->user()->es_dueno, 403, 'Solo el dueño del sistema maneja las copias de seguridad.');
-        $bases = [config('tenancy.base_sistema') => '★ Sistema principal ('.config('tenancy.base_sistema').')'];
-        foreach (Cliente::where('estado', '!=', 'ELIMINADO')->orderBy('razon_social')->get() as $c) {
-            $bases[$c->base_datos] = ($c->nombre_comercial ?: $c->razon_social).' · '.$c->ruc;
-        }
 
-        return $bases;
+        return Respaldos::bases();
     }
 
     private function baseElegida(Request $request): string

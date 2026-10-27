@@ -2,6 +2,7 @@
 
 namespace App\Support\Tenancy;
 
+use App\Models\Central\Cliente;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,77 @@ use Illuminate\Support\Facades\Process;
  */
 class Respaldos
 {
+    /** Copias automáticas (de cada noche) que se guardan por base; las más viejas se borran */
+    public const AUTOMATICAS_A_GUARDAR = 7;
+
+    /**
+     * Todas las bases que se respaldan: el sistema principal, la central (panel) y la de cada empresa.
+     *
+     * @return array<string, string> base => nombre visible
+     */
+    public static function bases(): array
+    {
+        $bases = [config('tenancy.base_sistema') => '★ Sistema principal ('.config('tenancy.base_sistema').')'];
+        $central = (string) config('database.connections.central.database');
+        if ($central !== '' && $central !== config('tenancy.base_sistema')) {
+            $bases[$central] = '◆ Panel: clientes, planes y web ('.$central.')';
+        }
+        foreach (Cliente::where('estado', '!=', 'ELIMINADO')->orderBy('razon_social')->get() as $c) {
+            $bases[$c->base_datos] = ($c->nombre_comercial ?: $c->razon_social).' · '.$c->ruc;
+        }
+
+        return $bases;
+    }
+
+    /** La base central del panel: se respalda y descarga, pero no se restaura desde el panel */
+    public static function esCentral(string $base): bool
+    {
+        return $base === (string) config('database.connections.central.database') && $base !== config('tenancy.base_sistema');
+    }
+
+    /**
+     * Saca una copia de todas las bases. Si una falla, sigue con las demás.
+     *
+     * @return array{ok: array<int, string>, fallas: array<string, string>}
+     */
+    public static function todas(string $motivo = 'todas'): array
+    {
+        $r = ['ok' => [], 'fallas' => []];
+        foreach (array_keys(self::bases()) as $base) {
+            try {
+                $r['ok'][] = self::crear($base, $motivo);
+            } catch (\Throwable $e) {
+                $r['fallas'][$base] = $e->getMessage();
+            }
+        }
+
+        return $r;
+    }
+
+    /** Borra las copias automáticas más viejas de una base: quedan las últimas AUTOMATICAS_A_GUARDAR */
+    public static function limpiarAutomaticas(string $base): int
+    {
+        $viejas = array_slice(array_values(array_filter(self::listar($base), fn ($c) => $c['motivo'] === 'automatica')), self::AUTOMATICAS_A_GUARDAR);
+        foreach ($viejas as $c) {
+            @unlink(config('sitio.respaldos').'/'.$c['archivo']);
+        }
+
+        return count($viejas);
+    }
+
+    /** La copia más nueva de cada base (para descargarlas todas juntas) @return array<string, string> base => ruta */
+    public static function ultimas(): array
+    {
+        $rutas = [];
+        foreach (array_keys(self::bases()) as $base) {
+            if ($copia = self::listar($base)[0] ?? null) {
+                $rutas[$base] = config('sitio.respaldos').'/'.$copia['archivo'];
+            }
+        }
+
+        return $rutas;
+    }
+
     /** Saca una copia; devuelve la ruta del .sql.gz. $motivo va en el nombre (ej. "antes-de-restaurar") */
     public static function crear(string $base, string $motivo = '', ?string $carpeta = null): string
     {

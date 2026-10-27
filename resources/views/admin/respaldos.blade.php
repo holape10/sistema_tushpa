@@ -4,9 +4,33 @@
 @section('content')
     @php $tamano = fn ($b) => $b > 1048576 ? round($b / 1048576, 1).' MB' : max(1, round($b / 1024)).' KB'; @endphp
 
+    <h1 class="text-xl font-bold mb-1">Copias de seguridad</h1>
+    <p class="text-sm text-slate-500 mb-4">Una copia es toda la información de una base (como cuando la exportabas a .sql en tu gestor de base de datos), comprimida en un archivo <b>.sql.gz</b>.</p>
+
+    {{-- Todas las bases a la vez --}}
+    <div class="rounded-2xl bg-gradient-to-r from-indigo-700 to-indigo-900 text-white shadow-sm p-5 mb-6 flex flex-wrap items-center gap-4">
+        <div class="flex-1 min-w-[240px]">
+            <p class="font-bold text-lg">🗄 Todas las empresas</p>
+            <p class="text-sm text-indigo-100 mt-1">{{ count($bases) }} bases: el sistema principal, el panel y cada empresa.
+                @if ($todasDesde)
+                    {{ $conCopia }} de {{ count($bases) }} ya tienen copia; la más antigua de las últimas es del <b>{{ $todasDesde->format('d/m/Y H:i') }}</b>.
+                @endif
+            </p>
+            <p class="text-xs text-indigo-200 mt-1">🌙 Además, cada noche a las 3:00 a. m. se saca sola una copia de todas (se guardan las de los últimos {{ \App\Support\Tenancy\Respaldos::AUTOMATICAS_A_GUARDAR }} días).</p>
+        </div>
+        <form method="POST" action="{{ route('admin.respaldos.todas') }}" x-data="{ enviando: false }" @submit="enviando = true">
+            @csrf
+            <button class="px-4 h-11 rounded-xl bg-white text-indigo-800 text-sm font-bold disabled:opacity-60" :disabled="enviando"
+                    x-text="enviando ? 'Sacando copias… no cierres' : '💾 Sacar copia de todas ahora'"></button>
+        </form>
+        @if ($conCopia)
+            <a href="{{ route('admin.respaldos.todas.descargar') }}" class="px-4 h-11 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold inline-flex items-center">⬇ Descargar todas (ZIP)</a>
+        @endif
+    </div>
+
     <div class="flex flex-wrap items-center gap-3 mb-4">
-        <h1 class="text-xl font-bold">Copias de seguridad</h1>
-        <form method="GET" class="ml-auto">
+        <p class="font-bold">Una sola empresa:</p>
+        <form method="GET">
             <select name="base" onchange="this.form.submit()" class="rounded-xl border-slate-300 text-sm min-w-[280px]">
                 @foreach ($bases as $clave => $nombre)
                     <option value="{{ $clave }}" @selected($clave === $base)>{{ $nombre }}</option>
@@ -32,7 +56,13 @@
                     x-text="enviando ? 'Sacando la copia…' : 'Sacar copia'"></button>
         </form>
 
-        {{-- Subir y restaurar --}}
+        {{-- Subir y restaurar (la base del panel no se restaura desde aquí) --}}
+        @if ($esCentral)
+            <div class="bg-white rounded-2xl shadow-sm p-5 text-sm text-slate-500">
+                <p class="font-bold text-slate-700">🔒 Restaurar el panel</p>
+                <p class="mt-1">La base del panel (clientes, planes, promociones) solo se respalda y descarga. Restaurarla es delicado: si algún día hace falta, hazlo con soporte técnico.</p>
+            </div>
+        @else
         <form method="POST" action="{{ route('admin.respaldos.restaurar') }}" enctype="multipart/form-data" class="bg-white rounded-2xl shadow-sm p-5 border-2 border-rose-100"
               x-data="{ archivo: '', confirmacion: '', enviando: false }" @submit="enviando = true">
             @csrf
@@ -46,6 +76,7 @@
                         :disabled="!archivo || confirmacion !== 'RESTAURAR' || enviando" x-text="enviando ? 'Restaurando… no cierres' : 'Restaurar'"></button>
             </div>
         </form>
+        @endif
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
@@ -62,7 +93,7 @@
                         <td class="px-4 py-3 text-right">{{ $tamano($c['tamano']) }}</td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             <a href="{{ route('admin.respaldos.descargar', ['base' => $base, 'archivo' => $c['archivo']]) }}" class="text-xs font-semibold text-indigo-700 hover:underline mr-3">Descargar</a>
-                            <button type="button" @click="restaurar = !restaurar" class="text-xs font-semibold text-rose-600 hover:underline mr-3">Restaurar</button>
+                            @unless ($esCentral)<button type="button" @click="restaurar = !restaurar" class="text-xs font-semibold text-rose-600 hover:underline mr-3">Restaurar</button>@endunless
                             <form method="POST" action="{{ route('admin.respaldos.eliminar') }}" class="inline" onsubmit="return confirm('¿Borrar esta copia del servidor?')">
                                 @csrf
                                 <input type="hidden" name="base" value="{{ $base }}"><input type="hidden" name="archivo" value="{{ $c['archivo'] }}">
@@ -83,5 +114,6 @@
             </tbody>
         </table>
     </div>
-    <p class="mt-3 text-xs text-slate-500">Las copias se guardan en el servidor en <span class="font-mono">storage/app/respaldos</span>. Descárgalas de vez en cuando para tener una copia fuera del servidor.</p>
+    <p class="mt-3 text-xs text-slate-500">Las copias se guardan en el servidor en <span class="font-mono">storage/app/respaldos</span>. <b>Descárgalas de vez en cuando</b> (con "Descargar todas") para tener una copia fuera del servidor:
+        si el servidor se daña, las copias que están dentro también se pierden.</p>
 @endsection

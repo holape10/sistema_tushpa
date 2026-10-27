@@ -49,6 +49,8 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/agente', [AgenteController::class, 'subir'])->name('agente.subir');
     Route::get('/respaldos', [RespaldoController::class, 'index'])->name('respaldos.index');
     Route::post('/respaldos/crear', [RespaldoController::class, 'crear'])->name('respaldos.crear');
+    Route::post('/respaldos/todas', [RespaldoController::class, 'crearTodas'])->name('respaldos.todas');
+    Route::get('/respaldos/todas/descargar', [RespaldoController::class, 'descargarTodas'])->name('respaldos.todas.descargar');
     Route::get('/respaldos/descargar', [RespaldoController::class, 'descargar'])->name('respaldos.descargar');
     Route::post('/respaldos/eliminar', [RespaldoController::class, 'eliminar'])->name('respaldos.eliminar');
     Route::post('/respaldos/restaurar', [RespaldoController::class, 'restaurar'])->name('respaldos.restaurar');
