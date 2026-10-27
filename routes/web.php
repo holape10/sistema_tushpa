@@ -55,6 +55,7 @@ use App\Http\Controllers\MedioPagoController;
 use App\Http\Controllers\MermaController;
 use App\Http\Controllers\MesaController;
 use App\Http\Controllers\MetaMozoController;
+use App\Http\Controllers\MisComprobantesController;
 use App\Http\Controllers\MotorizadoController;
 use App\Http\Controllers\NotaController;
 use App\Http\Controllers\PanelDuenoController;
@@ -526,6 +527,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/kardex/excel', [KardexController::class, 'excel'])->name('kardex.excel');
     Route::get('/respaldo', [RespaldoEmpresaController::class, 'index'])->name('respaldo.index');
     Route::post('/respaldo/descargar', [RespaldoEmpresaController::class, 'descargar'])->middleware('throttle:3,10')->name('respaldo.descargar');
+    // Mis comprobantes: los que TUSHPA (sistema principal) le emitió a esta empresa
+    Route::get('/mis-comprobantes', [MisComprobantesController::class, 'index'])->name('mis-comprobantes.index');
+    Route::get('/mis-comprobantes/{id}/pdf', [MisComprobantesController::class, 'pdf'])->whereNumber('id')->name('mis-comprobantes.pdf');
+    Route::get('/mis-comprobantes/{id}/{tipo}', [MisComprobantesController::class, 'archivo'])->whereNumber('id')->whereIn('tipo', ['xml', 'cdr'])->name('mis-comprobantes.archivo');
     Route::get('/kardex/inventario', [KardexController::class, 'inventario'])->name('kardex.inventario');
     Route::get('/series', [SerieController::class, 'index'])->name('series.index');
     Route::get('/kardex/inventario/excel', [KardexController::class, 'inventarioExcel'])->name('kardex.inventario.excel');
