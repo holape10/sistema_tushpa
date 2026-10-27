@@ -56,8 +56,10 @@ class ProductoController extends Controller
         $itemsParaCombo = Producto::where('id_empresa_negocio', $sucursal)
             ->whereIn('promocion', [0, 2]) // solo Producto y Preparado entran a un combo
             ->orderBy('pronom')->get();
+        // Para el stock inicial (solo al crear): el predeterminado primero
+        $almacenes = Almacen::where('id_empresa_negocio', $sucursal)->orderByDesc('predeterminado')->orderBy('descripcion')->get(['id_almacen', 'descripcion']);
 
-        return view('empresas.productos.create', compact('categorias', 'subcategorias', 'unidades', 'itemsParaCombo'));
+        return view('empresas.productos.create', compact('categorias', 'subcategorias', 'unidades', 'itemsParaCombo', 'almacenes'));
     }
 
     /** Reglas comunes de crear y editar; el precio de venta no aplica a insumos (no se venden) */
@@ -262,8 +264,11 @@ class ProductoController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['promocion' => ['required', Rule::in(array_merge(Rubros::tiposProducto(), [8]))]]
-            + $this->reglas(in_array((int) $request->promocion, [4, 8], true), (int) $request->promocion === 4), ['promocion.in' => 'Ese tipo no se usa en este tipo de negocio.'] + self::MENSAJE_COSTO, self::NOMBRES);
+        $request->validate(['promocion' => ['required', Rule::in(array_merge(Rubros::tiposProducto(), [8]))],
+            // Stock inicial (opcional, solo al crear): entra como inventario inicial en el kardex
+            'stock_inicial' => 'nullable|numeric|min:0|max:99999999', 'almacen_inicial' => 'nullable|integer']
+            + $this->reglas(in_array((int) $request->promocion, [4, 8], true), (int) $request->promocion === 4), ['promocion.in' => 'Ese tipo no se usa en este tipo de negocio.'] + self::MENSAJE_COSTO,
+            self::NOMBRES + ['stock_inicial' => 'stock inicial']);
 
         if ($request->promocion == 6 && empty(array_filter((array) $request->combo_items))) {
             return back()->withInput()->withErrors(['combo_items' => 'Un combo debe tener al menos un producto o preparado dentro.']);
@@ -272,7 +277,7 @@ class ProductoController extends Controller
             return back()->withInput()->withErrors(['codigo_barra' => $error]);
         }
 
-        DB::transaction(function () use ($request) {
+        $aviso = DB::transaction(function () use ($request) {
             $tipo = (int) $request->promocion;
             $producto = Producto::create([
                 'procod' => $request->procod ?: 'P'.time(),
@@ -314,9 +319,37 @@ class ProductoController extends Controller
             $this->guardarImagen($request, $producto);
             $this->guardarFotosExtra($request, $producto);
             $this->costoAlDia($producto, (float) $producto->costo);
+
+            return $this->stockInicial($request, $producto->refresh());
         });
 
-        return redirect()->route('productos.index')->with('success', 'Registrado correctamente.');
+        return redirect()->route('productos.index')->with('success', 'Registrado correctamente.'.$aviso);
+    }
+
+    /**
+     * Stock con el que empieza un producto o insumo nuevo: se registra como inventario inicial (kardex) en el almacén
+     * elegido (o el predeterminado). Vacío o 0 = no pasa nada. Con número de serie no aplica: sus unidades entran por compras.
+     * Devuelve el texto que se agrega al mensaje de "Registrado".
+     */
+    private function stockInicial(Request $request, Producto $producto): string
+    {
+        $cantidad = round((float) $request->input('stock_inicial', 0), 5);
+        if ($cantidad <= 0 || ! in_array((int) $producto->promocion, [0, 4], true)) {
+            return '';
+        }
+        if ($producto->control_serie) {
+            return ' El stock inicial no se cargó: un producto con número de serie suma stock al registrar la compra de cada unidad.';
+        }
+        $sucursal = (int) Auth::user()->id_empresa_negocio;
+        $almacen = ($request->almacen_inicial ? Almacen::where('id_almacen', $request->almacen_inicial)->where('id_empresa_negocio', $sucursal)->first() : null)
+            ?? Kardex::almacenPredeterminado($sucursal);
+        if (! $almacen) {
+            return ' El stock inicial no se cargó: la sucursal no tiene almacén.';
+        }
+        InventarioController::procesar($almacen, now()->toDateString(), 'STOCK INICIAL - '.mb_substr($producto->pronom, 0, 200), 'PRODUCTOS',
+            [['IdProducto' => $producto->IdProducto, 'cantidad' => $cantidad, 'costo' => null]], [$producto->IdProducto => $producto]);
+
+        return ' Stock inicial: '.rtrim(rtrim(number_format($cantidad, 3, '.', ''), '0'), '.').' en '.$almacen->descripcion.'.';
     }
 
     /** El combo cuesta lo que lleva; si cambió el costo de un producto o insumo, los platos y combos que lo usan se actualizan */

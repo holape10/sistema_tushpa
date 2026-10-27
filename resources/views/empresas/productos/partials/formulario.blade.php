@@ -176,6 +176,30 @@
         <aside class="space-y-6 lg:sticky lg:top-4 min-w-0">
             @include('empresas.productos.partials.imagen')
 
+            {{-- Stock inicial: solo al crear un producto o insumo. Vacío = no pasa nada; con un número entra como inventario inicial --}}
+            @if (! $p)
+                <section x-show="tipo == '0' || tipo == '4'" x-cloak class="bg-white rounded-2xl shadow-sm">
+                    <header class="px-5 py-4 border-b border-gray-100">
+                        <h3 class="font-bold text-gray-800">📦 Stock inicial <span class="font-normal text-sm text-gray-400">(opcional)</span></h3>
+                    </header>
+                    <div class="p-5 space-y-3">
+                        <label class="block text-sm font-medium text-gray-700">¿Con cuánto empiezas?
+                            <span class="font-normal text-gray-400" x-text="'(en ' + nombreUnidad(umecod) + ')'"></span>
+                            <input type="number" step="0.001" min="0" name="stock_inicial" value="{{ old('stock_inicial') }}" placeholder="Ej. 24"
+                                   class="mt-1 block w-full h-11 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </label>
+                        @if (($almacenes ?? collect())->count() > 1)
+                            <label class="block text-sm font-medium text-gray-700">En el almacén
+                                <select name="almacen_inicial" class="mt-1 block w-full h-11 rounded-xl border-gray-300 text-sm">
+                                    @foreach ($almacenes as $a)<option value="{{ $a->id_almacen }}" @selected(old('almacen_inicial') == $a->id_almacen)>{{ $a->descripcion }}</option>@endforeach
+                                </select>
+                            </label>
+                        @endif
+                        <p class="text-xs text-gray-400">Si lo dejas vacío no pasa nada. Se registra en el kardex como inventario inicial. Después, el stock cambia con compras, ventas e inventarios.</p>
+                    </div>
+                </section>
+            @endif
+
             <section class="bg-white rounded-2xl shadow-sm">
                 <header class="px-5 py-4 border-b border-gray-100">
                     <h3 class="font-bold text-gray-800">Precio y costo</h3>
