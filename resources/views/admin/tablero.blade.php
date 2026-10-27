@@ -194,7 +194,8 @@
     <div class="rounded-2xl bg-white shadow-sm overflow-hidden">
         <div class="px-5 py-4 flex items-center">
             <p class="font-bold text-slate-800 flex-1">Empresas que más emitieron</p>
-            <span class="text-xs text-slate-400">Se actualiza cada 10 minutos</span>
+            <span class="text-xs text-slate-400 mr-3">Se actualiza cada 10 minutos</span>
+            <a href="{{ request()->fullUrlWithQuery(['fresco' => 1]) }}" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">↻ Actualizar ahora</a>
         </div>
         <table class="w-full text-sm tabla-movil">
             <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
@@ -235,7 +236,9 @@
                         <td class="px-3 py-3 text-right" data-label="Vendido">{{ $soles($e['monto']) }}</td>
                         <td class="px-5 py-3 text-right" data-label="SUNAT">
                             @if ($e['pendientes'])
-                                <a href="{{ route('admin.clientes.comprobantes', $e['cliente']) }}" class="inline-block px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs font-bold hover:bg-rose-200">{{ $n($e['pendientes']) }} por revisar</a>
+                                <a href="{{ route('admin.clientes.comprobantes', $e['cliente']) }}" class="inline-block px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs font-bold hover:bg-rose-200"
+                                   title="{{ collect($e['revisar'])->map(fn ($c, $estado) => $estado.': '.$c)->implode(' · ') }}">{{ $n($e['pendientes']) }} por revisar</a>
+                                <span class="block text-[10px] text-slate-400 mt-0.5">{{ collect($e['revisar'])->map(fn ($c, $estado) => $estado.' '.$c)->implode(' · ') }}</span>
                             @else
                                 <span class="inline-block px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">Todo al día</span>
                             @endif

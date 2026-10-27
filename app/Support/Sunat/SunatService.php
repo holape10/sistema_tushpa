@@ -313,7 +313,8 @@ class SunatService
         if (! in_array($cab->tdocod, self::TIPOS_ELECTRONICOS, true)) {
             throw new RuntimeException('La nota de venta es un documento interno y no se envía a SUNAT.');
         }
-        if (! in_array($cab->est_sunat ?? 'PENDIENTE', self::ESTADOS_REENVIABLES, true)) {
+        // Sin estado o escrito distinto (vacío, minúsculas, con espacios) cuenta como pendiente
+        if (! in_array(mb_strtoupper(trim((string) $cab->est_sunat)) ?: 'PENDIENTE', self::ESTADOS_REENVIABLES, true)) {
             throw new RuntimeException("El comprobante {$cab->serdoc}-{$cab->numdoc} ya está {$cab->est_sunat}.");
         }
         if ($cab->ccabaj) {

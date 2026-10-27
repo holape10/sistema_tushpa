@@ -40,19 +40,25 @@ class ComprobanteController extends Controller
         $q = trim((string) $request->get('q'));
         $anio = (int) $request->get('anio');
 
-        [$lista, $conteo, $anios] = Tenancy::en($cliente->base_datos, function () use ($filtro, $q, $anio, $request) {
+        // Pendiente = todo lo que no está aceptado, anulado ni rechazado (cualquier otro estado, incluso escrito distinto
+        // o vacío), igual que cuenta el Tablero; así lo que allí sale "por revisar" siempre aparece aquí
+        // ("ACEPTADO CO" de los importados del sistema antiguo también cuenta como aceptado)
+        $pendiente = fn ($x) => $x->whereNull('est_sunat')->orWhereRaw("UPPER(TRIM(est_sunat)) NOT REGEXP '^(ACEPTAD|OBSERVAD|ANULAD|RECHAZAD)'");
+        $rechazado = fn ($w) => $w->whereRaw("UPPER(TRIM(est_sunat)) REGEXP '^RECHAZAD'");
+
+        [$lista, $conteo, $anios] = Tenancy::en($cliente->base_datos, function () use ($filtro, $q, $anio, $request, $pendiente, $rechazado) {
             $base = fn () => DB::table('cpe_cabecera')->whereIn('tdocod', SunatService::TIPOS_ELECTRONICOS)->whereNull('ccabaj');
             $lista = $base()
-                ->when($filtro === 'pendientes', fn ($w) => $w->where(fn ($x) => $x->whereNull('est_sunat')->orWhereIn('est_sunat', ['PENDIENTE', 'ERROR', 'EN RESUMEN', 'GENERADO'])))
-                ->when($filtro === 'rechazados', fn ($w) => $w->where('est_sunat', 'RECHAZADO'))
+                ->when($filtro === 'pendientes', fn ($w) => $w->where($pendiente))
+                ->when($filtro === 'rechazados', $rechazado)
                 ->when($anio, fn ($w) => $w->whereYear('ccafem', $anio))
                 ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->whereRaw("CONCAT(serdoc, '-', numdoc) LIKE ?", ["%{$q}%"])->orWhere('ccanom', 'like', "%{$q}%")->orWhere('ccandi', $q)))
                 ->orderBy('ccafem')->orderBy('IdCpe_cabecera')
                 ->paginate(100, ['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem', 'ccanom', 'ccandi', 'ccaitv', 'est_sunat', 'ccadessun', 'ccasunrescod'], 'pagina', (int) $request->get('pagina', 1))
                 ->withQueryString();
             $conteo = [
-                'pendientes' => $base()->where(fn ($x) => $x->whereNull('est_sunat')->orWhereIn('est_sunat', ['PENDIENTE', 'ERROR', 'EN RESUMEN', 'GENERADO']))->count(),
-                'rechazados' => $base()->where('est_sunat', 'RECHAZADO')->count(),
+                'pendientes' => $base()->where($pendiente)->count(),
+                'rechazados' => $rechazado($base())->count(),
             ];
             $anios = $base()->selectRaw('DISTINCT YEAR(ccafem) AS a')->orderByDesc('a')->pluck('a');
 

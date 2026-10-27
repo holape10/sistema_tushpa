@@ -28,7 +28,8 @@ class TableroController extends Controller
             ->when(! $yo->es_dueno, fn ($q) => $q->where('creado_por', $yo->id))
             ->orderBy('razon_social')->get();
 
-        $datos = TableroComprobantes::resumen($clientes, $desde, $hasta);
+        // "Actualizar ahora": vuelve a leer cada empresa sin esperar los 10 minutos
+        $datos = TableroComprobantes::resumen($clientes, $desde, $hasta, $request->boolean('fresco'));
 
         return view('admin.tablero', $datos + compact('periodo', 'desde', 'hasta', 'nombre') + ['empresasActivas' => $clientes->count()]);
     }

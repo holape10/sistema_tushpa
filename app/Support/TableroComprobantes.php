@@ -58,12 +58,18 @@ class TableroComprobantes
         };
     }
 
+    /**
+     * Sin importar mayúsculas, espacios ni cómo sigue el texto: los importados del sistema antiguo pueden traer
+     * "ACEPTADO CO" (aceptado con observaciones) o "Aceptada".
+     */
     public static function grupoSunat(?string $estado): string
     {
-        return match ($estado) {
-            'ACEPTADO', 'OBSERVADO', 'ANULADO' => 'aceptados',
-            'EN RESUMEN', 'GENERADO', 'ENVIADO', 'EN PROCESO' => 'proceso',
-            'RECHAZADO' => 'rechazados',
+        $e = mb_strtoupper(trim((string) $estado));
+
+        return match (true) {
+            (bool) preg_match('/^(ACEPTAD|OBSERVAD|ANULAD)/', $e) => 'aceptados',
+            in_array($e, ['EN RESUMEN', 'GENERADO', 'ENVIADO', 'EN PROCESO'], true) => 'proceso',
+            str_starts_with($e, 'RECHAZAD') => 'rechazados',
             default => 'pendientes',
         };
     }
@@ -73,13 +79,17 @@ class TableroComprobantes
      *
      * @return array{ok: bool, tipos: array<string, array{n: int, monto: float}>, sunat: array<string, int>, anulados: int, dias: array<string, int>}
      */
-    public static function deCliente(Cliente $cliente, string $desde, string $hasta): array
+    public static function deCliente(Cliente $cliente, string $desde, string $hasta, bool $fresco = false): array
     {
-        $vacio = ['ok' => false, 'tipos' => [], 'sunat' => [], 'anulados' => 0, 'dias' => []];
+        $vacio = ['ok' => false, 'tipos' => [], 'sunat' => [], 'anulados' => 0, 'dias' => [], 'revisar' => []];
         // Un periodo ya cerrado casi no cambia: se guarda más tiempo
         $segundos = $hasta < now()->toDateString() ? 6 * 3600 : 600;
+        $llave = "panel-tablero-v2-{$cliente->id}-{$desde}-{$hasta}";
+        if ($fresco) {
+            Cache::store('file')->forget($llave);
+        }
 
-        return Cache::store('file')->remember("panel-tablero-{$cliente->id}-{$desde}-{$hasta}", $segundos, function () use ($cliente, $desde, $hasta, $vacio) {
+        return Cache::store('file')->remember($llave, $segundos, function () use ($cliente, $desde, $hasta, $vacio) {
             try {
                 return Tenancy::en($cliente->base_datos, function () use ($desde, $hasta, $vacio) {
                     if (! Schema::hasTable('cpe_cabecera')) {
@@ -102,6 +112,11 @@ class TableroComprobantes
                         if ($f->tdocod !== '13') {
                             $g = self::grupoSunat($f->est_sunat);
                             $r['sunat'][$g] = ($r['sunat'][$g] ?? 0) + (int) $f->n;
+                            // Qué estados tienen los "por revisar" (se ve al pasar el mouse en el tablero)
+                            if (in_array($g, ['pendientes', 'rechazados'], true)) {
+                                $e = trim((string) $f->est_sunat) === '' ? 'SIN ESTADO' : $f->est_sunat;
+                                $r['revisar'][$e] = ($r['revisar'][$e] ?? 0) + (int) $f->n;
+                            }
                         }
                     }
                     $r['dias'] = DB::table('cpe_cabecera')->whereBetween('ccafem', [$desde, $hasta])->whereNull('ccabaj')
@@ -115,6 +130,10 @@ class TableroComprobantes
                             $r['tipos']['09']['monto'] = 0;
                             $g = self::grupoSunat($estado);
                             $r['sunat'][$g] = ($r['sunat'][$g] ?? 0) + (int) $n;
+                            if (in_array($g, ['pendientes', 'rechazados'], true)) {
+                                $e = 'GUÍA '.(trim((string) $estado) === '' ? 'SIN ESTADO' : $estado);
+                                $r['revisar'][$e] = ($r['revisar'][$e] ?? 0) + (int) $n;
+                            }
                         }
                     }
 
@@ -135,7 +154,7 @@ class TableroComprobantes
      * @param  iterable<int, Cliente>  $clientes
      * @return array<string, mixed>
      */
-    public static function resumen(iterable $clientes, string $desde, string $hasta): array
+    public static function resumen(iterable $clientes, string $desde, string $hasta, bool $fresco = false): array
     {
         $tipos = array_fill_keys(array_keys(self::TIPOS), ['n' => 0, 'monto' => 0.0]);
         $sunat = array_fill_keys(array_keys(self::GRUPOS_SUNAT), 0);
@@ -151,7 +170,7 @@ class TableroComprobantes
         $sinLeer = 0;
 
         foreach ($clientes as $cl) {
-            $d = self::deCliente($cl, $desde, $hasta);
+            $d = self::deCliente($cl, $desde, $hasta, $fresco);
             if (! $d['ok']) {
                 $sinLeer++;
 
@@ -180,6 +199,7 @@ class TableroComprobantes
                     // Los que van a SUNAT (facturas, boletas, notas y guías vigentes): lo que cobraría un PSE
                     'validos' => array_sum($d['sunat']),
                     'pendientes' => ($d['sunat']['pendientes'] ?? 0) + ($d['sunat']['rechazados'] ?? 0),
+                    'revisar' => $d['revisar'] ?? [],
                 ];
             }
         }
