@@ -387,6 +387,25 @@
 @include('sitio.partials.planes')
 @include('sitio.partials.certificados')
 
+{{-- Programa reseller: invita a vender TUSHPA (la página explica los beneficios; los precios, por WhatsApp) --}}
+<section class="seccion pt-0">
+    <div class="container">
+        <div class="llamada revelar text-start">
+            <div class="kene kene-laberinto"></div>
+            <div class="row align-items-center g-4 position-relative">
+                <div class="col-lg-8">
+                    <span class="etiqueta" style="color: var(--huito)">Programa reseller</span>
+                    <h2 class="mt-2 mb-2" style="font-size:clamp(1.6rem,3vw,2.3rem)">¿Quieres ganar vendiendo sistemas de facturación?</h2>
+                    <p class="mb-0" style="color:rgba(255,255,255,.8)">Te damos tu propio panel para crear a tus clientes. Nosotros ponemos el sistema, los servidores y el soporte: tú solo dedícate a vender.</p>
+                </div>
+                <div class="col-lg-4 text-lg-end">
+                    <a href="{{ route('sitio.reseller') }}" class="btn btn-achiote btn-lg"><i class="fas fa-handshake me-2"></i>Quiero ser reseller</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
 {{-- Clientes --}}
 <section id="clientes" class="seccion overflow-hidden">
     <div class="seccion-titulo revelar">

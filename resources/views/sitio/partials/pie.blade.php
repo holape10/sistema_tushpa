@@ -19,6 +19,7 @@
                     <li class="mb-2"><a href="{{ $ancla('funciones') }}">Funciones</a></li>
                     <li class="mb-2"><a href="{{ $ancla('planes') }}">Planes</a></li>
                     <li class="mb-2"><a href="{{ route('sitio.tutorial') }}">Tutoriales</a></li>
+                    <li class="mb-2"><a href="{{ route('sitio.reseller') }}">Sé reseller y gana</a></li>
                 </ul>
             </div>
             <div class="col-6 col-lg-3">

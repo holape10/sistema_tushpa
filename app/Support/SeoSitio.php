@@ -70,6 +70,7 @@ class SeoSitio
         $paginas = [
             ['loc' => self::url('/'), 'lastmod' => $fecha($vista('inicio'), $vista('partials/pie'), $vista('partials/menu'))],
             ['loc' => self::url('/tutorial'), 'lastmod' => $fecha($vista('tutorial'))],
+            ['loc' => self::url('/reseller'), 'lastmod' => $fecha($vista('reseller'))],
         ];
         foreach (self::slugsCiudades() as $slug) {
             $paginas[] = ['loc' => self::url(self::rutaCiudad($slug)), 'lastmod' => $fecha($vista('ciudad'), config_path('ciudades.php'))];

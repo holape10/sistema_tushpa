@@ -42,6 +42,7 @@
                         <ul class="dropdown-menu menu-sub">
                             <li><a class="dropdown-item" href="{{ route('sitio.carta.crear') }}"><i class="fas fa-qrcode"></i>Crea tu carta gratis</a></li>
                             <li><a class="dropdown-item" href="{{ route('sitio.tutorial') }}"><i class="fas fa-graduation-cap"></i>Tutoriales</a></li>
+                        <li><a class="dropdown-item" href="{{ route('sitio.reseller') }}"><i class="fas fa-handshake"></i>Sé reseller y gana</a></li>
                             <li><a class="dropdown-item" href="{{ $ancla('contacto') }}"><i class="fas fa-envelope"></i>Contacto</a></li>
                         </ul>
                     </li>

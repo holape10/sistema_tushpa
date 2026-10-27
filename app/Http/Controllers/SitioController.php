@@ -36,6 +36,12 @@ class SitioController extends Controller
     }
 
     /** Tutoriales por rubro (se crean en el panel › Tutoriales) */
+    /** Programa de revendedores: venden TUSHPA con su propio panel; los precios se consultan por WhatsApp */
+    public function reseller(): View
+    {
+        return view('sitio.reseller');
+    }
+
     public function tutorial(): View
     {
         return view('sitio.tutorial', ['tutoriales' => Tutoriales::activos(), 'rubros' => Tutoriales::rubros()]);
