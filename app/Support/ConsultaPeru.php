@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Consultas a fuentes públicas:
- *  - RUC: tu servicio consultas.holape.app (sin token).
- *  - DNI: consultas.holape.app y, si no lo encuentra, apiperu.dev (token APIPERU_TOKEN en .env).
+ *  - RUC: el padrón de SUNAT cargado en el sistema (PadronRuc) y, de respaldo, consultas.holape.app.
+ *  - DNI: el padrón (RUC 10), consultas.holape.app y, si no lo encuentra, apiperu.dev (token APIPERU_TOKEN en .env).
  *  - Tipo de cambio SUNAT: apiperu.dev, guardado en la tabla tipo_cambio para no gastar consultas del plan.
  */
 class ConsultaPeru
@@ -122,7 +122,14 @@ class ConsultaPeru
     /** @return array{nombre:string, direccion:?string, estado:?string, condicion:?string, ubigeo:?string}|null */
     public static function ruc(string $ruc): ?array
     {
-        if (! preg_match('/^\d{11}$/', $ruc) || ! ($d = self::holape("ruc/{$ruc}"))) {
+        if (! preg_match('/^\d{11}$/', $ruc)) {
+            return null;
+        }
+        // Primero el padrón de SUNAT cargado en el propio sistema; si no está, consultas.holape.app
+        if ($propio = PadronRuc::ruc($ruc)) {
+            return $propio;
+        }
+        if (! ($d = self::holape("ruc/{$ruc}"))) {
             return null;
         }
 
@@ -135,6 +142,10 @@ class ConsultaPeru
     {
         if (! preg_match('/^\d{8}$/', $dni) || $dni === '00000000') {
             return null;
+        }
+        // Personas con RUC 10 en el padrón propio; si no, consultas.holape.app y apiperu.dev
+        if ($propio = PadronRuc::dni($dni)) {
+            return ['nombre' => $propio['nombre'], 'fuente' => 'padron'];
         }
         if (($d = self::holape("dni/{$dni}")) && ! empty($d['nombres'])) {
             return ['nombre' => trim($d['nombres']), 'fuente' => 'holape'];

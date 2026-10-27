@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\Antiguo\CargadorSql;
 use App\Support\ClinicaRecordatorios;
 use App\Support\DemoDatos;
+use App\Support\PadronRuc;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Respaldos;
@@ -181,6 +182,22 @@ Artisan::command('respaldos:todas', function () {
 })->purpose('Saca una copia de seguridad de todas las bases y borra las automáticas más viejas');
 
 Schedule::command('respaldos:todas')->dailyAt('03:00')->withoutOverlapping(120);
+
+// Padrón reducido del RUC (SUNAT lo publica ~3:10 a. m.): consultas de RUC y DNI propias, sin depender de otra API
+Artisan::command('padron:actualizar {--limite= : Solo para pruebas: carga las primeras N filas}', function () {
+    $this->info('Descargando el padrón de SUNAT (unos 380 MB)…');
+    $limite = $this->option('limite') ? (int) $this->option('limite') : null;
+    try {
+        $r = PadronRuc::actualizar(fn (int $n) => $this->line('  '.number_format($n).' RUC cargados…'), $limite);
+    } catch (Throwable $e) {
+        $this->error($e->getMessage());
+
+        return 1;
+    }
+    $this->info('Listo: '.number_format($r['filas']).' RUC en '.gmdate('H:i:s', $r['segundos']).'.');
+})->purpose('Descarga el padrón reducido del RUC de SUNAT y lo carga para las consultas de RUC y DNI');
+
+Schedule::command('padron:actualizar')->dailyAt('04:30')->withoutOverlapping(240)->runInBackground();
 
 // Advertencias de pago del panel: al pasar la fecha límite (si se marcó "suspender automáticamente") la empresa se suspende
 Artisan::command('clientes:suspender-vencidos', function () {
