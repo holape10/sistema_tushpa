@@ -130,8 +130,15 @@ class Escpos
         return $this;
     }
 
-    /** Logo PNG/JPG convertido a raster de 1 bit (GS v 0). Se ignora si no se puede leer. */
-    public function logo(?string $ruta, int $anchoMax = 384): self
+    /** Filas de puntos por cada bloque del logo: bloques chicos para que la ticketera no se llene ni se apague */
+    private const FILAS_POR_BLOQUE = 48;
+
+    /**
+     * Logo PNG/JPG convertido a raster de 1 bit (GS v 0). Se ignora si no se puede leer.
+     * Se limita el alto (un logo alto y muy negro hace que las ticketeras con fuente débil se reinicien a medio imprimir)
+     * y se envía en bloques de pocas filas.
+     */
+    public function logo(?string $ruta, int $anchoMax = 384, int $altoMax = 220): self
     {
         if (! $ruta || ! is_file($ruta) || ! function_exists('imagecreatefromstring')) {
             return $this;
@@ -142,17 +149,31 @@ class Escpos
         }
         $w = imagesx($img);
         $h = imagesy($img);
-        if ($w > $anchoMax) {
-            $nh = (int) round($h * $anchoMax / $w);
-            $esc = imagecreatetruecolor($anchoMax, $nh);
+        $escala = min(1, $anchoMax / $w, $altoMax / $h);
+        if ($escala < 1) {
+            [$nw, $nh] = [max(1, (int) round($w * $escala)), max(1, (int) round($h * $escala))];
+            $esc = imagecreatetruecolor($nw, $nh);
             imagefill($esc, 0, 0, imagecolorallocate($esc, 255, 255, 255));
-            imagecopyresampled($esc, $img, 0, 0, 0, 0, $anchoMax, $nh, $w, $h);
+            imagecopyresampled($esc, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
             $img = $esc;
-            [$w, $h] = [$anchoMax, $nh];
+            [$w, $h] = [$nw, $nh];
         }
         $bytesFila = (int) ceil($w / 8);
+        $this->alinear('centro');
+        for ($desde = 0; $desde < $h; $desde += self::FILAS_POR_BLOQUE) {
+            $filas = min(self::FILAS_POR_BLOQUE, $h - $desde);
+            $this->buffer .= self::GS."v0\x00".chr($bytesFila % 256).chr(intdiv($bytesFila, 256)).chr($filas % 256).chr(intdiv($filas, 256))
+                .$this->filasLogo($img, $w, $bytesFila, $desde, $filas);
+        }
+
+        return $this;
+    }
+
+    /** Bytes de 1 bit (negro = 1) de unas filas del logo */
+    private function filasLogo(\GdImage $img, int $w, int $bytesFila, int $desde, int $filas): string
+    {
         $datos = '';
-        for ($y = 0; $y < $h; $y++) {
+        for ($y = $desde; $y < $desde + $filas; $y++) {
             for ($bx = 0; $bx < $bytesFila; $bx++) {
                 $byte = 0;
                 for ($b = 0; $b < 8; $b++) {
@@ -169,10 +190,8 @@ class Escpos
                 $datos .= chr($byte);
             }
         }
-        $this->alinear('centro');
-        $this->buffer .= self::GS."v0\x00".chr($bytesFila % 256).chr(intdiv($bytesFila, 256)).chr($h % 256).chr(intdiv($h, 256)).$datos;
 
-        return $this;
+        return $datos;
     }
 
     public function cortar(): self
