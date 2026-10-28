@@ -354,7 +354,8 @@ class ClinicaController extends Controller
 
             return ['lineas' => $lineas->values(), 'total' => round($lineas->where('cobrado', false)->sum('importe'), 2),
                 'puedeCobrar' => $user->puedeCobrar() && $pedido->ped_est === 'Aperturado', 'turnoAbierto' => (bool) Turno::abiertoDe($user),
-                'cobrar' => route('cobros.cobrar', $pedido->ped_id)];
+                // Se cobra en el Punto Venta (sin mozo, mesas ni cuentas separadas)
+                'cobrar' => route('pv.index', ['clinica' => $pedido->ped_id])];
         });
     }
 

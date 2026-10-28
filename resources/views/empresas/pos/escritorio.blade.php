@@ -76,6 +76,13 @@
                 <button type="button" @click="soltarProforma()" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25">Desvincular</button>
             </div>
 
+            {{-- Atención de la clínica por cobrar --}}
+            <div x-show="clinicaId" x-cloak class="flex flex-wrap items-center gap-2 rounded-2xl bg-teal-600 text-white px-4 py-3 shadow-sm">
+                <span class="font-bold">🩺 Atención <span x-text="clinicaNombre"></span></span>
+                <span class="text-sm text-teal-50 flex-1">REGISTRAR o IMPRIMIR la cobra y sale de "Por cobrar". Puedes agregar o quitar algo antes de cobrar.</span>
+                <a href="{{ route('clinica.agenda') }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25">Volver a la agenda</a>
+            </div>
+
             {{-- Venta abierta para corregirla --}}
             <div x-show="edicion" x-cloak class="flex flex-wrap items-center gap-2 rounded-2xl bg-amber-500 text-white px-4 py-3 shadow-sm">
                 <span class="font-bold">✏️ Editando <span x-text="edicion?.numero"></span></span>
@@ -501,6 +508,9 @@
         farmacia: @json($farmacia),
         diasAlerta: @json($diasAlerta),
         proforma: @json($proforma),
+        // Atención de la clínica por cobrar (llega desde la Agenda o al terminar la atención)
+        clinica: @json($clinica ?? null),
+        agendaClinica: @json(route('clinica.agenda')),
         // Venta abierta para corregirla desde el Panel de Ventas
         edicion: @json($edicion ?? null),
         rutas: {

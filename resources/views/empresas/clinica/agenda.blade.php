@@ -81,7 +81,7 @@
                                     {{-- Qué se cobra --}}
                                     @foreach ($p->lineas as $l)<p class="text-xs text-teal-800 truncate">• {{ $l }}</p>@endforeach
                                 </div>
-                                <a href="{{ url('cobrarmesa/' . $p->ped_id) }}" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold whitespace-nowrap">Cobrar S/ {{ number_format($p->ped_tot, 2) }}</a>
+                                <a href="{{ route('pv.index', ['clinica' => $p->ped_id]) }}" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold whitespace-nowrap">Cobrar S/ {{ number_format($p->ped_tot, 2) }}</a>
                             </div>
                         @empty
                             <p class="text-sm text-gray-400">Nada pendiente. Cuando el doctor termina una atención aparece aquí.</p>

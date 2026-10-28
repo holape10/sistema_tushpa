@@ -35,6 +35,8 @@ class VentaDirecta
         'items.*.series.*' => 'string|max:80',
         'items.*.presentacion' => 'nullable|integer',
         'proforma_id' => 'nullable|integer',
+        // Atención de la clínica que se cobra desde el Punto Venta (pedido 'Clinica')
+        'pedido_id' => 'nullable|integer',
         'placa' => 'nullable|string|max:10',
         'guia_remision' => 'nullable|string|max:20',
         'id_med_pag' => 'nullable|array|max:10',
@@ -87,6 +89,8 @@ class VentaDirecta
             if ($proformaId) {
                 Proformas::bloquearPendiente($user, $proformaId);
             }
+            // Atención de la clínica: se bloquea para que no se cobre dos veces (recepción y el doctor a la vez)
+            $pedidoClinica = ! empty($datos['pedido_id']) ? Clinica::bloquearPorCobrar($user, (int) $datos['pedido_id']) : null;
 
             // Pago por partes: va al crédito (con lo que paga hoy como primer abono) y el resto hasta la fecha que se eligió
             if (! empty($datos['partes'])) {
@@ -100,14 +104,21 @@ class VentaDirecta
                 [$lineas, $datos] = self::aplicarRecargos($user, $lineas, $datos);
             }
 
-            $cabId = Comprobante::emitir($user, $turno, $datos, $lineas, [
+            $cabId = Comprobante::emitir($user, $turno, $datos, $lineas, array_merge([
                 'ped_tip' => $origen, 'IdUsuario_ven' => $user->IdUsuario,
                 'placa' => mb_strtoupper(preg_replace('/[^A-Za-z0-9-]/', '', (string) ($datos['placa'] ?? ''))) ?: null,
                 'guia_remision' => mb_strtoupper(trim((string) ($datos['guia_remision'] ?? ''))) ?: null,
-            ]);
+            ], $pedidoClinica ? [
+                // Queda como venta de la clínica, a nombre del doctor que atendió (reportes por doctor)
+                'ped_id' => $pedidoClinica->ped_id, 'ped_tip' => 'Clinica',
+                'mozo' => $pedidoClinica->mozo, 'IdUsuario_ven' => $pedidoClinica->mozo ?: $user->IdUsuario,
+            ] : []));
 
             if ($proformaId) {
                 Proformas::marcarFacturada($proformaId, $cabId);
+            }
+            if ($pedidoClinica) {
+                Clinica::marcarCobrado((int) $pedidoClinica->ped_id);
             }
 
             return $cabId;

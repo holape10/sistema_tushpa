@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EmpresaNegocio;
 use App\Models\MedioPago;
 use App\Models\Turno;
+use App\Support\Clinica;
 use App\Support\EdicionVenta;
 use App\Support\Lotes;
 use App\Support\Proformas;
@@ -22,7 +23,8 @@ class PuntoVentaController extends Controller
 {
     private function autorizar(): void
     {
-        abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja pueden vender.');
+        // Clínicas: el doctor también, si la sucursal le permite cobrar sus atenciones
+        abort_unless(Auth::user()->puedeCobrar(), 403, 'Solo Administrador o Caja pueden vender.');
     }
 
     public function index(Request $request)
@@ -69,6 +71,15 @@ class PuntoVentaController extends Controller
             }
         }
 
+        // Atención de la clínica por cobrar: entra con sus líneas y el paciente como cliente
+        $clinica = null;
+        if ($request->filled('clinica')) {
+            $clinica = Clinica::paraCaja($user, (int) $request->clinica);
+            if (! $clinica) {
+                return redirect()->route('clinica.agenda')->with('error', 'Esa atención ya se cobró o no tiene nada por cobrar.');
+            }
+        }
+
         // Venta abierta para corregirla (aún no enviada a SUNAT)
         $edicion = null;
         if ($request->filled('editar')) {
@@ -78,7 +89,7 @@ class PuntoVentaController extends Controller
             }
         }
 
-        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion'));
+        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica'));
     }
 
     /** Editar una venta del Panel de Ventas: se abre en el Punto Venta con sus productos, cliente y pago */

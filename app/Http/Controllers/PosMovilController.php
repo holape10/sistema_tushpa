@@ -1,10 +1,16 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{EmpresaNegocio, MedioPago, Turno};
-use App\Support\{CatalogoVenta, Proformas, VentaDirecta};
+use App\Models\EmpresaNegocio;
+use App\Models\MedioPago;
+use App\Models\Turno;
+use App\Support\CatalogoVenta;
+use App\Support\Proformas;
+use App\Support\VentaDirecta;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Punto de venta móvil: venta directa (sin mesa ni pedido) desde el celular o tablet.
@@ -14,7 +20,8 @@ class PosMovilController extends Controller
 {
     private function autorizar(): void
     {
-        abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja pueden vender.');
+        // Clínicas: el doctor también, si la sucursal le permite cobrar sus atenciones
+        abort_unless(Auth::user()->puedeCobrar(), 403, 'Solo Administrador o Caja pueden vender.');
     }
 
     public function index(Request $request)
@@ -23,7 +30,7 @@ class PosMovilController extends Controller
         $user = Auth::user();
 
         $turno = Turno::abiertoDe($user);
-        if (!$turno) {
+        if (! $turno) {
             return redirect()->route('turnos.index')->with('error', 'Debes aperturar tu turno antes de vender.');
         }
 
@@ -40,7 +47,7 @@ class PosMovilController extends Controller
         $proforma = null;
         if ($request->filled('proforma')) {
             $proforma = Proformas::paraCaja($user, (int) $request->proforma);
-            if (!$proforma) {
+            if (! $proforma) {
                 return redirect()->route('proformas.index')->with('error', 'La proforma no existe o ya fue cobrada.');
             }
         }
@@ -76,6 +83,7 @@ class PosMovilController extends Controller
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json([
                 'estado' => 'error',
                 'mensaje' => config('app.debug') ? $e->getMessage() : 'Error al registrar la venta.',

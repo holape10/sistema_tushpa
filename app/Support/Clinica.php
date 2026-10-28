@@ -270,6 +270,63 @@ class Clinica
         self::recalcular($pedId);
     }
 
+    /**
+     * La atención (o el adelanto) por cobrar, lista para abrirla en el Punto Venta: sus líneas pendientes con los datos
+     * actuales del producto y el paciente como cliente. null si no existe o ya se cobró. Misma forma que una proforma.
+     */
+    public static function paraCaja(User $user, int $pedId): ?array
+    {
+        $p = Pedido::where('ped_id', $pedId)->where('id_empresa_negocio', $user->id_empresa_negocio)
+            ->where('ped_tip', 'Clinica')->where('ped_est', 'Aperturado')->first();
+        if (! $p) {
+            return null;
+        }
+        $detalle = PedidoDetalle::where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')
+            ->whereColumn('item_facturado', '<', 'ped_det_can')->orderBy('ped_det_id')->get();
+        if ($detalle->isEmpty()) {
+            return null;
+        }
+        $productos = CatalogoVenta::porIds($user, $detalle->pluck('IdProducto')->filter()->unique()->values()->all());
+        $cliente = DB::table('cliente')->where('clinum', $p->ped_num_doc)->where('rucemp', $user->IdEmpresa)->first(['tdicod', 'clinum', 'clinom', 'clidir']);
+
+        return [
+            'id' => $p->ped_id,
+            'numero' => $p->ped_obs ?: $p->ped_cli_nom,
+            'cliente' => ['tdicod' => $cliente->tdicod ?? (strlen((string) $p->ped_num_doc) === 11 ? '6' : '1'), 'num' => $cliente->clinum ?? (string) $p->ped_num_doc,
+                'nom' => $cliente->clinom ?? (string) $p->ped_cli_nom, 'dir' => ($cliente->clidir ?? '') !== '--' ? (string) ($cliente->clidir ?? '') : ''],
+            'observaciones' => '',
+            'items' => $detalle->map(function ($d) use ($productos) {
+                $prod = $d->IdProducto ? ($productos[$d->IdProducto] ?? null) : null;
+
+                return ['producto' => $prod, 'id' => $prod ? (int) $d->IdProducto : null, 'presentacion' => null, 'factor' => 1,
+                    'descripcion' => $d->descripcion, 'cantidad' => round((float) $d->ped_det_can - (float) $d->item_facturado, 3),
+                    'precio' => (float) $d->ped_det_pre, 'importe' => null, 'lote' => null, 'no_disponible' => $d->IdProducto && ! $prod];
+            })->values(),
+        ];
+    }
+
+    /** Bloquea la atención por cobrar (dentro de la transacción de la venta): no se cobra dos veces */
+    public static function bloquearPorCobrar(User $user, int $pedId): Pedido
+    {
+        $p = Pedido::where('ped_id', $pedId)->where('id_empresa_negocio', $user->id_empresa_negocio)
+            ->where('ped_tip', 'Clinica')->lockForUpdate()->first();
+        if (! $p) {
+            throw new \RuntimeException('La atención ya no existe.');
+        }
+        if ($p->ped_est !== 'Aperturado') {
+            throw new \RuntimeException('Esta atención ya se cobró.');
+        }
+
+        return $p;
+    }
+
+    /** Cobrada desde el Punto Venta: sus líneas quedan cobradas y sale de "Por cobrar" */
+    public static function marcarCobrado(int $pedId): void
+    {
+        PedidoDetalle::where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')->update(['item_facturado' => DB::raw('ped_det_can')]);
+        Pedido::where('ped_id', $pedId)->update(['ped_est' => 'Cerrado', 'fecha_hora_modificacion' => now()]);
+    }
+
     public static function recalcular(int $pedId): void
     {
         $total = PedidoDetalle::where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')->get()->sum(fn ($d) => $d->ped_det_can * $d->ped_det_pre);

@@ -90,6 +90,10 @@ document.addEventListener('alpine:init', () => {
         // Venta del Panel de Ventas que se está corrigiendo (aún no enviada a SUNAT)
         edicion: null,
 
+        // Atención de la clínica que se está cobrando (pedido 'Clinica')
+        clinicaId: null,
+        clinicaNombre: '',
+
         iniciar() {
             if (!CFG.comprobantes.some(c => c.tdocod === this.tdocod)) this.tdocod = CFG.comprobantes[0]?.tdocod;
             this.nuevoMedio = CFG.medios[0]?.id ?? null;
@@ -97,6 +101,8 @@ document.addEventListener('alpine:init', () => {
 
             if (CFG.edicion) {
                 this.cargarEdicion(CFG.edicion);
+            } else if (CFG.clinica) {
+                this.cargarClinica(CFG.clinica);
             } else if (CFG.proforma) {
                 this.cargarProforma(CFG.proforma);
             } else {
@@ -113,7 +119,8 @@ document.addEventListener('alpine:init', () => {
             }
 
             const guardar = () => {
-                if (this.edicion) return; // la venta que se corrige no reemplaza el borrador de la venta en curso
+                // La venta que se corrige y la atención de la clínica no reemplazan el borrador de la venta en curso
+                if (this.edicion || this.clinicaId) return;
                 try {
                     localStorage.setItem(CLAVE_BORRADOR, JSON.stringify({
                         carrito: this.carrito.map(({ flash, key, ...it }) => it), observaciones: this.observaciones,
@@ -582,6 +589,7 @@ document.addEventListener('alpine:init', () => {
             const body = {
                 items: this.itemsParaEnviar(),
                 proforma_id: this.proformaId,
+                pedido_id: this.clinicaId,
                 tdocod: this.tdocod,
                 estadopago: this.estadopago,
                 fecEmi: CFG.hoy,
@@ -627,6 +635,11 @@ document.addEventListener('alpine:init', () => {
                 }
                 this.aviso(`✔ ${d.numero} registrada` + (d.vuelto > 0 ? ` · Vuelto ${this.soles(d.vuelto)}` : ''), 'ok');
                 if (imprimir) this.imprimirUltima();
+                if (this.clinicaId) {
+                    // Atención cobrada: vuelve a la agenda de la clínica (ya no sale en "Por cobrar")
+                    setTimeout(() => { window.location.href = CFG.agendaClinica; }, imprimir ? 2500 : 1200);
+                    return;
+                }
                 this.nuevaVenta();
             } catch (e) {
                 this.aviso('Error de conexión con el servidor. Intenta otra vez.', 'error');
@@ -686,6 +699,21 @@ document.addEventListener('alpine:init', () => {
             this.proformaNumero = pf.numero;
             if (pf.cliente && pf.cliente.num) this.usarCliente(pf.cliente);
             this.aviso(`Proforma ${pf.numero} abierta: edítala o cóbrala`, 'ok');
+        },
+
+        /** Atención de la clínica por cobrar: sus líneas pendientes y el paciente como cliente (como una proforma) */
+        cargarClinica(at) {
+            this.carrito = at.items.map(i => {
+                if (!i.producto) {
+                    return { key: this._sigKey++, id: null, codigo: '', descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio,
+                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1 };
+                }
+                return this.nuevoItem(i.producto, null, { descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio, precioBase: i.precio });
+            });
+            this.clinicaId = at.id;
+            this.clinicaNombre = at.numero;
+            if (at.cliente && at.cliente.num) this.usarCliente(at.cliente);
+            this.aviso(`Atención de ${at.cliente?.nom || at.numero}: revisa y cobra`, 'ok');
         },
 
         /** Abre una venta del Panel de Ventas para corregirla: productos, cliente, comprobante y medios de pago */
