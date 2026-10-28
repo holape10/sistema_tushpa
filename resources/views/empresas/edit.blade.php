@@ -313,9 +313,15 @@
                                 <input type="file" name="logologin" accept="image/*" 
                                        class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm">
                                 @if($empresa->LogEmpresa)
-                                    <p class="text-xs text-green-600 mt-1">
-                                        <i class="fas fa-check-circle"></i> Logo actual: {{ $empresa->LogEmpresa }}
-                                    </p>
+                                    <div class="mt-2 flex items-center gap-3">
+                                        @if (is_file(public_path($empresa->LogEmpresa)))
+                                            <img src="{{ asset($empresa->LogEmpresa) }}" alt="" class="h-12 w-12 rounded-lg object-contain bg-gray-50 ring-1 ring-gray-200">
+                                        @endif
+                                        <label class="inline-flex items-center gap-1.5 text-xs text-red-600 cursor-pointer">
+                                            <input type="checkbox" name="quitar_logo" value="1" class="rounded text-red-600">
+                                            Quitar el logo (no sale en tickets ni comprobantes)
+                                        </label>
+                                    </div>
                                 @endif
                             </div>
 

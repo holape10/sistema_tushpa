@@ -374,7 +374,7 @@ class Impresion
         $juntos = fn (string $izq, string $der) => mb_strlen($izq) + 2 + mb_strlen($der) > $ancho
             ? $izq."\n".$der : $izq.str_repeat(' ', $ancho - mb_strlen($izq) - mb_strlen($der)).$der;
 
-        // Encabezado: logo (o nombre comercial en negrita), "DE: razón social", dirección, ubigeo y RUC
+        // Encabezado: logo (o nombre comercial en negrita), "DE: razón social", dirección, ubigeo, teléfono y RUC
         $logo = $negocio->logo_suc ?: $empresa->LogEmpresa;
         $conLogo = $logo && is_file(public_path($logo));
         $p->logo($conLogo ? public_path($logo) : null)->alinear('centro');
@@ -391,6 +391,9 @@ class Impresion
         $p->parrafo((string) $negocio->direccion);
         if ($negocio->distrito && ! str_contains(mb_strtoupper((string) $negocio->direccion), mb_strtoupper($negocio->distrito))) {
             $p->texto(trim($negocio->departamento.'-'.$negocio->provincia.'-'.$negocio->distrito, '-'));
+        }
+        if ($negocio->telefono) {
+            $p->texto('Telf: '.$negocio->telefono);
         }
         $p->texto()->texto('RUC:'.$empresa->IdEmpresa)->texto(mb_strtoupper($tdodes))
             ->texto($cab->serdoc.'-'.(ltrim((string) $cab->numdoc, '0') ?: '0'))->texto();

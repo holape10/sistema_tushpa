@@ -141,6 +141,12 @@ class EmpresaController extends Controller
             // Dentro de public/imagenes: es la carpeta pública donde el servidor permite escribir (permisos y SELinux)
             $file->move(public_path('imagenes/logos'), $nombreLogo);
             $empresa->LogEmpresa = 'imagenes/logos/'.$nombreLogo;
+        } elseif ($request->boolean('quitar_logo') && $empresa->LogEmpresa) {
+            // Sin logo: tickets y comprobantes salen solo con el nombre del negocio
+            if (str_starts_with($empresa->LogEmpresa, 'imagenes/logos/') && is_file(public_path($empresa->LogEmpresa))) {
+                @unlink(public_path($empresa->LogEmpresa));
+            }
+            $empresa->LogEmpresa = null;
         }
 
         // 4. Certificado Digital (.pfx o .p12): se guarda el .pfx y se genera el .pem que firma los XML.

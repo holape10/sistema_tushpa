@@ -133,12 +133,15 @@ class Escpos
     /** Filas de puntos por cada bloque del logo: bloques chicos para que la ticketera no se llene ni se apague */
     private const FILAS_POR_BLOQUE = 48;
 
+    /** Desde cuánto negro (fracción de puntos) un logo se considera "pesado" para la ticketera */
+    private const LOGO_MUY_NEGRO = 0.35;
+
     /**
      * Logo PNG/JPG convertido a raster de 1 bit (GS v 0). Se ignora si no se puede leer.
-     * Se limita el alto (un logo alto y muy negro hace que las ticketeras con fuente débil se reinicien a medio imprimir)
-     * y se envía en bloques de pocas filas.
+     * Un logo muy negro y alto hace que las ticketeras con fuente débil se reinicien a medio imprimir:
+     * a esos se les limita el alto; los demás salen a su tamaño de siempre. Se envía en bloques de pocas filas.
      */
-    public function logo(?string $ruta, int $anchoMax = 384, int $altoMax = 220): self
+    public function logo(?string $ruta, int $anchoMax = 384, int $altoMaxSiEsNegro = 220): self
     {
         if (! $ruta || ! is_file($ruta) || ! function_exists('imagecreatefromstring')) {
             return $this;
@@ -149,7 +152,10 @@ class Escpos
         }
         $w = imagesx($img);
         $h = imagesy($img);
-        $escala = min(1, $anchoMax / $w, $altoMax / $h);
+        $escala = min(1, $anchoMax / $w);
+        if ($h * $escala > $altoMaxSiEsNegro && $this->fraccionNegra($img, $w, $h) >= self::LOGO_MUY_NEGRO) {
+            $escala = min($escala, $altoMaxSiEsNegro / $h);
+        }
         if ($escala < 1) {
             [$nw, $nh] = [max(1, (int) round($w * $escala)), max(1, (int) round($h * $escala))];
             $esc = imagecreatetruecolor($nw, $nh);
@@ -169,6 +175,30 @@ class Escpos
         return $this;
     }
 
+    /** Fracción de puntos que salen negros (muestreando la imagen cada pocos píxeles) */
+    private function fraccionNegra(\GdImage $img, int $w, int $h): float
+    {
+        $paso = max(1, intdiv(min($w, $h), 120));
+        [$negros, $total] = [0, 0];
+        for ($y = 0; $y < $h; $y += $paso) {
+            for ($x = 0; $x < $w; $x += $paso) {
+                $negros += $this->esNegro($img, $x, $y) ? 1 : 0;
+                $total++;
+            }
+        }
+
+        return $total ? $negros / $total : 0;
+    }
+
+    private function esNegro(\GdImage $img, int $x, int $y): bool
+    {
+        $c = imagecolorat($img, $x, $y);
+        $a = ($c >> 24) & 0x7F;                       // transparencia = blanco
+        $gris = ((($c >> 16) & 0xFF) * 0.3 + (($c >> 8) & 0xFF) * 0.59 + ($c & 0xFF) * 0.11);
+
+        return $a < 64 && $gris < 128;
+    }
+
     /** Bytes de 1 bit (negro = 1) de unas filas del logo */
     private function filasLogo(\GdImage $img, int $w, int $bytesFila, int $desde, int $filas): string
     {
@@ -178,13 +208,8 @@ class Escpos
                 $byte = 0;
                 for ($b = 0; $b < 8; $b++) {
                     $x = $bx * 8 + $b;
-                    if ($x < $w) {
-                        $c = imagecolorat($img, $x, $y);
-                        $a = ($c >> 24) & 0x7F;                       // transparencia = blanco
-                        $gris = ((($c >> 16) & 0xFF) * 0.3 + (($c >> 8) & 0xFF) * 0.59 + ($c & 0xFF) * 0.11);
-                        if ($a < 64 && $gris < 128) {
-                            $byte |= (0x80 >> $b);
-                        }
+                    if ($x < $w && $this->esNegro($img, $x, $y)) {
+                        $byte |= (0x80 >> $b);
                     }
                 }
                 $datos .= chr($byte);
