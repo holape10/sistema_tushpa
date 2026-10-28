@@ -24,6 +24,8 @@
                 <div class="flex flex-wrap gap-2 mt-4">
                     <a href="{{ $url }}" target="_blank" class="h-10 px-4 rounded-xl bg-white text-indigo-700 font-bold text-sm flex items-center gap-2">👁️ Ver la carta</a>
                     <a href="{{ route('carta.imprimir') }}" target="_blank" class="h-10 px-4 rounded-xl bg-white/15 hover:bg-white/25 font-bold text-sm flex items-center gap-2">🖨️ Imprimir afiche QR</a>
+                    <a href="{{ route('carta.imprimir', ['formato' => '80']) }}" target="_blank" class="h-10 px-4 rounded-xl bg-white/15 hover:bg-white/25 font-bold text-sm flex items-center gap-2"
+                       title="QR general en la ticketera (también hay 58 mm en la pantalla de impresión)">🧾 QR en ticket</a>
                     <button type="button" onclick="navigator.clipboard.writeText(@js($url)); window.tushpaAviso ? tushpaAviso('Enlace copiado: pégalo en WhatsApp, Facebook o Instagram.', 'ok') : alert('Enlace copiado')"
                             class="h-10 px-4 rounded-xl bg-white/15 hover:bg-white/25 font-bold text-sm flex items-center gap-2">🔗 Copiar enlace</button>
                 </div>
@@ -106,8 +108,9 @@
         </form>
 
         <form method="GET" action="{{ route('carta.imprimir') }}" target="_blank" class="bg-white rounded-2xl shadow-sm p-5 sm:p-6 space-y-4"
-              x-data="{ todas: true }">
+              x-data="{ todas: true, formato: 'a4' }">
             <input type="hidden" name="tipo" value="mesas">
+            <input type="hidden" name="formato" :value="formato">
             <h2 class="font-bold text-gray-800">2. QR por mesa</h2>
             <p class="text-sm text-gray-500">Imprime una tarjeta por mesa: al escanearla, la carta muestra el nombre de la mesa{{ $negocio->carta_pedido_mesa ? ' y el cliente puede pedir desde ahí' : '' }}. Recórtalas y ponlas en un portacarta o pégalas en la mesa.</p>
             @if ($mesas->isEmpty())
@@ -122,7 +125,30 @@
                         </label>
                     @endforeach
                 </div>
+                {{-- Formato: hoja A4 (4 por hoja) o ticketera (una mesa por ticket, en blanco y negro) --}}
+                <div class="flex flex-wrap gap-2 text-sm">
+                    @foreach (['a4' => '📄 Hoja A4 (4 por hoja)', '80' => '🧾 Ticket 80 mm', '58' => '🧾 Ticket 58 mm'] as $f => $texto)
+                        <label class="flex items-center gap-2 rounded-xl border-2 px-3 py-2 cursor-pointer" :class="formato === '{{ $f }}' ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-gray-200 text-gray-600'">
+                            <input type="radio" value="{{ $f }}" x-model="formato" class="sr-only"> {{ $texto }}</label>
+                    @endforeach
+                </div>
                 <button class="h-11 px-6 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold">🖨️ Imprimir QR de mesas</button>
+
+                {{-- Una sola mesa (ej. se dañó su tarjeta): A4 o ticket con un clic --}}
+                <details class="rounded-xl border border-gray-200 p-3">
+                    <summary class="cursor-pointer text-sm font-semibold text-gray-700">🖨️ Imprimir una sola mesa</summary>
+                    <div class="mt-3 divide-y divide-gray-100 max-h-72 overflow-y-auto">
+                        @foreach ($mesas as $m)
+                            <div class="flex items-center gap-2 py-1.5 text-sm">
+                                <span class="flex-1 font-semibold text-gray-700">{{ $m->mes_nom }} @if ($m->pis_nom)<span class="text-[11px] font-normal text-gray-400">{{ $m->pis_nom }}</span>@endif</span>
+                                @foreach (['a4' => 'A4', '80' => 'Ticket 80', '58' => 'Ticket 58'] as $f => $texto)
+                                    <a href="{{ route('carta.imprimir', ['tipo' => 'mesas', 'mesas' => [$m->mes_id], 'formato' => $f]) }}" target="_blank"
+                                       class="px-2 py-1 rounded-lg text-xs font-bold {{ $f === 'a4' ? 'bg-violet-50 text-violet-700' : 'bg-gray-100 text-gray-700' }} hover:opacity-80">{{ $texto }}</a>
+                                @endforeach
+                            </div>
+                        @endforeach
+                    </div>
+                </details>
             @endif
         </form>
     </div>

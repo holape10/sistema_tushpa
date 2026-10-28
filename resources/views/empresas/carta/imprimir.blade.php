@@ -4,8 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR de la carta · {{ $nombre }}</title>
+    @php
+        $ticket = $formato !== 'a4';
+        $ancho = (int) $formato; // 80 o 58 mm
+    @endphp
     <style>
-        @page { size: A4; margin: 10mm; }
+        @if ($ticket)
+            @page { size: {{ $ancho }}mm auto; margin: 0; }
+        @else
+            @page { size: A4; margin: 10mm; }
+        @endif
         * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1e293b; background: #e2e8f0; }
         :root { --acento: {{ $color }}; }
@@ -38,14 +46,40 @@
         .general .paso { font-size: 17px; }
         .general .mensaje { font-size: 15px; opacity: .9; margin-top: 8px; white-space: pre-line; }
         @media print { body { background: #fff; } .barra { display: none; } .hojas { padding: 0; gap: 4mm; } .tarjeta { box-shadow: none; } }
+
+        /* Ticketera: blanco y negro (la térmica no imprime colores), al ancho del papel y una tarjeta por ticket (se corta entre cada una) */
+        .ticket { flex-direction: column; align-items: center; }
+        .ticket .tarjeta, .general.ticket .tarjeta, .mesas.ticket .tarjeta { width: {{ $ancho - 4 }}mm; min-height: 0; height: auto; border: 0; border-radius: 0; color: #000; }
+        .ticket .cabeza, .general.ticket .cabeza { background: none; color: #000; padding: 3mm 1mm 2mm; }
+        .ticket .logo, .general.ticket .logo { width: {{ $ancho >= 80 ? 22 : 16 }}mm; height: {{ $ancho >= 80 ? 22 : 16 }}mm; border-radius: 0; padding: 0; filter: grayscale(1) contrast(1.4); }
+        .ticket .inicial, .general.ticket .inicial { width: 16mm; height: 16mm; border-radius: 4mm; background: #000; color: #fff; font-size: 26px; }
+        .ticket .nombre, .general.ticket .nombre { font-size: {{ $ancho >= 80 ? 20 : 15 }}px; margin-top: 2mm; }
+        .ticket .mensaje { font-size: 12px; opacity: 1; }
+        .ticket .qr, .general.ticket .qr { margin: 0 auto; padding: 0; border-radius: 0; box-shadow: none; }
+        .ticket .qr svg, .mesas.ticket .qr svg, .general.ticket .qr svg { width: {{ $ancho - 16 }}mm; height: {{ $ancho - 16 }}mm; }
+        .ticket .pie { padding: 2mm 1mm 4mm; }
+        .ticket .mesa { background: none; color: #000; border: 3px solid #000; font-size: {{ $ancho >= 80 ? 24 : 18 }}px; padding: 1mm 5mm; }
+        .ticket .llamado, .general.ticket .llamado { color: #000; font-size: {{ $ancho >= 80 ? 14 : 11 }}px; margin-top: 0; }
+        .ticket .paso, .general.ticket .paso { color: #000; font-size: {{ $ancho >= 80 ? 12 : 10 }}px; }
+        .ticket .marca { color: #000; }
+        .ticket .tarjeta + .tarjeta { border-top: 1px dashed #000; }
+        @media print { .ticket .tarjeta { break-after: page; page-break-after: always; } .ticket .tarjeta:last-child { break-after: auto; page-break-after: auto; } .ticket .tarjeta + .tarjeta { border-top: 0; } }
     </style>
 </head>
 <body>
     <div class="barra">
-        {{ $tipo === 'mesas' ? $tarjetas->count().' tarjeta(s) de mesa · 4 por hoja A4' : 'Afiche con el QR de la carta · hoja A4' }}
+        @if ($ticket)
+            {{ $tipo === 'mesas' ? $tarjetas->count().' ticket(s) de mesa' : 'QR de la carta' }} · ticketera de {{ $ancho }} mm
+        @else
+            {{ $tipo === 'mesas' ? $tarjetas->count().' tarjeta(s) de mesa · 4 por hoja A4' : 'Afiche con el QR de la carta · hoja A4' }}
+        @endif
         <button type="button" onclick="window.print()">🖨️ Imprimir</button>
+        {{-- Cambiar de formato sin volver atrás --}}
+        @foreach (['a4' => 'Hoja A4', '80' => 'Ticket 80 mm', '58' => 'Ticket 58 mm'] as $f => $texto)
+            @if ($f !== $formato)<a href="{{ request()->fullUrlWithQuery(['formato' => $f]) }}" style="color:#cbd5e1;font-size:13px">{{ $texto }}</a>@endif
+        @endforeach
     </div>
-    <div class="hojas {{ $tipo }}">
+    <div class="hojas {{ $tipo }} {{ $ticket ? 'ticket' : '' }}">
         @forelse ($tarjetas as $t)
             <div class="tarjeta">
                 <div class="cabeza">

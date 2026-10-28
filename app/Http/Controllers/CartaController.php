@@ -171,6 +171,8 @@ class CartaController extends Controller
         return view('empresas.carta.imprimir', $this->datos($negocio) + [
             'tarjetas' => $tarjetas,
             'tipo' => $request->input('tipo') === 'mesas' ? 'mesas' : 'general',
+            // a4 = hoja (4 tarjetas de mesa o el afiche); 80 / 58 = ticketera de ese ancho, una tarjeta por ticket
+            'formato' => in_array($request->input('formato'), ['80', '58'], true) ? $request->input('formato') : 'a4',
         ]);
     }
 
