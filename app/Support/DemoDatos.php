@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Models\Empleado;
+use App\Models\EmpresaNegocio;
 use App\Models\Producto;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -12,10 +14,31 @@ use Illuminate\Support\Str;
 /**
  * Datos de ejemplo para la empresa demo (demos.tushpa.app): productos, clientes y lo propio de cada rubro
  * (mesas, farmacia con lotes, grifo, hotel, gimnasio, estacionamiento, club, clínica y comercio).
+ * Además, cada rubro tiene su propia sucursal con su administrador (usuario demo.{rubro}) y solo sus datos:
+ * al elegir el rubro en el login de la demo se entra a esa sucursal y no se ven productos de otros negocios.
  * Se puede correr varias veces: lo que ya existe (por nombre) no se duplica. No emite comprobantes.
  */
 class DemoDatos
 {
+    /** Usuarios administradores de cada rubro en la demo: demo.restobar, demo.farmacia… */
+    public const PREFIJO_USUARIO = 'demo.';
+
+    /** Rubro => [nombre de su sucursal demo, datos que se cargan en ella] */
+    public const SUCURSALES = [
+        'RESTOBAR' => ['EL SABOR AMAZÓNICO', ['restaurante']],
+        'GENERAL' => ['COMERCIAL LA ECONOMÍA', ['comercio']],
+        'FARMACIA' => ['BOTICA SALUD TOTAL', ['farmacia']],
+        'GRIFO' => ['GRIFO EL AMAZONAS', ['grifo']],
+        'HOTELERIA' => ['HOTEL RÍO MAR', ['hotel', 'restaurante']],
+        'GIMNASIO' => ['GYM POWER FIT', ['gimnasio']],
+        'ESTACIONAMIENTO' => ['ESTACIONAMIENTO CENTRAL', ['estacionamiento']],
+        'CLUB' => ['CLUB SOCIAL LORETO', ['club', 'restaurante']],
+        'CLINICA' => ['CLÍNICA SAN JUAN', ['clinica']],
+        'PRESTAMOS' => ['PRÉSTAMOS DEL ORIENTE', ['prestamos']],
+        'COLEGIO' => ['COLEGIO NUEVO HORIZONTE', ['colegio']],
+        'CONTABLE' => ['ESTUDIO CONTABLE DEMO', []],
+    ];
+
     private int $suc;
 
     private string $ruc;
@@ -33,24 +56,86 @@ class DemoDatos
             ?? DB::table('almacenes')->insertGetId(['descripcion' => 'ALMACÉN PRINCIPAL', 'id_empresa_negocio' => $this->suc, 'predeterminado' => 1]));
     }
 
-    /** @return array<string, int> Cuántos registros nuevos se crearon de cada cosa */
-    public function cargar(): array
+    /**
+     * @param  array<int, string>|null  $partes  qué rubros cargar (null = todos)
+     * @return array<string, int> Cuántos registros nuevos se crearon de cada cosa
+     */
+    public function cargar(?array $partes = null): array
     {
         Auth::login($this->admin);
         $this->clientesYProveedores();
-        $this->restaurante();
-        $this->farmacia();
-        $this->grifo();
-        $this->comercio();
-        $this->hotel();
-        $this->gimnasio();
-        $this->estacionamiento();
-        $this->club();
-        $this->clinica();
-        $this->prestamos();
-        $this->colegio();
+        foreach ($partes ?? ['restaurante', 'farmacia', 'grifo', 'comercio', 'hotel', 'gimnasio', 'estacionamiento', 'club', 'clinica', 'prestamos', 'colegio'] as $parte) {
+            $this->{$parte}();
+        }
 
         return $this->resumen;
+    }
+
+    /**
+     * Crea (o deja al día) la sucursal y el administrador de cada rubro y les carga solo los datos de su negocio.
+     *
+     * @return array<string, array<string, int>> nombre de la sucursal => registros nuevos
+     */
+    public static function porRubros(User $admin): array
+    {
+        $resumen = [];
+        foreach (self::SUCURSALES as $rubro => [$nombre, $partes]) {
+            $usuario = self::prepararRubro($admin, $rubro, $nombre);
+            $resumen[$nombre] = (new self($usuario))->cargar($partes);
+        }
+
+        return $resumen;
+    }
+
+    /** En el login de la demo: el administrador que entra eligiendo un rubro pasa al usuario de la sucursal de ese rubro */
+    public static function usuarioDelRubro(User $quien, string $rubro): ?User
+    {
+        if (! isset(self::SUCURSALES[$rubro]) || ! $quien->esAdmin()) {
+            return null;
+        }
+
+        return User::where('email', self::PREFIJO_USUARIO.strtolower($rubro))->where('estusu', 1)->first();
+    }
+
+    public static function esUsuarioDemo(User $usuario): bool
+    {
+        return str_starts_with((string) $usuario->email, self::PREFIJO_USUARIO) && isset(self::SUCURSALES[strtoupper(substr($usuario->email, strlen(self::PREFIJO_USUARIO)))]);
+    }
+
+    /** Sucursal del rubro (con sus series) y su administrador activo con el menú del rubro */
+    private static function prepararRubro(User $admin, string $rubro, string $nombre): User
+    {
+        $ruc = (string) $admin->IdEmpresa;
+        // La sucursal principal de la demo (la que tiene todo junto) nunca es la de un rubro
+        $suc = EmpresaNegocio::where('IdEmpresa', $ruc)->where('nombre_comercial', $nombre)
+            ->where('id_empresa_negocio', '!=', $admin->id_empresa_negocio)->value('id_empresa_negocio');
+        if (! $suc) {
+            $modelo = EmpresaNegocio::find($admin->id_empresa_negocio);
+            $sucursal = SucursalNueva::crear($admin, ['nombre_comercial' => $nombre] + collect($modelo?->only(['direccion', 'ubigeo', 'departamento', 'provincia', 'distrito', 'telefono', 'correo', 'codigofiscal']))
+                ->all() + SucursalNueva::seriesSugeridas($ruc));
+            $suc = $sucursal->id_empresa_negocio;
+            // El restobar muestra su carta digital con pedidos desde la mesa
+            if ($rubro === 'RESTOBAR' && Schema::hasColumn('empresa_negocios', 'carta_pedido_mesa')) {
+                $sucursal->update(['carta_activa' => 1, 'carta_pedido_mesa' => 1]);
+            }
+        }
+
+        $email = self::PREFIJO_USUARIO.strtolower($rubro);
+        $usuario = User::where('email', $email)->first();
+        if (! $usuario) {
+            $empleado = Empleado::create(['emp_nom' => 'DEMO', 'emp_ape_pat' => $nombre, 'emp_ape_mat' => '.', 'emp_num_doc' => $ruc, 'tdicod' => '6',
+                'rol_id' => 2, 'est_cod' => '1', 'id_empresa_negocio' => $suc]);
+            // Nadie escribe esta contraseña: se entra con el usuario de la demo eligiendo el rubro
+            $usuario = User::create(['name' => 'DEMO', 'apeusu' => $nombre, 'email' => $email, 'password' => bcrypt(Str::random(40)), 'estusu' => 1,
+                'IdEmpresa' => $ruc, 'id_empresa_negocio' => $suc, 'emp_id' => $empleado->emp_id]);
+        }
+        // Siempre en su sucursal y activo (aunque un visitante lo haya cambiado)
+        $usuario->update(['estusu' => 1, 'id_empresa_negocio' => $suc]);
+        DB::table('role_user')->where('user_IdUsuario', $usuario->IdUsuario)->delete();
+        DB::table('role_user')->insert(['role_id' => 2, 'user_IdUsuario' => $usuario->IdUsuario, 'id_empresa_negocio' => $suc]);
+        $usuario->modulos()->sync(Rubros::ids(Rubros::urls($rubro)));
+
+        return $usuario->fresh();
     }
 
     /**
@@ -189,7 +274,7 @@ class DemoDatos
             ['20600000202', 'DROGUERÍA SELVA SALUD DEMO E.I.R.L.', 'JR. ARICA 155'],
             ['20600000203', 'COMBUSTIBLES LORETO DEMO S.A.', 'CARRETERA IQUITOS - NAUTA KM 3'],
         ] as [$ruc, $razon, $dir]) {
-            if (! DB::table('proveedor')->where('id_empresa_negocio', $this->suc)->where('prov_ruc', $ruc)->exists()) {
+            if (! DB::table('proveedor')->where('IdEmpresa', $this->ruc)->where('prov_ruc', $ruc)->exists()) {
                 DB::table('proveedor')->insert(['tdicod' => '6', 'prov_ruc' => $ruc, 'prov_raz' => $razon, 'prov_dir' => $dir, 'prov_est' => '1',
                     'IdEmpresa' => $this->ruc, 'id_empresa_negocio' => $this->suc]);
                 $this->sumar('proveedores');
@@ -465,7 +550,8 @@ class DemoDatos
             $this->producto($consultas, $nombre, $precio, 0, 2, null);
         }
         foreach ([['73000101', 'ANA MARÍA VELA SANGAMA', 'F', 34], ['73000102', 'JOSÉ MANUEL ACOSTA PIZANGO', 'M', 52], ['73000103', 'VALERIA NICOLE HUAYMACARI', 'F', 8]] as $i => [$dni, $nombre, $sexo, $edad]) {
-            if (! DB::table('cliente')->where('rucemp', $this->ruc)->where('clinum', $dni)->exists()) {
+            if (! DB::table('historia_clinica as h')->join('cliente as c', 'c.clicod', '=', 'h.clicod')->where('h.id_empresa_negocio', $this->suc)
+                ->where('c.rucemp', $this->ruc)->where('c.clinum', $dni)->where('h.tipo', 'PERSONA')->exists()) {
                 Clinica::crearPaciente($this->admin, ['clinum' => $dni, 'clinom' => $nombre, 'telefono' => '96540010'.($i + 1), 'sexo' => $sexo,
                     'fecha_nac' => now()->subYears($edad)->toDateString()]);
                 $this->sumar('pacientes');

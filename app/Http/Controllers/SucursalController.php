@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EmpresaNegocio;
 use App\Models\Turno;
 use App\Support\ControlStock;
+use App\Support\DemoDatos;
 use App\Support\SucursalNueva;
 use App\Support\Ubigeo;
 use Illuminate\Http\Request;
@@ -250,6 +251,9 @@ class SucursalController extends Controller
     {
         $this->autorizar();
         $user = Auth::user();
+        if (DemoDatos::esUsuarioDemo($user)) {
+            return back()->with('error', 'En la demo cada tipo de negocio tiene su propia sucursal: sal del sistema y elige otro rubro al ingresar.');
+        }
         $destino = $this->sucursal((int) $request->input('id'));
         $turnoQueDeja = Turno::abiertoDe($user);
         DB::transaction(function () use ($user, $destino) {

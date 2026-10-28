@@ -78,8 +78,13 @@ Artisan::command('demo:cargar {cuenta=demos : Subdominio o RUC de la empresa dem
     foreach ($resumen as $que => $n) {
         $this->line("  + {$n} {$que}");
     }
-    $this->info($resumen ? 'Listo.' : 'Ya tenía todos los datos de ejemplo: no se agregó nada.');
-})->purpose('Carga productos, clientes y datos de todos los rubros en la empresa demo (se puede repetir sin duplicar)');
+    // Una sucursal por rubro con solo sus datos: al elegir el rubro en el login se entra ahí
+    $this->info('Sucursales por rubro:');
+    foreach (DemoDatos::porRubros($admin) as $sucursal => $nuevos) {
+        $this->line("  · {$sucursal}".($nuevos ? ': '.collect($nuevos)->map(fn ($n, $que) => "{$n} {$que}")->implode(', ') : ': al día'));
+    }
+    $this->info('Listo.');
+})->purpose('Carga productos, clientes y datos de todos los rubros en la empresa demo, y una sucursal con solo sus datos por cada rubro (se puede repetir sin duplicar)');
 
 Artisan::command('clientes:migrar {--ruc= : Solo este cliente}', function () {
     $clientes = Cliente::query()

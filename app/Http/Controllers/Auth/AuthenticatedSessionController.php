@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\Empresa;
+use App\Support\DemoDatos;
 use App\Support\Rubros;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -47,6 +48,10 @@ class AuthenticatedSessionController extends Controller
         $rubro = (string) $request->input('rubro');
         if (Rubros::eligeEnLogin() && isset(Rubros::RUBROS[$rubro])) {
             $request->session()->put(Rubros::SESION, $rubro);
+            // Demo: se entra a la sucursal de ese rubro, que solo tiene sus productos y datos
+            if ($delRubro = DemoDatos::usuarioDelRubro($request->user(), $rubro)) {
+                Auth::login($delRubro, $request->boolean('remember'));
+            }
         }
 
         // Este equipo queda asociado a la sucursal: el login móvil mostrará a sus mozos
