@@ -146,7 +146,7 @@
             <div class="space-y-5">
                 {{-- Lo que se cobra --}}
                 <section class="{{ $seccion }}">
-                    <h2 class="font-bold text-gray-700">Se cobra en caja</h2>
+                    <h2 class="font-bold text-gray-700">Lo que se cobra</h2>
                     @forelse ($servicios as $s)
                         <div class="flex justify-between text-sm border-b py-1">
                             <span>{{ (float) $s->ped_det_can }} × {{ $s->descripcion }}</span>
@@ -156,6 +156,9 @@
                     @empty
                         <p class="text-xs text-gray-500">La consulta de la especialidad se agrega sola al terminar. Aquí puedes sumar procedimientos o productos.</p>
                     @endforelse
+                    @if ($servicios->isNotEmpty())
+                        <div class="flex justify-between text-sm font-extrabold pt-1"><span>Total</span><span>S/ {{ number_format($servicios->sum(fn ($s) => $s->ped_det_can * $s->ped_det_pre), 2) }}</span></div>
+                    @endif
                     <div class="flex gap-2">
                         <select x-model="serv.IdProducto" class="{{ $in }}">
                             <option value="">Procedimiento / producto…</option>
@@ -187,7 +190,40 @@
         <div class="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t px-4 py-3 flex flex-wrap justify-end gap-2">
             <a href="{{ route('clinica.receta', $a->ate_cli_id) }}" target="_blank" class="px-4 py-2 rounded-xl bg-white border border-gray-300 text-sm font-semibold"><i class="fas fa-print"></i> Imprimir receta</a>
             <button type="button" @click="guardar(false)" :disabled="ocupado" class="px-4 py-2 rounded-xl bg-gray-800 text-white text-sm font-bold disabled:opacity-40">Guardar</button>
-            <button type="button" @click="guardar(true)" :disabled="ocupado" class="px-5 py-2 rounded-xl bg-teal-600 text-white text-sm font-extrabold hover:bg-teal-700 disabled:opacity-40"><i class="fas fa-check"></i> Terminar atención</button>
+            <button type="button" @click="terminar()" :disabled="ocupado" class="px-5 py-2 rounded-xl bg-teal-600 text-white text-sm font-extrabold hover:bg-teal-700 disabled:opacity-40"><i class="fas fa-check"></i> Terminar atención</button>
+        </div>
+
+        {{-- Terminar: muestra lo que se cobra y si se cobra aquí mismo o lo cobra recepción --}}
+        <div x-show="cobro" x-cloak class="fixed inset-0 z-[70] bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" @keydown.escape.window="cobro = null">
+            <div class="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl p-5 space-y-4" @click.outside="cobro = null">
+                <h3 class="text-lg font-extrabold text-gray-800"><i class="fas fa-check-circle text-teal-600"></i> Terminar la atención</h3>
+                <template x-if="cobro && cobro.lineas.length">
+                    <div class="rounded-xl border border-gray-200 divide-y text-sm">
+                        <template x-for="l in cobro.lineas">
+                            <div class="flex justify-between gap-3 px-3 py-2" :class="l.cobrado && 'text-gray-400 line-through'">
+                                <span x-text="l.texto"></span><span class="whitespace-nowrap" x-text="'S/ ' + l.importe.toFixed(2)"></span>
+                            </div>
+                        </template>
+                        <div class="flex justify-between px-3 py-2 font-extrabold text-base bg-teal-50"><span>Por cobrar</span><span x-text="'S/ ' + cobro.total.toFixed(2)"></span></div>
+                    </div>
+                </template>
+                <p x-show="cobro && !cobro.total" class="text-sm text-gray-500">No hay nada por cobrar (no se agregó consulta ni procedimientos).</p>
+
+                <div class="space-y-2">
+                    <template x-if="cobro && cobro.total > 0 && cobro.puedeCobrar">
+                        <div>
+                            <button type="button" @click="guardar(true, cobro.cobrar)" :disabled="ocupado"
+                                    class="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold disabled:opacity-40"><i class="fas fa-cash-register"></i> Cobrar ahora aquí</button>
+                            <p x-show="!cobro.turnoAbierto" class="text-xs text-amber-700 mt-1">Primero se abrirá tu turno de caja (te lo pide el sistema) y luego cobras.</p>
+                        </div>
+                    </template>
+                    <button type="button" x-show="cobro && cobro.total > 0" @click="guardar(true)" :disabled="ocupado"
+                            class="w-full py-3 rounded-xl font-bold disabled:opacity-40" :class="cobro && cobro.puedeCobrar ? 'bg-white border-2 border-teal-600 text-teal-700' : 'bg-teal-600 text-white'">
+                        <i class="fas fa-paper-plane"></i> Enviar a recepción para que la cobre</button>
+                    <button type="button" x-show="cobro && !cobro.total" @click="guardar(true)" :disabled="ocupado" class="w-full py-3 rounded-xl bg-teal-600 text-white font-extrabold disabled:opacity-40">Terminar</button>
+                    <button type="button" @click="cobro = null" class="w-full py-2 text-sm text-gray-500">Volver a la atención</button>
+                </div>
+            </div>
         </div>
 
         <div x-show="aviso" x-cloak class="fixed bottom-20 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl shadow-lg text-white font-semibold" :class="ok ? 'bg-teal-600' : 'bg-rose-600'" x-text="aviso"></div>
@@ -237,8 +273,18 @@
                     return r.status === 422 ? { ok: false, mensaje: Object.values(j.errors || {}).flat()[0] } : j;
                 },
                 limpio(o) { return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v === '' ? null : v])); },
-                async guardar(finalizar) {
-                    if (finalizar && !confirm('¿Terminar la atención? Recepción podrá cobrarla.')) return;
+                cobro: null,
+                // Guarda lo escrito y muestra lo que se va a cobrar antes de terminar
+                async terminar() {
+                    this.ocupado = true;
+                    await this.guardar(false);
+                    const r = await this.post('{{ route('clinica.atencion.cobro', $a->ate_cli_id) }}');
+                    this.ocupado = false;
+                    if (!r.ok) return this.avisar(r.mensaje || 'Error', false);
+                    this.cobro = r;
+                },
+                // destino: a dónde ir al terminar (la pantalla de cobro si se cobra aquí; si no, la historia)
+                async guardar(finalizar, destino = null) {
                     this.ocupado = true;
                     const r = await this.post('{{ route('clinica.atencion.guardar', $a->ate_cli_id) }}', Object.assign(this.limpio(this.d), {
                         receta: this.receta.filter(x => (x.medicamento || '').trim()).map(x => this.limpio(x)),
@@ -248,7 +294,10 @@
                     }));
                     this.ocupado = false;
                     this.avisar(r.mensaje || 'Error', !!r.ok);
-                    if (r.ok && r.terminada) setTimeout(() => location.href = '{{ route('clinica.historia', $h->his_cli_id) }}', 1200);
+                    if (r.ok && r.terminada) {
+                        this.cobro = null;
+                        setTimeout(() => location.href = destino || '{{ route('clinica.historia', $h->his_cli_id) }}', destino ? 300 : 1200);
+                    }
                 },
                 async agregar() {
                     if (!this.serv.IdProducto) return;

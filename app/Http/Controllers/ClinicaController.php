@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EmpresaNegocio;
 use App\Models\PedidoDetalle;
+use App\Models\Turno;
 use App\Support\Clinica;
 use App\Support\ClinicaFirmas;
 use Illuminate\Http\Request;
@@ -332,6 +333,28 @@ class ClinicaController extends Controller
             $porCobrar = PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')->exists();
 
             return ['mensaje' => 'Atención terminada.'.($porCobrar ? ' Recepción ya la ve en "Por cobrar".' : ''), 'terminada' => true];
+        });
+    }
+
+    /**
+     * Lo que se va a cobrar, para mostrarlo antes de terminar (la consulta de la especialidad ya entra aquí).
+     * También dice si este usuario puede cobrarla ahí mismo y si tiene su turno de caja abierto.
+     */
+    public function resumenCobro(int $id)
+    {
+        $this->clinico();
+        $a = $this->atencion($id);
+
+        return $this->json(function () use ($a) {
+            $user = Auth::user();
+            $pedido = Clinica::pedidoDe($a, $user);
+            $lineas = PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')->orderBy('ped_det_id')->get()
+                ->map(fn ($d) => ['texto' => rtrim(rtrim(number_format((float) $d->ped_det_can, 2, '.', ''), '0'), '.').' × '.$d->descripcion,
+                    'importe' => round($d->ped_det_can * $d->ped_det_pre, 2), 'cobrado' => (float) $d->item_facturado >= (float) $d->ped_det_can]);
+
+            return ['lineas' => $lineas->values(), 'total' => round($lineas->where('cobrado', false)->sum('importe'), 2),
+                'puedeCobrar' => $user->puedeCobrar() && $pedido->ped_est === 'Aperturado', 'turnoAbierto' => (bool) Turno::abiertoDe($user),
+                'cobrar' => route('cobros.cobrar', $pedido->ped_id)];
         });
     }
 

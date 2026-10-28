@@ -202,6 +202,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/atencion/{id}', 'verAtencion')->whereNumber('id')->name('atencion');
         Route::post('/atencion/{id}', 'guardarAtencion')->whereNumber('id')->name('atencion.guardar');
         Route::post('/atencion/{id}/servicio', 'agregarServicio')->whereNumber('id')->name('atencion.servicio');
+        Route::post('/atencion/{id}/cobro', 'resumenCobro')->whereNumber('id')->name('atencion.cobro');
         Route::delete('/atencion/{id}/servicio/{det}', 'quitarServicio')->whereNumber('id')->whereNumber('det');
         Route::get('/atencion/{id}/receta', 'receta')->whereNumber('id')->name('receta');
         Route::get('/especialidades', 'especialidades')->name('especialidades');

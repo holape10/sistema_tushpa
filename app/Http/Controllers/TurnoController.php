@@ -15,7 +15,8 @@ class TurnoController extends Controller
 {
     private function autorizar(): void
     {
-        abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja manejan turnos.');
+        // Clínicas: el doctor también, si la sucursal le permite cobrar sus atenciones
+        abort_unless(Auth::user()->puedeCobrar(), 403, 'Solo Administrador o Caja manejan turnos.');
     }
 
     // Turno de la sucursal del usuario; un cajero solo puede ver los suyos, el admin todos

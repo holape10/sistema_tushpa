@@ -35,7 +35,7 @@ class CobroController extends Controller
 
     private function autorizar(): void
     {
-        abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja pueden cobrar.');
+        abort_unless(Auth::user()->puedeCobrar(), 403, 'Solo Administrador o Caja pueden cobrar.');
     }
 
     private function itemsPendientes(int $pedId)

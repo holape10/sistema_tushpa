@@ -78,6 +78,8 @@
                                 <div class="min-w-0">
                                     <p class="text-sm font-semibold truncate">{{ $p->tipo === 'MASCOTA' ? $p->mascota . ' · ' . $p->clinom : $p->clinom }}</p>
                                     <p class="text-xs text-gray-500">{{ \Carbon\Carbon::parse($p->ate_cli_fec)->format('d/m') }} · {{ $p->doctor_nom }}</p>
+                                    {{-- Qué se cobra --}}
+                                    @foreach ($p->lineas as $l)<p class="text-xs text-teal-800 truncate">• {{ $l }}</p>@endforeach
                                 </div>
                                 <a href="{{ url('cobrarmesa/' . $p->ped_id) }}" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold whitespace-nowrap">Cobrar S/ {{ number_format($p->ped_tot, 2) }}</a>
                             </div>

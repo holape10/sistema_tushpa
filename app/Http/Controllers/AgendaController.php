@@ -31,9 +31,10 @@ class AgendaController extends Controller
             'fecha' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->fecha) ? $request->fecha : now()->toDateString(),
             'doctores' => Clinica::doctores($suc),
             'especialidades' => DB::table('especialidad')->where('id_empresa_negocio', $suc)->where('activo', 1)->orderBy('esp_des')->get(),
-            'porCobrar' => $user->esAdminOCaja() ? Clinica::porCobrar($suc) : collect(),
+            // Recepción y el administrador ven todo; un doctor que puede cobrar, solo sus atenciones
+            'porCobrar' => $user->puedeCobrar() ? Clinica::porCobrar($suc, $user->esAdminOCaja() ? null : (int) $user->IdUsuario) : collect(),
             'veClinico' => Clinica::veClinico($user),
-            'puedeCobrar' => $user->esAdminOCaja(),
+            'puedeCobrar' => $user->puedeCobrar(),
             'yo' => Clinica::esDoctor($user) ? $user->IdUsuario : null,
             'hayVeterinaria' => DB::table('especialidad')->where('id_empresa_negocio', $suc)->where('veterinaria', 1)->exists(),
         ]);

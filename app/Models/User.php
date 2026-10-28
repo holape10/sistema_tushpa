@@ -4,6 +4,7 @@
 
 namespace App\Models;
 
+use App\Support\Clinica;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
@@ -74,6 +75,16 @@ class User extends Authenticatable
     public function esAdminOCaja(): bool
     {
         return $this->tieneRol([2, 4]);
+    }
+
+    /**
+     * Puede abrir turno de caja y cobrar: administrador y caja; en clínicas, también el doctor si la sucursal lo permite
+     * (Sucursales › "Los doctores pueden cobrar sus atenciones").
+     */
+    public function puedeCobrar(): bool
+    {
+        return $this->esAdminOCaja() || ($this->tieneRol([Clinica::ROL_DOCTOR])
+            && (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $this->id_empresa_negocio)->value('clinica_doctor_cobra'));
     }
 
     /** Contador: solo ve lo contable y tributario que el administrador le dio en su menú */

@@ -263,6 +263,17 @@
                             <input type="hidden" name="descuento_max_cajero" value="{{ (float) ($sucursal->descuento_max_cajero ?? 10) }}">
                             <input type="hidden" name="ip_mozos" value="{{ $sucursal->ip_mozos }}">
                         @endif
+                        {{-- Clínicas: el doctor cobra sus atenciones (con su propio turno de caja) o las deja a recepción --}}
+                        @if (\App\Support\Rubros::permite('doctores'))
+                            <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
+                                <input type="checkbox" name="clinica_doctor_cobra" value="1" @checked($campo('clinica_doctor_cobra')) class="mt-0.5 rounded text-indigo-600">
+                                <span><span class="font-semibold text-gray-800">🩺 Los doctores pueden cobrar sus atenciones</span>
+                                    <span class="block text-xs text-gray-500">Al terminar una atención, el doctor elige cobrarla ahí mismo (abre su propio turno de caja) o enviarla a recepción.
+                                        Apagado: el doctor termina y recepción cobra.</span></span>
+                            </label>
+                        @elseif ($campo('clinica_doctor_cobra'))
+                            <input type="hidden" name="clinica_doctor_cobra" value="1">
+                        @endif
                         {{-- Fotos de los productos en los botones de venta (miniaturas livianas) --}}
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
                             <input type="checkbox" name="imagenes_venta" value="1" @checked($campo('imagenes_venta')) class="mt-0.5 rounded text-indigo-600">

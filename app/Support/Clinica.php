@@ -321,10 +321,10 @@ class Clinica
     }
 
     /**
-     * Lo que recepción tiene por cobrar: atenciones terminadas y adelantos de tratamientos.
-     * Las atenciones muestran al doctor; los adelantos, el tratamiento.
+     * Lo que recepción tiene por cobrar: atenciones terminadas y adelantos de tratamientos, con sus líneas (qué se cobra).
+     * Las atenciones muestran al doctor; los adelantos, el tratamiento. Con $doctor, solo lo de ese doctor.
      */
-    public static function porCobrar(int $suc)
+    public static function porCobrar(int $suc, ?int $doctor = null)
     {
         $pendiente = fn ($q) => $q->where('p.ped_est', 'Aperturado')
             ->whereExists(fn ($s) => $s->from('pedidos_detalle as d')->whereColumn('d.ped_id', 'p.ped_id')->where('d.estadoitem', '!=', 'Eliminado')
@@ -334,6 +334,7 @@ class Clinica
             ->join('historia_clinica as h', 'h.his_cli_id', '=', 'a.his_cli_id')->join('cliente as c', 'c.clicod', '=', 'h.clicod')
             ->leftJoin('users as u', 'u.IdUsuario', '=', 'a.doctor')
             ->where('a.id_empresa_negocio', $suc)->where('a.ate_cli_est', 'ATENDIDA')->tap($pendiente)
+            ->when($doctor, fn ($q) => $q->where('a.doctor', $doctor))
             ->get(['a.ate_cli_id', 'a.ped_id', 'a.ate_cli_fec', 'p.ped_tot', 'h.tipo', 'h.mascota', 'h.his_cli_cod',
                 'c.clinom', DB::raw("TRIM(CONCAT(u.name, ' ', u.apeusu)) as doctor_nom")]);
 
@@ -341,10 +342,21 @@ class Clinica
             ->join('pedidos as p', 'p.ped_id', '=', 'r.ped_id')
             ->join('historia_clinica as h', 'h.his_cli_id', '=', 't.his_cli_id')->join('cliente as c', 'c.clicod', '=', 'h.clicod')
             ->where('t.id_empresa_negocio', $suc)->tap($pendiente)
+            ->when($doctor, fn ($q) => $q->where('r.IdUsuario', $doctor))
             ->get([DB::raw('NULL as ate_cli_id'), 'r.ped_id', DB::raw('DATE(r.fecha_hora) as ate_cli_fec'), 'p.ped_tot', 'h.tipo', 'h.mascota', 'h.his_cli_cod',
                 'c.clinom', DB::raw("CONCAT('Adelanto · ', t.descripcion) as doctor_nom")]);
 
-        return $atenciones->concat($adelantos)->sortBy('ate_cli_fec')->values();
+        $todos = $atenciones->concat($adelantos)->sortBy('ate_cli_fec')->values();
+        // Qué se cobra en cada uno (lo que aún falta cobrar), para que recepción sepa qué está cobrando
+        $lineas = DB::table('pedidos_detalle')->whereIn('ped_id', $todos->pluck('ped_id'))->where('estadoitem', '!=', 'Eliminado')
+            ->whereColumn('item_facturado', '<', 'ped_det_can')->orderBy('ped_det_id')
+            ->get(['ped_id', 'descripcion', 'ped_det_can', 'item_facturado'])->groupBy('ped_id');
+
+        return $todos->map(function ($p) use ($lineas) {
+            $p->lineas = ($lineas[$p->ped_id] ?? collect())->map(fn ($l) => rtrim(rtrim(number_format((float) $l->ped_det_can - (float) $l->item_facturado, 2, '.', ''), '0'), '.').' × '.$l->descripcion)->all();
+
+            return $p;
+        });
     }
 
     // ------------------------------------------------------------------ registro de tratamientos
