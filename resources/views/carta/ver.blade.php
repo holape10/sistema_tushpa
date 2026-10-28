@@ -33,6 +33,77 @@
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased" x-data="carta()" x-init="iniciar()">
 
+    @if ($pedidoMesa)
+    {{-- ============ Modo mesa: como la pantalla del mozo (categorías, botones y tocar para sumar) ============ --}}
+    <header class="sticky top-0 z-30 hero text-white shadow-lg">
+        <div class="max-w-3xl mx-auto px-3 pt-3 pb-2">
+            <div class="flex items-center gap-2.5">
+                @if ($logo)
+                    <img src="{{ asset($logo) }}" alt="" class="h-11 w-11 shrink-0 rounded-xl object-contain bg-white p-0.5">
+                @else
+                    <span class="h-11 w-11 shrink-0 rounded-xl bg-white/20 flex items-center justify-center text-xl font-black">{{ mb_substr($nombre, 0, 1) }}</span>
+                @endif
+                <div class="flex-1 min-w-0">
+                    <p class="font-black leading-tight truncate">{{ $nombre }}</p>
+                    <p class="text-xs font-bold text-white/85">🍽️ {{ $mesa }}</p>
+                </div>
+                <button type="button" @click="enviarMesa('MOZO')" :disabled="enviando" class="h-10 px-3 rounded-xl bg-white/15 ring-1 ring-white/30 text-xs font-black active:scale-95 transition">🙋 Mozo</button>
+                <button type="button" @click="enviarMesa('CUENTA')" :disabled="enviando" class="h-10 px-3 rounded-xl bg-white/15 ring-1 ring-white/30 text-xs font-black active:scale-95 transition">🧾 Cuenta</button>
+            </div>
+            <label class="relative block mt-2.5">
+                <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
+                <input type="search" x-model="q" placeholder="Buscar plato o bebida…" class="w-full h-10 pl-9 pr-3 rounded-xl border-0 text-sm text-slate-800 placeholder-slate-400">
+            </label>
+            {{-- Una categoría a la vez, como el mozo --}}
+            @if (count($categorias) > 1)
+                <div class="flex gap-2 overflow-x-auto no-scroll mt-2.5 pb-1">
+                    @foreach ($categorias as $c)
+                        <button type="button" @click="catMesa = {{ $c['id'] }}; q = ''"
+                                :class="catMesa === {{ $c['id'] }} && !q.trim() ? 'bg-white text-slate-900 shadow' : 'bg-white/15 text-white'"
+                                class="shrink-0 h-9 px-4 rounded-full text-sm font-bold whitespace-nowrap transition">{{ $titulo($c['nombre']) }}</button>
+                    @endforeach
+                </div>
+            @endif
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-3 pt-3 pb-4">
+        <p x-show="!carrito.length && !q.trim()" class="text-xs text-slate-500 mb-2.5">👆 Toca un plato para agregarlo. Al terminar, toca <b>Ver mi pedido</b> y envíalo al mozo.</p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            @foreach ($categorias as $c)
+                @foreach ($c['productos'] as $p)
+                    <button type="button" x-show="enMesa({{ $c['id'] }}, @js($p['nombre'].' '.$p['descripcion'].' '.$c['nombre']))" @click="agregar({{ $p['id'] }})"
+                            :class="cantidadDe({{ $p['id'] }}) ? 'ring-2 ring-[color:var(--acento)]' : 'ring-1 ring-slate-200'"
+                            class="relative flex min-h-[104px] flex-col rounded-2xl bg-white p-3 text-left shadow-sm active:scale-[.97] transition-transform select-none">
+                        <span class="flex items-start gap-2">
+                            <span class="flex-1 min-w-0 text-sm font-bold leading-snug text-slate-800 line-clamp-3">{{ $titulo($p['nombre']) }}</span>
+                            @if ($p['img'])
+                                <img src="{{ $p['img'] }}" alt="" loading="lazy" class="h-12 w-12 shrink-0 rounded-xl object-cover bg-slate-100"
+                                     @click.stop="foto = @js(['img' => $p['img'], 'nombre' => $p['nombre'], 'descripcion' => $p['descripcion'], 'precio' => $soles($p['precio'])])">
+                            @endif
+                        </span>
+                        <span class="mt-auto pt-1.5 flex items-center gap-1.5">
+                            <span class="text-base font-black acento">{{ $soles($p['precio']) }}</span>
+                            @if ($p['precio'] < $p['normal'])<span class="text-[10px] text-slate-400 line-through">{{ $soles($p['normal']) }}</span>@endif
+                        </span>
+                        @if ($p['presentaciones'])
+                            <span class="mt-1 self-start rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 line-clamp-1">📦 {{ collect($p['presentaciones'])->pluck('nombre')->implode(' · ') }}</span>
+                        @endif
+                        {{-- Cuántos van y quitar uno --}}
+                        <span x-show="cantidadDe({{ $p['id'] }})" x-cloak x-text="cantidadDe({{ $p['id'] }})"
+                              class="absolute -top-2 -right-2 min-w-[28px] h-7 px-1.5 rounded-full bg-acento text-white text-sm font-black flex items-center justify-center shadow"></span>
+                        <span x-show="cantidadDe({{ $p['id'] }})" x-cloak @click.stop="quitarUno({{ $p['id'] }})" role="button" aria-label="Quitar uno"
+                              class="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-slate-100 text-slate-700 text-lg font-black flex items-center justify-center active:scale-90">−</span>
+                    </button>
+                @endforeach
+            @endforeach
+        </div>
+        <p x-show="!hayEnMesa()" x-cloak class="text-center text-slate-500 py-10">
+            <span x-show="q.trim()">No encontramos “<span x-text="q"></span>”. Prueba con otra palabra.</span>
+            <span x-show="!q.trim()">Aún no hay productos en esta categoría.</span>
+        </p>
+    </main>
+    @else
     {{-- Portada --}}
     <header class="hero relative overflow-hidden text-white rounded-b-[2rem] shadow-lg isolate">
         <x-kene-adorno />
@@ -135,6 +206,7 @@
             No encontramos “<span x-text="q"></span>”. Prueba con otra palabra.
         </p>
     </main>
+    @endif
 
     <footer class="text-center text-xs text-slate-400 {{ $pide ? 'pb-28' : 'pb-8' }} px-4 space-y-1">
         @if ($negocio->direccion)<p>📍 {{ $negocio->direccion }}</p>@endif
@@ -465,6 +537,16 @@
                                 }).catch(() => {});
                         });
                     }, 6000);
+                },
+
+                // Modo mesa: una categoría a la vez (como el mozo); al buscar se ve todo lo que coincide
+                catMesa: @js(collect($categorias)->first()['id'] ?? null),
+                todoMesa: @js(collect($categorias)->flatMap(fn ($c) => collect($c['productos'])->map(fn ($p) => [$c['id'], $p['nombre'].' '.$p['descripcion'].' '.$c['nombre']]))->values()),
+                enMesa(cat, t) { return this.q.trim() ? this.ver(t) : cat === this.catMesa; },
+                hayEnMesa() { return this.todoMesa.some(([c, t]) => this.enMesa(c, t)); },
+                quitarUno(id) {
+                    const i = this.carrito.map(x => x.id).lastIndexOf(id);
+                    if (i >= 0) this.cambiar(i, -1);
                 },
 
                 q: '', activa: null, foto: null,
