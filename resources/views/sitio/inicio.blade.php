@@ -482,7 +482,7 @@
                     <div class="contacto-dato"><i class="fas fa-location-dot"></i><div><b>Dirección</b><br>Jr. Raúl Pillco Pérez 285, Iquitos, Perú</div></div>
                     <div class="contacto-dato"><i class="fab fa-whatsapp"></i><div><b>Celular / WhatsApp</b><br>+51 928 396 147 · +51 964 382 212</div></div>
                 @endif
-                <div class="contacto-dato"><i class="fas fa-envelope"></i><div><b>Correo</b><br>{{ config('soporte.correo') }}</div></div>
+                <div class="contacto-dato"><i class="fas fa-envelope"></i><div><b>Correo</b><br>@foreach (config('soporte.correos_web') as $correo)<a href="mailto:{{ $correo }}" class="text-reset">{{ $correo }}</a>@if (! $loop->last)<br>@endif @endforeach</div></div>
                 <div class="contacto-dato"><i class="fas fa-clock"></i><div><b>Atención</b><br>Lunes a viernes, 9:00 a. m. a 6:00 p. m.</div></div>
             </div>
             <div class="col-lg-7 revelar">

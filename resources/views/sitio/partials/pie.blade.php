@@ -38,12 +38,12 @@
                     {{-- Partner de la ciudad (ej. Piura): sus teléfonos y su dirección --}}
                     <p class="small mb-1 fw-semibold">{{ $contactoPartner['nombre'] }}</p>
                     <p class="small mb-1">{{ collect($contactoPartner['telefonos'])->map(fn ($t) => '+51 '.$t)->implode(' · ') }}</p>
-                    @if (! empty($contactoPartner['correo']))<p class="small mb-1">{{ $contactoPartner['correo'] }}</p>@endif
+                    @foreach ($contactoPartner['correos'] ?? [] as $correo)<p class="small mb-1"><a href="mailto:{{ $correo }}">{{ $correo }}</a></p>@endforeach
                     <p class="small mb-1">{{ $contactoPartner['direccion'] }}</p>
                     <p class="small mb-0">{{ $contactoPartner['lugar'] }}</p>
                 @else
                     <p class="small mb-1">+51 928 396 147</p>
-                    <p class="small mb-1">{{ config('soporte.correo') }}</p>
+                    @foreach (config('soporte.correos_web') as $correo)<p class="small mb-1"><a href="mailto:{{ $correo }}">{{ $correo }}</a></p>@endforeach
                     <p class="small mb-0">Iquitos, Loreto · Perú</p>
                 @endif
             </div>

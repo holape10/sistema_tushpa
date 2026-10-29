@@ -5,7 +5,9 @@ return [
     'nombre' => env('SOPORTE_NOMBRE', 'HOLAPE E.I.R.L.'),
     'telefono' => env('SOPORTE_TELEFONO', '928396147'),
     'whatsapp' => env('SOPORTE_WHATSAPP', '51928396147'),   // con código de país, sin "+"
-    'correo' => env('SOPORTE_CORREO', 'holapesac@gmail.com'),
+    'correo' => env('SOPORTE_CORREO', 'soporte@tushpa.app'),
+    // Correos que se muestran en la página web (contacto y pie); con partner de la ciudad, los suyos
+    'correos_web' => ['soporte@tushpa.app', 'jacker@tushpa.app'],
     'direccion' => env('SOPORTE_DIRECCION', 'JR. RAUL PILLCO PEREZ NRO. 285'),
     'horario' => env('SOPORTE_HORARIO', 'Lunes a sábado'),
     // Línea discreta al pie de todos los comprobantes
