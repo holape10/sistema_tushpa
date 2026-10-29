@@ -79,6 +79,11 @@ class ClienteController extends Controller
             ->when($filtro === 'web', fn ($w) => $w->where('origen', 'web')->where('estado', '!=', 'ELIMINADO'))
             ->when($filtro === 'eliminar', fn ($w) => $w->where('estado', 'SUSPENDIDO')->where('suspendido_el', '<=', $limiteEliminar))
             ->when($filtro === 'eliminados', fn ($w) => $w->where('estado', 'ELIMINADO'))
+            // Los contadores de arriba también filtran (los vencidos y por vencer, del que vence primero)
+            ->when($filtro === 'activos', fn ($w) => $w->where('estado', 'ACTIVO'))
+            ->when($filtro === 'suspendidos', fn ($w) => $w->where('estado', 'SUSPENDIDO'))
+            ->when($filtro === 'vencidos', fn ($w) => $w->where('estado', 'ACTIVO')->where('vence_el', '<', now()->toDateString())->orderBy('vence_el'))
+            ->when($filtro === 'por_vencer', fn ($w) => $w->where('estado', 'ACTIVO')->whereBetween('vence_el', [now()->toDateString(), now()->addDays(7)->toDateString()])->orderBy('vence_el'))
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('ruc', 'like', $q.'%')
                 ->orWhere('subdominio', 'like', $q.'%')
                 ->orWhere('razon_social', 'like', '%'.$q.'%')
@@ -89,8 +94,8 @@ class ClienteController extends Controller
         $totales = [
             'activos' => $base()->where('estado', 'ACTIVO')->count(),
             'suspendidos' => $base()->where('estado', 'SUSPENDIDO')->count(),
-            'por_vencer' => $base()->where('estado', 'ACTIVO')->whereNotNull('vence_el')
-                ->where('vence_el', '<=', now()->addDays(7)->toDateString())->count(),
+            'vencidos' => $base()->where('estado', 'ACTIVO')->where('vence_el', '<', now()->toDateString())->count(),
+            'por_vencer' => $base()->where('estado', 'ACTIVO')->whereBetween('vence_el', [now()->toDateString(), now()->addDays(7)->toDateString()])->count(),
             // Ingreso mensual de los clientes activos según su plan
             'ingreso' => (float) $base()->where('clientes.estado', 'ACTIVO')->whereNull('clientes.prueba_hasta')
                 ->join('planes', 'planes.id', '=', 'clientes.plan_id')->sum('planes.precio'),

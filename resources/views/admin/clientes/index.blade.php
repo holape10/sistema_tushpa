@@ -25,9 +25,15 @@
     <div id="cabecera-clientes" class="flex flex-wrap items-center gap-3 mb-4">
         <h1 class="text-xl font-bold">Clientes</h1>
         <div data-totales class="flex gap-2 text-xs font-semibold">
-            <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">{{ $totales['activos'] }} activos</span>
-            @if ($totales['suspendidos'])<span class="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700">{{ $totales['suspendidos'] }} suspendidos</span>@endif
-            @if ($totales['por_vencer'])<span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">{{ $totales['por_vencer'] }} vencen en 7 días</span>@endif
+            {{-- Cada contador es un filtro: un clic muestra solo esas empresas, otro clic vuelve a todas --}}
+            @foreach (['activos' => ['activos', 'bg-emerald-100 text-emerald-700 ring-emerald-500'], 'suspendidos' => ['suspendidos', 'bg-rose-100 text-rose-700 ring-rose-500'],
+                'vencidos' => ['vencidos sin pagar', 'bg-orange-100 text-orange-700 ring-orange-500'], 'por_vencer' => ['vencen en 7 días', 'bg-amber-100 text-amber-700 ring-amber-500']] as $valor => [$texto, $color])
+                @if ($valor === 'activos' || $totales[$valor] || $filtro === $valor)
+                    <a href="{{ route('admin.clientes.index', array_filter(['filtro' => $filtro === $valor ? '' : $valor, 'q' => $q, 'usuario' => $usuario])) }}"
+                       title="{{ $filtro === $valor ? 'Ver todos' : 'Ver solo estos' }}"
+                       class="px-2.5 py-1 rounded-full hover:ring-2 {{ $color }} {{ $filtro === $valor ? 'ring-2' : '' }}">{{ $totales[$valor] }} {{ $texto }}</a>
+                @endif
+            @endforeach
             <span class="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700">Ingreso mensual S/ {{ number_format($totales['ingreso'], 2) }}</span>
         </div>
         {{-- Filtros: prueba gratis (registro desde la web) y las suspendidas hace tiempo, para eliminar --}}
