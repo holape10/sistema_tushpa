@@ -100,7 +100,7 @@ class TratamientoClinicoController extends Controller
         $d = $request->validate([
             'descripcion' => 'required|string|max:200', 'esp_id' => 'nullable|integer', 'costo' => 'required_unless:modalidad,MENSUAL|nullable|numeric|min:0|max:999999',
             'detalle' => 'nullable|string|max:3000', 'adelanto' => 'nullable|numeric|min:0|max:999999', 'firma' => 'nullable|string|max:600000',
-        ] + self::REGLAS_PLAN, [], self::NOMBRES_PLAN + ['descripcion' => 'tratamiento', 'costo' => 'costo total']);
+        ] + self::REGLAS_PLAN + self::reglasFecha(), [], self::NOMBRES_PLAN + self::NOMBRES_FECHA + ['descripcion' => 'tratamiento', 'costo' => 'costo total']);
 
         return $this->json(function () use ($hisId, $d) {
             $user = Auth::user();
@@ -109,7 +109,7 @@ class TratamientoClinicoController extends Controller
             $id = DB::table('clinica_tratamientos')->insertGetId(self::plan($d) + [
                 'his_cli_id' => $hisId, 'esp_id' => $espId, 'descripcion' => mb_strtoupper(trim($d['descripcion'])),
                 'doctor' => Clinica::esDoctor($user) ? $user->IdUsuario : null, 'IdUsuario' => $user->IdUsuario,
-                'id_empresa_negocio' => $this->suc(), 'creado' => now(),
+                'id_empresa_negocio' => $this->suc(), 'creado' => $d['fecha_hora'] ?? now(),
             ]);
             $tra = DB::table('clinica_tratamientos')->where('tra_id', $id)->first();
             if (trim((string) ($d['detalle'] ?? '')) !== '' || (float) ($d['adelanto'] ?? 0) > 0) {
@@ -119,7 +119,7 @@ class TratamientoClinicoController extends Controller
                 }
             }
 
-            return ['mensaje' => 'Tratamiento registrado.'.((float) ($d['adelanto'] ?? 0) > 0 ? ' El adelanto ya aparece en "Por cobrar" de recepción.' : ''), 'tra_id' => $id];
+            return ['mensaje' => 'Tratamiento registrado.'.(Clinica::vaACaja($d) ? ' El adelanto ya aparece en "Por cobrar" de recepción.' : ''), 'tra_id' => $id];
         });
     }
 
@@ -155,7 +155,7 @@ class TratamientoClinicoController extends Controller
         $this->usa();
         $tra = $this->tratamiento($id);
         $d = $request->validate(['detalle' => 'nullable|string|max:3000', 'adelanto' => 'nullable|numeric|min:0|max:999999',
-            'firma' => 'nullable|string|max:600000']);
+            'firma' => 'nullable|string|max:600000'] + self::reglasFecha(), [], self::NOMBRES_FECHA);
 
         return $this->json(function () use ($tra, $d) {
             $reg = Clinica::registrarSesion($tra, $d, Auth::user());
@@ -163,7 +163,7 @@ class TratamientoClinicoController extends Controller
                 Clinica::guardarFirma($reg, $this->suc(), $d['firma']);
             }
 
-            return ['mensaje' => 'Sesión registrada.'.((float) ($d['adelanto'] ?? 0) > 0 ? ' El pago ya aparece en "Por cobrar" de recepción.' : '')];
+            return ['mensaje' => 'Sesión registrada.'.(Clinica::vaACaja($d) ? ' El pago ya aparece en "Por cobrar" de recepción.' : '')];
         });
     }
 
@@ -220,6 +220,19 @@ class TratamientoClinicoController extends Controller
         'cuota' => 'required_if:modalidad,MENSUAL|nullable|numeric|min:0.01|max:999999',
         'primer_vencimiento' => 'required_if:modalidad,MENSUAL|nullable|date',
     ];
+
+    /**
+     * Fecha de la sesión o del tratamiento: vacía = ahora; puede ser pasada (tratamientos que se pasan del cuaderno).
+     * Un pago con fecha pasada puede marcarse como ya cobrado: no va a "Por cobrar" de caja.
+     *
+     * @return array<string, string>
+     */
+    private static function reglasFecha(): array
+    {
+        return ['fecha_hora' => 'nullable|date|after:2000-01-01|before_or_equal:'.now()->addHour()->format('Y-m-d H:i:s'), 'ya_cobrado' => 'nullable|boolean'];
+    }
+
+    private const NOMBRES_FECHA = ['fecha_hora' => 'fecha'];
 
     private const NOMBRES_PLAN = ['cuota_inicial' => 'cuota inicial', 'cuotas' => 'número de meses', 'cuota' => 'cuota mensual', 'primer_vencimiento' => 'fecha de la primera cuota'];
 

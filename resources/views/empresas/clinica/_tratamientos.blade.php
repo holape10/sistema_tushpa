@@ -42,7 +42,7 @@
             // ---- Tratamiento ----
             nuevoTratamiento() {
                 const mes = new Date(); mes.setMonth(mes.getMonth() + 1);
-                this.modalTrat = { tra_id: null, descripcion: '', esp_id: '', costo: '', detalle: '', adelanto: '', conSesion: true,
+                this.modalTrat = { tra_id: null, descripcion: '', esp_id: '', costo: '', detalle: '', adelanto: '', conSesion: true, fecha_hora: '', ya_cobrado: true,
                     modalidad: 'UNICO', cuota_inicial: '', cuotas: 12, cuota: '', primer_vencimiento: mes.toISOString().slice(0, 10) };
                 this.$nextTick(() => this.prepararFirma('firma_trat'));
             },
@@ -52,6 +52,10 @@
             },
             // Plan mensual: el costo total es la inicial más las cuotas
             totalPlan(m) { return m.modalidad === 'MENSUAL' ? (Number(m.cuota_inicial) || 0) + (Number(m.cuotas) || 0) * (Number(m.cuota) || 0) : (Number(m.costo) || 0); },
+            // Fecha de la sesión: vacía = ahora; si es de antes de hoy se puede marcar el pago como ya cobrado
+            hoy() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); },
+            esPasada(f) { return !!f && f.slice(0, 10) < this.hoy(); },
+            datosFecha(m) { return m.fecha_hora ? { fecha_hora: m.fecha_hora.replace('T', ' '), ya_cobrado: this.esPasada(m.fecha_hora) && m.ya_cobrado } : {}; },
             mesCorto(f) { return f ? new Date(f + 'T00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : ''; },
             async guardarTratamiento() {
                 const m = this.modalTrat;
@@ -60,18 +64,18 @@
                 const r = m.tra_id
                     ? await this.post('{{ url('clinica/tratamientos') }}/' + m.tra_id, datos)
                     : await this.post('{{ url('clinica/historia') }}/' + this.hisId + '/tratamientos',
-                        { ...datos, detalle: m.detalle, adelanto: m.adelanto || 0, firma: this.firmaDe('firma_trat') });
+                        { ...datos, ...this.datosFecha(m), detalle: m.detalle, adelanto: m.adelanto || 0, firma: this.firmaDe('firma_trat') });
                 if (r.ok) { this.modalTrat = null; this.cargar(this.hisId); }
             },
             // ---- Sesión ----
             nuevaSesion(t) {
-                this.modalSesion = { tra: t, detalle: '', adelanto: '' };
+                this.modalSesion = { tra: t, detalle: '', adelanto: '', fecha_hora: '', ya_cobrado: true };
                 this.$nextTick(() => this.prepararFirma('firma_sesion'));
             },
             async guardarSesion() {
                 const m = this.modalSesion;
                 const r = await this.post('{{ url('clinica/tratamientos') }}/' + m.tra.tra_id + '/sesion',
-                    { detalle: m.detalle, adelanto: m.adelanto || 0, firma: this.firmaDe('firma_sesion') });
+                    { ...this.datosFecha(m), detalle: m.detalle, adelanto: m.adelanto || 0, firma: this.firmaDe('firma_sesion') });
                 if (r.ok) { this.modalSesion = null; this.cargar(this.hisId); }
             },
             // ---- Firma en la tablet (dedo, lápiz o mouse) ----
@@ -166,6 +170,7 @@
                                     <span x-text="Number(r.adelanto) > 0 ? soles(r.adelanto) : '—'"></span>
                                     <span x-show="r.cobrado === true" class="block text-[10px] font-bold text-emerald-600">cobrado en caja</span>
                                     <span x-show="r.cobrado === false" class="block text-[10px] font-bold text-amber-600">por cobrar en caja</span>
+                                    <span x-show="r.cobrado === null && Number(r.adelanto) > 0" class="block text-[10px] font-bold text-gray-500">cobrado antes</span>
                                 </td>
                                 <td class="px-3 py-2 text-right whitespace-nowrap font-semibold" x-text="soles(r.saldo)"></td>
                                 <td class="px-3 py-2 text-center"><span x-show="Number(r.adelanto) > 0 && Number(r.saldo) <= 0" class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">CANCELADO</span></td>
@@ -197,13 +202,14 @@
                     <div class="grid grid-cols-2 gap-2">
                         <button type="button" @click="modalTrat.modalidad = 'UNICO'" class="rounded-xl border-2 px-3 py-2 text-left"
                                 :class="modalTrat.modalidad === 'UNICO' ? 'border-teal-600 bg-teal-50' : 'border-gray-200'">
-                            <span class="block text-sm font-bold">💵 Costo total</span><span class="block text-[11px] text-gray-500">Paga con adelantos cuando puede</span></button>
+                            <span class="block text-sm font-bold">💵 Normal / por sesiones</span><span class="block text-[11px] text-gray-500">Curaciones: paga por partes en cada sesión</span></button>
                         <button type="button" @click="modalTrat.modalidad = 'MENSUAL'" class="rounded-xl border-2 px-3 py-2 text-left"
                                 :class="modalTrat.modalidad === 'MENSUAL' ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200'">
                             <span class="block text-sm font-bold">📅 Mensual</span><span class="block text-[11px] text-gray-500">Ortodoncia: inicial + cuotas por mes</span></button>
                     </div>
                     <label x-show="modalTrat.modalidad !== 'MENSUAL'" class="block text-xs font-semibold text-gray-500">Costo total S/
-                        <input type="number" step="0.01" min="0" x-model="modalTrat.costo" class="{{ $in }} mt-1 text-right font-bold"></label>
+                        <input type="number" step="0.01" min="0" x-model="modalTrat.costo" class="{{ $in }} mt-1 text-right font-bold">
+                        <span class="block mt-1 font-normal text-[11px] text-gray-500">El paciente paga por partes: en cada sesión con <b>+ Sesión / pago</b> se anota lo que paga y el saldo baja solo. Si el tratamiento sube, corrígelo con ✏️.</span></label>
                     <div x-show="modalTrat.modalidad === 'MENSUAL'" class="grid grid-cols-2 gap-2 rounded-xl bg-indigo-50/60 p-3">
                         <label class="block text-xs font-semibold text-gray-500">Cuota inicial S/ <span class="font-normal">(si no hay, 0)</span>
                             <input type="number" step="0.01" min="0" x-model="modalTrat.cuota_inicial" placeholder="0.00" class="{{ $in }} mt-1 text-right"></label>
@@ -221,6 +227,12 @@
                     <template x-if="!modalTrat.tra_id">
                         <div class="space-y-3 border-t pt-3">
                             <p class="text-xs font-bold text-gray-500 uppercase">Primera sesión (opcional)</p>
+                            <div class="grid grid-cols-2 gap-2 items-end">
+                                <label class="block text-xs font-semibold text-gray-500">Fecha <span class="font-normal">(vacío = ahora)</span>
+                                    <input type="datetime-local" x-model="modalTrat.fecha_hora" :max="hoy() + 'T23:59'" class="{{ $in }} mt-1"></label>
+                                <label x-show="esPasada(modalTrat.fecha_hora) && Number(modalTrat.adelanto) > 0" class="flex items-center gap-2 text-xs text-gray-600 pb-2">
+                                    <input type="checkbox" x-model="modalTrat.ya_cobrado" class="rounded text-teal-600"> Ese pago ya se cobró (no mandarlo a caja)</label>
+                            </div>
                             <label class="block text-xs font-semibold text-gray-500">Tratamiento realizado o indicaciones
                                 <textarea x-model="modalTrat.detalle" rows="2" class="{{ $in }} mt-1"></textarea></label>
                             <label class="block text-xs font-semibold text-gray-500">Adelanto que paga hoy S/
@@ -253,6 +265,12 @@
                         <h3 class="font-bold text-gray-800">Nueva sesión</h3>
                         <p class="text-sm text-gray-500"><span x-text="modalSesion.tra.descripcion"></span> · saldo <b class="text-rose-600" x-text="soles(modalSesion.tra.saldo)"></b></p>
                     </div>
+                    <div class="grid grid-cols-2 gap-2 items-end">
+                                <label class="block text-xs font-semibold text-gray-500">Fecha <span class="font-normal">(vacío = ahora)</span>
+                                    <input type="datetime-local" x-model="modalSesion.fecha_hora" :max="hoy() + 'T23:59'" class="{{ $in }} mt-1"></label>
+                                <label x-show="esPasada(modalSesion.fecha_hora) && Number(modalSesion.adelanto) > 0" class="flex items-center gap-2 text-xs text-gray-600 pb-2">
+                                    <input type="checkbox" x-model="modalSesion.ya_cobrado" class="rounded text-teal-600"> Ese pago ya se cobró (no mandarlo a caja)</label>
+                            </div>
                     <label class="block text-xs font-semibold text-gray-500">Tratamiento realizado o indicaciones
                         <textarea x-model="modalSesion.detalle" rows="3" class="{{ $in }} mt-1"></textarea></label>
                     <div class="flex items-end gap-2">
@@ -269,7 +287,7 @@
                                 class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold" x-text="'Pagar lo vencido (' + soles(modalSesion.tra.vencido) + ')'"></button>
                     </div>
                     <p class="text-xs text-gray-500">Saldo después: <b x-text="soles(Math.max(0, (Number(modalSesion.tra.saldo) || 0) - (Number(modalSesion.adelanto) || 0)))"></b>.
-                        El pago lo cobra recepción en caja (le aparece en "Por cobrar").</p>
+                        <span x-text="esPasada(modalSesion.fecha_hora) && modalSesion.ya_cobrado ? 'Es un pago de antes: solo queda anotado, no va a caja.' : 'El pago lo cobra recepción en caja (le aparece en &quot;Por cobrar&quot;).'"></span></p>
                     <div>
                         <div class="flex justify-between items-center"><span class="text-xs font-semibold text-gray-500">Firma del paciente</span>
                             <button type="button" @click="borrarFirma('firma_sesion')" class="text-xs text-gray-500 underline">Borrar</button></div>

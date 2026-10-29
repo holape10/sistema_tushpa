@@ -444,6 +444,14 @@ class Clinica
      * @param  array{detalle?: ?string, adelanto?: float|string|null, fecha_hora?: ?string}  $d
      * @return int reg_id
      */
+    /** Un pago va a "Por cobrar" de caja salvo que sea de una fecha pasada y se marque como ya cobrado */
+    public static function vaACaja(array $d): bool
+    {
+        $pasado = ! empty($d['fecha_hora']) && Carbon::parse($d['fecha_hora'])->lt(Carbon::today());
+
+        return (float) ($d['adelanto'] ?? 0) > 0 && ! ($pasado && ! empty($d['ya_cobrado']));
+    }
+
     public static function registrarSesion(object $tra, array $d, User $user): int
     {
         $pagado = (float) DB::table('clinica_tratamiento_registros')->where('tra_id', $tra->tra_id)->sum('adelanto');
@@ -458,7 +466,7 @@ class Clinica
         $saldo = round($pendiente - $adelanto, 2);
 
         $pedId = null;
-        if ($adelanto > 0) {
+        if (self::vaACaja($d)) {
             $h = DB::table('historia_clinica as h')->join('cliente as c', 'c.clicod', '=', 'h.clicod')->where('h.his_cli_id', $tra->his_cli_id)
                 ->first(['h.*', 'c.clinom', 'c.clinum']);
             $pedido = Pedido::create([
@@ -478,7 +486,7 @@ class Clinica
             'adelanto' => $adelanto, 'saldo' => $saldo, 'ped_id' => $pedId, 'IdUsuario' => $user->IdUsuario, 'creado' => now(),
         ]);
         DB::table('clinica_tratamientos')->where('tra_id', $tra->tra_id)->update($saldo <= 0 && (float) $tra->costo > 0
-            ? ['estado' => 'CANCELADO', 'cancelado' => now()] : ['estado' => 'EN CURSO', 'cancelado' => null]);
+            ? ['estado' => 'CANCELADO', 'cancelado' => $d['fecha_hora'] ?? now()] : ['estado' => 'EN CURSO', 'cancelado' => null]);
 
         return $regId;
     }
@@ -517,6 +525,11 @@ class Clinica
 
         return $tratamientos->map(function ($t) use ($registros) {
             $t->registros = $registros[$t->tra_id] ?? collect();
+            // El saldo de cada sesión se recalcula en orden de fecha (una sesión pasada pudo registrarse después)
+            $saldo = (float) $t->costo;
+            foreach ($t->registros as $r) {
+                $r->saldo = $saldo = round($saldo - (float) $r->adelanto, 2);
+            }
             $t->pagado = round((float) $t->registros->sum('adelanto'), 2);
             $t->saldo = round((float) $t->costo - $t->pagado, 2);
 
