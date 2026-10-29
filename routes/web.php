@@ -56,6 +56,7 @@ use App\Http\Controllers\ImpresionController;
 use App\Http\Controllers\InicioController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\KardexController;
+use App\Http\Controllers\KardexSunatController;
 use App\Http\Controllers\LineaTiempoController;
 use App\Http\Controllers\LoteController;
 use App\Http\Controllers\MedioPagoController;
@@ -536,6 +537,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/kardex', [KardexController::class, 'index'])->name('kardex.index');
     Route::get('/kardex/stock', [KardexController::class, 'stock'])->name('kardex.stock');
     Route::get('/kardex/excel', [KardexController::class, 'excel'])->name('kardex.excel');
+    // Kardex oficial de SUNAT: formatos 12.1 y 13.1 con su archivo del PLE
+    Route::get('/kardex/sunat', [KardexSunatController::class, 'index'])->name('kardex.sunat');
+    Route::get('/kardex/sunat/txt', [KardexSunatController::class, 'txt'])->name('kardex.sunat.txt');
+    Route::get('/kardex/sunat/excel', [KardexSunatController::class, 'excel'])->name('kardex.sunat.excel');
+    Route::post('/kardex/sunat/codigos', [KardexSunatController::class, 'codigos'])->name('kardex.sunat.codigos');
     Route::get('/respaldo', [RespaldoEmpresaController::class, 'index'])->name('respaldo.index');
     Route::post('/respaldo/descargar', [RespaldoEmpresaController::class, 'descargar'])->middleware('throttle:3,10')->name('respaldo.descargar');
     // Mis comprobantes: los que TUSHPA (sistema principal) le emitió a esta empresa

@@ -112,9 +112,33 @@
                         <p class="text-xs text-gray-400 mt-1">Unidad predeterminada de venta y stock. En el ticket sale con su nombre; a SUNAT siempre va un código vigente.</p>
                     </div>
 
+                    {{-- Para el Kardex SUNAT (formatos 12.1 y 13.1 del PLE): solo lo que maneja stock --}}
+                    <div x-show="tipo == '0' || tipo == '4'" x-cloak>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Código de existencia <span class="font-normal text-gray-400">(Kardex SUNAT, opcional)</span></label>
+                        <input type="text" name="unspsc" x-ref="codigoSunat" value="{{ old('unspsc', $p->unspsc ?? '') }}" maxlength="16" inputmode="numeric" pattern="\d{8}|\d{16}"
+                               list="codigos-sunat" placeholder="Escribe: agua, gasolina, lácteos…" class="{{ $campo }} font-mono">
+                        {{-- Primero lo que la empresa ya usa; luego el catálogo 25 de SUNAT --}}
+                        <datalist id="codigos-sunat">
+                            @foreach (($codigosSunat['usados'] ?? []) + ($codigosSunat['catalogo'] ?? []) as $codigo => $texto)<option value="{{ $codigo }}">{{ $texto }}</option>@endforeach
+                        </datalist>
+                        <p class="text-xs text-gray-400 mt-1">Escribe qué es y elige el código, o pega el de 16 dígitos del <a href="{{ \App\Support\KardexSunat::BUSCADOR_CUBSO }}" target="_blank" class="text-indigo-600 underline">buscador oficial del CUBSO</a>.
+                            Si otro producto de la misma categoría ya lo tiene, se pone solo.</p>
+                    </div>
+                    <div x-show="tipo == '0' || tipo == '4'" x-cloak>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de existencia <span class="font-normal text-gray-400">(tabla 5 SUNAT)</span></label>
+                        <select name="tipo_existencia" class="{{ $campo }}">
+                            <option value="">Automático (producto = mercadería, insumo = materia prima)</option>
+                            @foreach (\App\Support\KardexSunat::TIPOS_EXISTENCIA as $cod => $nom)
+                                <option value="{{ $cod }}" @selected(old('tipo_existencia', $p->tipo_existencia ?? '') == $cod)>{{ $cod }} · {{ $nom }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                        <select name="cat_id" class="{{ $campo }}">
+                        {{-- Al elegir la categoría se sugiere el código SUNAT que más usan sus productos (si aún no tiene) --}}
+                        <select name="cat_id" class="{{ $campo }}"
+                                @change="const c = @js($codigosSunat['porCategoria'] ?? [])[$event.target.value]; if (c && $refs.codigoSunat && !$refs.codigoSunat.value) $refs.codigoSunat.value = c">
                             <option value="">— Sin categoría —</option>
                             @foreach ($categorias as $c)
                                 <option value="{{ $c->cat_id }}" @selected(old('cat_id', $p->cat_id ?? null) == $c->cat_id)>{{ $c->cat_nom }}</option>

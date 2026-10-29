@@ -47,6 +47,7 @@ class InicioController extends Controller
         '/transferencias' => ['fa-right-left', '#7c3aed'],
         '/kardex' => ['fa-book', '#334155'],
         '/kardex/stock' => ['fa-boxes-stacked', '#ea580c'],
+        '/kardex/sunat' => ['fa-file-contract', '#b91c1c'],
         '/kardex/movimiento' => ['fa-dolly', '#0d9488'],
         '/lotes' => ['fa-calendar-xmark', '#b45309'],
         '/productos' => ['fa-box-open', '#f97316'],

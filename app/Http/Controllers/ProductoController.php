@@ -15,6 +15,7 @@ use App\Support\Excel;
 use App\Support\ExcelLector;
 use App\Support\ImagenProducto;
 use App\Support\Kardex;
+use App\Support\KardexSunat;
 use App\Support\Recetas;
 use App\Support\Rubros;
 use Illuminate\Http\Request;
@@ -59,7 +60,9 @@ class ProductoController extends Controller
         // Para el stock inicial (solo al crear): el predeterminado primero
         $almacenes = Almacen::where('id_empresa_negocio', $sucursal)->orderByDesc('predeterminado')->orderBy('descripcion')->get(['id_almacen', 'descripcion']);
 
-        return view('empresas.productos.create', compact('categorias', 'subcategorias', 'unidades', 'itemsParaCombo', 'almacenes'));
+        $codigosSunat = KardexSunat::codigosUsados((int) $sucursal);
+
+        return view('empresas.productos.create', compact('categorias', 'subcategorias', 'unidades', 'itemsParaCombo', 'almacenes', 'codigosSunat'));
     }
 
     /** Reglas comunes de crear y editar; el precio de venta no aplica a insumos (no se venden) */
@@ -79,6 +82,9 @@ class ProductoController extends Controller
             'debe' => 'nullable|string|max:12|regex:/^[0-9A-Za-z]+$/',
             'haber' => 'nullable|string|max:12|regex:/^[0-9A-Za-z]+$/',
             'codigo_barra' => 'nullable|string|max:50',
+            // Kardex SUNAT (PLE 12.1 / 13.1)
+            'unspsc' => ['nullable', 'regex:'.KardexSunat::REGLA_CODIGO],
+            'tipo_existencia' => 'nullable|in:'.implode(',', array_keys(KardexSunat::TIPOS_EXISTENCIA)),
             'umecod' => 'nullable|exists:unidad_medida,umecod',
             'ume_equivalente' => 'nullable|exists:unidad_medida,umecod',
             'factor_equivalente' => 'nullable|required_with:ume_equivalente|numeric|min:0.0001|max:99999999',
@@ -103,7 +109,7 @@ class ProductoController extends Controller
     }
 
     private const NOMBRES = [
-        'pronom' => 'Nombre del producto', 'debe' => 'Cuenta Debe', 'haber' => 'Cuenta Haber', 'propun' => 'Precio de venta', 'promocion' => 'Tipo', 'codigo_barra' => 'Código de barras',
+        'pronom' => 'Nombre del producto', 'unspsc' => 'Código de existencia (8 dígitos UNSPSC o 16 del CUBSO)', 'tipo_existencia' => 'Tipo de existencia', 'debe' => 'Cuenta Debe', 'haber' => 'Cuenta Haber', 'propun' => 'Precio de venta', 'promocion' => 'Tipo', 'codigo_barra' => 'Código de barras',
         'ume_equivalente' => 'Unidad equivalente', 'factor_equivalente' => 'Factor de equivalencia', 'imagen' => 'Imagen', 'fotos_extra' => 'Más fotos', 'fotos_extra.*' => 'Foto',
         'presentaciones.*.umecod' => 'Unidad de la presentación', 'presentaciones.*.factor' => 'Factor de la presentación',
         'presentaciones.*.precio' => 'Precio de la presentación', 'presentaciones.*.codigo_barra' => 'Código de barras de la presentación',
@@ -291,6 +297,8 @@ class ProductoController extends Controller
                 'cat_id' => $request->cat_id,
                 'subcat_id' => $request->subcat_id,
                 'stock_min' => $request->stock_min ?: 0,
+                'unspsc' => in_array($tipo, [0, 4], true) ? ($request->unspsc ?: null) : null,
+                'tipo_existencia' => in_array($tipo, [0, 4], true) ? ($request->tipo_existencia ?: null) : null,
                 'debe' => trim((string) $request->debe) ?: null,
                 'haber' => trim((string) $request->haber) ?: null,
                 'control_lote' => in_array($tipo, [0, 4]) && $request->boolean('control_lote') && Rubros::permite('lotes'),
@@ -380,7 +388,9 @@ class ProductoController extends Controller
             ->orderBy('pronom')->get();
         $comboActual = $producto->itemsCombo()->pluck('prod_comb_cant', 'IdProducto_comb');
 
-        return view('empresas.productos.edit', compact('producto', 'categorias', 'subcategorias', 'unidades', 'itemsParaCombo', 'comboActual'));
+        $codigosSunat = KardexSunat::codigosUsados((int) $sucursal);
+
+        return view('empresas.productos.edit', compact('producto', 'categorias', 'subcategorias', 'unidades', 'itemsParaCombo', 'comboActual', 'codigosSunat'));
     }
 
     public function update(Request $request, Producto $producto)
@@ -413,6 +423,8 @@ class ProductoController extends Controller
                     'codigo_barra' => trim((string) $request->codigo_barra) ?: null,
                     'descripcion' => trim((string) $request->descripcion) ?: null,
                     'debe' => trim((string) $request->debe) ?: null, 'haber' => trim((string) $request->haber) ?: null,
+                    'unspsc' => in_array($tipo, [0, 4], true) ? ($request->unspsc ?: null) : null,
+                    'tipo_existencia' => in_array($tipo, [0, 4], true) ? ($request->tipo_existencia ?: null) : null,
                     'control_lote' => in_array($tipo, [0, 4]) && $request->boolean('control_lote') && (Rubros::permite('lotes') || $producto->control_lote),
                     'control_serie' => $tipo === 0 && $request->boolean('control_serie') && (Rubros::permite('series') || $producto->control_serie),
                     'garantia_meses' => $tipo === 0 && $request->boolean('control_serie') && (Rubros::permite('series') || $producto->control_serie)
