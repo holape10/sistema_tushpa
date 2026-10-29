@@ -54,6 +54,7 @@ return [
             'nombre' => 'Gabriel Ríos',
             'whatsapp' => '51964382212',
             'telefonos' => ['964 382 212', '958 258 047'],
+            'correo' => 'devsoftsolucionestecnologicas@gmail.com',
             'direccion' => 'Urb. San Felipe, al costado de la Privada - Piura',
             'lugar' => 'Piura · Perú',
         ],
@@ -73,7 +74,7 @@ return [
         ],
         'atencion' => [
             'titulo' => 'Estamos en Piura',
-            'texto' => 'Te atiende Gabriel Ríos en Urb. San Felipe, al costado de la Privada, Piura, y por WhatsApp al 964 382 212 o al 958 258 047. Te acompañamos a cargar tus productos, configurar tu impresora de tickets y emitir tu primer comprobante.',
+            'texto' => 'Te atiende Gabriel Ríos en Urb. San Felipe, al costado de la Privada, Piura, por WhatsApp al 964 382 212 o al 958 258 047 y por correo a devsoftsolucionestecnologicas@gmail.com. Te acompañamos a cargar tus productos, configurar tu impresora de tickets y emitir tu primer comprobante.',
         ],
         'preguntas' => [
             ['¿Atienden negocios de Piura?', 'Sí. Te atendemos en Piura, en Urb. San Felipe (al costado de la Privada), y por WhatsApp al 964 382 212 o al 958 258 047.'],

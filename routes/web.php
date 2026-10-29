@@ -571,6 +571,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/cobros/registrar', [CobroController::class, 'registrar'])->name('cobros.registrar');
     Route::get('/cobros/cliente/{doc}', [CobroController::class, 'buscarCliente'])->name('cobros.cliente');
     Route::get('/voucher/{id}', [CobroController::class, 'voucher'])->name('cobros.voucher');
+    Route::get('/voucher/{id}/rawbt', [CobroController::class, 'rawbt'])->whereNumber('id')->name('cobros.rawbt');
 
     // Cuentas por cobrar (ventas al crédito) y por pagar (compras al crédito)
     Route::prefix('/cuentas/{tipo}')->whereIn('tipo', ['cobrar', 'pagar'])->group(function () {

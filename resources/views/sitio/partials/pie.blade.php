@@ -38,6 +38,7 @@
                     {{-- Partner de la ciudad (ej. Piura): sus teléfonos y su dirección --}}
                     <p class="small mb-1 fw-semibold">{{ $contactoPartner['nombre'] }}</p>
                     <p class="small mb-1">{{ collect($contactoPartner['telefonos'])->map(fn ($t) => '+51 '.$t)->implode(' · ') }}</p>
+                    @if (! empty($contactoPartner['correo']))<p class="small mb-1">{{ $contactoPartner['correo'] }}</p>@endif
                     <p class="small mb-1">{{ $contactoPartner['direccion'] }}</p>
                     <p class="small mb-0">{{ $contactoPartner['lugar'] }}</p>
                 @else

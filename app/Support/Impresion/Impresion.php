@@ -245,6 +245,18 @@ class Impresion
             return true;
         }
 
+        self::encolar($imp, self::ticketComprobante($cab, $imp, $copias), 'COMPROBANTE', $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT));
+
+        return true;
+    }
+
+    /**
+     * Los bytes ESC/POS del ticket del comprobante con el diseño y el ancho de $imp (columnas, diseno, abrir_cajon).
+     * Lo usan la cola del agente y la impresión directa desde Android con RawBT.
+     */
+    public static function ticketComprobante(object $cab, object $imp, int $copias = 1): string
+    {
+        $idCpe = (int) $cab->IdCpe_cabecera;
         $detalle = DB::table('cpe_detalle')->where('IdCpe_cabecera', $idCpe)->get();
         $medios = DB::table('venta_medio_pago as v')->leftJoin('medios_pagos as m', 'm.id_med_pag', '=', 'v.id_med_pag')
             ->where('v.IdCpe_cabecera', $idCpe)->get(['m.nom_med_pag', 'v.monto']);
@@ -259,9 +271,8 @@ class Impresion
             $p = ($imp->diseno ?? '') === 'COMPACTO'
                 ? self::ticketCompacto($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido)
                 : self::ticketClasico($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido, ($imp->diseno ?? '') === 'EN_LINEA');
-            self::encolar($imp, self::conCopias($imp, $p->bytes(), $copias, true), 'COMPROBANTE', $numero);
 
-            return true;
+            return self::conCopias($imp, $p->bytes(), $copias, true);
         }
 
         $p = new Escpos((int) $imp->columnas);
@@ -350,9 +361,8 @@ class Impresion
             ->texto('¡Gracias por su preferencia!');
         self::firma($p);
         $p->avanzar(3)->cortar();
-        self::encolar($imp, self::conCopias($imp, $p->bytes(), $copias, true), 'COMPROBANTE', $numero);
 
-        return true;
+        return self::conCopias($imp, $p->bytes(), $copias, true);
     }
 
     /**

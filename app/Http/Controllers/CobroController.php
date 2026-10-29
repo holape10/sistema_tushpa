@@ -24,6 +24,7 @@ use App\Support\MesasUnidas;
 use App\Support\OpcionesPlato;
 use App\Support\Propinas;
 use App\Support\VentaDirecta;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -564,5 +565,25 @@ class CobroController extends Controller
         $datos = compact('cab', 'detalle', 'medios', 'empresa', 'negocio', 'tdodes', 'pedidoPendiente');
 
         return view($formato === 'A4' ? 'empresas.cobros.comprobante_a4' : 'empresas.cobros.voucher', $datos);
+    }
+
+    /**
+     * El ticket en ESC/POS (base64) para imprimirlo directo desde Android con la app RawBT, sin vista previa.
+     * El ancho lo elige el equipo (58 mm = 32 columnas, 80 mm = 48); el diseño es el de la ticketera de caja.
+     */
+    public function rawbt(Request $request, $id): JsonResponse
+    {
+        $user = Auth::user();
+        $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->where('id_empresa_negocio', $user->id_empresa_negocio)->first();
+        abort_unless($cab, 404);
+        $caja = Impresion::impresoraCaja((int) $cab->id_empresa_negocio);
+        $ticketera = (object) [
+            'columnas' => in_array($request->integer('columnas'), [32, 42, 48], true) ? $request->integer('columnas') : 32,
+            'diseno' => $caja && $caja->tip_conex_imp !== 'WINDOWS' ? ($caja->diseno ?? 'CLASICO') : 'CLASICO',
+            'abrir_cajon' => 0,
+        ];
+        $copias = Impresion::copias((int) $cab->id_empresa_negocio, 'copias_comprobante');
+
+        return response()->json(['datos' => base64_encode(Impresion::ticketComprobante($cab, $ticketera, $copias))]);
     }
 }

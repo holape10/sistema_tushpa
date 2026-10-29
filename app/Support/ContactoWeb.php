@@ -59,7 +59,8 @@ class ContactoWeb
     {
         $p = self::partner();
         if ($p) {
-            config(['soporte.whatsapp' => $p['whatsapp'], 'soporte.telefono' => str_replace(' ', '', $p['telefonos'][0])]);
+            config(['soporte.whatsapp' => $p['whatsapp'], 'soporte.telefono' => str_replace(' ', '', $p['telefonos'][0])]
+                + (empty($p['correo']) ? [] : ['soporte.correo' => $p['correo']]));
         }
 
         return $p;

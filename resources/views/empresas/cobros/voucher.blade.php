@@ -174,6 +174,8 @@
 
 @unless (request('embed'))
 <div class="acciones">
+    {{-- Android con ticketera Bluetooth: imprime directo con la app RawBT (sin la vista previa) --}}
+    <button class="b2" id="btn-rawbt" style="background:#059669; display:none;" onclick="imprimirRawbt()">🖨 IMPRIMIR DIRECTO</button>
     <button class="b2" onclick="window.print()">IMPRIMIR</button>
     <a class="b2" style="background:#6b7280;" href="{{ request()->fullUrlWithQuery(['formato' => 'a4']) }}">VER EN A4</a>
     @if ($pedidoPendiente)
@@ -199,8 +201,47 @@
 </div>
 @endunless
 
+@unless (request('embed'))
+<div id="ajuste-rawbt" style="display:none; text-align:center; font-family:Arial, sans-serif; font-size:12px; color:#4b5563; margin:6px 0 14px;">
+    <label><input type="checkbox" id="usa-rawbt" onchange="guardarRawbt()"> Este equipo imprime directo con RawBT</label>
+    <select id="ancho-rawbt" onchange="guardarRawbt()" style="margin-left:6px;">
+        <option value="32">58 mm</option><option value="48">80 mm</option>
+    </select>
+</div>
+@endunless
+<script>
+    // RawBT: el ticket se pide ya armado en ESC/POS y se le pasa a la app con un intent de Android.
+    // Se descarga al abrir la página, así el toque en el botón lo abre al instante.
+    const RAWBT_URL = @js(route('cobros.rawbt', $cab->IdCpe_cabecera));
+    let rawbtDatos = null;
+    function anchoRawbt() { try { return localStorage.getItem('tushpa_rawbt'); } catch (e) { return null; } }
+    function prepararRawbt() {
+        const ancho = anchoRawbt();
+        document.getElementById('btn-rawbt') && (document.getElementById('btn-rawbt').style.display = ancho ? '' : 'none');
+        rawbtDatos = null;
+        if (!ancho) return Promise.resolve(null);
+        return fetch(RAWBT_URL + '?columnas=' + ancho, { headers: { Accept: 'application/json' } })
+            .then(r => r.json()).then(d => (rawbtDatos = d.datos)).catch(() => null);
+    }
+    async function imprimirRawbt() {
+        const datos = rawbtDatos || await prepararRawbt();
+        if (!datos) { alert('No se pudo preparar el ticket. Revisa tu conexión.'); return; }
+        location.href = 'intent:base64,' + datos + '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
+    }
+    function guardarRawbt() {
+        const usa = document.getElementById('usa-rawbt').checked;
+        try { usa ? localStorage.setItem('tushpa_rawbt', document.getElementById('ancho-rawbt').value) : localStorage.removeItem('tushpa_rawbt'); } catch (e) {}
+        prepararRawbt();
+    }
+    const listoRawbt = prepararRawbt();
+    if (/Android/i.test(navigator.userAgent) && document.getElementById('ajuste-rawbt')) {
+        document.getElementById('ajuste-rawbt').style.display = '';
+        document.getElementById('usa-rawbt').checked = !!anchoRawbt();
+        if (anchoRawbt()) document.getElementById('ancho-rawbt').value = anchoRawbt();
+    }
+</script>
 @if (request('imprimir') == 1)
-    <script>window.addEventListener('load', () => setTimeout(() => window.print(), 400));</script>
+    <script>window.addEventListener('load', () => setTimeout(() => anchoRawbt() ? listoRawbt.then(imprimirRawbt) : window.print(), 400));</script>
 @endif
 @unless (request('embed'))@include('partials.avisos')@endunless
 </body>
