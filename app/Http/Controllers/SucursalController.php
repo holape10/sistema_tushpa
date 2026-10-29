@@ -108,6 +108,8 @@ class SucursalController extends Controller
             'tip_igv_pred' => 'required|in:10,20',
             'tdocod_pred' => 'required|in:01,03,13',
             'formato_impresion' => 'required|in:TICKET,A4',
+            'diseno_a4' => 'nullable|in:MODERNO,SIMPLE',
+            'cabecera_a4' => 'nullable|string|max:500',
             'control_stock' => 'required|in:'.implode(',', array_keys(ControlStock::NIVELES)),
             'comandas_solo_mesas' => 'nullable|boolean',
             'ip_mozos' => 'nullable|string|max:255',
@@ -179,6 +181,8 @@ class SucursalController extends Controller
         $datos['descuento_max_cajero'] = (float) ($datos['descuento_max_cajero'] ?? 10);
         $datos['permite_propina'] = $request->boolean('permite_propina');
         $datos['imagenes_venta'] = $request->boolean('imagenes_venta');
+        $datos['diseno_a4'] = $datos['diseno_a4'] ?? 'MODERNO';
+        $datos['cabecera_a4'] = trim((string) ($datos['cabecera_a4'] ?? '')) ?: null;
         $datos['clinica_doctor_cobra'] = $request->boolean('clinica_doctor_cobra');
         $datos['tipo_cambio_usd'] = (float) ($datos['tipo_cambio_usd'] ?? 0) > 0 ? round((float) $datos['tipo_cambio_usd'], 3) : null;
 

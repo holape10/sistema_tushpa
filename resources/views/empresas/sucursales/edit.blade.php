@@ -174,6 +174,24 @@
                                 <span x-show="formato === 'A4'" class="inline-block mt-1 text-[10px] font-bold text-indigo-700"><i class="fas fa-circle-check"></i> SELECCIONADO</span>
                             </div>
                         </label>
+                        {{-- Diseño de la hoja A4: el de colores o uno simple en blanco y negro (menos tinta), con líneas propias en la cabecera --}}
+                        <div class="sm:col-span-2 rounded-xl border border-gray-200 p-4 space-y-3" x-data="{ diseno: @js($campo('diseno_a4') ?: 'MODERNO') }">
+                            <p class="text-sm font-medium text-gray-600">Diseño de la hoja A4 y del PDF</p>
+                            <div class="grid sm:grid-cols-2 gap-3">
+                                @foreach (['MODERNO' => ['Moderno', 'Con colores y fondos.'], 'SIMPLE' => ['Simple (blanco y negro)', 'Solo líneas negras: gasta menos tinta.']] as $v => [$t, $d])
+                                    <label class="cursor-pointer rounded-xl border-2 px-4 py-3 transition" :class="diseno === '{{ $v }}' ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-200 hover:border-gray-300'">
+                                        <input type="radio" name="diseno_a4" value="{{ $v }}" x-model="diseno" class="sr-only">
+                                        <span class="font-bold text-gray-800">{{ $t }}</span><span class="block text-xs text-gray-500">{{ $d }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                            <label class="block">
+                                <span class="text-sm text-gray-600">Líneas extra de la cabecera <span class="text-gray-400">(opcional)</span></span>
+                                <textarea name="cabecera_a4" rows="3" maxlength="500" class="mt-1 w-full rounded-xl border-gray-300 text-sm"
+                                          placeholder="Ej.: DE: JUAN PÉREZ&#10;VENTA DE MADERA, CARPINTERÍA Y TRANSPORTE DE CARGA">{{ $campo('cabecera_a4') }}</textarea>
+                                <span class="text-xs text-gray-400">Salen debajo del nombre, una por línea, junto a la dirección y el teléfono de la sucursal.</span>
+                            </label>
+                        </div>
                         <p class="sm:col-span-2 text-xs text-gray-400"><i class="fas fa-circle-info mr-1"></i>Desde el Panel de ventas siempre puedes ver un comprobante en el otro formato. La impresión directa a la impresora térmica (agente) sigue en ticket.</p>
                     </div>
                 </section>

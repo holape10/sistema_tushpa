@@ -26,6 +26,10 @@
     $mon = ($cab->moncod ?? 'PEN') === 'USD' ? '$' : 'S/';
     $fecha = fn($f) => $f ? \Carbon\Carbon::parse($f)->format('d-m-Y') : '-';
 @endphp
+@if (($negocio->diseno_a4 ?? 'MODERNO') === 'SIMPLE')
+    {{-- Diseño simple en blanco y negro (elegido en la sucursal) --}}
+    @include('empresas.cobros.partials.a4_simple')
+@else
 <style>
     /* print-color-adjust: el navegador imprime los fondos (cabecera oscura, recuadro azul) aunque no esté marcado
        "Gráficos de fondo"; sin esto, en blanco y negro el comprobante sale casi vacío. Bordes oscuros para que se noten. */
@@ -78,6 +82,7 @@
                     <div class="empresa">{{ $empresa->NomEmpresa ?? '' }}</div>
                 @endif
                 <div class="info">
+                    @if (!empty($negocio->cabecera_a4)){!! nl2br(e($negocio->cabecera_a4)) !!}<br>@endif
                     {{ $negocio->direccion ?? '' }}<br>
                     @if (!empty($negocio->departamento)){{ $negocio->departamento }} - {{ $negocio->provincia }} - {{ $negocio->distrito }}<br>@endif
                     @if (!empty($negocio->telefono)){{ $negocio->telefono }}@endif
@@ -212,3 +217,4 @@
         <span style="font-size:8px; color:#9ca3af;">{{ config('soporte.firma_comprobante') }}</span>
     </div>
 </div>
+@endif
