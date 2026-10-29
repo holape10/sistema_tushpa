@@ -27,6 +27,13 @@ use App\Http\Controllers\ConsumoCajasController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContabilidadRegistroController;
 use App\Http\Controllers\ContactoController;
+use App\Http\Controllers\CourierController;
+use App\Http\Controllers\CourierCreditoController;
+use App\Http\Controllers\CourierManifiestoController;
+use App\Http\Controllers\CourierReclamoController;
+use App\Http\Controllers\CourierRepartoController;
+use App\Http\Controllers\CourierReporteController;
+use App\Http\Controllers\CourierWebController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\CuponController;
 use App\Http\Controllers\DashboardController;
@@ -76,6 +83,7 @@ use App\Http\Controllers\PuntoVentaController;
 use App\Http\Controllers\PvGrifoController;
 use App\Http\Controllers\PvTactilController;
 use App\Http\Controllers\PwaController;
+use App\Http\Controllers\RastreoController;
 use App\Http\Controllers\RecetaController;
 use App\Http\Controllers\RecetaExportarController;
 use App\Http\Controllers\RentabilidadController;
@@ -755,6 +763,68 @@ Route::middleware('auth')->prefix('estacionamiento')->name('estacionamiento.')->
     Route::post('/abonados/{id}', 'editarAbonado')->whereNumber('id')->name('abonados.editar');
     Route::get('/reporte', 'reporte')->name('reporte');
 });
+// Courier: envíos, guía con QR, despacho, recepción y entrega con clave; tarifas por ruta y agencias
+Route::middleware('auth')->prefix('courier')->name('courier.')->controller(CourierController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/nuevo', 'nuevo')->name('nuevo');
+    Route::post('/', 'guardar')->name('guardar');
+    Route::get('/documento/{doc}', 'documento')->where('doc', '[0-9]{8,11}')->middleware('throttle:30,1')->name('documento');
+    Route::post('/avanzar', 'avanzar')->name('avanzar');
+    Route::get('/{id}', 'ver')->whereNumber('id')->name('ver');
+    Route::get('/{id}/guia', 'guia')->whereNumber('id')->name('guia');
+    Route::post('/{id}/entregar', 'entregar')->whereNumber('id')->name('entregar');
+    Route::post('/{id}/cobrar', 'cobrar')->whereNumber('id')->name('cobrar');
+    Route::post('/{id}/anular', 'anular')->whereNumber('id')->name('anular');
+    Route::get('/tarifas', 'tarifas')->name('tarifas');
+    Route::post('/tarifas/general', 'guardarConfig')->name('tarifas.general');
+    Route::post('/tarifas/ruta', 'guardarTarifa')->name('tarifas.ruta');
+    Route::post('/tarifas/ruta/{id}/quitar', 'quitarTarifa')->whereNumber('id')->name('tarifas.quitar');
+    Route::post('/agencias', 'guardarAgencia')->name('agencias.guardar');
+    Route::get('/prerregistro/{codigo}', 'prerregistro')->where('codigo', '[A-Za-z0-9]{6}')->name('prerregistro');
+    Route::post('/{id}/devolver', 'devolver')->whereNumber('id')->name('devolver');
+    Route::post('/{id}/reclamo', 'reclamar')->whereNumber('id')->name('reclamar');
+});
+Route::middleware('auth')->prefix('courier')->name('courier.')->group(function () {
+    Route::controller(CourierManifiestoController::class)->prefix('manifiestos')->name('manifiestos.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'crear')->name('crear');
+        Route::get('/{id}', 'ver')->whereNumber('id')->name('ver');
+        Route::get('/{id}/imprimir', 'imprimir')->whereNumber('id')->name('imprimir');
+        Route::post('/{id}/cargar', 'cargar')->whereNumber('id')->name('cargar');
+        Route::post('/{id}/quitar/{env}', 'quitar')->whereNumber(['id', 'env'])->name('quitar');
+        Route::post('/{id}/despachar', 'despachar')->whereNumber('id')->name('despachar');
+        Route::post('/{id}/recibir', 'recibir')->whereNumber('id')->name('recibir');
+        Route::post('/{id}/anular', 'anular')->whereNumber('id')->name('anular');
+    });
+    Route::get('/reparto', [CourierRepartoController::class, 'index'])->name('reparto');
+    Route::post('/reparto/asignar', [CourierRepartoController::class, 'asignar'])->name('reparto.asignar');
+    Route::post('/reparto/liquidar', [CourierRepartoController::class, 'liquidar'])->name('reparto.liquidar');
+    Route::get('/reportes', [CourierReporteController::class, 'index'])->name('reportes');
+    Route::post('/aliados/{age}/liquidar', [CourierReporteController::class, 'liquidarAliado'])->whereNumber('age')->name('aliados.liquidar');
+    Route::controller(CourierCreditoController::class)->prefix('creditos')->name('creditos.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'guardar')->name('guardar');
+        Route::get('/{clicod}', 'cuenta')->whereNumber('clicod')->name('cuenta');
+        Route::post('/{clicod}/facturar', 'facturar')->whereNumber('clicod')->name('facturar');
+    });
+    Route::get('/reclamos', [CourierReclamoController::class, 'index'])->name('reclamos');
+    Route::post('/reclamos/{id}', [CourierReclamoController::class, 'responder'])->whereNumber('id')->name('reclamos.responder');
+});
+// El motorizado del courier entra con su enlace personal (sin sesión)
+Route::prefix('courier/repartidor/{token}')->where(['token' => '[A-Za-z0-9]{32}'])->name('courier.repartidor')->controller(CourierRepartoController::class)->group(function () {
+    Route::get('/', 'ruta')->middleware('throttle:60,1,courier-repartidor')->name('');
+    Route::post('/{id}/entregar', 'entregar')->whereNumber('id')->middleware('throttle:30,1,courier-repartidor-accion')->name('.entregar');
+    Route::post('/{id}/no-entregado', 'noEntregado')->whereNumber('id')->middleware('throttle:30,1,courier-repartidor-accion')->name('.no');
+});
+// El cliente sigue su envío con su número de guía o el QR, cotiza, se pre-registra o reclama (sin sesión)
+Route::get('/rastreo', [RastreoController::class, 'index'])->middleware('throttle:60,1,rastreo')->name('rastreo');
+Route::get('/rastreo/{codigo}', [RastreoController::class, 'ver'])->where('codigo', '[A-Za-z0-9]{10}')->middleware('throttle:60,1,rastreo')->name('rastreo.ver');
+Route::get('/rastreo/{codigo}/reclamo', [CourierWebController::class, 'reclamo'])->where('codigo', '[A-Za-z0-9]{10}')->middleware('throttle:30,1,rastreo')->name('rastreo.reclamo');
+Route::post('/rastreo/{codigo}/reclamo', [CourierWebController::class, 'reclamar'])->where('codigo', '[A-Za-z0-9]{10}')->middleware('throttle:6,10,courier-reclamo')->name('rastreo.reclamar');
+Route::get('/envios', [CourierWebController::class, 'index'])->middleware('throttle:60,1,courier-web')->name('envios.web');
+Route::post('/envios/cotizar', [CourierWebController::class, 'cotizar'])->middleware('throttle:30,1,courier-cotizar')->name('envios.cotizar');
+Route::post('/envios/prerregistro', [CourierWebController::class, 'prerregistrar'])->middleware('throttle:5,10,courier-prerregistro')->name('envios.prerregistrar');
+
 // El cliente escanea el QR de su ticket: ve su tiempo y pide su auto (sin sesión)
 Route::get('/valet/{codigo}', [EstacionamientoController::class, 'publico'])->where('codigo', '[A-Za-z0-9]{10}')->middleware('throttle:60,1')->name('valet.ver');
 Route::post('/valet/{codigo}', [EstacionamientoController::class, 'pedir'])->where('codigo', '[A-Za-z0-9]{10}')->middleware('throttle:10,1')->name('valet.pedir');

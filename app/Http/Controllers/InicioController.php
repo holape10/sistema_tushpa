@@ -83,6 +83,13 @@ class InicioController extends Controller
         '/soporte' => ['fa-headset', '#1f2937'],
         '/estacionamiento' => ['fa-square-parking', '#1d4ed8'],
         '/estacionamiento/abonados' => ['fa-id-card', '#0e7490'],
+        '/courier' => ['fa-truck-fast', '#ea580c'],
+        '/courier/tarifas' => ['fa-route', '#0f766e'],
+        '/courier/manifiestos' => ['fa-clipboard-list', '#0369a1'],
+        '/courier/reparto' => ['fa-motorcycle', '#e11d48'],
+        '/courier/reportes' => ['fa-chart-column', '#7c3aed'],
+        '/courier/creditos' => ['fa-handshake', '#15803d'],
+        '/courier/reclamos' => ['fa-comment-dots', '#b45309'],
     ];
 
     /** Ícono de reserva por grupo del menú, cuando el módulo no tiene uno propio */
@@ -91,6 +98,7 @@ class InicioController extends Controller
         'Mantenimiento' => 'fa-gear', 'Contactos' => 'fa-address-book', 'Asistencia' => 'fa-user-clock',
         'Planilla' => 'fa-money-check', 'Contabilidad' => 'fa-scale-balanced', 'SUNAT' => 'fa-cloud-arrow-up',
         'SIRE' => 'fa-landmark', 'Cuentas' => 'fa-hand-holding-dollar', 'Restaurante' => 'fa-utensils', 'Gimnasio' => 'fa-dumbbell', 'Estacionamiento' => 'fa-square-parking', 'Clínica' => 'fa-stethoscope',
+        'Courier' => 'fa-truck-fast',
     ];
 
     private const COLORES = ['#2563eb', '#16a34a', '#dc2626', '#7c3aed', '#ea580c', '#0891b2', '#db2777', '#ca8a04', '#0f766e', '#4f46e5'];

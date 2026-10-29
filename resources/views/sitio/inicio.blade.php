@@ -99,6 +99,16 @@
                 ['fa-gift', 'Sorteo de pensión', 'Premia a los padres más puntuales con una pensión gratis.'],
                 ['fa-triangle-exclamation', 'Reporte de morosos', 'Quién debe 1, 2 o más meses, con recordatorio por WhatsApp.'],
             ]],
+        'courier' => ['icono' => 'fa-truck-fast', 'nombre' => 'Courier y envíos', 'ejemplos' => 'Encomiendas, paquetería y carga entre agencias',
+            'texto' => 'Registra cada encomienda, cóbrala en origen o al recoger y que tu cliente siga su envío en línea.',
+            'funciones' => [
+                ['fa-scale-balanced', 'Tarifa por ruta', 'Por peso real o volumétrico, sobres, reparto a domicilio y seguro.'],
+                ['fa-qrcode', 'Guía con QR', 'Etiqueta para el paquete y comprobante del remitente en tu ticketera.'],
+                ['fa-location-crosshairs', 'Rastreo en línea', 'El cliente ve dónde está su envío con su número de guía.'],
+                ['fa-key', 'Clave de recojo', 'Solo entrega quien tiene la clave de 4 dígitos del remitente.'],
+                ['fa-hand-holding-dollar', 'Paga en origen o destino', 'Boleta o factura al enviar o al recoger.'],
+                ['fa-warehouse', 'Varias agencias', 'Cada agencia despacha, recibe y entrega lo suyo.'],
+            ]],
         'contabilidad' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudios contables y empresas que llevan su contabilidad',
             'texto' => 'Lleva la contabilidad, el SIRE y la planilla de tus empresas en el mismo sistema.',
             'funciones' => [
@@ -111,7 +121,7 @@
     ];
     // Rubros del sistema (los mismos de la demo): si se agrega uno nuevo y aún no tiene texto aquí, sale igual con sus datos
     $equivalencias = ['RESTOBAR' => 'restaurante', 'HOTELERIA' => 'hotel', 'GENERAL' => 'comercio', 'FARMACIA' => 'farmacia', 'GRIFO' => 'grifo',
-        'GIMNASIO' => 'gimnasio', 'ESTACIONAMIENTO' => 'estacionamiento', 'CLUB' => 'club', 'CLINICA' => 'clinica', 'PRESTAMOS' => 'prestamos', 'COLEGIO' => 'colegio', 'CONTABLE' => 'contabilidad'];
+        'GIMNASIO' => 'gimnasio', 'ESTACIONAMIENTO' => 'estacionamiento', 'CLUB' => 'club', 'CLINICA' => 'clinica', 'PRESTAMOS' => 'prestamos', 'COLEGIO' => 'colegio', 'COURIER' => 'courier', 'CONTABLE' => 'contabilidad'];
     foreach (\App\Support\Rubros::RUBROS as $claveRubro => $rubroSistema) {
         $clave = $equivalencias[$claveRubro] ?? mb_strtolower($claveRubro);
         if ($claveRubro === 'COMPLETO' || isset($rubros[$clave])) {

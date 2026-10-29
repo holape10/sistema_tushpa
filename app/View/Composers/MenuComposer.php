@@ -12,7 +12,7 @@ class MenuComposer
 {
     /** Orden de los grupos del menú: primero lo del día a día, al final la configuración (los demás van después, por orden alfabético) */
     public const ORDEN_GRUPOS = [
-        'Principal', 'Ventas', 'Restaurante', 'Hotel', 'Gimnasio', 'Clínica', 'Colegio', 'Estacionamiento', 'Préstamos', 'Fidelización',
+        'Principal', 'Ventas', 'Restaurante', 'Hotel', 'Gimnasio', 'Clínica', 'Colegio', 'Courier', 'Estacionamiento', 'Préstamos', 'Fidelización',
         'Compras', 'Almacén', 'Cuentas', 'Contactos', 'SUNAT', 'SIRE', 'Contabilidad', 'Planilla', 'Asistencia', 'Farmacias', 'Mantenimiento', 'Otros',
     ];
 

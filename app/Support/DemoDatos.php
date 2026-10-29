@@ -36,6 +36,7 @@ class DemoDatos
         'CLINICA' => ['CLÍNICA SAN JUAN', ['clinica']],
         'PRESTAMOS' => ['PRÉSTAMOS DEL ORIENTE', ['prestamos']],
         'COLEGIO' => ['COLEGIO NUEVO HORIZONTE', ['colegio']],
+        'COURIER' => ['ENVÍOS RÁPIDO AMAZÓNICO', ['courier']],
         'CONTABLE' => ['ESTUDIO CONTABLE DEMO', []],
     ];
 
@@ -480,6 +481,70 @@ class DemoDatos
                     'id_empresa_negocio' => $this->suc, 'creado' => now()]);
                 $this->sumar('socios del club');
             }
+        }
+    }
+
+    /**
+     * Courier de ejemplo: agencias aliadas en otras ciudades con su tarifa, y envíos en cada estado (pagan al recoger,
+     * así no se emiten comprobantes).
+     */
+    private function courier(): void
+    {
+        if (! Schema::hasTable('cou_envios')) {
+            return;
+        }
+        $origen = Courier::agenciasPropias($this->admin)->first();
+        $destinos = [];
+        foreach ([['LIMA', 'AGENCIA LA VICTORIA', 'AV. AVIACIÓN 1250', 15, 3.5, 3], ['PUCALLPA', 'AGENCIA CENTRO', 'JR. TACNA 480', 12, 2.5, 2],
+            ['TARAPOTO', 'AGENCIA MORALES', 'JR. LEGUÍA 320', 12, 2.5, 2], ['YURIMAGUAS', 'AGENCIA PUERTO', 'AV. AÑO DEL PERÚ 150', 8, 1.5, 1]] as [$ciudad, $nombre, $dir, $base, $kg, $dias]) {
+            $id = DB::table('cou_agencias')->where('IdEmpresa', $this->ruc)->where('ciudad', $ciudad)->whereNull('id_empresa_negocio')->value('age_id');
+            if (! $id) {
+                $id = DB::table('cou_agencias')->insertGetId(['nombre' => $nombre, 'ciudad' => $ciudad, 'direccion' => $dir, 'activo' => 1, 'IdEmpresa' => $this->ruc]);
+                $this->sumar('agencias de courier');
+            }
+            if (! DB::table('cou_tarifas')->where('origen_id', $origen->age_id)->where('destino_id', $id)->exists()) {
+                DB::table('cou_tarifas')->insert(['origen_id' => $origen->age_id, 'destino_id' => $id, 'base' => $base, 'kg_incluidos' => 1, 'por_kg' => $kg,
+                    'sobre' => 8, 'domicilio' => 6, 'dias' => $dias, 'IdEmpresa' => $this->ruc]);
+            }
+            $destinos[$ciudad] = $id;
+        }
+        // Cliente empresa con crédito y un motorizado para el reparto a domicilio
+        if (Schema::hasTable('cou_creditos')) {
+            $empresa = $this->cliente('20600000101', 'DISTRIBUIDORA AMAZÓNICA DEMO S.A.C.', '065231010', 'AV. FREYRE 1520, IQUITOS');
+            if (! DB::table('cou_creditos')->where('clicod', $empresa)->exists()) {
+                DB::table('cou_creditos')->insert(['clicod' => $empresa, 'limite' => 3000, 'dias' => 30, 'activo' => 1, 'IdEmpresa' => $this->ruc, 'creado' => now()]);
+                $this->sumar('clientes con crédito');
+            }
+            if (! DB::table('motorizados')->where('id_empresa_negocio', $this->suc)->exists()) {
+                DB::table('motorizados')->insert(['nombre' => 'CARLOS REPARTIDOR', 'telefono' => '965400100', 'placa' => '1234-MT', 'activo' => 1, 'id_empresa_negocio' => $this->suc]);
+                $this->sumar('motorizados');
+            }
+        }
+        if (DB::table('cou_envios')->where('id_empresa_negocio', $this->suc)->exists()) {
+            return;
+        }
+        // [destino, remitente, destinatario, celular, paquetes, a domicilio, hasta qué estado llega]
+        foreach ([
+            ['LIMA', ['70000101', 'MARÍA FERNANDA RÍOS PANDURO'], ['45100301', 'CARLOS ENRIQUE RÍOS VELA'], '987300301', [['tipo' => 'PAQUETE', 'cantidad' => 1, 'peso' => 6.5, 'descripcion' => 'CAJA CON ROPA']], false, 'REGISTRADO'],
+            ['PUCALLPA', ['70000102', 'JORGE LUIS TORRES VÁSQUEZ'], ['45100302', 'ANA LUCÍA TORRES PEZO'], '987300302', [['tipo' => 'SOBRE', 'cantidad' => 2, 'descripcion' => 'DOCUMENTOS']], false, 'EN_TRANSITO'],
+            ['TARAPOTO', ['70000103', 'ROSA ELENA DÍAZ GRÁNDEZ'], ['45100303', 'LUIS ALBERTO DÍAZ SOTO'], '987300303', [['tipo' => 'PAQUETE', 'cantidad' => 2, 'peso' => 3, 'largo' => 40, 'ancho' => 30, 'alto' => 30]], true, 'EN_DESTINO'],
+            ['YURIMAGUAS', ['70000104', 'CARLOS ALBERTO RUIZ PINEDO'], ['45100304', 'PEDRO PABLO RUIZ MOZOMBITE'], '987300304', [['tipo' => 'PAQUETE', 'cantidad' => 1, 'peso' => 12, 'descripcion' => 'MOTOR FUERA DE BORDA (REPUESTOS)']], false, 'ENTREGADO'],
+        ] as [$ciudad, [$remDoc, $remNom], [$desDoc, $desNom], $cel, $paquetes, $domicilio, $hasta]) {
+            $r = Courier::registrar($this->admin, ['origen_id' => $origen->age_id, 'destino_id' => $destinos[$ciudad], 'rem_doc' => $remDoc, 'rem_nombre' => $remNom,
+                'des_doc' => $desDoc, 'des_nombre' => $desNom, 'des_telefono' => $cel, 'entrega' => $domicilio ? 'DOMICILIO' : 'AGENCIA',
+                'direccion_entrega' => $domicilio ? 'JR. LOS ÁNGELES 245, MORALES' : null, 'pago' => 'DESTINO', 'paquetes' => $paquetes]);
+            $avance = ['REGISTRADO' => 0, 'EN_TRANSITO' => 1, 'EN_DESTINO' => 2, 'ENTREGADO' => 3][$hasta];
+            foreach (['EN_TRANSITO' => 1, 'EN_DESTINO' => 2] as $paso => $orden) {
+                if ($avance >= $orden) {
+                    Courier::avanzar($this->admin, [$r['env_id']], $paso);
+                }
+            }
+            if ($hasta === 'ENTREGADO') {
+                // Entregado sin cobrar en la demo (como si el aliado lo hubiera cobrado): se marca directo
+                DB::table('cou_envios')->where('env_id', $r['env_id'])->update(['estado' => 'ENTREGADO', 'entregado' => now(), 'entregado_a' => $desNom, 'entregado_doc' => $desDoc]);
+                Courier::evento($r['env_id'], 'ENTREGADO', 'Entregado a '.Courier::enmascarar($desNom), $destinos[$ciudad], $this->admin->IdUsuario);
+            }
+            $this->sumar('envíos de courier');
         }
     }
 

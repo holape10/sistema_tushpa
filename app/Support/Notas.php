@@ -217,6 +217,7 @@ class Notas
                 Gimnasio::revertirComprobante((int) $ref->IdCpe_cabecera); // la membresía de gimnasio que pagó queda anulada
                 Estacionamiento::revertirComprobante((int) $ref->IdCpe_cabecera); // y la pensión o el cobro de estacionamiento
                 Colegio::revertirComprobante((int) $ref->IdCpe_cabecera); // pensiones del colegio pagadas con él vuelven a deberse
+                Courier::revertirComprobante((int) $ref->IdCpe_cabecera); // el envío que pagó vuelve a quedar por cobrar
                 Fidelizacion::revertir((int) $ref->IdCpe_cabecera);        // y se descuentan los puntos que ganó
                 Porciones::revertir((int) $ref->IdCpe_cabecera);           // y vuelven las porciones del día
             }

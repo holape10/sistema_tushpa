@@ -30,7 +30,8 @@ class AnulacionVenta
             Gimnasio::revertirComprobante($cabId); // membresía de gimnasio pagada con esta venta
             Estacionamiento::revertirComprobante($cabId); // pensión o cobro de estacionamiento
             Colegio::revertirComprobante($cabId); // pensiones del colegio pagadas con él vuelven a deberse
-            Fidelizacion::revertir($cabId);        // los puntos que ganó con esta compra
+            Courier::revertirComprobante($cabId); // el envío que pagó vuelve a quedar por cobrar
+            Fidelizacion::revertir($cabId);       // los puntos que ganó con esta compra
             Porciones::revertir($cabId);           // las porciones del día que se vendieron
             Series::revertirVenta($cabId);         // los equipos vendidos (número de serie) vuelven a estar disponibles
             Cupones::devolver($cabId);             // el uso del cupón de descuento vuelve a quedar libre

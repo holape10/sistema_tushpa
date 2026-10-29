@@ -92,6 +92,11 @@ class Rubros
         'COLEGIO' => ['icono' => 'fa-school', 'nombre' => 'Colegio', 'ejemplos' => 'Colegios, academias, nidos: matrículas y pensiones', 'modulos' => [
             '/colegio', '/colegio/reportes', '/colegio/sorteo', '/colegio/configuracion',
         ]],
+        // Courier: envío de encomiendas y carga entre agencias, con rastreo público
+        'COURIER' => ['icono' => 'fa-truck-fast', 'nombre' => 'Courier / envíos', 'ejemplos' => 'Encomiendas y carga entre agencias, con rastreo', 'modulos' => [
+            '/courier', '/courier/manifiestos', '/courier/reparto', '/courier/reportes', '/courier/creditos', '/courier/reclamos', '/courier/tarifas',
+            '/motorizados', '/punto-venta',
+        ]],
         // Estudio contable o empresa que solo lleva su contabilidad (sin vender con el sistema)
         'CONTABLE' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudio contable, contabilidad de la empresa, SIRE, planilla', 'sin_base' => true, 'modulos' => [
             '/inicio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo',
