@@ -287,10 +287,8 @@ class ComandasController extends Controller
             ->get();
         $nombrePiso = Piso::where('pis_id', $piso_id)->value('pis_nom');
 
-        // Cocina terminó y falta llevarlo a la mesa (pantalla de cocina)
-        $listos = DB::table('cocina_tickets')->whereIn('ped_id', $mesas->pluck('pedido_id')->filter())
-            ->whereNotNull('listo')->whereNull('entregado')->where('tipo', '!=', 'ANULACION')
-            ->groupBy('ped_id')->select('ped_id', DB::raw('COUNT(*) as n'))->pluck('n', 'ped_id');
+        // Platos que cocina ya despachó y falta llevar a la mesa (cada plato sale cuando está listo)
+        $listos = Cocina::listosParaLlevar($mesas->pluck('pedido_id')->filter()->all());
 
         // Próxima reserva de hoy (en las siguientes 3 horas) de cada mesa
         $reservas = DB::table('reservas')->where('id_empresa_negocio', $id_empresa_negocio)
@@ -328,7 +326,8 @@ class ComandasController extends Controller
                 $m->ped_tot = $grupo->ped_tot;
                 $m->pedido_fecha_hora = $grupo->fecha_hora;
             }
-            $m->listos = (int) ($listos[$m->pedido_id] ?? 0);
+            $m->listos = count($listos[$m->pedido_id] ?? []);
+            $m->listos_texto = implode(' · ', $listos[$m->pedido_id] ?? []);
             $m->reserva = $reservas[$m->mes_id] ?? null;
             $m->mozo_nombre = $m->pedido_id ? ($mozos[$m->pedido_id] ?? null) : null;
         });

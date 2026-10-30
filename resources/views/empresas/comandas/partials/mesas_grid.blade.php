@@ -9,7 +9,7 @@
     <button type="button"
         class="btn-mesa-comanda relative min-h-[88px] rounded-2xl px-2 py-2.5 text-white shadow-sm ring-1 ring-black/5 active:scale-95 transition-transform select-none {{ $color }}"
         data-id="{{ $principal['mes_id'] ?? $m->mes_id }}" data-nombre="{{ $principal['nombre'] ?? $m->etiqueta }}" data-estado="{{ $estado }}"
-        data-pedido-id="{{ $m->pedido_id }}" data-listos="{{ $m->listos ?? 0 }}">
+        data-pedido-id="{{ $m->pedido_id }}" data-listos="{{ $m->listos ?? 0 }}" data-listos-texto="{{ $m->listos_texto ?? '' }}">
         <span class="block text-base font-black leading-tight">{{ $m->mes_nom }}</span>
         <span class="block text-xs font-semibold opacity-95 mt-0.5">
             @if ($principal)
@@ -30,7 +30,7 @@
         @endif
         {{-- Cocina ya lo tiene listo: el mozo debe llevarlo --}}
         @if (($m->listos ?? 0) > 0)
-            <span class="absolute -top-2 -right-1.5 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-black shadow animate-pulse" title="Listo en cocina para servir">🔔 LISTO</span>
+            <span class="absolute -top-2 -right-1.5 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-black shadow animate-pulse" title="Listo para llevar: {{ $m->listos_texto ?? '' }}">🔔 LISTO{{ ($m->listos ?? 0) > 1 ? ' ×'.$m->listos : '' }}</span>
         @endif
         {{-- Reserva próxima --}}
         @if (!empty($m->reserva))

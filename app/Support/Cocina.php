@@ -134,6 +134,35 @@ class Cocina
     }
 
     /** Marca la tarjeta como lista cuando ya no le queda nada pendiente */
+    /**
+     * Lo que cocina ya despachó y el mozo todavía no llevó, por pedido: ["1 CEVICHE MIXTO", "2 CERVEZA PILSEN"].
+     *
+     * @param  array<int, int>  $pedidos
+     * @return array<int, array<int, string>>
+     */
+    public static function listosParaLlevar(array $pedidos): array
+    {
+        if (! $pedidos) {
+            return [];
+        }
+
+        return DB::table('cocina_items as i')->join('cocina_tickets as t', 't.id', '=', 'i.ticket_id')
+            ->whereIn('t.ped_id', $pedidos)->where('t.tipo', '!=', 'ANULACION')->where('i.anulado', 0)
+            ->whereNotNull('i.listo')->whereNull('i.entregado')->whereNull('t.entregado')
+            ->orderBy('i.listo')->get(['t.ped_id', 'i.cantidad', 'i.descripcion'])
+            ->groupBy('ped_id')
+            ->map(fn ($g) => $g->map(fn ($i) => rtrim(rtrim(number_format((float) $i->cantidad, 2, '.', ''), '0'), '.').' '.$i->descripcion)->values()->all())
+            ->all();
+    }
+
+    /** El mozo llevó a la mesa todo lo que cocina ya despachó de ese pedido (lo que sigue en preparación, no) */
+    public static function entregar(int $pedId): void
+    {
+        $tickets = DB::table('cocina_tickets')->where('ped_id', $pedId)->pluck('id');
+        DB::table('cocina_items')->whereIn('ticket_id', $tickets)->whereNotNull('listo')->whereNull('entregado')->update(['entregado' => now()]);
+        DB::table('cocina_tickets')->where('ped_id', $pedId)->whereNotNull('listo')->whereNull('entregado')->update(['entregado' => now()]);
+    }
+
     public static function actualizarTicket(int $ticketId): void
     {
         $pendientes = DB::table('cocina_items')->where('ticket_id', $ticketId)->whereNull('listo')->exists();

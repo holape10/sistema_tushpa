@@ -134,7 +134,8 @@
                 <button type="button" data-cerrar class="h-9 w-9 rounded-full bg-gray-100 text-lg font-bold text-gray-500">&times;</button>
             </div>
             <div id="modal_mesa_listo" class="mt-3 hidden rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-center">
-                <p class="font-bold text-amber-900">🔔 Cocina tiene listo un pedido de esta mesa</p>
+                <p class="font-bold text-amber-900">🔔 Listo en cocina para llevar a esta mesa</p>
+                <p id="modal_mesa_listo_texto" class="mt-1 text-sm font-semibold text-amber-800"></p>
                 <button type="button" id="btn_modal_entregado" class="mt-2 h-10 rounded-xl bg-amber-500 px-4 text-sm font-black text-white">✔ Ya lo llevé a la mesa</button>
             </div>
             <div id="modal_mesa_detalle" class="mt-3 max-h-56 overflow-y-auto text-sm">Cargando…</div>
@@ -657,6 +658,7 @@
         }
         document.getElementById('btn_modal_precuenta').onclick = () => imprimirPrecuenta(pedidoId);
         document.getElementById('modal_mesa_listo').classList.toggle('hidden', !(Number(mesa.dataset.listos) > 0));
+        document.getElementById('modal_mesa_listo_texto').textContent = (mesa.dataset.listosTexto || '').split(' · ').join(', ');
         document.getElementById('btn_modal_entregado').onclick = () => postJson(@json(url('cocina/entregado')) + '/' + pedidoId, {}).then(() => {
             document.getElementById('modal_mesa_listo').classList.add('hidden');
             toast('✔ Entregado a la mesa');

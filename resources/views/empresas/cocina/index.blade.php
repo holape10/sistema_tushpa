@@ -79,6 +79,7 @@
             <div class="text-7xl mb-4">✅</div>
             <p class="text-2xl font-bold">Todo al día</p>
             <p>Los pedidos aparecerán aquí apenas el mozo envíe la comanda.</p>
+            <p class="mt-2 text-sm">Cada plato tiene su botón <b class="text-emerald-400">SALE</b>: despacha lo que ya está (una bebida, un plato rápido) sin esperar al resto. El mozo ve qué platos llevar.</p>
         </div>
 
         <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));">
@@ -88,7 +89,8 @@
                     <div class="px-3 py-2 flex items-start justify-between gap-2"
                          :class="t.tipo === 'ANULACION' ? 'bg-red-700' : { verde: 'bg-emerald-600', amarillo: 'bg-amber-500 text-slate-900', rojo: 'bg-red-600' }[nivel(t)]">
                         <div class="min-w-0">
-                            <p class="font-extrabold text-xl leading-tight truncate" x-text="t.destino"></p>
+                            <p x-show="lugar(t).zona" class="text-[11px] font-bold uppercase tracking-wide opacity-90 leading-tight" x-text="lugar(t).zona"></p>
+                            <p class="font-extrabold text-2xl leading-tight break-words" x-text="lugar(t).mesa"></p>
                             <p class="text-xs opacity-90">
                                 <span x-text="t.ped_id ? '#' + t.ped_id : 'Venta directa'"></span> · <span x-text="t.mozo || ''"></span>
                             </p>
@@ -104,10 +106,12 @@
                         <template x-for="l in t.lineas" :key="l.id">
                             <li @click="!l.anulado && alternar(l)" class="px-3 py-2 select-none"
                                 :class="l.anulado ? 'bg-red-950/60' : (l.listo ? 'opacity-40 cursor-pointer' : 'cursor-pointer hover:bg-slate-700/60')">
-                                <div class="flex gap-2 items-baseline">
+                                <div class="flex gap-2 items-center">
                                     <span class="font-black text-2xl w-10 shrink-0 text-right" :class="l.anulado ? 'text-red-400 line-through' : 'text-amber-300'" x-text="cant(l.cantidad)"></span>
-                                    <span class="text-lg font-bold leading-tight" :class="{ 'line-through': l.listo || l.anulado, 'text-red-300': l.anulado }" x-text="l.descripcion"></span>
-                                    <span x-show="l.listo && !l.anulado" class="ml-auto text-emerald-400 text-xl">✔</span>
+                                    <span class="flex-1 text-lg font-bold leading-tight" :class="{ 'line-through': l.listo || l.anulado, 'text-red-300': l.anulado }" x-text="l.descripcion"></span>
+                                    <span x-show="!l.anulado && t.tipo !== 'ANULACION'" class="shrink-0 h-9 min-w-[2.25rem] px-2 rounded-lg flex items-center justify-center text-sm font-black"
+                                          :class="l.listo ? 'bg-emerald-600 text-white' : 'border-2 border-emerald-500 text-emerald-400'"
+                                          :title="l.listo ? 'Despachado (toca para deshacer)' : 'Despachar solo este plato'" x-text="l.listo ? '✔' : 'SALE'"></span>
                                 </div>
                                 <p x-show="l.observacion" class="ml-12 mt-0.5 text-sm font-semibold"
                                    :class="l.anulado ? 'text-red-300' : 'text-yellow-300'" x-text="'» ' + l.observacion"></p>
@@ -117,7 +121,7 @@
 
                     <button @click="listo(t)" class="m-2 py-3 rounded-lg font-black text-lg tracking-wide"
                             :class="t.tipo === 'ANULACION' ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'"
-                            x-text="t.tipo === 'ANULACION' ? 'ENTENDIDO' : 'LISTO ✔'"></button>
+                            x-text="t.tipo === 'ANULACION' ? 'ENTENDIDO' : (t.lineas.some(l => l.listo && !l.anulado) ? 'SALE EL RESTO ✔' : 'TODO LISTO ✔')"></button>
                 </div>
             </template>
         </div>
@@ -174,6 +178,10 @@
                 transcurrido(t) { const s = this.segundos(t); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); },
                 nivel(t) { const m = this.segundos(t) / 60; return m >= this.cfg.rojo ? 'rojo' : (m >= this.cfg.amarillo ? 'amarillo' : 'verde'); },
                 cant(n) { return Number(n) % 1 === 0 ? Number(n) : Number(n).toFixed(1); },
+                lugar(t) {
+                    const d = String(t.destino || ''), i = d.lastIndexOf(' / ');
+                    return i > 0 ? { zona: d.slice(0, i), mesa: d.slice(i + 3) } : { zona: '', mesa: d };
+                },
                 hora(f) { return new Date(f.replace(' ', 'T')).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }); },
 
                 async alternar(l) { l.listo = !l.listo; await post(URL.item + '/' + l.id + '/alternar'); this.cargar(); },

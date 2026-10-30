@@ -1,9 +1,12 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Support\Cocina;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /** Pantalla de cocina (KDS): tarjetas por pedido, tiempo transcurrido con colores y "bump" con un toque */
 class CocinaController extends Controller
@@ -22,6 +25,7 @@ class CocinaController extends Controller
     public function index(Request $request)
     {
         $sucursal = $this->sucursal();
+
         return view('empresas.cocina.index', [
             'estaciones' => DB::table('configuracion_impresoras')->where('id_empresa_negocio', $sucursal)->where('activo', 1)->orderBy('descripcion')->get(['Id', 'descripcion']),
             'estacion' => $this->estacion($request),
@@ -36,9 +40,9 @@ class CocinaController extends Controller
         $sucursal = $this->sucursal();
         $estacion = $this->estacion($request);
 
-        $items = fn() => DB::table('cocina_items as i')->join('cocina_tickets as t', 't.id', '=', 'i.ticket_id')
+        $items = fn () => DB::table('cocina_items as i')->join('cocina_tickets as t', 't.id', '=', 'i.ticket_id')
             ->where('t.id_empresa_negocio', $sucursal)
-            ->when($estacion, fn($q) => $q->where('i.estacion', $estacion));
+            ->when($estacion, fn ($q) => $q->where('i.estacion', $estacion));
 
         // Tarjetas con algo pendiente en esta estación (las de hace más de 24 h se ignoran)
         $pendientes = $items()->whereNull('i.listo')->where('t.creado', '>=', now()->subDay())
@@ -54,11 +58,12 @@ class CocinaController extends Controller
         $tarjetas = $pendientes->groupBy('ticket_id')->map(function ($g, $ticketId) use ($listasDeEsas) {
             $t = $g->first();
             $lineas = $g->concat($listasDeEsas->where('ticket_id', $ticketId))->sortBy('id')->values()
-                ->map(fn($i) => ['id' => $i->id, 'descripcion' => $i->descripcion, 'cantidad' => (float) $i->cantidad,
+                ->map(fn ($i) => ['id' => $i->id, 'descripcion' => $i->descripcion, 'cantidad' => (float) $i->cantidad,
                     'observacion' => $i->observacion, 'anulado' => (bool) $i->anulado, 'listo' => (bool) $i->listo]);
+
             return [
                 'id' => (int) $ticketId, 'ped_id' => $t->ped_id, 'destino' => $t->destino, 'ped_tip' => $t->ped_tip,
-                'mozo' => $t->mozo, 'tipo' => $t->tipo, 'creado' => \Carbon\Carbon::parse($t->creado)->toIso8601String(),
+                'mozo' => $t->mozo, 'tipo' => $t->tipo, 'creado' => Carbon::parse($t->creado)->toIso8601String(),
                 'lineas' => $lineas,
             ];
         })->values();
@@ -86,6 +91,7 @@ class CocinaController extends Controller
     {
         $t = DB::table('cocina_tickets')->where('id', $id)->where('id_empresa_negocio', $this->sucursal())->first();
         abort_unless($t, 404);
+
         return $t;
     }
 
@@ -96,8 +102,9 @@ class CocinaController extends Controller
         abort_unless($item, 404);
         $this->ticketPropio((int) $item->ticket_id);
 
-        DB::table('cocina_items')->where('id', $id)->update(['listo' => $item->listo ? null : now()]);
+        DB::table('cocina_items')->where('id', $id)->update(['listo' => $item->listo ? null : now(), 'entregado' => null]);
         Cocina::actualizarTicket((int) $item->ticket_id);
+
         return response()->json(['ok' => true]);
     }
 
@@ -106,9 +113,10 @@ class CocinaController extends Controller
     {
         $this->ticketPropio((int) $id);
         DB::table('cocina_items')->where('ticket_id', $id)->whereNull('listo')
-            ->when($this->estacion($request), fn($q, $e) => $q->where('estacion', $e))
+            ->when($this->estacion($request), fn ($q, $e) => $q->where('estacion', $e))
             ->update(['listo' => now()]);
         Cocina::actualizarTicket((int) $id);
+
         return response()->json(['ok' => true]);
     }
 
@@ -117,9 +125,10 @@ class CocinaController extends Controller
     {
         $this->ticketPropio((int) $id);
         DB::table('cocina_items')->where('ticket_id', $id)->where('listo', '>=', now()->subMinutes(30))
-            ->when($this->estacion($request), fn($q, $e) => $q->where('estacion', $e))
-            ->update(['listo' => null]);
+            ->when($this->estacion($request), fn ($q, $e) => $q->where('estacion', $e))
+            ->update(['listo' => null, 'entregado' => null]);
         DB::table('cocina_tickets')->where('id', $id)->update(['listo' => null, 'entregado' => null]);
+
         return response()->json(['ok' => true]);
     }
 
@@ -129,6 +138,7 @@ class CocinaController extends Controller
         $d = $request->validate(['kds_amarillo' => 'required|integer|min:1|max:120', 'kds_rojo' => 'required|integer|gt:kds_amarillo|max:240'],
             [], ['kds_amarillo' => 'Minutos para amarillo', 'kds_rojo' => 'Minutos para rojo']);
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal())->update($d);
+
         return response()->json(['ok' => true]);
     }
 
@@ -136,7 +146,8 @@ class CocinaController extends Controller
     public function entregado($pedId)
     {
         abort_unless(DB::table('pedidos')->where('ped_id', $pedId)->where('id_empresa_negocio', $this->sucursal())->exists(), 404);
-        DB::table('cocina_tickets')->where('ped_id', $pedId)->whereNotNull('listo')->whereNull('entregado')->update(['entregado' => now()]);
+        Cocina::entregar((int) $pedId);
+
         return response()->json(['ok' => true]);
     }
 }
