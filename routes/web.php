@@ -856,6 +856,7 @@ Route::get('/carta/{sucursal?}', [CartaController::class, 'ver'])->whereNumber('
 Route::post('/carta/{sucursal}/envio', [CartaController::class, 'envio'])->whereNumber('sucursal')->middleware('throttle:30,1,carta-envio')->name('carta.envio');
 Route::post('/carta/{sucursal}/pedido', [CartaController::class, 'pedir'])->whereNumber('sucursal')->middleware('throttle:10,10,carta-pedido')->name('carta.pedir');
 // Desde el QR de la mesa: pedir, llamar al mozo o pedir la cuenta, y ver si el mozo ya lo atendió
+Route::get('/carta/{sucursal}/mesa/{mesa}/consumo', [CartaController::class, 'consumoMesa'])->whereNumber(['sucursal', 'mesa'])->middleware('throttle:30,1,carta-consumo')->name('carta.consumo');
 Route::post('/carta/{sucursal}/mesa/{mesa}', [CartaController::class, 'solicitarMesa'])->whereNumber(['sucursal', 'mesa'])->middleware('throttle:12,5,carta-mesa')->name('carta.mesa');
 Route::get('/carta/{sucursal}/solicitud/{token}', [CartaController::class, 'estadoSolicitud'])->whereNumber('sucursal')->where('token', '[A-Za-z0-9]{32}')
     ->middleware('throttle:60,1,carta-solicitud')->name('carta.solicitud');

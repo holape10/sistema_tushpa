@@ -47,8 +47,12 @@
                     <p class="font-black leading-tight truncate">{{ $nombre }}</p>
                     <p class="text-xs font-bold text-white/85">🍽️ {{ $mesa }}</p>
                 </div>
-                <button type="button" @click="enviarMesa('MOZO')" :disabled="enviando" class="h-10 px-3 rounded-xl bg-white/15 ring-1 ring-white/30 text-xs font-black active:scale-95 transition">🙋 Mozo</button>
-                <button type="button" @click="enviarMesa('CUENTA')" :disabled="enviando" class="h-10 px-3 rounded-xl bg-white/15 ring-1 ring-white/30 text-xs font-black active:scale-95 transition">🧾 Cuenta</button>
+            </div>
+            {{-- Ver lo consumido (solo lectura), llamar al mozo y pedir la cuenta --}}
+            <div class="grid grid-cols-3 gap-2 mt-2.5">
+                <button type="button" @click="verConsumo()" class="h-10 rounded-xl bg-white/15 ring-1 ring-white/30 text-xs font-black active:scale-95 transition">📋 Mi consumo</button>
+                <button type="button" @click="enviarMesa('MOZO')" :disabled="enviando" class="h-10 rounded-xl bg-white/15 ring-1 ring-white/30 text-xs font-black active:scale-95 transition">🙋 Mozo</button>
+                <button type="button" @click="enviarMesa('CUENTA')" :disabled="enviando" class="h-10 rounded-xl bg-white/15 ring-1 ring-white/30 text-xs font-black active:scale-95 transition">🧾 Cuenta</button>
             </div>
             <label class="relative block mt-2.5">
                 <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
@@ -124,6 +128,7 @@
                     <button type="button" @click="enviarMesa('MOZO')" :disabled="enviando" class="h-12 rounded-2xl bg-white/15 ring-1 ring-white/30 font-black text-sm active:scale-95 transition">🙋 Llamar al mozo</button>
                     <button type="button" @click="enviarMesa('CUENTA')" :disabled="enviando" class="h-12 rounded-2xl bg-white/15 ring-1 ring-white/30 font-black text-sm active:scale-95 transition">🧾 Pedir la cuenta</button>
                 </div>
+                <button type="button" @click="verConsumo()" class="mt-2 h-11 w-full max-w-sm mx-auto block rounded-2xl bg-white/15 ring-1 ring-white/30 font-black text-sm active:scale-95 transition">📋 Ver lo que voy consumiendo</button>
                 <p class="text-white/80 text-xs mt-2">Toca <b>+ Agregar</b> en lo que quieras: tu pedido le llega al mozo.</p>
             @endif
             @if ($negocio->carta_mensaje)
@@ -265,6 +270,37 @@
                         <button type="button" @click="quitarSolicitud(s.token)" class="text-xl leading-none opacity-50">&times;</button>
                     </div>
                 </template>
+            </div>
+        </div>
+
+        {{-- Lo que va consumiendo la mesa: solo para ver (lo aceptado no se cambia desde aquí) --}}
+        <div x-show="consumo" x-cloak class="fixed inset-0 z-40 bg-slate-900/60 flex items-end sm:items-center justify-center sm:p-4" @keydown.escape.window="consumo = null">
+            <div @click.outside="consumo = null" class="bg-slate-50 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[94vh] overflow-y-auto">
+                <div class="sticky top-0 z-10 bg-white px-5 py-4 flex items-center border-b">
+                    <h2 class="flex-1 text-lg font-black text-slate-800">📋 Mi consumo · {{ $mesa }}</h2>
+                    <button type="button" @click="consumo = null" class="text-3xl leading-none text-slate-400">&times;</button>
+                </div>
+                <div class="p-4 space-y-3">
+                    <p x-show="consumo && consumo.cargando" class="text-center text-sm text-slate-500">Cargando…</p>
+                    <template x-if="consumo && !consumo.cargando">
+                        <div class="space-y-3">
+                            <div x-show="!consumo.items.length" class="bg-white rounded-2xl ring-1 ring-slate-200 p-5 text-center text-sm text-slate-500">
+                                Todavía no hay nada confirmado en tu mesa. Lo que pidas aparece aquí cuando el mozo lo acepte.</div>
+                            <div x-show="consumo.items.length" class="bg-white rounded-2xl ring-1 ring-slate-200 divide-y">
+                                <template x-for="(it, i) in consumo.items" :key="i">
+                                    <div class="px-4 py-2.5 flex items-center gap-3 text-sm">
+                                        <span class="w-10 shrink-0 font-black text-slate-700" x-text="Number(it.cantidad) + '×'"></span>
+                                        <span class="flex-1 text-slate-800" x-text="it.nombre"></span>
+                                        <span class="font-bold text-slate-700" x-text="soles(it.total)"></span>
+                                    </div>
+                                </template>
+                            </div>
+                            <div x-show="consumo.items.length" class="bg-white rounded-2xl ring-1 ring-slate-200 p-4 flex justify-between text-lg font-black text-slate-900"><span>Total</span><span x-text="soles(consumo.total)"></span></div>
+                            <p class="text-xs text-slate-500 text-center">Solo para ver. Si algo no está bien, llama al mozo.</p>
+                            <button type="button" @click="enviarMesa('CUENTA'); consumo = null" :disabled="enviando || !consumo.items.length" class="w-full h-12 rounded-2xl bg-acento text-white font-black disabled:opacity-40">🧾 Pedir la cuenta</button>
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
 
@@ -515,10 +551,19 @@
                 textoSolicitud(s) {
                     const t = { PEDIDO: 'Tu pedido' + (s.total ? ' de ' + this.soles(s.total) : ''), MOZO: 'Llamaste al mozo', CUENTA: 'Pediste la cuenta' }[s.tipo];
                     if (s.estado === 'PENDIENTE') return t + ': ' + (s.tipo === 'PEDIDO' ? 'esperando que el mozo lo confirme…' : 'ya le avisamos…');
-                    if (s.estado === 'ACEPTADA') return t + ': confirmado, ya va a cocina 👨‍🍳';
+                    if (s.estado === 'ACEPTADA') return t + (s.corregido ? ': el mozo lo ajustó y ya va a cocina 👨‍🍳 (mira 📋 tu consumo)' : ': confirmado, ya va a cocina 👨‍🍳');
                     if (s.estado === 'ATENDIDA') return t + (s.tipo === 'CUENTA' ? ': ya te la llevan' : ': ya viene');
                     if (s.estado === 'RECHAZADA') return t + ': no se pudo aceptar' + (s.motivo ? ' (' + s.motivo.toLowerCase() + ')' : '') + '. Habla con el mozo.';
                     return t + ': no se atendió a tiempo. Llama al mozo, por favor.';
+                },
+                consumo: null,
+                verConsumo() {
+                    if (!MESA) return;
+                    this.consumo = { cargando: true, items: [], total: 0 };
+                    fetch(@js(url('/carta/'.$negocio->id_empresa_negocio.'/mesa')) + '/' + MESA.id + '/consumo?k=' + encodeURIComponent(MESA.k), { headers: { Accept: 'application/json' } })
+                        .then(r => r.ok ? r.json() : Promise.reject())
+                        .then(d => { if (this.consumo) this.consumo = { cargando: false, items: d.items || [], total: d.total || 0 }; })
+                        .catch(() => { this.consumo = null; alert('No se pudo cargar tu consumo. Revisa tu internet.'); });
                 },
                 quitarSolicitud(token) {
                     this.solicitudes = this.solicitudes.filter(s => s.token !== token);
@@ -531,7 +576,7 @@
                             fetch(@js(url('/carta/'.$negocio->id_empresa_negocio.'/solicitud')) + '/' + s.token, { headers: { Accept: 'application/json' } })
                                 .then(r => r.ok ? r.json() : null).then(d => {
                                     if (!d || d.estado === s.estado) return;
-                                    Object.assign(s, { estado: d.estado, motivo: d.motivo });
+                                    Object.assign(s, { estado: d.estado, motivo: d.motivo, corregido: d.total !== null && s.total !== null && Math.abs(d.total - s.total) > 0.001, total: d.total ?? s.total });
                                     if (navigator.vibrate) navigator.vibrate(200);
                                     guardar(CLAVE + '-sol', this.solicitudes);
                                 }).catch(() => {});

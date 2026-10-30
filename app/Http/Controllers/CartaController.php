@@ -120,6 +120,17 @@ class CartaController extends Controller
         return response()->json($r);
     }
 
+    /** Lo que va consumiendo la mesa (solo para ver), desde el QR firmado de la mesa */
+    public function consumoMesa(Request $request, int $sucursal, int $mesa): JsonResponse
+    {
+        $negocio = Carta::sucursal($sucursal);
+        abort_unless($negocio, 404);
+        $fila = $this->mesa($negocio, $mesa);
+        abort_unless(CartaMesa::permite($negocio, $fila, $request->query('k')), 403);
+
+        return response()->json(CartaMesa::consumo((int) $fila->mes_id));
+    }
+
     /** El cliente ve si el mozo ya aceptó su pedido */
     public function estadoSolicitud(int $sucursal, string $token): JsonResponse
     {

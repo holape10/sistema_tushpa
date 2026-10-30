@@ -272,6 +272,23 @@ class CartaMesa
     }
 
     /** Estado que ve el cliente en su celular */
+    /**
+     * Lo que va consumiendo la mesa (el pedido abierto que llevan el mozo y la carta), para que el cliente lo vea en su
+     * celular. Solo para ver: lo que ya se aceptó no se cambia desde la carta.
+     *
+     * @return array{items: array<int, array{cantidad: float, nombre: string, total: float}>, total: float}
+     */
+    public static function consumo(int $mesId): array
+    {
+        $pedido = MesasUnidas::pedidoDe($mesId);
+        $items = $pedido ? DB::table('pedidos_detalle')->where('ped_id', $pedido)->where('estadoitem', '!=', 'Eliminado')->orderBy('ped_det_id')
+            ->get(['descripcion', 'ped_det_can', 'ped_det_pre'])
+            ->map(fn ($l) => ['cantidad' => (float) $l->ped_det_can, 'nombre' => (string) $l->descripcion,
+                'total' => round((float) $l->ped_det_can * (float) $l->ped_det_pre, 2)])->all() : [];
+
+        return ['items' => $items, 'total' => round(array_sum(array_column($items, 'total')), 2)];
+    }
+
     public static function estado(int $suc, string $token): ?array
     {
         $s = DB::table('carta_solicitudes')->where('id_empresa_negocio', $suc)->where('token', $token)->first();
