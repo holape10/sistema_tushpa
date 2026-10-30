@@ -51,7 +51,7 @@ class SunatController extends Controller
             ->when($estado === 'pendientes', fn ($q) => $q->whereIn('c.est_sunat', SunatService::ESTADOS_REENVIABLES)->whereNull('c.ccabaj'))
             ->when($estado && $estado !== 'pendientes' && $estado !== 'todos', fn ($q) => $q->where('c.est_sunat', $estado))
             ->orderByDesc('c.ccafem')->orderByDesc('c.IdCpe_cabecera')
-            ->select('c.IdCpe_cabecera', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccafem', 'c.fecha_hora', 'c.ccandi', 'c.ccanom', 'c.ccaitv',
+            ->select('c.IdCpe_cabecera', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccafem', 'c.ccandi', 'c.ccanom', 'c.ccaitv',
                 'c.est_sunat', 'c.ccasunrescod', 'c.ccadessun', 'c.res_id', 'c.serie_ref', 'c.num_ref', 'c.ccabaj', 't.tdodes')
             // "Por enviar": hasta 500 en una página para enviarlos todos de una vez
             ->paginate($estado === 'pendientes' ? 500 : 50)->withQueryString();
@@ -59,7 +59,11 @@ class SunatController extends Controller
         $empresa = DB::table('empresa')->where('IdEmpresa', Auth::user()->IdEmpresa)->first();
         $tieneCertificado = is_file(storage_path('app/certificados/'.Auth::user()->IdEmpresa.'.pem'));
 
-        return view('empresas.sunat.envios', compact('comprobantes', 'conteo', 'desde', 'hasta', 'tipo', 'estado', 'empresa', 'tieneCertificado'));
+        // El botón "Corregir fecha de los vencidos" solo sale si en la lista hay alguno fuera de plazo
+        $hayVencidos = $comprobantes->getCollection()->contains(fn ($c) => ! $c->ccabaj
+            && in_array($c->est_sunat, SunatService::ESTADOS_REENVIABLES, true) && CambioFecha::vencido($c));
+
+        return view('empresas.sunat.envios', compact('comprobantes', 'conteo', 'desde', 'hasta', 'tipo', 'estado', 'empresa', 'tieneCertificado', 'hayVencidos'));
     }
 
     /** Campanita de pendientes ya actualizada (la pide el layout después de cada envío a SUNAT) */
@@ -99,7 +103,7 @@ class SunatController extends Controller
         }
 
         return response()->json(['success' => true, 'fecha' => Carbon::parse($r['nueva'])->format('d/m/Y'),
-            'mensaje' => 'Fecha cambiada del '.Carbon::parse($r['anterior'])->format('d/m/Y').' al '.Carbon::parse($r['nueva'])->format('d/m/Y').'. Envíalo a SUNAT hoy mismo y avisa al cliente.']);
+            'mensaje' => 'Fecha cambiada del '.Carbon::parse($r['anterior'])->format('d/m/Y').' al '.Carbon::parse($r['nueva'])->format('d/m/Y').'. Envíalo a SUNAT hoy mismo.']);
     }
 
     public function descargar($id, $tipo)

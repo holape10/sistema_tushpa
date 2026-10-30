@@ -97,8 +97,11 @@
                         @endphp
                         <tr class="hover:bg-gray-50 {{ $anulada ? 'bg-red-50/40' : '' }}">
                             <td class="px-3 py-2 whitespace-nowrap">
-                                {{ \Carbon\Carbon::parse($v->fecha_hora)->format('d/m/Y') }}
+                                {{ \Carbon\Carbon::parse($v->ccafem)->format('d/m/Y') }}
                                 <span class="block text-xs text-gray-400">{{ \Carbon\Carbon::parse($v->fecha_hora)->format('H:i:s') }}</span>
+                                @if (substr((string) $v->fecha_hora, 0, 10) !== substr((string) $v->ccafem, 0, 10))
+                                    <span class="block text-[11px] text-amber-700" title="La fecha del comprobante se corrigió para enviarlo a SUNAT">vendida el {{ \Carbon\Carbon::parse($v->fecha_hora)->format('d/m') }}</span>
+                                @endif
                             </td>
                             <td class="px-3 py-2 whitespace-nowrap">
                                 <span class="px-1.5 py-0.5 rounded text-[10px] font-bold text-white {{ $colorTipo[$v->tdocod] ?? 'bg-gray-500' }}">{{ $abrev[$v->tdocod] ?? $v->tdocod }}</span>
@@ -140,7 +143,8 @@
                             </td>
                             <td class="px-3 py-2">
                                 <div class="flex items-center justify-center gap-1">
-                                    <a href="{{ route('cobros.voucher', $v->IdCpe_cabecera) }}" target="_blank" title="Ticket" class="btn-ico text-red-600"><i class="fas fa-file-pdf"></i></a>
+                                    <a href="{{ route('ventas.pdf', $v->IdCpe_cabecera) }}" title="Descargar PDF (A4)" class="btn-ico text-red-600"><i class="fas fa-file-pdf"></i></a>
+                                    <a href="{{ route('cobros.voucher', $v->IdCpe_cabecera) }}" target="_blank" title="Ver ticket" class="btn-ico text-slate-600"><i class="fas fa-receipt"></i></a>
                                     <button type="button" @click="imprimirTicketera({{ $v->IdCpe_cabecera }}, $event.currentTarget)" title="Imprimir directo en la ticketera" class="btn-ico text-slate-700"><i class="fas fa-print"></i></button>
                                     <button type="button" onclick="TushpaWhatsApp.abrir({{ $v->IdCpe_cabecera }})" title="Enviar el comprobante por WhatsApp" class="btn-ico text-green-600"><i class="fab fa-whatsapp"></i></button>
                                     @if ($electronico)
@@ -324,7 +328,7 @@
                         <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
                             <div><strong>Cliente:</strong> <span x-text="det.cabecera.ccanom"></span></div>
                             <div><strong>Doc.:</strong> <span x-text="det.cabecera.ccandi"></span></div>
-                            <div><strong>Fecha:</strong> <span x-text="det.cabecera.fecha_hora"></span></div>
+                            <div><strong>Fecha:</strong> <span x-text="det.cabecera.ccafem.split('-').reverse().join('/') + ' ' + String(det.cabecera.fecha_hora).slice(11, 19)"></span></div>
                             <div><strong>Usuario:</strong> <span x-text="det.usuario"></span></div>
                             <div><strong>Condición:</strong> <span x-text="det.cabecera.estadopago"></span></div>
                             <div x-show="det.cabecera.ccaobs"><strong>Obs.:</strong> <span x-text="det.cabecera.ccaobs"></span></div>

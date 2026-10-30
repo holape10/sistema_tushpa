@@ -97,7 +97,7 @@ class VentaController extends Controller
         ];
 
         $ventas = (clone $q)
-            ->orderByDesc('c.fecha_hora')->orderByDesc('c.IdCpe_cabecera')
+            ->orderByDesc('c.ccafem')->orderByDesc('c.fecha_hora')->orderByDesc('c.IdCpe_cabecera')
             ->select('c.*', 't.tdodes', 'u.apeusu as usuario', 'm.mes_nom')
             ->paginate(100)->withQueryString();
 
@@ -281,16 +281,6 @@ class VentaController extends Controller
         $tipo = DB::table('tipo_documento')->where('tdocod', $cab->tdocod)->value('tdodes') ?: 'comprobante';
         $numero = $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT);
         $pdf = URL::signedRoute('comprobante.pdf', ['id' => $cab->IdCpe_cabecera]);
-        // Aviso de cambio de fecha (comprobante que se envió a SUNAT fuera de plazo)
-        if (request('aviso') === 'fecha') {
-            return response()->json([
-                'telefono' => self::celular($cab->telefono_cliente) ?? self::celular($cliente->telefono ?? null),
-                'cliente' => $cab->ccanom, 'numero' => $numero, 'archivo' => $numero.'.pdf', 'pdf' => $pdf,
-                'texto' => "Hola 👋, le saludamos de *{$empresa}*.\nLe informamos que su ".mb_strtolower($tipo)." *{$numero}* por *S/ "
-                    .number_format((float) $cab->ccaitv, 2).'* quedó con fecha de emisión *'.Carbon::parse($cab->ccafem)->format('d/m/Y')
-                    ."* (se actualizó la fecha para registrarla en SUNAT). El monto y el detalle no cambian.\n\n📄 Descargue su comprobante actualizado:\n{$pdf}",
-            ]);
-        }
 
         return response()->json([
             'telefono' => self::celular($cab->telefono_cliente) ?? self::celular($cliente->telefono ?? null),
@@ -298,6 +288,16 @@ class VentaController extends Controller
             'texto' => "Hola 👋, gracias por tu compra en *{$empresa}*.\nTe enviamos tu ".mb_strtolower($tipo)." *{$numero}* por *S/ "
                 .number_format((float) $cab->ccaitv, 2)."*.\n\n📄 Descarga tu comprobante en PDF:\n{$pdf}",
         ]);
+    }
+
+    /** Descarga directa del PDF A4 del comprobante */
+    public function pdf($id)
+    {
+        $this->autorizar();
+        $cab = $this->venta($id);
+        [$nombre, $contenido] = ComprobantePdf::generar((int) $cab->IdCpe_cabecera);
+
+        return response($contenido, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename="'.$nombre.'"']);
     }
 
     /** Guarda el celular en la venta y en el cliente (para la próxima vez) */

@@ -55,7 +55,7 @@
                 Enviar seleccionados (<span id="n_sel">0</span>)
             </button>
             {{-- Lo que se pasó del plazo: se pasa a la fecha de hoy (luego se envía y se avisa al cliente) --}}
-            <button type="button" id="btn_fecha_lote" class="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 disabled:opacity-50" disabled
+            <button type="button" id="btn_fecha_lote" @class(['hidden' => ! $hayVencidos]) class="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 disabled:opacity-50" disabled
                     title="Solo cambia los seleccionados que están fuera de plazo">
                 📅 Corregir fecha de los vencidos (<span id="n_venc">0</span>)
             </button>
@@ -79,8 +79,6 @@
                     @php
                         $reenviable = ! $c->ccabaj && in_array($c->est_sunat, \App\Support\Sunat\SunatService::ESTADOS_REENVIABLES, true);
                         $vencido = $reenviable && \App\Support\Sunat\CambioFecha::vencido($c);
-                        // Se pasó a otra fecha: la venta fue antes del día de emisión (para avisar al cliente)
-                        $fechaCambiada = $c->fecha_hora && substr((string) $c->fecha_hora, 0, 10) < $c->ccafem;
                     @endphp
                     <tr class="hover:bg-gray-50 align-top" data-id="{{ $c->IdCpe_cabecera }}">
                         <td class="px-3 py-3">@if ($reenviable)<input type="checkbox" class="chk" value="{{ $c->IdCpe_cabecera }}" data-vencido="{{ $vencido ? 1 : 0 }}">@endif</td>
@@ -108,8 +106,6 @@
                             @if ($reenviable)
                                 <button type="button" class="btn-enviar px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">Enviar</button>
                             @endif
-                            <button type="button" class="btn-avisar {{ $fechaCambiada ? '' : 'hidden' }} px-3 py-1 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700"
-                                    title="Avisar al cliente por WhatsApp que su comprobante tiene nueva fecha"><i class="fab fa-whatsapp"></i> Avisar</button>
                             <a href="{{ route('sunat.descargar', [$c->IdCpe_cabecera, 'xml']) }}" class="text-xs text-indigo-600 hover:underline">XML</a>
                             <a href="{{ route('sunat.descargar', [$c->IdCpe_cabecera, 'cdr']) }}" class="text-xs text-indigo-600 hover:underline">CDR</a>
                         </td>
@@ -127,7 +123,7 @@
         const URL_ENVIAR = "{{ url('sunat/enviar') }}/";
         const URL_FECHA = "{{ url('sunat/fecha') }}/";
 
-        // Pasa a hoy un comprobante fuera de plazo; queda listo para enviar y para avisar al cliente
+        // Pasa al último día válido un comprobante fuera de plazo; queda listo para enviar
         async function pasarAHoy(id) {
             const fila = document.querySelector(`tr[data-id="${id}"]`);
             const btn = fila.querySelector('.btn-fecha');
@@ -146,7 +142,6 @@
                 btn?.remove();
                 const chk = fila.querySelector('.chk');
                 if (chk) chk.dataset.vencido = '0';
-                fila.querySelector('.btn-avisar')?.classList.remove('hidden');
             } else if (btn) {
                 btn.disabled = false; btn.textContent = '📅 Pasar al ' + btn.dataset.fecha.slice(0, 5);
             }
@@ -191,9 +186,7 @@
             const b = e.target.closest('.btn-enviar');
             if (b) enviar(b.closest('tr').dataset.id);
             const f = e.target.closest('.btn-fecha');
-            if (f && confirm('¿Pasar este comprobante al ' + f.dataset.fecha + '?\nEs el día más antiguo que SUNAT todavía acepta (así no queda después de los comprobantes más nuevos).\n\nEnvíalo a SUNAT hoy mismo y avisa al cliente con el botón de WhatsApp.')) pasarAHoy(f.closest('tr').dataset.id);
-            const w = e.target.closest('.btn-avisar');
-            if (w) TushpaWhatsApp.abrir(Number(w.closest('tr').dataset.id), false, 'fecha');
+            if (f && confirm('¿Pasar este comprobante al ' + f.dataset.fecha + '?\nEs el día más antiguo que SUNAT todavía acepta (así no queda después de los comprobantes más nuevos).\n\nEnvíalo a SUNAT hoy mismo.')) pasarAHoy(f.closest('tr').dataset.id);
         });
 
         function actualizarSeleccion() {
@@ -207,7 +200,7 @@
 
         document.getElementById('btn_fecha_lote').addEventListener('click', async function () {
             const ids = [...document.querySelectorAll('.chk:checked[data-vencido="1"]')].map(c => c.value);
-            if (!ids.length || !confirm(`¿Corregir la fecha de ${ids.length} comprobante(s) fuera de plazo?\nCada uno pasa al día más antiguo que SUNAT todavía acepta (así no quedan después de los más nuevos).\n\nEnvíalos a SUNAT hoy mismo y avisa a cada cliente con el botón de WhatsApp.`)) return;
+            if (!ids.length || !confirm(`¿Corregir la fecha de ${ids.length} comprobante(s) fuera de plazo?\nCada uno pasa al día más antiguo que SUNAT todavía acepta (así no quedan después de los más nuevos).\n\nEnvíalos a SUNAT hoy mismo.`)) return;
             this.disabled = true;
             const progreso = document.getElementById('progreso');
             let ok = 0;
@@ -242,5 +235,4 @@
             progreso.textContent = `Listo: ${ok} aceptado(s), ${ids.length - ok} con problema.`;
         });
     </script>
-    <script src="{{ asset('js/whatsapp-cpe.js') }}?v={{ filemtime(public_path('js/whatsapp-cpe.js')) }}" data-base="{{ url('/') }}" data-csrf="{{ csrf_token() }}"></script>
 @endsection

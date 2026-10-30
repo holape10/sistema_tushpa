@@ -1,7 +1,6 @@
 /*
  * Enviar un comprobante por WhatsApp (Panel de ventas, PV Móvil y otras pantallas).
  *   TushpaWhatsApp.abrir(idComprobante)
- *   TushpaWhatsApp.abrir(idComprobante, false, 'fecha')   → aviso de que se cambió la fecha del comprobante
  *
  * - Si el cliente tiene celular guardado: abre su chat de WhatsApp con el mensaje y el enlace al PDF A4.
  * - Si no tiene: pide el número (y lo guarda en la venta y en el cliente para la próxima vez).
@@ -128,11 +127,11 @@
     }
 
     window.TushpaWhatsApp = {
-        /** @param {number} id IdCpe_cabecera  @param {boolean} preguntar  true = mostrar el modal aunque ya tenga número  @param {?string} aviso  'fecha' = avisar el cambio de fecha */
-        async abrir(id, preguntar = false, aviso = null) {
+        /** @param {number} id IdCpe_cabecera  @param {boolean} preguntar  true = mostrar el modal aunque ya tenga número */
+        async abrir(id, preguntar = false) {
             idActual = id;
             try {
-                const r = await fetch(BASE + '/ventas/' + id + '/whatsapp' + (aviso ? '?aviso=' + encodeURIComponent(aviso) : ''), { headers: { 'Accept': 'application/json' } });
+                const r = await fetch(BASE + '/ventas/' + id + '/whatsapp', { headers: { 'Accept': 'application/json' } });
                 if (!r.ok) throw new Error();
                 datos = await r.json();
             } catch (e) { return aviso('No se pudo preparar el mensaje. Revisa tu conexión.', false); }

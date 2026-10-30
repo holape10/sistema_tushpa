@@ -509,6 +509,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/ventas/{id}/editar', [PuntoVentaController::class, 'editar'])->whereNumber('id')->name('ventas.editar');
     Route::post('/ventas/{id}/editar', [PuntoVentaController::class, 'guardarEdicion'])->whereNumber('id')->name('ventas.editar.guardar');
     Route::get('/ventas/{id}/whatsapp', [VentaController::class, 'whatsapp'])->whereNumber('id')->name('ventas.whatsapp');
+    Route::get('/ventas/{id}/pdf', [VentaController::class, 'pdf'])->whereNumber('id')->name('ventas.pdf');
     Route::post('/ventas/{id}/telefono', [VentaController::class, 'telefono'])->whereNumber('id')->name('ventas.telefono');
 
     // Notas de crédito y débito electrónicas
