@@ -42,6 +42,11 @@ class VisitaController extends Controller
             'paginas' => $base()->groupBy('ruta')->selectRaw('ruta, COUNT(*) as vistas, COUNT(DISTINCT visitante) as personas')->orderByDesc('vistas')->limit(10)->get(),
             'origenes' => $base()->groupBy('origen')->selectRaw("COALESCE(origen, 'Directo') as origen, COUNT(DISTINCT visitante) as personas")->orderByDesc('personas')->limit(10)->get(),
             'dispositivos' => $base()->groupBy('dispositivo')->selectRaw('dispositivo, COUNT(DISTINCT visitante) as personas')->orderByDesc('personas')->get(),
+            // Desde dónde: países y, en el Perú, ciudades (las visitas de antes de guardar la ubicación no cuentan)
+            'paises' => $base()->whereNotNull('pais')->groupBy('pais')->selectRaw('pais, COUNT(DISTINCT visitante) as personas')->orderByDesc('personas')->limit(10)->get(),
+            'ciudades' => $base()->where('pais', 'PE')->groupBy('region', 'ciudad')
+                ->selectRaw("region, COALESCE(ciudad, region, 'Perú') as ciudad, COUNT(DISTINCT visitante) as personas")->orderByDesc('personas')->limit(12)->get(),
+            'sinUbicacion' => (int) $base()->whereNull('pais')->distinct()->count('visitante'),
             'porHora' => $base()->groupByRaw('HOUR(fecha)')->selectRaw('HOUR(fecha) as hora, COUNT(*) as vistas')->pluck('vistas', 'hora'),
             'registros' => $registros,
             'conversion' => $personas > 0 ? round($registros / $personas * 100, 1) : 0,

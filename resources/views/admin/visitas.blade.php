@@ -93,6 +93,37 @@
         </div>
     </div>
 
+    {{-- Desde dónde entran: países y ciudades del Perú (aproximado, por la conexión) --}}
+    <div class="grid lg:grid-cols-2 gap-4 mt-4">
+        <div class="bg-white rounded-2xl shadow-sm p-5 min-w-0">
+            <p class="font-bold mb-3">🌎 ¿Desde qué país?</p>
+            @php $maxPais = max(1, (int) $paises->max('personas')); @endphp
+            @forelse ($paises as $p)
+                <div class="py-1.5 text-sm">
+                    <div class="flex justify-between gap-2"><span>{{ \App\Support\GeoIp::bandera($p->pais) }} {{ \App\Support\GeoIp::nombrePais($p->pais) }}</span><b>{{ $p->personas }}</b></div>
+                    <div class="h-1.5 rounded-full bg-slate-100 mt-1"><div class="h-1.5 rounded-full bg-sky-500" style="width: {{ $barra($p->personas, $maxPais) }}%"></div></div>
+                </div>
+            @empty
+                <p class="text-sm text-slate-400">Todavía no hay visitas con ubicación. Se empiezan a contar desde hoy.</p>
+            @endforelse
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm p-5 min-w-0">
+            <p class="font-bold mb-3">📍 Ciudades del Perú</p>
+            @php $maxCiudad = max(1, (int) $ciudades->max('personas')); @endphp
+            @forelse ($ciudades as $c)
+                <div class="py-1.5 text-sm">
+                    @php $region = trim(str_ireplace(' region', '', (string) $c->region)); @endphp
+                    <div class="flex justify-between gap-2"><span>{{ $c->ciudad }} @if ($region && $region !== $c->ciudad)<span class="text-xs text-slate-400">· {{ $region }}</span>@endif</span><b>{{ $c->personas }}</b></div>
+                    <div class="h-1.5 rounded-full bg-slate-100 mt-1"><div class="h-1.5 rounded-full bg-rose-500" style="width: {{ $barra($c->personas, $maxCiudad) }}%"></div></div>
+                </div>
+            @empty
+                <p class="text-sm text-slate-400">Todavía no hay visitas del Perú con ubicación.</p>
+            @endforelse
+        </div>
+        <p class="lg:col-span-2 text-xs text-slate-400 -mt-2">Es aproximado, según la conexión: muchos celulares figuran en Lima aunque estén en otra ciudad.
+            @if ($sinUbicacion) {{ $sinUbicacion }} persona(s) del periodo entraron antes de que se guardara la ubicación o desde una conexión desconocida.@endif</p>
+    </div>
+
     {{-- Negocios que crearon su carta gratis (posibles clientes) --}}
     <div class="bg-white rounded-2xl shadow-sm mt-4 overflow-x-auto">
         <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2">

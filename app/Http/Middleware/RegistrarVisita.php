@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\GeoIp;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +25,10 @@ class RegistrarVisita
             $agente = (string) $request->userAgent();
             if ($request->isMethod('GET') && ! $request->expectsJson() && $respuesta->getStatusCode() === 200
                 && ! str_ends_with($request->path(), '.xml') && $agente !== '' && ! preg_match(self::ROBOTS, $agente) && ! auth('superadmin')->check()) {
+                // Desde dónde (país; en el Perú también región y ciudad), aproximado y sin guardar el IP
+                $lugar = GeoIp::ubicacion($request->ip());
                 DB::connection('central')->table('web_visitas')->insert([
+                    'pais' => $lugar['pais'] ?? null, 'region' => $lugar['region'] ?? null, 'ciudad' => $lugar['ciudad'] ?? null,
                     'fecha' => now(),
                     'ruta' => Str::limit('/'.ltrim($request->path(), '/'), 115, ''),
                     // Código anónimo del día: la misma persona cuenta una vez por día, sin guardar su IP
