@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\DB;
  * Comprobantes que no se enviaron a SUNAT a tiempo: se pasan al primer día que SUNAT todavía acepta (no a hoy), así quedan
  * lo más cerca de su fecha real y antes de los comprobantes más nuevos, sin romper el orden de los números (como se hacía en
  * el sistema anterior). Luego se envían ese mismo día y se le avisa al cliente. Solo lo que SUNAT todavía no tiene
- * (pendiente, error o rechazado), nunca lo aceptado ni lo anulado. Plazos: facturas y sus notas 3 días, boletas y sus
- * notas 7 días (día 1 = el de emisión).
+ * (pendiente, error o rechazado), nunca lo aceptado ni lo anulado. Plazos contados desde el día siguiente a la emisión
+ * (R.S. 000003-2023/SUNAT): facturas y sus notas 3 días, boletas y sus notas 7 días.
  */
 class CambioFecha
 {
@@ -23,10 +23,10 @@ class CambioFecha
         return RescateEnvios::PLAZOS[$letra][0] ?? RescateEnvios::PLAZOS['F'][0];
     }
 
-    /** La fecha más antigua que SUNAT todavía acepta hoy para ese comprobante (último día de su plazo) */
+    /** La fecha de emisión más antigua que SUNAT todavía acepta hoy (con hoy 30, una factura del 27: su plazo es 28, 29 y 30) */
     public static function fechaValida(object $cab, ?Carbon $hoy = null): Carbon
     {
-        return ($hoy ?? now())->copy()->startOfDay()->subDays(self::plazo($cab) - 1);
+        return ($hoy ?? now())->copy()->startOfDay()->subDays(self::plazo($cab));
     }
 
     /** ¿Ya se le pasó el plazo para enviarlo a SUNAT? */

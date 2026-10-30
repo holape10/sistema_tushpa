@@ -11,14 +11,15 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Envío de rescate: si nadie mandó a SUNAT un comprobante y se le acaba el plazo, el sistema lo envía solo.
- *  - Factura y sus notas (serie F): plazo de 3 días calendario → se envía desde el día 2.
- *  - Boleta y sus notas (serie B): plazo de 7 días → se envía desde el día 5.
+ * El plazo se cuenta desde el día siguiente a la emisión (R.S. 000003-2023/SUNAT): una factura del 27 vale hasta el 30.
+ *  - Factura y sus notas (serie F): 3 días calendario → se envía desde el día siguiente a la emisión.
+ *  - Boleta y sus notas (serie B): 7 días → se envía desde el 4.º día después de la emisión.
  * No toca lo RECHAZADO (hay que corregirlo), ni lo anulado, ni lo que ya venció el plazo.
  */
 class RescateEnvios
 {
-    /** [días de plazo, desde qué día se envía] */
-    public const PLAZOS = ['F' => [3, 2], 'B' => [7, 5]];
+    /** [días de plazo después de la emisión, desde cuántos días después de la emisión se envía] */
+    public const PLAZOS = ['F' => [3, 1], 'B' => [7, 4]];
 
     private const MAXIMO_POR_SUCURSAL = 60;
 
@@ -35,8 +36,8 @@ class RescateEnvios
             return DB::table('cpe_cabecera')->where('id_empresa_negocio', $sucursal)->whereNull('ccabaj')
                 ->where(fn ($w) => $w->whereNull('est_sunat')->orWhereIn('est_sunat', ['PENDIENTE', 'ERROR']))
                 ->where(fn ($q) => $tipo($q, $letra))
-                // Día 1 = el de emisión
-                ->whereBetween('ccafem', [$hoy->copy()->subDays($plazo - 1)->toDateString(), $hoy->copy()->subDays($desde - 1)->toDateString()])
+                // El plazo empieza al día siguiente de la emisión: hoy todavía vale lo emitido hace $plazo días
+                ->whereBetween('ccafem', [$hoy->copy()->subDays($plazo)->toDateString(), $hoy->copy()->subDays($desde)->toDateString()])
                 ->orderBy('ccafem')->orderBy('IdCpe_cabecera')->limit(self::MAXIMO_POR_SUCURSAL)
                 ->get(['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem']);
         })->values();

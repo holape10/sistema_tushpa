@@ -12,14 +12,14 @@ class CambioFechaTest extends TestCase
     /** @return array<string, array{string, string, string, bool}> */
     public static function comprobantes(): array
     {
-        // Hoy es 30/10: la factura tiene 3 días (27 ya venció), la boleta 7 (23 ya venció)
+        // Hoy es 30/10. El plazo empieza al día siguiente de la emisión: factura 3 días (la del 27 vale hasta hoy), boleta 7 (la del 23)
         return [
             'factura de ayer, a tiempo' => ['01', 'F001', '2026-10-29', false],
-            'factura del día 3, último día' => ['01', 'F001', '2026-10-28', false],
-            'factura de hace 3 días, fuera de plazo' => ['01', 'F001', '2026-10-27', true],
+            'factura del 27: hoy es su último día' => ['01', 'F001', '2026-10-27', false],
+            'factura del 26, fuera de plazo' => ['01', 'F001', '2026-10-26', true],
             'nota de crédito de factura fuera de plazo' => ['07', 'FC01', '2026-10-25', true],
-            'boleta del día 7, último día' => ['03', 'B001', '2026-10-24', false],
-            'boleta de hace 7 días, fuera de plazo' => ['03', 'B001', '2026-10-23', true],
+            'boleta del 23: hoy es su último día' => ['03', 'B001', '2026-10-23', false],
+            'boleta del 22, fuera de plazo' => ['03', 'B001', '2026-10-22', true],
         ];
     }
 
@@ -35,8 +35,8 @@ class CambioFechaTest extends TestCase
     {
         $hoy = Carbon::parse('2026-10-30 10:00');
 
-        // Una factura del 20: no pasa a hoy (30) sino al 28, antes de las facturas del 28 y 29
-        $this->assertSame('2026-10-28', CambioFecha::fechaValida((object) ['tdocod' => '01', 'serdoc' => 'F001', 'ccafem' => '2026-10-20'], $hoy)->toDateString());
-        $this->assertSame('2026-10-24', CambioFecha::fechaValida((object) ['tdocod' => '03', 'serdoc' => 'B001', 'ccafem' => '2026-10-15'], $hoy)->toDateString());
+        // Una factura del 20: no pasa a hoy (30) sino al 27, antes de las facturas del 28 y 29
+        $this->assertSame('2026-10-27', CambioFecha::fechaValida((object) ['tdocod' => '01', 'serdoc' => 'F001', 'ccafem' => '2026-10-20'], $hoy)->toDateString());
+        $this->assertSame('2026-10-23', CambioFecha::fechaValida((object) ['tdocod' => '03', 'serdoc' => 'B001', 'ccafem' => '2026-10-15'], $hoy)->toDateString());
     }
 }
