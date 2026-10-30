@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\ComprobanteController;
 use App\Http\Controllers\Admin\DatosCobroController;
 use App\Http\Controllers\Admin\LoginController;
+use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\PromocionController;
 use App\Http\Controllers\Admin\ProspectoController;
 use App\Http\Controllers\Admin\RespaldoController;
@@ -92,9 +93,17 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/usuarios/{usuario}/permiso', [UsuarioController::class, 'permiso'])->whereNumber('usuario')->name('usuarios.permiso');
     Route::post('/usuarios/{usuario}/estado', [UsuarioController::class, 'estado'])->whereNumber('usuario')->name('usuarios.estado');
     Route::post('/usuarios/{usuario}/clave', [UsuarioController::class, 'clave'])->whereNumber('usuario')->name('usuarios.clave');
+    // Mis cuentas y QR de cobro (cada usuario, también el dueño, puede tener varios)
     Route::get('/mis-cobros', [DatosCobroController::class, 'index'])->name('cobros.index');
-    Route::post('/mis-cobros', [DatosCobroController::class, 'guardar'])->name('cobros.guardar');
-    Route::post('/mis-cobros/qr/quitar', [DatosCobroController::class, 'quitarQr'])->name('cobros.qr.quitar');
+    Route::post('/mis-cobros/cuenta/{id?}', [DatosCobroController::class, 'guardarCuenta'])->whereNumber('id')->name('cobros.cuenta');
+    Route::post('/mis-cobros/qr/{id?}', [DatosCobroController::class, 'guardarQr'])->whereNumber('id')->name('cobros.qr');
+    Route::post('/mis-cobros/{id}/eliminar', [DatosCobroController::class, 'eliminar'])->whereNumber('id')->name('cobros.eliminar');
+    Route::post('/mis-cobros/whatsapp', [DatosCobroController::class, 'guardarWhatsapp'])->name('cobros.whatsapp');
+    // Mi perfil: foto, nombre, celular, cumpleaños y contraseña (una vez por semana)
+    Route::get('/mi-perfil', [PerfilController::class, 'index'])->name('perfil');
+    Route::post('/mi-perfil', [PerfilController::class, 'guardar'])->name('perfil.guardar');
+    Route::post('/mi-perfil/foto/quitar', [PerfilController::class, 'quitarFoto'])->name('perfil.foto.quitar');
+    Route::post('/mi-perfil/clave', [PerfilController::class, 'clave'])->middleware('throttle:10,1')->name('perfil.clave');
     Route::get('/subdominio/{sub}', [ClienteController::class, 'revisarSubdominio'])->where('sub', '[A-Za-z0-9-]{1,40}')->name('subdominio');
     Route::get('/ruc/{ruc}', [ClienteController::class, 'consultarRuc'])->where('ruc', '\d{11}')->name('ruc');
 });

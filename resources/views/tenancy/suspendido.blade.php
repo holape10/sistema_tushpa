@@ -58,6 +58,8 @@
         .seguro { position: relative; margin-top: 18px; display: flex; align-items: center; gap: 8px; color: #dbeafe; font-size: 12px; }
         .seguro svg { width: 16px; height: 16px; flex: 0 0 16px; }
         .tarjeta.sin-qr { grid-template-columns: 1fr; max-width: 620px; }
+        .pago .qr-nombre { position: relative; margin: 22px 0 8px; color: #fff; font-weight: 800; font-size: 16px; letter-spacing: .02em; }
+        .pago .qr-nombre:first-of-type { margin-top: 0; }
         @media (max-width: 820px) {
             .tarjeta { grid-template-columns: 1fr; border-radius: 22px; }
             .info { padding: 28px 22px 24px; }
@@ -93,19 +95,22 @@
                 <li><b class="n">3</b><span>Reactivamos tu acceso y sigues trabajando.</span></li>
             </ol>
 
+            {{-- Todas las cuentas de quien cobra (puede tener varias: BCP, BBVA…) --}}
             <div class="cuentas">
-                @if ($pago['cuenta'])
-                    <div class="cuenta">
-                        <div><small>Cuenta {{ $pago['banco'] }} · {{ $pago['titular'] }}</small><span>{{ $pago['cuenta'] }}</span></div>
-                        <button type="button" class="copiar" data-valor="{{ preg_replace('/\D/', '', $pago['cuenta']) }}">Copiar</button>
-                    </div>
-                @endif
-                @if ($pago['cci'])
-                    <div class="cuenta">
-                        <div><small>CCI (desde otros bancos)</small><span>{{ $pago['cci'] }}</span></div>
-                        <button type="button" class="copiar" data-valor="{{ preg_replace('/\D/', '', $pago['cci']) }}">Copiar</button>
-                    </div>
-                @endif
+                @foreach ($pago['cuentas'] as $c)
+                    @if ($c['cuenta'])
+                        <div class="cuenta">
+                            <div><small>Cuenta {{ $c['banco'] }} · {{ $c['titular'] }}</small><span>{{ $c['cuenta'] }}</span></div>
+                            <button type="button" class="copiar" data-valor="{{ preg_replace('/\D/', '', $c['cuenta']) }}">Copiar</button>
+                        </div>
+                    @endif
+                    @if ($c['cci'])
+                        <div class="cuenta">
+                            <div><small>CCI {{ $c['banco'] }} (desde otros bancos)</small><span>{{ $c['cci'] }}</span></div>
+                            <button type="button" class="copiar" data-valor="{{ preg_replace('/\D/', '', $c['cci']) }}">Copiar</button>
+                        </div>
+                    @endif
+                @endforeach
             </div>
 
             <div class="acciones">
@@ -121,11 +126,15 @@
             <aside class="pago">
                 <h2>Paga con cualquier billetera digital</h2>
                 <p>Yape · Plin · BBVA · BCP · Interbank y más</p>
-                <div class="qr"><img src="{{ $pago['qr'] }}" alt="QR de pago {{ $pago['banco'] }} - {{ $pago['titular'] }}"></div>
-                <div class="seguro">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/></svg>
-                    Titular: {{ $pago['titular'] }}
-                </div>
+                {{-- Todos los QR (Yape, Plin…): con varios, el cliente elige con cuál paga --}}
+                @foreach ($pago['qrs'] as $q)
+                    @if (count($pago['qrs']) > 1)<p class="qr-nombre">{{ $q['nombre'] }}</p>@endif
+                    <div class="qr"><img src="{{ $q['url'] }}" alt="QR de pago {{ $q['nombre'] }} - {{ $q['titular'] }}"></div>
+                    <div class="seguro">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/></svg>
+                        Titular: {{ $q['titular'] }}
+                    </div>
+                @endforeach
             </aside>
         @endif
     </main>

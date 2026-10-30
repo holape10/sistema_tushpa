@@ -92,8 +92,9 @@ class UsuarioController extends Controller
         $this->autorizar();
         abort_unless($this->puedeManejar($usuario), 403);
         $request->validate(['password' => 'required|string|min:10'], [], ['password' => 'contraseña']);
-        $usuario->update(['password' => $request->password, 'remember_token' => null]);
+        // Restablecida por quien la maneja: el usuario entra con esta y, si quiere, la cambia en "Mi perfil" sin esperar la semana
+        $usuario->update(['password' => $request->password, 'remember_token' => null, 'clave_cambiada_el' => null]);
 
-        return back()->with('ok', "Contraseña de {$usuario->nombre} cambiada.");
+        return back()->with('ok', "Contraseña de {$usuario->nombre} restablecida. Pásale la nueva para que vuelva a entrar.");
     }
 }

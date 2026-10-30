@@ -37,7 +37,7 @@
                     $yo->es_dueno ? ['Promociones', 'admin.promociones.index', 'admin.promociones.*', 0, 'M7 7h.01M3 11l8.59 8.59a2 2 0 002.82 0l6.18-6.18a2 2 0 000-2.82L12 2H3v9z'] : null,
                     $yo->es_dueno ? ['Prospectos', 'admin.prospectos.index', 'admin.prospectos.*', 0, 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'] : null,
                     $yo->es_dueno ? ['Certificados', 'admin.certificados.index', 'admin.certificados.*', 0, 'M12 15l-3 6 3-1.5L15 21l-3-6zm0 0a6 6 0 100-12 6 6 0 000 12z'] : null,
-                    ! $yo->es_dueno ? ['Mis datos de cobro', 'admin.cobros.index', 'admin.cobros.*', 0, 'M3 10h18M7 15h2m4 0h4M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z'] : null,
+                    ['Mis cuentas y QR', 'admin.cobros.index', 'admin.cobros.*', 0, 'M3 10h18M7 15h2m4 0h4M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z'],
                 ]),
                 'Página web' => $yo->es_dueno ? [
                     ['Mensajes web', 'admin.mensajes.index', 'admin.mensajes.*', $mensajesNuevos, 'M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
@@ -111,8 +111,14 @@
                     @endforeach
                 </nav>
 
-                <form method="POST" action="{{ route('admin.logout') }}" class="p-3 shrink-0 border-t border-indigo-800/70">
+                <form method="POST" action="{{ route('admin.logout') }}" class="p-3 shrink-0 border-t border-indigo-800/70 space-y-2">
                     @csrf
+                    {{-- Mi perfil: foto, nombre, celular, cumpleaños y contraseña --}}
+                    <a href="{{ route('admin.perfil') }}" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition {{ request()->routeIs('admin.perfil*') ? 'bg-white text-indigo-950' : 'hover:bg-indigo-800' }}">
+                        @include('admin.partials.avatar', ['usuario' => $yo, 'tamano' => 'w-9 h-9 text-xs'])
+                        <span class="min-w-0 flex-1 leading-tight"><span class="block text-sm font-semibold truncate">{{ $yo->nombre }}</span>
+                            <span class="block text-[11px] opacity-70">Mi perfil · contraseña</span></span>
+                    </a>
                     <button class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-indigo-900 hover:bg-rose-600 text-sm font-semibold transition">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Salir</button>
                 </form>
