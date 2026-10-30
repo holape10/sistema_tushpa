@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Support\ConsultaPeru;
+use App\Support\Sunat\CambioFecha;
 use App\Support\Sunat\SunatService;
 use App\View\Composers\MenuComposer;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -49,7 +51,7 @@ class SunatController extends Controller
             ->when($estado === 'pendientes', fn ($q) => $q->whereIn('c.est_sunat', SunatService::ESTADOS_REENVIABLES)->whereNull('c.ccabaj'))
             ->when($estado && $estado !== 'pendientes' && $estado !== 'todos', fn ($q) => $q->where('c.est_sunat', $estado))
             ->orderByDesc('c.ccafem')->orderByDesc('c.IdCpe_cabecera')
-            ->select('c.IdCpe_cabecera', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccafem', 'c.ccandi', 'c.ccanom', 'c.ccaitv',
+            ->select('c.IdCpe_cabecera', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccafem', 'c.fecha_hora', 'c.ccandi', 'c.ccanom', 'c.ccaitv',
                 'c.est_sunat', 'c.ccasunrescod', 'c.ccadessun', 'c.res_id', 'c.serie_ref', 'c.num_ref', 'c.ccabaj', 't.tdodes')
             // "Por enviar": hasta 500 en una página para enviarlos todos de una vez
             ->paginate($estado === 'pendientes' ? 500 : 50)->withQueryString();
@@ -84,6 +86,20 @@ class SunatController extends Controller
 
             return response()->json(['success' => false, 'estado' => 'ERROR', 'mensaje' => 'Error al enviar: '.$e->getMessage()]);
         }
+    }
+
+    /** Pasa al primer día que SUNAT todavía acepta un comprobante que no se envió a tiempo (luego se envía y se avisa al cliente) */
+    public function cambiarFecha($id)
+    {
+        $this->autorizar();
+        try {
+            $r = CambioFecha::aFechaValida((int) $id, (int) Auth::user()->id_empresa_negocio, Auth::user());
+        } catch (\RuntimeException $e) {
+            return response()->json(['success' => false, 'mensaje' => $e->getMessage()]);
+        }
+
+        return response()->json(['success' => true, 'fecha' => Carbon::parse($r['nueva'])->format('d/m/Y'),
+            'mensaje' => 'Fecha cambiada del '.Carbon::parse($r['anterior'])->format('d/m/Y').' al '.Carbon::parse($r['nueva'])->format('d/m/Y').'. Envíalo a SUNAT hoy mismo y avisa al cliente.']);
     }
 
     public function descargar($id, $tipo)

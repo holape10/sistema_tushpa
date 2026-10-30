@@ -187,6 +187,11 @@ class SunatService
         $doc = $esNota ? new Note : new Invoice;
 
         $fecha = new DateTime(($cab->ccafem).' '.date('H:i:s', strtotime((string) $cab->fecha_hora)), new DateTimeZone('America/Lima'));
+        // Un comprobante pasado a la fecha de hoy conserva la hora de la venta: nunca más tarde que este momento
+        $ahora = new DateTime('now', new DateTimeZone('America/Lima'));
+        if ($fecha > $ahora) {
+            $fecha = $ahora;
+        }
         $client = (new Client)
             ->setTipoDoc((string) $cab->tdicod)
             ->setNumDoc((string) $cab->ccandi)

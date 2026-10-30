@@ -529,6 +529,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/sunat/envios', [SunatController::class, 'envios'])->name('sunat.envios');
     Route::get('/sunat/campana', [SunatController::class, 'campana'])->name('sunat.campana');
     Route::post('/sunat/enviar/{id}', [SunatController::class, 'enviar'])->whereNumber('id')->name('sunat.enviar');
+    Route::post('/sunat/fecha/{id}', [SunatController::class, 'cambiarFecha'])->whereNumber('id')->name('sunat.fecha');
     Route::get('/sunat/descargar/{id}/{tipo}', [SunatController::class, 'descargar'])->whereNumber('id')->name('sunat.descargar');
     Route::get('/sunat/resumenes', [SunatController::class, 'resumenes'])->name('sunat.resumenes');
     Route::post('/sunat/resumenes', [SunatController::class, 'resumenEnviar'])->name('sunat.resumen_enviar');
