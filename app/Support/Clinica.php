@@ -437,13 +437,6 @@ class Clinica
         return DB::table('productos')->where('IdProducto', $id)->first();
     }
 
-    /**
-     * Registra una sesión del tratamiento: lo realizado, el adelanto y el saldo que queda. El adelanto se cobra en caja
-     * (pedido 'Clinica' que recepción ve en "Por cobrar"). Con saldo 0 el tratamiento queda CANCELADO.
-     *
-     * @param  array{detalle?: ?string, adelanto?: float|string|null, fecha_hora?: ?string}  $d
-     * @return int reg_id
-     */
     /** Un pago va a "Por cobrar" de caja salvo que sea de una fecha pasada y se marque como ya cobrado */
     public static function vaACaja(array $d): bool
     {
@@ -452,6 +445,13 @@ class Clinica
         return (float) ($d['adelanto'] ?? 0) > 0 && ! ($pasado && ! empty($d['ya_cobrado']));
     }
 
+    /**
+     * Registra una sesión del tratamiento: lo realizado, el adelanto y el saldo que queda. El adelanto se cobra en caja
+     * (pedido 'Clinica' que recepción ve en "Por cobrar"). Con saldo 0 el tratamiento queda CANCELADO.
+     *
+     * @param  array{detalle?: ?string, adelanto?: float|string|null, fecha_hora?: ?string, ya_cobrado?: ?bool}  $d
+     * @return int reg_id
+     */
     public static function registrarSesion(object $tra, array $d, User $user): int
     {
         $pagado = (float) DB::table('clinica_tratamiento_registros')->where('tra_id', $tra->tra_id)->sum('adelanto');
@@ -489,6 +489,126 @@ class Clinica
             ? ['estado' => 'CANCELADO', 'cancelado' => $d['fecha_hora'] ?? now()] : ['estado' => 'EN CURSO', 'cancelado' => null]);
 
         return $regId;
+    }
+
+    /** ¿El pago de la sesión ya se cobró en caja con comprobante? Ese monto ya no se cambia desde aquí. */
+    public static function pagoCobrado(?int $pedId): bool
+    {
+        return $pedId && (DB::table('cpe_cabecera')->where('ped_id', $pedId)->exists()
+            || DB::table('pedidos')->where('ped_id', $pedId)->where('ped_est', 'Cerrado')->exists());
+    }
+
+    /** El cobro pendiente en caja de una sesión se anula (lo que no tiene comprobante) */
+    private static function anularCobroPendiente(?int $pedId): void
+    {
+        if ($pedId) {
+            DB::table('pedidos')->where('ped_id', $pedId)->where('ped_est', 'Aperturado')->update(['ped_est' => 'Anulado', 'ped_tot' => 0]);
+        }
+    }
+
+    /**
+     * El administrador corrige una sesión: fecha, lo realizado y el monto. El monto solo cambia si ese pago no se cobró
+     * todavía en caja con comprobante (si está "por cobrar", también cambia lo que caja cobrará).
+     *
+     * Con ya_cobrado, un pago que estaba "por cobrar en caja" pasa a cobrado antes (se anula ese cobro pendiente).
+     *
+     * @param  array{fecha_hora: string, detalle?: ?string, adelanto: float|string, ya_cobrado?: ?bool}  $d
+     *
+     * @throws \RuntimeException
+     */
+    public static function editarSesion(object $reg, array $d): void
+    {
+        $tra = DB::table('clinica_tratamientos')->where('tra_id', $reg->tra_id)->first();
+        $adelanto = round((float) $d['adelanto'], 2);
+        $cambiaMonto = abs($adelanto - (float) $reg->adelanto) > 0.001;
+        if ($cambiaMonto && self::pagoCobrado($reg->ped_id)) {
+            throw new \RuntimeException('Ese pago ya se cobró en caja con comprobante: el monto no se cambia aquí (anula el comprobante si está mal). La fecha y el texto sí.');
+        }
+        $otros = (float) DB::table('clinica_tratamiento_registros')->where('tra_id', $reg->tra_id)->where('reg_id', '!=', $reg->reg_id)->sum('adelanto');
+        if ((float) $tra->costo > 0 && $otros + $adelanto > (float) $tra->costo + 0.001) {
+            throw new \RuntimeException('Con ese monto lo pagado pasaría el costo del tratamiento (S/ '.number_format((float) $tra->costo, 2).'). Si el costo subió, corrígelo primero con ✏️.');
+        }
+        if ($adelanto <= 0 && trim((string) ($d['detalle'] ?? '')) === '') {
+            throw new \RuntimeException('La sesión necesita lo realizado o un monto. Si sobra, elimínala.');
+        }
+
+        $pedId = $reg->ped_id;
+        if ($pedId && ! empty($d['ya_cobrado']) && ! self::pagoCobrado($pedId)) {
+            self::anularCobroPendiente((int) $pedId);
+            $pedId = null;
+        }
+        if ($cambiaMonto && $pedId) {
+            if ($adelanto > 0) {
+                // Lo que caja tiene por cobrar pasa al monto corregido
+                PedidoDetalle::where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')->update(['ped_det_pre' => $adelanto]);
+                self::recalcular((int) $pedId);
+            } else {
+                self::anularCobroPendiente((int) $pedId);
+                $pedId = null;
+            }
+        }
+        DB::table('clinica_tratamiento_registros')->where('reg_id', $reg->reg_id)->update([
+            'fecha_hora' => $d['fecha_hora'], 'detalle' => trim((string) ($d['detalle'] ?? '')) ?: null, 'adelanto' => $adelanto, 'ped_id' => $pedId,
+        ]);
+        self::actualizarEstado((int) $reg->tra_id);
+    }
+
+    /**
+     * El administrador elimina una sesión registrada por error. Si su pago ya se cobró en caja con comprobante, no
+     * (primero se anula el comprobante); si estaba por cobrar, ese cobro se anula.
+     *
+     * @throws \RuntimeException
+     */
+    public static function eliminarSesion(object $reg): void
+    {
+        if (self::pagoCobrado($reg->ped_id)) {
+            throw new \RuntimeException('El pago de esta sesión ya se cobró en caja con comprobante: anula el comprobante antes de eliminarla.');
+        }
+        self::anularCobroPendiente($reg->ped_id);
+        DB::table('clinica_tratamiento_registros')->where('reg_id', $reg->reg_id)->delete();
+        if ($reg->firma) {
+            Storage::disk('local')->delete($reg->firma);
+        }
+        self::actualizarEstado((int) $reg->tra_id);
+    }
+
+    /**
+     * El administrador elimina un tratamiento registrado por error, con sus sesiones. No si alguno de sus pagos ya se
+     * cobró en caja con comprobante.
+     *
+     * @throws \RuntimeException
+     */
+    public static function eliminarTratamiento(object $tra): void
+    {
+        $registros = DB::table('clinica_tratamiento_registros')->where('tra_id', $tra->tra_id)->get();
+        if ($registros->contains(fn ($r) => self::pagoCobrado($r->ped_id))) {
+            throw new \RuntimeException('Este tratamiento tiene pagos cobrados en caja con comprobante: no se puede eliminar. Puedes corregirlo con ✏️.');
+        }
+        foreach ($registros as $r) {
+            self::anularCobroPendiente($r->ped_id);
+            if ($r->firma) {
+                Storage::disk('local')->delete($r->firma);
+            }
+        }
+        DB::table('clinica_tratamiento_registros')->where('tra_id', $tra->tra_id)->delete();
+        DB::table('clinica_tratamientos')->where('tra_id', $tra->tra_id)->delete();
+    }
+
+    /** Después de corregir: el saldo de cada sesión (por fecha) y si el tratamiento quedó cancelado, y desde cuándo */
+    public static function actualizarEstado(int $traId): void
+    {
+        $tra = DB::table('clinica_tratamientos')->where('tra_id', $traId)->first();
+        $saldo = (float) $tra->costo;
+        $cancelado = null;
+        foreach (DB::table('clinica_tratamiento_registros')->where('tra_id', $traId)->orderBy('fecha_hora')->orderBy('reg_id')->get() as $r) {
+            $saldo = round($saldo - (float) $r->adelanto, 2);
+            DB::table('clinica_tratamiento_registros')->where('reg_id', $r->reg_id)->update(['saldo' => $saldo]);
+            if ($saldo <= 0 && ! $cancelado && (float) $r->adelanto > 0) {
+                $cancelado = $r->fecha_hora;
+            }
+        }
+        DB::table('clinica_tratamientos')->where('tra_id', $traId)->update($saldo <= 0 && (float) $tra->costo > 0
+            ? ['estado' => 'CANCELADO', 'cancelado' => $cancelado ?? now()] : ['estado' => 'EN CURSO', 'cancelado' => null]);
     }
 
     /** Guarda la firma (imagen PNG que manda la tablet) en storage/app/clinica/firmas */

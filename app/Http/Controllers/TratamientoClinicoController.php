@@ -129,8 +129,9 @@ class TratamientoClinicoController extends Controller
         $this->usa();
         $tra = $this->tratamiento($id);
         $d = $request->validate(['descripcion' => 'required|string|max:200', 'esp_id' => 'nullable|integer',
-            'costo' => 'required_unless:modalidad,MENSUAL|nullable|numeric|min:0|max:999999'] + self::REGLAS_PLAN,
-            [], self::NOMBRES_PLAN + ['descripcion' => 'tratamiento', 'costo' => 'costo total']);
+            'costo' => 'required_unless:modalidad,MENSUAL|nullable|numeric|min:0|max:999999',
+            'creado' => 'nullable|date|after:2000-01-01|before_or_equal:today'] + self::REGLAS_PLAN,
+            [], self::NOMBRES_PLAN + ['descripcion' => 'tratamiento', 'costo' => 'costo total', 'creado' => 'fecha de inicio']);
 
         return $this->json(function () use ($tra, $d) {
             $pagado = (float) DB::table('clinica_tratamiento_registros')->where('tra_id', $tra->tra_id)->sum('adelanto');
@@ -139,11 +140,15 @@ class TratamientoClinicoController extends Controller
             if ($costo < $pagado) {
                 throw new \RuntimeException('El costo no puede ser menor que lo ya pagado (S/ '.number_format($pagado, 2).').');
             }
-            $saldo = round($costo - $pagado, 2);
+            // La fecha de inicio la corrige el administrador (se conserva la hora)
+            if (! empty($d['creado']) && Auth::user()->esAdmin()) {
+                $plan['creado'] = $d['creado'].' '.substr((string) $tra->creado, 11, 8);
+            }
             DB::table('clinica_tratamientos')->where('tra_id', $tra->tra_id)->update($plan + [
                 'descripcion' => mb_strtoupper(trim($d['descripcion'])),
                 'esp_id' => ! empty($d['esp_id']) && DB::table('especialidad')->where('esp_id', $d['esp_id'])->where('id_empresa_negocio', $this->suc())->exists() ? (int) $d['esp_id'] : null,
-            ] + ($saldo <= 0 && $costo > 0 ? ['estado' => 'CANCELADO', 'cancelado' => $tra->cancelado ?? now()] : ['estado' => 'EN CURSO', 'cancelado' => null]));
+            ]);
+            Clinica::actualizarEstado((int) $tra->tra_id);
 
             return ['mensaje' => 'Tratamiento actualizado.'];
         });
@@ -164,6 +169,54 @@ class TratamientoClinicoController extends Controller
             }
 
             return ['mensaje' => 'Sesión registrada.'.(Clinica::vaACaja($d) ? ' El pago ya aparece en "Por cobrar" de recepción.' : '')];
+        });
+    }
+
+    private function soloAdmin(): void
+    {
+        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el administrador corrige o elimina lo registrado.');
+    }
+
+    /** El administrador corrige una sesión: fecha y hora, lo realizado y el monto */
+    public function editarSesion(Request $request, int $reg): JsonResponse
+    {
+        $this->usa();
+        $this->soloAdmin();
+        $r = $this->registro($reg);
+        $d = $request->validate(['fecha_hora' => 'required|date|after:2000-01-01|before_or_equal:'.now()->addHour()->format('Y-m-d H:i:s'),
+            'detalle' => 'nullable|string|max:3000', 'adelanto' => 'required|numeric|min:0|max:999999', 'ya_cobrado' => 'nullable|boolean'],
+            [], self::NOMBRES_FECHA + ['adelanto' => 'monto']);
+
+        return $this->json(function () use ($r, $d) {
+            Clinica::editarSesion($r, $d);
+
+            return ['mensaje' => 'Sesión corregida.'];
+        });
+    }
+
+    public function eliminarSesion(int $reg): JsonResponse
+    {
+        $this->usa();
+        $this->soloAdmin();
+        $r = $this->registro($reg);
+
+        return $this->json(function () use ($r) {
+            Clinica::eliminarSesion($r);
+
+            return ['mensaje' => 'Sesión eliminada.'];
+        });
+    }
+
+    public function eliminar(int $id): JsonResponse
+    {
+        $this->usa();
+        $this->soloAdmin();
+        $tra = $this->tratamiento($id);
+
+        return $this->json(function () use ($tra) {
+            Clinica::eliminarTratamiento($tra);
+
+            return ['mensaje' => 'Tratamiento eliminado.'];
         });
     }
 

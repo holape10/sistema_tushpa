@@ -225,6 +225,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/historia/{id}/tratamientos/imprimir', 'imprimir')->whereNumber('id')->name('imprimir');
         Route::post('/tratamientos/{id}', 'editar')->whereNumber('id')->name('editar');
         Route::post('/tratamientos/{id}/sesion', 'sesion')->whereNumber('id')->name('sesion');
+        // El administrador corrige o elimina lo registrado por error
+        Route::delete('/tratamientos/{id}', 'eliminar')->whereNumber('id')->name('eliminar');
+        Route::post('/tratamientos/sesion/{reg}', 'editarSesion')->whereNumber('reg')->name('sesion.editar');
+        Route::delete('/tratamientos/sesion/{reg}', 'eliminarSesion')->whereNumber('reg')->name('sesion.eliminar');
         Route::post('/tratamientos/sesion/{reg}/firma', 'firmar')->whereNumber('reg')->name('firmar');
         Route::get('/tratamientos/sesion/{reg}/firma', 'firma')->whereNumber('reg')->name('firma');
     });
