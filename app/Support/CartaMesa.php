@@ -121,7 +121,7 @@ class CartaMesa
             ->orderBy('s.id')->get(['s.id', 's.tipo', 's.items', 's.total', 's.nombre', 's.nota', 's.created_at', 'm.mes_nom', 'p.pis_nom'])
             ->map(fn ($s) => (object) [
                 'id' => (int) $s->id, 'tipo' => $s->tipo, 'mesa' => Mesa::etiqueta($s->pis_nom, $s->mes_nom),
-                'items' => collect(json_decode((string) $s->items, true) ?: [])->map(fn ($l) => ['cantidad' => $l['cantidad'], 'nombre' => $l['nombre'], 'nota' => $l['nota']])->all(),
+                'items' => collect(json_decode((string) $s->items, true) ?: [])->map(fn ($l) => ['cantidad' => $l['cantidad'], 'nombre' => $l['nombre'], 'nota' => $l['nota'], 'precio' => (float) ($l['precio'] ?? 0)])->all(),
                 'total' => $s->total !== null ? (float) $s->total : null, 'nombre' => $s->nombre, 'nota' => $s->nota,
                 'hace' => now()->diffInMinutes($s->created_at, true),
             ]);
@@ -131,15 +131,18 @@ class CartaMesa
      * El mozo atiende la solicitud. Un pedido se suma a la mesa y va a cocina; llamar al mozo y pedir la cuenta solo
      * quedan atendidas.
      *
+     * $cantidades: lo que el mozo dejó de cada línea antes de aceptar (puede bajar o quitar, nunca subir); null = todo.
+     *
+     * @param  array<int, float|int>|null  $cantidades
      * @return string mensaje para el mozo
      *
      * @throws \RuntimeException
      */
-    public static function aceptar(User $usuario, int $id): string
+    public static function aceptar(User $usuario, int $id, ?array $cantidades = null): string
     {
         $suc = (int) $usuario->id_empresa_negocio;
         $cocina = [];
-        $resultado = DB::transaction(function () use ($usuario, $suc, $id, &$cocina) {
+        $resultado = DB::transaction(function () use ($usuario, $suc, $id, $cantidades, &$cocina) {
             $s = DB::table('carta_solicitudes')->where('id', $id)->where('id_empresa_negocio', $suc)->lockForUpdate()->first();
             if (! $s || $s->estado !== 'PENDIENTE') {
                 throw new \RuntimeException('Otra persona ya atendió esta solicitud.');
@@ -157,6 +160,12 @@ class CartaMesa
                 throw new \RuntimeException('La mesa ya no existe.');
             }
             $lineas = json_decode((string) $s->items, true) ?: [];
+            if ($cantidades !== null) {
+                $lineas = self::ajustarLineas($lineas, $cantidades);
+                // Lo aceptado es lo que queda (el cliente lo ve así en su celular)
+                DB::table('carta_solicitudes')->where('id', $id)->update(['items' => json_encode($lineas, JSON_UNESCAPED_UNICODE),
+                    'total' => round(collect($lineas)->sum(fn ($l) => $l['precio'] * $l['cantidad']), 2)]);
+            }
             $pedidoId = MesasUnidas::pedidoDe((int) $mesa->mes_id);
             $pedido = $pedidoId ? Pedido::where('ped_id', $pedidoId)->lockForUpdate()->first() : null;
 
@@ -221,6 +230,35 @@ class CartaMesa
         }
 
         return $alCobrar ? 'Pedido sumado a la mesa: la comanda saldrá al cobrar.' : 'Pedido sumado a la mesa y enviado a cocina.';
+    }
+
+    /**
+     * Las líneas del pedido con las cantidades que dejó el mozo: solo puede bajarlas o quitarlas (0). Si no queda nada,
+     * es un rechazo.
+     *
+     * @param  array<int, array<string, mixed>>  $lineas
+     * @param  array<int, float|int>  $cantidades  por posición de la línea
+     * @return array<int, array<string, mixed>>
+     *
+     * @throws \RuntimeException
+     */
+    public static function ajustarLineas(array $lineas, array $cantidades): array
+    {
+        $quedan = [];
+        foreach (array_values($lineas) as $i => $l) {
+            $cantidad = array_key_exists($i, $cantidades) ? (float) $cantidades[$i] : (float) $l['cantidad'];
+            if ($cantidad < 0 || $cantidad > (float) $l['cantidad']) {
+                throw new \RuntimeException('Solo puedes bajar o quitar lo que pidió el cliente, no aumentar.');
+            }
+            if ($cantidad > 0) {
+                $quedan[] = ['cantidad' => $cantidad] + $l;
+            }
+        }
+        if (! $quedan) {
+            throw new \RuntimeException('Quitaste todo: usa "Rechazar" para avisarle al cliente.');
+        }
+
+        return $quedan;
     }
 
     public static function rechazar(User $usuario, int $id, ?string $motivo): void

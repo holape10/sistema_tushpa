@@ -18,10 +18,12 @@ class SolicitudCartaController extends Controller
         return response()->json(CartaMesa::pendientes((int) Auth::user()->id_empresa_negocio));
     }
 
-    public function aceptar(int $id): JsonResponse
+    public function aceptar(Request $request, int $id): JsonResponse
     {
+        // Lo que dejó el mozo de cada producto del pedido (si bajó o quitó algo)
+        $d = $request->validate(['cantidades' => 'nullable|array', 'cantidades.*' => 'numeric|min:0|max:999']);
         try {
-            return response()->json(['ok' => true, 'mensaje' => CartaMesa::aceptar(Auth::user(), $id)]);
+            return response()->json(['ok' => true, 'mensaje' => CartaMesa::aceptar(Auth::user(), $id, $d['cantidades'] ?? null)]);
         } catch (\RuntimeException $e) {
             return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
         }
