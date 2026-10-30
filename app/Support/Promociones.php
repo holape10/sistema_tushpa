@@ -11,6 +11,28 @@ use Illuminate\Support\Str;
 /** Promociones de la web pública (tushpa.app) que se administran desde el panel */
 class Promociones
 {
+    /** Lado mayor de las imágenes de promociones: la ventana mide 440 px (el doble para pantallas nítidas) */
+    private const LADO_IMAGEN = 900;
+
+    /**
+     * Achica la imagen de una promoción y la pasa a WEBP para que la web cargue rápido (un afiche de 1 MB pasa a ~60 KB).
+     * Los GIF se dejan igual (pueden ser animados). Si no se puede convertir, queda la original.
+     */
+    public static function optimizarImagen(string $ruta): string
+    {
+        $origen = public_path($ruta);
+        if (! is_file($origen) || str_ends_with(strtolower($ruta), '.gif')) {
+            return $ruta;
+        }
+        $nueva = preg_replace('/\.[a-z0-9]+$/i', '', $ruta).'-'.self::LADO_IMAGEN.'.webp';
+        if (! ImagenProducto::redimensionar($origen, public_path($nueva), self::LADO_IMAGEN)) {
+            return $ruta;
+        }
+        @unlink($origen);
+
+        return $nueva;
+    }
+
     public const PAGINAS = ['todas' => 'Todas las páginas', 'inicio' => 'Página principal', 'registro' => 'Registro (prueba gratis)',
         'carta' => 'Crea tu carta', 'tutorial' => 'Tutoriales', 'ciudades' => 'Páginas de ciudades', 'ingresar' => 'Ingresar'];
 

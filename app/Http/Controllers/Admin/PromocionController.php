@@ -103,7 +103,7 @@ class PromocionController extends Controller
             $request->file('imagen')->move(public_path('imagenes/promos'), $nombre);
             $this->borrarImagen($anterior);
 
-            return 'imagenes/promos/'.$nombre;
+            return Promociones::optimizarImagen('imagenes/promos/'.$nombre);
         }
         if ($request->boolean('quitar_imagen')) {
             $this->borrarImagen($anterior);

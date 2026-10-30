@@ -92,8 +92,8 @@ class ImagenProducto
         return [3 => 180, 6 => -90, 8 => 90][(int) ($exif['Orientation'] ?? 1)] ?? 0;
     }
 
-    /** Achica la imagen (sin agrandarla) a $lado px como máximo y la guarda en WEBP */
-    private static function redimensionar(string $origen, string $destino, int $lado, int $girar = 0): bool
+    /** Achica la imagen (sin agrandarla) a $lado px como máximo y la guarda en WEBP (también la usan las promociones de la web) */
+    public static function redimensionar(string $origen, string $destino, int $lado, int $girar = 0): bool
     {
         $info = @getimagesize($origen);
         if (! $info || ! function_exists('imagewebp')) {

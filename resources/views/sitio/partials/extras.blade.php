@@ -58,7 +58,7 @@
             <div class="tp-fondo" id="tp-promo-{{ $p->id }}" style="display: none" data-promo="{{ $p->id }}" data-frecuencia="{{ $p->frecuencia }}" data-retraso="{{ (int) $p->retraso }}">
                 <div class="tp-modal" role="dialog" aria-label="{{ $p->titulo }}">
                     <button type="button" class="tp-cerrar" aria-label="Cerrar" data-cerrar>×</button>
-                    @if ($p->imagen)<a href="{{ $botonGeneral ? $destino : '#' }}" @unless ($botonGeneral) onclick="return false" @endunless><img src="{{ asset($p->imagen) }}" alt="{{ $p->titulo }}"
+                    @if ($p->imagen)<a href="{{ $botonGeneral ? $destino : '#' }}" @unless ($botonGeneral) onclick="return false" @endunless><img data-src="{{ asset($p->imagen) }}" alt="{{ $p->titulo }}" decoding="async"
                         class="{{ \App\Support\Promociones::imagenCompleta($p) ? 'tp-completa' : '' }}" style="{{ \App\Support\Promociones::estiloImagen($p) }}"></a>@endif
                     <div class="tp-cuerpo">
                         <h3>{{ $p->titulo }}</h3>
@@ -86,12 +86,19 @@
                 const id = el.dataset.promo, f = el.dataset.frecuencia, clave = 'tp_promo_' + id;
                 // Cada cuánto: siempre, una vez por visita, una vez al día o una sola vez
                 if ((f === 'SESION' && leer(clave, true)) || (f === 'DIA' && leer(clave) === hoy) || (f === 'UNA_VEZ' && leer(clave))) return;
-                setTimeout(() => {
+                const mostrar = () => {
                     el.style.display = 'flex';
                     requestAnimationFrame(() => el.classList.add('tp-ver'));
                     if (el.classList.contains('tp-barra')) document.body.style.paddingBottom = el.offsetHeight + 'px';
                     f === 'SESION' ? poner(clave, '1', true) : poner(clave, hoy);
                     fetch(@js(url('/promo')) + '/' + id + '/vista', { method: 'POST', headers: { 'X-CSRF-TOKEN': @js(csrf_token()) } }).catch(() => {});
+                };
+                // La imagen se pide recién ahora y la ventana sale cuando ya cargó (sin cuadro vacío)
+                setTimeout(() => {
+                    const img = el.querySelector('img[data-src]');
+                    if (!img) return mostrar();
+                    img.src = img.dataset.src;
+                    (img.decode ? img.decode() : Promise.resolve()).then(mostrar, mostrar);
                 }, (Number(el.dataset.retraso) || 0) * 1000);
                 const cerrar = () => { el.style.display = 'none'; if (el.classList.contains('tp-barra')) document.body.style.paddingBottom = ''; };
                 el.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrar));
@@ -104,7 +111,21 @@
 
 @if ($conGoogle)
     {{-- Google One Tap: "Continuar como …" arriba a la derecha; llena el registro con su nombre y correo --}}
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        (function () {
+            let cargado = false;
+            const cargar = () => {
+                if (cargado) return;
+                cargado = true;
+                const s = document.createElement('script');
+                s.src = 'https://accounts.google.com/gsi/client';
+                s.async = true;
+                document.head.appendChild(s);
+            };
+            ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(e => addEventListener(e, cargar, { once: true, passive: true }));
+            setTimeout(cargar, 4000);
+        })();
+    </script>
     <div id="g_id_onload" data-client_id="{{ $googleId }}" data-callback="tushpaGoogle" data-auto_prompt="true" data-context="signup"
          data-itp_support="true" data-cancel_on_tap_outside="true"></div>
     <script>

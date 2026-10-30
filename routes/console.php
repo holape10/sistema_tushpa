@@ -8,6 +8,7 @@ use App\Support\ClinicaRecordatorios;
 use App\Support\DemoDatos;
 use App\Support\GeoIp;
 use App\Support\PadronRuc;
+use App\Support\Promociones;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Respaldos;
@@ -219,6 +220,20 @@ Artisan::command('geoip:actualizar', function () {
 })->purpose('Descarga la base de ubicación por IP (DB-IP Lite) y carga los rangos del Perú');
 
 Schedule::command('geoip:actualizar')->monthlyOn(6, '05:30')->withoutOverlapping(60);
+
+// Las imágenes de promociones subidas antes de achicarlas: pasan a WEBP chico para que tushpa.app cargue rápido
+Artisan::command('promos:optimizar', function () {
+    $n = 0;
+    foreach (Promociones::db()->whereNotNull('imagen')->where('imagen', 'not like', '%.webp')->get(['id', 'imagen']) as $p) {
+        $nueva = Promociones::optimizarImagen($p->imagen);
+        if ($nueva !== $p->imagen) {
+            Promociones::db()->where('id', $p->id)->update(['imagen' => $nueva]);
+            $this->line("{$p->imagen} → {$nueva} (".round(filesize(public_path($nueva)) / 1024).' KB)');
+            $n++;
+        }
+    }
+    $this->info("{$n} imagen(es) optimizada(s).");
+})->purpose('Achica y pasa a WEBP las imágenes de las promociones de la web');
 
 // Advertencias de pago del panel: al pasar la fecha límite (si se marcó "suspender automáticamente") la empresa se suspende
 Artisan::command('clientes:suspender-vencidos', function () {
