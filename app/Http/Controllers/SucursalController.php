@@ -181,6 +181,7 @@ class SucursalController extends Controller
         $datos['descuento_max_cajero'] = (float) ($datos['descuento_max_cajero'] ?? 10);
         $datos['permite_propina'] = $request->boolean('permite_propina');
         $datos['imagenes_venta'] = $request->boolean('imagenes_venta');
+        $datos['igv_restaurante'] = $request->boolean('igv_restaurante');
         $datos['diseno_a4'] = $datos['diseno_a4'] ?? 'MODERNO';
         $datos['cabecera_a4'] = trim((string) ($datos['cabecera_a4'] ?? '')) ?: null;
         $datos['clinica_doctor_cobra'] = $request->boolean('clinica_doctor_cobra');

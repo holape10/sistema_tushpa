@@ -213,6 +213,14 @@
                                     </label>
                                 @endforeach
                             </div>
+                            {{-- MYPE de restaurante / hotel: IGV especial en lo que se cobra desde Comandas y Hotel (Ley 31556 y 32219) --}}
+                            @php $tasaHoy = round((\App\Support\Comprobante::factorRestaurante() - 1) * 100, 2); @endphp
+                            <label x-show="igv === '10'" class="mt-3 flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer">
+                                <input type="checkbox" name="igv_restaurante" value="1" @checked($campo('igv_restaurante') ?? true) class="mt-0.5 rounded text-indigo-600">
+                                <span class="text-sm"><span class="font-bold text-gray-800">Restaurante / hotel MYPE: IGV especial ({{ rtrim(rtrim(number_format($tasaHoy, 2), '0'), '.') }}% este año)</span>
+                                    <span class="block text-xs text-gray-500">Lo que se cobra desde Comandas (mesa, llevar, delivery) y Hotel sale con la tasa especial: 10.5% en 2026 y 15% en 2027 (cambia sola cada año).
+                                        Desmárcalo si la empresa no cumple los requisitos (ventas hasta 1,700 UIT al año, 70% o más de sus ingresos de restaurante u hotel y sin vinculación con otras empresas): entonces vende con 18%.</span></span>
+                            </label>
                         </div>
                         <div>
                             <p class="text-sm font-medium text-gray-600 mb-2">¿Se puede vender sin stock?</p>

@@ -134,8 +134,8 @@ class CajaSinInternet
                 'direccion' => (string) $negocio->direccion, 'telefono' => (string) $negocio->telefono,
                 'gravado' => $negocio->tip_igv_pred === '10', 'tdocod' => in_array($negocio->tdocod_pred, ['01', '03', '13'], true) ? $negocio->tdocod_pred : '03',
                 // De dónde sale la venta (con mesas es restaurante: su tasa de IGV es otra)
-                'origen' => $restaurante ? 'PVCOMANDA' : 'PV', 'factor' => Comprobante::factorPara($restaurante ? 'PVCOMANDA' : 'PV'),
-                'factor_mesa' => Comprobante::factorPara('SALON'),
+                'origen' => $restaurante ? 'PVCOMANDA' : 'PV', 'factor' => Comprobante::factorPara($restaurante ? 'PVCOMANDA' : 'PV', (bool) $negocio->igv_restaurante),
+                'factor_mesa' => Comprobante::factorPara('SALON', (bool) $negocio->igv_restaurante),
                 'consulta' => ConsultaCpe::direccion(), 'firma' => (string) config('soporte.firma_comprobante'),
                 'leyenda' => 'BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA',
             ],

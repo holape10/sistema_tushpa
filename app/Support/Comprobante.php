@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\Impresion\Impresion;
 use App\Support\Sunat\EnvioAutomatico;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -24,15 +25,34 @@ class Comprobante
     // IGV general (puntos de venta, compras)
     public const FACTOR_IGV = 1.18;
 
-    // Restaurante y hotel: lo que se cobra desde Comandas (mesa, llevar, delivery y su punto de venta) y las habitaciones
+    // Comprobantes de restaurante anteriores a guardar su tasa (por_igv): se emitieron con 10.5%
     public const FACTOR_RESTAURANTE = 1.105;
 
+    /**
+     * IGV + IPM de las MYPE de restaurantes, hoteles y alojamientos turísticos por año (Ley 31556, ampliada por la
+     * Ley 32219; el IPM sube por la Ley 32387): 2025 8% + 2%, 2026 8% + 2.5%, 2027 12% + 3%. Desde 2028, el 18% general.
+     */
+    private const TASAS_RESTAURANTE = [2025 => 1.10, 2026 => 1.105, 2027 => 1.15];
+
+    // Restaurante y hotel: lo que se cobra desde Comandas (mesa, llevar, delivery y su punto de venta) y las habitaciones
     private const ORIGENES_RESTAURANTE = ['SALON', 'LLEVAR', 'DELIVERY', 'PVCOMANDA', 'HOTEL'];
 
-    /** Factor de IGV según de dónde sale la venta (cpe_cabecera.ped_tip) */
-    public static function factorPara(?string $origen): float
+    /** Factor de la tasa especial de restaurantes y hoteles en la fecha de emisión */
+    public static function factorRestaurante(?CarbonInterface $fecha = null): float
     {
-        return in_array(mb_strtoupper((string) $origen), self::ORIGENES_RESTAURANTE, true) ? self::FACTOR_RESTAURANTE : self::FACTOR_IGV;
+        $anio = ($fecha ?? now())->year;
+
+        return self::TASAS_RESTAURANTE[$anio] ?? ($anio < 2025 ? 1.10 : self::FACTOR_IGV);
+    }
+
+    /**
+     * Factor de IGV según de dónde sale la venta (cpe_cabecera.ped_tip). $especial = la sucursal tiene el IGV especial
+     * de restaurante/hotel (si no cumple los requisitos de la ley, se apaga y vende con el 18%).
+     */
+    public static function factorPara(?string $origen, bool $especial = true, ?CarbonInterface $fecha = null): float
+    {
+        return $especial && in_array(mb_strtoupper((string) $origen), self::ORIGENES_RESTAURANTE, true)
+            ? self::factorRestaurante($fecha) : self::FACTOR_IGV;
     }
 
     /** Factor con el que se emitió un comprobante (lo anterior a guardar la tasa se hizo con 10.5%) */
@@ -92,7 +112,7 @@ class Comprobante
 
         // ---- Totales ----
         $gravado = $sucursal->tip_igv_pred === '10';
-        $factorIgv = self::factorPara($extra['ped_tip'] ?? null);
+        $factorIgv = self::factorPara($extra['ped_tip'] ?? null, (bool) ($sucursal->igv_restaurante ?? true), Carbon::parse($datos['fecEmi'] ?? now()));
         $totales = self::totales($lineas, $gravado, $factorIgv);
         $total = $totales['ccaitv'];
 
@@ -183,7 +203,7 @@ class Comprobante
         Fidelizacion::quitarPuntosDeVenta($cabId);
 
         $gravado = $sucursal->tip_igv_pred === '10';
-        $factorIgv = self::factorPara($cab->ped_tip);
+        $factorIgv = self::factorPara($cab->ped_tip, (bool) ($sucursal->igv_restaurante ?? true), Carbon::parse($datos['fecEmi'] ?? $cab->ccafem));
         $almacen = $cab->id_almacen ? Almacen::find($cab->id_almacen) : null;
         $cliNom = strtoupper(trim($datos['clinom']));
         if ($lineas !== null) {
