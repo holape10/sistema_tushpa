@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\AvisosCelular;
 use App\Support\Cocina;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -104,6 +105,9 @@ class CocinaController extends Controller
 
         DB::table('cocina_items')->where('id', $id)->update(['listo' => $item->listo ? null : now(), 'entregado' => null]);
         Cocina::actualizarTicket((int) $item->ticket_id);
+        if (! $item->listo) {
+            AvisosCelular::platoListo((int) $item->ticket_id, [(int) $id]);
+        }
 
         return response()->json(['ok' => true]);
     }
@@ -112,10 +116,11 @@ class CocinaController extends Controller
     public function listo(Request $request, $id)
     {
         $this->ticketPropio((int) $id);
-        DB::table('cocina_items')->where('ticket_id', $id)->whereNull('listo')
-            ->when($this->estacion($request), fn ($q, $e) => $q->where('estacion', $e))
-            ->update(['listo' => now()]);
+        $platos = DB::table('cocina_items')->where('ticket_id', $id)->whereNull('listo')
+            ->when($this->estacion($request), fn ($q, $e) => $q->where('estacion', $e))->pluck('id')->all();
+        DB::table('cocina_items')->whereIn('id', $platos)->update(['listo' => now()]);
         Cocina::actualizarTicket((int) $id);
+        AvisosCelular::platoListo((int) $id, $platos);
 
         return response()->json(['ok' => true]);
     }

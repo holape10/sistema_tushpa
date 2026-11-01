@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AvisarCambios;
 use App\Http\Middleware\IdentificarEmpresa;
 use App\Http\Middleware\SoloMenuContador;
 use App\Http\Middleware\SoloWifiLocal;
@@ -15,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
+        channels: __DIR__.'/../routes/channels.php',
         health: '/up',
         then: function () {
             // Panel multi-empresa: https://admin.{dominio}/{ruta} (solo si el multi-empresa está activo)
@@ -32,7 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(IdentificarEmpresa::class);
         // El contador solo entra a las secciones de su menú
         // Mozos y promotores solo con el Wi-Fi del local (si la sucursal lo activó)
-        $middleware->web(append: [SoloMenuContador::class, SoloWifiLocal::class]);
+        $middleware->web(append: [SoloMenuContador::class, SoloWifiLocal::class, AvisarCambios::class]);
 
         $middleware->redirectGuestsTo(fn (Request $request) => $request->attributes->get('panel_admin')
             ? route('admin.login')

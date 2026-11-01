@@ -61,4 +61,11 @@ return [
         'chat_id' => env('TELEGRAM_CHAT_ID'),
     ],
 
+    // Avisos al celular del mozo (Web Push). Las claves las crea: php artisan push:claves
+    'push' => [
+        'publica' => env('VAPID_PUBLIC_KEY'),
+        'privada' => env('VAPID_PRIVATE_KEY'),
+        'contacto' => env('VAPID_SUBJECT', 'mailto:soporte@tushpa.app'),
+    ],
+
 ];

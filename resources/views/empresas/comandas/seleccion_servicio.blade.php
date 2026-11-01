@@ -47,6 +47,12 @@
                 <h2 class="text-xl font-black text-gray-800 sm:text-2xl">{{ \App\Support\Temporada::halloween() ? '🎃' : '🍽️' }} Elige la mesa o el tipo de pedido</h2>
                 <p class="text-sm text-gray-500">{{ auth()->user()->apeusu }}</p>
             </div>
+            @if ($cartaMesa && \App\Support\AvisosCelular::configurado())
+                {{-- Usan el QR de mesas: el celular se registra solo; si el navegador aún no dio permiso, se pide con este botón --}}
+                <button type="button" data-avisos-celular data-clave="{{ config('services.push.publica') }}" data-guardar="{{ route('avisos_celular.suscribir') }}"
+                    data-quitar="{{ route('avisos_celular.quitar') }}" data-icono="{{ asset('imagenes/192.png') }}"
+                    class="hidden h-10 items-center gap-2 rounded-full bg-amber-400 px-4 text-sm font-bold text-gray-900 shadow-sm">🔔 Permitir avisos del QR</button>
+            @endif
             <button type="button" id="btn_reservas" class="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-violet-700 shadow-sm ring-1 ring-gray-200">
                 📅 Reservas <span id="n_reservas" class="rounded-full bg-violet-600 px-2 text-xs text-white">0</span>
             </button>
@@ -240,9 +246,16 @@
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.modal-t.flex').forEach((m) => cerrarModal(m.id)); });
 
-    // Recargas automáticas: se pausan con la pestaña oculta o la tablet bloqueada y se ponen al día al volver
-    function cadaSiVisible(fn, ms) {
-        setInterval(() => { if (!document.hidden) fn(); }, ms);
+    // Recargas automáticas: se pausan con la pestaña oculta o la tablet bloqueada y se ponen al día al volver.
+    // Con tiempo real (tema: mesas | cocina | solicitudes) se actualiza al instante y solo pregunta cada minuto por si acaso.
+    function cadaSiVisible(fn, ms, temas = null) {
+        const vivo = temas && window.tushpaEnVivo ? window.tushpaEnVivo(temas, () => { if (!document.hidden) fn(); }) : { conectado: () => false };
+        let ultima = Date.now();
+        setInterval(() => {
+            if (document.hidden || (vivo.conectado() && Date.now() - ultima < 60000)) return;
+            ultima = Date.now();
+            fn();
+        }, ms);
         document.addEventListener('visibilitychange', () => { if (!document.hidden) fn(); });
     }
     function postJson(url, data) {
@@ -623,7 +636,7 @@
         const pendientes = [...document.querySelectorAll('.piso-btn')].map((b) => String(b.dataset.pisoId)).filter((id) => !zonas.has(id));
         pendientes.reduce((p, id) => p.then(() => zonas.has(id) ? null : traerZona(id).catch(() => {})), Promise.resolve());
     })();
-    cadaSiVisible(() => { if (pisoVisible) refrescarMesas(pisoVisible); }, 10000);
+    cadaSiVisible(() => { if (pisoVisible) refrescarMesas(pisoVisible); }, 10000, ['mesas', 'cocina']);
 
     // Tiempo en vivo de cada mesa ocupada (corre en el navegador; solo con la pantalla visible)
     function actualizarTimers() {
@@ -700,7 +713,7 @@
         });
     }
     cargarActivos();
-    cadaSiVisible(cargarActivos, 15000);
+    cadaSiVisible(cargarActivos, 15000, ['mesas']);
 </script>
 @if ($cartaMesa)
     @include('empresas.comandas.partials.solicitudes_carta')

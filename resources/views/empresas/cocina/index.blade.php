@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="tushpa-canal" content="{{ \App\Events\CambioEnSucursal::canal((string) auth()->user()->IdEmpresa, (int) auth()->user()->id_empresa_negocio) }}">
     <title>Pantalla de Cocina</title>
     <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -143,7 +144,10 @@
 
                 iniciar() {
                     this.cargar();
-                    setInterval(() => this.cargar(), 4000);
+                    // Tiempo real: cada comanda nueva o plato despachado llega al instante; sin conexión, pregunta cada 4 s
+                    const vivo = window.tushpaEnVivo ? window.tushpaEnVivo(['cocina'], () => this.cargar()) : { conectado: () => false };
+                    let vueltas = 0;
+                    setInterval(() => { if (!vivo.conectado() || ++vueltas % 15 === 0) this.cargar(); }, 4000);
                     setInterval(() => { this.tic++; this.reloj = new Date(Date.now() + this.desfase).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }); }, 1000);
                 },
 

@@ -64,6 +64,11 @@
             };
         }
     </script>
+    {{-- Tiempo real: el canal de la sucursal (y la clave para entrar a él) --}}
+    @auth
+        <meta name="csrf-token" content="{{ csrf_token() }}">
+        <meta name="tushpa-canal" content="{{ \App\Events\CambioEnSucursal::canal((string) auth()->user()->IdEmpresa, (int) auth()->user()->id_empresa_negocio) }}">
+    @endauth
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.pwa')
 </head>

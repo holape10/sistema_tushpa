@@ -75,6 +75,12 @@ class CartaMesa
             'estado' => 'PENDIENTE', 'token' => $token, 'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        // Las pantallas de mesas de la sucursal suenan al instante (tiempo real)
+        TiempoReal::avisar((int) $negocio->id_empresa_negocio, ['solicitudes']);
+        // Y los celulares que activaron avisos, aunque tengan la pantalla apagada
+        $piso = isset($mesa->pis_id) ? DB::table('pisos')->where('pis_id', $mesa->pis_id)->value('pis_nom') : null;
+        AvisosCelular::solicitudCarta($suc, Mesa::etiqueta($piso, $mesa->mes_nom ?? null) ?: 'Mesa', $tipo, $total);
+
         return ['token' => $token, 'tipo' => $tipo, 'total' => $total];
     }
 

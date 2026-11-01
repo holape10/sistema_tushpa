@@ -29,6 +29,9 @@ if grep -qE '^TENANCY_DOMINIO=.+' .env; then
     php artisan clientes:migrar || true
 fi
 
+# Claves de los avisos al celular del mozo (solo la primera vez; si ya existen no las toca)
+php artisan push:claves || true
+
 echo "==> Estilos"
 npm ci --no-audit --no-fund
 npm run build
@@ -42,6 +45,8 @@ chown -R apache:apache "${DIR}"
 chmod -R ug+rwX storage bootstrap/cache public/imagenes
 command -v restorecon >/dev/null && restorecon -R "${DIR}" || true
 systemctl reload php-fpm httpd
+# Tiempo real (deploy/reverb-instalar.sh): arranca con el código nuevo
+systemctl is-enabled --quiet tushpa-reverb 2>/dev/null && systemctl restart tushpa-reverb || true
 # Tareas programadas de Laravel (limpieza de la cola de impresión a las 4 am, etc.)
 if [ ! -f /etc/cron.d/tushpa-schedule ]; then
     echo "* * * * * apache cd ${DIR} && php artisan schedule:run >> /dev/null 2>&1" > /etc/cron.d/tushpa-schedule

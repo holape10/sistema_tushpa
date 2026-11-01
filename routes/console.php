@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Minishlink\WebPush\VAPID;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -305,3 +306,21 @@ Artisan::command('clinica:recordatorios {--ruc= : Solo esta empresa}', function 
 
 // Cada 15 minutos de 7am a 9:45pm: cada clínica envía desde la hora que eligió (por defecto 6pm)
 Schedule::command('clinica:recordatorios')->everyFifteenMinutes()->between('07:00', '21:45')->withoutOverlapping(14);
+
+Artisan::command('push:claves {--forzar : Cambiarlas aunque ya existan (los celulares tendrán que activar avisos de nuevo)}', function () {
+    $env = base_path('.env');
+    $texto = file_get_contents($env);
+    if (preg_match('/^VAPID_PUBLIC_KEY=.+$/m', $texto) && ! $this->option('forzar')) {
+        $this->info('Las claves de avisos al celular ya existen.');
+
+        return;
+    }
+    $claves = VAPID::createVapidKeys();
+    foreach (['VAPID_PUBLIC_KEY' => $claves['publicKey'], 'VAPID_PRIVATE_KEY' => $claves['privateKey']] as $nombre => $valor) {
+        $texto = preg_match("/^{$nombre}=.*$/m", $texto)
+            ? preg_replace("/^{$nombre}=.*$/m", "{$nombre}={$valor}", $texto)
+            : rtrim($texto, "\n")."\n{$nombre}={$valor}\n";
+    }
+    file_put_contents($env, $texto);
+    $this->info('Claves de avisos al celular creadas en el .env.');
+})->purpose('Crea las claves VAPID de los avisos al celular del mozo (una sola vez)');

@@ -118,6 +118,6 @@
         });
 
         cargar();
-        cadaSiVisible(cargar, 8000);
+        cadaSiVisible(cargar, 8000, ['solicitudes']);
     })();
 </script>

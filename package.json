@@ -21,6 +21,8 @@
         "@laravel/multiplex": "^0.4.1"
     },
     "dependencies": {
-        "@alpinejs/collapse": "^3.17.4"
+        "@alpinejs/collapse": "^3.17.4",
+        "laravel-echo": "^2.6.3",
+        "pusher-js": "^8.6.0"
     }
 }

@@ -7,6 +7,7 @@
  *   y se sirven desde ahí. El resto (imágenes, fuentes) lo maneja la caché normal del navegador.
  * - La caché tiene tope: no crece sin límite con cada actualización.
  * - Nunca guarda POST ni respuestas de datos (JSON).
+ * - Avisos al celular (Web Push): muestra el aviso y al tocarlo abre la pantalla de mesas.
  * - Caja sin internet: su pantalla se guarda aparte (la guarda la misma página mientras hay internet) y sin conexión
  *   se abre desde la PC.
  */
@@ -88,4 +89,31 @@ self.addEventListener('fetch', (e) => {
         }
         return res;
     })));
+});
+
+// Avisos al celular del mozo (pedido del QR, llaman al mozo, cuenta, plato listo): suenan aunque la pantalla esté apagada
+self.addEventListener('push', (e) => {
+    let aviso = {};
+    try { aviso = e.data ? e.data.json() : {}; } catch (error) { aviso = { cuerpo: e.data ? e.data.text() : '' }; }
+    e.waitUntil(self.registration.showNotification(aviso.titulo || 'TUSHPA', {
+        body: aviso.cuerpo || '',
+        icon: BASE + 'imagenes/192.png',
+        badge: BASE + 'imagenes/192.png',
+        tag: aviso.etiqueta || undefined,       // el mismo aviso repetido no se amontona
+        renotify: true,
+        vibrate: [200, 100, 200],
+        data: { url: aviso.url || BASE },
+    }));
+});
+
+// Tocar el aviso abre (o trae al frente) la pantalla de mesas
+self.addEventListener('notificationclick', (e) => {
+    e.notification.close();
+    const destino = new URL(e.notification.data?.url || BASE, self.location.origin).href;
+    e.waitUntil((async () => {
+        const abiertas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const misma = abiertas.find((c) => c.url.split('#')[0] === destino);
+        if (misma) return misma.focus();
+        return self.clients.openWindow(destino);
+    })());
 });
