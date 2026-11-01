@@ -19,6 +19,6 @@ return [
         'titular' => env('PAGO_TITULAR', 'HOLAPE E.I.R.L.'),
         'cuenta' => env('PAGO_CUENTA', '0011-0301-0201897749'),
         'cci' => env('PAGO_CCI', '011-301-000201897749-92'),
-        'qr' => env('PAGO_QR', 'imagenes/qr-holape.png'),   // ruta dentro de public/
+        'qr' => env('PAGO_QR', 'imagenes/qr-holape.webp'),   // ruta dentro de public/
     ],
 ];

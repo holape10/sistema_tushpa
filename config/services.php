@@ -61,6 +61,13 @@ return [
         'chat_id' => env('TELEGRAM_CHAT_ID'),
     ],
 
+    // Cobro en línea del servicio TUSHPA (tarjeta, Yape y billeteras con QR) a las empresas que le pagan al dueño del
+    // sistema. Llaves de prueba (pk_test / sk_test) o de producción (pk_live / sk_live) del CulqiPanel → Desarrollo → API Keys
+    'culqi' => [
+        'publica' => env('CULQI_PUBLIC_KEY'),
+        'privada' => env('CULQI_SECRET_KEY'),
+    ],
+
     // Avisos al celular del mozo (Web Push). Las claves las crea: php artisan push:claves
     'push' => [
         'publica' => env('VAPID_PUBLIC_KEY'),

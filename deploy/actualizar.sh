@@ -31,6 +31,8 @@ fi
 
 # Claves de los avisos al celular del mozo (solo la primera vez; si ya existen no las toca)
 php artisan push:claves || true
+# QR de pago pesados → WebP liviano (pantalla de suspendido); los ya optimizados no se tocan
+php artisan cobros:optimizar-qr || true
 
 echo "==> Estilos"
 npm ci --no-audit --no-fund

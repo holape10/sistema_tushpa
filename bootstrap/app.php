@@ -37,6 +37,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // El contador solo entra a las secciones de su menú
         // Mozos y promotores solo con el Wi-Fi del local (si la sucursal lo activó)
         $middleware->web(append: [SoloMenuContador::class, SoloWifiLocal::class, AvisarCambios::class, CabecerasSeguridad::class, RegistrarVisita::class.':demos']);
+        // Los avisos de Culqi llegan de su servidor (sin sesión): se confirman preguntándole a Culqi
+        $middleware->validateCsrfTokens(except: ['culqi/webhook']);
 
         $middleware->redirectGuestsTo(fn (Request $request) => $request->attributes->get('panel_admin')
             ? route('admin.login')

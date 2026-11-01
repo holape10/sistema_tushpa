@@ -4,6 +4,7 @@
 
 use App\Http\Controllers\CartaWebController;
 use App\Http\Controllers\GoogleWebController;
+use App\Http\Controllers\PagoOnlineController;
 use App\Http\Controllers\PromocionWebController;
 use App\Http\Controllers\SitioController;
 use App\Support\SeoSitio;
@@ -53,3 +54,11 @@ Route::get('/promo/{id}', [PromocionWebController::class, 'clic'])->whereNumber(
 
 // Continuar con Google (One Tap): llena el registro con el nombre y el correo
 Route::post('/google', [GoogleWebController::class, 'entrar'])->middleware('throttle:10,1,sitio-google')->name('google');
+
+// Pago en línea del servicio (Culqi): se entra con el enlace firmado de la pantalla de suspendido o del aviso de pago
+Route::get('/pagar/{cliente}', [PagoOnlineController::class, 'pagina'])->whereNumber('cliente')->middleware('signed')->name('pagar');
+Route::post('/pagar/{cliente}/preparar', [PagoOnlineController::class, 'preparar'])->whereNumber('cliente')->middleware(['signed', 'throttle:20,10,sitio-pagar'])->name('pagar.preparar');
+Route::post('/pagar/{cliente}/cobrar', [PagoOnlineController::class, 'cobrar'])->whereNumber('cliente')->middleware(['signed', 'throttle:10,10,sitio-cobrar'])->name('pagar.cobrar');
+Route::get('/pagar/{cliente}/estado/{pago}', [PagoOnlineController::class, 'estado'])->whereNumber(['cliente', 'pago'])->middleware('throttle:60,1,sitio-pago-estado')->name('pagar.estado');
+// Avisos de Culqi (se registra en CulqiPanel → Eventos/Webhooks con el evento order.status.changed)
+Route::post('/culqi/webhook', [PagoOnlineController::class, 'webhook'])->middleware('throttle:120,1,culqi')->name('culqi.webhook');

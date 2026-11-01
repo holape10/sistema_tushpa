@@ -21,6 +21,14 @@ class DatosCobro
         return $usuario && $usuario->activo && $usuario->cobros()->exists();
     }
 
+    /** ¿La empresa le paga al dueño del sistema? (las del revendedor que puso sus propias cuentas le pagan a él) */
+    public static function cobraElDueno(Cliente $cliente): bool
+    {
+        $creador = $cliente->creado_por ? Superadmin::find($cliente->creado_por) : null;
+
+        return ! self::tienePropios($creador) || (bool) $creador->es_dueno;
+    }
+
     /**
      * @return array{titular: string, banco: string, cuenta: ?string, cci: ?string, qr: ?string, whatsapp: string, telefono: string, horario: ?string,
      *     cuentas: array<int, array{banco: string, titular: string, cuenta: ?string, cci: ?string}>, qrs: array<int, array{nombre: string, titular: string, url: string}>}
@@ -72,7 +80,42 @@ class DatosCobro
         $nombre = $usuario->id.'-'.bin2hex(random_bytes(6)).'.'.strtolower($imagen->extension() ?: 'png');
         $imagen->move($dir, $nombre);
 
-        return self::CARPETA.'/'.$nombre;
+        return self::optimizar(self::CARPETA.'/'.$nombre);
+    }
+
+    /**
+     * QR liviano: la pantalla de suspendido lo muestra al instante. Se achica a 720 px de ancho y se guarda en WebP
+     * (un QR de 1 MB queda en unas decenas de KB y se sigue leyendo bien). Si no se puede, queda la imagen original.
+     */
+    public static function optimizar(string $ruta): string
+    {
+        $archivo = public_path($ruta);
+        $info = @getimagesize($archivo);
+        if (! $info || ! function_exists('imagewebp') || ! in_array($info[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG, IMAGETYPE_WEBP], true)) {
+            return $ruta;
+        }
+        $origen = match ($info[2]) {
+            IMAGETYPE_PNG => @imagecreatefrompng($archivo), IMAGETYPE_JPEG => @imagecreatefromjpeg($archivo), default => @imagecreatefromwebp($archivo),
+        };
+        if (! $origen) {
+            return $ruta;
+        }
+        $ancho = min(720, $info[0]);
+        $imagen = $ancho < $info[0] ? imagescale($origen, $ancho, -1, IMG_BICUBIC) : $origen;
+        $nueva = preg_replace('/\.\w+$/', '', $ruta).'.webp';
+        $ok = imagewebp($imagen, public_path($nueva), 88);
+        if (! $ok || filesize(public_path($nueva)) >= filesize($archivo)) {
+            if ($nueva !== $ruta) {
+                @unlink(public_path($nueva));
+            }
+
+            return $ruta;
+        }
+        if ($nueva !== $ruta) {
+            @unlink($archivo);
+        }
+
+        return $nueva;
     }
 
     public static function borrarImagen(?string $ruta): void

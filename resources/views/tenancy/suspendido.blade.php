@@ -3,6 +3,9 @@
     $pago = \App\Support\Tenancy\DatosCobro::para($cliente);
     $empresa = $cliente->nombre_comercial ?: $cliente->razon_social;
     $mensaje = "Hola, soy de {$empresa} (RUC {$cliente->ruc}). Ya realicé el pago del servicio TUSHPA, les envío el comprobante para reactivar el acceso.";
+    // Pago en línea (Culqi): se reactiva solo, sin mandar captura
+    $enLinea = \Illuminate\Support\Facades\Route::has('sitio.pagar') && \App\Support\Tenancy\PagosOnline::disponiblePara($cliente)
+        ? \Illuminate\Support\Facades\URL::signedRoute('sitio.pagar', $cliente) : null;
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -12,6 +15,7 @@
     <meta name="robots" content="noindex">
     <title>Servicio suspendido · TUSHPA</title>
     <link rel="icon" href="{{ asset('imagenes/icono.png') }}">
+    @if ($pago['qr'])<link rel="preload" as="image" href="{{ $pago['qrs'][0]['url'] ?? $pago['qr'] }}" fetchpriority="high">@endif
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -58,6 +62,11 @@
         .seguro { position: relative; margin-top: 18px; display: flex; align-items: center; gap: 8px; color: #dbeafe; font-size: 12px; }
         .seguro svg { width: 16px; height: 16px; flex: 0 0 16px; }
         .tarjeta.sin-qr { grid-template-columns: 1fr; max-width: 620px; }
+        .en-linea { margin-top: 22px; display: block; padding: 16px 18px; border-radius: 16px; background: linear-gradient(135deg, #2563eb, #4f46e5); color: #fff; text-decoration: none;
+                    box-shadow: 0 14px 30px -10px rgba(37, 99, 235, .7); transition: transform .15s; }
+        .en-linea:hover { transform: translateY(-1px); }
+        .en-linea b { display: block; font-size: 17px; }
+        .en-linea span { font-size: 13px; color: #dbeafe; }
         .pago .qr-nombre { position: relative; margin: 22px 0 8px; color: #fff; font-weight: 800; font-size: 16px; letter-spacing: .02em; }
         .pago .qr-nombre:first-of-type { margin-top: 0; }
         @media (max-width: 820px) {
@@ -83,6 +92,14 @@
 
             @if ($cliente->motivo_suspension)
                 <div class="motivo"><small>Motivo</small>{{ $cliente->motivo_suspension }}</div>
+            @endif
+
+            @if ($enLinea)
+                <a class="en-linea" href="{{ $enLinea }}">
+                    <b>💳 Pagar en línea y reactivar al instante</b>
+                    <span>Tarjeta, Yape o QR de Plin y bancos. Tu sistema se activa solo apenas se confirma el pago.</span>
+                </a>
+                <p class="nota" style="margin:14px 0 0">O, si prefieres, paga por transferencia o QR y envíanos la captura:</p>
             @endif
 
             <ol class="pasos">
@@ -129,7 +146,7 @@
                 {{-- Todos los QR (Yape, Plin…): con varios, el cliente elige con cuál paga --}}
                 @foreach ($pago['qrs'] as $q)
                     @if (count($pago['qrs']) > 1)<p class="qr-nombre">{{ $q['nombre'] }}</p>@endif
-                    <div class="qr"><img src="{{ $q['url'] }}" alt="QR de pago {{ $q['nombre'] }} - {{ $q['titular'] }}"></div>
+                    <div class="qr"><img src="{{ $q['url'] }}" alt="QR de pago {{ $q['nombre'] }} - {{ $q['titular'] }}" @if ($loop->first) fetchpriority="high" @else loading="lazy" @endif></div>
                     <div class="seguro">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/></svg>
                         Titular: {{ $q['titular'] }}

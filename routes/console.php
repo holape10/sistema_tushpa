@@ -2,6 +2,7 @@
 
 use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
+use App\Models\Central\SuperadminCobro;
 use App\Models\User;
 use App\Support\Antiguo\CargadorSql;
 use App\Support\AvisosCelular;
@@ -12,6 +13,7 @@ use App\Support\PadronRuc;
 use App\Support\PanelDueno;
 use App\Support\Promociones;
 use App\Support\Sunat\RescateEnvios;
+use App\Support\Tenancy\DatosCobro;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Respaldos;
 use App\Support\Tenancy\Tenancy;
@@ -368,3 +370,22 @@ Artisan::command('dueno:resumen {--noche : Negocios que atienden de noche (resum
 // Resumen al celular del dueño: los negocios de día a las 11 pm, los de noche a las 12:05 pm (cuando cierra la noche)
 Schedule::command('dueno:resumen')->dailyAt('23:00')->withoutOverlapping(30);
 Schedule::command('dueno:resumen --noche')->dailyAt('12:05')->withoutOverlapping(30);
+
+Artisan::command('cobros:optimizar-qr', function () {
+    if (! Tenancy::activa() || ! Schema::connection('central')->hasTable('superadmin_cobros')) {
+        return;
+    }
+    $n = 0;
+    foreach (SuperadminCobro::whereNotNull('qr')->get() as $cobro) {
+        // Solo los pesados (más de 150 KB): los demás ya cargan rápido
+        if (! is_file(public_path($cobro->qr)) || filesize(public_path($cobro->qr)) < 150 * 1024) {
+            continue;
+        }
+        $nueva = DatosCobro::optimizar($cobro->qr);
+        if ($nueva !== $cobro->qr) {
+            $cobro->update(['qr' => $nueva]);
+            $n++;
+        }
+    }
+    $this->info("QR optimizados: {$n}");
+})->purpose('Achica los QR de pago pesados (pantalla de suspendido) a WebP');
