@@ -36,6 +36,12 @@ class AnulacionVenta
             Series::revertirVenta($cabId);         // los equipos vendidos (número de serie) vuelven a estar disponibles
             Cupones::devolver($cabId);             // el uso del cupón de descuento vuelve a quedar libre
 
+            // Al celular del dueño (si lo activó): una venta anulada puede ser plata que no entró a caja
+            $quien = $usuarioId ? (string) DB::table('users')->where('IdUsuario', $usuarioId)->value('apeusu') : '';
+            AvisosCelular::alDueno((int) $cab->id_empresa_negocio, '🚫 Anularon una venta de S/ '.number_format((float) $cab->ccaitv, 2),
+                trim(($quien ?: 'Alguien').' anuló '.$cab->serdoc.'-'.$cab->numdoc.' ('.trim((string) $cab->ccanom).'). Motivo: '.trim($motivo)),
+                route('actividad.index'));
+
             // El stock que salió con esta venta vuelve al almacén
             return Kardex::revertirVenta($cabId, [
                 'cliente' => $cab->ccanom, 'descripcion' => 'ANULACIÓN: '.trim($motivo), 'fecha_mov' => now()->toDateString(),

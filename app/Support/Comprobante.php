@@ -153,8 +153,28 @@ class Comprobante
 
         Fidelizacion::acumular($cabId);       // puntos del cliente (si la sucursal tiene fidelización)
         EnvioAutomatico::programar($cabId);   // si la empresa tiene envío automático
+        self::avisarDescuentos($user, $serie.'-'.$numero, $lineas, $extra);
 
         return $cabId;
+    }
+
+    /** Al celular del dueño (si lo activó): cortesías y descuentos a mano de S/ 5 o más (los cupones ya están autorizados) */
+    private static function avisarDescuentos(User $user, string $numero, array $lineas, array $extra): void
+    {
+        $cortesias = collect($lineas)->filter(fn ($l) => ! empty($l['cortesia']))
+            ->map(fn ($l) => rtrim(rtrim(number_format((float) $l['cantidad'], 2, '.', ''), '0'), '.').' × '.$l['descripcion'].(! empty($l['motivo']) ? ' ('.$l['motivo'].')' : ''));
+        $descuento = empty($extra['cupon_id']) ? (float) ($extra['descuento'] ?? 0) : 0.0;
+        if ($cortesias->isEmpty() && $descuento < 5) {
+            return;
+        }
+        $mesa = ! empty($extra['ped_id']) ? DB::table('pedidos as p')->leftJoin('mesas as m', 'm.mes_id', '=', 'p.mes_id')
+            ->where('p.ped_id', $extra['ped_id'])->value('m.mes_nom') : null;
+        $partes = array_filter([
+            $descuento >= 5 ? 'descuento de S/ '.number_format($descuento, 2).(! empty($extra['descuento_motivo']) ? ' ('.$extra['descuento_motivo'].')' : '') : null,
+            $cortesias->isNotEmpty() ? 'cortesía: '.$cortesias->implode(', ') : null,
+        ]);
+        AvisosCelular::alDueno((int) $user->id_empresa_negocio, ($cortesias->isNotEmpty() ? '🎁 Cortesía' : '🏷️ Descuento').' en '.($mesa ?: $numero),
+            trim(($user->apeusu ?: $user->name).' cobró '.$numero.' con '.implode(' y ', $partes).'.'), route('descuentos.reporte'));
     }
 
     /**

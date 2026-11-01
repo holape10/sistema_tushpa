@@ -61,6 +61,7 @@ use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\KardexController;
 use App\Http\Controllers\KardexSunatController;
 use App\Http\Controllers\LineaTiempoController;
+use App\Http\Controllers\LlamadorController;
 use App\Http\Controllers\LoteController;
 use App\Http\Controllers\MedioPagoController;
 use App\Http\Controllers\MermaController;
@@ -200,6 +201,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/cocina/ticket/{id}/recuperar', [CocinaController::class, 'recuperar'])->whereNumber('id');
     Route::post('/cocina/configuracion', [CocinaController::class, 'configuracion'])->name('cocina.config');
     Route::post('/cocina/entregado/{ped_id}', [CocinaController::class, 'entregado'])->whereNumber('ped_id');
+    // Llamador: televisor para los clientes con los pedidos para llevar "Preparando" y "¡Listo!"
+    Route::get('/llamador', [LlamadorController::class, 'index'])->name('llamador.index');
+    Route::get('/llamador/datos', [LlamadorController::class, 'datos'])->name('llamador.datos');
 
     // Reservas
     // Clínica: historias clínicas y agenda de citas

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Mesa;
 use App\Models\Pedido;
 use App\Models\Turno;
+use App\Support\AvisosCelular;
 use App\Support\Propinas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -188,6 +189,21 @@ class TurnoController extends Controller
         return redirect()->route('turnos.index')->with('success', $ok ? 'Movimiento anulado.' : 'No se encontró el movimiento.');
     }
 
+    /** Al celular del dueño (si lo activó): faltaron S/ 5 o más en el efectivo contado al cerrar */
+    private function avisarFaltante(Turno $turno): void
+    {
+        if ($turno->montocierre === null) {
+            return;
+        }
+        $esperado = self::resumen($turno)['efectivoEsperado'];
+        $diferencia = round((float) $turno->montocierre - $esperado, 2);
+        if ($diferencia <= -5) {
+            AvisosCelular::alDueno((int) $turno->id_empresa_negocio, '💸 Faltó S/ '.number_format(abs($diferencia), 2).' en caja',
+                (Auth::user()->apeusu ?: Auth::user()->name).' cerró el turno N° '.($turno->turno ?? $turno->id_turno).': debía haber S/ '.number_format($esperado, 2)
+                .' en efectivo y contó S/ '.number_format((float) $turno->montocierre, 2).'.', route('turnos.show', $turno->id_turno));
+        }
+    }
+
     public function cerrar(Request $request)
     {
         $this->autorizar();
@@ -241,6 +257,7 @@ class TurnoController extends Controller
         if (! $idTurno) {
             return redirect()->route('turnos.index')->withErrors(['turno' => 'No tienes un turno abierto.']);
         }
+        $this->avisarFaltante(Turno::find($idTurno));
 
         return redirect()->route('turnos.show', $idTurno)->with('success', 'Turno cerrado correctamente.');
     }

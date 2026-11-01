@@ -21,6 +21,13 @@
                 <p class="text-sm text-indigo-200">Todo tu negocio en una pantalla: cuánto vendes, cuándo, quién y qué revisar.</p>
             </div>
             <button type="button" @click="abrirResumen()" class="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-black text-sm shadow">📲 Resumen del día por WhatsApp</button>
+            @if (\App\Support\AvisosCelular::configurado())
+                {{-- Avisos al celular del dueño: anulaciones, platos quitados, cortesías, descuentos y faltantes de caja al momento --}}
+                <button type="button" data-avisos-celular data-para="dueno" data-clave="{{ config('services.push.publica') }}" data-guardar="{{ route('avisos_celular.suscribir') }}"
+                    data-quitar="{{ route('avisos_celular.quitar') }}" data-icono="{{ asset('imagenes/192.png') }}"
+                    data-bienvenida="Te avisaré al momento si anulan una venta, quitan un plato de cocina, dan cortesías o descuentos, o falta plata en caja."
+                    class="hidden px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-gray-900 font-black text-sm shadow">🔔 Avisarme al celular</button>
+            @endif
             <button type="button" @click="config = true" class="px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 font-bold text-sm">⚙ Meta y gastos</button>
         </div>
     </section>
@@ -40,17 +47,30 @@
             <label class="font-semibold text-gray-500">Desde<input type="date" name="desde" value="{{ $desde }}" class="mt-1 block h-9 rounded-lg border-gray-300 text-sm"></label>
             <label class="font-semibold text-gray-500">Hasta<input type="date" name="hasta" value="{{ $hasta }}" class="mt-1 block h-9 rounded-lg border-gray-300 text-sm"></label>
             <button class="h-9 px-4 rounded-lg bg-indigo-600 text-white font-bold">Ver</button>
+            @if ($config->atiende_de_noche ?? false)<span class="self-center text-gray-500">🌙 Cada fecha es una noche: de 12 del mediodía a 12 del mediodía del día siguiente.</span>@endif
         </form>
     @endif
 
     {{-- ===================================================== Cómo va mi negocio --}}
     @if ($ver === 'panel')
-        @php $r = $resumen; @endphp
+        @php
+            $r = $resumen;
+            $noche = $r['nocturno'];
+            $nombreDia = $r['inicioHoy']->locale('es')->translatedFormat('l');
+        @endphp
+        @if ($noche)
+            <p class="rounded-2xl bg-indigo-50 ring-1 ring-indigo-100 p-3 text-sm text-indigo-900">🌙 <b>Tu panel cuenta por noches.</b>
+                La noche del {{ $nombreDia }} empezó el {{ $r['inicioHoy']->format('d/m') }} a las 12 del mediodía y termina al día siguiente a las 12 del mediodía:
+                lo que vendes de madrugada cuenta en la noche que atendiste.</p>
+        @elseif ($sugerirNoche)
+            <button type="button" @click="config = true" class="w-full text-left rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-3 text-sm text-amber-900">🌙 <b>Vendes mucho de madrugada.</b>
+                ¿Tu negocio atiende de noche (discoteca, bar)? Actívalo en ⚙ y verás "Esta noche" en vez de "Hoy", sin que la madrugada se pase al día siguiente. →</button>
+        @endif
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs font-semibold text-gray-500">Hoy</p>
+            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs font-semibold text-gray-500">{{ $noche ? '🌙 Esta noche ('.$nombreDia.')' : 'Hoy' }}</p>
                 <p class="text-2xl font-black text-gray-800">{{ $soles($r['hoy']->total) }}</p>
-                <p class="text-xs text-gray-500">{!! $var($r['varHoy']) !!} vs. el {{ now()->subWeek()->locale('es')->translatedFormat('l') }} pasado a esta hora ({{ $solesCorto($r['semanaPasada']->total) }})</p></div>
-            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs font-semibold text-gray-500">En el mes (al día {{ $r['diaActual'] }})</p>
+                <p class="text-xs text-gray-500">{!! $var($r['varHoy']) !!} vs. {{ $noche ? 'la noche del' : 'el' }} {{ $nombreDia }} pasado a esta hora ({{ $solesCorto($r['semanaPasada']->total) }})</p></div>
+            <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs font-semibold text-gray-500">En el mes ({{ $noche ? 'a la noche' : 'al día' }} {{ $r['diaActual'] }})</p>
                 <p class="text-2xl font-black text-gray-800">{{ $soles($r['mes']->total) }}</p>
                 <p class="text-xs text-gray-500">{!! $var($r['varMes']) !!} vs. el mismo tramo del mes pasado</p></div>
             <div class="rounded-2xl shadow-sm p-4 bg-indigo-600 text-white"><p class="text-xs font-semibold text-indigo-100">A este ritmo cierras el mes en</p>
@@ -70,7 +90,7 @@
                     <div class="mt-2 h-4 rounded-full bg-gray-100 overflow-hidden"><div class="h-4 rounded-full {{ $r['avanceMeta'] >= 100 ? 'bg-emerald-500' : 'bg-indigo-500' }}" style="width: {{ min(100, $r['avanceMeta']) }}%"></div></div>
                     <p class="text-sm mt-2">
                         @if ($r['avanceMeta'] >= 100) <b class="text-emerald-600">🎉 ¡Meta cumplida! ({{ $r['avanceMeta'] }}%)</b>
-                        @else Vas al <b>{{ $r['avanceMeta'] }}%</b> · te falta vender <b>{{ $soles($r['faltaPorDia']) }} por día</b> para llegar.
+                        @else Vas al <b>{{ $r['avanceMeta'] }}%</b> · te falta vender <b>{{ $soles($r['faltaPorDia']) }} por {{ $noche ? 'noche' : 'día' }}</b> para llegar.
                             @if ($r['proyeccion'] >= $r['meta'])<span class="text-emerald-600 font-semibold"> A este ritmo sí llegas.</span>@else<span class="text-amber-600 font-semibold"> A este ritmo no llegas: acelera.</span>@endif
                         @endif
                     </p>
@@ -85,9 +105,9 @@
                 <h2 class="font-black text-gray-800">⚖️ Punto de equilibrio</h2>
                 @if ($r['equilibrioDia'] !== null)
                     <p class="text-sm text-gray-600 mt-1">Con gastos fijos de {{ $soles($r['gastosFijos']) }} al mes y un margen de {{ $r['margen'] }}% sobre lo que vendes:</p>
-                    <p class="mt-2 text-lg">Necesitas vender <b class="text-indigo-700">{{ $soles($r['equilibrioDia']) }} al día</b> para no perder.</p>
-                    <p class="text-sm mt-1">Hoy vas <b class="{{ $r['hoy']->total >= $r['equilibrioDia'] ? 'text-emerald-600' : 'text-amber-600' }}">{{ $soles($r['hoy']->total) }}</b>
-                        {{ $r['hoy']->total >= $r['equilibrioDia'] ? '✅ ya cubriste el día' : '· te faltan '.$soles($r['equilibrioDia'] - $r['hoy']->total) }}</p>
+                    <p class="mt-2 text-lg">Necesitas vender <b class="text-indigo-700">{{ $soles($r['equilibrioDia']) }} {{ $noche ? 'por noche' : 'al día' }}</b> para no perder.</p>
+                    <p class="text-sm mt-1">{{ $noche ? 'Esta noche' : 'Hoy' }} vas <b class="{{ $r['hoy']->total >= $r['equilibrioDia'] ? 'text-emerald-600' : 'text-amber-600' }}">{{ $soles($r['hoy']->total) }}</b>
+                        {{ $r['hoy']->total >= $r['equilibrioDia'] ? '✅ ya cubriste '.($noche ? 'la noche' : 'el día') : '· te faltan '.$soles($r['equilibrioDia'] - $r['hoy']->total) }}</p>
                     @if ($r['gananciaNeta'] !== null)
                         <p class="mt-3 rounded-xl p-3 text-sm font-semibold {{ $r['gananciaNeta'] >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800' }}">
                             {{ $r['gananciaNeta'] >= 0 ? '💰 Si sigues así, este mes te quedan unos' : '⚠️ Si sigues así, este mes pierdes unos' }} {{ $soles(abs($r['gananciaNeta'])) }}
@@ -105,19 +125,19 @@
         <div class="grid lg:grid-cols-3 gap-4">
             {{-- Ventas de cada día del mes --}}
             <section class="lg:col-span-2 bg-white rounded-2xl shadow-sm p-5">
-                <h2 class="font-black text-gray-800">Ventas de cada día del mes</h2>
+                <h2 class="font-black text-gray-800">Ventas de cada {{ $noche ? 'noche' : 'día' }} del mes</h2>
                 @php $maxDia = max(1, (float) $r['porDia']->max()); @endphp
                 <div class="mt-4 h-40 flex items-end gap-1">
                     @for ($d = 1; $d <= $r['diasMes']; $d++)
                         @php $v = (float) ($r['porDia'][$d] ?? 0); @endphp
-                        <div class="flex-1 flex flex-col items-center justify-end h-full group relative" title="Día {{ $d }}: {{ $soles($v) }}">
+                        <div class="flex-1 flex flex-col items-center justify-end h-full group relative" title="{{ $noche ? 'Noche del' : 'Día' }} {{ $d }}: {{ $soles($v) }}">
                             <div class="w-full rounded-t {{ $d === $r['diaActual'] ? 'bg-indigo-600' : ($d > $r['diaActual'] ? 'bg-gray-100' : 'bg-indigo-300') }}"
                                  style="height: {{ $d > $r['diaActual'] ? 4 : max(2, $v / $maxDia * 100) }}%"></div>
                         </div>
                     @endfor
                 </div>
                 <div class="flex justify-between text-[10px] text-gray-400 mt-1"><span>1</span><span>{{ intdiv($r['diasMes'], 2) }}</span><span>{{ $r['diasMes'] }}</span></div>
-                @if ($r['equilibrioDia'])<p class="text-xs text-gray-500 mt-2">Punto de equilibrio: {{ $soles($r['equilibrioDia']) }} por día.</p>@endif
+                @if ($r['equilibrioDia'])<p class="text-xs text-gray-500 mt-2">Punto de equilibrio: {{ $soles($r['equilibrioDia']) }} por {{ $noche ? 'noche' : 'día' }}.</p>@endif
             </section>
             {{-- Top productos --}}
             <section class="bg-white rounded-2xl shadow-sm p-5">
@@ -147,24 +167,27 @@
         @php
             $m = $mapa;
             $color = fn ($v) => $v <= 0 ? '#f3f4f6' : 'rgba(79, 70, 229, '.(0.12 + 0.88 * $v / max(1, $m['maximo'])).')';
+            $dia = fn ($d) => PanelDueno::DIAS[$d].($m['nocturno'] ? ' (noche)' : '');
+            $franja = fn ($h) => PanelDueno::hora($h).' a '.PanelDueno::hora(($h + 1) % 24);
         @endphp
         @if ($m['pico'])
             <div class="grid sm:grid-cols-3 gap-3">
                 <div class="rounded-2xl bg-indigo-600 text-white p-4"><p class="text-xs text-indigo-100">🔥 Tu momento más fuerte</p>
-                    <p class="text-xl font-black">{{ PanelDueno::DIAS[$m['pico']['dia']] }} de {{ $m['pico']['hora'] }}:00 a {{ $m['pico']['hora'] + 1 }}:00</p>
+                    <p class="text-xl font-black">{{ $dia($m['pico']['dia']) }} de {{ $franja($m['pico']['hora']) }}</p>
                     <p class="text-xs text-indigo-100">{{ $soles($m['pico']['total'] / $m['semanas']) }} en promedio esa hora. Ten más personal y todo listo.</p></div>
                 <div class="rounded-2xl bg-white shadow-sm p-4"><p class="text-xs text-gray-500">😴 El más flojo (con ventas)</p>
-                    <p class="text-xl font-black text-gray-800">{{ PanelDueno::DIAS[$m['flojo']['dia']] }} de {{ $m['flojo']['hora'] }}:00 a {{ $m['flojo']['hora'] + 1 }}:00</p>
+                    <p class="text-xl font-black text-gray-800">{{ $dia($m['flojo']['dia']) }} de {{ $franja($m['flojo']['hora']) }}</p>
                     <p class="text-xs text-gray-500">Buen momento para una promo o un happy hour.</p></div>
                 @php $mejorDia = collect($m['porDia'])->sortDesc()->keys()->first(); $peorDia = collect($m['porDia'])->sort()->keys()->first(); @endphp
                 <div class="rounded-2xl bg-white shadow-sm p-4"><p class="text-xs text-gray-500">📅 Días</p>
-                    <p class="text-sm"><b class="text-emerald-600">Mejor: {{ PanelDueno::DIAS[$mejorDia] }}</b> ({{ $solesCorto($m['porDia'][$mejorDia] / $m['semanas']) }} por semana)</p>
-                    <p class="text-sm"><b class="text-rose-600">Más bajo: {{ PanelDueno::DIAS[$peorDia] }}</b> ({{ $solesCorto($m['porDia'][$peorDia] / $m['semanas']) }} por semana)</p></div>
+                    <p class="text-sm"><b class="text-emerald-600">Mejor: {{ $dia($mejorDia) }}</b> ({{ $solesCorto($m['porDia'][$mejorDia] / $m['semanas']) }} por semana)</p>
+                    <p class="text-sm"><b class="text-rose-600">Más bajo: {{ $dia($peorDia) }}</b> ({{ $solesCorto($m['porDia'][$peorDia] / $m['semanas']) }} por semana)</p></div>
             </div>
             <section class="bg-white rounded-2xl shadow-sm p-4 overflow-x-auto">
-                <p class="text-xs text-gray-500 mb-3">Más oscuro = más ventas. Pasa el mouse sobre un cuadro para ver el monto. Del {{ \Carbon\Carbon::parse($desde)->format('d/m') }} al {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }}.</p>
+                <p class="text-xs text-gray-500 mb-3">Más oscuro = más ventas. Pasa el mouse sobre un cuadro para ver el monto. Del {{ \Carbon\Carbon::parse($desde)->format('d/m') }} al {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }}.
+                    @if ($m['nocturno']) 🌙 Cada fila es una noche: lo del sábado a las 2 am está en la fila del viernes.@endif</p>
                 <table class="text-xs border-separate" style="border-spacing: 3px">
-                    <thead><tr><th></th>@foreach ($m['horas'] as $h)<th class="font-semibold text-gray-500 w-10">{{ $h }}h</th>@endforeach<th class="pl-2 text-gray-500 text-right">Total</th></tr></thead>
+                    <thead><tr><th></th>@foreach ($m['horas'] as $h)<th class="font-semibold text-gray-500 w-10 whitespace-nowrap">{{ PanelDueno::hora($h) }}</th>@endforeach<th class="pl-2 text-gray-500 text-right">Total</th></tr></thead>
                     <tbody>
                         @foreach (PanelDueno::DIAS as $dia => $nombre)
                             <tr>
@@ -172,7 +195,7 @@
                                 @foreach ($m['horas'] as $h)
                                     @php $c = $m['celdas'][$dia][$h] ?? ['total' => 0, 'tickets' => 0]; @endphp
                                     <td class="h-9 w-10 rounded-md text-center text-[10px] font-bold {{ $c['total'] > $m['maximo'] * 0.6 ? 'text-white' : 'text-gray-600' }}" style="background: {{ $color($c['total']) }}"
-                                        title="{{ $nombre }} {{ $h }}:00 · {{ $soles($c['total']) }} · {{ $c['tickets'] }} ventas">{{ $c['total'] > 0 ? ($c['total'] >= 1000 ? round($c['total'] / 1000, 1).'k' : (int) round($c['total'])) : '' }}</td>
+                                        title="{{ $nombre }} {{ $franja($h) }} · {{ $soles($c['total']) }} · {{ $c['tickets'] }} ventas">{{ $c['total'] > 0 ? ($c['total'] >= 1000 ? round($c['total'] / 1000, 1).'k' : (int) round($c['total'])) : '' }}</td>
                                 @endforeach
                                 <td class="pl-2 text-right font-bold text-gray-700 whitespace-nowrap">{{ $solesCorto($m['porDia'][$dia] ?? 0) }}</td>
                             </tr>
@@ -327,6 +350,10 @@
                 @if ($resumen && $resumen['gastosSugeridos'] > 0)
                     <button type="button" @click="form.gastos_fijos_mes = {{ $resumen['gastosSugeridos'] }}" class="mt-1 text-xs text-indigo-600 font-semibold">Usar lo registrado el mes pasado: {{ $soles($resumen['gastosSugeridos']) }}</button>
                 @endif</label>
+            <label class="flex items-start gap-2 rounded-xl bg-indigo-50 p-3 font-semibold text-gray-700">
+                <input type="checkbox" x-model="form.atiende_de_noche" class="mt-0.5 rounded text-indigo-600">
+                <span>🌙 Mi negocio atiende de noche (discoteca, bar)
+                    <span class="block text-xs font-normal text-gray-500">El panel cuenta por noches, de 12 del mediodía a 12 del mediodía: lo vendido de madrugada cuenta en la noche que se atendió.</span></span></label>
             <label class="block font-semibold text-gray-600">📲 Tu WhatsApp (para el resumen del día)
                 <input x-model="form.whatsapp_dueno" inputmode="tel" placeholder="987654321" class="mt-1 w-full rounded-lg border-gray-300"></label>
             <p x-show="error" x-text="error" class="text-rose-600"></p>
@@ -341,7 +368,7 @@
         return {
             resumen: false, config: false, texto: '', enlace: '#', copiado: false, error: '', fecha: @js(now()->toDateString()),
             tieneNumero: @js((bool) ($config->whatsapp_dueno ?? null)),
-            form: { meta_mensual: @js($config->meta_mensual ?? ''), gastos_fijos_mes: @js($config->gastos_fijos_mes ?? ''), whatsapp_dueno: @js($config->whatsapp_dueno ?? '') },
+            form: { meta_mensual: @js($config->meta_mensual ?? ''), gastos_fijos_mes: @js($config->gastos_fijos_mes ?? ''), whatsapp_dueno: @js($config->whatsapp_dueno ?? ''), atiende_de_noche: @js((bool) ($config->atiende_de_noche ?? false)) },
             abrirResumen() { this.resumen = true; this.cargarResumen(); },
             async cargarResumen() {
                 this.texto = ''; this.copiado = false;

@@ -52,7 +52,7 @@ class Rubros
 
     public const RUBROS = [
         'RESTOBAR' => ['icono' => 'fa-utensils', 'nombre' => 'Restobar', 'ejemplos' => 'Restaurante, cafetería, discoteca, bar', 'modulos' => [
-            '/comandas', '/comandas/punto-venta', '/promotores', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/reservas', '/motorizados', '/delivery', '/delivery/liquidacion', '/delivery/reporte', '/carta/configuracion', '/recetas', '/entradas', '/preparados', '/mermas', '/reportes/consumo-insumos', '/productos?tipo=4', '/productos?tipo=6',
+            '/comandas', '/comandas/punto-venta', '/promotores', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/llamador', '/reservas', '/motorizados', '/delivery', '/delivery/liquidacion', '/delivery/reporte', '/carta/configuracion', '/recetas', '/entradas', '/preparados', '/mermas', '/reportes/consumo-insumos', '/productos?tipo=4', '/productos?tipo=6',
             '/reportes/ventas-vendedor', '/reportes/ventas-delivery',
             '/cupones', '/reportes/propinas', '/metas-mozos', '/encuestas', '/autoservicio',
         ]],
@@ -69,7 +69,7 @@ class Rubros
             '/pv-grifo', '/punto-venta', '/inventarios', '/kardex/movimiento?tipo=I', '/kardex/movimiento?tipo=E', '/cuentas/cobrar/reporte', '/guias',
         ]],
         'HOTELERIA' => ['icono' => 'fa-bed', 'nombre' => 'Hotelería', 'ejemplos' => 'Hotel, hospedaje con restaurante', 'modulos' => [
-            '/hotel', '/hotel/reporte', '/reservas', '/comandas', '/comandas/punto-venta', '/promotores', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/productos?tipo=4',
+            '/hotel', '/hotel/reporte', '/reservas', '/comandas', '/comandas/punto-venta', '/promotores', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/llamador', '/productos?tipo=4',
         ]],
         'GIMNASIO' => ['icono' => 'fa-dumbbell', 'nombre' => 'Gimnasio', 'ejemplos' => 'Gimnasio, academia (membresías y control de ingreso)', 'modulos' => [
             '/gimnasio', '/gimnasio/acceso', '/gimnasio/entrenador', '/gimnasio/reporte', '/pv',

@@ -13,7 +13,7 @@ use Illuminate\View\View;
 
 /**
  * Panel del dueño (administrador): cómo va el negocio, horas pico, ranking del equipo, alertas y el resumen
- * del día para mandar por WhatsApp.
+ * del día para mandar por WhatsApp. Los negocios nocturnos (discotecas, bares) lo ven por noches.
  */
 class PanelDuenoController extends Controller
 {
@@ -56,7 +56,9 @@ class PanelDuenoController extends Controller
             'mapa' => $ver === 'horas' ? PanelDueno::mapaCalor($suc, $desde, $hasta) : null,
             'equipo' => $ver === 'equipo' ? PanelDueno::equipo($suc, $desde, $hasta) : null,
             'turno' => $ver === 'turno' ? $this->ventasDelTurno($request, $suc) : null,
-            'config' => DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['meta_mensual', 'gastos_fijos_mes', 'whatsapp_dueno']),
+            'config' => DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['meta_mensual', 'gastos_fijos_mes', 'whatsapp_dueno', 'atiende_de_noche']),
+            // Vende mucho de madrugada y aún cuenta por días: se le sugiere contar por noches
+            'sugerirNoche' => $ver === 'panel' && ! PanelDueno::corte($suc) && $this->vendeDeMadrugada($suc),
         ]);
     }
 
@@ -106,6 +108,15 @@ class PanelDuenoController extends Controller
             'elegido' => $elegido?->id_turno, 'fecha' => $fecha?->toDateString()];
     }
 
+    /** Más de la cuarta parte de lo vendido en las últimas 4 semanas fue entre las 12 am y las 6 am */
+    private function vendeDeMadrugada(int $suc): bool
+    {
+        $r = DB::table('cpe_cabecera')->where('id_empresa_negocio', $suc)->whereNull('ccabaj')->where('fecha_hora', '>=', now()->subDays(28))
+            ->selectRaw('SUM(ccaitv) as total, SUM(CASE WHEN HOUR(fecha_hora) < 6 THEN ccaitv ELSE 0 END) as madrugada')->first();
+
+        return (float) $r->total > 0 && (float) $r->madrugada / (float) $r->total > 0.25;
+    }
+
     /** El resumen del día listo para WhatsApp (texto y enlace al número del dueño) */
     public function resumenDia(Request $request): JsonResponse
     {
@@ -128,11 +139,12 @@ class PanelDuenoController extends Controller
         $suc = $this->sucursal();
         $d = $request->validate([
             'meta_mensual' => 'nullable|numeric|min:0|max:99999999', 'gastos_fijos_mes' => 'nullable|numeric|min:0|max:99999999',
-            'whatsapp_dueno' => ['nullable', 'regex:/^\+?[\d\s]{9,15}$/'],
+            'whatsapp_dueno' => ['nullable', 'regex:/^\+?[\d\s]{9,15}$/'], 'atiende_de_noche' => 'nullable|boolean',
         ], ['whatsapp_dueno.regex' => 'Escribe el celular con 9 dígitos (o con el código de país).'], ['meta_mensual' => 'meta', 'gastos_fijos_mes' => 'gastos fijos']);
         DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->update([
             'meta_mensual' => $d['meta_mensual'] ?? null, 'gastos_fijos_mes' => $d['gastos_fijos_mes'] ?? null,
             'whatsapp_dueno' => isset($d['whatsapp_dueno']) ? preg_replace('/\s/', '', $d['whatsapp_dueno']) : null,
+            'atiende_de_noche' => (bool) ($d['atiende_de_noche'] ?? false),
         ]);
 
         return response()->json(['ok' => true, 'mensaje' => 'Guardado.']);

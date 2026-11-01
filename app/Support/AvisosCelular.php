@@ -8,13 +8,18 @@ use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
 
 /**
- * Avisos al celular de los mozos (Web Push): pedido del QR, llaman al mozo, piden la cuenta y plato listo. Llegan a
- * todos los equipos de la sucursal aunque la pantalla esté apagada, solo en las sucursales que usan el QR de mesas
- * (carta_pedido_mesa). Se mandan después de responder y si algo falla no se rompe nada.
+ * Avisos al celular (Web Push), aunque la pantalla esté apagada. Se mandan después de responder y si algo falla no se
+ * rompe nada. Dos tipos, y un celular puede recibir uno o los dos:
+ *  - mozo: pedido del QR, llaman al mozo, piden la cuenta y plato listo, a todos los mozos de la sucursal. Solo en las
+ *    sucursales que usan el QR de mesas (carta_pedido_mesa).
+ *  - dueno: lo que el dueño debe saber al momento (anulaciones, platos quitados de cocina, cortesías, descuentos y
+ *    faltantes de caja). Lo activa el administrador en el panel del dueño.
  */
 class AvisosCelular
 {
-    /** @var array<int, array{sucursal: int, aviso: array<string, mixed>}> */
+    public const TIPOS = ['mozo', 'dueno'];
+
+    /** @var array<int, array{sucursal: int, para: string, aviso: array<string, mixed>}> */
     private static array $pendientes = [];
 
     public static function configurado(): bool
@@ -22,13 +27,20 @@ class AvisosCelular
         return (bool) config('services.push.publica') && (bool) config('services.push.privada');
     }
 
-    /** @param  array{endpoint: string, keys: array{p256dh: string, auth: string}}  $suscripcion */
-    public static function suscribir(int $usuario, int $sucursal, array $suscripcion, ?string $equipo): void
+    /**
+     * Guarda el celular para un tipo de avisos (sin quitarle el otro si ya lo tenía)
+     *
+     * @param  array{endpoint: string, keys: array{p256dh: string, auth: string}}  $suscripcion
+     */
+    public static function suscribir(int $usuario, int $sucursal, array $suscripcion, ?string $equipo, string $para = 'mozo'): void
     {
-        DB::table('push_suscripciones')->updateOrInsert(['huella' => hash('sha256', $suscripcion['endpoint'])], [
+        $huella = hash('sha256', $suscripcion['endpoint']);
+        $antes = DB::table('push_suscripciones')->where('huella', $huella)->first(['mozo', 'dueno']);
+        DB::table('push_suscripciones')->updateOrInsert(['huella' => $huella], [
             'IdUsuario' => $usuario, 'id_empresa_negocio' => $sucursal, 'endpoint' => $suscripcion['endpoint'],
             'p256dh' => $suscripcion['keys']['p256dh'], 'auth' => $suscripcion['keys']['auth'],
             'equipo' => mb_substr((string) $equipo, 0, 150) ?: null, 'updated_at' => now(), 'created_at' => now(),
+            'mozo' => $para === 'mozo' || (bool) ($antes->mozo ?? false), 'dueno' => $para === 'dueno' || (bool) ($antes->dueno ?? false),
         ]);
     }
 
@@ -45,7 +57,7 @@ class AvisosCelular
             'CUENTA' => ['🧾 Piden la cuenta · '.$mesa, 'El cliente quiere pagar.'],
             default => ['🙋 Llaman al mozo · '.$mesa, 'El cliente necesita atención.'],
         };
-        self::encolar($sucursal, ['titulo' => $titulo, 'cuerpo' => $cuerpo, 'url' => route('comandas.seleccion'), 'etiqueta' => 'carta-'.$tipo.'-'.$mesa]);
+        self::encolar($sucursal, 'mozo', ['titulo' => $titulo, 'cuerpo' => $cuerpo, 'url' => route('comandas.seleccion'), 'etiqueta' => 'carta-'.$tipo.'-'.$mesa]);
     }
 
     /** Cocina despachó platos: a todos los mozos de la sucursal */
@@ -60,20 +72,30 @@ class AvisosCelular
         if ($platos === '') {
             return;
         }
-        self::encolar((int) $ticket->id_empresa_negocio, ['titulo' => '🍽️ Listo para llevar · '.($ticket->destino ?: 'Pedido'),
+        self::encolar((int) $ticket->id_empresa_negocio, 'mozo', ['titulo' => '🍽️ Listo para llevar · '.($ticket->destino ?: 'Pedido'),
             'cuerpo' => mb_strimwidth($platos, 0, 160, '…'), 'url' => route('comandas.seleccion'), 'etiqueta' => 'listo-'.$ticketId]);
     }
 
-    /** @param  array{titulo: string, cuerpo: string, url: string, etiqueta: string}  $aviso */
-    private static function encolar(int $sucursal, array $aviso): void
+    /**
+     * Para el dueño: algo que conviene saber al momento. Sale solo si lo que lo causó se guardó (después del commit).
+     */
+    public static function alDueno(int $sucursal, string $titulo, string $cuerpo, ?string $url = null): void
     {
-        if (! self::configurado() || ! self::usaQrDeMesas($sucursal)) {
+        $aviso = ['titulo' => $titulo, 'cuerpo' => mb_strimwidth($cuerpo, 0, 180, '…'), 'url' => $url ?? route('dueno.index', ['ver' => 'alertas']),
+            'etiqueta' => 'dueno-'.substr(md5($titulo.$cuerpo), 0, 10)];
+        DB::afterCommit(fn () => self::encolar($sucursal, 'dueno', $aviso));
+    }
+
+    /** @param  array{titulo: string, cuerpo: string, url: string, etiqueta: string}  $aviso */
+    private static function encolar(int $sucursal, string $para, array $aviso): void
+    {
+        if (! self::configurado() || ! $sucursal || ($para === 'mozo' && ! self::usaQrDeMesas($sucursal))) {
             return;
         }
         if (! self::$pendientes) {
             app()->terminating(fn () => self::enviar());
         }
-        self::$pendientes[] = ['sucursal' => $sucursal, 'aviso' => $aviso];
+        self::$pendientes[] = ['sucursal' => $sucursal, 'para' => $para, 'aviso' => $aviso];
     }
 
     /** Solo las sucursales que dejan pedir desde el QR de la mesa tienen avisos al celular */
@@ -96,7 +118,7 @@ class AvisosCelular
             }
             $push = null;
             foreach ($pendientes as $p) {
-                $equipos = DB::table('push_suscripciones')->where('id_empresa_negocio', $p['sucursal'])->get();
+                $equipos = DB::table('push_suscripciones')->where('id_empresa_negocio', $p['sucursal'])->where($p['para'], true)->get();
                 if ($equipos->isEmpty()) {
                     continue;
                 }
@@ -116,7 +138,7 @@ class AvisosCelular
                 }
             }
         } catch (\Throwable) {
-            // Sin aviso al celular igual queda la campanita en la pantalla de mesas
+            // Sin aviso al celular igual queda la campanita en mesas y la alerta en el panel del dueño
         }
     }
 }

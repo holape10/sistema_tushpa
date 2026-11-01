@@ -32,6 +32,7 @@
                 <a href="{{ route('cocina.index', ['estacion' => $e->Id]) }}" class="px-3 py-1.5 rounded-lg text-sm font-bold {{ $estacion == $e->Id ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">{{ $e->descripcion }}</a>
             @endforeach
         </nav>
+        <a href="{{ route('llamador.index') }}" target="_blank" class="px-3 py-1.5 rounded-lg text-sm font-bold bg-slate-800 text-slate-300 hover:bg-slate-700" title="Pantalla para un televisor a la vista de los clientes: pedidos para llevar Preparando y Listo">📺 Llamador</a>
 
         <div class="ml-auto flex flex-wrap items-center gap-2 text-sm">
             <span class="px-3 py-1.5 rounded-lg bg-slate-800"><span class="text-slate-400">En cola</span> <b class="text-lg" x-text="tarjetas.length"></b></span>

@@ -20,6 +20,31 @@ class PanelDueno
 
     public const DIAS = [1 => 'Lun', 2 => 'Mar', 3 => 'Mié', 4 => 'Jue', 5 => 'Vie', 6 => 'Sáb', 7 => 'Dom'];
 
+    /**
+     * Discotecas y bares que venden pasada la medianoche (atiende_de_noche): cada día del panel es una noche, de
+     * mediodía a mediodía, y lo de madrugada cuenta en la noche que se atendió. Devuelve las horas del corte (0 o 12).
+     */
+    public static function corte(int $suc): int
+    {
+        return (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('atiende_de_noche') ? Reportes::CORTE_JORNADA : 0;
+    }
+
+    /** Inicio y fin de un rango de fechas: días normales (00:00 a 23:59) o noches (mediodía a mediodía del día siguiente) */
+    public static function limites(int $suc, string $desde, string $hasta): array
+    {
+        $corte = self::corte($suc);
+
+        return [Carbon::parse($desde)->addHours($corte)->toDateTimeString(), Carbon::parse($hasta)->addDay()->addHours($corte)->subSecond()->toDateTimeString()];
+    }
+
+    /** "9 pm", "12 m", "1 am": las horas como las dice la gente */
+    public static function hora(int $h): string
+    {
+        return match (true) {
+            $h === 0 => '12 am', $h === 12 => '12 m', $h < 12 => $h.' am', default => ($h - 12).' pm',
+        };
+    }
+
     /** Comprobantes vigentes de la sucursal (los anulados no cuentan) */
     private static function ventas(int $suc)
     {
@@ -49,16 +74,20 @@ class PanelDueno
     public static function resumen(int $suc, ?Carbon $ahora = null): array
     {
         $ahora ??= now();
-        $hoy = self::totales($suc, $ahora->copy()->startOfDay(), $ahora);
-        $semanaPasada = self::totales($suc, $ahora->copy()->subWeek()->startOfDay(), $ahora->copy()->subWeek());
-        $inicioMes = $ahora->copy()->startOfMonth();
+        // De noche, el "reloj del negocio" va 12 horas atrás: el sábado a las 3 am todavía es la noche del viernes
+        $corte = self::corte($suc);
+        $negocio = $ahora->copy()->subHours($corte);
+        $inicioHoy = $negocio->copy()->startOfDay()->addHours($corte);
+        $hoy = self::totales($suc, $inicioHoy, $ahora);
+        $semanaPasada = self::totales($suc, $inicioHoy->copy()->subWeek(), $ahora->copy()->subWeek());
+        $inicioMes = $negocio->copy()->startOfMonth()->addHours($corte);
         $mes = self::totales($suc, $inicioMes, $ahora);
         $mesPasadoTramo = self::totales($suc, $inicioMes->copy()->subMonthNoOverflow(), $ahora->copy()->subMonthNoOverflow());
         $mesPasado = self::totales($suc, $inicioMes->copy()->subMonthNoOverflow(), $inicioMes->copy()->subSecond());
 
         // Proyección: lo vendido por día transcurrido (el día de hoy cuenta según la hora) por los días del mes
-        $diasMes = $ahora->daysInMonth;
-        $transcurridos = max(0.5, ($ahora->day - 1) + min(1, $ahora->secondsSinceMidnight() / 86400 * 1.4));
+        $diasMes = $negocio->daysInMonth;
+        $transcurridos = max(0.5, ($negocio->day - 1) + min(1, $negocio->secondsSinceMidnight() / 86400 * 1.4));
         $proyeccion = round($mes->total / $transcurridos * $diasMes, 2);
 
         $config = DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first();
@@ -75,16 +104,17 @@ class PanelDueno
         return [
             'hoy' => $hoy, 'semanaPasada' => $semanaPasada, 'varHoy' => self::variacion($hoy->total, $semanaPasada->total),
             'mes' => $mes, 'mesPasadoTramo' => $mesPasadoTramo, 'mesPasado' => $mesPasado, 'varMes' => self::variacion($mes->total, $mesPasadoTramo->total),
-            'proyeccion' => $proyeccion, 'varProyeccion' => self::variacion($proyeccion, $mesPasado->total), 'diasMes' => $diasMes, 'diaActual' => $ahora->day,
+            'proyeccion' => $proyeccion, 'varProyeccion' => self::variacion($proyeccion, $mesPasado->total), 'diasMes' => $diasMes, 'diaActual' => $negocio->day,
+            'nocturno' => $corte > 0, 'inicioHoy' => $inicioHoy,
             'meta' => $meta, 'avanceMeta' => $meta > 0 ? round($mes->total / $meta * 100, 1) : null,
-            'faltaPorDia' => $meta > 0 ? round(max(0, $meta - $mes->total) / max(1, $diasMes - $ahora->day + 1), 2) : null,
+            'faltaPorDia' => $meta > 0 ? round(max(0, $meta - $mes->total) / max(1, $diasMes - $negocio->day + 1), 2) : null,
             'margen' => $margen !== null ? round($margen * 100, 1) : null, 'gananciaBruta' => $fc->ganancia,
             'gastosFijos' => $gastosFijos, 'gastosSugeridos' => $gastosSugeridos,
             'equilibrioMes' => $equilibrioMes, 'equilibrioDia' => $equilibrioMes !== null ? round($equilibrioMes / $diasMes, 2) : null,
             // Lo que quedaría al cerrar el mes: la ganancia bruta proyectada menos los gastos fijos
             'gananciaNeta' => $margen !== null && $gastosFijos > 0 ? round($proyeccion * $margen - $gastosFijos, 2) : null,
             'porDia' => self::ventas($suc)->whereBetween('c.fecha_hora', [$inicioMes, $ahora])->groupBy('dia')
-                ->selectRaw('DAY(c.fecha_hora) as dia, SUM('.self::SIGNO.' * c.ccaitv) as total')->pluck('total', 'dia')->map(fn ($v) => round((float) $v, 2)),
+                ->selectRaw('DAY(DATE_SUB(c.fecha_hora, INTERVAL '.$corte.' HOUR)) as dia, SUM('.self::SIGNO.' * c.ccaitv) as total')->pluck('total', 'dia')->map(fn ($v) => round((float) $v, 2)),
             'topProductos' => DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
                 ->where('c.id_empresa_negocio', $suc)->whereNull('c.ccabaj')->whereNotIn('c.tdocod', ['07', '08'])->whereBetween('c.fecha_hora', [$inicioMes, $ahora])
                 ->groupBy('d.cdedes')->selectRaw('d.cdedes as nombre, SUM(d.cdecan) as cantidad, SUM(d.cdevve) as total')
@@ -100,21 +130,24 @@ class PanelDueno
      */
     public static function mapaCalor(int $suc, string $desde, string $hasta): array
     {
-        $filas = self::ventas($suc)->whereBetween('c.fecha_hora', [$desde.' 00:00:00', $hasta.' 23:59:59'])
+        // De noche, la fila es la noche (lo del sábado 2 am va en el viernes) y las horas van de mediodía a mediodía
+        $corte = self::corte($suc);
+        $filas = self::ventas($suc)->whereBetween('c.fecha_hora', self::limites($suc, $desde, $hasta))
             ->groupBy('dia', 'hora')
-            ->selectRaw('WEEKDAY(c.fecha_hora) + 1 as dia, HOUR(c.fecha_hora) as hora, SUM('.self::SIGNO.' * c.ccaitv) as total, SUM(c.tdocod NOT IN (\'07\',\'08\')) as tickets')
+            ->selectRaw('WEEKDAY(DATE_SUB(c.fecha_hora, INTERVAL '.$corte.' HOUR)) + 1 as dia, HOUR(c.fecha_hora) as hora, SUM('.self::SIGNO.' * c.ccaitv) as total, SUM(c.tdocod NOT IN (\'07\',\'08\')) as tickets')
             ->get();
         $celdas = [];
         foreach ($filas as $f) {
             $celdas[(int) $f->dia][(int) $f->hora] = ['total' => round((float) $f->total, 2), 'tickets' => (int) $f->tickets];
         }
-        $horas = $filas->pluck('hora')->map(fn ($h) => (int) $h);
-        $rango = $horas->isEmpty() ? [] : range($horas->min(), $horas->max());
+        $orden = fn (int $h) => ($h - $corte + 24) % 24;
+        $horas = $filas->pluck('hora')->map(fn ($h) => $orden((int) $h));
+        $rango = $horas->isEmpty() ? [] : array_map(fn ($o) => ($o + $corte) % 24, range($horas->min(), $horas->max()));
         $todas = $filas->map(fn ($f) => ['dia' => (int) $f->dia, 'hora' => (int) $f->hora, 'total' => (float) $f->total]);
         // Las semanas del rango: el promedio por celda dice cuánto se vende "un viernes a las 9 pm"
         $semanas = max(1, (int) ceil((Carbon::parse($desde)->diffInDays(Carbon::parse($hasta)) + 1) / 7));
 
-        return ['celdas' => $celdas, 'maximo' => (float) $todas->max('total'), 'horas' => $rango, 'semanas' => $semanas,
+        return ['celdas' => $celdas, 'maximo' => (float) $todas->max('total'), 'horas' => $rango, 'semanas' => $semanas, 'nocturno' => $corte > 0,
             'pico' => $todas->sortByDesc('total')->first(), 'flojo' => $todas->where('total', '>', 0)->sortBy('total')->first(),
             'porDia' => $todas->groupBy('dia')->map(fn ($g) => round($g->sum('total'), 2))->all()];
     }
@@ -125,7 +158,7 @@ class PanelDueno
      */
     public static function equipo(int $suc, string $desde, string $hasta): Collection
     {
-        [$d, $h] = [$desde.' 00:00:00', $hasta.' 23:59:59'];
+        [$d, $h] = self::limites($suc, $desde, $hasta);
         $base = fn () => self::ventas($suc)->whereBetween('c.fecha_hora', [$d, $h]);
         $comoMozo = $base()->whereNotNull('c.mozo')->groupBy('c.mozo')
             ->selectRaw('c.mozo as usuario, SUM('.self::SIGNO.' * c.ccaitv) as total, SUM(c.tdocod NOT IN (\'07\',\'08\')) as tickets')->get()->keyBy('usuario');
@@ -237,7 +270,7 @@ class PanelDueno
     public static function diferenciasCaja(int $suc, string $desde, string $hasta): Collection
     {
         return Turno::where('id_empresa_negocio', $suc)->where('estado', 'CERRADO')->whereNotNull('montocierre')
-            ->whereBetween('cierre', [$desde.' 00:00:00', $hasta.' 23:59:59'])->get()
+            ->whereBetween('cierre', self::limites($suc, $desde, $hasta))->get()
             ->map(function (Turno $t) {
                 $esperado = TurnoController::resumen($t)['efectivoEsperado'];
 
@@ -256,7 +289,8 @@ class PanelDueno
         $alertas = collect();
         $agregar = fn (string $nivel, string $icono, string $titulo, string $detalle, ?string $url = null) => $alertas->push((object) compact('nivel', 'icono', 'titulo', 'detalle', 'url'));
         $soles = fn ($n) => 'S/ '.number_format((float) $n, 2);
-        $ventas = self::totales($suc, $desde.' 00:00:00', $hasta.' 23:59:59')->total;
+        [$d, $h] = self::limites($suc, $desde, $hasta);
+        $ventas = self::totales($suc, $d, $h)->total;
 
         foreach (self::diferenciasCaja($suc, $desde, $hasta)->where('diferencia', '<=', -5) as $t) {
             $nombre = DB::table('users')->where('IdUsuario', $t->usuario)->value('apeusu') ?: 'Usuario '.$t->usuario;
@@ -279,7 +313,7 @@ class PanelDueno
                 $agregar('media', '❌', "{$u->nombre} quitó platos de la comanda {$u->quitados} veces", 'Quitar después de enviar a cocina puede ser un error… o un plato que se sirvió y no se cobró.', route('actividad.index'));
             }
         }
-        $descuentosTotal = (float) self::ventas($suc)->whereBetween('c.fecha_hora', [$desde.' 00:00:00', $hasta.' 23:59:59'])->sum('c.descuento');
+        $descuentosTotal = (float) self::ventas($suc)->whereBetween('c.fecha_hora', [$d, $h])->sum('c.descuento');
         if ($ventas > 0 && $descuentosTotal / $ventas > 0.05) {
             $agregar('media', '🏷️', 'Los descuentos son el '.round($descuentosTotal / $ventas * 100, 1).'% de las ventas', "Se descontó {$soles($descuentosTotal)} en el periodo.", route('descuentos.reporte'));
         }
@@ -304,35 +338,42 @@ class PanelDueno
         return $alertas->sortBy(fn ($a) => ['alta' => 0, 'media' => 1, 'info' => 2][$a->nivel])->values();
     }
 
-    /** El resumen del día en texto para WhatsApp */
+    /** El resumen del día (o de la noche, en negocios nocturnos) en texto para WhatsApp */
     public static function mensajeDia(int $suc, Carbon $fecha): string
     {
         $soles = fn ($n) => 'S/ '.number_format((float) $n, 2);
         $negocio = (string) DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('nombre_comercial');
-        $dia = self::totales($suc, $fecha->copy()->startOfDay(), $fecha->copy()->endOfDay());
-        $antes = self::totales($suc, $fecha->copy()->subWeek()->startOfDay(), $fecha->copy()->subWeek()->endOfDay());
+        $corte = self::corte($suc);
+        // Hoy antes del mediodía, en un negocio nocturno, la noche que se resume es la que empezó ayer
+        if ($corte && $fecha->isToday() && now()->hour < $corte) {
+            $fecha = $fecha->copy()->subDay();
+        }
+        $inicio = $fecha->copy()->startOfDay()->addHours($corte);
+        $fin = min($inicio->copy()->addDay()->subSecond(), now());
+        $dia = self::totales($suc, $inicio, $fin);
+        $antes = self::totales($suc, $inicio->copy()->subWeek(), $fin->copy()->subWeek());
         $var = self::variacion($dia->total, $antes->total);
         $desde = $fecha->toDateString();
-        $lineas = ["📊 *{$negocio}* · resumen del ".$fecha->locale('es')->translatedFormat('l d/m'),
+        $lineas = ["📊 *{$negocio}* · resumen de".($corte ? ' la noche del ' : 'l ').$fecha->locale('es')->translatedFormat('l d/m'),
             '', "💰 Vendiste *{$soles($dia->total)}* en {$dia->tickets} ventas (ticket promedio {$soles($dia->promedio)})"];
         if ($var !== null) {
             $lineas[] = ($var >= 0 ? '📈 ' : '📉 ').($var >= 0 ? '+' : '').$var.'% vs. el '.$fecha->copy()->subWeek()->locale('es')->translatedFormat('l').' pasado ('.$soles($antes->total).')';
         }
         $medios = DB::table('venta_medio_pago as v')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'v.IdCpe_cabecera')
             ->leftJoin('medios_pagos as m', 'm.id_med_pag', '=', 'v.id_med_pag')->where('c.id_empresa_negocio', $suc)->whereNull('c.ccabaj')
-            ->whereBetween('c.fecha_hora', [$fecha->copy()->startOfDay(), $fecha->copy()->endOfDay()])->groupBy('m.nom_med_pag')
+            ->whereBetween('c.fecha_hora', [$inicio, $fin])->groupBy('m.nom_med_pag')
             ->selectRaw('m.nom_med_pag as medio, SUM(v.monto) as total')->orderByDesc('total')->get();
         if ($medios->isNotEmpty()) {
             $lineas[] = '💳 '.$medios->map(fn ($m) => mb_convert_case((string) $m->medio, MB_CASE_TITLE).' '.$soles($m->total))->implode(' · ');
         }
         $top = DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
             ->where('c.id_empresa_negocio', $suc)->whereNull('c.ccabaj')->whereNotIn('c.tdocod', ['07', '08'])
-            ->whereBetween('c.fecha_hora', [$fecha->copy()->startOfDay(), $fecha->copy()->endOfDay()])
+            ->whereBetween('c.fecha_hora', [$inicio, $fin])
             ->groupBy('d.cdedes')->selectRaw('d.cdedes as nombre, SUM(d.cdecan) as cantidad')->orderByDesc('cantidad')->limit(3)->get();
         if ($top->isNotEmpty()) {
             $lineas[] = '🏆 Lo más vendido: '.$top->map(fn ($t) => $t->nombre.' ('.rtrim(rtrim(number_format((float) $t->cantidad, 2), '0'), '.').')')->implode(', ');
         }
-        $mes = self::resumen($suc, $fecha->isToday() ? now() : $fecha->copy()->endOfDay());
+        $mes = self::resumen($suc, $fin);
         $lineas[] = '📅 En el mes: '.$soles($mes['mes']->total).' · a este ritmo cierras en '.$soles($mes['proyeccion'])
             .($mes['avanceMeta'] !== null ? ' (meta al '.$mes['avanceMeta'].'%)' : '');
         $alertas = self::alertas($suc, $desde, $desde);

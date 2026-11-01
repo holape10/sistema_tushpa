@@ -101,6 +101,14 @@ class Cocina
                 }
             }
         });
+
+        // Al celular del dueño (si lo activó): quitar lo ya pedido a cocina puede ser un error… o un plato que no se cobró
+        if ($anulaciones) {
+            $platos = collect($anulaciones)->map(fn ($a) => rtrim(rtrim(number_format((float) $a['cantidad'], 2, '.', ''), '0'), '.').' × '.$a['nombre'])->implode(', ');
+            $motivos = collect($anulaciones)->pluck('observacion')->filter()->unique()->implode(' · ');
+            AvisosCelular::alDueno((int) $pedido->id_empresa_negocio, '❌ Quitaron de cocina · '.$destino,
+                trim((Auth::user()?->apeusu ?? 'Alguien').' quitó '.$platos.'.'.($motivos !== '' ? ' '.$motivos : '')), route('actividad.index'));
+        }
     }
 
     /** Venta directa (punto de venta): tarjeta sin pedido (ped_id = 0), con el comprobante como referencia */

@@ -7,19 +7,21 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
-/** La pantalla de mesas registra el celular para los avisos (o lo quita si el navegador dejó de aceptarlos) */
+/** La pantalla de mesas (avisos de mozo) o el panel del dueño (avisos del dueño) registran el celular para los avisos */
 class AvisoCelularController extends Controller
 {
     public function suscribir(Request $request): JsonResponse
     {
-        abort_unless(AvisosCelular::configurado() && AvisosCelular::usaQrDeMesas((int) Auth::user()->id_empresa_negocio), 404);
+        $usuario = Auth::user();
+        $para = $request->input('para') === 'dueno' ? 'dueno' : 'mozo';
+        // Avisos de mozo: solo con QR de mesas · avisos del dueño: solo el administrador
+        abort_unless(AvisosCelular::configurado() && ($para === 'dueno' ? $usuario->esAdmin() : AvisosCelular::usaQrDeMesas((int) $usuario->id_empresa_negocio)), 404);
         $d = $request->validate([
             'endpoint' => 'required|url|starts_with:https://|max:1000',
             'keys.p256dh' => 'required|string|max:200',
             'keys.auth' => 'required|string|max:100',
         ]);
-        $usuario = Auth::user();
-        AvisosCelular::suscribir((int) $usuario->IdUsuario, (int) $usuario->id_empresa_negocio, $d, $request->userAgent());
+        AvisosCelular::suscribir((int) $usuario->IdUsuario, (int) $usuario->id_empresa_negocio, $d, $request->userAgent(), $para);
 
         return response()->json(['ok' => true]);
     }

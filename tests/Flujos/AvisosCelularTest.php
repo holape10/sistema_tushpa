@@ -46,6 +46,24 @@ class AvisosCelularTest extends FlujoTestCase
         $this->get(route('comandas.seleccion'))->assertOk()->assertDontSee('data-avisos-celular', false);
     }
 
+    public function test_el_celular_del_dueno_recibe_sus_avisos_sin_perder_los_de_mozo(): void
+    {
+        $this->postJson(route('avisos_celular.suscribir'), self::EQUIPO)->assertOk();
+        $this->postJson(route('avisos_celular.suscribir'), self::EQUIPO + ['para' => 'dueno'])->assertOk();
+
+        $equipo = DB::table('push_suscripciones')->first();
+        $this->assertTrue((bool) $equipo->mozo);
+        $this->assertTrue((bool) $equipo->dueno);
+    }
+
+    public function test_los_avisos_del_dueno_no_dependen_del_qr_de_mesas(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['carta_pedido_mesa' => 0]);
+
+        $this->postJson(route('avisos_celular.suscribir'), self::EQUIPO + ['para' => 'dueno'])->assertOk();
+        $this->assertFalse((bool) DB::table('push_suscripciones')->value('mozo'));
+    }
+
     public function test_solo_acepta_direcciones_seguras_de_avisos(): void
     {
         $this->postJson(route('avisos_celular.suscribir'), ['endpoint' => 'http://otro-sitio.test/x'] + self::EQUIPO)->assertUnprocessable();

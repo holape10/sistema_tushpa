@@ -4,6 +4,7 @@
  *   - Si el navegador ya dio permiso, el celular se registra solo, sin tocar nada.
  *   - Si aún no lo dio, aparece "Permitir avisos del QR" (el navegador solo pregunta tras un toque) y luego se oculta.
  *   data-clave = clave pública VAPID · data-guardar / data-quitar = rutas para guardar o quitar este equipo · data-icono.
+ *   data-para = mozo (por defecto) o dueno (panel del dueño) · data-bienvenida = texto del primer aviso.
  * En iPhone solo funciona con la app instalada (Compartir → Agregar a inicio).
  */
 const CSRF = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -28,7 +29,7 @@ async function registrar(boton) {
     const registro = await navigator.serviceWorker.ready;
     const s = (await registro.pushManager.getSubscription())
         || (await registro.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: claveBinaria(boton.dataset.clave) }));
-    const r = await enviar(boton.dataset.guardar, s.toJSON());
+    const r = await enviar(boton.dataset.guardar, { ...s.toJSON(), para: boton.dataset.para || 'mozo' });
     if (!r.ok) throw new Error();
     return registro;
 }
@@ -50,7 +51,7 @@ async function iniciar(boton) {
             }
             const registro = await registrar(boton);
             boton.classList.replace('inline-flex', 'hidden');
-            registro.showNotification('🔔 Avisos activados', { body: 'Aquí te llegarán los pedidos del QR, llamadas y platos listos.', icon: boton.dataset.icono });
+            registro.showNotification('🔔 Avisos activados', { body: boton.dataset.bienvenida || 'Aquí te llegarán los pedidos del QR, llamadas y platos listos.', icon: boton.dataset.icono });
         } catch (e) {
             alert('No se pudo activar los avisos en este equipo. En iPhone primero instala la app (Compartir → Agregar a inicio).');
         } finally {
