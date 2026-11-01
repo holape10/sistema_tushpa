@@ -13,14 +13,14 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${DIR}"
 
-poner() { if grep -qE "^#?\s*$1=" .env; then sed -i -E "s|^#?\s*$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi; }
+# Si el .env no termina en salto de línea, lo agregado se pegaba a la última línea: primero se asegura el salto
+poner() { [ -n "$(tail -c1 .env)" ] && echo >> .env; if grep -qE "^#?\s*$1=" .env; then sed -i -E "s|^#?\s*$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi; }
 tiene() { grep -qE "^$1=.+" .env; }
 
 echo "==> Claves de Reverb"
 tiene REVERB_APP_ID || poner REVERB_APP_ID "$(shuf -i 100000-999999 -n 1)"
 tiene REVERB_APP_KEY || poner REVERB_APP_KEY "$(openssl rand -hex 16)"
 tiene REVERB_APP_SECRET || poner REVERB_APP_SECRET "$(openssl rand -hex 24)"
-poner BROADCAST_CONNECTION reverb
 # Laravel le habla a Reverb por dentro del VPS
 poner REVERB_HOST 127.0.0.1
 poner REVERB_PORT 8080
@@ -65,7 +65,17 @@ httpd -M 2>/dev/null | grep -q proxy_wstunnel_module || echo "LoadModule proxy_w
 command -v setsebool >/dev/null && setsebool -P httpd_can_network_connect 1 || true
 
 echo "==> Configuración (sin modo mantenimiento: nadie deja de trabajar)"
-php artisan config:cache
+# Se revisa ANTES de activar: si falta alguna clave, el sistema sigue como estaba (sin tiempo real)
+for v in REVERB_APP_ID REVERB_APP_KEY REVERB_APP_SECRET; do
+    tiene "$v" || { echo "Falta $v en el .env: no se activó el tiempo real (el sistema sigue igual)."; exit 1; }
+done
+poner BROADCAST_CONNECTION reverb
+if ! php artisan config:cache; then
+    poner BROADCAST_CONNECTION log
+    php artisan config:cache
+    echo "No se pudo activar el tiempo real: se dejó como estaba."
+    exit 1
+fi
 chown apache:apache .env bootstrap/cache/config.php
 
 # Si Apache no acepta la configuración nueva se quita: nunca se recarga Apache con un error
