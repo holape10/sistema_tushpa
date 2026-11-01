@@ -27,7 +27,7 @@
 <body>
     <nav class="py-3">
         <div class="container d-flex align-items-center justify-content-between">
-            <a href="{{ route('sitio.inicio') }}"><img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" height="46"></a>
+            <a href="{{ route('sitio.inicio') }}"><img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" width="115" height="46"></a>
             <div class="d-flex gap-2">
                 <a href="{{ route('sitio.inicio') }}#planes" class="btn btn-sm btn-outline-light rounded-pill px-3">Planes</a>
                 <a href="{{ route('sitio.ingresar') }}" class="btn btn-sm btn-light rounded-pill px-3 fw-semibold">Ingresar</a>

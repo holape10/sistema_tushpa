@@ -17,7 +17,7 @@
 <header class="menu">
     <nav class="navbar navbar-expand-lg">
         <div class="container">
-            <a class="navbar-brand" href="{{ $ancla('inicio') }}"><img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" height="44"></a>
+            <a class="navbar-brand" href="{{ $ancla('inicio') }}"><img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" width="110" height="44"></a>
             <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#menuPrincipal" aria-label="Abrir menú">
                 <span class="navbar-toggler-icon"></span>
             </button>

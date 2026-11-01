@@ -9,7 +9,7 @@
     <div class="container">
         <div class="row g-4">
             <div class="col-lg-4">
-                <div class="bg-white d-inline-block rounded-3 px-3 py-2 mb-3"><img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" height="38"></div>
+                <div class="bg-white d-inline-block rounded-3 px-3 py-2 mb-3"><img src="{{ asset('web/img/logo.webp') }}" alt="TUSHPA" width="95" height="38"></div>
                 <p class="small mb-0">Sistema de facturación electrónica y gestión para negocios del Perú. Hecho con orgullo en la Amazonía.</p>
             </div>
             <div class="col-6 col-lg-2">

@@ -20,12 +20,23 @@
     box-sizing: border-box;
 }
 
+/* Mientras llega Poppins se usa Arial (o Liberation Sans en Linux) ajustada a sus medidas: el texto ocupa lo mismo
+   y la página no "salta" al cambiar de letra (eso bajaba el puntaje de PageSpeed en computadora) */
+@font-face {
+    font-family: 'Poppins Respaldo';
+    src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('Helvetica');
+    ascent-override: 93.62%;
+    descent-override: 31.21%;
+    line-gap-override: 8.92%;
+    size-adjust: 112.16%;
+}
+
 html {
     scroll-behavior: smooth;
 }
 
 body {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Poppins', 'Poppins Respaldo', sans-serif;
     color: #334155;
     line-height: 1.6;
     overflow-x: hidden;

@@ -44,6 +44,10 @@ php artisan view:cache
 chown -R apache:apache "${DIR}"
 chmod -R ug+rwX storage bootstrap/cache public/imagenes
 command -v restorecon >/dev/null && restorecon -R "${DIR}" || true
+# No mostrar a internet las versiones exactas de Apache y PHP (si Apache no acepta el cambio, se quita)
+[ -f /etc/httpd/conf.d/00-tushpa-seguridad.conf ] || printf 'ServerTokens Prod\nServerSignature Off\n' > /etc/httpd/conf.d/00-tushpa-seguridad.conf
+apachectl configtest >/dev/null 2>&1 || rm -f /etc/httpd/conf.d/00-tushpa-seguridad.conf
+[ -d /etc/php.d ] && [ ! -f /etc/php.d/99-tushpa-seguridad.ini ] && echo 'expose_php = Off' > /etc/php.d/99-tushpa-seguridad.ini || true
 systemctl reload php-fpm httpd
 # Tiempo real (deploy/reverb-instalar.sh): arranca con el código nuevo
 systemctl is-enabled --quiet tushpa-reverb 2>/dev/null && systemctl restart tushpa-reverb || true

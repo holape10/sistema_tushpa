@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AvisarCambios;
+use App\Http\Middleware\CabecerasSeguridad;
 use App\Http\Middleware\IdentificarEmpresa;
 use App\Http\Middleware\SoloMenuContador;
 use App\Http\Middleware\SoloWifiLocal;
@@ -34,7 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(IdentificarEmpresa::class);
         // El contador solo entra a las secciones de su menú
         // Mozos y promotores solo con el Wi-Fi del local (si la sucursal lo activó)
-        $middleware->web(append: [SoloMenuContador::class, SoloWifiLocal::class, AvisarCambios::class]);
+        $middleware->web(append: [SoloMenuContador::class, SoloWifiLocal::class, AvisarCambios::class, CabecerasSeguridad::class]);
 
         $middleware->redirectGuestsTo(fn (Request $request) => $request->attributes->get('panel_admin')
             ? route('admin.login')

@@ -3,6 +3,17 @@
  * con los colores de siempre de la marca: azul TUSHPA y el degradado índigo-morado.
  * (Las variables conservan sus nombres de la primera versión: "selva" = azules de la marca, "rio" = morado, etc.)
  */
+/* Mientras llega Poppins se usa Arial (o Liberation Sans en Linux) ajustada a sus medidas: el texto ocupa lo mismo
+   y la página no "salta" al cambiar de letra (eso bajaba el puntaje de PageSpeed en computadora) */
+@font-face {
+    font-family: 'Poppins Respaldo';
+    src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('Helvetica');
+    ascent-override: 93.62%;
+    descent-override: 31.21%;
+    line-gap-override: 8.92%;
+    size-adjust: 112.16%;
+}
+
 :root {
     --selva-900: #0f1544;
     --selva-800: #1b1f5e;
@@ -25,7 +36,7 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 84px; }
-body { font-family: 'Poppins', system-ui, sans-serif; color: var(--tinta); background: var(--arena); overflow-x: hidden; }
+body { font-family: 'Poppins', 'Poppins Respaldo', system-ui, sans-serif; color: var(--tinta); background: var(--arena); overflow-x: hidden; }
 h1, h2, h3, h4, .titulo { font-weight: 800; letter-spacing: -.02em; }
 a { color: var(--selva-600); }
 .texto-gris { color: var(--gris); }
