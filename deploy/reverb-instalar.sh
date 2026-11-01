@@ -5,6 +5,7 @@
 #  - Claves de Reverb en el .env (si faltan) y el sistema avisando por Reverb.
 #  - Servicio systemd tushpa-reverb: escucha solo en 127.0.0.1:8080 (no se abre ningún puerto nuevo).
 #  - Apache pasa /app (websocket) y /apps a Reverb en todos los dominios y subdominios, con http o https.
+#  No interrumpe a nadie: no recompila estilos ni reinicia Apache (solo lo recarga, sin cortar conexiones).
 #  Si Reverb se cae, las pantallas siguen actualizándose solas cada pocos segundos, como antes.
 # =====================================================================================
 set -euo pipefail
@@ -26,8 +27,8 @@ poner REVERB_PORT 8080
 poner REVERB_SCHEME http
 poner REVERB_SERVER_HOST 127.0.0.1
 poner REVERB_SERVER_PORT 8080
-# El navegador entra por el mismo dominio de la empresa (vacío = el de la página, con su http o https)
-poner VITE_REVERB_APP_KEY '"${REVERB_APP_KEY}"'
+# El navegador entra por el mismo dominio de la empresa (vacío = el de la página, con su http o https).
+# La clave pública la pone cada página: no hace falta recompilar los estilos.
 poner VITE_REVERB_HOST '""'
 poner VITE_REVERB_PORT '""'
 poner VITE_REVERB_SCHEME '""'
@@ -63,12 +64,12 @@ CONF
 httpd -M 2>/dev/null | grep -q proxy_wstunnel_module || echo "LoadModule proxy_wstunnel_module modules/mod_proxy_wstunnel.so" > /etc/httpd/conf.modules.d/00-tushpa-wstunnel.conf
 command -v setsebool >/dev/null && setsebool -P httpd_can_network_connect 1 || true
 
-echo "==> Estilos y cachés (la clave pública va dentro del JavaScript)"
-npm run build
+echo "==> Configuración (sin modo mantenimiento: nadie deja de trabajar)"
 php artisan config:cache
-chown -R apache:apache "${DIR}"
+chown apache:apache .env bootstrap/cache/config.php
 
-apachectl configtest
+# Si Apache no acepta la configuración nueva se quita: nunca se recarga Apache con un error
+apachectl configtest || { rm -f /etc/httpd/conf.d/tushpa-reverb.conf /etc/httpd/conf.modules.d/00-tushpa-wstunnel.conf; echo "Apache no aceptó la configuración: no se cambió nada."; exit 1; }
 systemctl restart tushpa-reverb
 systemctl reload httpd
 sleep 2

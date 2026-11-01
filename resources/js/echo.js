@@ -5,7 +5,8 @@
  *   const vivo = tushpaEnVivo(['cocina'], () => cargar());   // cada vez que algo cambia en esos temas
  *   vivo.conectado()                                        // true = no hace falta preguntar seguido al servidor
  *
- * El canal de la sucursal lo pone la página en <meta name="tushpa-canal">. Sin Reverb configurado (o si se cae), las
+ * El canal de la sucursal y la clave pública de Reverb los pone la página en <meta name="tushpa-canal" data-clave>
+ * (así activar Reverb en el servidor no obliga a recompilar los estilos). Sin Reverb configurado (o si se cae), las
  * pantallas siguen actualizándose solas cada pocos segundos, como antes.
  */
 import Echo from 'laravel-echo';
@@ -16,13 +17,13 @@ window.Pusher = Pusher;
 let echo = null;
 const sinConexion = { conectado: () => false };
 
-function conectar() {
+function conectar(clave) {
     if (echo) return echo;
     const segura = (import.meta.env.VITE_REVERB_SCHEME || location.protocol.replace(':', '')) === 'https';
     const puerto = Number(import.meta.env.VITE_REVERB_PORT) || (segura ? 443 : 80);
     echo = new Echo({
         broadcaster: 'reverb',
-        key: import.meta.env.VITE_REVERB_APP_KEY,
+        key: clave,
         // En el servidor el tiempo real entra por el mismo dominio de la empresa (Apache lo pasa a Reverb)
         wsHost: import.meta.env.VITE_REVERB_HOST || location.hostname,
         wsPort: puerto,
@@ -34,10 +35,12 @@ function conectar() {
 }
 
 window.tushpaEnVivo = function (temas, alCambiar) {
-    const canal = document.querySelector('meta[name="tushpa-canal"]')?.content;
-    if (!canal || !import.meta.env.VITE_REVERB_APP_KEY) return sinConexion;
+    const meta = document.querySelector('meta[name="tushpa-canal"]');
+    const canal = meta?.content;
+    const clave = meta?.dataset.clave || import.meta.env.VITE_REVERB_APP_KEY;
+    if (!canal || !clave) return sinConexion;
     try {
-        const e = conectar();
+        const e = conectar(clave);
         e.private(canal).listen('.cambio', (datos) => {
             if (!temas || (datos.temas || []).some((t) => temas.includes(t))) alCambiar(datos);
         });
