@@ -67,6 +67,11 @@ class GeoIp
         'HN' => 'Honduras', 'SV' => 'El Salvador', 'NI' => 'Nicaragua', 'PR' => 'Puerto Rico', 'IT' => 'Italia', 'FR' => 'Francia',
         'DE' => 'Alemania', 'GB' => 'Reino Unido', 'NL' => 'Países Bajos', 'PT' => 'Portugal', 'CN' => 'China', 'JP' => 'Japón',
         'IN' => 'India', 'RU' => 'Rusia', 'SG' => 'Singapur', 'IE' => 'Irlanda', 'SE' => 'Suecia', 'CH' => 'Suiza', 'AU' => 'Australia',
+        'AD' => 'Andorra', 'HK' => 'Hong Kong', 'KR' => 'Corea del Sur', 'TW' => 'Taiwán', 'BE' => 'Bélgica', 'AT' => 'Austria', 'PL' => 'Polonia',
+        'FI' => 'Finlandia', 'NO' => 'Noruega', 'DK' => 'Dinamarca', 'CZ' => 'Chequia', 'RO' => 'Rumania', 'UA' => 'Ucrania', 'TR' => 'Turquía',
+        'IL' => 'Israel', 'AE' => 'Emiratos Árabes', 'SA' => 'Arabia Saudita', 'ZA' => 'Sudáfrica', 'EG' => 'Egipto', 'NG' => 'Nigeria',
+        'ID' => 'Indonesia', 'VN' => 'Vietnam', 'TH' => 'Tailandia', 'MY' => 'Malasia', 'PH' => 'Filipinas', 'PK' => 'Pakistán',
+        'BD' => 'Bangladés', 'NZ' => 'Nueva Zelanda', 'LU' => 'Luxemburgo', 'LT' => 'Lituania', 'BG' => 'Bulgaria', 'GR' => 'Grecia', 'HU' => 'Hungría',
     ];
 
     /**

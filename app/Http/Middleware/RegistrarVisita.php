@@ -10,21 +10,27 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Cuenta las visitas a la web pública (tushpa.app) para el panel. No cuenta robots, ni pedidos de datos (JSON),
- * ni al dueño navegando con el panel abierto. Si falla, la página sale igual.
+ * Cuenta las visitas a la web pública (tushpa.app) y a la demostración (demos.tushpa.app, con el parámetro "demos")
+ * para el panel. No cuenta robots, ni pedidos de datos (JSON), ni al dueño navegando con el panel abierto. En la demo
+ * solo cuenta cuando se abre una pantalla (no las actualizaciones automáticas de mesas, cocina...). Si falla, la
+ * página sale igual.
  */
 class RegistrarVisita
 {
     private const ROBOTS = '/bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegram|preview|curl|wget|python|headless|lighthouse|monitor|uptime/i';
 
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string $sitio = 'web'): Response
     {
         $respuesta = $next($request);
+        if ($sitio === 'demos' && ! $this->esDemo($request)) {
+            return $respuesta;
+        }
 
         try {
             $agente = (string) $request->userAgent();
             if ($request->isMethod('GET') && ! $request->expectsJson() && $respuesta->getStatusCode() === 200
-                && ! str_ends_with($request->path(), '.xml') && $agente !== '' && ! preg_match(self::ROBOTS, $agente) && ! auth('superadmin')->check()) {
+                && ! str_ends_with($request->path(), '.xml') && $agente !== '' && ! preg_match(self::ROBOTS, $agente) && ! auth('superadmin')->check()
+                && ($sitio === 'web' || $this->abrePantalla($request, $respuesta))) {
                 // Desde dónde (país; en el Perú también región y ciudad), aproximado y sin guardar el IP
                 $lugar = GeoIp::ubicacion($request->ip());
                 DB::connection('central')->table('web_visitas')->insert([
@@ -35,6 +41,7 @@ class RegistrarVisita
                     'visitante' => substr(hash('sha256', $request->ip().'|'.$agente.'|'.now()->toDateString().'|'.config('app.key')), 0, 16),
                     'origen' => $this->origen($request),
                     'dispositivo' => preg_match('/tablet|ipad/i', $agente) ? 'Tablet' : (preg_match('/mobi|android|iphone/i', $agente) ? 'Celular' : 'PC'),
+                    'sitio' => $sitio,
                 ]);
             }
         } catch (\Throwable $e) {
@@ -42,6 +49,21 @@ class RegistrarVisita
         }
 
         return $respuesta;
+    }
+
+    /** La demostración: el subdominio de config('sitio.demo.url') */
+    private function esDemo(Request $request): bool
+    {
+        $demo = parse_url((string) config('sitio.demo.url'), PHP_URL_HOST);
+
+        return $demo && strcasecmp($request->getHost(), $demo) === 0;
+    }
+
+    /** Se abrió una pantalla (no una consulta en segundo plano de la misma pantalla) */
+    private function abrePantalla(Request $request, Response $respuesta): bool
+    {
+        return in_array($request->headers->get('Sec-Fetch-Mode', 'navigate'), ['navigate', 'nested-navigate'], true)
+            && str_contains((string) $respuesta->headers->get('Content-Type'), 'text/html');
     }
 
     /** De dónde llegó: ?utm_source=, o el sitio que lo trajo (Google, Facebook...); null = escribió la dirección */

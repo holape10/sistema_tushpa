@@ -9,18 +9,20 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
-/** Visitas a la web pública (tushpa.app): personas, páginas vistas, de dónde llegan y cuántos se registran. Solo el dueño. */
+/** Visitas a la web pública (tushpa.app) o a la demostración (demos.tushpa.app): personas, páginas, de dónde llegan y cuántos se registran. Solo el dueño. */
 class VisitaController extends Controller
 {
     public function index(Request $request): View
     {
         abort_unless((bool) Auth::guard('superadmin')->user()->es_dueno, 403, 'Solo el dueño del sistema ve las visitas.');
         $dias = in_array((int) $request->get('dias'), [7, 30, 90], true) ? (int) $request->get('dias') : 30;
+        $sitio = $request->get('sitio') === 'demos' ? 'demos' : 'web';
         $desde = now()->subDays($dias - 1)->startOfDay();
         $central = DB::connection('central');
-        $base = fn () => $central->table('web_visitas')->where('fecha', '>=', $desde);
+        $visitas = fn () => $central->table('web_visitas')->where('sitio', $sitio);
+        $base = fn () => $visitas()->where('fecha', '>=', $desde);
 
-        $resumen = fn ($desdeResumen) => $central->table('web_visitas')->where('fecha', '>=', $desdeResumen)
+        $resumen = fn ($desdeResumen) => $visitas()->where('fecha', '>=', $desdeResumen)
             ->selectRaw('COUNT(*) as vistas, COUNT(DISTINCT visitante) as personas')->first();
 
         $porDia = $base()->groupByRaw('DATE(fecha)')->selectRaw('DATE(fecha) as dia, COUNT(*) as vistas, COUNT(DISTINCT visitante) as personas')
@@ -33,6 +35,7 @@ class VisitaController extends Controller
 
         return view('admin.visitas', [
             'dias' => $dias,
+            'sitio' => $sitio,
             'hoy' => $resumen(now()->startOfDay()),
             'semana' => $resumen(now()->subDays(6)->startOfDay()),
             'mes' => $resumen(now()->subDays(29)->startOfDay()),

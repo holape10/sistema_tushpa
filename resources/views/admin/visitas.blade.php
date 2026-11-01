@@ -2,6 +2,12 @@
 @section('title', 'Visitas web')
 
 @section('content')
+    {{-- Windows no trae banderas en emoji (muestra "US"): esta letra las dibuja; solo se descarga si hay banderas en pantalla --}}
+    <style>
+        @font-face { font-family: 'Banderas'; src: url('https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.8/dist/TwemojiCountryFlags.woff2') format('woff2');
+            unicode-range: U+1F1E6-1F1FF; font-display: swap; }
+        .bandera { font-family: 'Banderas', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; }
+    </style>
     @php
         $maxDia = max(1, $serie->max('personas'));
         $maxHora = max(1, (int) $porHora->max());
@@ -9,13 +15,19 @@
     @endphp
 
     <div class="flex flex-wrap items-center gap-3 mb-4">
+        @php $demo = parse_url((string) config('sitio.demo.url'), PHP_URL_HOST); @endphp
         <div>
-            <h1 class="text-xl font-bold">Visitas a {{ config('tenancy.dominio') }}</h1>
-            <p class="text-sm text-slate-500">Personas que entraron a tu página principal. No cuenta robots ni a ti mismo.</p>
+            <h1 class="text-xl font-bold">Visitas a {{ $sitio === 'demos' ? $demo : config('tenancy.dominio') }}</h1>
+            <p class="text-sm text-slate-500">{{ $sitio === 'demos' ? 'Personas que abrieron la demostración del sistema.' : 'Personas que entraron a tu página principal.' }} No cuenta robots ni a ti mismo.</p>
+        </div>
+        <div class="flex gap-1 p-1 bg-white rounded-xl shadow-sm text-sm">
+            @foreach (['web' => '🌐 Página web', 'demos' => '🧪 Demo'] as $clave => $texto)
+                <a href="{{ route('admin.visitas.index', ['dias' => $dias, 'sitio' => $clave]) }}" class="px-3 py-1.5 rounded-lg font-semibold {{ $sitio === $clave ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100' }}">{{ $texto }}</a>
+            @endforeach
         </div>
         <div class="ml-auto flex gap-1 p-1 bg-white rounded-xl shadow-sm text-sm">
             @foreach ([7 => '7 días', 30 => '30 días', 90 => '90 días'] as $n => $texto)
-                <a href="{{ route('admin.visitas.index', ['dias' => $n]) }}" class="px-3 py-1.5 rounded-lg font-semibold {{ $dias === $n ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100' }}">{{ $texto }}</a>
+                <a href="{{ route('admin.visitas.index', ['dias' => $n, 'sitio' => $sitio]) }}" class="px-3 py-1.5 rounded-lg font-semibold {{ $dias === $n ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100' }}">{{ $texto }}</a>
             @endforeach
         </div>
     </div>
@@ -28,11 +40,13 @@
                 <p class="text-xs text-slate-400">personas · {{ number_format($r->vistas) }} páginas vistas</p>
             </div>
         @endforeach
+        @if ($sitio === 'web')
         <div class="bg-white rounded-2xl shadow-sm p-4">
             <p class="text-xs font-semibold text-slate-500 uppercase">Se registraron ({{ $dias }} días)</p>
             <p class="text-3xl font-extrabold text-emerald-600">{{ $registros }}</p>
             <p class="text-xs text-slate-400">{{ $conversion }}% de los visitantes · {{ $mensajes }} mensaje(s) de contacto</p>
         </div>
+        @endif
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm p-5 mb-4">
@@ -100,7 +114,7 @@
             @php $maxPais = max(1, (int) $paises->max('personas')); @endphp
             @forelse ($paises as $p)
                 <div class="py-1.5 text-sm">
-                    <div class="flex justify-between gap-2"><span>{{ \App\Support\GeoIp::bandera($p->pais) }} {{ \App\Support\GeoIp::nombrePais($p->pais) }}</span><b>{{ $p->personas }}</b></div>
+                    <div class="flex justify-between gap-2"><span><span class="bandera">{{ \App\Support\GeoIp::bandera($p->pais) }}</span> {{ \App\Support\GeoIp::nombrePais($p->pais) }}</span><b>{{ $p->personas }}</b></div>
                     <div class="h-1.5 rounded-full bg-slate-100 mt-1"><div class="h-1.5 rounded-full bg-sky-500" style="width: {{ $barra($p->personas, $maxPais) }}%"></div></div>
                 </div>
             @empty
@@ -124,6 +138,7 @@
             @if ($sinUbicacion) {{ $sinUbicacion }} persona(s) del periodo entraron antes de que se guardara la ubicación o desde una conexión desconocida.@endif</p>
     </div>
 
+    @if ($sitio === 'web')
     {{-- Negocios que crearon su carta gratis (posibles clientes) --}}
     <div class="bg-white rounded-2xl shadow-sm mt-4 overflow-x-auto">
         <div class="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
@@ -155,4 +170,5 @@
             </tbody>
         </table>
     </div>
+    @endif
 @endsection
