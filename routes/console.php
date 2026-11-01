@@ -4,10 +4,12 @@ use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
 use App\Models\User;
 use App\Support\Antiguo\CargadorSql;
+use App\Support\AvisosCelular;
 use App\Support\ClinicaRecordatorios;
 use App\Support\DemoDatos;
 use App\Support\GeoIp;
 use App\Support\PadronRuc;
+use App\Support\PanelDueno;
 use App\Support\Promociones;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\Tenancy\Provisionador;
@@ -19,6 +21,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Validator;
 use Minishlink\WebPush\VAPID;
 
@@ -324,3 +327,44 @@ Artisan::command('push:claves {--forzar : Cambiarlas aunque ya existan (los celu
     file_put_contents($env, $texto);
     $this->info('Claves de avisos al celular creadas en el .env.');
 })->purpose('Crea las claves VAPID de los avisos al celular del mozo (una sola vez)');
+
+Artisan::command('dueno:resumen {--noche : Negocios que atienden de noche (resumen de la noche que terminó)} {--ruc= : Solo esta empresa}', function () {
+    $noche = (bool) $this->option('noche');
+    // De día: el resumen de hoy (a las 11 pm) · de noche: el de la noche que empezó ayer a mediodía (a las 12:05 pm)
+    $fecha = $noche ? now()->subDay() : now();
+    $clientes = Tenancy::activa()
+        ? Cliente::where('estado', 'ACTIVO')->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))->get()
+        : collect([null]);
+    $enviados = 0;
+    foreach ($clientes as $cliente) {
+        $enviar = function () use ($noche, $fecha, &$enviados) {
+            if (! Schema::hasTable('push_suscripciones') || ! Schema::hasColumn('push_suscripciones', 'dueno')) {
+                return;
+            }
+            $sucursales = DB::table('empresa_negocios')->where('atiende_de_noche', $noche)
+                ->whereIn('id_empresa_negocio', DB::table('push_suscripciones')->where('dueno', true)->select('id_empresa_negocio'))
+                ->pluck('id_empresa_negocio');
+            foreach ($sucursales as $suc) {
+                $enviados += (int) PanelDueno::avisarCierre((int) $suc, $fecha);
+            }
+            AvisosCelular::enviar();   // ahora, con la base de esta empresa (no al terminar el comando)
+        };
+        try {
+            if ($cliente) {
+                // Los enlaces del aviso abren el sistema de esta empresa (su subdominio)
+                URL::forceRootUrl($cliente->url());
+                Tenancy::en($cliente->base_datos, $enviar);
+            } else {
+                $enviar();
+            }
+        } catch (Throwable $e) {
+            $this->error(($cliente?->ruc ?? 'local').': '.$e->getMessage());
+        }
+    }
+    URL::forceRootUrl(null);
+    $this->info("Resúmenes enviados: {$enviados}");
+})->purpose('Manda al celular de los dueños y socios el resumen del día (o de la noche)');
+
+// Resumen al celular del dueño: los negocios de día a las 11 pm, los de noche a las 12:05 pm (cuando cierra la noche)
+Schedule::command('dueno:resumen')->dailyAt('23:00')->withoutOverlapping(30);
+Schedule::command('dueno:resumen --noche')->dailyAt('12:05')->withoutOverlapping(30);

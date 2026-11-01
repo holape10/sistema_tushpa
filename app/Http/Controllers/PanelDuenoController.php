@@ -127,23 +127,36 @@ class PanelDuenoController extends Controller
             $fecha = now();
         }
         $texto = PanelDueno::mensajeDia($suc, $fecha->isToday() ? now() : $fecha);
-        $tel = preg_replace('/\D/', '', (string) DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('whatsapp_dueno'));
+        // Un enlace por socio (o uno sin número para elegir el contacto en WhatsApp)
+        $numeros = PanelDueno::whatsapps((string) DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('whatsapp_dueno')) ?: [''];
+        $enlaces = array_map(fn ($n) => ['numero' => $n, 'url' => 'https://wa.me/'.($n !== '' && strlen($n) === 9 ? '51'.$n : $n).'?text='.rawurlencode($texto)], $numeros);
 
-        return response()->json(['texto' => $texto,
-            'whatsapp' => 'https://wa.me/'.($tel !== '' ? (strlen($tel) === 9 ? '51'.$tel : $tel) : '').'?text='.rawurlencode($texto)]);
+        return response()->json(['texto' => $texto, 'whatsapp' => $enlaces[0]['url'], 'enlaces' => $enlaces]);
     }
 
-    /** Meta del mes, gastos fijos (punto de equilibrio) y WhatsApp del dueño */
+    /** Meta del mes, gastos fijos (punto de equilibrio), WhatsApp del dueño o de los socios y si atiende de noche */
     public function configuracion(Request $request): JsonResponse
     {
         $suc = $this->sucursal();
         $d = $request->validate([
             'meta_mensual' => 'nullable|numeric|min:0|max:99999999', 'gastos_fijos_mes' => 'nullable|numeric|min:0|max:99999999',
-            'whatsapp_dueno' => ['nullable', 'regex:/^\+?[\d\s]{9,15}$/'], 'atiende_de_noche' => 'nullable|boolean',
-        ], ['whatsapp_dueno.regex' => 'Escribe el celular con 9 dígitos (o con el código de país).'], ['meta_mensual' => 'meta', 'gastos_fijos_mes' => 'gastos fijos']);
+            // Varios socios: hasta 5 celulares separados por coma
+            'whatsapp_dueno' => ['nullable', 'string', 'max:120', function ($campo, $valor, $falla) {
+                $partes = array_filter(array_map('trim', preg_split('/[,;\/]+/', (string) $valor)));
+                if (count($partes) > 5) {
+                    $falla('Pon hasta 5 celulares.');
+                }
+                foreach ($partes as $n) {
+                    if (! preg_match('/^\+?[\d\s]{9,15}$/', $n)) {
+                        $falla("\"{$n}\" no es un celular: escribe 9 dígitos (o con el código de país), separados por coma.");
+                    }
+                }
+            }],
+            'atiende_de_noche' => 'nullable|boolean',
+        ], [], ['meta_mensual' => 'meta', 'gastos_fijos_mes' => 'gastos fijos']);
         DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->update([
             'meta_mensual' => $d['meta_mensual'] ?? null, 'gastos_fijos_mes' => $d['gastos_fijos_mes'] ?? null,
-            'whatsapp_dueno' => isset($d['whatsapp_dueno']) ? preg_replace('/\s/', '', $d['whatsapp_dueno']) : null,
+            'whatsapp_dueno' => implode(',', PanelDueno::whatsapps($d['whatsapp_dueno'] ?? '')) ?: null,
             'atiende_de_noche' => (bool) ($d['atiende_de_noche'] ?? false),
         ]);
 

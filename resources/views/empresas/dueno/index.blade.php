@@ -331,11 +331,16 @@
             <div class="flex items-center gap-2"><h3 class="font-black text-lg flex-1">📲 Resumen del día</h3>
                 <input type="date" x-model="fecha" @change="cargarResumen()" max="{{ now()->toDateString() }}" class="h-9 rounded-lg border-gray-300 text-sm"></div>
             <pre class="whitespace-pre-wrap rounded-2xl bg-emerald-50 p-4 text-sm text-gray-800 font-sans" x-text="texto || 'Cargando…'"></pre>
-            <div class="grid grid-cols-2 gap-2">
-                <a :href="enlace" target="_blank" rel="noopener" class="py-3 rounded-xl bg-green-600 text-white font-black text-center">Enviar por WhatsApp</a>
+            {{-- Un botón por socio: WhatsApp abre el chat de cada uno con el resumen escrito, solo hay que tocar Enviar --}}
+            <div class="grid gap-2" :class="enlaces.length > 1 ? 'grid-cols-1' : 'grid-cols-2'">
+                <template x-for="e in enlaces" :key="e.numero">
+                    <a :href="e.url" target="_blank" rel="noopener" class="py-3 rounded-xl bg-green-600 text-white font-black text-center"
+                       x-text="e.numero ? 'Enviar por WhatsApp a ' + e.numero : 'Enviar por WhatsApp'"></a>
+                </template>
                 <button type="button" @click="copiar()" class="py-3 rounded-xl bg-gray-100 font-bold" x-text="copiado ? '✔ Copiado' : 'Copiar texto'"></button>
             </div>
-            <p class="text-xs text-gray-500" x-show="!tieneNumero">Tip: guarda tu número en ⚙ Meta y gastos para que el mensaje te llegue directo.</p>
+            <p class="text-xs text-gray-500" x-show="!tieneNumero">Tip: guarda tu número (o el de cada socio) en ⚙ Meta y gastos para que el mensaje vaya directo.</p>
+            <p class="text-xs text-gray-500">🔔 Con <b>Avisarme al celular</b> activado, este resumen te llega solo cada {{ ($config->atiende_de_noche ?? false) ? 'mediodía (la noche que terminó)' : 'noche a las 11 pm' }}.</p>
         </div>
     </div>
 
@@ -354,8 +359,9 @@
                 <input type="checkbox" x-model="form.atiende_de_noche" class="mt-0.5 rounded text-indigo-600">
                 <span>🌙 Mi negocio atiende de noche (discoteca, bar)
                     <span class="block text-xs font-normal text-gray-500">El panel cuenta por noches, de 12 del mediodía a 12 del mediodía: lo vendido de madrugada cuenta en la noche que se atendió.</span></span></label>
-            <label class="block font-semibold text-gray-600">📲 Tu WhatsApp (para el resumen del día)
-                <input x-model="form.whatsapp_dueno" inputmode="tel" placeholder="987654321" class="mt-1 w-full rounded-lg border-gray-300"></label>
+            <label class="block font-semibold text-gray-600">📲 WhatsApp para el resumen del día
+                <input x-model="form.whatsapp_dueno" inputmode="tel" placeholder="987654321, 912345678, 956789123" class="mt-1 w-full rounded-lg border-gray-300">
+                <span class="block text-xs font-normal text-gray-500 mt-1">¿Varios socios? Pon el celular de cada uno separado por coma (hasta 5).</span></label>
             <p x-show="error" x-text="error" class="text-rose-600"></p>
             <div class="flex justify-end gap-2"><button type="button" @click="config = false" class="px-4 py-2 rounded-xl bg-gray-100">Cancelar</button>
                 <button class="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold">Guardar</button></div>
@@ -366,7 +372,7 @@
 <script>
     function panelDueno() {
         return {
-            resumen: false, config: false, texto: '', enlace: '#', copiado: false, error: '', fecha: @js(now()->toDateString()),
+            resumen: false, config: false, texto: '', enlaces: [], copiado: false, error: '', fecha: @js(request('fecha', now()->toDateString())),
             tieneNumero: @js((bool) ($config->whatsapp_dueno ?? null)),
             form: { meta_mensual: @js($config->meta_mensual ?? ''), gastos_fijos_mes: @js($config->gastos_fijos_mes ?? ''), whatsapp_dueno: @js($config->whatsapp_dueno ?? ''), atiende_de_noche: @js((bool) ($config->atiende_de_noche ?? false)) },
             abrirResumen() { this.resumen = true; this.cargarResumen(); },
@@ -374,7 +380,7 @@
                 this.texto = ''; this.copiado = false;
                 const d = await fetch(@js(route('dueno.resumen_dia')) + '?fecha=' + this.fecha, { headers: { Accept: 'application/json' } }).then(r => r.json()).catch(() => null);
                 if (!d) { this.texto = 'No se pudo armar el resumen.'; return; }
-                this.texto = d.texto; this.enlace = d.whatsapp;
+                this.texto = d.texto; this.enlaces = d.enlaces || [{ numero: '', url: d.whatsapp }];
             },
             copiar() { navigator.clipboard?.writeText(this.texto).then(() => this.copiado = true); },
             async guardar() {

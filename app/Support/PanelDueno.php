@@ -338,6 +338,40 @@ class PanelDueno
         return $alertas->sortBy(fn ($a) => ['alta' => 0, 'media' => 1, 'info' => 2][$a->nivel])->values();
     }
 
+    /**
+     * Los WhatsApp del dueño o de los socios ("987654321, 912 345 678") solo con dígitos, hasta 5
+     *
+     * @return array<int, string>
+     */
+    public static function whatsapps(string $texto): array
+    {
+        $numeros = array_map(fn ($n) => preg_replace('/\D/', '', $n), preg_split('/[,;\/]+/', $texto));
+
+        return array_slice(array_values(array_unique(array_filter($numeros, fn ($n) => strlen($n) >= 9))), 0, 5);
+    }
+
+    /**
+     * Al cerrar el día (o la noche): el resumen corto llega solo al celular de los socios que activaron los avisos del
+     * dueño. Al tocarlo se abre el resumen completo, listo para mandar por WhatsApp. Devuelve si había a quién avisarle.
+     */
+    public static function avisarCierre(int $suc, Carbon $fecha): bool
+    {
+        if (! AvisosCelular::configurado() || ! DB::table('push_suscripciones')->where('id_empresa_negocio', $suc)->where('dueno', true)->exists()) {
+            return false;
+        }
+        $corte = self::corte($suc);
+        $inicio = $fecha->copy()->startOfDay()->addHours($corte);
+        $periodo = ($corte ? 'la noche del ' : 'hoy ').$fecha->locale('es')->translatedFormat('l d/m');
+        $dia = self::totales($suc, $inicio, $inicio->copy()->addDay()->subSecond());
+        $var = self::variacion($dia->total, self::totales($suc, $inicio->copy()->subWeek(), $inicio->copy()->subWeek()->addDay()->subSecond())->total);
+        AvisosCelular::alDueno($suc, '📊 Resumen de '.$periodo,
+            'Vendiste S/ '.number_format($dia->total, 2).' en '.$dia->tickets.' ventas'
+            .($var !== null ? ' ('.($var >= 0 ? '+' : '').$var.'% vs. la semana pasada)' : '').'. Toca para ver el detalle y enviarlo por WhatsApp.',
+            route('dueno.index', ['resumen' => 1, 'fecha' => $fecha->toDateString()]));
+
+        return true;
+    }
+
     /** El resumen del día (o de la noche, en negocios nocturnos) en texto para WhatsApp */
     public static function mensajeDia(int $suc, Carbon $fecha): string
     {

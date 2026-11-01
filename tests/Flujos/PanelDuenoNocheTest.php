@@ -50,6 +50,29 @@ class PanelDuenoNocheTest extends FlujoTestCase
         $this->getJson(route('dueno.resumen_dia'))->assertOk()->assertJsonPath('texto', fn ($t) => str_contains($t, 'resumen de la noche del'));
     }
 
+    public function test_el_resumen_se_puede_mandar_a_cada_socio(): void
+    {
+        $this->postJson(route('dueno.configuracion'), ['whatsapp_dueno' => '987 654 321, 912345678; +51 956789123'])->assertOk();
+        $this->assertSame('987654321,912345678,51956789123', DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('whatsapp_dueno'));
+
+        $enlaces = $this->getJson(route('dueno.resumen_dia'))->assertOk()->json('enlaces');
+        $this->assertCount(3, $enlaces);
+        $this->assertStringStartsWith('https://wa.me/51987654321?text=', $enlaces[0]['url']);
+        $this->assertStringStartsWith('https://wa.me/51956789123?text=', $enlaces[2]['url']);
+
+        $this->postJson(route('dueno.configuracion'), ['whatsapp_dueno' => '987654321, hola'])->assertUnprocessable();
+    }
+
+    public function test_el_resumen_automatico_solo_va_a_quien_activo_los_avisos(): void
+    {
+        config(['services.push.publica' => 'clave-publica', 'services.push.privada' => 'clave-privada']);
+        $this->assertFalse(PanelDueno::avisarCierre($this->sucursal, now()));
+
+        DB::table('push_suscripciones')->insert(['IdUsuario' => $this->usuario->IdUsuario, 'id_empresa_negocio' => $this->sucursal, 'huella' => str_repeat('a', 64),
+            'endpoint' => 'https://fcm.googleapis.com/fcm/send/x', 'p256dh' => 'p', 'auth' => 'a', 'mozo' => false, 'dueno' => true]);
+        $this->assertTrue(PanelDueno::avisarCierre($this->sucursal, now()));
+    }
+
     public function test_las_horas_se_dicen_como_la_gente(): void
     {
         $this->assertSame(['12 am', '9 am', '12 m', '9 pm'], array_map([PanelDueno::class, 'hora'], [0, 9, 12, 21]));
