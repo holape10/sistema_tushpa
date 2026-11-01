@@ -158,7 +158,7 @@
                     settings: Object.assign({ title: 'TUSHPA · ' + pago.texto, currency: 'PEN', amount: pago.monto }, conOrden ? { order: pago.orden } : {}),
                     client: @js($correo) ? { email: @js($correo) } : {},
                     options: { lang: 'es', installments: false, modal: true, paymentMethods: metodos, paymentMethodsSort: Object.keys(metodos) },
-                    appearance: { menuType: 'sidebar', buttonCardPayText: 'Pagar S/ ' + (pago.monto / 100).toFixed(2), defaultStyle: { buttonBackground: '#2563eb', menuColor: '#2563eb', linksColor: '#2563eb' } },
+                    appearance: { menuType: 'sidebar', buttonCardPayText: 'Pagar', logo: @js(asset('imagenes/192.png')), defaultStyle: { buttonBackground: '#2563eb', menuColor: '#2563eb', linksColor: '#2563eb' } },
                 });
                 checkout.culqi = alResponderCulqi;
                 checkout.open();
