@@ -54,5 +54,6 @@ if [ ! -f /etc/cron.d/tushpa-schedule ]; then
 fi
 # El script de certificados corre como root: su copia vive fuera de la carpeta de Apache
 [ -f /usr/local/sbin/tushpa-ssl ] && install -o root -g root -m 755 deploy/ssl-clientes.sh /usr/local/sbin/tushpa-ssl
+[ -f /usr/local/sbin/tushpa-respaldos-nube ] && install -o root -g root -m 755 deploy/respaldos-nube.sh /usr/local/sbin/tushpa-respaldos-nube
 
 echo "==> Listo: $(git log -1 --format='%h %s')"
