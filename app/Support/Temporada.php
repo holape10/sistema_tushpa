@@ -7,12 +7,12 @@ namespace App\Support;
  */
 class Temporada
 {
-    /** Del 20 de octubre al 1 de noviembre */
+    /** Del 20 al 31 de octubre */
     public static function halloween(): bool
     {
         $hoy = now()->format('m-d');
 
-        return ($hoy >= '10-20' && $hoy <= '11-01')
+        return ($hoy >= '10-20' && $hoy <= '10-31')
             // Para ver el adorno en la PC de desarrollo fuera de fecha: ?tema=halloween
             || (app()->isLocal() && request()->query('tema') === 'halloween');
     }
