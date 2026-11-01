@@ -33,38 +33,40 @@
         </form>
     </div>
 
-    <form method="POST" action="{{ route('admin.clientes.comprobantes.accion', $cliente->id) }}" x-data="{ sel: [], accion: '', motivo: '' }"
-          @submit="if (!sel.length) { $event.preventDefault(); alert('Marca al menos un comprobante.'); return; }
-                   if (['descartar', 'anular'].includes(accion) && !confirm(accion === 'anular' ? '¿Anular en el sistema? El stock vuelve al almacén y se anulan sus cobros.' : '¿Descartar? Solo deja de salir en pendientes; no mueve stock.')) $event.preventDefault();">
-        @csrf
+    {{-- Las acciones van de uno en uno (3 a la vez al consultar o enviar) y cada fila muestra cómo quedó, como en el sistema de la empresa --}}
+    <div x-data="comprobantesPanel()">
         <div class="bg-white rounded-2xl shadow-sm p-3 mb-3 flex flex-wrap items-center gap-2 text-sm">
             <span class="font-semibold" x-text="sel.length + ' marcado(s)'"></span>
             @foreach (['consultar' => ['🔎 Consultar en SUNAT', 'bg-sky-50 text-sky-700'], 'enviar' => ['📤 Enviar a SUNAT', 'bg-indigo-50 text-indigo-700'],
+                'fecha' => ['📅 Corregir fecha (vencidos)', 'bg-amber-50 text-amber-800'],
                 'aceptado' => ['✔ Marcar aceptado', 'bg-emerald-50 text-emerald-700'], 'descartar' => ['🚫 Descartar (rechazado)', 'bg-slate-100 text-slate-700'],
                 'anular' => ['✖ Anular en el sistema', 'bg-rose-50 text-rose-700']] as $valor => [$texto, $clase])
-                <button name="accion" value="{{ $valor }}" @click="accion = '{{ $valor }}'" class="px-3 py-1.5 rounded-lg font-semibold {{ $clase }}">{{ $texto }}</button>
+                <button type="button" @click="ejecutar('{{ $valor }}')" :disabled="trabajando" @if ($valor === 'fecha') x-show="hayVencidos" @endif
+                        class="px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50 {{ $clase }}">{{ $texto }}</button>
             @endforeach
-            <input name="motivo" x-model="motivo" maxlength="70" placeholder="Motivo (para descartar o anular)" class="ml-auto rounded-lg border-slate-300 text-sm w-64">
+            <input x-model="motivo" maxlength="70" placeholder="Motivo (para descartar o anular)" class="ml-auto rounded-lg border-slate-300 text-sm w-64">
+            <p x-show="progreso" x-text="progreso" class="w-full text-sm font-semibold text-indigo-700"></p>
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
-                    <tr><th class="px-3 py-2"><input type="checkbox" @change="sel = $event.target.checked ? [...$root.querySelectorAll('[data-id]')].map(x => x.value) : []" class="rounded"></th>
+                    <tr><th class="px-3 py-2"><input type="checkbox" @change="sel = $event.target.checked ? [...$root.querySelectorAll('[data-id]:not(:disabled)')].map(x => x.value) : []" class="rounded"></th>
                         <th class="px-3 py-2 text-left">Fecha</th><th class="px-3 py-2 text-left">Comprobante</th><th class="px-3 py-2 text-left">Cliente</th>
                         <th class="px-3 py-2 text-right">Total</th><th class="px-3 py-2 text-left">SUNAT</th></tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse ($lista as $c)
-                        <tr>
-                            <td class="px-3 py-2"><input type="checkbox" name="ids[]" value="{{ $c->IdCpe_cabecera }}" data-id x-model="sel" class="rounded"></td>
-                            <td class="px-3 py-2 whitespace-nowrap">{{ \Carbon\Carbon::parse($c->ccafem)->format('d/m/Y') }}
-                                @if (\Carbon\Carbon::parse($c->ccafem)->lt(now()->subDays(7)))<span class="block text-[10px] text-rose-600 font-semibold">fuera de plazo</span>@endif</td>
+                        @php $vencido = in_array($c->est_sunat ?: 'PENDIENTE', \App\Support\Sunat\SunatService::ESTADOS_REENVIABLES, true) && \App\Support\Sunat\CambioFecha::vencido($c); @endphp
+                        <tr data-fila="{{ $c->IdCpe_cabecera }}" data-vencido="{{ $vencido ? 1 : 0 }}">
+                            <td class="px-3 py-2"><input type="checkbox" value="{{ $c->IdCpe_cabecera }}" data-id x-model="sel" class="rounded"></td>
+                            <td class="px-3 py-2 whitespace-nowrap"><span class="js-fecha">{{ \Carbon\Carbon::parse($c->ccafem)->format('d/m/Y') }}</span>
+                                <span class="js-vencido block text-[10px] text-rose-600 font-semibold {{ $vencido ? '' : 'hidden' }}">fuera de plazo</span></td>
                             <td class="px-3 py-2 whitespace-nowrap"><span class="text-xs text-slate-400">{{ $tipos[$c->tdocod] ?? $c->tdocod }}</span><br><b>{{ $c->serdoc }}-{{ $c->numdoc }}</b></td>
                             <td class="px-3 py-2">{{ $c->ccanom }}<span class="block text-xs text-slate-400">{{ $c->ccandi }}</span></td>
                             <td class="px-3 py-2 text-right font-semibold">{{ number_format($c->ccaitv, 2) }}</td>
-                            <td class="px-3 py-2 max-w-sm"><span class="px-2 py-0.5 rounded-lg text-xs font-bold {{ $color[$c->est_sunat] ?? 'bg-slate-100 text-slate-600' }}">{{ $c->est_sunat ?: 'PENDIENTE' }}</span>
-                                @if ($c->ccadessun)<span class="block text-[11px] text-slate-500 mt-0.5 line-clamp-2" title="{{ $c->ccadessun }}">{{ $c->ccadessun }}</span>@endif</td>
+                            <td class="px-3 py-2 max-w-sm"><span class="js-estado px-2 py-0.5 rounded-lg text-xs font-bold {{ $color[$c->est_sunat] ?? 'bg-slate-100 text-slate-600' }}">{{ $c->est_sunat ?: 'PENDIENTE' }}</span>
+                                <span class="js-msg block text-[11px] text-slate-500 mt-0.5 line-clamp-2" title="{{ $c->ccadessun }}">{{ $c->ccadessun }}</span></td>
                         </tr>
                     @empty
                         <tr><td colspan="6" class="px-3 py-10 text-center text-slate-400">No hay comprobantes {{ $filtro === 'todos' ? '' : mb_strtolower(\App\Http\Controllers\Admin\ComprobanteController::FILTROS[$filtro]) }} 🎉</td></tr>
@@ -72,14 +74,79 @@
                 </tbody>
             </table>
         </div>
-    </form>
+    </div>
+    <script>
+        function comprobantesPanel() {
+            const URL_BASE = @js(route('admin.clientes.comprobantes.accion', [$cliente->id, 0])).replace(/0$/, '');
+            const COLOR = @js($color);
+            const NOMBRE = { consultar: 'Consultando', enviar: 'Enviando', fecha: 'Corrigiendo fecha', aceptado: 'Marcando', descartar: 'Descartando', anular: 'Anulando' };
+            return {
+                sel: [], motivo: '', trabajando: false, progreso: '',
+                get hayVencidos() { return !!document.querySelector('tr[data-vencido="1"]'); },
+                async uno(accion, id) {
+                    const fila = document.querySelector(`tr[data-fila="${id}"]`);
+                    const etiqueta = fila.querySelector('.js-estado');
+                    etiqueta.textContent = '⏳ ' + NOMBRE[accion] + '…';
+                    let r;
+                    try {
+                        const res = await fetch(URL_BASE + id, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) },
+                            body: JSON.stringify({ accion, motivo: this.motivo }) });
+                        r = await res.json();
+                    } catch (e) { r = { ok: false, mensaje: 'Sin conexión con el servidor.' }; }
+                    if (r.estado) {
+                        etiqueta.className = 'js-estado px-2 py-0.5 rounded-lg text-xs font-bold ' + (COLOR[r.estado] || 'bg-slate-100 text-slate-600');
+                        etiqueta.textContent = r.anulado ? 'ANULADO EN EL SISTEMA' : r.estado;
+                        fila.querySelector('.js-fecha').textContent = r.fecha;
+                        fila.querySelector('.js-vencido').classList.toggle('hidden', !r.vencido);
+                        fila.dataset.vencido = r.vencido ? '1' : '0';
+                    } else {
+                        etiqueta.textContent = 'ERROR';
+                    }
+                    const msg = fila.querySelector('.js-msg');
+                    msg.textContent = r.mensaje || ''; msg.title = r.mensaje || '';
+                    msg.className = 'js-msg block text-[11px] mt-0.5 line-clamp-2 ' + (r.ok ? 'text-slate-500' : 'text-rose-600 font-semibold');
+                    if (r.anulado) fila.classList.add('opacity-50');
+                    return r.ok;
+                },
+                async ejecutar(accion) {
+                    let ids = [...this.sel];
+                    if (accion === 'fecha') ids = ids.filter(id => document.querySelector(`tr[data-fila="${id}"]`)?.dataset.vencido === '1');
+                    if (!ids.length) { alert(accion === 'fecha' ? 'Marca comprobantes que estén fuera de plazo.' : 'Marca al menos un comprobante.'); return; }
+                    const avisos = {
+                        anular: '¿Anular en el sistema? El stock vuelve al almacén y se anulan sus cobros.',
+                        descartar: '¿Descartar? Solo deja de salir en pendientes; no mueve stock.',
+                        fecha: `¿Corregir la fecha de ${ids.length} comprobante(s) fuera de plazo? Pasan al último día que SUNAT todavía acepta. Envíalos hoy mismo.`,
+                        aceptado: `¿Marcar ${ids.length} comprobante(s) como aceptados? Hazlo solo si ya los viste aceptados en la web de SUNAT.`,
+                    };
+                    if (avisos[accion] && !confirm(avisos[accion])) return;
+                    this.trabajando = true;
+                    // Consultar y enviar: de 3 en 3 (SUNAT tarda en responder cada uno); lo demás, uno tras otro
+                    const juntos = ['consultar', 'enviar'].includes(accion) ? 3 : 1;
+                    let ok = 0, hechos = 0, siguiente = 0;
+                    this.progreso = `${NOMBRE[accion]} 0 de ${ids.length}…`;
+                    const trabajador = async () => {
+                        while (siguiente < ids.length) {
+                            const id = ids[siguiente++];
+                            if (await this.uno(accion, id)) ok++;
+                            this.progreso = `${NOMBRE[accion]} ${++hechos} de ${ids.length}…`;
+                        }
+                    };
+                    await Promise.all(Array.from({ length: Math.min(juntos, ids.length) }, trabajador));
+                    this.progreso = `Listo: ${ok} bien, ${ids.length - ok} con problema (mira el mensaje de cada fila).`;
+                    this.sel = [];
+                    this.trabajando = false;
+                },
+            };
+        }
+    </script>
     <div class="mt-4">{{ $lista->links() }}</div>
 
     <div class="mt-4 grid md:grid-cols-2 gap-3 text-xs text-slate-600">
         <div class="bg-white rounded-2xl shadow-sm p-4 space-y-1">
             <p class="font-bold text-slate-800 text-sm">¿Qué hago con cada uno?</p>
-            <p><b>🔎 Consultar:</b> pregunta a SUNAT si lo tiene. Si ya estaba aceptado, se actualiza solo (requiere producción y clave SOL).</p>
-            <p><b>📤 Enviar:</b> lo manda ahora a SUNAT (dentro del plazo: facturas 3 días, boletas 7).</p>
+            <p><b>🔎 Consultar:</b> pregunta a SUNAT si lo tiene. Si SUNAT dice que está aceptado, aquí queda <b>ACEPTADO</b> solo (sirve para facturas y boletas).</p>
+            <p><b>📤 Enviar:</b> lo manda ahora a SUNAT (dentro del plazo: facturas 3 días, boletas 7, contados desde el día siguiente a la emisión).</p>
+            <p><b>📅 Corregir fecha:</b> sale si hay vencidos. Los pasa al último día que SUNAT todavía acepta; luego envíalos hoy mismo.</p>
             <p><b>✔ Marcar aceptado:</b> cuando ya lo viste aceptado en la web de SUNAT pero aquí quedó pendiente.</p>
         </div>
         <div class="bg-white rounded-2xl shadow-sm p-4 space-y-1">

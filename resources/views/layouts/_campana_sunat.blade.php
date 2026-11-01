@@ -8,8 +8,9 @@
                       d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
             @if ($notifSunat['total'] > 0)
-                <span class="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1 rounded-full text-[11px] font-bold text-white flex items-center justify-center {{ $notifSunat['vencidas'] > 0 ? 'bg-red-600 animate-pulse' : 'bg-orange-500' }}">
-                    {{ $notifSunat['total'] > 99 ? '99+' : $notifSunat['total'] }}
+                {{-- El número real (1,214), no "99+": así se sabe cuánto falta enviar --}}
+                <span class="absolute -top-1 left-1/2 min-w-5 h-5 px-1.5 rounded-full text-[11px] font-bold text-white whitespace-nowrap flex items-center justify-center {{ $notifSunat['vencidas'] > 0 ? 'bg-red-600 animate-pulse' : 'bg-orange-500' }}">
+                    {{ number_format($notifSunat['total']) }}
                 </span>
             @endif
         </button>

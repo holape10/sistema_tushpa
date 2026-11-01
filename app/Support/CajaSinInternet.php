@@ -14,9 +14,10 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Caja sin internet. Mientras hay internet, la PC de caja se lleva un "paquete" con todo lo que necesita para vender sola
- * (productos y precios, mesas, medios de pago, impresoras, el encabezado del ticket y su serie propia). Si se cae el
- * internet vende, toma pedidos de mesa e imprime con el agente de esa PC; al volver, sube las ventas y aquí se emiten
- * con el mismo número que ya salió impreso (serie propia de la caja: nunca choca con otra caja ni deja huecos).
+ * (productos y precios, mesas, habitaciones ocupadas del hotel, medios de pago, impresoras, el encabezado del ticket y su
+ * serie propia). Si se cae el internet vende, toma pedidos de mesa, cobra habitaciones e imprime con el agente de esa PC;
+ * al volver, sube las ventas y aquí se emiten con el mismo número que ya salió impreso (serie propia de la caja: nunca
+ * choca con otra caja ni deja huecos). Cada negocio ve solo lo suyo: mesas si es restaurante, habitaciones si es hotel.
  */
 class CajaSinInternet
 {
@@ -151,6 +152,9 @@ class CajaSinInternet
                 'presentaciones' => ($presentaciones[$p->IdProducto] ?? collect())->map(fn ($r) => ['id' => (int) $r->id_presentacion, 'nombre' => $r->nombre,
                     'factor' => (float) $r->factor, 'precio' => (float) $r->precio])->values()])->values(),
             'mesas' => $mesas->map(fn ($m) => ['id' => (int) $m->mes_id, 'nombre' => $m->mes_nom, 'piso' => $m->pis_nom])->values(),
+            // Hotel: si la sucursal tiene habitaciones, las ocupadas con lo que falta cobrar (se cobran sin internet)
+            'hotel' => DB::table('habitaciones')->where('id_empresa_negocio', $suc)->exists(),
+            'habitaciones' => self::habitacionesOcupadas($suc),
             // Mesas ya abiertas en el sistema con lo que falta cobrar: si se cae el internet se ven ocupadas y se pueden cobrar
             'pedidos' => self::pedidosAbiertos($suc),
             'impresoras' => $impresoras->map(fn ($i) => ['id' => (int) $i->Id, 'nombre' => $i->descripcion, 'ruta' => $i->ruta ?: $i->descripcion,
@@ -171,25 +175,58 @@ class CajaSinInternet
     {
         $pedidos = DB::table('pedidos')->where('id_empresa_negocio', $suc)->where('ped_est', 'Aperturado')->whereNotNull('mes_id')
             ->where('ped_tip', '!=', 'Hotel')->orderBy('ped_id')->get(['ped_id', 'mes_id', 'mozo'])->unique('mes_id');
-        $items = DB::table('pedidos_detalle as d')->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
-            ->whereIn('d.ped_id', $pedidos->pluck('ped_id')->all() ?: [0])->where('d.estadoitem', '!=', 'Eliminado')
-            ->whereRaw('(d.ped_det_can - IFNULL(d.item_facturado, 0)) > 0')
-            ->get(['d.ped_id', 'd.IdProducto', 'd.id_presentacion', 'd.descripcion', 'd.ped_det_pre', 'p.cat_id',
-                DB::raw('d.ped_det_can - IFNULL(d.item_facturado, 0) as pendiente')])
-            ->groupBy('ped_id');
+        $items = self::porCobrar($pedidos->pluck('ped_id')->all());
 
         return $pedidos->map(fn ($p) => [
             'ped_id' => (int) $p->ped_id, 'mesa' => (int) $p->mes_id, 'mozo' => $p->mozo ? (int) $p->mozo : null,
-            'items' => ($items[$p->ped_id] ?? collect())->groupBy(fn ($i) => $i->IdProducto.'|'.$i->id_presentacion.'|'.$i->ped_det_pre)
-                ->map(fn ($g) => ['id' => (int) $g->first()->IdProducto, 'nombre' => $g->first()->descripcion, 'precio' => (float) $g->first()->ped_det_pre,
-                    'presentacion' => $g->first()->id_presentacion ? (int) $g->first()->id_presentacion : null, 'categoria' => (int) $g->first()->cat_id,
-                    'cantidad' => round($g->sum('pendiente'), 2)])->values()->all(),
+            'items' => $items[$p->ped_id] ?? [],
         ])->filter(fn ($p) => $p['items'])->values()->all();
     }
 
     /**
+     * Hotel: habitaciones ocupadas con lo que aún falta cobrar de su estadía (alojamiento, horas extra y consumos).
+     *
+     * @return array<int, array{ped_id: int, habitacion: string, cliente: string, documento: ?string, salida: string, items: array}>
+     */
+    public static function habitacionesOcupadas(int $suc): array
+    {
+        $estadias = DB::table('hospedajes as h')->join('habitaciones as hab', 'hab.hab_id', '=', 'h.hab_id')
+            ->join('pedidos as p', 'p.ped_id', '=', 'h.ped_id')
+            ->where('h.id_empresa_negocio', $suc)->where('h.hos_est', 'ACTIVO')->where('p.ped_est', 'Aperturado')
+            ->orderBy('hab.hab_nom')->get(['h.ped_id', 'hab.hab_nom', 'h.cliente', 'h.documento', 'h.fin']);
+        $items = self::porCobrar($estadias->pluck('ped_id')->all());
+
+        return $estadias->map(fn ($e) => [
+            'ped_id' => (int) $e->ped_id, 'habitacion' => (string) $e->hab_nom, 'cliente' => (string) $e->cliente,
+            'documento' => $e->documento, 'salida' => (string) $e->fin, 'items' => $items[$e->ped_id] ?? [],
+        ])->filter(fn ($e) => $e['items'])->values()->all();
+    }
+
+    /**
+     * Lo que falta cobrar de cada pedido (una línea por producto, presentación y precio).
+     *
+     * @param  array<int, int>  $pedidos
+     * @return array<int, array<int, array{id: int, nombre: string, precio: float, presentacion: ?int, categoria: int, cantidad: float}>>
+     */
+    private static function porCobrar(array $pedidos): array
+    {
+        return DB::table('pedidos_detalle as d')->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
+            ->whereIn('d.ped_id', $pedidos ?: [0])->where('d.estadoitem', '!=', 'Eliminado')
+            ->whereRaw('(d.ped_det_can - IFNULL(d.item_facturado, 0)) > 0')
+            ->get(['d.ped_id', 'd.IdProducto', 'd.id_presentacion', 'd.descripcion', 'd.ped_det_pre', 'p.cat_id',
+                DB::raw('d.ped_det_can - IFNULL(d.item_facturado, 0) as pendiente')])
+            ->groupBy('ped_id')
+            ->map(fn ($lineas) => $lineas->groupBy(fn ($i) => $i->IdProducto.'|'.$i->id_presentacion.'|'.$i->ped_det_pre)
+                ->map(fn ($g) => ['id' => (int) $g->first()->IdProducto, 'nombre' => $g->first()->descripcion, 'precio' => (float) $g->first()->ped_det_pre,
+                    'presentacion' => $g->first()->id_presentacion ? (int) $g->first()->id_presentacion : null, 'categoria' => (int) $g->first()->cat_id,
+                    'cantidad' => round($g->sum('pendiente'), 2)])->values()->all())
+            ->all();
+    }
+
+    /**
      * Un pedido del sistema cobrado sin internet: lo cobrado se descuenta de sus líneas y, si ya no queda nada, se cierra
-     * el pedido y se libera la mesa (igual que al cobrar la mesa con internet).
+     * el pedido y se libera la mesa (igual que al cobrar la mesa con internet). La habitación del hotel no se libera al
+     * cobrar (muchos pagan al entrar): sigue ocupada hasta "Dar salida".
      */
     private static function cerrarPedido(Pedido $pedido, array $items): void
     {
@@ -210,7 +247,7 @@ class CajaSinInternet
         }
         $quedan = PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')
             ->whereRaw('(ped_det_can - IFNULL(item_facturado, 0)) > 0')->exists();
-        if (! $quedan) {
+        if (! $quedan && $pedido->ped_tip !== 'Hotel') {
             $pedido->update(['ped_est' => 'Cerrado', 'fecha_hora_modificacion' => now()]);
             Mesa::where('mes_id', $pedido->mes_id)->update(['mes_est' => 'Libre']);
             MesasUnidas::liberar($pedido->ped_id);
@@ -256,7 +293,7 @@ class CajaSinInternet
                 ];
 
                 $cabId = Comprobante::emitir($user, $turno, $datos, $lineas, array_filter([
-                    'ped_tip' => $mesa ? 'SALON' : ($v['origen'] ?? 'PV'), 'IdUsuario_ven' => $pedido?->mozo ?? $user->IdUsuario, 'fecha_hora' => $v['fecha'],
+                    'ped_tip' => $mesa ? 'SALON' : (($v['origen'] ?? 'PV') === 'HOTEL' ? 'Hotel' : ($v['origen'] ?? 'PV')), 'IdUsuario_ven' => $pedido?->mozo ?? $user->IdUsuario, 'fecha_hora' => $v['fecha'],
                     'mes_id' => $mesa?->mes_id, 'pis_id' => $mesa?->pis_id ?? null, 'mozo' => $v['mozo'] ?? $pedido?->mozo, 'ped_id' => $pedido?->ped_id,
                 ], fn ($x) => $x !== null));
                 if ($pedido) {

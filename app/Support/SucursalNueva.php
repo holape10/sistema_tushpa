@@ -115,7 +115,7 @@ class SucursalNueva
         };
 
         $tipos = $copiar('tipo_producto', 'tip_pro_id');
-        $cats = $copiar('categorias', 'cat_id', ['tip_pro_id' => fn ($v) => $tipos[$v] ?? $v, 'impresora' => fn () => null]);
+        $cats = $copiar('categorias', 'cat_id', ['tip_pro_id' => fn ($v) => $tipos[$v] ?? $v, 'impresora' => fn () => null, 'impresora2' => fn () => null]);
         $subcats = $copiar('subcategorias', 'subcat_id', ['cat_id' => fn ($v) => $cats[$v] ?? $v]);
         $productos = $copiar('productos', 'IdProducto', [
             'cat_id' => fn ($v) => $cats[$v] ?? $v, 'subcat_id' => fn ($v) => $subcats[$v] ?? $v,

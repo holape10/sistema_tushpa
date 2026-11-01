@@ -8,9 +8,12 @@ use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Models\User;
 use App\Support\AnulacionVenta;
+use App\Support\ConsultaPeru;
+use App\Support\Sunat\CambioFecha;
 use App\Support\Sunat\SunatService;
 use App\Support\Tenancy\Tenancy;
-use Illuminate\Http\RedirectResponse;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -18,14 +21,15 @@ use Illuminate\View\View;
 
 /**
  * Comprobantes SUNAT de una empresa desde el panel (sin entrar a su base de datos): ver los pendientes y rechazados,
- * consultarlos o enviarlos a SUNAT, marcarlos como aceptados, descartarlos o anularlos en el sistema.
+ * consultarlos o enviarlos a SUNAT, corregir la fecha de los vencidos, marcarlos como aceptados, descartarlos o anularlos.
+ * Cada acción va de uno en uno (la pantalla manda varios a la vez y muestra el resultado en cada fila).
  * No se borran: el número ya se usó y debe quedar el rastro.
  */
 class ComprobanteController extends Controller
 {
     public const FILTROS = ['pendientes' => 'Pendientes de SUNAT', 'rechazados' => 'Rechazados', 'todos' => 'Todos'];
 
-    private const ACCIONES = ['consultar', 'enviar', 'aceptado', 'descartar', 'anular'];
+    private const ACCIONES = ['consultar', 'enviar', 'fecha', 'aceptado', 'descartar', 'anular'];
 
     private function autorizar(Cliente $cliente): void
     {
@@ -54,7 +58,7 @@ class ComprobanteController extends Controller
                 ->when($anio, fn ($w) => $w->whereYear('ccafem', $anio))
                 ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->whereRaw("CONCAT(serdoc, '-', numdoc) LIKE ?", ["%{$q}%"])->orWhere('ccanom', 'like', "%{$q}%")->orWhere('ccandi', $q)))
                 ->orderBy('ccafem')->orderBy('IdCpe_cabecera')
-                ->paginate(100, ['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem', 'ccanom', 'ccandi', 'ccaitv', 'est_sunat', 'ccadessun', 'ccasunrescod'], 'pagina', (int) $request->get('pagina', 1))
+                ->paginate(100, ['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem', 'ccanom', 'ccandi', 'ccaitv', 'est_sunat', 'ccadessun', 'ccasunrescod', 'ccabaj'], 'pagina', (int) $request->get('pagina', 1))
                 ->withQueryString();
             $conteo = [
                 'pendientes' => $base()->where($pendiente)->count(),
@@ -68,12 +72,15 @@ class ComprobanteController extends Controller
         return view('admin.clientes.comprobantes', compact('cliente', 'lista', 'conteo', 'anios', 'filtro', 'q', 'anio'));
     }
 
-    /** Una acción sobre uno o varios comprobantes (ids[]) */
-    public function accion(Request $request, Cliente $cliente): RedirectResponse
+    /**
+     * Una acción sobre un comprobante; responde cómo quedó para pintar su fila al instante.
+     *
+     * @return JsonResponse {ok, estado, mensaje, fecha, vencido, anulado}
+     */
+    public function accion(Request $request, Cliente $cliente, int $id): JsonResponse
     {
         $this->autorizar($cliente);
-        $d = $request->validate(['accion' => 'required|in:'.implode(',', self::ACCIONES), 'ids' => 'required|array|min:1|max:200', 'ids.*' => 'integer',
-            'motivo' => 'nullable|string|max:70'], [], ['ids' => 'comprobantes']);
+        $d = $request->validate(['accion' => 'required|in:'.implode(',', self::ACCIONES), 'motivo' => 'nullable|string|max:70']);
         $motivo = trim((string) ($d['motivo'] ?? '')) ?: match ($d['accion']) {
             'descartar' => 'RECHAZADO POR SUNAT - DESCARTADO DESDE EL PANEL',
             'anular' => 'ANULADO DESDE EL PANEL',
@@ -81,30 +88,30 @@ class ComprobanteController extends Controller
         };
         $quien = Auth::guard('superadmin')->user()->nombre;
 
-        $r = Tenancy::en($cliente->base_datos, function () use ($d, $motivo, $quien) {
-            $res = ['ok' => 0, 'fallas' => []];
-            // Las acciones que mueven stock necesitan un usuario de la empresa (su administrador), sin abrir sesión
+        return response()->json(Tenancy::en($cliente->base_datos, function () use ($d, $id, $motivo, $quien) {
+            $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first();
+            if (! $cab) {
+                return ['ok' => false, 'mensaje' => 'Comprobante no encontrado.'];
+            }
+            // Las acciones que mueven stock o cambian la fecha necesitan un usuario de la empresa (su administrador), sin abrir sesión
             $admin = User::join('role_user as ru', 'ru.user_IdUsuario', '=', 'users.IdUsuario')->where('ru.role_id', 2)->orderBy('users.IdUsuario')->first(['users.*']);
             if ($admin) {
                 Auth::guard('web')->setUser($admin);
             }
-            foreach (DB::table('cpe_cabecera')->whereIn('IdCpe_cabecera', $d['ids'])->get() as $cab) {
-                $numero = "{$cab->serdoc}-{$cab->numdoc}";
-                try {
-                    $this->aplicar($d['accion'], $cab, $motivo, $quien, $admin);
-                    $res['ok']++;
-                } catch (\Throwable $e) {
-                    $res['fallas'][] = "{$numero}: ".mb_substr($e->getMessage(), 0, 140);
-                }
+            try {
+                $this->aplicar($d['accion'], $cab, $motivo, $quien, $admin);
+                $ok = true;
+                $error = null;
+            } catch (\Throwable $e) {
+                $ok = false;
+                $error = mb_substr($e->getMessage(), 0, 300);
             }
+            $c = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first();
 
-            return $res;
-        });
-
-        $nombres = ['consultar' => 'consultado(s)', 'enviar' => 'enviado(s)', 'aceptado' => 'marcado(s) como aceptado(s)', 'descartar' => 'descartado(s)', 'anular' => 'anulado(s)'];
-        $mensaje = "{$r['ok']} comprobante(s) {$nombres[$d['accion']]}.";
-
-        return back()->with($r['fallas'] ? 'error' : 'ok', $mensaje.($r['fallas'] ? ' Con problema: '.implode(' · ', array_slice($r['fallas'], 0, 8)) : ''));
+            return ['ok' => $ok, 'estado' => $c->est_sunat ?: 'PENDIENTE', 'mensaje' => $error ?? (string) $c->ccadessun,
+                'fecha' => Carbon::parse($c->ccafem)->format('d/m/Y'), 'anulado' => (bool) $c->ccabaj,
+                'vencido' => ! $c->ccabaj && in_array($c->est_sunat ?: 'PENDIENTE', SunatService::ESTADOS_REENVIABLES, true) && CambioFecha::vencido($c)];
+        }));
     }
 
     private function aplicar(string $accion, object $cab, string $motivo, string $quien, ?User $admin): void
@@ -116,15 +123,41 @@ class ComprobanteController extends Controller
         $aceptado = in_array($cab->est_sunat, ['ACEPTADO', 'OBSERVADO'], true);
 
         switch ($accion) {
-            case 'consultar':   // ¿SUNAT lo tiene? (recupera su constancia)
+            case 'consultar':   // ¿SUNAT lo tiene? Primero su constancia (CDR, facturas con clave SOL); si no, la consulta de validez
                 $r = $sunat()->consultarCdr($cab);
-                if (! $r) {
-                    throw new \RuntimeException('SUNAT no tiene su constancia (o la empresa no está en producción con clave SOL)');
+                if ($r) {
+                    DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([
+                        'est_sunat' => $r['estado'], 'ccasunrescod' => $r['codigo'], 'ccadessun' => mb_substr($r['mensaje'], 0, 500),
+                        'enviado' => $r['ok'] ? 1 : 0,
+                    ]);
+                    break;
                 }
-                DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([
-                    'est_sunat' => $r['estado'], 'ccasunrescod' => $r['codigo'], 'ccadessun' => mb_substr($r['mensaje'], 0, 500),
-                    'enviado' => $r['ok'] ? 1 : 0,
-                ]);
+                // Consulta de validez (sirve también para boletas; gasta una consulta del plan de apiperu.dev)
+                $v = ConsultaPeru::estadoCpe((string) $cab->IdEmpresa, $cab->tdocod, $cab->serdoc, (string) (int) $cab->numdoc, (string) $cab->ccafem, (float) $cab->ccaitv);
+                if (! $v) {
+                    throw new \RuntimeException('no se pudo consultar a SUNAT (sin constancia ni consulta de validez). Intenta en unos minutos.');
+                }
+                $hora = now()->format('d/m/Y H:i');
+                if (str_starts_with($v['estado'], 'ACEPTADO')) {
+                    DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([
+                        'est_sunat' => 'ACEPTADO', 'enviado' => 1, 'ccadessun' => "Consultado en SUNAT el {$hora}: ACEPTADO.",
+                    ]);
+                } elseif (str_starts_with($v['estado'], 'ANULADO')) {
+                    DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([
+                        'est_sunat' => 'ANULADO', 'ccadessun' => "Consultado en SUNAT el {$hora}: ANULADO (comunicado de baja).",
+                    ]);
+                } else {
+                    DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([
+                        'ccadessun' => mb_substr("Consultado en SUNAT el {$hora}: {$v['estado']}. Todavía no lo tiene: envíalo.", 0, 500),
+                    ]);
+                    throw new \RuntimeException("SUNAT dice {$v['estado']}: todavía no lo tiene, envíalo.");
+                }
+                break;
+            case 'fecha':       // Fuera de plazo: al último día que SUNAT todavía acepta (luego se envía)
+                if (! $admin) {
+                    throw new \RuntimeException('la empresa no tiene un administrador');
+                }
+                CambioFecha::aFechaValida((int) $cab->IdCpe_cabecera, (int) $cab->id_empresa_negocio, $admin);
                 break;
             case 'enviar':
                 $r = $sunat()->enviarComprobante((int) $cab->IdCpe_cabecera);

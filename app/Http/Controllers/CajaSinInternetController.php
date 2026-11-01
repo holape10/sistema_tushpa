@@ -53,7 +53,7 @@ class CajaSinInternetController extends Controller
             'ventas.*.numero' => 'required|integer|min:1',
             'ventas.*.fecha' => 'required|date_format:Y-m-d H:i:s|before_or_equal:'.now()->addMinutes(10)->format('Y-m-d H:i:s'),
             'ventas.*.id_turno' => 'nullable|integer',
-            'ventas.*.origen' => 'nullable|in:PV,PVCOMANDA',
+            'ventas.*.origen' => 'nullable|in:PV,PVCOMANDA,HOTEL',
             'ventas.*.mesa' => 'nullable|integer',
             'ventas.*.pedido' => 'nullable|integer',
             'ventas.*.mozo' => 'nullable|integer',

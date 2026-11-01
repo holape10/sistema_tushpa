@@ -81,7 +81,7 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/clientes/{cliente}/accesos', [AccesoController::class, 'index'])->whereNumber('cliente')->name('clientes.accesos');
     Route::post('/clientes/{cliente}/accesos/{usuario}', [AccesoController::class, 'clave'])->whereNumber(['cliente', 'usuario'])->middleware('throttle:20,1')->name('clientes.accesos.clave');
     Route::get('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'index'])->whereNumber('cliente')->name('clientes.comprobantes');
-    Route::post('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'accion'])->whereNumber('cliente')->name('clientes.comprobantes.accion');
+    Route::post('/clientes/{cliente}/comprobantes/{id}', [ComprobanteController::class, 'accion'])->whereNumber(['cliente', 'id'])->name('clientes.comprobantes.accion');
     Route::post('/cartas/{id}/estado', [VisitaController::class, 'cartaEstado'])->whereNumber('id')->name('cartas.estado');
     Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
     Route::get('/tickets/{id}', [TicketController::class, 'show'])->whereNumber('id')->name('tickets.show');

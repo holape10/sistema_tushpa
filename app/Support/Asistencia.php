@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Support;
 
 use Carbon\Carbon;
@@ -19,11 +20,14 @@ use Illuminate\Support\Facades\DB;
 class Asistencia
 {
     public const ACCIONES = ['check_in_1', 'check_out_1', 'check_in_2', 'check_out_2'];
+
     public const NOMBRES = [
         'check_in_1' => 'Entrada', 'check_out_1' => 'Salida', 'check_in_2' => 'Retorno de refrigerio',
         'check_out_2' => 'Salida final', 'completado' => 'Jornada completa',
     ];
+
     public const SEGUNDOS_DOBLE_LECTURA = 60;
+
     public const JORNADA_MINUTOS = 480;
 
     public const TURNOS_INICIALES = [
@@ -46,13 +50,13 @@ class Asistencia
     public static function empleados(int $sucursal)
     {
         return DB::table('empleado')->where('id_empresa_negocio', $sucursal)->where('asistencia', 1)
-            ->where(fn($w) => $w->whereNull('est_cod')->orWhere('est_cod', '!=', '0'))
+            ->where(fn ($w) => $w->whereNull('est_cod')->orWhere('est_cod', '!=', '0'))
             ->orderBy('emp_nom')->orderBy('emp_ape_pat')->get();
     }
 
     public static function nombre(object $e): string
     {
-        return trim(preg_replace('/\s+/', ' ', ($e->emp_nom ?? '') . ' ' . ($e->emp_ape_pat ?? '') . ' ' . ($e->emp_ape_mat ?? '')));
+        return trim(preg_replace('/\s+/', ' ', ($e->emp_nom ?? '').' '.($e->emp_ape_pat ?? '').' '.($e->emp_ape_mat ?? '')));
     }
 
     public static function horario(int $empId, string $fecha): ?object
@@ -64,19 +68,20 @@ class Asistencia
     /** Siguiente marcación de un registro (o 'completado') */
     public static function siguiente(?object $a, ?object $turno): string
     {
-        if (!$a || !$a->check_in_1) {
+        if (! $a || ! $a->check_in_1) {
             return 'check_in_1';
         }
-        if (!$a->check_out_1) {
+        if (! $a->check_out_1) {
             return 'check_out_1';
         }
         // Turno corrido: termina en la primera salida
-        if ($turno && $turno->tipo === 'TRABAJO' && !$turno->hora_entrada_2) {
+        if ($turno && $turno->tipo === 'TRABAJO' && ! $turno->hora_entrada_2) {
             return 'completado';
         }
-        if (!$a->check_in_2) {
+        if (! $a->check_in_2) {
             return 'check_in_2';
         }
+
         return $a->check_out_2 ? 'completado' : 'check_out_2';
     }
 
@@ -84,16 +89,18 @@ class Asistencia
     public static function horaEsperada(object $turno, string $fecha, string $accion): ?Carbon
     {
         $campo = ['check_in_1' => 'hora_entrada_1', 'check_out_1' => 'hora_salida_1', 'check_in_2' => 'hora_entrada_2', 'check_out_2' => 'hora_salida_2'][$accion];
-        if (!$turno->$campo) {
+        if (! $turno->$campo) {
             return null;
         }
-        $hora = Carbon::parse($fecha . ' ' . $turno->$campo);
-        $inicio = Carbon::parse($fecha . ' ' . $turno->hora_entrada_1);
+        $hora = Carbon::parse($fecha.' '.$turno->$campo);
+        $inicio = Carbon::parse($fecha.' '.$turno->hora_entrada_1);
+
         return $hora->lt($inicio) ? $hora->addDay() : $hora;
     }
 
     /**
      * Estado de hoy de un trabajador: qué registro usar (el de hoy o el de un turno nocturno de ayer), turno y siguiente acción.
+     *
      * @return array{fecha: string, registro: ?object, turno: ?object, accion: string}
      */
     public static function situacion(int $empId, ?Carbon $ahora = null): array
@@ -104,32 +111,52 @@ class Asistencia
         $fecha = $hoy;
 
         // Turno de ayer que sigue abierto (ej. 22:00 → 06:00): la salida de madrugada pertenece a ayer
-        if (!$registro) {
+        if (! $registro) {
             $ayer = $ahora->copy()->subDay()->toDateString();
             $previo = DB::table('asistencias')->where('emp_id', $empId)->where('fecha', $ayer)->first();
             if ($previo) {
                 $turnoAyer = self::horario($empId, $ayer);
-                $ultima = collect(self::ACCIONES)->map(fn($c) => $previo->$c)->filter()->max();
+                $ultima = collect(self::ACCIONES)->map(fn ($c) => $previo->$c)->filter()->max();
                 if (self::siguiente($previo, $turnoAyer) !== 'completado' && self::siguiente($previo, $turnoAyer) !== 'check_in_1'
-                    && $ultima && Carbon::parse($ultima)->diffInHours($ahora) < 14) {
+                    && $ultima && Carbon::parse($ultima)->diffInHours($ahora) < 14 && self::sigueTurnoDeAyer($empId, $turnoAyer, $ayer, $ahora)) {
                     return ['fecha' => $ayer, 'registro' => $previo, 'turno' => $turnoAyer, 'accion' => self::siguiente($previo, $turnoAyer)];
                 }
             }
         }
 
         $turno = self::horario($empId, $fecha);
+
         return ['fecha' => $fecha, 'registro' => $registro, 'turno' => $turno, 'accion' => self::siguiente($registro, $turno)];
     }
 
     /**
+     * ¿La marcación de madrugada cierra el turno de ayer? Solo si ese turno cruza la medianoche (ej. 22:00 → 06:00) y
+     * todavía no pasaron 6 horas de su salida. Si ayer fue un turno de día y se olvidó la salida, lo de hoy es la entrada
+     * de hoy (no la salida de ayer). Sin horario asignado ayer, se mira si hoy le toca entrar pronto.
+     */
+    private static function sigueTurnoDeAyer(int $empId, ?object $turnoAyer, string $ayer, Carbon $ahora): bool
+    {
+        if ($turnoAyer && $turnoAyer->tipo === 'TRABAJO' && $turnoAyer->hora_entrada_1) {
+            $fin = self::horaEsperada($turnoAyer, $ayer, $turnoAyer->hora_salida_2 ? 'check_out_2' : 'check_out_1');
+
+            return $fin && $fin->toDateString() !== $ayer && $ahora->lt($fin->copy()->addHours(6));
+        }
+        $hoy = self::horario($empId, $ahora->toDateString());
+        $entradaHoy = $hoy && $hoy->tipo === 'TRABAJO' && $hoy->hora_entrada_1 ? self::horaEsperada($hoy, $ahora->toDateString(), 'check_in_1') : null;
+
+        return ! $entradaHoy || $ahora->lt($entradaHoy->copy()->subHours(3));
+    }
+
+    /**
      * Revisa si la marcación necesita autorización del administrador.
+     *
      * @return ?string motivo por el que se requiere autorización (null = puede marcar)
      */
     public static function requiereAutorizacion(array $s, ?Carbon $ahora = null): ?string
     {
         $ahora ??= now();
         $turno = $s['turno'];
-        if (!$turno) {
+        if (! $turno) {
             return null;
         }
         if ($turno->tipo === 'DESCANSO') {
@@ -142,16 +169,19 @@ class Asistencia
             $esperada = self::horaEsperada($turno, $s['fecha'], $s['accion']);
             if ($esperada && $ahora->gt($esperada->copy()->addMinutes((int) $turno->tolerancia_minutos))) {
                 $limite = $esperada->copy()->addMinutes((int) $turno->tolerancia_minutos)->format('H:i');
+
                 return ($s['accion'] === 'check_in_1' ? 'Llegaste fuera de la tolerancia' : 'Retorno de refrigerio fuera de tolerancia')
-                    . " (límite {$limite}). Llama al administrador para autorizar.";
+                    ." (límite {$limite}). Llama al administrador para autorizar.";
             }
         }
+
         return null;
     }
 
     /**
      * Registra la siguiente marcación. Debe llamarse con la situación recién leída.
-     * @param array $extra autorizado_por, motivo, hora (Carbon a registrar si el admin la corrigió), ip
+     *
+     * @param  array  $extra  autorizado_por, motivo, hora (Carbon a registrar si el admin la corrigió), ip
      * @return array{accion: string, hora: Carbon, mensaje: string, tardanza: int}
      */
     public static function marcar(object $empleado, string $origen, array $extra = []): array
@@ -169,9 +199,9 @@ class Asistencia
             }
             // Doble lectura del lector o doble toque: se ignora
             if ($s['registro']) {
-                $ultima = collect(self::ACCIONES)->map(fn($c) => $s['registro']->$c)->filter()->max();
+                $ultima = collect(self::ACCIONES)->map(fn ($c) => $s['registro']->$c)->filter()->max();
                 if ($ultima && Carbon::parse($ultima)->diffInSeconds($ahora) < self::SEGUNDOS_DOBLE_LECTURA && empty($extra['autorizado_por'])) {
-                    throw new \RuntimeException('Ya marcaste hace un momento (' . Carbon::parse($ultima)->format('H:i:s') . '). Espera un minuto para la siguiente marcación.');
+                    throw new \RuntimeException('Ya marcaste hace un momento ('.Carbon::parse($ultima)->format('H:i:s').'). Espera un minuto para la siguiente marcación.');
                 }
             }
 
@@ -184,16 +214,16 @@ class Asistencia
             }
 
             $motivo = trim((string) ($extra['motivo'] ?? ''));
-            $origenTxt = $origen . (empty($extra['autorizado_por']) ? '' : '*');
+            $origenTxt = $origen.(empty($extra['autorizado_por']) ? '' : '*');
             if ($s['registro']) {
                 $r = $s['registro'];
                 DB::table('asistencias')->where('id', $r->id)->update([
                     $accion => $hora,
                     'tardanza_minutos' => (int) $r->tardanza_minutos + $tardanza,
                     'autorizado_por' => empty($extra['autorizado_por']) ? $r->autorizado_por
-                        : trim(($r->autorizado_por ? $r->autorizado_por . ', ' : '') . $extra['autorizado_por']),
-                    'motivo' => $motivo === '' ? $r->motivo : mb_substr(trim(($r->motivo ? $r->motivo . ' | ' : '') . self::NOMBRES[$accion] . ': ' . $motivo), 0, 255),
-                    'origen' => mb_substr(trim(($r->origen ? $r->origen . ',' : '') . $origenTxt), 0, 30),
+                        : trim(($r->autorizado_por ? $r->autorizado_por.', ' : '').$extra['autorizado_por']),
+                    'motivo' => $motivo === '' ? $r->motivo : mb_substr(trim(($r->motivo ? $r->motivo.' | ' : '').self::NOMBRES[$accion].': '.$motivo), 0, 255),
+                    'origen' => mb_substr(trim(($r->origen ? $r->origen.',' : '').$origenTxt), 0, 30),
                     'updated_at' => $ahora,
                 ]);
             } else {
@@ -201,18 +231,18 @@ class Asistencia
                     'emp_id' => $empleado->emp_id, 'id_empresa_negocio' => $empleado->id_empresa_negocio, 'fecha' => $s['fecha'],
                     'turno_id' => $s['turno']->id ?? null, $accion => $hora, 'tardanza_minutos' => $tardanza,
                     'autorizado_por' => $extra['autorizado_por'] ?? null,
-                    'motivo' => $motivo === '' ? null : mb_substr(self::NOMBRES[$accion] . ': ' . $motivo, 0, 255),
+                    'motivo' => $motivo === '' ? null : mb_substr(self::NOMBRES[$accion].': '.$motivo, 0, 255),
                     'origen' => $origenTxt, 'ip' => $extra['ip'] ?? null, 'created_at' => $ahora, 'updated_at' => $ahora,
                 ]);
             }
 
             $nombre = $empleado->emp_nom;
             $mensaje = match ($accion) {
-                'check_in_1' => "¡Bienvenido(a) {$nombre}! Entrada registrada a las " . $hora->format('H:i:s'),
-                'check_out_1' => ($s['turno'] && $s['turno']->tipo === 'TRABAJO' && !$s['turno']->hora_entrada_2
-                    ? "¡Buen trabajo {$nombre}! Jornada finalizada a las " : "¡Buen provecho {$nombre}! Salida registrada a las ") . $hora->format('H:i:s'),
-                'check_in_2' => "¡Bienvenido(a) de nuevo {$nombre}! Retorno registrado a las " . $hora->format('H:i:s'),
-                'check_out_2' => "¡Buen trabajo {$nombre}! Jornada finalizada a las " . $hora->format('H:i:s'),
+                'check_in_1' => "¡Bienvenido(a) {$nombre}! Entrada registrada a las ".$hora->format('H:i:s'),
+                'check_out_1' => ($s['turno'] && $s['turno']->tipo === 'TRABAJO' && ! $s['turno']->hora_entrada_2
+                    ? "¡Buen trabajo {$nombre}! Jornada finalizada a las " : "¡Buen provecho {$nombre}! Salida registrada a las ").$hora->format('H:i:s'),
+                'check_in_2' => "¡Bienvenido(a) de nuevo {$nombre}! Retorno registrado a las ".$hora->format('H:i:s'),
+                'check_out_2' => "¡Buen trabajo {$nombre}! Jornada finalizada a las ".$hora->format('H:i:s'),
             };
             if ($tardanza > 0) {
                 $mensaje .= " (tardanza: {$tardanza} min)";
@@ -230,6 +260,7 @@ class Asistencia
         if ($config === '' || in_array($ip, ['127.0.0.1', '::1'], true)) {
             return true;
         }
+
         return in_array($ip, array_filter(array_map('trim', explode(',', $config))), true);
     }
 
@@ -241,9 +272,9 @@ class Asistencia
         $res = [];
         for ($anio = (int) substr($desde, 0, 4); $anio <= (int) substr($hasta, 0, 4); $anio++) {
             foreach (['01-01' => 'Año Nuevo', '05-01' => 'Día del Trabajo', '06-07' => 'Batalla de Arica y Día de la Bandera',
-                      '06-29' => 'San Pedro y San Pablo', '07-23' => 'Día de la Fuerza Aérea', '07-28' => 'Fiestas Patrias', '07-29' => 'Fiestas Patrias',
-                      '08-06' => 'Batalla de Junín', '08-30' => 'Santa Rosa de Lima', '10-08' => 'Combate de Angamos', '11-01' => 'Todos los Santos',
-                      '12-08' => 'Inmaculada Concepción', '12-09' => 'Batalla de Ayacucho', '12-25' => 'Navidad'] as $md => $nom) {
+                '06-29' => 'San Pedro y San Pablo', '07-23' => 'Día de la Fuerza Aérea', '07-28' => 'Fiestas Patrias', '07-29' => 'Fiestas Patrias',
+                '08-06' => 'Batalla de Junín', '08-30' => 'Santa Rosa de Lima', '10-08' => 'Combate de Angamos', '11-01' => 'Todos los Santos',
+                '12-08' => 'Inmaculada Concepción', '12-09' => 'Batalla de Ayacucho', '12-25' => 'Navidad'] as $md => $nom) {
                 $res["$anio-$md"] = $nom;
             }
             $pascua = Carbon::create($anio, 3, 21)->addDays(easter_days($anio));
@@ -251,10 +282,11 @@ class Asistencia
             $res[$pascua->copy()->subDays(2)->toDateString()] = 'Viernes Santo';
         }
         foreach (DB::table('feriados')->whereBetween('fecha', [$desde, $hasta])
-                     ->where(fn($w) => $w->whereNull('id_empresa_negocio')->orWhere('id_empresa_negocio', $sucursal))->get() as $f) {
+            ->where(fn ($w) => $w->whereNull('id_empresa_negocio')->orWhere('id_empresa_negocio', $sucursal))->get() as $f) {
             $res[$f->fecha] = $f->descripcion;
         }
-        return array_filter($res, fn($k) => $k >= $desde && $k <= $hasta, ARRAY_FILTER_USE_KEY);
+
+        return array_filter($res, fn ($k) => $k >= $desde && $k <= $hasta, ARRAY_FILTER_USE_KEY);
     }
 
     /**
@@ -289,7 +321,7 @@ class Asistencia
                 }
             }
         }
-        if (!$turno || $turno->tipo !== 'TRABAJO') {
+        if (! $turno || $turno->tipo !== 'TRABAJO') {
             $laborado = $presente;
         }
         $meta = $programado ?: self::JORNADA_MINUTOS;
@@ -304,6 +336,6 @@ class Asistencia
 
     public static function horas(int $minutos): string
     {
-        return $minutos > 0 ? intdiv($minutos, 60) . 'h ' . str_pad((string) ($minutos % 60), 2, '0', STR_PAD_LEFT) . 'm' : '—';
+        return $minutos > 0 ? intdiv($minutos, 60).'h '.str_pad((string) ($minutos % 60), 2, '0', STR_PAD_LEFT).'m' : '—';
     }
 }

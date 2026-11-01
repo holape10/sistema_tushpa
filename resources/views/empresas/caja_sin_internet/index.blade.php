@@ -51,7 +51,8 @@
                     if (this.p) {
                         let guardada = null;
                         try { guardada = localStorage.getItem('tushpa_caja_vista'); } catch (e) { /* sin almacenamiento */ }
-                        this.irA(['pv', 'venta', 'mesas'].includes(guardada) ? guardada : (this.p.mesas.length ? 'mesas' : 'pv'));
+                        this.irA(['pv', 'venta', 'mesas', 'habitaciones'].includes(guardada) ? guardada
+                            : (this.p.mesas.length ? 'mesas' : (this.p.hotel ? 'habitaciones' : 'pv')));
                     }
                     await this.refrescar();
                     this.agente = await C.agenteDisponible();
@@ -173,7 +174,7 @@
                     } else if (this.cobro && !this.cobro.modal) {
                         this.cobro = null;
                     }
-                    if (['pv', 'venta', 'mesas'].includes(vista)) { try { localStorage.setItem('tushpa_caja_vista', vista); } catch (e) { /* sin almacenamiento */ } }
+                    if (['pv', 'venta', 'mesas', 'habitaciones'].includes(vista)) { try { localStorage.setItem('tushpa_caja_vista', vista); } catch (e) { /* sin almacenamiento */ } }
                     this.vista = vista;
                 },
 
@@ -297,7 +298,24 @@
                     this.mesasAbiertas = (await C.mesas()).filter((x) => x.items.length);
                 },
 
-                salirMesa() { this.mesa = null; this.vista = 'mesas'; },
+                salirMesa() { const hotel = this.mesa?.hotel; this.mesa = null; this.vista = hotel ? 'habitaciones' : 'mesas'; },
+
+                // ---------------------------------------------------------------- hotel
+
+                /** Habitaciones ocupadas en el sistema que aún tienen algo por cobrar (las cobradas en esta PC ya no salen) */
+                get habitaciones() { return (this.p?.habitaciones || []).filter((h) => !this.pedidosCobrados.includes(h.ped_id)); },
+                estadoHabitacion(h) { return this.mesasAbiertas.find((x) => x.id === -h.ped_id) || null; },
+                totalHabitacion(h) { return C.totales((this.estadoHabitacion(h) || h).items, false, 1).total.toFixed(2); },
+                abrirHabitacion(h) {
+                    if (this.cobro && !this.cobro.modal) this.cobro = null;
+                    const local = this.estadoHabitacion(h);
+                    this.mesa = local ? JSON.parse(JSON.stringify(local)) : { id: -h.ped_id, nombre: 'HAB. ' + h.habitacion, hotel: true, ped_id: h.ped_id,
+                        cliente: h.cliente, documento: h.documento, delSistema: true, abierta: Date.now(),
+                        items: h.items.map((i, n) => ({ clave: 'H' + h.ped_id + '-' + n, id: i.id, nombre: i.nombre, precio: i.precio, presentacion: i.presentacion,
+                            categoria: i.categoria, cantidad: i.cantidad, enviado: i.cantidad, observacion: '' })) };
+                    this.busqueda = '';
+                    this.vista = 'mesa';
+                },
 
                 get porEnviar() { return this.mesa ? this.mesa.items.filter((i) => i.cantidad > i.enviado) : []; },
 
@@ -354,10 +372,12 @@
                 abrirCobro() {
                     if (!this.p.turno) { this.avisar('No tienes turno de caja abierto. Ábrelo cuando haya internet para poder vender.', 'error'); return; }
                     if (!this.lista.length) return;
-                    if (this.mesa && this.porEnviar.length && !confirm('Hay productos que aún no salieron a cocina. ¿Cobrar igual?')) return;
+                    if (this.mesa && !this.mesa.hotel && this.porEnviar.length && !confirm('Hay productos que aún no salieron a cocina. ¿Cobrar igual?')) return;
                     const medio = this.p.medios[0]?.id;
-                    this.cobro = { modal: true, tdocod: this.p.empresa.tdocod, clinum: '', clinom: '', clidir: '', observaciones: '', paga: '',
-                        pagos: [{ medio, monto: this.total, operacion: '' }] };
+                    // Habitación: el comprobante sale a nombre del huésped (si dejó su documento)
+                    const huesped = this.mesa?.hotel && /^(\d{8}|\d{11})$/.test(String(this.mesa.documento || '')) ? this.mesa : null;
+                    this.cobro = { modal: true, tdocod: this.p.empresa.tdocod, clinum: huesped ? String(huesped.documento) : '', clinom: huesped ? huesped.cliente : '',
+                        clidir: '', observaciones: this.mesa?.hotel ? this.mesa.nombre : '', paga: '', pagos: [{ medio, monto: this.total, operacion: '' }] };
                 },
 
                 get sumaPagos() { return r2(this.cobro.pagos.reduce((s, x) => s + Number(x.monto || 0), 0)); },
@@ -390,8 +410,9 @@
                     try {
                         const { serie, numero } = await C.siguienteNumero(c.tdocod);
                         const venta = {
-                            uuid: uuid(), usuario: this.p.usuario.id, tdocod: c.tdocod, serie, numero, fecha: ahora(), id_turno: this.p.turno.id, origen: this.p.empresa.origen,
-                            mesa: this.mesa?.id || null, mesa_nombre: this.mesa?.nombre || null, mozo: this.mesa?.mozo || null, pedido: this.mesa?.ped_id || null, ...cliente,
+                            uuid: uuid(), usuario: this.p.usuario.id, tdocod: c.tdocod, serie, numero, fecha: ahora(), id_turno: this.p.turno.id,
+                            origen: this.mesa?.hotel ? 'HOTEL' : this.p.empresa.origen, mesa: this.mesa && !this.mesa.hotel ? this.mesa.id : null,
+                            mesa_nombre: this.mesa?.nombre || null, mozo: this.mesa?.mozo || null, pedido: this.mesa?.ped_id || null, ...cliente,
                             observaciones: c.observaciones.trim().slice(0, 90) || null, total, paga: Number(c.paga || 0),
                             items: this.lista.map((i) => ({ id: i.id, descripcion: String(i.nombre).trim().toUpperCase(), cantidad: i.cantidad, precio: i.precio, presentacion: i.presentacion })),
                             pagos: c.pagos.filter((x) => Number(x.monto) > 0).map((x) => ({ medio: Number(x.medio), monto: r2(x.monto), operacion: x.operacion || null,
@@ -399,7 +420,7 @@
                         };
                         await C.guardarVenta(venta);
                         if (imprimir) await this.imprimirVenta(venta);
-                        if (this.mesa) { await C.borrarMesa(this.mesa.id); this.mesa = null; this.vista = 'mesas'; } else { this.carrito = []; }
+                        if (this.mesa) { const hotel = this.mesa.hotel; await C.borrarMesa(this.mesa.id); this.mesa = null; this.vista = hotel ? 'habitaciones' : 'mesas'; } else { this.carrito = []; }
                         this.ultima = venta;
                         if (c.modal) { this.cobro = null; } else { this.pvNuevo(); this.$nextTick(() => this.$refs.pvBuscador?.focus()); }
                         this.avisar(`Venta ${serie}-${String(numero).padStart(8, '0')} guardada en esta PC.` + (this.online ? '' : ' Se subirá sola cuando vuelva el internet.'));
@@ -519,8 +540,10 @@
                 <nav class="flex gap-1 px-3 pt-3">
                     <button type="button" @click="irA('pv')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'pv' ? 'bg-white text-indigo-700' : 'text-gray-500'">Punto de venta</button>
                     <button type="button" x-show="p.mesas.length" @click="irA('venta')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'venta' ? 'bg-white text-indigo-700' : 'text-gray-500'">PV Restaurante</button>
-                    <button type="button" x-show="p.mesas.length" @click="mesa ? (vista = 'mesa') : irA('mesas')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'mesas' || vista === 'mesa' ? 'bg-white text-indigo-700' : 'text-gray-500'">
-                        Mesas <span class="text-xs" x-show="mesasAbiertas.length" x-text="'(' + mesasAbiertas.length + ')'"></span></button>
+                    <button type="button" x-show="p.mesas.length" @click="mesa && !mesa.hotel ? (vista = 'mesa') : irA('mesas')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'mesas' || (vista === 'mesa' && !mesa?.hotel) ? 'bg-white text-indigo-700' : 'text-gray-500'">
+                        Mesas <span class="text-xs" x-show="mesasAbiertas.filter((m) => !m.hotel).length" x-text="'(' + mesasAbiertas.filter((m) => !m.hotel).length + ')'"></span></button>
+                    <button type="button" x-show="p.hotel" @click="mesa?.hotel ? (vista = 'mesa') : irA('habitaciones')" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'habitaciones' || (vista === 'mesa' && mesa?.hotel) ? 'bg-white text-indigo-700' : 'text-gray-500'">
+                        🛏️ Habitaciones <span class="text-xs" x-show="habitaciones.length" x-text="'(' + habitaciones.length + ')'"></span></button>
                     <button type="button" @click="irA('ventas'); refrescar()" class="px-4 py-2 rounded-t-lg text-sm font-bold" :class="vista === 'ventas' ? 'bg-white text-indigo-700' : 'text-gray-500'">Ventas de esta PC</button>
                 </nav>
 
@@ -887,11 +910,32 @@
                         Al volver el internet, ese pedido se cierra solo y la mesa queda libre.</p>
                 </div>
 
+                {{-- Hotel: habitaciones ocupadas con lo que falta cobrar (alojamiento, horas extra y consumos) --}}
+                <div x-show="vista === 'habitaciones'" class="flex-1 overflow-y-auto px-3 pb-3 pt-2 space-y-4">
+                    <div>
+                        <h1 class="text-2xl font-extrabold text-slate-800">🛏️ Habitaciones por cobrar</h1>
+                        <p class="text-xs text-slate-500">Las que estaban ocupadas en el sistema con algo pendiente. Toca una para cobrarla o agregarle consumos.</p>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                        <template x-for="h in habitaciones" :key="h.ped_id">
+                            <button type="button" @click="abrirHabitacion(h)" class="rounded-2xl bg-orange-500 hover:brightness-110 text-white text-left shadow-sm p-3 min-h-[96px]">
+                                <span class="block text-lg font-extrabold" x-text="'HAB. ' + h.habitacion"></span>
+                                <span class="block text-xs font-semibold truncate" x-text="h.cliente"></span>
+                                <span class="block text-sm font-extrabold mt-1" x-text="'S/ ' + totalHabitacion(h)"></span>
+                                <span class="block text-[11px] opacity-90" x-text="'Sale: ' + String(h.salida).slice(5, 16).replace('T', ' ')"></span>
+                            </button>
+                        </template>
+                    </div>
+                    <p x-show="!habitaciones.length" class="text-center text-sm text-slate-400 py-8">No hay habitaciones con algo por cobrar.</p>
+                    <p class="text-xs text-slate-500">Sin internet no se registran ingresos ni salidas: solo se cobra. Al volver el internet, el cobro se aplica a la estadía;
+                        la habitación sigue ocupada hasta que le des "Dar salida" en el Hotel. Para vender algo suelto usa <b>Punto de venta</b>.</p>
+                </div>
+
                 {{-- Pedido de la mesa (como la pantalla de comanda): productos a la izquierda, pedido a la derecha --}}
                 <div x-show="vista === 'mesa'" class="flex-1 flex flex-col min-h-0 px-3 pb-3 pt-2 gap-3">
                     <div class="flex items-center gap-3 bg-white rounded-xl shadow-sm px-3 py-2">
-                        <button type="button" @click="salirMesa()" class="px-3 py-1.5 rounded-lg bg-slate-100 text-sm font-semibold hover:bg-slate-200">← Mesas</button>
-                        <h2 class="text-lg font-extrabold uppercase" x-text="'Mesa ' + (mesa ? (p.mesas.find((x) => x.id === mesa.id)?.piso || '') + ' - ' + mesa.nombre : '')"></h2>
+                        <button type="button" @click="salirMesa()" class="px-3 py-1.5 rounded-lg bg-slate-100 text-sm font-semibold hover:bg-slate-200" x-text="mesa?.hotel ? '← Habitaciones' : '← Mesas'"></button>
+                        <h2 class="text-lg font-extrabold uppercase" x-text="mesa?.hotel ? mesa.nombre + ' · ' + (mesa.cliente || '') : 'Mesa ' + (mesa ? (p.mesas.find((x) => x.id === mesa.id)?.piso || '') + ' - ' + mesa.nombre : '')"></h2>
                     </div>
                     <input x-model="busqueda" @keydown.enter.prevent="buscarEnter()" placeholder="🔎 Buscar producto…" class="h-11 rounded-xl border-slate-200 shadow-sm text-sm">
                     <div class="grid grid-rows-2 grid-flow-col auto-cols-max gap-2 overflow-x-auto pb-1">
