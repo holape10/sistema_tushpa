@@ -24,6 +24,7 @@
         @php
             $yo = auth('superadmin')->user();
             $ticketsNuevos = \App\Http\Controllers\Admin\TicketController::sinLeer();
+            $erroresNuevos = $yo->es_dueno ? \App\Http\Controllers\Admin\ErrorController::pendientes() : 0;
             $mensajesNuevos = $yo->es_dueno ? \Illuminate\Support\Facades\DB::connection('central')->table('web_contactos')->where('atendido', false)->count() : 0;
             // Menú por grupos, como el del sistema de ventas: [nombre, ruta, patrón de ruta activa, aviso, ícono (path SVG)]
             $grupos = array_filter([
@@ -48,6 +49,7 @@
                 ] : [],
                 'Sistema' => array_filter([
                     $yo->es_dueno || $yo->puede_crear_usuarios ? ['Usuarios', 'admin.usuarios.index', 'admin.usuarios.*', 0, 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'] : null,
+                    $yo->es_dueno ? ['Errores del sistema', 'admin.errores.index', 'admin.errores.*', $erroresNuevos, 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z'] : null,
                     $yo->es_dueno ? ['Agente', 'admin.agente.index', 'admin.agente.*', 0, 'M9 17v2m6-2v2M5 7h14a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2zm7-4v4'] : null,
                     $yo->es_dueno ? ['Respaldos', 'admin.respaldos.index', 'admin.respaldos.*', 0, 'M4 7v10c0 2 3.6 3 8 3s8-1 8-3V7M4 7c0 2 3.6 3 8 3s8-1 8-3M4 7c0-2 3.6-3 8-3s8 1 8 3m-16 5c0 2 3.6 3 8 3s8-1 8-3'] : null,
                 ]),
@@ -130,7 +132,7 @@
                 <button type="button" @mouseenter="if (grande) abierto = true" @click="abierto = !abierto"
                         class="p-2.5 rounded-xl bg-indigo-950 text-white shadow hover:bg-indigo-800 relative" aria-label="Menú">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
-                    @if ($ticketsNuevos + $mensajesNuevos)<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 ring-2 ring-white"></span>@endif
+                    @if ($ticketsNuevos + $mensajesNuevos + $erroresNuevos)<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 ring-2 ring-white"></span>@endif
                 </button>
                 <p class="font-bold text-slate-800">TUSHPA <span class="font-normal text-slate-400">· @yield('title', 'Panel')</span></p>
             </header>

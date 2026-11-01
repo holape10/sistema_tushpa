@@ -55,4 +55,10 @@ return [
         'plantilla_doctor' => env('WHATSAPP_PLANTILLA_DOCTOR', 'agenda_doctor'),
     ],
 
+    // Monitor de errores: avisa al Telegram del dueño cuando el sistema falla en alguna empresa. Vacío = solo se anota en el panel
+    'telegram' => [
+        'token' => env('TELEGRAM_BOT_TOKEN'),
+        'chat_id' => env('TELEGRAM_CHAT_ID'),
+    ],
+
 ];

@@ -3,6 +3,7 @@
 use App\Http\Middleware\IdentificarEmpresa;
 use App\Http\Middleware\SoloMenuContador;
 use App\Http\Middleware\SoloWifiLocal;
+use App\Support\MonitorErrores;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -39,5 +40,6 @@ return Application::configure(basePath: dirname(__DIR__))
         // aquí luego registramos un middleware "VerificarEmpresaCreada"
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Monitor de errores: se anota en el panel y avisa al Telegram del dueño (además del log de siempre)
+        $exceptions->report(fn (Throwable $e) => MonitorErrores::registrar($e));
     })->create();

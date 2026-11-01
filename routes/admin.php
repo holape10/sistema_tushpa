@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\CertificadoController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\ComprobanteController;
 use App\Http\Controllers\Admin\DatosCobroController;
+use App\Http\Controllers\Admin\ErrorController;
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\PromocionController;
@@ -94,6 +95,11 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/usuarios/{usuario}/estado', [UsuarioController::class, 'estado'])->whereNumber('usuario')->name('usuarios.estado');
     Route::post('/usuarios/{usuario}/clave', [UsuarioController::class, 'clave'])->whereNumber('usuario')->name('usuarios.clave');
     // Mis cuentas y QR de cobro (cada usuario, también el dueño, puede tener varios)
+    // Monitor de errores del sistema (solo el dueño)
+    Route::get('/errores', [ErrorController::class, 'index'])->name('errores.index');
+    Route::post('/errores/probar', [ErrorController::class, 'probar'])->middleware('throttle:5,1')->name('errores.probar');
+    Route::post('/errores/resolver-todos', [ErrorController::class, 'resolverTodos'])->name('errores.resolver_todos');
+    Route::post('/errores/{id}/resolver', [ErrorController::class, 'resolver'])->whereNumber('id')->name('errores.resolver');
     Route::get('/mis-cobros', [DatosCobroController::class, 'index'])->name('cobros.index');
     Route::post('/mis-cobros/cuenta/{id?}', [DatosCobroController::class, 'guardarCuenta'])->whereNumber('id')->name('cobros.cuenta');
     Route::post('/mis-cobros/qr/{id?}', [DatosCobroController::class, 'guardarQr'])->whereNumber('id')->name('cobros.qr');

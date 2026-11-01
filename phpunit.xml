@@ -11,6 +11,10 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <!-- Flujos de dinero con MySQL (base DB_PRUEBAS_DATABASE, por defecto bd_pruebas_tushpa): ventas, stock, IGV, SUNAT -->
+        <testsuite name="Flujos">
+            <directory>tests/Flujos</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
