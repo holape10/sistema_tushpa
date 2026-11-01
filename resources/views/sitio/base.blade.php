@@ -39,6 +39,7 @@
     </main>
     <p class="text-center text-white-50 small pb-4 mb-0">
         &copy; {{ date('Y') }} TUSHPA · <a class="text-white-50" href="https://wa.me/{{ config('soporte.whatsapp') }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> {{ config('soporte.telefono') }}</a> · <a class="text-white-50" href="mailto:{{ config('soporte.correo') }}"><i class="fas fa-envelope"></i> {{ config('soporte.correo') }}</a>
+        · <a class="text-white-50" href="{{ route('sitio.privacidad') }}">Privacidad</a> · <a class="text-white-50" href="{{ route('sitio.terminos') }}">Condiciones</a>
     </p>
     @stack('scripts')
     @include('sitio.partials.extras')

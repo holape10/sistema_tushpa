@@ -59,7 +59,8 @@
             </div>
         @endif
         <hr class="my-4" style="border-color:rgba(255,255,255,.12)">
-        <p class="small text-center mb-0">&copy; {{ date('Y') }} TUSHPA · {{ config('soporte.nombre') }}. Todos los derechos reservados.</p>
+        <p class="small text-center mb-0">&copy; {{ date('Y') }} TUSHPA · {{ config('soporte.nombre') }}. Todos los derechos reservados.
+            · <a href="{{ route('sitio.privacidad') }}" class="text-reset">Política de privacidad</a> · <a href="{{ route('sitio.terminos') }}" class="text-reset">Condiciones del servicio</a></p>
         {{-- La base de ubicación por IP (DB-IP Lite) pide citarla (licencia CC BY 4.0) --}}
         <p class="text-center mb-0 mt-1" style="font-size:.7rem;opacity:.5"><a href="https://db-ip.com" target="_blank" rel="noopener" style="color:inherit">IP Geolocation by DB-IP</a></p>
     </div>
