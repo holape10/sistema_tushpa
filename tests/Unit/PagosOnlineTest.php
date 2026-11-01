@@ -85,6 +85,19 @@ class PagosOnlineTest extends TestCase
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/v2/charges') && $r['amount'] === 8000 && $r['source_id'] === 'tkn_test_abc');
     }
 
+    public function test_volver_a_intentar_el_mismo_pago_usa_la_misma_orden(): void
+    {
+        Http::fake(['api.culqi.com/v2/orders' => Http::response(['id' => 'ord_test_9'], 201)]);
+
+        $primero = PagosOnline::preparar($this->cliente, 1);
+        $segundo = PagosOnline::preparar($this->cliente, 1);
+
+        $this->assertSame($primero->id, $segundo->id);
+        $this->assertSame('ord_test_9', $segundo->orden);
+        Http::assertSentCount(1);
+        $this->assertNotSame($primero->id, PagosOnline::preparar($this->cliente, 12)->id, 'Si cambia a 1 año es otro pago.');
+    }
+
     public function test_si_el_banco_rechaza_la_tarjeta_sigue_suspendida(): void
     {
         Http::fake(['api.culqi.com/v2/orders' => Http::response(['id' => 'ord_test_2'], 201),

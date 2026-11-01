@@ -68,6 +68,13 @@ class PagosOnline
         if (! $opcion) {
             throw new \RuntimeException('Elige 1 mes o 1 año.');
         }
+        // Vuelve a intentar el mismo pago: se usa la orden que ya estaba esperando (no se llena Culqi de órdenes pendientes)
+        $anterior = DB::connection('central')->table('pagos_online')->where('cliente_id', $cliente->id)->where('meses', $meses)
+            ->where('monto', $opcion['monto'])->where('estado', 'PENDIENTE')->whereNotNull('culqi_orden')
+            ->where('created_at', '>=', now()->subHours(self::HORAS_ORDEN - 1))->latest('id')->first();
+        if ($anterior) {
+            return (object) ['id' => (int) $anterior->id, 'monto' => $opcion['monto'], 'texto' => $opcion['texto'], 'orden' => $anterior->culqi_orden];
+        }
         $id = DB::connection('central')->table('pagos_online')->insertGetId([
             'cliente_id' => $cliente->id, 'meses' => $meses, 'monto' => $opcion['monto'], 'estado' => 'PENDIENTE',
             'correo' => self::correo($cliente), 'vence_antes' => $cliente->vence_el?->toDateString(), 'created_at' => now(), 'updated_at' => now(),

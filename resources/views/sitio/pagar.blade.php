@@ -46,8 +46,8 @@
                 {{-- 2) Esperando el pago con QR (billeteras, agentes, banca móvil) --}}
                 <div data-paso="esperando" class="text-center d-none">
                     <div class="spinner-border text-primary mb-3" role="status"></div>
-                    <h2 class="h4 fw-bold">Esperando tu pago…</h2>
-                    <p class="text-muted mb-0">Apenas pagues en tu app, esta página se actualiza sola y tu sistema se activa. No la cierres.</p>
+                    <h2 class="h4 fw-bold" id="espera-titulo">Esperando tu pago…</h2>
+                    <p class="text-muted mb-0" id="espera-texto">Apenas pagues en tu app, esta página se actualiza sola y tu sistema se activa. No la cierres.</p>
                     <button type="button" id="btn-reabrir" class="btn btn-link mt-2">Volver a ver las opciones de pago</button>
                 </div>
 
@@ -77,6 +77,14 @@
             let pago = null, checkout = null, vigilando = null;
 
             const paso = (nombre) => document.querySelectorAll('[data-paso]').forEach((d) => d.classList.toggle('d-none', d.dataset.paso !== nombre));
+            // Tarjeta o Yape: se está cobrando ahora · QR, agentes o banca móvil: se espera que pague en su app
+            const espera = (cobrando) => {
+                $('#espera-titulo').textContent = cobrando ? 'Procesando tu pago…' : 'Esperando tu pago…';
+                $('#espera-texto').textContent = cobrando ? 'Estamos confirmando el pago, no cierres esta página.'
+                    : 'Apenas pagues en tu app, esta página se actualiza sola y tu sistema se activa. No la cierres.';
+                $('#btn-reabrir').classList.toggle('d-none', cobrando);
+                paso('esperando');
+            };
             const error = (texto) => { const e = $('#error'); e.textContent = texto || ''; e.classList.toggle('d-none', !texto); };
             const enviar = (url, datos) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify(datos) })
                 .then(async (r) => ({ ok: r.ok, datos: await r.json().catch(() => ({})) }));
@@ -122,7 +130,7 @@
                 if (checkout.token) {
                     const token = checkout.token.id, correo = checkout.token.email || @js($correo) || null;
                     checkout.close();
-                    paso('esperando');
+                    espera(true);
                     const dispositivo = window.Culqi3DS ? await Culqi3DS.generateDevice().catch(() => null) : null;
                     const datos = { pago: pago.pago, token, correo, dispositivo };
                     const r = await enviar(rutas.cobrar, datos);
@@ -135,7 +143,7 @@
                     terminarCobro(r);
                 } else if (checkout.order) {
                     checkout.close();
-                    paso('esperando');
+                    espera(false);
                     vigilar();
                 } else if (checkout.error) {
                     error(checkout.error.user_message || checkout.error.merchant_message || 'No se pudo completar el pago.');

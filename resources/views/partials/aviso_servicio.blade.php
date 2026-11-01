@@ -8,6 +8,9 @@
     $clienteTenancy = \App\Support\Tenancy\Tenancy::cliente();
     $pago = config('soporte.pago');
     $soporteWa = config('soporte.whatsapp');
+    // Pago en línea (Culqi): paga y se renueva solo, sin mandar captura
+    $enLinea = $clienteTenancy && ($clienteTenancy->aviso_mensaje || $clienteTenancy->enPrueba()) && \Illuminate\Support\Facades\Route::has('sitio.pagar') && \App\Support\Tenancy\PagosOnline::disponiblePara($clienteTenancy)
+        ? \Illuminate\Support\Facades\URL::signedRoute('sitio.pagar', $clienteTenancy) : null;
 @endphp
 @php
     // Prueba gratis (registro desde la web): aviso propio mientras no haya una advertencia de pago del panel
@@ -34,7 +37,11 @@
                 </p>
             </div>
             <div style="display:flex;gap:8px;align-items:center">
-                <button type="button" onclick="document.getElementById('pago-servicio').style.display='flex'" style="border:0;border-radius:12px;background:#fff;color:#312e81;font-weight:800;padding:10px 14px;cursor:pointer">Activar mi plan</button>
+                @if ($enLinea)
+                    <a href="{{ $enLinea }}" target="_blank" rel="noopener" style="border-radius:12px;background:#fff;color:#312e81;font-weight:800;padding:10px 14px;text-decoration:none">💳 Activar mi plan</a>
+                @else
+                    <button type="button" onclick="document.getElementById('pago-servicio').style.display='flex'" style="border:0;border-radius:12px;background:#fff;color:#312e81;font-weight:800;padding:10px 14px;cursor:pointer">Activar mi plan</button>
+                @endif
                 <button type="button" onclick="document.getElementById('aviso-servicio').style.display='none'" title="Ocultar" style="border:0;background:transparent;color:#c7d2fe;font-size:24px;cursor:pointer;line-height:1">&times;</button>
             </div>
         </div>
@@ -59,7 +66,10 @@
                 <p style="margin:4px 0 0;font-size:14px;line-height:1.45;color:#fde68a">{{ $clienteTenancy->aviso_mensaje }}</p>
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <button type="button" onclick="document.getElementById('pago-servicio').style.display='flex'" style="border:0;border-radius:12px;background:#f59e0b;color:#451a03;font-weight:800;padding:10px 14px;cursor:pointer">Ver cómo pagar</button>
+                @if ($enLinea)
+                    <a href="{{ $enLinea }}" target="_blank" rel="noopener" style="border-radius:12px;background:#f59e0b;color:#451a03;font-weight:800;padding:10px 14px;text-decoration:none">💳 Pagar en línea</a>
+                @endif
+                <button type="button" onclick="document.getElementById('pago-servicio').style.display='flex'" style="border:0;border-radius:12px;background:{{ $enLinea ? 'transparent' : '#f59e0b' }};color:{{ $enLinea ? '#fde68a' : '#451a03' }};font-weight:800;padding:10px 14px;cursor:pointer{{ $enLinea ? ';text-decoration:underline' : '' }}">{{ $enLinea ? 'Otras formas de pago' : 'Ver cómo pagar' }}</button>
                 <button type="button" onclick="document.getElementById('aviso-servicio').style.display='none'" title="Ocultar" style="border:0;background:transparent;color:#fed7aa;font-size:24px;cursor:pointer;line-height:1">&times;</button>
             </div>
         </div>
@@ -69,6 +79,11 @@
     <div id="pago-servicio" onclick="if (event.target === this) this.style.display='none'" style="display:none;position:fixed;inset:0;z-index:2147481500;background:rgba(15,23,42,.65);align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
         <div style="background:#fff;border-radius:22px;max-width:380px;width:100%;padding:20px;text-align:center;max-height:92vh;overflow:auto">
             <p style="margin:0 0 4px;font-weight:800;font-size:18px;color:#0f172a">Paga tu servicio TUSHPA</p>
+            @if ($enLinea)
+                <a href="{{ $enLinea }}" target="_blank" rel="noopener" style="display:block;margin:10px 0 14px;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;font-weight:800;border-radius:14px;padding:13px;text-decoration:none">💳 Pagar en línea (tarjeta, Yape o QR)
+                    <span style="display:block;font-weight:500;font-size:12px;color:#dbeafe">Se renueva solo apenas se confirma el pago</span></a>
+                <p style="margin:0 0 10px;font-size:12px;color:#94a3b8">O por transferencia y nos envías la captura:</p>
+            @endif
             <p style="margin:0 0 12px;font-size:13px;color:#64748b">Yape, Plin o transferencia a {{ $pago['titular'] }}</p>
             @if (is_file(public_path($pago['qr'])))<img src="{{ asset($pago['qr']) }}" alt="QR de pago" style="width:100%;border-radius:14px">@endif
             <p style="margin:12px 0 2px;font-size:13px;color:#334155">Cuenta {{ $pago['banco'] }}: <b>{{ $pago['cuenta'] }}</b></p>
