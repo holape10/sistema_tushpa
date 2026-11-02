@@ -18,6 +18,37 @@
         {{ $propios ? '✔ Tus empresas suspendidas ven tus '.$cuentas->count().' cuenta(s) y '.$qrs->count().' QR.' : 'Todavía no agregaste cuentas ni QR.' }}
     </div>
 
+    {{-- El dueño sin cuentas propias: lo que hoy ven sus empresas (la configuración del sistema), para verlo y descargarlo --}}
+    @if (! $propios && $yo->es_dueno)
+        @php
+            $pagoSistema = config('soporte.pago');
+            $qrSistema = $pagoSistema['qr'] && is_file(public_path($pagoSistema['qr'])) ? $pagoSistema['qr'] : null;
+        @endphp
+        <section class="mb-6 bg-white rounded-2xl shadow-sm p-4 flex flex-col sm:flex-row gap-5">
+            @if ($qrSistema)
+                <div class="sm:w-56 shrink-0 text-center">
+                    <img src="{{ asset($qrSistema) }}" alt="QR de pago" class="w-full rounded-xl bg-slate-50">
+                    <a href="{{ asset($qrSistema) }}" download="QR-pago-{{ \Illuminate\Support\Str::slug($pagoSistema['titular']) }}.{{ pathinfo($qrSistema, PATHINFO_EXTENSION) }}"
+                       class="mt-2 inline-flex items-center gap-1 px-4 h-9 rounded-xl bg-indigo-600 text-white text-sm font-bold">⬇ Descargar QR</a>
+                </div>
+            @endif
+            <div class="flex-1 space-y-2 text-sm" x-data="{ copiado: '' }">
+                <p class="font-bold text-slate-800">📌 Lo que ven hoy tus empresas suspendidas</p>
+                <p class="text-slate-500">Son los datos de la configuración del sistema. Si quieres cambiarlos desde aquí, agrégalos abajo como cuenta y QR.</p>
+                <p class="text-slate-600">Titular: <b>{{ $pagoSistema['titular'] }}</b></p>
+                @foreach (['Cuenta '.$pagoSistema['banco'] => $pagoSistema['cuenta'], 'CCI' => $pagoSistema['cci']] as $etiqueta => $numero)
+                    @if ($numero)
+                        <div class="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                            <span class="flex-1"><span class="block text-[11px] font-bold uppercase text-slate-400">{{ $etiqueta }}</span><b class="font-mono">{{ $numero }}</b></span>
+                            <button type="button" @click="navigator.clipboard.writeText(@js(preg_replace('/\D/', '', $numero))); copiado = @js($etiqueta)"
+                                    class="px-3 h-8 rounded-lg bg-slate-100 text-xs font-semibold" x-text="copiado === @js($etiqueta) ? '✔ Copiado' : 'Copiar'"></button>
+                        </div>
+                    @endif
+                @endforeach
+            </div>
+        </section>
+    @endif
+
     <div class="grid lg:grid-cols-2 gap-5">
         {{-- ================= Cuentas bancarias ================= --}}
         <section class="space-y-3" x-data="{ nueva: {{ $cuentas->isEmpty() || old('_form') === 'cuenta' ? 'true' : 'false' }} }">
@@ -102,6 +133,8 @@
                         <img src="{{ asset($q->qr) }}?v={{ @filemtime(public_path($q->qr)) }}" alt="QR {{ $q->banco }}" class="w-full aspect-square object-contain rounded-xl bg-slate-50">
                         <div x-show="!editar" class="mt-2 flex items-start gap-2">
                             <div class="flex-1 min-w-0"><p class="font-bold text-slate-800 truncate">{{ $q->banco }}</p><p class="text-xs text-slate-500 truncate">{{ $q->titular ?: $yo->nombre }}</p></div>
+                            <a href="{{ asset($q->qr) }}" download="QR-{{ \Illuminate\Support\Str::slug($q->banco) }}.{{ pathinfo($q->qr, PATHINFO_EXTENSION) }}"
+                               class="px-2.5 h-8 leading-8 rounded-lg bg-indigo-50 text-xs" title="Descargar el QR">⬇</a>
                             <button type="button" @click="editar = true" class="px-2.5 h-8 rounded-lg bg-slate-100 text-xs" title="Cambiar">✏️</button>
                             <form method="POST" action="{{ route('admin.cobros.eliminar', $q->id) }}" onsubmit="return confirm('¿Quitar el QR {{ $q->banco }}?')">@csrf
                                 <button class="px-2.5 h-8 rounded-lg bg-rose-50 text-xs" title="Quitar">🗑</button></form>

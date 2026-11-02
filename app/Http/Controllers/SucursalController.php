@@ -6,6 +6,7 @@ use App\Models\EmpresaNegocio;
 use App\Models\Turno;
 use App\Support\ControlStock;
 use App\Support\DemoDatos;
+use App\Support\LogoNegocio;
 use App\Support\SucursalNueva;
 use App\Support\Ubigeo;
 use Illuminate\Http\Request;
@@ -118,9 +119,10 @@ class SucursalController extends Controller
             'descuento_max_cajero' => 'nullable|numeric|min:0|max:100',
             'permite_propina' => 'nullable|boolean',
             'tipo_cambio_usd' => 'nullable|numeric|min:0|max:20',
+            'logo_suc' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
         ];
         $nombres = ['nombre_comercial' => 'Nombre comercial', 'codigofiscal' => 'Código de establecimiento',
-            'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión', 'control_stock' => 'Venta con o sin stock'];
+            'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión', 'control_stock' => 'Venta con o sin stock', 'logo_suc' => 'Logo de la sucursal'];
 
         foreach (self::SERIES as $c) {
             $reglas[$c['serie']] = ['required', 'regex:'.$c['regex']];
@@ -186,6 +188,16 @@ class SucursalController extends Controller
         $datos['cabecera_a4'] = trim((string) ($datos['cabecera_a4'] ?? '')) ?: null;
         $datos['clinica_doctor_cobra'] = $request->boolean('clinica_doctor_cobra');
         $datos['tipo_cambio_usd'] = (float) ($datos['tipo_cambio_usd'] ?? 0) > 0 ? round((float) $datos['tipo_cambio_usd'], 3) : null;
+
+        // Logo propio de la sucursal (sin logo propio usa el de la empresa)
+        unset($datos['logo_suc']);
+        if ($request->hasFile('logo_suc')) {
+            LogoNegocio::borrar($sucursal->logo_suc);
+            $datos['logo_suc'] = LogoNegocio::guardar($request->file('logo_suc'), $sucursal->IdEmpresa.'_suc'.$sucursal->id_empresa_negocio);
+        } elseif ($request->boolean('quitar_logo_suc') && $sucursal->logo_suc) {
+            LogoNegocio::borrar($sucursal->logo_suc);
+            $datos['logo_suc'] = null;
+        }
 
         DB::transaction(function () use ($sucursal, $datos) {
             // Bloqueo: si en este momento alguien está cobrando, se espera a que termine

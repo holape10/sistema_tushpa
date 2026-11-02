@@ -28,7 +28,8 @@
     @if ($a4)
         <div class="cab">
             <div>
-                @if (!empty($empresa->LogEmpresa))<img src="{{ asset($empresa->LogEmpresa) }}" alt="" style="max-height:70px;max-width:200px;margin-bottom:6px"><br>@endif
+                @php $logoProforma = \App\Support\LogoNegocio::de($negocio->logo_suc ?? null, $empresa->LogEmpresa ?? null); @endphp
+                @if ($logoProforma)<img src="{{ asset($logoProforma) }}" alt="" style="max-height:70px;max-width:200px;margin-bottom:6px"><br>@endif
                 <strong style="font-size:15px">{{ $empresa->NomEmpresa ?? '' }}</strong><br>
                 {{ $negocio->nombre_comercial ?? '' }}<br>
                 {{ $negocio->direccion ?? '' }}<br>

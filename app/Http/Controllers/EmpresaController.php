@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Empresa;
 use App\Support\ConsultaPeru;
 use App\Support\EmpresaInicial;
+use App\Support\LogoNegocio;
 use App\Support\Sunat\Certificado;
 use App\Support\Sunat\Sire;
 use Illuminate\Http\Request;
@@ -113,39 +114,25 @@ class EmpresaController extends Controller
 
         $empresa = Empresa::findOrFail($id);
 
-        // 2. Asignar valores normales
+        // 2. Asignar valores normales (formato, copias de impresión, ticket en pantalla y correo de envío ya no se usan:
+        // el formato va por sucursal; se dejan como están)
         $empresa->NomEmpresa = $request->get('nomEmpresa');
         $empresa->DirEmpresa = $request->get('dirEmpresa');
         $empresa->EstEmpresa = $request->get('estEmpresa', 'Activo');
         $empresa->wsusuario = $request->get('txtWsUsuario');
         $empresa->claveSunat = $request->get('txtWsContrasena');
-        $empresa->fec_ini_cer = $request->get('fecini');
-        $empresa->fec_fin_cer = $request->get('fecfin');
         $empresa->produccion = $request->get('produccion');
-        $empresa->ticket_pantalla = $request->get('ticket_pantalla');
-        $empresa->correo_envio = $request->get('correo_envio');
-        $empresa->contrasena_envio = $request->get('contrasena_envio');
         $empresa->passcert = $request->get('txtPassCert');
-        $empresa->formato = $request->get('formato');
-        $empresa->imp_pedido = $request->get('imp_pedido');
-        $empresa->imp_venta = $request->get('imp_venta');
         $empresa->icbper = $request->get('icbper');
         $empresa->tip_env_fac_id = $request->get('tip_env_fac');
         $empresa->tipo_envio = $request->get('envio');
 
-        // 3. Logo Login
+        // 3. Logo de la empresa (lo usan las sucursales que no tienen logo propio)
         if ($request->hasFile('logologin')) {
-            // Nombre generado por el servidor: nunca se usa el nombre ni la extensión que manda el cliente
-            $file = $request->file('logologin');
-            $nombreLogo = $empresa->IdEmpresa.'_'.time().'.'.$file->guessExtension();
-            // Dentro de public/imagenes: es la carpeta pública donde el servidor permite escribir (permisos y SELinux)
-            $file->move(public_path('imagenes/logos'), $nombreLogo);
-            $empresa->LogEmpresa = 'imagenes/logos/'.$nombreLogo;
+            $empresa->LogEmpresa = LogoNegocio::guardar($request->file('logologin'), $empresa->IdEmpresa);
         } elseif ($request->boolean('quitar_logo') && $empresa->LogEmpresa) {
             // Sin logo: tickets y comprobantes salen solo con el nombre del negocio
-            if (str_starts_with($empresa->LogEmpresa, 'imagenes/logos/') && is_file(public_path($empresa->LogEmpresa))) {
-                @unlink(public_path($empresa->LogEmpresa));
-            }
+            LogoNegocio::borrar($empresa->LogEmpresa);
             $empresa->LogEmpresa = null;
         }
 

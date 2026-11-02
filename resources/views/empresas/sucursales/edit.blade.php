@@ -7,13 +7,14 @@
     @php
         $input = 'block w-full mt-1 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500';
         $campo = fn($nombre) => old($nombre, $sucursal->$nombre);
+        // Cada grupo llena su fila: sin tarjetas sueltas ni huecos
         $grupos = [
-            ['titulo' => 'Comprobantes de venta', 'icono' => 'fa-receipt', 'claves' => ['01', '03', '13']],
-            ['titulo' => 'Notas de crédito', 'icono' => 'fa-file-circle-minus', 'claves' => ['07F', '07B']],
-            ['titulo' => 'Notas de débito', 'icono' => 'fa-file-circle-plus', 'claves' => ['08F', '08B']],
-            ['titulo' => 'Proformas (cotizaciones, sin valor tributario)', 'icono' => 'fa-file-lines', 'claves' => ['PR']],
-            ['titulo' => 'Guías de remisión electrónicas', 'icono' => 'fa-truck-fast', 'claves' => ['GR']],
+            ['titulo' => 'Comprobantes de venta', 'icono' => 'fa-receipt', 'claves' => ['01', '03', '13'], 'columnas' => 'sm:grid-cols-3'],
+            ['titulo' => 'Notas de crédito y de débito', 'icono' => 'fa-file-circle-minus', 'claves' => ['07F', '07B', '08F', '08B'], 'columnas' => 'sm:grid-cols-2 xl:grid-cols-4'],
+            ['titulo' => 'Proformas y guías de remisión', 'icono' => 'fa-file-lines', 'claves' => ['PR', 'GR'], 'columnas' => 'sm:grid-cols-2'],
         ];
+        $logoPropio = $sucursal->logo_suc && is_file(public_path($sucursal->logo_suc)) ? $sucursal->logo_suc : null;
+        $logoEmpresa = \App\Support\LogoNegocio::de(null, \Illuminate\Support\Facades\DB::table('empresa')->where('IdEmpresa', $sucursal->IdEmpresa)->value('LogEmpresa'));
         // Clases completas (Tailwind no detecta clases armadas por partes)
         $azul = ['badge' => 'bg-blue-100 text-blue-700', 'texto' => 'text-blue-700'];
         $verde = ['badge' => 'bg-emerald-100 text-emerald-700', 'texto' => 'text-emerald-700'];
@@ -22,12 +23,12 @@
         $ambar = ['badge' => 'bg-amber-100 text-amber-700', 'texto' => 'text-amber-700'];
         $violeta = ['badge' => 'bg-violet-100 text-violet-700', 'texto' => 'text-violet-700'];
         $colores = ['01' => $azul, '03' => $verde, '13' => $gris, '07F' => $rojo, '07B' => $rojo, '08F' => $ambar, '08B' => $ambar, 'PR' => $violeta, 'GR' => $azul];
-        $nombresCortos = ['01' => 'Factura', '03' => 'Boleta', '13' => 'Nota de venta', '07F' => 'De facturas', '07B' => 'De boletas', '08F' => 'De facturas', '08B' => 'De boletas', 'PR' => 'Proforma', 'GR' => 'Guía remitente'];
-        $secciones = ['datos' => ['Datos', 'fa-store'], 'direccion' => ['Dirección', 'fa-location-dot'], 'series' => ['Series', 'fa-hashtag'],
+        $nombresCortos = ['01' => 'Factura', '03' => 'Boleta', '13' => 'Nota de venta', '07F' => 'Crédito · facturas', '07B' => 'Crédito · boletas', '08F' => 'Débito · facturas', '08B' => 'Débito · boletas', 'PR' => 'Proforma', 'GR' => 'Guía remitente'];
+        $secciones = ['datos' => ['Datos y logo', 'fa-store'], 'direccion' => ['Dirección', 'fa-location-dot'], 'series' => ['Series', 'fa-hashtag'],
                       'impresion' => ['Impresión', 'fa-print'], 'venta' => ['Venta', 'fa-cash-register']];
     @endphp
 
-    <form method="POST" action="{{ route('sucursales.update', $sucursal->id_empresa_negocio) }}" class="max-w-6xl mx-auto pb-24"
+    <form method="POST" action="{{ route('sucursales.update', $sucursal->id_empresa_negocio) }}" enctype="multipart/form-data" class="max-w-6xl mx-auto pb-24"
           x-data="{ formato: @js($campo('formato_impresion') ?: 'TICKET'), igv: @js((string) $campo('tip_igv_pred')), pred: @js((string) $campo('tdocod_pred')), stock: @js((string) ($campo('control_stock') ?: 'libre')) }">
         @csrf @method('PATCH')
 
@@ -35,7 +36,9 @@
         <div class="rounded-2xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 text-white p-5 sm:p-6 mb-5 shadow-sm relative isolate overflow-hidden">
             <x-kene-adorno patron="cruces" />
             <div class="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div class="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center text-2xl shrink-0"><i class="fas fa-store"></i></div>
+                <div class="w-14 h-14 rounded-2xl {{ ($logoPropio ?: $logoEmpresa) ? 'bg-white' : 'bg-white/15' }} flex items-center justify-center text-2xl shrink-0 overflow-hidden">
+                    @if ($logoPropio ?: $logoEmpresa)<img src="{{ asset($logoPropio ?: $logoEmpresa) }}" alt="" class="w-full h-full object-contain p-1">@else<i class="fas fa-store"></i>@endif
+                </div>
                 <div class="min-w-0 flex-1">
                     <p class="text-xs uppercase tracking-wider text-indigo-200">Sucursal · RUC {{ $sucursal->IdEmpresa }}</p>
                     <h2 class="text-xl sm:text-2xl font-extrabold truncate">{{ $sucursal->nombre_comercial }}</h2>
@@ -78,6 +81,30 @@
                             <input type="email" name="correo" value="{{ $campo('correo') }}" maxlength="255" placeholder="ventas@minegocio.com" class="{{ $input }}"></label>
                         <label class="text-sm font-medium text-gray-600 sm:col-span-2">Web
                             <input name="web" value="{{ $campo('web') }}" maxlength="255" placeholder="www.minegocio.com" class="{{ $input }}"></label>
+
+                        {{-- Logo propio de la sucursal; sin logo propio usa el de la empresa --}}
+                        <div class="sm:col-span-6 rounded-2xl border border-gray-200 p-4 flex flex-col sm:flex-row gap-4 sm:items-center"
+                             x-data="{ vista: @js($logoPropio ? asset($logoPropio) : null), quitar: false }">
+                            <div class="w-24 h-24 shrink-0 rounded-2xl bg-gray-50 ring-1 ring-gray-200 flex items-center justify-center overflow-hidden">
+                                <template x-if="vista && !quitar"><img :src="vista" alt="" class="w-full h-full object-contain p-2"></template>
+                                <template x-if="!vista || quitar">
+                                    @if ($logoEmpresa)<img src="{{ asset($logoEmpresa) }}" alt="" class="w-full h-full object-contain p-2 opacity-50">@else<span class="text-xs text-gray-400 text-center px-2">Sin logo</span>@endif
+                                </template>
+                            </div>
+                            <div class="flex-1 space-y-1.5">
+                                <p class="text-sm font-semibold text-gray-700">Logo de esta sucursal</p>
+                                <p class="text-xs text-gray-500" x-show="!vista || quitar">
+                                    {{ $logoEmpresa ? 'Ahora usa el logo de la empresa (el de la imagen). Sube uno si esta sucursal tiene el suyo.' : 'Sin logo: los tickets salen solo con el nombre. Sube uno si quieres.' }}</p>
+                                <p class="text-xs text-emerald-600" x-show="vista && !quitar"><i class="fas fa-circle-check"></i> Tickets, comprobantes, carta y tienda de esta sucursal salen con este logo.</p>
+                                <input type="file" name="logo_suc" accept="image/png,image/jpeg,image/webp"
+                                       @change="if ($event.target.files[0]) { vista = URL.createObjectURL($event.target.files[0]); quitar = false }"
+                                       class="block w-full text-sm text-gray-600 file:mr-3 file:rounded-xl file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100">
+                                @if ($logoPropio)
+                                    <label class="inline-flex items-center gap-2 text-sm text-red-600 cursor-pointer">
+                                        <input type="checkbox" name="quitar_logo_suc" value="1" x-model="quitar" class="rounded text-red-600"> Quitar el logo propio (usará el de la empresa)</label>
+                                @endif
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -109,7 +136,7 @@
                         @foreach ($grupos as $g)
                             <div>
                                 <p class="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2"><i class="fas {{ $g['icono'] }} mr-1"></i>{{ $g['titulo'] }}</p>
-                                <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                                <div class="grid {{ $g['columnas'] }} gap-3">
                                     @foreach ($g['claves'] as $clave)
                                         @php $c = $series[$clave]; $color = $colores[$clave]; @endphp
                                         <div class="rounded-2xl border border-gray-200 p-4 hover:border-indigo-300 hover:shadow-sm transition"
