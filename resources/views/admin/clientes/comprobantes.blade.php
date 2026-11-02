@@ -51,7 +51,8 @@
         <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
-                    <tr><th class="px-3 py-2"><input type="checkbox" @change="sel = $event.target.checked ? [...$root.querySelectorAll('[data-id]:not(:disabled)')].map(x => x.value) : []" class="rounded"></th>
+                    <tr><th class="px-3 py-2"><input type="checkbox" :checked="sel.length > 0 && sel.length === disponibles()" :disabled="trabajando || disponibles() === 0"
+                        @change="sel = $event.target.checked ? [...$root.querySelectorAll('[data-id]:not(:disabled)')].map(x => x.value) : []" class="rounded"></th>
                         <th class="px-3 py-2 text-left">Fecha</th><th class="px-3 py-2 text-left">Comprobante</th><th class="px-3 py-2 text-left">Cliente</th>
                         <th class="px-3 py-2 text-right">Total</th><th class="px-3 py-2 text-left">SUNAT</th></tr>
                 </thead>
@@ -83,6 +84,7 @@
             return {
                 sel: [], motivo: '', trabajando: false, progreso: '',
                 get hayVencidos() { return !!document.querySelector('tr[data-vencido="1"]'); },
+                disponibles() { return document.querySelectorAll('[data-id]:not(:disabled)').length; },
                 async uno(accion, id) {
                     const fila = document.querySelector(`tr[data-fila="${id}"]`);
                     const etiqueta = fila.querySelector('.js-estado');
@@ -106,6 +108,13 @@
                     msg.textContent = r.mensaje || ''; msg.title = r.mensaje || '';
                     msg.className = 'js-msg block text-[11px] mt-0.5 line-clamp-2 ' + (r.ok ? 'text-slate-500' : 'text-rose-600 font-semibold');
                     if (r.anulado) fila.classList.add('opacity-50');
+                    // Ya resuelto (aceptado, anulado o descartado): su casillero se apaga para no volver a marcarlo
+                    if (r.ok && (r.anulado || ['ACEPTADO', 'DESCARTADO'].includes(r.estado))) {
+                        const chk = fila.querySelector('[data-id]');
+                        chk.checked = false;
+                        chk.disabled = true;
+                        this.sel = this.sel.filter(x => x !== String(id));
+                    }
                     return r.ok;
                 },
                 async ejecutar(accion) {

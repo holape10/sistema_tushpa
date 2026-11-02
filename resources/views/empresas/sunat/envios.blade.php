@@ -196,6 +196,10 @@
             document.getElementById('btn_lote').disabled = n === 0;
             document.getElementById('n_venc').textContent = venc;
             document.getElementById('btn_fecha_lote').disabled = venc === 0;
+            // "Marcar todos" sigue a las filas: se desmarca solo y se apaga si ya no queda nada por enviar
+            const todos = document.getElementById('chk_todos'), quedan = document.querySelectorAll('.chk').length;
+            todos.checked = quedan > 0 && n === quedan;
+            todos.disabled = quedan === 0;
         }
 
         document.getElementById('btn_fecha_lote').addEventListener('click', async function () {
@@ -232,6 +236,9 @@
                 }
             };
             await Promise.all(Array.from({ length: Math.min(3, ids.length) }, trabajador));
+            // Terminado: todo desmarcado (los que fallaron se pueden volver a marcar para reintentar)
+            document.querySelectorAll('.chk:checked').forEach(c => c.checked = false);
+            actualizarSeleccion();
             progreso.textContent = `Listo: ${ok} aceptado(s), ${ids.length - ok} con problema.`;
         });
     </script>
