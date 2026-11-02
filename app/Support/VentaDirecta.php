@@ -24,6 +24,11 @@ class VentaDirecta
         'clinom' => 'required|string|max:120',
         'clidir' => 'nullable|string|max:150',
         'observaciones' => 'nullable|string|max:100',
+        // Contacto y cumpleaños del cliente; "por consumo" = el comprobante sale con una sola línea POR CONSUMO
+        'clicor' => 'nullable|string|max:100',
+        'telefono' => 'nullable|string|max:30',
+        'fecha_nac' => 'nullable|date',
+        'consumo' => 'nullable|boolean',
         'items' => 'required|array|min:1|max:200',
         'items.*.id' => 'nullable|integer',
         'items.*.descripcion' => 'nullable|string|max:150',

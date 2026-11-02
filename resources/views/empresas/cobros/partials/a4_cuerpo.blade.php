@@ -168,7 +168,7 @@
     {{-- SON + QR | QR de pago | totales (una sola tabla con rowspan: Dompdf corta las tablas anidadas) --}}
     @php
         $filas = [];
-        if ((float) ($cab->descuento ?? 0) > 0 || (float) ($cab->promo_descuento ?? 0) > 0) {
+        if (empty($cab->consumo) && ((float) ($cab->descuento ?? 0) > 0 || (float) ($cab->promo_descuento ?? 0) > 0)) {
             $filas[] = ['CONSUMO', $cab->ccaitv + $cab->descuento + ($cab->promo_descuento ?? 0)];
             foreach (\App\Support\PromocionesVenta::delComprobante($cab) as $pr) { $filas[] = ['PROMO '.mb_strtoupper($pr->nombre), -$pr->ahorro]; }
             if ((float) ($cab->descuento ?? 0) > 0) { $filas[] = ['DESCUENTO', -$cab->descuento]; }

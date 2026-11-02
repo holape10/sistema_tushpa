@@ -326,6 +326,21 @@ class Comprobante
     }
 
     /** Valida el documento según el comprobante y guarda (o actualiza) al cliente */
+    /** Cumpleaños del cliente con DNI (para la fidelización): una fecha real, de alguien de 3 a 110 años; si no, no se toca */
+    private static function fechaNacimiento(array $datos, string $tdicod): ?string
+    {
+        if ($tdicod !== '1' || empty($datos['fecha_nac'])) {
+            return null;
+        }
+        try {
+            $fecha = Carbon::parse((string) $datos['fecha_nac'])->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $fecha->betweenIncluded(now()->subYears(110), now()->subYears(3)) ? $fecha->toDateString() : null;
+    }
+
     private static function cliente(User $user, array $datos, bool $esContado): Cliente
     {
         $clinum = trim($datos['clinum']);
@@ -363,7 +378,7 @@ class Comprobante
                 'clicor' => $datos['clicor'] ?? null,
                 'tdicod' => $tdicod,
                 'telefono' => $datos['telefono'] ?? null,
-            ]
+            ] + (($nacimiento = self::fechaNacimiento($datos, $tdicod)) ? ['fecha_nac' => $nacimiento] : [])
         );
         ClienteDirecciones::recordar($cliente->clicod, $direccion, $principal);
 

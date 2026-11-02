@@ -126,6 +126,7 @@
             clidir: el('clidir').value,
             clicor: el('clicor').value,
             telefono: el('telefono').value,
+            fecha_nac: el('tdicod').value === '1' ? el('fecha_nac').value : '',
             observaciones: el('observaciones').value,
             paga: pagaSoles(),
             imprimir: el('imprimir').checked ? 1 : 0,

@@ -20,12 +20,24 @@
     @if (session('success'))
         <div class="alert alert-success text-center" style="margin-bottom:10px;"><i class="fas fa-print"></i> {{ session('success') }}</div>
     @endif
-    <div class="row">
-
-        @include('empresas.cobros.partials.cobrar.panel_comprobante')
-
+    <div class="cobro-top">
+        <a href="{{ $volver ?? route('comandas.seleccion') }}" class="top-btn">←</a>
+        <h1>{{ $directa ? 'Punto de venta' : 'Cobrar' }}
+            @unless ($directa)<small>{{ $mesa ? trim(($piso->pis_nom ?? '').' / '.$mesa->mes_nom, ' /') : strtoupper($pedido->ped_tip) }}</small>@endunless</h1>
+        <span class="chip chip-verde">Turno N° {{ $turno->turno }} abierto</span>
+        <label class="top-btn"><input type="checkbox" id="imprimir" checked> Imprimir</label>
+        @if (! $directa)
+            @if ($separadas)
+                <a href="{{ route('cobros.cobrar', $pedido->ped_id) }}" class="top-btn">Cobrar todo junto</a>
+            @else
+                <a href="{{ route('cobros.separadas', $pedido->ped_id) }}" class="top-btn morado">👥 Cuentas separadas</a>
+            @endif
+        @endif
+    </div>
+    <div class="cobro-grid {{ $directa ? 'es-pv' : '' }}">
         @include('empresas.cobros.partials.cobrar.panel_cobro')
-
+        @include('empresas.cobros.partials.cobrar.panel_comprobante')
+        @include('empresas.cobros.partials.cobrar.panel_pago')
     </div>
 </div>
 

@@ -107,7 +107,7 @@
     </table>
 
     <table class="totales" style="margin-top:4px;">
-        @if ((float) ($cab->descuento ?? 0) > 0 || (float) ($cab->promo_descuento ?? 0) > 0)
+        @if (! $cab->consumo && ((float) ($cab->descuento ?? 0) > 0 || (float) ($cab->promo_descuento ?? 0) > 0))
             <tr><td>CONSUMO S/</td><td>{{ number_format($cab->ccaitv + $cab->descuento + ($cab->promo_descuento ?? 0), 2) }}</td></tr>
             @foreach (\App\Support\PromocionesVenta::delComprobante($cab) as $pr)
                 <tr><td>PROMO {{ mb_strtoupper($pr->nombre) }}</td><td>-{{ number_format($pr->ahorro, 2) }}</td></tr>

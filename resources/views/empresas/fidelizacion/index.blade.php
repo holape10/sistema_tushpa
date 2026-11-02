@@ -24,6 +24,49 @@
             <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500 font-semibold">Premios canjeados este mes</p><p class="text-3xl font-black text-amber-600">{{ number_format($resumen['canjes_mes']) }}</p></div>
         </div>
 
+        {{-- Cumpleaños: la fecha se anota al cobrar con el DNI del cliente --}}
+        <div class="bg-white rounded-2xl shadow-sm p-5 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="font-bold text-gray-700">🎂 Cumpleaños de {{ now()->locale('es')->translatedFormat('F') }}</h2>
+                    <p class="text-xs text-gray-500">La fecha de nacimiento se anota al cobrar, cuando el cliente da su DNI. Salúdalo y dale un motivo para volver.</p>
+                </div>
+                @php $dobles = (bool) ($cfg->fid_cumple_dobles ?? false); @endphp
+                <form method="POST" action="{{ route('fidelizacion.config') }}" class="flex items-center gap-2 text-sm">
+                    @csrf
+                    <span class="font-semibold text-gray-700">Puntos dobles en su mes de cumpleaños</span>
+                    <span class="flex rounded-xl border-2 overflow-hidden font-bold">
+                        <button name="fid_cumple_dobles" value="1" @disabled(!$esAdmin) class="px-3 py-1 {{ $dobles ? 'bg-pink-500 text-white' : 'text-gray-500 hover:bg-gray-50' }}">SÍ</button>
+                        <button name="fid_cumple_dobles" value="0" @disabled(!$esAdmin) class="px-3 py-1 {{ ! $dobles ? 'bg-gray-600 text-white' : 'text-gray-500 hover:bg-gray-50' }}">NO</button>
+                    </span>
+                </form>
+            </div>
+            @if ($cumpleanos->isEmpty())
+                <p class="rounded-xl bg-gray-50 p-4 text-center text-sm text-gray-400">Nadie cumple este mes (o aún no se anotaron fechas de nacimiento al cobrar).</p>
+            @else
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    @foreach ($cumpleanos as $c)
+                        @php
+                            $nac = \Illuminate\Support\Carbon::parse($c->fecha_nac);
+                            $esHoy = $nac->day === now()->day;
+                            $cel = preg_replace('/\D/', '', (string) $c->telefono);
+                            $saludo = rawurlencode('¡Feliz cumpleaños, '.\Illuminate\Support\Str::title(\Illuminate\Support\Str::of($c->clinom)->explode(' ')->first()).'! 🎂 Te esperamos para celebrarlo.');
+                        @endphp
+                        <div class="flex items-center gap-3 rounded-xl border px-3 py-2 {{ $esHoy ? 'border-pink-300 bg-pink-50' : 'border-gray-200' }}">
+                            <div class="w-11 shrink-0 text-center"><p class="text-lg font-black text-pink-600 leading-none">{{ $nac->day }}</p><p class="text-[10px] text-gray-500">{{ $esHoy ? '¡HOY!' : $nac->locale('es')->translatedFormat('M') }}</p></div>
+                            <div class="flex-1 min-w-0">
+                                <p class="truncate text-sm font-semibold text-gray-800">{{ $c->clinom }}</p>
+                                <p class="text-xs text-gray-500">Cumple {{ now()->year - $nac->year }} años · {{ number_format($c->puntos) }} pts</p>
+                            </div>
+                            @if (strlen($cel) >= 9)
+                                <a href="https://wa.me/{{ strlen($cel) === 9 ? '51'.$cel : $cel }}?text={{ $saludo }}" target="_blank" class="h-8 px-3 inline-flex items-center rounded-lg bg-emerald-500 text-white text-xs font-bold">Saludar</a>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+        </div>
+
         <div class="grid lg:grid-cols-2 gap-5">
             {{-- Reglas --}}
             <div class="bg-white rounded-2xl shadow-sm p-5 space-y-4" x-data="{ r: { regla_id: '', nombre: '', soles_por_punto: 1, compra_minima: 0, desde: '', hasta: '', activo: true } }">

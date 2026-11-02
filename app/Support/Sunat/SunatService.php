@@ -185,6 +185,15 @@ class SunatService
 
         $esNota = in_array($cab->tdocod, ['07', '08'], true);
         $doc = $esNota ? new Note : new Invoice;
+        // "Por consumo": SUNAT recibe lo mismo que sale impreso, una sola línea POR CONSUMO (una por afectación de IGV);
+        // las cortesías siguen aparte porque van como operación gratuita
+        if (! empty($cab->consumo) && ! $esNota) {
+            $detalles = $detalles->filter(fn ($d) => empty($d->cortesia))->groupBy(fn ($d) => (string) $d->tigcod)
+                ->map(fn ($g, $afecto) => (object) ['cdecan' => 1, 'cdepve' => round($g->sum('cdepve'), 2), 'cdeigv' => round($g->sum('cdeigv'), 2),
+                    'cdevve' => round($g->sum('cdevve'), 2), 'tigcod' => $afecto, 'umecod' => 'NIU', 'cdedes' => 'POR CONSUMO',
+                    'procod' => 'CONSUMO', 'IdProducto' => 0, 'cortesia' => false, 'precio_lista' => null])
+                ->values()->concat($detalles->filter(fn ($d) => ! empty($d->cortesia)));
+        }
 
         $fecha = new DateTime(($cab->ccafem).' '.date('H:i:s', strtotime((string) $cab->fecha_hora)), new DateTimeZone('America/Lima'));
         // Un comprobante pasado a la fecha de hoy conserva la hora de la venta: nunca más tarde que este momento

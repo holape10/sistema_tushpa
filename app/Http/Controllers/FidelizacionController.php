@@ -39,7 +39,11 @@ class FidelizacionController extends Controller
         $mov = DB::table('fid_movimientos')->where('id_empresa_negocio', $suc);
 
         return view('empresas.fidelizacion.index', [
-            'cfg' => DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['fid_activo']),
+            'cfg' => DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['fid_activo', 'fid_cumple_dobles']),
+            // Quién cumple años este mes (para saludarlo e invitarlo)
+            'cumpleanos' => DB::table('cliente')->where('rucemp', Auth::user()->IdEmpresa)->whereNotNull('fecha_nac')
+                ->whereMonth('fecha_nac', now()->month)->orderByRaw('DAY(fecha_nac)')->limit(100)
+                ->get(['clicod', 'clinum', 'clinom', 'telefono', 'puntos', 'fecha_nac']),
             'reglas' => DB::table('fid_reglas')->where('id_empresa_negocio', $suc)->orderByDesc('activo')->orderBy('regla_id')->get()
                 ->map(function ($r) {
                     $hoy = now()->toDateString();
@@ -70,6 +74,13 @@ class FidelizacionController extends Controller
     public function guardarConfig(Request $request)
     {
         $this->soloAdmin();
+        // Puntos dobles en el mes de cumpleaños (se activa aparte)
+        if ($request->has('fid_cumple_dobles')) {
+            $dobles = $request->validate(['fid_cumple_dobles' => 'required|boolean'])['fid_cumple_dobles'];
+            DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal())->update(['fid_cumple_dobles' => (bool) $dobles]);
+
+            return back()->with('success', $dobles ? '🎂 Listo: en su mes de cumpleaños cada cliente gana el doble de puntos.' : 'Los cumpleaños ya no dan puntos dobles.');
+        }
         $d = $request->validate(['fid_activo' => 'required|boolean']);
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal())->update(['fid_activo' => (int) $d['fid_activo']]);
 

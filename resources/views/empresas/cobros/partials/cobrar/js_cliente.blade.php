@@ -1,4 +1,20 @@
 {{-- JS: comprobante según el cliente y búsqueda por nombre (va dentro de cobrar.blade.php) --}}
+    // ---------- Cumpleaños (solo con DNI): se anota para la fidelización y la caja ve si cumple hoy o este mes ----------
+    function verCumple() {
+        el('box_nac').style.display = el('tdicod').value === '1' ? '' : 'none';
+        const v = el('fecha_nac').value, aviso = el('cumple_aviso');
+        aviso.style.display = 'none';
+        if (!v) return;
+        const [, m, d] = v.split('-').map(Number), hoy = new Date();
+        if (m === hoy.getMonth() + 1) {
+            aviso.textContent = d === hoy.getDate() ? '🎉 ¡Hoy cumple años! Salúdalo' : '🎂 Cumple este mes (día ' + d + ')';
+            aviso.style.display = 'block';
+        }
+    }
+    el('tdicod').addEventListener('change', verCumple);
+    el('fecha_nac').addEventListener('change', verCumple);
+    verCumple();
+
     // ---------- Comprobante según el cliente: RUC = factura; si no, el predeterminado ----------
     function aplicarComprobante(tdicod) {
         const tieneFactura = !!el('tdocod').querySelector('option[value="01"]');
@@ -23,6 +39,8 @@
         el('clicor').value = c.cor || '';
         el('telefono').value = c.tel || '';
         if (c.tdicod) el('tdicod').value = c.tdicod;
+        el('fecha_nac').value = c.nac ? String(c.nac).slice(0, 10) : '';
+        verCumple();
         ultimoBuscado = el('clinum').value.trim();
         const comp = aplicarComprobante(c.tdicod);
         mensajeCliente(comp ? '✔ Cliente con RUC: se cambió a FACTURA.' : '✔ Cliente seleccionado.', 'ok');

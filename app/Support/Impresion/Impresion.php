@@ -612,7 +612,8 @@ class Impresion
     private static function lineasDescuento(Escpos $p, object $cab, string $sufijo): void
     {
         $promo = (float) ($cab->promo_descuento ?? 0);
-        if ((float) ($cab->descuento ?? 0) > 0 || $promo > 0) {
+        // Por consumo: solo POR CONSUMO y el total (sin el detalle de lo consumido ni sus descuentos)
+        if (! $cab->consumo && ((float) ($cab->descuento ?? 0) > 0 || $promo > 0)) {
             $p->dosColumnas('CONSUMO'.$sufijo, number_format((float) $cab->ccaitv + (float) $cab->descuento + $promo, 2));
             foreach (PromocionesVenta::delComprobante($cab) as $pr) {
                 $p->dosColumnas('PROMO '.mb_strtoupper(mb_substr($pr->nombre, 0, 18)), '-'.number_format((float) $pr->ahorro, 2));

@@ -68,6 +68,17 @@ class Fidelizacion
         return ['puntos' => $puntos, 'detalle' => $detalle];
     }
 
+    /** Puntos dobles en el mes de cumpleaños del cliente (si la sucursal lo activó) */
+    public static function conCumpleanos(array $calc, int $suc, ?string $fechaNac): array
+    {
+        if ($calc['puntos'] <= 0 || ! $fechaNac || Carbon::parse($fechaNac)->month !== now()->month
+            || ! DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('fid_cumple_dobles')) {
+            return $calc;
+        }
+
+        return ['puntos' => $calc['puntos'] * 2, 'detalle' => array_merge($calc['detalle'], ['🎂 mes de su cumpleaños x2'])];
+    }
+
     /** Suma o resta puntos al cliente y deja el movimiento (con bloqueo, para que dos cajas no pisen el saldo) */
     private static function mover(int $clicod, int $suc, string $tipo, int $puntos, array $extra = []): int
     {
@@ -104,7 +115,7 @@ class Fidelizacion
             return;
         }
         $suc = (int) $cab->id_empresa_negocio;
-        $calc = self::calcular((float) $cab->ccaitv, $suc);
+        $calc = self::conCumpleanos(self::calcular((float) $cab->ccaitv, $suc), $suc, DB::table('cliente')->where('clicod', $cab->clicod)->value('fecha_nac'));
         if ($calc['puntos'] > 0 && ! DB::table('fid_movimientos')->where('IdCpe_cabecera', $cabId)->where('tipo', 'VENTA')->exists()) {
             self::mover((int) $cab->clicod, $suc, 'VENTA', $calc['puntos'], [
                 'IdCpe_cabecera' => $cabId, 'IdUsuario' => $cab->IdUsuario,
@@ -237,9 +248,9 @@ class Fidelizacion
         }
         $doc = trim($doc);
         $cliente = self::docValido($doc)
-            ? DB::table('cliente')->where('clinum', $doc)->where('rucemp', DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('IdEmpresa'))->first(['clicod', 'clinom', 'puntos'])
+            ? DB::table('cliente')->where('clinum', $doc)->where('rucemp', DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('IdEmpresa'))->first(['clicod', 'clinom', 'puntos', 'fecha_nac'])
             : null;
-        $calc = self::calcular($total, $suc);
+        $calc = self::conCumpleanos(self::calcular($total, $suc), $suc, $cliente->fecha_nac ?? null);
         $actual = (int) ($cliente->puntos ?? 0);
         $conCompra = $actual + $calc['puntos'];
         $reserva = self::reserva();
