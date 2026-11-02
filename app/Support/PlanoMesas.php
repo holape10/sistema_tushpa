@@ -154,6 +154,17 @@ class PlanoMesas
         });
     }
 
+    /**
+     * Una mesa en Comandas: arranca en su lugar con su tamaño como mínimo, pero crece lo que necesite para que se lea
+     * todo (nombre, total, tiempo y mozo), aunque en un celular se pase un poco de su lugar.
+     */
+    public static function estiloMesa(int|float $x, int|float $y, int|float $w, int|float $h, int $alto = self::ALTO, int $ancho = self::ANCHO): string
+    {
+        $p = fn ($v, $total) => round($v / $total * 100, 3).'%';
+
+        return 'left:'.$p($x, $ancho).';top:'.$p($y, $alto).';min-width:'.$p($w, $ancho).';min-height:'.$p($h, $alto);
+    }
+
     /** Estilo de posición de algo en el plano (en % del lienzo, así se ve igual en cualquier pantalla) */
     public static function estilo(int|float $x, int|float $y, int|float $w, int|float $h, int $alto = self::ALTO, int $ancho = self::ANCHO): string
     {

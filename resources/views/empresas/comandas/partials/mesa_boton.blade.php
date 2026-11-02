@@ -9,14 +9,16 @@
 @php
     $enPlano = ($plano ?? false) && $m->plano_x !== null;
     $forma = $enPlano ? ['REDONDA' => 'rounded-full', 'BOX' => 'rounded-2xl border-2 border-amber-300'][$m->plano_forma] ?? 'rounded-xl' : 'rounded-2xl';
+    // En el plano la letra va según el ancho del plano (cqw): se lee igual en el celular y en la PC
+    $letra = fn (int $min, float $cqw, int $max) => $enPlano ? 'style="font-size: clamp('.$min.'px, '.$cqw.'cqw, '.$max.'px)"' : '';
 @endphp
-<button type="button" @if ($enPlano) style="{{ \App\Support\PlanoMesas::estilo($m->plano_x, $m->plano_y, $m->plano_w, $m->plano_h, $alto ?? \App\Support\PlanoMesas::ALTO, $ancho ?? \App\Support\PlanoMesas::ANCHO) }}" @endif
-    class="btn-mesa-comanda {{ $enPlano ? 'absolute z-20 flex flex-col items-center justify-center overflow-visible px-1 py-0.5 text-[11px] leading-tight' : 'relative min-h-[88px] px-2 py-2.5' }} {{ $forma }} text-white shadow-sm ring-1 ring-black/5 active:scale-95 transition-transform select-none {{ $color }}"
+<button type="button" @if ($enPlano) style="{{ \App\Support\PlanoMesas::estiloMesa($m->plano_x, $m->plano_y, $m->plano_w, $m->plano_h, $alto ?? \App\Support\PlanoMesas::ALTO, $ancho ?? \App\Support\PlanoMesas::ANCHO) }}" @endif
+    class="btn-mesa-comanda {{ $enPlano ? 'absolute '.($m->pedido_id ? 'z-30' : 'z-20').' flex flex-col items-center justify-center overflow-visible px-2 py-1 leading-tight whitespace-nowrap' : 'relative min-h-[88px] px-2 py-2.5' }} {{ $forma }} text-white shadow-sm ring-1 ring-black/5 active:scale-95 transition-transform select-none {{ $color }}"
     data-id="{{ $principal['mes_id'] ?? $m->mes_id }}" data-nombre="{{ $principal['nombre'] ?? $m->etiqueta }}" data-estado="{{ $estado }}"
     data-pedido-id="{{ $m->pedido_id }}" data-listos="{{ $m->listos ?? 0 }}" data-listos-texto="{{ $m->listos_texto ?? '' }}">
-    @if ($enPlano && $m->plano_forma === 'BOX')<span class="block text-[9px] font-black tracking-widest text-amber-200">VIP</span>@endif
-    <span class="block {{ $enPlano ? 'text-xs' : 'text-base' }} font-black leading-tight">{{ $m->mes_nom }}</span>
-    <span class="block {{ $enPlano ? 'text-[10px]' : 'text-xs' }} font-semibold opacity-95 mt-0.5">
+    @if ($enPlano && $m->plano_forma === 'BOX')<span class="block font-black tracking-widest text-amber-200" {!! $letra(8, 1.2, 11) !!}>VIP</span>@endif
+    <span class="block {{ $enPlano ? '' : 'text-base' }} font-black leading-tight" {!! $letra(12, 2.4, 19) !!}>{{ $m->mes_nom }}</span>
+    <span class="block {{ $enPlano ? '' : 'text-xs' }} font-semibold opacity-95 mt-0.5" {!! $letra(10, 1.7, 14) !!}>
         @if ($principal)
             🔗 Junta con {{ $principal['nombre'] }}
         @else
@@ -24,11 +26,11 @@
         @endif
     </span>
     @if ($m->pedido_id && $m->pedido_fecha_hora)
-        <span class="mesa-timer block font-mono text-[11px] opacity-90" data-inicio="{{ \Carbon\Carbon::parse($m->pedido_fecha_hora)->toIso8601String() }}">00:00:00</span>
+        <span class="mesa-timer block font-mono {{ $enPlano ? '' : 'text-[11px]' }} opacity-90" {!! $letra(10, 1.6, 13) !!} data-inicio="{{ \Carbon\Carbon::parse($m->pedido_fecha_hora)->toIso8601String() }}">00:00:00</span>
     @endif
     {{-- Quién atiende la mesa (solo en las sucursales con nombres cortos) --}}
-    @if (! empty($m->mozo_nombre) && (! $enPlano || $m->plano_w >= 120))
-        <span class="mt-1 inline-flex max-w-full items-center justify-center gap-1 rounded-xl bg-black/25 px-2 py-0.5 text-[11px] font-bold leading-tight" title="Mozo: {{ $m->mozo_nombre }}">
+    @if (! empty($m->mozo_nombre))
+        <span class="mt-1 inline-flex {{ $enPlano ? '' : 'max-w-full' }} items-center justify-center gap-1 rounded-xl bg-black/25 px-2 py-0.5 {{ $enPlano ? '' : 'text-[11px]' }} font-bold leading-tight" {!! $letra(10, 1.6, 13) !!} title="Mozo: {{ $m->mozo_nombre }}">
             <svg class="h-3 w-3 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 10a4 4 0 100-8 4 4 0 000 8zm-7 8a7 7 0 0114 0H3z"/></svg>
             <span class="break-words">{{ $m->mozo_nombre }}</span>
         </span>

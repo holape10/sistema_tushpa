@@ -7,12 +7,15 @@
 @if ($enPlano->isEmpty())
     @include('empresas.comandas.partials.mesas_grid', ['mesas' => $mesas])
 @else
+    {{-- Celular: el plano usa todo el ancho (las mesas crecen para que se lea todo). PC: entra entero en la pantalla y un
+         local angosto no se estira a todo el ancho --}}
+    @once<style>@media (min-width: 768px) { .plano-lienzo { max-width: var(--escala-pc); } }</style>@endonce
     <div class="col-span-full overflow-x-auto -mx-1 px-1 pb-2">
         @php
             $alto = $alto ?? \App\Support\PlanoMesas::ALTO;
             $ancho = $ancho ?? \App\Support\PlanoMesas::ANCHO;
         @endphp
-        <div class="plano-lienzo relative w-full rounded-2xl bg-slate-50 ring-1 ring-slate-200" style="aspect-ratio: {{ $ancho }} / {{ $alto }}; width: {{ round(100 * $ancho / max($ancho, 1000), 3) }}%; min-width: {{ round(640 * $ancho / max($ancho, 1000)) }}px">
+        <div class="plano-lienzo relative w-full rounded-2xl bg-slate-50 ring-1 ring-slate-200" style="container-type: inline-size; aspect-ratio: {{ $ancho }} / {{ $alto }}; width: min(100%, calc(85vh * {{ $ancho }} / {{ $alto }})); margin-inline: auto; --escala-pc: {{ round(100 * $ancho / max($ancho, 1000), 3) }}%">
             @foreach ($elementos ?? [] as $e)
                 @php
                     $c = $e->color ?: (\App\Support\PlanoMesas::ELEMENTOS[$e->tipo][2] ?? '#475569');
