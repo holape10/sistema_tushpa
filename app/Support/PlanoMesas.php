@@ -38,6 +38,17 @@ class PlanoMesas
 
     public const MINIMO = 20;
 
+    /** Alto del ambiente que se puede elegir (el ancho siempre es 1000): de bien apaisado a bien alargado */
+    public const ALTO_MIN = 400;
+
+    public const ALTO_MAX = 2000;
+
+    /** Alto del ambiente de un piso (625 si nunca se cambió) */
+    public static function alto(int $piso): int
+    {
+        return (int) (DB::table('pisos')->where('pis_id', $piso)->value('plano_alto') ?: self::ALTO);
+    }
+
     /** ¿La sucursal ve sus mesas en el plano? */
     public static function usaPlano(int $sucursal): bool
     {
@@ -56,16 +67,28 @@ class PlanoMesas
     }
 
     /**
-     * Guarda el plano de un piso: posición, tamaño, forma y nombre de las mesas (las nuevas se crean; las que se sacan
-     * del plano quedan sin ubicar, no se borran) y los elementos (se reemplazan todos).
+     * Guarda el plano de un piso: el alto del ambiente, posición, tamaño, forma y nombre de las mesas (las nuevas se
+     * crean; las que se sacan del plano quedan sin ubicar; las de $eliminar se borran si no están ocupadas) y los
+     * elementos (se reemplazan todos).
      *
+     * @param  array<int, int>  $eliminar
      * @param  array<int, array{id: ?int, nombre: string, forma: string, x: int, y: int, w: int, h: int}>  $mesas
      * @param  array<int, array{tipo: string, texto: ?string, x: int, y: int, w: int, h: int, color: ?string}>  $elementos
      * @return int mesas en el plano
      */
-    public static function guardar(int $sucursal, int $idEmpresa, int $piso, array $mesas, array $elementos): int
+    public static function guardar(int $sucursal, int $idEmpresa, int $piso, array $mesas, array $elementos, int $alto = self::ALTO, array $eliminar = []): int
     {
-        return DB::transaction(function () use ($sucursal, $idEmpresa, $piso, $mesas, $elementos) {
+        $alto = (int) max(self::ALTO_MIN, min(self::ALTO_MAX, round($alto / 5) * 5));
+
+        return DB::transaction(function () use ($sucursal, $idEmpresa, $piso, $mesas, $elementos, $alto, $eliminar) {
+            DB::table('pisos')->where('pis_id', $piso)->update(['plano_alto' => $alto]);
+            // Mesas que el dueño eliminó en el plano (una ocupada no: primero se cobra o se libera)
+            foreach (Mesa::where('id_empresa_negocio', $sucursal)->where('pis_id', $piso)->whereIn('mes_id', array_map('intval', $eliminar) ?: [0])->get() as $mesa) {
+                if (MesasUnidas::pedidoDe($mesa->mes_id)) {
+                    throw new \RuntimeException("La {$mesa->mes_nom} está ocupada: cóbrala o libérala antes de eliminarla.");
+                }
+                $mesa->delete();
+            }
             $propias = Mesa::where('id_empresa_negocio', $sucursal)->where('pis_id', $piso)->pluck('mes_nom', 'mes_id');
             // Las mesas del piso que no vienen en el plano conservan su nombre: no se puede repetir
             $enPlano = array_map('intval', array_filter(array_column($mesas, 'id')));
@@ -77,15 +100,18 @@ class PlanoMesas
                 if ($nombre === '') {
                     throw new \RuntimeException('Hay una mesa sin nombre en el plano.');
                 }
-                if (isset($nombres[$nombre]) || $otras->has($nombre)) {
-                    throw new \RuntimeException("Hay dos mesas llamadas {$nombre} en este piso: cambia el nombre de una.");
+                if (isset($nombres[$nombre])) {
+                    throw new \RuntimeException("Hay dos mesas llamadas {$nombre} en el plano: cambia el nombre de una.");
+                }
+                if ($otras->has($nombre)) {
+                    throw new \RuntimeException("Ya hay otra {$nombre} en este piso (está en \"Sin ubicar\"): ponla en el plano, elimínala o cambia el nombre de la nueva.");
                 }
                 $nombres[$nombre] = true;
                 $forma = array_key_exists($m['forma'] ?? '', self::FORMAS) ? $m['forma'] : 'CUADRADA';
                 $w = self::medida($m['w'] ?? 90, self::MINIMO, self::ANCHO);
-                $h = self::medida($m['h'] ?? 90, self::MINIMO, self::ALTO);
+                $h = self::medida($m['h'] ?? 90, self::MINIMO, $alto);
                 $fila = ['mes_nom' => $nombre, 'plano_forma' => $forma, 'plano_w' => $w, 'plano_h' => $h,
-                    'plano_x' => self::medida($m['x'] ?? 0, 0, self::ANCHO - $w), 'plano_y' => self::medida($m['y'] ?? 0, 0, self::ALTO - $h)];
+                    'plano_x' => self::medida($m['x'] ?? 0, 0, self::ANCHO - $w), 'plano_y' => self::medida($m['y'] ?? 0, 0, $alto - $h)];
                 $id = (int) ($m['id'] ?? 0);
                 if ($id && $propias->has($id)) {
                     Mesa::where('mes_id', $id)->update($fila);
@@ -105,11 +131,11 @@ class PlanoMesas
                     continue;
                 }
                 $w = self::medida($e['w'] ?? 100, 10, self::ANCHO);
-                $h = self::medida($e['h'] ?? 40, 10, self::ALTO);
+                $h = self::medida($e['h'] ?? 40, 10, $alto);
                 DB::table('plano_elementos')->insert([
                     'id_empresa_negocio' => $sucursal, 'pis_id' => $piso, 'tipo' => $e['tipo'],
                     'texto' => trim(mb_substr((string) ($e['texto'] ?? ''), 0, 40)) ?: null,
-                    'x' => self::medida($e['x'] ?? 0, 0, self::ANCHO - $w), 'y' => self::medida($e['y'] ?? 0, 0, self::ALTO - $h), 'w' => $w, 'h' => $h,
+                    'x' => self::medida($e['x'] ?? 0, 0, self::ANCHO - $w), 'y' => self::medida($e['y'] ?? 0, 0, $alto - $h), 'w' => $w, 'h' => $h,
                     'color' => preg_match('/^#[0-9a-f]{6}$/i', (string) ($e['color'] ?? '')) ? strtolower($e['color']) : self::ELEMENTOS[$e['tipo']][2],
                 ]);
             }
@@ -119,10 +145,10 @@ class PlanoMesas
     }
 
     /** Estilo de posición de algo en el plano (en % del lienzo, así se ve igual en cualquier pantalla) */
-    public static function estilo(int|float $x, int|float $y, int|float $w, int|float $h): string
+    public static function estilo(int|float $x, int|float $y, int|float $w, int|float $h, int $alto = self::ALTO): string
     {
         $p = fn ($v, $total) => round($v / $total * 100, 3).'%';
 
-        return 'left:'.$p($x, self::ANCHO).';top:'.$p($y, self::ALTO).';width:'.$p($w, self::ANCHO).';height:'.$p($h, self::ALTO);
+        return 'left:'.$p($x, self::ANCHO).';top:'.$p($y, $alto).';width:'.$p($w, self::ANCHO).';height:'.$p($h, $alto);
     }
 }

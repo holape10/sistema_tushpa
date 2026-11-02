@@ -24,7 +24,7 @@ class PlanoMesasTest extends FlujoTestCase
 
     public function test_por_defecto_las_mesas_se_ven_en_cuadricula(): void
     {
-        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('MESA 01')->assertDontSee('aspect-[16/10]', false);
+        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('MESA 01')->assertDontSee('plano-lienzo', false);
         $this->get(route('mesas.plano'))->assertOk()->assertSee('Dibuja tu local');
     }
 
@@ -49,7 +49,7 @@ class PlanoMesasTest extends FlujoTestCase
         $this->assertSame(1, DB::table('plano_elementos')->where('pis_id', $this->piso)->count(), 'Lo que no es un elemento conocido no se guarda.');
         $this->assertSame('PLANO', DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('vista_mesas'));
 
-        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('aspect-[16/10]', false)->assertSee('VIP')->assertSee('Barra')
+        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('plano-lienzo', false)->assertSee('VIP')->assertSee('Barra')
             ->assertSee('Mesas que aún no están en el plano')->assertSee('MESA 02');
         $this->getJson(route('comandas.mesas_por_piso', $this->piso))->assertOk()->assertJsonPath('vista', fn ($v) => str_contains($v, 'BOX 01'));
     }
@@ -61,5 +61,44 @@ class PlanoMesasTest extends FlujoTestCase
             'mesas' => [['id' => null, 'nombre' => 'MESA 02', 'forma' => 'BOX', 'x' => 0, 'y' => 0, 'w' => 200, 'h' => 130]], 'elementos' => [],
         ])->assertStatus(422)->assertJsonPath('ok', false);
         $this->assertSame(2, DB::table('mesas')->where('pis_id', $this->piso)->count());
+    }
+
+    public function test_eliminar_una_mesa_libera_su_nombre_pero_no_si_esta_ocupada(): void
+    {
+        // MESA 02 (sin ubicar) se elimina y un box nuevo puede llamarse igual
+        $this->postJson(route('mesas.plano.guardar', $this->piso), [
+            'mesas' => [['id' => null, 'nombre' => 'MESA 02', 'forma' => 'BOX', 'x' => 0, 'y' => 0, 'w' => 200, 'h' => 130]],
+            'elementos' => [], 'eliminar' => [$this->mesa2],
+        ])->assertOk()->assertJsonPath('ok', true);
+        $this->assertFalse(DB::table('mesas')->where('mes_id', $this->mesa2)->exists());
+        $this->assertSame('BOX', DB::table('mesas')->where('pis_id', $this->piso)->where('mes_nom', 'MESA 02')->value('plano_forma'));
+
+        // Una mesa con pedido abierto no se elimina
+        $lomo = $this->producto('LOMO', 30, 5);
+        $this->postJson(route('comandas.set_servicio'), ['order_type' => 'salon', 'mesa_id' => $this->mesa1, 'mesa_nombre' => 'MESA 01'])->assertOk();
+        $this->postJson(route('comandas.add_to_cart'), ['id' => $lomo->IdProducto])->assertOk();
+        $this->postJson(route('comandas.enviar'))->assertOk();
+        $this->postJson(route('mesas.plano.guardar', $this->piso), ['mesas' => [], 'elementos' => [], 'eliminar' => [$this->mesa1]])
+            ->assertStatus(422)->assertJsonPath('mensaje', fn ($m) => str_contains($m, 'está ocupada'));
+        $this->assertTrue(DB::table('mesas')->where('mes_id', $this->mesa1)->exists());
+    }
+
+    public function test_el_ambiente_puede_ser_mas_largo_que_ancho(): void
+    {
+        $this->postJson(route('mesas.plano.guardar', $this->piso), [
+            'mesas' => [['id' => $this->mesa1, 'nombre' => 'MESA 01', 'forma' => 'CUADRADA', 'x' => 100, 'y' => 1400, 'w' => 90, 'h' => 90]],
+            'elementos' => [], 'alto' => 1600, 'usar_plano' => true,
+        ])->assertOk();
+        $this->assertSame(1600, (int) DB::table('pisos')->where('pis_id', $this->piso)->value('plano_alto'));
+        $this->assertSame(1400, (int) DB::table('mesas')->where('mes_id', $this->mesa1)->value('plano_y'), 'En un ambiente largo la mesa puede ir más abajo.');
+        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('aspect-ratio: 1000 / 1600', false);
+        $this->get(route('mesas.plano'))->assertOk()->assertSee('Forma del ambiente');
+
+        // Si se achica el ambiente, nada queda fuera
+        $this->postJson(route('mesas.plano.guardar', $this->piso), [
+            'mesas' => [['id' => $this->mesa1, 'nombre' => 'MESA 01', 'forma' => 'CUADRADA', 'x' => 100, 'y' => 1400, 'w' => 90, 'h' => 90]],
+            'elementos' => [], 'alto' => 625,
+        ])->assertOk();
+        $this->assertSame(535, (int) DB::table('mesas')->where('mes_id', $this->mesa1)->value('plano_y'));
     }
 }

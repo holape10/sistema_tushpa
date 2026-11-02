@@ -2,7 +2,9 @@
 @section('title', 'Plano del local')
 @section('content')
 @use('App\Support\PlanoMesas')
-    <div class="space-y-4" x-data="planoEditor({ mesas: @js($mesas), elementos: @js($elementos), usaPlano: @js($usaPlano),
+    {{-- En el celular el dedo arrastra la mesa, no la página --}}
+    <style>.plano-item { touch-action: none; -webkit-user-select: none; user-select: none; }</style>
+    <div class="space-y-4" x-data="planoEditor({ mesas: @js($mesas), elementos: @js($elementos), usaPlano: @js($usaPlano), alto: @js($alto),
             formas: @js(PlanoMesas::FORMAS), tipos: @js(PlanoMesas::ELEMENTOS), url: @js($piso ? route('mesas.plano.guardar', $piso->pis_id) : null) })"
          @keydown.window.delete="if (!['INPUT','TEXTAREA'].includes($event.target.tagName)) quitar()">
         <section class="rounded-3xl bg-gradient-to-br from-slate-800 to-indigo-900 text-white p-5 sm:p-6 shadow-lg">
@@ -32,29 +34,30 @@
             <div class="grid xl:grid-cols-[1fr_280px] gap-4 items-start">
                 {{-- Lienzo --}}
                 <div class="bg-white rounded-2xl shadow-sm p-3 overflow-x-auto">
-                    <div x-ref="lienzo" class="relative w-full min-w-[640px] aspect-[16/10] rounded-xl bg-slate-50 ring-1 ring-slate-200 select-none overflow-hidden"
-                         style="background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 2% 3.2%;" @pointerdown.self="sel = null">
+                    <div x-ref="lienzo" class="relative w-full rounded-xl bg-slate-50 ring-1 ring-slate-200 select-none overflow-hidden"
+                         :style="'aspect-ratio: 1000 / ' + alto + '; min-width: ' + (alto > 1000 ? 300 : 560) + 'px; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px;'"
+                         @pointerdown.self="sel = null">
                         {{-- Barra, paredes, DJ... (debajo de las mesas) --}}
                         <template x-for="(e, i) in elementos" :key="'e' + i">
-                            <div class="absolute flex items-center justify-center text-center font-bold leading-tight cursor-move" style="touch-action:none"
+                            <div class="plano-item absolute flex items-center justify-center text-center font-bold leading-tight cursor-move"
                                  :style="pos(e) + ';' + estiloElemento(e)" :class="esSel('elem', i) ? 'ring-4 ring-indigo-400 z-30' : 'z-10'"
                                  @pointerdown.stop="iniciar($event, 'elem', i, 'mover')">
                                 <span class="px-1 pointer-events-none" style="font-size: clamp(9px, 1.1vw, 15px)" x-text="(tipos[e.tipo][0] ? tipos[e.tipo][0] + ' ' : '') + (e.texto ?? '')"></span>
-                                <span class="absolute -right-1 -bottom-1 w-4 h-4 bg-indigo-600 rounded-sm cursor-se-resize" x-show="esSel('elem', i)" @pointerdown.stop="iniciar($event, 'elem', i, 'tamano')"></span>
+                                <span class="plano-item absolute -right-2 -bottom-2 w-6 h-6 sm:w-4 sm:h-4 sm:-right-1 sm:-bottom-1 bg-indigo-600 rounded-md cursor-se-resize" x-show="esSel('elem', i)" @pointerdown.stop="iniciar($event, 'elem', i, 'tamano')"></span>
                             </div>
                         </template>
                         {{-- Mesas y boxes --}}
                         <template x-for="(m, i) in mesas" :key="'m' + i">
-                            <div x-show="m.ubicada" class="absolute flex flex-col items-center justify-center text-white font-black shadow-md cursor-move" style="touch-action:none"
+                            <div x-show="m.ubicada" class="plano-item absolute flex flex-col items-center justify-center text-white font-black shadow-md cursor-move"
                                  :style="pos(m)" :class="[claseMesa(m), esSel('mesa', i) ? 'ring-4 ring-indigo-400 z-40' : 'z-20']"
                                  @pointerdown.stop="iniciar($event, 'mesa', i, 'mover')">
                                 <span x-show="m.forma === 'BOX'" class="pointer-events-none text-[10px] font-black text-amber-200 tracking-widest">VIP</span>
                                 <span class="pointer-events-none px-1 text-center leading-tight" style="font-size: clamp(9px, 1.1vw, 15px)" x-text="m.nombre"></span>
-                                <span class="absolute -right-1 -bottom-1 w-4 h-4 bg-indigo-600 rounded-sm cursor-se-resize" x-show="esSel('mesa', i)" @pointerdown.stop="iniciar($event, 'mesa', i, 'tamano')"></span>
+                                <span class="plano-item absolute -right-2 -bottom-2 w-6 h-6 sm:w-4 sm:h-4 sm:-right-1 sm:-bottom-1 bg-indigo-600 rounded-md cursor-se-resize" x-show="esSel('mesa', i)" @pointerdown.stop="iniciar($event, 'mesa', i, 'tamano')"></span>
                             </div>
                         </template>
                     </div>
-                    <p class="mt-2 text-xs text-gray-500">Toca algo para elegirlo · arrástralo para moverlo · la esquina ◢ cambia el tamaño · la tecla Supr lo quita.</p>
+                    <p class="mt-2 text-xs text-gray-500">Toca algo para elegirlo · arrástralo para moverlo · la esquina ◢ cambia el tamaño · en el celular también puedes usar los botones de "Mover".</p>
                 </div>
 
                 {{-- Herramientas --}}
@@ -71,11 +74,13 @@
                                                 :class="actual().forma === clave ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'" x-text="f[0]"></button>
                                     </template>
                                 </div>
+                                @include('empresas.mesas.partials.plano_mover')
                                 <div class="flex gap-2">
                                     <button type="button" @click="duplicar()" class="flex-1 h-9 rounded-lg bg-gray-100 text-xs font-bold text-gray-700">⧉ Otra igual</button>
-                                    <button type="button" @click="quitar()" class="flex-1 h-9 rounded-lg bg-rose-50 text-xs font-bold text-rose-700" x-text="actual().id ? 'Sacar del plano' : 'Borrar'"></button>
+                                    <button type="button" @click="quitar()" x-show="actual().id" class="flex-1 h-9 rounded-lg bg-amber-50 text-xs font-bold text-amber-800">Sacar del plano</button>
                                 </div>
-                                <p class="text-[11px] text-gray-400" x-show="actual().id">Sacarla del plano no la borra: queda en "Sin ubicar". Para borrar una mesa usa Mantenimiento → Mesas.</p>
+                                <button type="button" @click="eliminarMesa()" class="w-full h-9 rounded-lg bg-rose-600 text-xs font-bold text-white">🗑️ Eliminar mesa</button>
+                                <p class="text-[11px] text-gray-400" x-show="actual().id">"Sacar del plano" la deja en "Sin ubicar" (sigue existiendo). "Eliminar" la borra al guardar (si está ocupada, no se puede).</p>
                             </div>
                         </template>
                         <template x-if="sel && sel.kind === 'elem'">
@@ -89,12 +94,25 @@
                                                 :class="actual().color === c ? 'ring-4 ring-indigo-400' : ''" :style="'background:' + c"></button>
                                     </template>
                                 </div>
+                                @include('empresas.mesas.partials.plano_mover')
                                 <div class="flex gap-2">
                                     <button type="button" @click="duplicar()" class="flex-1 h-9 rounded-lg bg-gray-100 text-xs font-bold text-gray-700">⧉ Otro igual</button>
-                                    <button type="button" @click="quitar()" class="flex-1 h-9 rounded-lg bg-rose-50 text-xs font-bold text-rose-700">Borrar</button>
+                                    <button type="button" @click="quitar()" class="flex-1 h-9 rounded-lg bg-rose-600 text-xs font-bold text-white">🗑️ Eliminar</button>
                                 </div>
                             </div>
                         </template>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
+                        <p class="font-bold text-gray-800">📐 Forma del ambiente</p>
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <template x-for="[nombre, valor] in [['▭ Ancho', 625], ['□ Cuadrado', 1000], ['▯ Largo', 1600]]" :key="valor">
+                                <button type="button" @click="cambiarAlto(valor)" class="h-9 rounded-lg text-xs font-bold"
+                                        :class="alto === valor ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'" x-text="nombre"></button>
+                            </template>
+                        </div>
+                        <input type="range" min="{{ PlanoMesas::ALTO_MIN }}" max="{{ PlanoMesas::ALTO_MAX }}" step="25" :value="alto" @input="cambiarAlto(Number($event.target.value))" class="w-full">
+                        <p class="text-[11px] text-gray-500" x-text="alto < 1000 ? 'Más ancho que largo' : (alto === 1000 ? 'Cuadrado' : 'Más largo que ancho')"></p>
                     </div>
 
                     <div class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
@@ -119,7 +137,10 @@
                         <p class="font-bold text-gray-800">📍 Sin ubicar <span class="text-xs font-normal text-gray-500">(toca para ponerla en el plano)</span></p>
                         <div class="flex flex-wrap gap-1.5">
                             <template x-for="m in sinUbicar()" :key="m.id">
-                                <button type="button" @click="ubicar(m)" class="h-9 px-3 rounded-lg bg-amber-50 text-amber-800 text-xs font-bold hover:bg-amber-100" x-text="m.nombre"></button>
+                                <span class="inline-flex rounded-lg bg-amber-50 overflow-hidden">
+                                    <button type="button" @click="ubicar(m)" class="h-9 px-3 text-amber-800 text-xs font-bold hover:bg-amber-100" x-text="m.nombre"></button>
+                                    <button type="button" @click="eliminarMesa(m)" title="Eliminar esta mesa" class="h-9 px-2 text-rose-600 text-xs hover:bg-rose-100">🗑️</button>
+                                </span>
                             </template>
                         </div>
                         <button type="button" @click="sinUbicar().forEach(m => ubicar(m))" class="text-xs font-semibold text-indigo-600">Ubicar todas</button>
@@ -131,16 +152,16 @@
 
     <script>
         function planoEditor(cfg) {
-            const ANCHO = {{ PlanoMesas::ANCHO }}, ALTO = {{ PlanoMesas::ALTO }};
+            const ANCHO = {{ PlanoMesas::ANCHO }}, ALTO_MIN = {{ PlanoMesas::ALTO_MIN }}, ALTO_MAX = {{ PlanoMesas::ALTO_MAX }};
             const paso = v => Math.round(v / 5) * 5;
             const entre = (v, min, max) => Math.max(min, Math.min(max, v));
             return {
-                ...cfg, sel: null, cambios: false, guardando: false, mensaje: '', error: false,
+                ...cfg, sel: null, cambios: false, guardando: false, mensaje: '', error: false, eliminar: [],
                 colores: ['#111827', '#475569', '#7c2d12', '#b91c1c', '#c2410c', '#ca8a04', '#15803d', '#0369a1', '#1d4ed8', '#7e22ce', '#db2777'],
                 init() {
                     window.addEventListener('beforeunload', e => { if (this.cambios) { e.preventDefault(); e.returnValue = ''; } });
                 },
-                pos(o) { return `left:${o.x / ANCHO * 100}%;top:${o.y / ALTO * 100}%;width:${o.w / ANCHO * 100}%;height:${o.h / ALTO * 100}%`; },
+                pos(o) { return `left:${o.x / ANCHO * 100}%;top:${o.y / this.alto * 100}%;width:${o.w / ANCHO * 100}%;height:${o.h / this.alto * 100}%`; },
                 claseMesa(m) {
                     return { REDONDA: 'rounded-full bg-emerald-600', CUADRADA: 'rounded-xl bg-emerald-600', RECTANGULAR: 'rounded-xl bg-emerald-600',
                         BOX: 'rounded-2xl bg-violet-700 border-2 border-amber-300' }[m.forma] || 'rounded-xl bg-emerald-600';
@@ -155,43 +176,76 @@
                 esSel(kind, i) { return this.sel && this.sel.kind === kind && this.sel.idx === i; },
                 actual() { return this.sel ? (this.sel.kind === 'mesa' ? this.mesas[this.sel.idx] : this.elementos[this.sel.idx]) : {}; },
                 sinUbicar() { return this.mesas.filter(m => !m.ubicada && m.id); },
+                /** Que nada quede fuera del lienzo (al moverlo o al achicar el ambiente) */
+                acomodar(o) {
+                    o.w = entre(o.w, 10, ANCHO); o.h = entre(o.h, 10, this.alto);
+                    o.x = entre(o.x, 0, ANCHO - o.w); o.y = entre(o.y, 0, this.alto - o.h);
+                },
+                /** Forma del ambiente: el ancho es fijo (1000) y el alto se elige */
+                cambiarAlto(valor) {
+                    this.alto = entre(paso(valor), ALTO_MIN, ALTO_MAX);
+                    [...this.mesas.filter(m => m.ubicada), ...this.elementos].forEach(o => this.acomodar(o));
+                    this.cambios = true;
+                },
                 /** Mover o agrandar con el dedo o el mouse (en pasos de 5, sin salir del lienzo) */
                 iniciar(e, kind, idx, modo) {
                     e.preventDefault();
                     this.sel = { kind, idx };
                     const o = kind === 'mesa' ? this.mesas[idx] : this.elementos[idx];
+                    // En el celular el dedo queda "pegado" a la mesa aunque salga de ella
+                    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* sin captura: igual funciona con el mouse */ }
                     const escala = ANCHO / this.$refs.lienzo.getBoundingClientRect().width;
                     const ini = { px: e.clientX, py: e.clientY, x: o.x, y: o.y, w: o.w, h: o.h };
                     const minimo = kind === 'mesa' ? 20 : 10;
                     const mover = ev => {
                         const dx = (ev.clientX - ini.px) * escala, dy = (ev.clientY - ini.py) * escala;
                         if (Math.abs(dx) + Math.abs(dy) < 2) return;
+                        ev.preventDefault();
                         if (modo === 'mover') {
                             o.x = entre(paso(ini.x + dx), 0, ANCHO - o.w);
-                            o.y = entre(paso(ini.y + dy), 0, ALTO - o.h);
+                            o.y = entre(paso(ini.y + dy), 0, this.alto - o.h);
                         } else {
                             o.w = entre(paso(ini.w + dx), minimo, ANCHO - o.x);
-                            o.h = entre(paso(ini.h + dy), minimo, ALTO - o.y);
-                            if (o.forma === 'REDONDA') o.h = o.w = Math.min(o.w, ALTO - o.y);
+                            o.h = entre(paso(ini.h + dy), minimo, this.alto - o.y);
+                            if (o.forma === 'REDONDA') o.h = o.w = Math.min(o.w, this.alto - o.y);
                         }
                         this.cambios = true;
                     };
-                    const soltar = () => { window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); };
-                    window.addEventListener('pointermove', mover);
+                    const soltar = () => {
+                        window.removeEventListener('pointermove', mover);
+                        window.removeEventListener('pointerup', soltar);
+                        window.removeEventListener('pointercancel', soltar);
+                    };
+                    window.addEventListener('pointermove', mover, { passive: false });
                     window.addEventListener('pointerup', soltar);
+                    window.addEventListener('pointercancel', soltar);
+                },
+                /** Botones de mover y de tamaño (fácil en el celular) */
+                mover(dx, dy) {
+                    const o = this.actual();
+                    o.x = entre(o.x + dx, 0, ANCHO - o.w); o.y = entre(o.y + dy, 0, this.alto - o.h);
+                    this.cambios = true;
+                },
+                crecer(d) {
+                    const o = this.actual();
+                    const minimo = this.sel.kind === 'mesa' ? 20 : 10;
+                    o.w = entre(o.w + d, minimo, ANCHO - o.x);
+                    o.h = o.forma === 'REDONDA' ? o.w : entre(o.h + d, minimo, this.alto - o.y);
+                    this.acomodar(o);
+                    this.cambios = true;
                 },
                 /** Un lugar libre para algo nuevo: recorre el lienzo hasta que no choque con nada */
                 lugarLibre(w, h) {
                     const ocupados = [...this.mesas.filter(m => m.ubicada), ...this.elementos];
-                    for (let y = 20; y + h <= ALTO; y += 25) {
+                    for (let y = 20; y + h <= this.alto; y += 25) {
                         for (let x = 20; x + w <= ANCHO; x += 25) {
                             if (!ocupados.some(o => x < o.x + o.w + 10 && x + w + 10 > o.x && y < o.y + o.h + 10 && y + h + 10 > o.y)) return { x, y };
                         }
                     }
-                    return { x: paso((ANCHO - w) / 2), y: paso((ALTO - h) / 2) };
+                    return { x: paso((ANCHO - w) / 2), y: paso(Math.max(0, this.alto - h) / 2) };
                 },
                 siguienteNombre(prefijo) {
-                    const usados = this.mesas.map(m => (m.nombre || '').toUpperCase());
+                    const usados = this.mesas.map(m => (m.nombre || '').trim().toUpperCase());
                     for (let n = 1; n < 1000; n++) {
                         const nombre = `${prefijo} ${String(n).padStart(2, '0')}`;
                         if (!usados.includes(nombre)) return nombre;
@@ -215,6 +269,7 @@
                     const [, w, h] = this.formas[m.forma] || this.formas.CUADRADA;
                     Object.assign(m, { w: m.w || w, h: m.h || h, ubicada: true });
                     Object.assign(m, this.lugarLibre(m.w, m.h));
+                    this.acomodar(m);
                     this.sel = { kind: 'mesa', idx: this.mesas.indexOf(m) };
                     this.cambios = true;
                 },
@@ -222,7 +277,7 @@
                     const m = this.actual();
                     const [, w, h] = this.formas[forma];
                     Object.assign(m, { forma, w, h });
-                    m.x = entre(m.x, 0, ANCHO - w); m.y = entre(m.y, 0, ALTO - h);
+                    this.acomodar(m);
                     this.cambios = true;
                 },
                 duplicar() {
@@ -236,6 +291,7 @@
                     }
                     this.cambios = true;
                 },
+                /** Mesa: sale del plano (queda "Sin ubicar"); una nueva sin guardar, o un elemento, se borra */
                 quitar() {
                     if (!this.sel) return;
                     if (this.sel.kind === 'mesa') {
@@ -247,11 +303,37 @@
                     this.sel = null;
                     this.cambios = true;
                 },
+                /** Eliminar la mesa de verdad (se borra al guardar el plano) */
+                eliminarMesa(m = null) {
+                    m = m || this.actual();
+                    if (!m || !confirm(`¿Eliminar la ${m.nombre}? Se borra al guardar el plano.`)) return;
+                    if (m.id) this.eliminar.push(m.id);
+                    this.mesas.splice(this.mesas.indexOf(m), 1);
+                    this.sel = null;
+                    this.cambios = true;
+                },
+                /** Antes de guardar: no dos mesas con el mismo nombre (contando las que están "Sin ubicar") */
+                repetida() {
+                    const vistos = {};
+                    for (const [i, m] of this.mesas.entries()) {
+                        const n = (m.nombre || '').trim().toUpperCase();
+                        if (vistos[n] !== undefined) return [n, m.ubicada ? i : vistos[n]];
+                        vistos[n] = i;
+                    }
+                    return null;
+                },
                 async guardar() {
+                    const rep = this.repetida();
+                    if (rep) {
+                        this.error = true;
+                        this.mensaje = `Hay dos mesas llamadas ${rep[0]} en este piso (una puede estar en "Sin ubicar"): cambia el nombre o elimina una.`;
+                        if (this.mesas[rep[1]].ubicada) this.sel = { kind: 'mesa', idx: rep[1] };
+                        return;
+                    }
                     this.guardando = true; this.mensaje = '';
                     const cuerpo = {
                         mesas: this.mesas.filter(m => m.ubicada).map(({ id, nombre, forma, x, y, w, h }) => ({ id, nombre, forma, x, y, w, h })),
-                        elementos: this.elementos, usar_plano: this.usaPlano,
+                        elementos: this.elementos, usar_plano: this.usaPlano, alto: this.alto, eliminar: this.eliminar,
                     };
                     const r = await fetch(this.url, { method: 'POST', body: JSON.stringify(cuerpo),
                         headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) } }).catch(() => null);

@@ -69,13 +69,14 @@ class ComandasController extends Controller
     /**
      * Si la sucursal ve sus mesas en el plano del local, lo que va alrededor de las mesas (barra, paredes, DJ...)
      *
-     * @return array{usaPlano: bool, elementos: Collection}
+     * @return array{usaPlano: bool, elementos: Collection, alto: int}
      */
     private static function plano(int $sucursal, int $piso): array
     {
         $usaPlano = $piso && PlanoMesas::usaPlano($sucursal);
 
-        return ['usaPlano' => $usaPlano, 'elementos' => $usaPlano ? PlanoMesas::elementos($sucursal, $piso) : collect()];
+        return ['usaPlano' => $usaPlano, 'elementos' => $usaPlano ? PlanoMesas::elementos($sucursal, $piso) : collect(),
+            'alto' => $usaPlano ? PlanoMesas::alto($piso) : PlanoMesas::ALTO];
     }
 
     /**

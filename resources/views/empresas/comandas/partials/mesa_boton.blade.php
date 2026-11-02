@@ -10,7 +10,7 @@
     $enPlano = ($plano ?? false) && $m->plano_x !== null;
     $forma = $enPlano ? ['REDONDA' => 'rounded-full', 'BOX' => 'rounded-2xl border-2 border-amber-300'][$m->plano_forma] ?? 'rounded-xl' : 'rounded-2xl';
 @endphp
-<button type="button" @if ($enPlano) style="{{ \App\Support\PlanoMesas::estilo($m->plano_x, $m->plano_y, $m->plano_w, $m->plano_h) }}" @endif
+<button type="button" @if ($enPlano) style="{{ \App\Support\PlanoMesas::estilo($m->plano_x, $m->plano_y, $m->plano_w, $m->plano_h, $alto ?? \App\Support\PlanoMesas::ALTO) }}" @endif
     class="btn-mesa-comanda {{ $enPlano ? 'absolute z-20 flex flex-col items-center justify-center overflow-visible px-1 py-0.5 text-[11px] leading-tight' : 'relative min-h-[88px] px-2 py-2.5' }} {{ $forma }} text-white shadow-sm ring-1 ring-black/5 active:scale-95 transition-transform select-none {{ $color }}"
     data-id="{{ $principal['mes_id'] ?? $m->mes_id }}" data-nombre="{{ $principal['nombre'] ?? $m->etiqueta }}" data-estado="{{ $estado }}"
     data-pedido-id="{{ $m->pedido_id }}" data-listos="{{ $m->listos ?? 0 }}" data-listos-texto="{{ $m->listos_texto ?? '' }}">
