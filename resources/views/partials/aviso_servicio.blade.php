@@ -94,3 +94,23 @@
         </div>
     </div>
 @endif
+@php
+    // Contrato de servicio pendiente de firma (o con observación): solo lo ve el administrador de la empresa
+    $contratoPendiente = $clienteTenancy && auth()->check() && auth()->user()->esAdmin() && \Illuminate\Support\Facades\Route::has('sitio.contrato')
+        ? \App\Support\Tenancy\Contratos::deCliente($clienteTenancy->id) : null;
+    $contratoPendiente = $contratoPendiente && \App\Support\Tenancy\Contratos::editable($contratoPendiente) ? $contratoPendiente : null;
+    $hayBarraPago = $enPrueba || ($clienteTenancy && $clienteTenancy->aviso_mensaje);
+@endphp
+@if ($contratoPendiente)
+    <div id="aviso-contrato" style="position:fixed;left:12px;right:12px;bottom:{{ $hayBarraPago ? '108px' : '12px' }};z-index:2147480900;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
+        <div style="max-width:880px;margin:0 auto;background:{{ $contratoPendiente->estado === 'OBSERVADO' ? '#92400e' : '#1e3a8a' }};color:#fff;border-radius:16px;box-shadow:0 14px 34px -10px rgba(0,0,0,.45);padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div style="font-size:22px">📄</div>
+            <div style="flex:1;min-width:200px">
+                <p style="margin:0;font-weight:800;font-size:14px">{{ $contratoPendiente->estado === 'OBSERVADO' ? 'Tu contrato tiene una observación' : 'Firma tu contrato de servicio' }}</p>
+                <p style="margin:2px 0 0;font-size:12px;color:#c7d2fe">{{ $contratoPendiente->estado === 'OBSERVADO' ? $contratoPendiente->observacion : 'Sube tu DNI y fírmalo desde tu celular, tablet o PC. Toma 2 minutos.' }}</p>
+            </div>
+            <a href="{{ route('sitio.contrato', $contratoPendiente->token) }}" target="_blank" rel="noopener" style="border-radius:12px;background:#fff;color:#1e3a8a;font-weight:800;padding:9px 14px;text-decoration:none">Firmar contrato</a>
+            <button type="button" onclick="document.getElementById('aviso-contrato').style.display='none'" title="Ocultar" style="border:0;background:transparent;color:#c7d2fe;font-size:22px;cursor:pointer;line-height:1">&times;</button>
+        </div>
+    </div>
+@endif

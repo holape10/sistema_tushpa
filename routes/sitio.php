@@ -3,6 +3,7 @@
 // Web pública del dominio principal (tushpa.app). Se carga desde routes/web.php solo con el multi-empresa activo.
 
 use App\Http\Controllers\CartaWebController;
+use App\Http\Controllers\ContratoController;
 use App\Http\Controllers\GoogleWebController;
 use App\Http\Controllers\PagoOnlineController;
 use App\Http\Controllers\PromocionWebController;
@@ -62,3 +63,8 @@ Route::post('/pagar/{cliente}/cobrar', [PagoOnlineController::class, 'cobrar'])-
 Route::get('/pagar/{cliente}/estado/{pago}', [PagoOnlineController::class, 'estado'])->whereNumber(['cliente', 'pago'])->middleware('throttle:60,1,sitio-pago-estado')->name('pagar.estado');
 // Avisos de Culqi (se registra en CulqiPanel → Eventos/Webhooks con el evento order.status.changed)
 Route::post('/culqi/webhook', [PagoOnlineController::class, 'webhook'])->middleware('throttle:120,1,culqi')->name('culqi.webhook');
+
+// Contrato de servicio: la empresa lo completa y firma con el enlace que le manda el panel (sin usuario ni contraseña)
+Route::get('/contrato/{token}', [ContratoController::class, 'pagina'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:60,1,sitio-contrato')->name('contrato');
+Route::get('/contrato/{token}/pdf', [ContratoController::class, 'pdf'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:20,1,sitio-contrato-pdf')->name('contrato.pdf');
+Route::post('/contrato/{token}', [ContratoController::class, 'enviar'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:10,10,sitio-contrato-enviar')->name('contrato.enviar');

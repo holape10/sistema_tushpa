@@ -19,6 +19,9 @@
                 Si el navegador dice "La conexión no es privada", espera un momento o entra mientras tanto por
                 <a href="{{ preg_replace('#^https://#', 'http://', $c['url']) }}" target="_blank" class="font-semibold underline">{{ preg_replace('#^https://#', 'http://', $c['url']) }}</a>.
             </p>
+            @isset($c['id'])
+                <a href="{{ route('admin.clientes.contrato', $c['id']) }}" class="mt-3 inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-indigo-600 text-white text-sm font-bold">📄 Generar su contrato</a>
+            @endisset
         </div>
     @endif
 
@@ -159,6 +162,7 @@
                             @endif
                             <a href="{{ route('admin.clientes.accesos', $cl->id) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2" title="Ver sus usuarios y ponerles una contraseña nueva">Contraseñas</a>
                             <a href="{{ route('admin.clientes.comprobantes', $cl->id) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2" title="Pendientes y rechazados de SUNAT">Comprobantes</a>
+                            <a href="{{ route('admin.clientes.contrato', $cl->id) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2" title="Generar el contrato, ver su DNI y el contrato firmado">Contrato</a>
                             @if ($cl->activo())
                                 <button type="button" x-data class="text-xs font-semibold text-amber-600 hover:text-amber-700 mr-2"
                                         @click="$dispatch('advertir', @js(['id' => $cl->id, 'nombre' => $cl->nombre_comercial ?: $cl->razon_social, 'telefono' => $cl->contacto_telefono,

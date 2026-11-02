@@ -157,7 +157,7 @@ class ClienteController extends Controller
         }
 
         return redirect()->route('admin.clientes.index')->with('creado', [
-            'razon_social' => $cliente->razon_social,
+            'razon_social' => $cliente->razon_social, 'id' => $cliente->id,
             'url' => $cliente->url(),
             'base' => $cliente->base_datos,
             'usuario' => $d['usuario'],

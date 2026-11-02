@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\AnuncioController;
 use App\Http\Controllers\Admin\CertificadoController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\ComprobanteController;
+use App\Http\Controllers\Admin\ContratoController;
 use App\Http\Controllers\Admin\DatosCobroController;
 use App\Http\Controllers\Admin\ErrorController;
 use App\Http\Controllers\Admin\LoginController;
@@ -81,6 +82,13 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/prospectos/carta/{id}/contactado', [ProspectoController::class, 'contactado'])->whereNumber('id')->name('prospectos.contactado');
     Route::get('/clientes/{cliente}/accesos', [AccesoController::class, 'index'])->whereNumber('cliente')->name('clientes.accesos');
     Route::post('/clientes/{cliente}/accesos/{usuario}', [AccesoController::class, 'clave'])->whereNumber(['cliente', 'usuario'])->middleware('throttle:20,1')->name('clientes.accesos.clave');
+    // Contrato de servicio: generarlo, ver el DNI y el contrato firmado, aprobarlo u observarlo
+    Route::get('/clientes/{cliente}/contrato', [ContratoController::class, 'index'])->whereNumber('cliente')->name('clientes.contrato');
+    Route::post('/clientes/{cliente}/contrato', [ContratoController::class, 'generar'])->whereNumber('cliente')->name('clientes.contrato.generar');
+    Route::post('/clientes/{cliente}/contrato/{id}/revisar', [ContratoController::class, 'revisar'])->whereNumber(['cliente', 'id'])->name('clientes.contrato.revisar');
+    Route::get('/clientes/{cliente}/contrato/{id}/pdf', [ContratoController::class, 'pdf'])->whereNumber(['cliente', 'id'])->name('clientes.contrato.pdf');
+    Route::get('/clientes/{cliente}/contrato/{id}/{campo}', [ContratoController::class, 'archivo'])->whereNumber(['cliente', 'id'])
+        ->whereIn('campo', ['dni_frente', 'dni_reverso', 'firma', 'escaneado'])->name('clientes.contrato.archivo');
     Route::get('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'index'])->whereNumber('cliente')->name('clientes.comprobantes');
     Route::post('/clientes/{cliente}/comprobantes/{id}', [ComprobanteController::class, 'accion'])->whereNumber(['cliente', 'id'])->name('clientes.comprobantes.accion');
     Route::post('/cartas/{id}/estado', [VisitaController::class, 'cartaEstado'])->whereNumber('id')->name('cartas.estado');

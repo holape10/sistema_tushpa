@@ -19,7 +19,7 @@ class PaginasDelSitioTest extends TestCase
         Route::getRoutes()->refreshNameLookups();
 
         $permitida = (new \ReflectionMethod(IdentificarEmpresa::class, 'esPaginaDelSitio'))->getClosure(app(IdentificarEmpresa::class));
-        $ejemplos = ['cliente' => '7', 'pago' => '3', 'id' => '5', 'slug' => 'mi-negocio', 'ruc' => '20123456789', 'sub' => 'demo', 'ciudad' => 'iquitos'];
+        $ejemplos = ['cliente' => '7', 'pago' => '3', 'id' => '5', 'slug' => 'mi-negocio', 'ruc' => '20123456789', 'sub' => 'demo', 'ciudad' => 'iquitos', 'token' => str_repeat('a', 40)];
         $revisadas = 0;
         foreach (Route::getRoutes() as $ruta) {
             if (! str_starts_with((string) $ruta->getName(), 'sitio.') || str_contains($ruta->uri(), 'sistema-de-facturacion-electronica-')) {
