@@ -13,7 +13,8 @@
 
         return $paraPdf ? public_path($archivo) : asset($archivo);
     };
-    $logo = $ruta($negocio->logo_suc ?? null) ?? $ruta($empresa->LogEmpresa ?? null);
+    // A4: el logo a color de la empresa; el de la sucursal (a veces en blanco y negro para la ticketera) solo si la empresa no tiene
+    $logo = $ruta($empresa->LogEmpresa ?? null) ?? $ruta($negocio->logo_suc ?? null);
     $enlaceQr = $g->qr ?: ($g->token ? route('guias.verificar', $g->token) : null);
     $qr = $enlaceQr ? (new \BaconQrCode\Writer(new \BaconQrCode\Renderer\ImageRenderer(new \BaconQrCode\Renderer\RendererStyle\RendererStyle(160, 1), new \BaconQrCode\Renderer\Image\SvgImageBackEnd)))->writeString($enlaceQr) : null;
     $docs = ['1' => 'DNI', '4' => 'CARNÉ EXT.', '6' => 'RUC', '7' => 'PASAPORTE', '0' => 'DOC.'];

@@ -18,6 +18,7 @@ use App\Support\ControlStock;
 use App\Support\Delivery;
 use App\Support\ImagenProducto;
 use App\Support\Impresion\Impresion;
+use App\Support\LogoNegocio;
 use App\Support\MesasUnidas;
 use App\Support\MetasMozo;
 use App\Support\NombreCorto;
@@ -352,9 +353,30 @@ class ComandasController extends Controller
         $mozoActual = $mozos->isEmpty() ? null : ($pedidoId ? Pedido::where('ped_id', $pedidoId)->value('mozo') : session('comanda_mozo_id'));
         $total = round(collect($cart)->sum(fn ($i) => $i['cantidad'] * $i['precio']), 2);
         $productosIniciales = $cat_default_id ? $this->productosHtml($cat_default_id, null) : '';
+        $fotoRedes = $order_type === 'salon' ? self::fotoRedes((int) $id_empresa_negocio) : null;
 
         return view('empresas.comandas.menu_pedido', compact('categorias', 'cat_default_id', 'cart', 'order_type', 'mesa_info', 'esAdmin', 'motorizados', 'motActual',
-            'promotores', 'promActual', 'esPromotor', 'mozos', 'mozoActual', 'total', 'productosIniciales'));
+            'promotores', 'promActual', 'esPromotor', 'mozos', 'mozoActual', 'total', 'productosIniciales', 'fotoRedes'));
+    }
+
+    /**
+     * Foto para redes (si la sucursal la activó): nombre, logo (el de la empresa, a color; el de la sucursal suele ser
+     * en blanco y negro para la ticketera) y el marco que eligió la sucursal
+     *
+     * @return array{nombre: string, logo: ?string, estilo: string, color: string, texto: ?string}|null
+     */
+    public static function fotoRedes(int $sucursal): ?array
+    {
+        $negocio = DB::table('empresa_negocios as n')->join('empresa as e', 'e.IdEmpresa', '=', 'n.IdEmpresa')
+            ->where('n.id_empresa_negocio', $sucursal)->where('n.foto_redes', true)
+            ->first(['n.nombre_comercial', 'n.logo_suc', 'n.foto_marco_estilo', 'n.foto_marco_color', 'n.foto_texto', 'e.LogEmpresa', 'e.NomEmpresa']);
+        if (! $negocio) {
+            return null;
+        }
+        $logo = LogoNegocio::de($negocio->LogEmpresa, $negocio->logo_suc);
+
+        return ['nombre' => (string) ($negocio->nombre_comercial ?: $negocio->NomEmpresa), 'logo' => $logo ? asset($logo) : null,
+            'estilo' => (string) $negocio->foto_marco_estilo, 'color' => (string) $negocio->foto_marco_color, 'texto' => $negocio->foto_texto];
     }
 
     /** Usuarios activos con rol Mozo de la sucursal */

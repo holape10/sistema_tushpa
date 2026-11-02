@@ -1,10 +1,15 @@
-{{-- Vigencia del certificado digital: días que quedan; vencido en producción = no se puede enviar nada a SUNAT --}}
+{{-- Vigencia del certificado digital: días que quedan; vencido en producción = no se puede enviar nada a SUNAT.
+     $enLinea: la etiqueta verde (al costado de PRODUCCIÓN); si no, los avisos grandes (por vencer, vencido, falta) --}}
 @php
     $diasCert = \App\Support\Sunat\Certificado::diasRestantes($empresa->fec_fin_cer);
     $fechaCert = $empresa->fec_fin_cer ? \Carbon\Carbon::parse($empresa->fec_fin_cer)->format('d/m/Y') : null;
     $urlCert = route('empresas.edit', $empresa->IdEmpresa).'#certificado';
 @endphp
-@if (! is_file(storage_path('app/certificados/'.$empresa->IdEmpresa.'.pem')))
+@if ($enLinea ?? false)
+    @if ($diasCert !== null && $diasCert > 30 && is_file(storage_path('app/certificados/'.$empresa->IdEmpresa.'.pem')))
+        <span class="px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold">🔐 Certificado vigente hasta {{ $fechaCert }} · quedan {{ $diasCert }} días</span>
+    @endif
+@elseif (! is_file(storage_path('app/certificados/'.$empresa->IdEmpresa.'.pem')))
     <div class="mb-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 px-4 py-3 text-sm flex flex-wrap items-center gap-3">
         <span class="text-2xl">🔐</span>
         <p class="flex-1"><b>Falta el certificado digital.</b> Sin él no se pueden enviar comprobantes a SUNAT.</p>
@@ -38,9 +43,5 @@
             <p class="text-sm">Vence el <b>{{ $fechaCert }}</b>. Después de esa fecha no podrás enviar comprobantes ni resúmenes a SUNAT: renuévalo con tu proveedor y súbelo en Editar empresa.</p>
         </div>
         <a href="{{ $urlCert }}" class="px-4 py-2 rounded-xl {{ $diasCert <= 7 ? 'bg-orange-600 hover:bg-orange-700' : 'bg-amber-600 hover:bg-amber-700' }} text-white font-bold">Subir certificado</a>
-    </div>
-@elseif ($diasCert !== null)
-    <div class="mb-4 text-sm">
-        <span class="px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold">🔐 Certificado vigente hasta {{ $fechaCert }} · quedan {{ $diasCert }} días</span>
     </div>
 @endif

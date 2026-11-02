@@ -10,6 +10,7 @@
         @else
             <span class="px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-bold">BETA (pruebas, sin validez tributaria)</span>
         @endif
+        @include('empresas.sunat._certificado', ['enLinea' => true])
         <a href="{{ route('sunat.resumenes') }}" class="ml-auto px-4 py-2 rounded-xl bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300">Resumen diario de boletas →</a>
     </div>
     @include('empresas.sunat._certificado')

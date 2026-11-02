@@ -76,7 +76,13 @@
                     </select>
                 </div>
             @endif
+            @if ($fotoRedes)
+                <button type="button" @click="$dispatch('foto-redes')" class="inline-flex h-10 items-center gap-1.5 rounded-xl bg-pink-50 px-3 text-sm font-bold text-pink-700 active:bg-pink-100">📸 Foto para redes</button>
+            @endif
         </div>
+        @if ($fotoRedes)
+            @include('empresas.comandas.partials.foto_redes')
+        @endif
 
         <div class="lg:grid lg:grid-cols-[1fr_380px] lg:gap-5 lg:px-6 lg:pt-4">
             {{-- Productos --}}

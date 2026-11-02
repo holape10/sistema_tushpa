@@ -118,11 +118,15 @@ class SucursalController extends Controller
             'permite_cortesias' => 'nullable|boolean',
             'descuento_max_cajero' => 'nullable|numeric|min:0|max:100',
             'permite_propina' => 'nullable|boolean',
+            'foto_marco_estilo' => 'nullable|in:DEGRADADO,BANDA,BORDE',
+            'foto_marco_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'foto_texto' => 'nullable|string|max:60',
             'tipo_cambio_usd' => 'nullable|numeric|min:0|max:20',
             'logo_suc' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
         ];
         $nombres = ['nombre_comercial' => 'Nombre comercial', 'codigofiscal' => 'Código de establecimiento',
-            'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión', 'control_stock' => 'Venta con o sin stock', 'logo_suc' => 'Logo de la sucursal'];
+            'tip_igv_pred' => 'Afectación IGV', 'tdocod_pred' => 'Comprobante predeterminado', 'formato_impresion' => 'Formato de impresión', 'control_stock' => 'Venta con o sin stock', 'logo_suc' => 'Logo de la sucursal',
+            'foto_marco_estilo' => 'Estilo del marco', 'foto_marco_color' => 'Color del marco', 'foto_texto' => 'Texto de la foto'];
 
         foreach (self::SERIES as $c) {
             $reglas[$c['serie']] = ['required', 'regex:'.$c['regex']];
@@ -182,6 +186,10 @@ class SucursalController extends Controller
         $datos['permite_cortesias'] = $request->boolean('permite_cortesias');
         $datos['descuento_max_cajero'] = (float) ($datos['descuento_max_cajero'] ?? 10);
         $datos['permite_propina'] = $request->boolean('permite_propina');
+        $datos['foto_redes'] = $request->boolean('foto_redes');
+        $datos['foto_marco_estilo'] = $datos['foto_marco_estilo'] ?? 'DEGRADADO';
+        $datos['foto_marco_color'] = strtolower($datos['foto_marco_color'] ?? '#111827');
+        $datos['foto_texto'] = trim((string) ($datos['foto_texto'] ?? '')) ?: null;
         $datos['imagenes_venta'] = $request->boolean('imagenes_venta');
         $datos['igv_restaurante'] = $request->boolean('igv_restaurante');
         $datos['diseno_a4'] = $datos['diseno_a4'] ?? 'MODERNO';

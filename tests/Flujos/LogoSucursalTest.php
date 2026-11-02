@@ -2,6 +2,7 @@
 
 namespace Tests\Flujos;
 
+use App\Http\Controllers\ComandasController;
 use App\Http\Controllers\SucursalController;
 use App\Support\LogoNegocio;
 use Illuminate\Http\UploadedFile;
@@ -51,6 +52,25 @@ class LogoSucursalTest extends FlujoTestCase
         $this->assertNull(DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('logo_suc'));
         $this->assertFileDoesNotExist(public_path($logo));
         $this->assertSame('imagenes/192.png', LogoNegocio::de(null, 'imagenes/192.png'), 'Sin logo propio usa el de la empresa.');
+    }
+
+    public function test_la_foto_para_redes_guarda_su_marco_y_usa_el_logo_a_color_de_la_empresa(): void
+    {
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['foto_redes' => 1, 'foto_marco_color' => '#ZZZZZZ']))
+            ->assertSessionHasErrors('foto_marco_color');
+
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['foto_redes' => 1, 'foto_marco_estilo' => 'BORDE',
+            'foto_marco_color' => '#DB2777', 'foto_texto' => '@local.prueba']))->assertSessionHasNoErrors();
+        // La sucursal con su logo en blanco y negro (ticketera); la empresa con el logo a color
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['logo_suc' => 'imagenes/icono.png']);
+        DB::table('empresa')->where('IdEmpresa', $this->usuario->IdEmpresa)->update(['LogEmpresa' => 'imagenes/192.png']);
+
+        $marco = ComandasController::fotoRedes($this->sucursal);
+        $this->assertSame(['BORDE', '#db2777', '@local.prueba'], [$marco['estilo'], $marco['color'], $marco['texto']]);
+        $this->assertStringEndsWith('imagenes/192.png', $marco['logo'], 'La foto usa el logo a color de la empresa.');
+
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario())->assertSessionHasNoErrors();
+        $this->assertNull(ComandasController::fotoRedes($this->sucursal), 'Sin marcar, la foto para redes queda apagada.');
     }
 
     public function test_las_pantallas_de_empresa_y_sucursal_abren_dentro_del_menu(): void

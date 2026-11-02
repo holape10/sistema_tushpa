@@ -103,6 +103,15 @@ class RestauranteTest extends FlujoTestCase
         $this->assertEquals(5.00, (float) $cab->vuelto, 'Vuelto = paga 50 - total 40 - propina 5.');
     }
 
+    public function test_la_foto_para_redes_solo_sale_si_la_sucursal_la_activa(): void
+    {
+        $this->postJson(route('comandas.set_servicio'), ['order_type' => 'salon', 'mesa_id' => $this->mesa, 'mesa_nombre' => 'MESA 01'])->assertOk();
+        $this->get(route('comandas.menu'))->assertOk()->assertDontSee('Foto para redes');
+
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['foto_redes' => true]);
+        $this->get(route('comandas.menu'))->assertOk()->assertSee('Foto para redes')->assertSee('El cliente aceptó');
+    }
+
     public function test_un_doble_clic_en_cobrar_no_emite_dos_comprobantes(): void
     {
         $plato = $this->producto('CHAUFA', 18, 10);

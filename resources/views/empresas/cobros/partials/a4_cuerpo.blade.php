@@ -14,7 +14,8 @@
         }
         return $paraPdf ? public_path($archivo) : asset($archivo);
     };
-    $logo = $ruta($negocio->logo_suc ?? null) ?? $ruta($empresa->LogEmpresa ?? null);
+    // A4: el logo a color de la empresa; el de la sucursal (a veces en blanco y negro para la ticketera) solo si la empresa no tiene
+    $logo = $ruta($empresa->LogEmpresa ?? null) ?? $ruta($negocio->logo_suc ?? null);
     // QR de pago (Yape/Plin) opcional por empresa: public/imagenes/qr-pago-{RUC}.png
     $qrPago = $ruta('imagenes/qr-pago-' . $cab->IdEmpresa . '.png');
     $tipoDoc = \Illuminate\Support\Facades\DB::table('tipo_documento_identidad')->where('tdicod', $cab->tdicod)->value('tdides') ?: 'DOC.';

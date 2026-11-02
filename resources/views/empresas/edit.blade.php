@@ -76,7 +76,7 @@
                     <header class="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
                         <span class="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center"><i class="fas fa-image"></i></span>
                         <div><h3 class="font-bold text-gray-800">Logo de la empresa</h3>
-                            <p class="text-xs text-gray-400">Sale en tickets, comprobantes, la carta y la tienda. Las sucursales con logo propio usan el suyo
+                            <p class="text-xs text-gray-400">Súbelo a color: sale en el PDF A4, la foto para redes, tickets, la carta y la tienda. Las sucursales con logo propio lo usan en sus tickets
                                 (<a href="{{ route('sucursales.index') }}" class="text-indigo-600 font-semibold">Sucursales → Editar</a>).</p></div>
                     </header>
                     <div class="p-5 flex flex-col sm:flex-row gap-5 sm:items-center">

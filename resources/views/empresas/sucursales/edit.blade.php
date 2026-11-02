@@ -95,7 +95,7 @@
                                 <p class="text-sm font-semibold text-gray-700">Logo de esta sucursal</p>
                                 <p class="text-xs text-gray-500" x-show="!vista || quitar">
                                     {{ $logoEmpresa ? 'Ahora usa el logo de la empresa (el de la imagen). Sube uno si esta sucursal tiene el suyo.' : 'Sin logo: los tickets salen solo con el nombre. Sube uno si quieres.' }}</p>
-                                <p class="text-xs text-emerald-600" x-show="vista && !quitar"><i class="fas fa-circle-check"></i> Tickets, comprobantes, carta y tienda de esta sucursal salen con este logo.</p>
+                                <p class="text-xs text-emerald-600" x-show="vista && !quitar"><i class="fas fa-circle-check"></i> Tickets, carta y tienda de esta sucursal salen con este logo (puede ser en blanco y negro para la ticketera). El PDF A4 y la foto para redes usan el logo a color de la empresa.</p>
                                 <input type="file" name="logo_suc" accept="image/png,image/jpeg,image/webp"
                                        @change="if ($event.target.files[0]) { vista = URL.createObjectURL($event.target.files[0]); quitar = false }"
                                        class="block w-full text-sm text-gray-600 file:mr-3 file:rounded-xl file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100">
@@ -266,6 +266,53 @@
                             <span><span class="font-bold text-gray-800">🍽️ Mozos y promotores solo atienden mesas</span>
                                 <span class="block text-xs text-gray-500 mt-0.5">En Comandas no ven "Para llevar", "Delivery" ni "Punto de venta" (solo administrador y caja). Sin marcar, mozos y promotores tienen "Para llevar".</span></span>
                         </label>
+                        {{-- Foto para redes: botón en la comanda de la mesa y el marco a gusto de la sucursal (con vista previa) --}}
+                        <div class="rounded-xl border-2 border-gray-200 px-4 py-3"
+                             x-data="marcoRedesSucursal({ activo: @js((bool) $campo('foto_redes')), estilo: @js(old('foto_marco_estilo', $sucursal->foto_marco_estilo ?: 'DEGRADADO')),
+                                color: @js(old('foto_marco_color', $sucursal->foto_marco_color ?: '#111827')), texto: @js(old('foto_texto', $sucursal->foto_texto) ?? ''),
+                                nombre: @js($sucursal->nombre_comercial), logo: @js(($logoEmpresa ?: $logoPropio) ? asset($logoEmpresa ?: $logoPropio) : null) })">
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input type="checkbox" name="foto_redes" value="1" x-model="activo" class="mt-0.5 rounded text-indigo-600">
+                                <span><span class="font-bold text-gray-800">📸 Foto para redes</span>
+                                    <span class="block text-xs text-gray-500 mt-0.5">En la comanda de la mesa, mozos y promotores ven el botón "Foto para redes": con el permiso del cliente toman la foto con su celular, sale con el marco del local y la comparten en Facebook, Instagram, WhatsApp o TikTok. La foto no se guarda en el sistema.</span></span>
+                            </label>
+                            <div x-show="activo" x-cloak class="mt-3 grid gap-4 sm:grid-cols-[1fr_220px]">
+                                <div class="space-y-3">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-700 mb-1">Estilo del marco</p>
+                                        <div class="grid grid-cols-3 gap-2">
+                                            @foreach (['DEGRADADO' => ['🌅', 'Sombra', 'Sobre la foto'], 'BANDA' => ['▬', 'Franja', 'Debajo de la foto'], 'BORDE' => ['🖼️', 'Marco', 'Alrededor, tipo polaroid']] as $valor => [$icono, $titulo, $detalle])
+                                                <label class="cursor-pointer rounded-xl border-2 px-2 py-2 text-center transition" :class="estilo === '{{ $valor }}' ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-200 hover:border-gray-300'">
+                                                    <input type="radio" name="foto_marco_estilo" value="{{ $valor }}" x-model="estilo" class="sr-only">
+                                                    <span class="block text-lg">{{ $icono }}</span><span class="block text-sm font-bold text-gray-800">{{ $titulo }}</span>
+                                                    <span class="block text-[11px] text-gray-500">{{ $detalle }}</span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-700 mb-1">Color</p>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            @foreach (['#111827', '#ffffff', '#b91c1c', '#c2410c', '#ca8a04', '#15803d', '#1d4ed8', '#7e22ce', '#db2777'] as $muestra)
+                                                <button type="button" @click="color = '{{ $muestra }}'" title="{{ $muestra }}" class="h-8 w-8 rounded-full ring-1 ring-gray-300"
+                                                        :class="color.toLowerCase() === '{{ $muestra }}' ? 'ring-4 ring-indigo-400' : ''" style="background: {{ $muestra }}"></button>
+                                            @endforeach
+                                            <label class="flex items-center gap-1 text-xs text-gray-500">Otro <input type="color" name="foto_marco_color" x-model="color" class="h-8 w-10 cursor-pointer rounded border-gray-300 p-0.5"></label>
+                                        </div>
+                                    </div>
+                                    <label class="block">
+                                        <span class="text-sm font-semibold text-gray-700">Texto debajo del nombre</span>
+                                        <input name="foto_texto" x-model="texto" maxlength="60" placeholder="Ej.: @cocoroco.sanantonio · ¡Gracias por visitarnos!" class="mt-1 block w-full h-10 rounded-lg border-gray-300 text-sm">
+                                        <span class="text-xs text-gray-500">Vacío = sale la fecha del día.</span>
+                                    </label>
+                                    <p class="text-xs text-gray-500">El logo es el de <b>Empresas → Editar</b> (súbelo a color). El de esta sucursal queda para los tickets.</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-700 mb-1">Así sale</p>
+                                    <img :src="vista" alt="Vista previa del marco" class="w-full rounded-xl shadow ring-1 ring-gray-200" x-show="vista">
+                                </div>
+                            </div>
+                        </div>
                         {{-- Mozos y promotores solo con el Wi-Fi del local (sus celulares salen a internet con la IP pública del local) --}}
                         <div class="rounded-xl border-2 border-gray-200 px-4 py-3" x-data="{ ip: @js(old('ip_mozos', $sucursal->ip_mozos)) }">
                             <p class="font-bold text-gray-800">📶 Mozos y promotores solo con el Wi-Fi del local</p>
@@ -309,8 +356,11 @@
                         </div>
                         @else
                             {{-- Opciones de restaurante: este negocio no las usa, se guardan como están --}}
-                            @foreach (['comandas_solo_mesas', 'permite_descuentos', 'permite_cortesias', 'permite_propina'] as $opcion)
+                            @foreach (['comandas_solo_mesas', 'permite_descuentos', 'permite_cortesias', 'permite_propina', 'foto_redes'] as $opcion)
                                 @if ($campo($opcion))<input type="hidden" name="{{ $opcion }}" value="1">@endif
+                            @endforeach
+                            @foreach (['foto_marco_estilo', 'foto_marco_color', 'foto_texto'] as $opcion)
+                                <input type="hidden" name="{{ $opcion }}" value="{{ $sucursal->$opcion }}">
                             @endforeach
                             <input type="hidden" name="tipo_cambio_usd" value="{{ $sucursal->tipo_cambio_usd }}">
                             <input type="hidden" name="descuento_max_cajero" value="{{ (float) ($sucursal->descuento_max_cajero ?? 10) }}">
@@ -360,3 +410,39 @@
         </div>
     </form>
 @endsection
+
+@include('empresas.comandas.partials.foto_redes_marco')
+@push('scripts')
+<script>
+    /** Vista previa del marco de la foto para redes con una foto de ejemplo; se redibuja al cambiar estilo, color o texto */
+    function marcoRedesSucursal(cfg) {
+        return {
+            ...cfg, vista: null, ejemplo: null, logoImg: null,
+            async init() {
+                const c = document.createElement('canvas');
+                c.width = 900; c.height = 1200;
+                const x = c.getContext('2d');
+                const g = x.createLinearGradient(0, 0, 900, 1200);
+                g.addColorStop(0, '#fde68a'); g.addColorStop(1, '#f472b6');
+                x.fillStyle = g; x.fillRect(0, 0, 900, 1200);
+                x.fillStyle = 'rgba(255,255,255,.75)';
+                [[300, 480, 120], [600, 500, 110]].forEach(([cx, cy, rr]) => {
+                    x.beginPath(); x.arc(cx, cy, rr, 0, Math.PI * 2); x.fill();
+                    x.beginPath(); x.ellipse(cx, cy + rr * 3, rr * 1.7, rr * 1.9, 0, Math.PI, 0); x.fill();
+                });
+                this.ejemplo = await cargarImagenRedes(c.toDataURL('image/jpeg', 0.85));
+                if (this.logo) {
+                    try { this.logoImg = await cargarImagenRedes(this.logo); } catch (e) { this.logoImg = null; }
+                }
+                this.dibujar();
+                ['estilo', 'color', 'texto', 'activo'].forEach(campo => this.$watch(campo, () => this.dibujar()));
+            },
+            dibujar() {
+                if (!this.ejemplo) return;
+                this.vista = marcoFotoRedes(this.ejemplo, this.logoImg, { nombre: this.nombre, estilo: this.estilo, color: this.color, texto: this.texto })
+                    .toDataURL('image/jpeg', 0.8);
+            },
+        };
+    }
+</script>
+@endpush
