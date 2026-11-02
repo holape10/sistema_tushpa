@@ -10,15 +10,9 @@
         @else
             <span class="px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-bold">BETA (pruebas, sin validez tributaria)</span>
         @endif
-        @if (!$tieneCertificado)
-            <span class="px-3 py-1 rounded-full bg-red-100 text-red-700">⚠️ Falta el certificado digital —
-                <a href="{{ route('empresas.edit', $empresa->IdEmpresa) }}" class="underline font-semibold">súbelo aquí</a></span>
-        @elseif ($empresa->fec_fin_cer)
-            <span class="px-3 py-1 rounded-full {{ \Carbon\Carbon::parse($empresa->fec_fin_cer)->isPast() ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600' }}">
-                Certificado vigente hasta {{ \Carbon\Carbon::parse($empresa->fec_fin_cer)->format('d/m/Y') }}</span>
-        @endif
         <a href="{{ route('sunat.resumenes') }}" class="ml-auto px-4 py-2 rounded-xl bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300">Resumen diario de boletas →</a>
     </div>
+    @include('empresas.sunat._certificado')
 
     <form class="bg-white rounded-2xl shadow-sm p-4 mb-4 flex flex-wrap items-end gap-3">
         <label class="text-sm">Desde<input type="date" name="desde" value="{{ $desde }}" class="block rounded-lg border-gray-300 text-sm"></label>

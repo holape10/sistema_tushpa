@@ -346,6 +346,7 @@ class GuiaRemision
         if ((string) $e->produccion !== '1') {
             throw new RuntimeException('SUNAT no tiene ambiente de pruebas para la guía electrónica: pon la empresa en PRODUCCIÓN para enviarla. La guía quedó guardada como PENDIENTE.');
         }
+        Certificado::exigirVigente($e);
         if (! $e->client_id || ! $e->client_secret) {
             throw new RuntimeException('Faltan las credenciales API de SUNAT (client_id y client_secret) en Mantenimiento > Empresas > Editar.');
         }

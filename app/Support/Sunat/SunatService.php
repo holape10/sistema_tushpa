@@ -326,6 +326,7 @@ class SunatService
             throw new RuntimeException("El comprobante {$cab->serdoc}-{$cab->numdoc} está anulado en el sistema: ya no se envía a SUNAT.");
         }
 
+        Certificado::exigirVigente($this->empresa);
         $doc = $this->construirComprobante($cab);
         $see = $this->see();
         $resultado = $see->send($doc);
@@ -477,6 +478,7 @@ class SunatService
         if ($docs->isEmpty()) {
             throw new RuntimeException('No hay boletas pendientes de resumen para esa fecha.');
         }
+        Certificado::exigirVigente($this->empresa);
 
         $see = $this->see();
         $creados = [];
@@ -658,6 +660,7 @@ class SunatService
                     ->setMtoIGV((float) $cab->ccaigv)]);
         }
 
+        Certificado::exigirVigente($this->empresa);
         $see = $this->see();
         $resultado = $see->send($documento);
         if ($xml = $see->getFactory()->getLastXml()) {

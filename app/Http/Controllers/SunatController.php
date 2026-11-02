@@ -57,13 +57,12 @@ class SunatController extends Controller
             ->paginate($estado === 'pendientes' ? 500 : 50)->withQueryString();
 
         $empresa = DB::table('empresa')->where('IdEmpresa', Auth::user()->IdEmpresa)->first();
-        $tieneCertificado = is_file(storage_path('app/certificados/'.Auth::user()->IdEmpresa.'.pem'));
 
         // El botón "Corregir fecha de los vencidos" solo sale si en la lista hay alguno fuera de plazo
         $hayVencidos = $comprobantes->getCollection()->contains(fn ($c) => ! $c->ccabaj
             && in_array($c->est_sunat, SunatService::ESTADOS_REENVIABLES, true) && CambioFecha::vencido($c));
 
-        return view('empresas.sunat.envios', compact('comprobantes', 'conteo', 'desde', 'hasta', 'tipo', 'estado', 'empresa', 'tieneCertificado', 'hayVencidos'));
+        return view('empresas.sunat.envios', compact('comprobantes', 'conteo', 'desde', 'hasta', 'tipo', 'estado', 'empresa', 'hayVencidos'));
     }
 
     /** Campanita de pendientes ya actualizada (la pide el layout después de cada envío a SUNAT) */
