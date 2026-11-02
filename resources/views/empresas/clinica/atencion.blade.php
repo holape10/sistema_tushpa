@@ -89,6 +89,15 @@
                         <textarea x-model="d.tratamiento" rows="2" class="{{ $in }} mt-1"></textarea></label>
                 </section>
 
+                {{-- Todo en la misma atención: el registro de tratamientos (costo, pagos, firma y consentimiento) y los presupuestos --}}
+                <script>window.fichaPaciente = { [{{ (int) $h->his_cli_id }}]: @js(['alergias' => $h->alergias, 'antecedentes' => $h->antecedentes]) };</script>
+                <section id="tratamientos" x-data="registroTratamientos()" x-init="cargar({{ $h->his_cli_id }})" class="scroll-mt-20">
+                    @include('empresas.clinica._tratamientos', ['especialidadesTrat' => $especialidades])
+                </section>
+                <section id="presupuestos" class="scroll-mt-20">
+                    @include('empresas.clinica._presupuestos', ['servicios' => $productos->where('propun', '>', 0)->values()])
+                </section>
+
                 {{-- Receta --}}
                 <section class="{{ $seccion }}">
                     <div class="flex items-center justify-between">

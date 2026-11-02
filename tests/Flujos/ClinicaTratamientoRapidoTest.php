@@ -114,4 +114,14 @@ class ClinicaTratamientoRapidoTest extends FlujoTestCase
         $this->assertEquals(200, (float) DB::table('cpe_cabecera')->where('ped_id', $reg->ped_id)->value('ccaitv'));
         $this->assertEquals(200, (float) DB::table('clinica_tratamiento_registros')->where('reg_id', $reg->reg_id)->value('adelanto'));
     }
+
+    public function test_nueva_atencion_tiene_todo_en_una_sola_pantalla(): void
+    {
+        $atencion = $this->post(route('clinica.nueva_atencion', $this->historia), ['esp_id' => $this->especialidad]);
+        $atencion->assertRedirect();
+        $this->get($atencion->headers->get('Location'))->assertOk()
+            ->assertSee('Registro de tratamientos')->assertSee('+ Nuevo tratamiento')
+            ->assertSee('Presupuestos')->assertSee('Signos vitales');
+        $this->get(route('clinica.historia', $this->historia))->assertOk()->assertSee('⋯ Más')->assertSee('Nueva atención');
+    }
 }

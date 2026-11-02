@@ -109,7 +109,8 @@
                     if (!m.tra_id && (m.alergias || m.antecedentes)) {
                         window.dispatchEvent(new CustomEvent('ficha-paciente', { detail: Object.fromEntries(Object.entries({ alergias: m.alergias, antecedentes: m.antecedentes }).filter(([, v]) => v)) }));
                     }
-                    if (!m.tra_id && m.consentimiento) setTimeout(() => location.reload(), 900);
+                    // La historia muestra su lista de consentimientos (en la atención no se recarga: se perdería lo no guardado)
+                    if (!m.tra_id && m.consentimiento && window.recargarConConsentimiento) setTimeout(() => location.reload(), 900);
                     this.modalTrat = null; this.cargar(this.hisId);
                 }
             },
