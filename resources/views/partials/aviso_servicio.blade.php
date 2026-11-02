@@ -102,7 +102,8 @@
     $hayBarraPago = $enPrueba || ($clienteTenancy && $clienteTenancy->aviso_mensaje);
 @endphp
 @if ($contratoPendiente)
-    <div id="aviso-contrato" style="position:fixed;left:12px;right:12px;bottom:{{ $hayBarraPago ? '108px' : '12px' }};z-index:2147480900;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
+    {{-- Sale una sola vez al día (no en cada pantalla ni al recargar): la firma puede esperar --}}
+    <div id="aviso-contrato" style="display:none;position:fixed;left:12px;right:12px;bottom:{{ $hayBarraPago ? '108px' : '12px' }};z-index:2147480900;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
         <div style="max-width:880px;margin:0 auto;background:{{ $contratoPendiente->estado === 'OBSERVADO' ? '#92400e' : '#1e3a8a' }};color:#fff;border-radius:16px;box-shadow:0 14px 34px -10px rgba(0,0,0,.45);padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
             <div style="font-size:22px">📄</div>
             <div style="flex:1;min-width:200px">
@@ -113,4 +114,15 @@
             <button type="button" onclick="document.getElementById('aviso-contrato').style.display='none'" title="Ocultar" style="border:0;background:transparent;color:#c7d2fe;font-size:22px;cursor:pointer;line-height:1">&times;</button>
         </div>
     </div>
+    <script>
+        (function () {
+            const clave = 'tushpa_aviso_contrato_{{ $contratoPendiente->id }}_{{ $contratoPendiente->estado }}';
+            const hoy = new Date().toISOString().slice(0, 10);
+            let visto = null;
+            try { visto = localStorage.getItem(clave); } catch (e) { /* sin almacenamiento: se muestra */ }
+            if (visto === hoy) return;
+            document.getElementById('aviso-contrato').style.display = '';
+            try { localStorage.setItem(clave, hoy); } catch (e) { /* sin almacenamiento */ }
+        })();
+    </script>
 @endif
