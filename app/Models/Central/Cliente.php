@@ -18,7 +18,7 @@ class Cliente extends Model
     protected $guarded = [];
 
     /** sol_clave: clave SOL principal (referencia), guardada cifrada */
-    protected $casts = ['vence_el' => 'date', 'prueba_hasta' => 'date', 'suspendido_el' => 'date', 'sol_clave' => 'encrypted'];
+    protected $casts = ['vence_el' => 'date', 'prueba_hasta' => 'date', 'suspendido_el' => 'date', 'cert_vence' => 'date', 'sol_clave' => 'encrypted'];
 
     protected $hidden = ['sol_clave'];
 

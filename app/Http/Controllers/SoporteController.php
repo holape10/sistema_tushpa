@@ -81,7 +81,10 @@ class SoporteController extends Controller
 
     public function responder(Request $request, int $id): RedirectResponse
     {
-        $this->ticket($id);
+        // Cerrado: ya no se escribe ahí, se abre un ticket nuevo
+        if ($this->ticket($id)->estado === 'CERRADO') {
+            return redirect()->route('soporte')->withErrors(['texto' => 'Ese ticket ya está cerrado: abre un ticket nuevo.']);
+        }
         $request->validate(['texto' => 'nullable|string|max:5000', 'fotos' => self::FOTOS, 'fotos.*' => self::FOTO],
             ['fotos.max' => 'Hasta '.Soporte::MAX_FOTOS.' fotos por mensaje.'], ['fotos.*' => 'foto']);
         try {

@@ -13,6 +13,7 @@ use App\Support\PadronRuc;
 use App\Support\PanelDueno;
 use App\Support\Promociones;
 use App\Support\Sunat\RescateEnvios;
+use App\Support\Tenancy\CertificadosClientes;
 use App\Support\Tenancy\DatosCobro;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Respaldos;
@@ -389,3 +390,14 @@ Artisan::command('cobros:optimizar-qr', function () {
     }
     $this->info("QR optimizados: {$n}");
 })->purpose('Achica los QR de pago pesados (pantalla de suspendido) a WebP');
+
+Artisan::command('certificados:revisar', function () {
+    if (! Tenancy::activa()) {
+        return;
+    }
+    $n = CertificadosClientes::avisar();
+    $this->info($n ? "Aviso por Telegram: {$n} empresa(s) con el certificado por vencer o vencido." : 'Ningún certificado por vencer.');
+})->purpose('Copia al panel el vencimiento del certificado digital de cada empresa y avisa por Telegram los que están por vencer');
+
+// Cada mañana: certificados digitales por vencer (aviso al Telegram del dueño)
+Schedule::command('certificados:revisar')->dailyAt('08:00')->withoutOverlapping(30);

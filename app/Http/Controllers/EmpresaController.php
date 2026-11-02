@@ -10,6 +10,7 @@ use App\Support\Sunat\Certificado;
 use App\Support\Sunat\Sire;
 use App\Support\Tenancy\Contratos;
 use App\Support\Tenancy\Tenancy;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -206,6 +207,10 @@ class EmpresaController extends Controller
         }
 
         $empresa->save();
+        // El panel ve al instante la nueva vigencia del certificado
+        if ($pfxNuevo !== null && ($cliente = Tenancy::cliente())) {
+            $cliente->update(['cert_vence' => $empresa->fec_fin_cer ? Carbon::parse($empresa->fec_fin_cer)->toDateString() : null]);
+        }
 
         // Si cambiaron las credenciales del SIRE, se prueba la conexión con SUNAT al guardar
         $mensajeSire = '';

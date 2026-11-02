@@ -126,3 +126,37 @@
         })();
     </script>
 @endif
+@php
+    // Certificado digital por vencer (15 días) o vencido: solo el administrador, una vez al día
+    $venceCert = auth()->check() && auth()->user()->esAdmin()
+        ? \Illuminate\Support\Facades\DB::table('empresa')->where('IdEmpresa', auth()->user()->IdEmpresa)->value('fec_fin_cer') : null;
+    $diasCert = $venceCert ? (int) now()->startOfDay()->diffInDays(\Carbon\Carbon::parse($venceCert)->startOfDay(), false) : null;
+@endphp
+@if ($diasCert !== null && $diasCert <= 15)
+    <div id="aviso-certificado" style="display:none;position:fixed;top:12px;left:12px;right:12px;z-index:2147480800;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
+        <div style="max-width:760px;margin:0 auto;background:{{ $diasCert < 0 ? '#991b1b' : '#92400e' }};color:#fff;border-radius:16px;box-shadow:0 14px 34px -10px rgba(0,0,0,.45);padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div style="font-size:22px">🔐</div>
+            <div style="flex:1;min-width:200px">
+                <p style="margin:0;font-weight:800;font-size:14px">
+                    @if ($diasCert < 0) Tu certificado digital venció el {{ \Carbon\Carbon::parse($venceCert)->format('d/m/Y') }}
+                    @elseif ($diasCert === 0) Tu certificado digital vence HOY
+                    @else Tu certificado digital vence en {{ $diasCert }} día(s) ({{ \Carbon\Carbon::parse($venceCert)->format('d/m/Y') }})
+                    @endif
+                </p>
+                <p style="margin:2px 0 0;font-size:12px;color:#fde68a">Sin certificado vigente tus comprobantes no se pueden enviar a SUNAT. Renuévalo y súbelo en Editar empresa → Certificado.</p>
+            </div>
+            <a href="{{ route('empresas.edit', auth()->user()->IdEmpresa) }}#certificado" style="border-radius:12px;background:#fff;color:#92400e;font-weight:800;padding:9px 14px;text-decoration:none">Subir certificado</a>
+            <button type="button" onclick="document.getElementById('aviso-certificado').style.display='none'" title="Ocultar" style="border:0;background:transparent;color:#fde68a;font-size:22px;cursor:pointer;line-height:1">&times;</button>
+        </div>
+    </div>
+    <script>
+        (function () {
+            const clave = 'tushpa_aviso_certificado_{{ $venceCert }}', hoy = new Date().toISOString().slice(0, 10);
+            let visto = null;
+            try { visto = localStorage.getItem(clave); } catch (e) { /* sin almacenamiento: se muestra */ }
+            if (visto === hoy) return;
+            document.getElementById('aviso-certificado').style.display = '';
+            try { localStorage.setItem(clave, hoy); } catch (e) { /* sin almacenamiento */ }
+        })();
+    </script>
+@endif

@@ -90,6 +90,8 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/clientes/{cliente}/contrato/{id}/{campo}', [ContratoController::class, 'archivo'])->whereNumber(['cliente', 'id'])
         ->whereIn('campo', ['dni_frente', 'dni_reverso', 'firma', 'escaneado'])->name('clientes.contrato.archivo');
     Route::get('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'index'])->whereNumber('cliente')->name('clientes.comprobantes');
+    Route::post('/clientes/{cliente}/comprobantes/resumen', [ComprobanteController::class, 'resumen'])->whereNumber('cliente')->name('clientes.comprobantes.resumen');
+    Route::get('/clientes/{cliente}/comprobantes/{id}/pdf', [ComprobanteController::class, 'pdf'])->whereNumber(['cliente', 'id'])->name('clientes.comprobantes.pdf');
     Route::post('/clientes/{cliente}/comprobantes/{id}', [ComprobanteController::class, 'accion'])->whereNumber(['cliente', 'id'])->name('clientes.comprobantes.accion');
     Route::post('/cartas/{id}/estado', [VisitaController::class, 'cartaEstado'])->whereNumber('id')->name('cartas.estado');
     Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');

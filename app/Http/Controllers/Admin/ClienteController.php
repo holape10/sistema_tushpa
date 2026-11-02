@@ -84,6 +84,8 @@ class ClienteController extends Controller
             ->when($filtro === 'suspendidos', fn ($w) => $w->where('estado', 'SUSPENDIDO'))
             ->when($filtro === 'vencidos', fn ($w) => $w->where('estado', 'ACTIVO')->where('vence_el', '<', now()->toDateString())->orderBy('vence_el'))
             ->when($filtro === 'por_vencer', fn ($w) => $w->where('estado', 'ACTIVO')->whereBetween('vence_el', [now()->toDateString(), now()->addDays(7)->toDateString()])->orderBy('vence_el'))
+            // Certificado digital vencido o que vence en 30 días (el que vence primero arriba)
+            ->when($filtro === 'certificados', fn ($w) => $w->where('estado', 'ACTIVO')->whereNotNull('cert_vence')->where('cert_vence', '<=', now()->addDays(30)->toDateString())->orderBy('cert_vence'))
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('ruc', 'like', $q.'%')
                 ->orWhere('subdominio', 'like', $q.'%')
                 ->orWhere('razon_social', 'like', '%'.$q.'%')
@@ -96,6 +98,7 @@ class ClienteController extends Controller
             'suspendidos' => $base()->where('estado', 'SUSPENDIDO')->count(),
             'vencidos' => $base()->where('estado', 'ACTIVO')->where('vence_el', '<', now()->toDateString())->count(),
             'por_vencer' => $base()->where('estado', 'ACTIVO')->whereBetween('vence_el', [now()->toDateString(), now()->addDays(7)->toDateString()])->count(),
+            'certificados' => $base()->where('estado', 'ACTIVO')->whereNotNull('cert_vence')->where('cert_vence', '<=', now()->addDays(30)->toDateString())->count(),
             // Ingreso mensual de los clientes activos según su plan
             'ingreso' => (float) $base()->where('clientes.estado', 'ACTIVO')->whereNull('clientes.prueba_hasta')
                 ->join('planes', 'planes.id', '=', 'clientes.plan_id')->sum('planes.precio'),

@@ -29,12 +29,18 @@
         <a :href="foto" target="_blank" @click.stop class="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-white/90 text-sm font-semibold">Abrir original</a>
     </div>
 
-    {{-- Responder --}}
+    {{-- Responder (el cliente no escribe en un ticket cerrado: abre uno nuevo; soporte sí puede) --}}
+    @if ($ticket->estado === 'CERRADO' && $yo === 'CLIENTE')
+        <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 flex flex-wrap items-center gap-3">
+            <p class="flex-1 text-sm text-slate-600">🔒 Este ticket está cerrado. Si necesitas ayuda otra vez, abre un ticket nuevo.</p>
+            <a href="{{ route('soporte') }}" class="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold flex items-center">+ Nuevo ticket</a>
+        </div>
+    @else
     <form method="POST" action="{{ $urlResponder }}" enctype="multipart/form-data" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-3"
           x-data="{ fotos: [], enviando: false }" @submit="enviando = true">
         @csrf
         @if ($ticket->estado === 'CERRADO')
-            <p class="text-xs text-slate-500">Este ticket está cerrado. Si escribes, se vuelve a abrir.</p>
+            <p class="text-xs text-slate-500">Este ticket está cerrado: el cliente ya no puede escribir aquí (abre uno nuevo). Tu mensaje no lo reabre.</p>
         @endif
         <textarea name="texto" rows="3" maxlength="5000" placeholder="Escribe tu mensaje…" class="w-full rounded-xl border-slate-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
         <div class="flex flex-wrap items-center gap-2">
@@ -48,4 +54,5 @@
             <button :disabled="enviando" class="ml-auto h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:opacity-50" x-text="enviando ? 'Enviando…' : 'Enviar'"></button>
         </div>
     </form>
+    @endif
 </div>

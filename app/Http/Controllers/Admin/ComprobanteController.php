@@ -9,12 +9,14 @@ use App\Models\EmpresaNegocio;
 use App\Models\User;
 use App\Support\AnulacionVenta;
 use App\Support\ConsultaPeru;
+use App\Support\Impresion\ComprobantePdf;
 use App\Support\Sunat\CambioFecha;
 use App\Support\Sunat\SunatService;
 use App\Support\Tenancy\Tenancy;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -114,6 +116,66 @@ class ComprobanteController extends Controller
         }));
     }
 
+    /**
+     * Boletas (y sus notas) por resumen diario, como lo hace la empresa: se agrupan por sucursal y fecha y en cada grupo
+     * va todo lo pendiente de ese día (SUNAT lo recibe junto). Devuelve cómo quedó cada comprobante marcado.
+     */
+    public function resumen(Request $request, Cliente $cliente): JsonResponse
+    {
+        $this->autorizar($cliente);
+        $ids = array_map('intval', $request->validate(['ids' => 'required|array|max:500', 'ids.*' => 'integer'])['ids']);
+        @set_time_limit(600);   // cada día marcado es un envío a SUNAT y la espera de su ticket
+
+        return response()->json(Tenancy::en($cliente->base_datos, function () use ($ids) {
+            $admin = User::join('role_user as ru', 'ru.user_IdUsuario', '=', 'users.IdUsuario')->where('ru.role_id', 2)->orderBy('users.IdUsuario')->first(['users.*']);
+            if ($admin) {
+                Auth::guard('web')->setUser($admin);
+            }
+            $boletas = DB::table('cpe_cabecera')->whereIn('IdCpe_cabecera', $ids)->whereNull('ccabaj')
+                ->where(fn ($q) => $q->where('tdocod', '03')->orWhere(fn ($n) => $n->whereIn('tdocod', ['07', '08'])->where('serdoc', 'like', 'B%')))
+                ->whereIn('est_sunat', SunatService::ESTADOS_REENVIABLES)->get();
+            $errores = [];
+            foreach ($boletas->groupBy(fn ($c) => $c->id_empresa_negocio.'|'.$c->ccafem) as $grupo) {
+                $c = $grupo->first();
+                try {
+                    $creados = (new SunatService(Empresa::findOrFail($c->IdEmpresa), EmpresaNegocio::findOrFail($c->id_empresa_negocio)))->enviarResumen((string) $c->ccafem);
+                    // SUNAT rechazó el envío: las boletas siguen pendientes y el motivo queda en el resumen
+                    $rechazo = DB::table('resumenes')->whereIn('res_id', $creados)->where('est_sunat', 'ERROR')->value('res_est');
+                    if ($rechazo) {
+                        foreach ($grupo as $g) {
+                            $errores[$g->IdCpe_cabecera] = 'SUNAT no recibió el resumen: '.mb_substr($rechazo, 0, 280);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    if (! $e instanceof \RuntimeException) {
+                        report($e);
+                    }
+                    foreach ($grupo as $g) {
+                        $errores[$g->IdCpe_cabecera] = mb_substr($e->getMessage(), 0, 300);
+                    }
+                }
+            }
+
+            return DB::table('cpe_cabecera')->whereIn('IdCpe_cabecera', $ids)->get()->map(fn ($c) => [
+                'id' => (int) $c->IdCpe_cabecera, 'estado' => $c->est_sunat ?: 'PENDIENTE', 'anulado' => (bool) $c->ccabaj,
+                'ok' => ! isset($errores[$c->IdCpe_cabecera]) && in_array($c->est_sunat, ['ACEPTADO', 'OBSERVADO', 'EN RESUMEN'], true),
+                'mensaje' => $errores[$c->IdCpe_cabecera] ?? ($boletas->contains('IdCpe_cabecera', $c->IdCpe_cabecera) ? (string) $c->ccadessun
+                    : 'No va por resumen: solo boletas y sus notas pendientes.'),
+                'fecha' => Carbon::parse($c->ccafem)->format('d/m/Y'),
+                'vencido' => ! $c->ccabaj && in_array($c->est_sunat ?: 'PENDIENTE', SunatService::ESTADOS_REENVIABLES, true) && CambioFecha::vencido($c),
+            ])->values();
+        }));
+    }
+
+    /** PDF A4 del comprobante (el mismo que descarga la empresa), sin entrar a su sistema */
+    public function pdf(Cliente $cliente, int $id): Response
+    {
+        $this->autorizar($cliente);
+        [$nombre, $contenido] = Tenancy::en($cliente->base_datos, fn () => ComprobantePdf::generar($id));
+
+        return response($contenido, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="'.$nombre.'"']);
+    }
+
     private function aplicar(string $accion, object $cab, string $motivo, string $quien, ?User $admin): void
     {
         if ($cab->ccabaj) {
@@ -124,6 +186,14 @@ class ComprobanteController extends Controller
 
         switch ($accion) {
             case 'consultar':   // ¿SUNAT lo tiene? Primero su constancia (CDR, facturas con clave SOL); si no, la consulta de validez
+                // Ya va en un resumen diario: se consulta el ticket del resumen (actualiza todas sus boletas)
+                if ($cab->res_id && in_array($cab->est_sunat, ['EN RESUMEN', 'EN PROCESO'], true)) {
+                    $t = $sunat()->consultarTicket((int) $cab->res_id);
+                    if (! in_array($t['estado'], ['ACEPTADO', 'OBSERVADO'], true)) {
+                        throw new \RuntimeException('Resumen '.$t['estado'].': '.$t['mensaje']);
+                    }
+                    break;
+                }
                 $r = $sunat()->consultarCdr($cab);
                 if ($r) {
                     DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([

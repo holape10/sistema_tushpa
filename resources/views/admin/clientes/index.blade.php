@@ -30,7 +30,8 @@
         <div data-totales class="flex gap-2 text-xs font-semibold">
             {{-- Cada contador es un filtro: un clic muestra solo esas empresas, otro clic vuelve a todas --}}
             @foreach (['activos' => ['activos', 'bg-emerald-100 text-emerald-700 ring-emerald-500'], 'suspendidos' => ['suspendidos', 'bg-rose-100 text-rose-700 ring-rose-500'],
-                'vencidos' => ['vencidos sin pagar', 'bg-orange-100 text-orange-700 ring-orange-500'], 'por_vencer' => ['vencen en 7 días', 'bg-amber-100 text-amber-700 ring-amber-500']] as $valor => [$texto, $color])
+                'vencidos' => ['vencidos sin pagar', 'bg-orange-100 text-orange-700 ring-orange-500'], 'por_vencer' => ['vencen en 7 días', 'bg-amber-100 text-amber-700 ring-amber-500'],
+                'certificados' => ['🔐 certificados por vencer', 'bg-violet-100 text-violet-700 ring-violet-500']] as $valor => [$texto, $color])
                 @if ($valor === 'activos' || $totales[$valor] || $filtro === $valor)
                     <a href="{{ route('admin.clientes.index', array_filter(['filtro' => $filtro === $valor ? '' : $valor, 'q' => $q, 'usuario' => $usuario])) }}"
                        title="{{ $filtro === $valor ? 'Ver todos' : 'Ver solo estos' }}"
@@ -111,6 +112,12 @@
                             @if ($cl->vence_el)
                                 <span class="{{ $cl->vence_el->isPast() ? 'text-rose-600 font-semibold' : ($cl->vence_el->lte(now()->addDays(7)) ? 'text-amber-600 font-semibold' : '') }}">{{ $cl->vence_el->format('d/m/Y') }}</span>
                             @else — @endif
+                            {{-- Certificado digital: rojo vencido, ámbar en 30 días --}}
+                            @if ($cl->cert_vence)
+                                @php $diasCert = (int) now()->startOfDay()->diffInDays($cl->cert_vence, false); @endphp
+                                <span class="block text-xs {{ $diasCert < 0 ? 'text-rose-600 font-semibold' : ($diasCert <= 30 ? 'text-amber-600 font-semibold' : 'text-slate-400') }}"
+                                      title="Certificado digital">🔐 {{ $diasCert < 0 ? 'Venció' : 'Cert.' }} {{ $cl->cert_vence->format('d/m/Y') }}</span>
+                            @endif
                         </td>
                         <td class="px-4 py-3" data-label="Estado">
                             @if ($cl->estado === 'ELIMINADO')

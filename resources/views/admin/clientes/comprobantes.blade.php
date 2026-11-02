@@ -38,6 +38,7 @@
         <div class="bg-white rounded-2xl shadow-sm p-3 mb-3 flex flex-wrap items-center gap-2 text-sm">
             <span class="font-semibold" x-text="sel.length + ' marcado(s)'"></span>
             @foreach (['consultar' => ['🔎 Consultar en SUNAT', 'bg-sky-50 text-sky-700'], 'enviar' => ['📤 Enviar a SUNAT', 'bg-indigo-50 text-indigo-700'],
+                'resumen' => ['🧾 Enviar por resumen diario', 'bg-violet-50 text-violet-700'],
                 'fecha' => ['📅 Corregir fecha (vencidos)', 'bg-amber-50 text-amber-800'],
                 'aceptado' => ['✔ Marcar aceptado', 'bg-emerald-50 text-emerald-700'], 'descartar' => ['🚫 Descartar (rechazado)', 'bg-slate-100 text-slate-700'],
                 'anular' => ['✖ Anular en el sistema', 'bg-rose-50 text-rose-700']] as $valor => [$texto, $clase])
@@ -63,7 +64,9 @@
                             <td class="px-3 py-2"><input type="checkbox" value="{{ $c->IdCpe_cabecera }}" data-id x-model="sel" class="rounded"></td>
                             <td class="px-3 py-2 whitespace-nowrap"><span class="js-fecha">{{ \Carbon\Carbon::parse($c->ccafem)->format('d/m/Y') }}</span>
                                 <span class="js-vencido block text-[10px] text-rose-600 font-semibold {{ $vencido ? '' : 'hidden' }}">fuera de plazo</span></td>
-                            <td class="px-3 py-2 whitespace-nowrap"><span class="text-xs text-slate-400">{{ $tipos[$c->tdocod] ?? $c->tdocod }}</span><br><b>{{ $c->serdoc }}-{{ $c->numdoc }}</b></td>
+                            <td class="px-3 py-2 whitespace-nowrap"><span class="text-xs text-slate-400">{{ $tipos[$c->tdocod] ?? $c->tdocod }}</span><br><b>{{ $c->serdoc }}-{{ $c->numdoc }}</b>
+                                <a href="{{ route('admin.clientes.comprobantes.pdf', [$cliente->id, $c->IdCpe_cabecera]) }}" target="_blank" title="Ver o descargar el PDF A4"
+                                   class="ml-1 px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11px] font-bold hover:bg-rose-100">PDF</a></td>
                             <td class="px-3 py-2">{{ $c->ccanom }}<span class="block text-xs text-slate-400">{{ $c->ccandi }}</span></td>
                             <td class="px-3 py-2 text-right font-semibold">{{ number_format($c->ccaitv, 2) }}</td>
                             <td class="px-3 py-2 max-w-sm"><span class="js-estado px-2 py-0.5 rounded-lg text-xs font-bold {{ $color[$c->est_sunat] ?? 'bg-slate-100 text-slate-600' }}">{{ $c->est_sunat ?: 'PENDIENTE' }}</span>
@@ -87,14 +90,20 @@
                 disponibles() { return document.querySelectorAll('[data-id]:not(:disabled)').length; },
                 async uno(accion, id) {
                     const fila = document.querySelector(`tr[data-fila="${id}"]`);
-                    const etiqueta = fila.querySelector('.js-estado');
-                    etiqueta.textContent = '⏳ ' + NOMBRE[accion] + '…';
+                    fila.querySelector('.js-estado').textContent = '⏳ ' + NOMBRE[accion] + '…';
                     let r;
                     try {
                         const res = await fetch(URL_BASE + id, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) },
                             body: JSON.stringify({ accion, motivo: this.motivo }) });
                         r = await res.json();
                     } catch (e) { r = { ok: false, mensaje: 'Sin conexión con el servidor.' }; }
+                    return this.pintar(id, r);
+                },
+                /** Cómo quedó un comprobante después de una acción */
+                pintar(id, r) {
+                    const fila = document.querySelector(`tr[data-fila="${id}"]`);
+                    if (!fila) return false;
+                    const etiqueta = fila.querySelector('.js-estado');
                     if (r.estado) {
                         etiqueta.className = 'js-estado px-2 py-0.5 rounded-lg text-xs font-bold ' + (COLOR[r.estado] || 'bg-slate-100 text-slate-600');
                         etiqueta.textContent = r.anulado ? 'ANULADO EN EL SISTEMA' : r.estado;
@@ -117,7 +126,38 @@
                     }
                     return r.ok;
                 },
+                /** Boletas por resumen diario: todo en una sola llamada (se agrupan por fecha y van juntas a SUNAT) */
+                async resumenDiario() {
+                    const ids = [...this.sel];
+                    if (!ids.length) { alert('Marca al menos una boleta.'); return; }
+                    if (!confirm(`¿Enviar por resumen diario? Van las boletas (y sus notas) pendientes de los días marcados, junto a las demás pendientes de esos días.`)) return;
+                    this.trabajando = true;
+                    this.progreso = 'Enviando el resumen diario a SUNAT…';
+                    ids.forEach(id => { const e = document.querySelector(`tr[data-fila="${id}"] .js-estado`); if (e) e.textContent = '⏳ En resumen…'; });
+                    let lista = [];
+                    try {
+                        const res = await fetch(@js(route('admin.clientes.comprobantes.resumen', $cliente->id)), { method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) }, body: JSON.stringify({ ids }) });
+                        lista = await res.json();
+                        if (!Array.isArray(lista)) throw new Error();
+                    } catch (e) {
+                        this.progreso = 'No se pudo enviar el resumen. Intenta de nuevo.';
+                        this.trabajando = false;
+                        return;
+                    }
+                    let ok = 0;
+                    lista.forEach(r => { if (this.pintar(r.id, r)) ok++; });
+                    this.sel = [];
+                    this.progreso = `Listo: ${ok} en el resumen o aceptado(s), ${lista.length - ok} con problema (mira el mensaje de cada fila). Si quedan "EN RESUMEN", usa Consultar en unos minutos.`;
+                    if (ok > 0 && @js($filtro) !== 'todos') {
+                        this.progreso += ' Actualizando la lista…';
+                        setTimeout(() => location.reload(), 2500);
+                        return;
+                    }
+                    this.trabajando = false;
+                },
                 async ejecutar(accion) {
+                    if (accion === 'resumen') return this.resumenDiario();
                     let ids = [...this.sel];
                     if (accion === 'fecha') ids = ids.filter(id => document.querySelector(`tr[data-fila="${id}"]`)?.dataset.vencido === '1');
                     if (!ids.length) { alert(accion === 'fecha' ? 'Marca comprobantes que estén fuera de plazo.' : 'Marca al menos un comprobante.'); return; }
