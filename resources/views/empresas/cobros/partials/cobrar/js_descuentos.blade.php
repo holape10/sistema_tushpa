@@ -18,7 +18,7 @@
             if (DSCTO) el('dscto_clave_box').style.display = (!cupon && !ES_ADMIN && pct > MAX_CAJERO + 0.001) ? 'block' : 'none';
             el('dscto_info').textContent = d > 0 ? (cupon ? `Cupón ${cupon.codigo}: ` : 'Descuento: ') + `-S/ ${fmt(d)} (${pct.toFixed(1)}%)` + (d >= BRUTO ? ' · es mayor que la cuenta' : '') : '';
         }
-        const partes = [];
+        const partes = PROMOS_APLICADAS.map(p => `🎉 ${p.nombre}${p.veces > 1 ? ' ×' + p.veces : ''}: −S/ ${fmt(p.ahorro)}`);
         if (d > 0) partes.push(`Consumo S/ ${fmt(BRUTO)} − descuento S/ ${fmt(d)}`);
         if (GRATIS > 0) partes.push(`🎁 Cortesías S/ ${fmt(GRATIS)} (no se cobran)`);
         el('lbl_desglose').textContent = partes.join(' · ');

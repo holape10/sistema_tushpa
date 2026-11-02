@@ -86,6 +86,57 @@ class RestauranteTest extends FlujoTestCase
         $this->assertEquals(36.00, (float) DB::table('cpe_cabecera')->where('ped_id', $pedId)->sum('ccaitv'));
     }
 
+    public function test_la_promo_3x2_se_aplica_sola_en_la_precuenta_y_al_cobrar(): void
+    {
+        $caipi = $this->producto('CAIPIRIÑA', 15, 20);
+        $promo = DB::table('promociones_venta')->insertGetId(['id_empresa_negocio' => $this->sucursal, 'nombre' => '3X2 CAIPIRIÑA', 'tipo' => 'LLEVA_PAGA',
+            'lleva' => 3, 'paga' => 2, 'dias' => '1234567', 'activo' => true]);
+        DB::table('promocion_venta_producto')->insert(['promocion_id' => $promo, 'IdProducto' => $caipi->IdProducto]);
+        $pedId = $this->pedirEnMesa([[$caipi, 4]]);
+
+        $this->get(route('comandas.precuenta', $pedId))->assertOk()->assertSee('PROMO 3X2 CAIPIRIÑA')->assertSee('45.00');
+        $this->get(route('cobros.cobrar', $pedId))->assertOk()->assertSee('"lleva":3,"paga":2', false);
+
+        $r = $this->cobrar($pedId, 45);
+        $this->assertSame('success', $r['estado'] ?? null, $r['mensaje'] ?? '');
+        $cab = DB::table('cpe_cabecera')->where('ped_id', $pedId)->first();
+        $this->assertEquals(45.00, (float) $cab->ccaitv, '4 caipiriñas con 3x2 = S/ 45.');
+        $this->assertEquals(15.00, (float) $cab->promo_descuento);
+        $this->assertEquals(0.00, (float) $cab->descuento, 'La promo no cuenta como descuento a mano del cajero.');
+        $det = DB::table('cpe_detalle')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->first();
+        $this->assertEquals(15.00, (float) $det->precio_lista);
+        $this->assertEquals(15.00, (float) $det->descuento);
+        $this->assertSame(1, (int) DB::table('cpe_promociones')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->value('veces'));
+        $this->assertEquals(16.0, $this->stock($caipi), 'Las 4 salen del stock.');
+        $this->get(route('cobros.voucher', $cab->IdCpe_cabecera))->assertOk()->assertSee('PROMO 3X2 CAIPIRIÑA')->assertSee('60.00');
+    }
+
+    public function test_la_promo_fuera_de_horario_no_se_aplica_y_el_descuento_a_mano_se_suma(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['permite_descuentos' => 1]);
+        $cerveza = $this->producto('CERVEZA', 10, 20);
+        // 2x1 solo de 6 a 8 pm (la prueba corre a las 12 m)
+        $fuera = DB::table('promociones_venta')->insertGetId(['id_empresa_negocio' => $this->sucursal, 'nombre' => 'HORA FELIZ', 'tipo' => 'LLEVA_PAGA',
+            'lleva' => 2, 'paga' => 1, 'dias' => '1234567', 'hora_inicio' => '18:00', 'hora_fin' => '20:00', 'activo' => true]);
+        DB::table('promocion_venta_producto')->insert(['promocion_id' => $fuera, 'IdProducto' => $cerveza->IdProducto]);
+        $pedId = $this->pedirEnMesa([[$cerveza, 2]]);
+
+        $r = $this->cobrar($pedId, 18, ['descuento_tipo' => 'S', 'descuento_valor' => 2]);
+        $this->assertSame('success', $r['estado'] ?? null, $r['mensaje'] ?? '');
+        $cab = DB::table('cpe_cabecera')->where('ped_id', $pedId)->first();
+        $this->assertEquals(18.00, (float) $cab->ccaitv);
+        $this->assertEquals(0.00, (float) $cab->promo_descuento);
+
+        // Con la promo vigente y además S/ 2 de descuento a mano: las dos bajan la misma línea
+        DB::table('promociones_venta')->where('id', $fuera)->update(['hora_inicio' => null, 'hora_fin' => null]);
+        $otro = $this->pedirEnMesa([[$cerveza, 2]]);
+        $r = $this->cobrar($otro, 8, ['descuento_tipo' => 'S', 'descuento_valor' => 2]);
+        $this->assertSame('success', $r['estado'] ?? null, $r['mensaje'] ?? '');
+        $cab = DB::table('cpe_cabecera')->where('ped_id', $otro)->first();
+        $this->assertEquals(8.00, (float) $cab->ccaitv, '2 cervezas: 2x1 (S/ 10) menos S/ 2 = S/ 8.');
+        $this->assertEquals(12.00, (float) DB::table('cpe_detalle')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->value('descuento'));
+    }
+
     public function test_cortesia_no_se_cobra_y_la_propina_va_aparte_del_comprobante(): void
     {
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['permite_cortesias' => 1, 'permite_propina' => 1]);

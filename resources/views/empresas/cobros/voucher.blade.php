@@ -107,9 +107,12 @@
     </table>
 
     <table class="totales" style="margin-top:4px;">
-        @if ((float) ($cab->descuento ?? 0) > 0)
-            <tr><td>CONSUMO S/</td><td>{{ number_format($cab->ccaitv + $cab->descuento, 2) }}</td></tr>
-            <tr><td>DESCUENTO S/</td><td>-{{ number_format($cab->descuento, 2) }}</td></tr>
+        @if ((float) ($cab->descuento ?? 0) > 0 || (float) ($cab->promo_descuento ?? 0) > 0)
+            <tr><td>CONSUMO S/</td><td>{{ number_format($cab->ccaitv + $cab->descuento + ($cab->promo_descuento ?? 0), 2) }}</td></tr>
+            @foreach (\App\Support\PromocionesVenta::delComprobante($cab) as $pr)
+                <tr><td>PROMO {{ mb_strtoupper($pr->nombre) }}</td><td>-{{ number_format($pr->ahorro, 2) }}</td></tr>
+            @endforeach
+            @if ((float) ($cab->descuento ?? 0) > 0)<tr><td>DESCUENTO S/</td><td>-{{ number_format($cab->descuento, 2) }}</td></tr>@endif
         @endif
         @if ((float) ($cab->ccagra ?? 0) > 0)<tr><td>OP. GRATUITAS S/</td><td>{{ number_format($cab->ccagra, 2) }}</td></tr>@endif
         @if ($cab->ccatvg > 0)<tr><td>OP. GRAVADA S/</td><td>{{ number_format($cab->ccatvg, 2) }}</td></tr>@endif

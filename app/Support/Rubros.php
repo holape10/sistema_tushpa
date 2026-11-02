@@ -54,7 +54,7 @@ class Rubros
         'RESTOBAR' => ['icono' => 'fa-utensils', 'nombre' => 'Restobar', 'ejemplos' => 'Restaurante, cafetería, discoteca, bar', 'modulos' => [
             '/comandas', '/comandas/punto-venta', '/promotores', '/pv', '/punto-venta', '/pisos', '/mesas', '/cocina', '/llamador', '/reservas', '/motorizados', '/delivery', '/delivery/liquidacion', '/delivery/reporte', '/carta/configuracion', '/recetas', '/entradas', '/preparados', '/mermas', '/reportes/consumo-insumos', '/productos?tipo=4', '/productos?tipo=6',
             '/reportes/ventas-vendedor', '/reportes/ventas-delivery',
-            '/cupones', '/reportes/propinas', '/metas-mozos', '/encuestas', '/autoservicio',
+            '/cupones', '/promociones', '/reportes/propinas', '/metas-mozos', '/encuestas', '/autoservicio',
         ]],
         'GENERAL' => ['icono' => 'fa-cart-shopping', 'nombre' => 'Comercio general', 'ejemplos' => 'Comercio, ferretería, construcción, lavandería', 'modulos' => [
             '/punto-venta', '/pv-movil', '/proformas', '/guias', '/inventarios', '/transferencias', '/kardex/movimiento?tipo=I',

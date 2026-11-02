@@ -121,6 +121,7 @@ class SucursalController extends Controller
             'foto_marco_estilo' => 'nullable|in:DEGRADADO,BANDA,BORDE',
             'foto_marco_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'foto_texto' => 'nullable|string|max:60',
+            'vista_mesas' => 'nullable|in:GRILLA,PLANO',
             'tipo_cambio_usd' => 'nullable|numeric|min:0|max:20',
             'logo_suc' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
         ];
@@ -187,6 +188,8 @@ class SucursalController extends Controller
         $datos['descuento_max_cajero'] = (float) ($datos['descuento_max_cajero'] ?? 10);
         $datos['permite_propina'] = $request->boolean('permite_propina');
         $datos['foto_redes'] = $request->boolean('foto_redes');
+        $datos['cierre_ciego'] = $request->boolean('cierre_ciego');
+        $datos['vista_mesas'] = $datos['vista_mesas'] ?? 'GRILLA';
         $datos['foto_marco_estilo'] = $datos['foto_marco_estilo'] ?? 'DEGRADADO';
         $datos['foto_marco_color'] = strtolower($datos['foto_marco_color'] ?? '#111827');
         $datos['foto_texto'] = trim((string) ($datos['foto_texto'] ?? '')) ?: null;

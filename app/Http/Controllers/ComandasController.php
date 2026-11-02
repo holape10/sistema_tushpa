@@ -23,8 +23,10 @@ use App\Support\MesasUnidas;
 use App\Support\MetasMozo;
 use App\Support\NombreCorto;
 use App\Support\OpcionesPlato;
+use App\Support\PlanoMesas;
 use App\Support\Porciones;
 use App\Support\Precios;
+use App\Support\PromocionesVenta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -60,7 +62,20 @@ class ComandasController extends Controller
         $cartaMesa = (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $id_empresa_negocio)->value('carta_pedido_mesa');
         $fotoRedes = self::fotoRedes((int) $id_empresa_negocio);
 
-        return view('empresas.comandas.seleccion_servicio', compact('pisos', 'mesas', 'primerPisoId', 'puedeCobrar', 'permisos', 'miMeta', 'cartaMesa', 'fotoRedes'));
+        return view('empresas.comandas.seleccion_servicio', compact('pisos', 'mesas', 'primerPisoId', 'puedeCobrar', 'permisos', 'miMeta', 'cartaMesa', 'fotoRedes')
+            + self::plano((int) $id_empresa_negocio, (int) $primerPisoId));
+    }
+
+    /**
+     * Si la sucursal ve sus mesas en el plano del local, lo que va alrededor de las mesas (barra, paredes, DJ...)
+     *
+     * @return array{usaPlano: bool, elementos: Collection}
+     */
+    private static function plano(int $sucursal, int $piso): array
+    {
+        $usaPlano = $piso && PlanoMesas::usaPlano($sucursal);
+
+        return ['usaPlano' => $usaPlano, 'elementos' => $usaPlano ? PlanoMesas::elementos($sucursal, $piso) : collect()];
     }
 
     /**
@@ -105,7 +120,7 @@ class ComandasController extends Controller
         $pagado = round($items->sum(fn ($i) => $i->pagado * $i->precio), 2);
 
         return view('empresas.comandas.precuenta', [
-            'pedido' => $pedido, 'items' => $items, 'total' => $total, 'pagado' => $pagado,
+            'pedido' => $pedido, 'items' => $items, 'total' => $total, 'pagado' => $pagado, 'promos' => PromocionesVenta::delPedido((int) $pedido->ped_id),
             'mesa' => $pedido->mes_id ? Mesa::find($pedido->mes_id) : null,
             'piso' => $pedido->pis_id ? Piso::find($pedido->pis_id) : null,
             'mozo' => User::find($pedido->mozo)?->apeusu,
@@ -179,7 +194,7 @@ class ComandasController extends Controller
     public function getMesasPorPiso(Request $request, $piso_id)
     {
         $mesas = $this->mesasDelPiso($piso_id, Auth::user()->id_empresa_negocio);
-        $vista = view('empresas.comandas.partials.mesas_grid', compact('mesas'))->render();
+        $vista = view('empresas.comandas.partials.mesas_piso', ['mesas' => $mesas] + self::plano((int) Auth::user()->id_empresa_negocio, (int) $piso_id))->render();
         $huella = substr(md5($vista), 0, 16);
 
         return response()->json($request->query('h') === $huella ? ['igual' => true] : ['vista' => $vista, 'h' => $huella]);

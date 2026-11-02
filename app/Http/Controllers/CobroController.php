@@ -22,8 +22,10 @@ use App\Support\Fidelizacion;
 use App\Support\Impresion\Impresion;
 use App\Support\MesasUnidas;
 use App\Support\OpcionesPlato;
+use App\Support\PromocionesVenta;
 use App\Support\Propinas;
 use App\Support\VentaDirecta;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -132,7 +134,7 @@ class CobroController extends Controller
         return view('empresas.cobros.cobrar', compact(
             'pedido', 'detalle', 'total', 'comprobantes', 'documentos',
             'estadopagos', 'mediospagos', 'negocio', 'mesa', 'piso', 'turno', 'separadas', 'cuentasPrevias', 'volver', 'promotores', 'mozos'
-        ) + ['descuentos' => Descuentos::config((int) $user->id_empresa_negocio)]);
+        ) + ['descuentos' => Descuentos::config((int) $user->id_empresa_negocio), 'promos' => $this->promosPara($pedido->ped_tip, $pedido->fecha_hora)]);
     }
 
     /**
@@ -155,7 +157,7 @@ class CobroController extends Controller
             'cuentasPrevias' => collect(), 'mesa' => null, 'piso' => null, 'turno' => $turno,
             'promotores' => ComandasController::promotores((int) $user->id_empresa_negocio),
             'mozos' => ComandasController::mozos((int) $user->id_empresa_negocio),
-            'descuentos' => Descuentos::config((int) $user->id_empresa_negocio),
+            'descuentos' => Descuentos::config((int) $user->id_empresa_negocio), 'promos' => $this->promosPara('PVCOMANDA', null),
             'comprobantes' => DB::table('tipo_documento')->where('caja', 1)->get(),
             'documentos' => DB::table('tipo_documento_identidad')->orderBy('orden')->get(),
             'estadopagos' => DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)->get(),
@@ -163,6 +165,17 @@ class CobroController extends Controller
             'negocio' => EmpresaNegocio::find($user->id_empresa_negocio),
             'categorias' => DB::table('categorias')->where('id_empresa_negocio', $user->id_empresa_negocio)->where('visible', 1)->get(),
         ]);
+    }
+
+    /** Promociones que la pantalla de cobro muestra antes de cobrar (al registrar se vuelven a calcular en el servidor) */
+    private function promosPara(?string $origen, mixed $abierto): array
+    {
+        if (! in_array(mb_strtoupper((string) $origen), PromocionesVenta::ORIGENES, true)) {
+            return [];
+        }
+
+        return PromocionesVenta::paraPantalla(PromocionesVenta::vigentes((int) Auth::user()->id_empresa_negocio,
+            array_filter([now(), $abierto ? Carbon::parse($abierto) : null])));
     }
 
     /**

@@ -132,7 +132,8 @@ class Descuentos
     {
         $neto = round($total - $parte, 2);
         $l['precio_lista'] = $l['precio_lista'] ?? $l['precio'];
-        $l['descuento'] = $parte;
+        // Se suma a lo que ya bajó la línea por una promoción
+        $l['descuento'] = round((float) ($l['descuento'] ?? 0) + $parte, 2);
         $l['importe'] = $neto;
         $l['precio'] = round($neto / (float) $l['cantidad'], 2);
 

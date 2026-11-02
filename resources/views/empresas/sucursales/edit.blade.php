@@ -260,12 +260,32 @@
                                 @endforeach
                             </div>
                         </div>
+                        {{-- Cierre de caja ciego: el cajero cuenta sin ver lo esperado (antirrobo) --}}
+                        <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer hover:border-gray-300">
+                            <input type="checkbox" name="cierre_ciego" value="1" @checked($campo('cierre_ciego')) class="mt-0.5 rounded text-indigo-600">
+                            <span><span class="font-bold text-gray-800">🙈 Cierre de caja ciego</span>
+                                <span class="block text-xs text-gray-500 mt-0.5">El cajero no ve lo vendido ni cuánto efectivo debería haber: al cerrar el turno cuenta la caja y escribe cuánto hay (obligatorio). La diferencia se ve recién al cerrar y, si falta dinero, te llega el aviso al celular. El administrador siempre ve todo.</span></span>
+                        </label>
                         @if (\App\Support\Rubros::permite('restaurante'))
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer hover:border-gray-300">
                             <input type="checkbox" name="comandas_solo_mesas" value="1" @checked($campo('comandas_solo_mesas')) class="mt-0.5 rounded text-indigo-600">
                             <span><span class="font-bold text-gray-800">🍽️ Mozos y promotores solo atienden mesas</span>
                                 <span class="block text-xs text-gray-500 mt-0.5">En Comandas no ven "Para llevar", "Delivery" ni "Punto de venta" (solo administrador y caja). Sin marcar, mozos y promotores tienen "Para llevar".</span></span>
                         </label>
+                        {{-- Cómo ve el mozo las mesas: cuadrícula (como siempre) o el plano del local --}}
+                        <div class="rounded-xl border-2 border-gray-200 px-4 py-3" x-data="{ vista: @js(old('vista_mesas', $sucursal->vista_mesas ?: 'GRILLA')) }">
+                            <p class="font-bold text-gray-800">🗺️ Cómo se ven las mesas en Comandas</p>
+                            <div class="mt-2 grid sm:grid-cols-2 gap-2">
+                                @foreach (['GRILLA' => ['▦ Cuadrícula', 'Como siempre: las mesas en orden, una al lado de otra.'], 'PLANO' => ['🗺️ Plano del local', 'Las mesas y boxes donde están de verdad, con la barra, el DJ y la entrada.']] as $valor => [$titulo, $detalle])
+                                    <label class="relative cursor-pointer rounded-xl border-2 px-3 py-2 transition" :class="vista === '{{ $valor }}' ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-200 hover:border-gray-300'">
+                                        <input type="radio" name="vista_mesas" value="{{ $valor }}" x-model="vista" class="sr-only">
+                                        <span class="font-bold text-gray-800">{{ $titulo }}</span><span class="block text-xs text-gray-500">{{ $detalle }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                            <a href="{{ route('mesas.plano') }}" class="mt-2 inline-flex h-9 items-center rounded-lg bg-indigo-600 px-4 text-sm font-bold text-white hover:bg-indigo-700">✏️ Diseñar el plano del local</a>
+                            <span class="ml-2 text-xs text-gray-500" x-show="vista === 'PLANO'">Arrastra las mesas, crea boxes VIP y pon la barra. Las mesas que no pongas en el plano salen debajo.</span>
+                        </div>
                         {{-- Foto para redes: botón en la comanda de la mesa y el marco a gusto de la sucursal (con vista previa) --}}
                         <div class="rounded-xl border-2 border-gray-200 px-4 py-3"
                              x-data="marcoRedesSucursal({ activo: @js((bool) $campo('foto_redes')), estilo: @js(old('foto_marco_estilo', $sucursal->foto_marco_estilo ?: 'DEGRADADO')),
@@ -359,7 +379,7 @@
                             @foreach (['comandas_solo_mesas', 'permite_descuentos', 'permite_cortesias', 'permite_propina', 'foto_redes'] as $opcion)
                                 @if ($campo($opcion))<input type="hidden" name="{{ $opcion }}" value="1">@endif
                             @endforeach
-                            @foreach (['foto_marco_estilo', 'foto_marco_color', 'foto_texto'] as $opcion)
+                            @foreach (['foto_marco_estilo', 'foto_marco_color', 'foto_texto', 'vista_mesas'] as $opcion)
                                 <input type="hidden" name="{{ $opcion }}" value="{{ $sucursal->$opcion }}">
                             @endforeach
                             <input type="hidden" name="tipo_cambio_usd" value="{{ $sucursal->tipo_cambio_usd }}">

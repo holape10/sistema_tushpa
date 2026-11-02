@@ -210,34 +210,88 @@
 
     {{-- ===================================================== Ventas del turno --}}
     @if ($ver === 'turno')
-        @php $t = $turno; @endphp
+        @php
+            $t = $turno;
+            $r = $t['rango'];
+            $columnas = [['mozos', '🍽️ Por mozo', 'Las mesas que atendió cada uno'], ['cajeros', '💰 Por cajero', 'Lo que cobró cada uno en caja'], ['promotores', '📣 Por promotor', 'Lo que trajo cada promotor']];
+            $chip = fn (bool $activo) => 'h-9 px-3 inline-flex items-center rounded-full text-sm font-bold '.($activo ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 shadow-sm');
+        @endphp
         <div class="flex flex-wrap items-center gap-2">
             @foreach (PanelDuenoController::PERIODOS as $clave => $nombre)
-                <a href="{{ route('dueno.index', ['ver' => 'turno', 'periodo' => $clave]) }}"
-                   class="h-9 px-3 inline-flex items-center rounded-full text-sm font-bold {{ $t['periodo'] === $clave ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 shadow-sm' }}">{{ $nombre }}</a>
+                <a href="{{ route('dueno.index', ['ver' => 'turno', 'periodo' => $clave]) }}" class="{{ $chip($t['periodo'] === $clave) }}">{{ $nombre }}</a>
             @endforeach
-            {{-- Una noche pasada: elige la fecha (y, si quieres, uno de los turnos de esa noche) --}}
-            <form class="flex items-center gap-1.5 text-sm">
+        </div>
+        {{-- Varias noches juntas: para pagar a mozos, promotores y cajeros según lo que hicieron --}}
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="text-sm font-bold text-gray-500">📅 Varios días:</span>
+            @foreach (PanelDuenoController::RANGOS as $clave => $nombre)
+                <a href="{{ route('dueno.index', ['ver' => 'turno', 'periodo' => $clave]) }}" class="{{ $chip($t['periodo'] === $clave) }}">{{ $nombre }}</a>
+            @endforeach
+            <form class="flex flex-wrap items-center gap-1.5 text-sm">
                 <input type="hidden" name="ver" value="turno">
-                <label class="font-semibold text-gray-600">Noche del</label>
-                <input type="date" name="fecha" value="{{ $t['fecha'] }}" max="{{ now()->toDateString() }}" onchange="this.form.submit()"
-                       class="h-9 rounded-lg border-gray-300 text-sm {{ $t['periodo'] === 'fecha' ? 'ring-2 ring-indigo-500' : '' }}">
-            </form>
-            <form class="ml-auto">
-                <input type="hidden" name="ver" value="turno">
-                @if ($t['fecha'])<input type="hidden" name="fecha" value="{{ $t['fecha'] }}">@endif
-                <select name="turno" onchange="this.form.submit()" class="h-9 rounded-lg border-gray-300 text-sm {{ $t['elegido'] ? 'ring-2 ring-indigo-500' : '' }}">
-                    <option value="">{{ $t['fecha'] ? 'Turnos de esa noche…' : 'Elegir un turno de caja…' }}</option>
-                    @foreach ($t['turnos'] as $tu)
-                        <option value="{{ $tu->id_turno }}" @selected($t['elegido'] == $tu->id_turno)>
-                            N° {{ $tu->turno }} · {{ $tu->cajero }} · {{ \Carbon\Carbon::parse($tu->apertura)->format('d/m H:i') }}{{ $tu->estado === 'ABIERTO' ? ' (abierto)' : '' }}</option>
-                    @endforeach
-                </select>
+                <input type="hidden" name="periodo" value="rango">
+                <label class="font-semibold text-gray-600">Del</label>
+                <input type="date" name="desde" value="{{ $r['desde'] ?? now()->startOfWeek()->toDateString() }}" max="{{ now()->toDateString() }}" required
+                       class="h-9 rounded-lg border-gray-300 text-sm {{ $t['periodo'] === 'rango' ? 'ring-2 ring-indigo-500' : '' }}">
+                <label class="font-semibold text-gray-600">al</label>
+                <input type="date" name="hasta" value="{{ $r['hasta'] ?? now()->toDateString() }}" max="{{ now()->toDateString() }}" required
+                       class="h-9 rounded-lg border-gray-300 text-sm {{ $t['periodo'] === 'rango' ? 'ring-2 ring-indigo-500' : '' }}">
+                <button class="h-9 px-4 rounded-lg bg-indigo-600 text-white font-bold">Ver</button>
             </form>
         </div>
+        @if (! $r)
+            {{-- Una noche o un turno --}}
+            <div class="flex flex-wrap items-center gap-2">
+                <form class="flex items-center gap-1.5 text-sm">
+                    <input type="hidden" name="ver" value="turno">
+                    <label class="font-semibold text-gray-600">Noche del</label>
+                    <input type="date" name="fecha" value="{{ $t['fecha'] }}" max="{{ now()->toDateString() }}" onchange="this.form.submit()"
+                           class="h-9 rounded-lg border-gray-300 text-sm {{ $t['periodo'] === 'fecha' ? 'ring-2 ring-indigo-500' : '' }}">
+                </form>
+                <form class="ml-auto">
+                    <input type="hidden" name="ver" value="turno">
+                    @if ($t['fecha'])<input type="hidden" name="fecha" value="{{ $t['fecha'] }}">@endif
+                    <select name="turno" onchange="this.form.submit()" class="h-9 rounded-lg border-gray-300 text-sm {{ $t['elegido'] ? 'ring-2 ring-indigo-500' : '' }}">
+                        <option value="">{{ $t['fecha'] ? 'Turnos de esa noche…' : 'Elegir un turno de caja…' }}</option>
+                        @foreach ($t['turnos'] as $tu)
+                            <option value="{{ $tu->id_turno }}" @selected($t['elegido'] == $tu->id_turno)>
+                                N° {{ $tu->turno }} · {{ $tu->cajero }} · {{ \Carbon\Carbon::parse($tu->apertura)->format('d/m H:i') }}{{ $tu->estado === 'ABIERTO' ? ' (abierto)' : '' }}</option>
+                        @endforeach
+                    </select>
+                </form>
+            </div>
+        @endif
         <p class="text-sm text-gray-600">🕒 {{ $t['texto'] }}
-            @if ($t['periodo'] === 'jornada')<span class="text-gray-400">· La jornada va de mediodía a mediodía: lo vendido de madrugada cuenta en la noche que se atendió.</span>@endif
+            @if ($t['periodo'] === 'jornada' || ($r && $r['unidad'] === 'noche'))<span class="text-gray-400">· La noche va de mediodía a mediodía: lo vendido de madrugada cuenta en la noche que se atendió.</span>@endif
             <a href="{{ request()->fullUrl() }}" class="ml-1 text-indigo-600 font-semibold">↻ Actualizar</a></p>
+
+        @if ($r && $t['turnos']->isNotEmpty())
+            {{-- Qué turnos de caja suman: todos, salvo los que se desmarquen --}}
+            <details class="bg-white rounded-2xl shadow-sm" @if (count($r['marcados']) < $t['turnos']->count()) open @endif>
+                <summary class="px-4 py-3 cursor-pointer text-sm font-bold text-gray-700">🧾 Turnos de caja que suman: {{ count($r['marcados']) }} de {{ $t['turnos']->count() }}
+                    <span class="font-normal text-gray-400">· toca para elegir cuáles</span></summary>
+                <form class="px-4 pb-4" x-data>
+                    <input type="hidden" name="ver" value="turno">
+                    <input type="hidden" name="periodo" value="rango">
+                    <input type="hidden" name="desde" value="{{ $r['desde'] }}">
+                    <input type="hidden" name="hasta" value="{{ $r['hasta'] }}">
+                    <input type="hidden" name="elegir" value="1">
+                    <div class="flex gap-3 mb-2 text-xs font-semibold">
+                        <button type="button" class="text-indigo-600" @click="$root.querySelectorAll('[name=\'turnos[]\']').forEach(c => c.checked = true)">Marcar todos</button>
+                        <button type="button" class="text-gray-500" @click="$root.querySelectorAll('[name=\'turnos[]\']').forEach(c => c.checked = false)">Desmarcar todos</button>
+                    </div>
+                    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                        @foreach ($t['turnos'] as $tu)
+                            <label class="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+                                <input type="checkbox" name="turnos[]" value="{{ $tu->id_turno }}" @checked(in_array((int) $tu->id_turno, $r['marcados'], true)) class="rounded text-indigo-600">
+                                <span>N° {{ $tu->turno }} · <b>{{ $tu->cajero }}</b> · {{ \Carbon\Carbon::parse($tu->apertura)->locale('es')->translatedFormat('D d/m H:i') }}{{ $tu->estado === 'ABIERTO' ? ' (abierto)' : '' }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                    <button class="mt-3 h-10 px-5 rounded-xl bg-indigo-600 text-white text-sm font-bold">Ver con estos turnos</button>
+                </form>
+            </details>
+        @endif
 
         <div class="grid grid-cols-3 gap-3">
             <div class="rounded-2xl shadow-sm p-4 bg-indigo-600 text-white"><p class="text-xs font-semibold text-indigo-100">Vendido</p><p class="text-2xl font-black">{{ $soles($t['total']->total) }}</p></div>
@@ -245,33 +299,97 @@
             <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs font-semibold text-gray-500">Ticket promedio</p><p class="text-2xl font-black text-gray-800">{{ $soles($t['total']->promedio) }}</p></div>
         </div>
 
-        <div class="grid lg:grid-cols-3 gap-4 items-start">
-            @foreach ([['mozos', '🍽️ Por mozo', 'Las mesas que atendió cada uno'], ['cajeros', '💰 Por cajero', 'Lo que cobró cada uno en caja'], ['promotores', '📣 Por promotor', 'Lo que trajo cada promotor']] as [$clave, $titulo, $ayuda])
-                <section class="bg-white rounded-2xl shadow-sm overflow-hidden">
-                    <div class="px-4 py-3 border-b"><p class="font-bold text-gray-800">{{ $titulo }}</p><p class="text-xs text-gray-400">{{ $ayuda }}</p></div>
-                    <div class="divide-y divide-gray-100">
-                        @forelse ($t[$clave] as $i => $p)
-                            <div class="px-4 py-2.5">
-                                <div class="flex items-baseline gap-2">
-                                    <span class="w-6 text-sm">{{ ['🥇', '🥈', '🥉'][$i] ?? ($i + 1) }}</span>
-                                    <span class="flex-1 min-w-0 truncate text-sm font-semibold text-gray-800">{{ $p->nombre }}</span>
-                                    <span class="text-sm font-black text-gray-900">{{ $soles($p->total) }}</span>
+        <div class="space-y-4" x-data="pagosEquipo(@js($r !== null), {{ (int) auth()->user()->id_empresa_negocio }})">
+            @if ($r)
+                <p class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">💵 <b>Para pagarles:</b> en cada columna escribe cuánto pagas por {{ $r['unidad'] }} trabajada y/o el % de lo que vendió.
+                    El sistema calcula <b>"A pagar"</b> de cada uno. Se queda guardado en este equipo para la próxima vez.</p>
+            @endif
+            <div class="grid lg:grid-cols-3 gap-4 items-start">
+                @foreach ($columnas as [$clave, $titulo, $ayuda])
+                    <section class="bg-white rounded-2xl shadow-sm overflow-hidden">
+                        <div class="px-4 py-3 border-b"><p class="font-bold text-gray-800">{{ $titulo }}</p><p class="text-xs text-gray-400">{{ $ayuda }}</p>
+                            @if ($r)
+                                <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                                    <label class="flex items-center gap-1">S/ <input type="number" min="0" step="0.5" x-model.number="pago.{{ $clave }}.base" placeholder="0" class="w-16 h-8 rounded-lg border-gray-300 text-xs text-center"> por {{ $r['unidad'] }}</label>
+                                    <label class="flex items-center gap-1">+ <input type="number" min="0" max="100" step="0.5" x-model.number="pago.{{ $clave }}.pct" placeholder="0" class="w-14 h-8 rounded-lg border-gray-300 text-xs text-center">% de lo vendido</label>
                                 </div>
-                                <div class="ml-8 mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div class="h-1.5 rounded-full bg-indigo-500" style="width: {{ min(100, $p->participacion) }}%"></div></div>
-                                <p class="ml-8 mt-0.5 text-[11px] text-gray-500">{{ $p->tickets }} {{ $p->tickets === 1 ? 'venta' : 'ventas' }} · ticket {{ $soles($p->promedio) }} · {{ $p->participacion }}%
-                                    · {{ \Carbon\Carbon::parse($p->primera)->format('H:i') }}–{{ \Carbon\Carbon::parse($p->ultima)->format('H:i') }}</p>
-                            </div>
-                        @empty
-                            <p class="px-4 py-6 text-center text-sm text-gray-400">Sin ventas.</p>
-                        @endforelse
-                        @if ($clave === 'mozos' && $t['sinMozo'] > 0)
-                            <p class="px-4 py-2.5 text-xs text-gray-500">Sin mozo (venta directa en caja): <b>{{ $soles($t['sinMozo']) }}</b></p>
-                        @endif
+                            @endif
+                        </div>
+                        <div class="divide-y divide-gray-100">
+                            @forelse ($t[$clave] as $i => $p)
+                                <div class="px-4 py-2.5">
+                                    <div class="flex items-baseline gap-2">
+                                        <span class="w-6 text-sm">{{ ['🥇', '🥈', '🥉'][$i] ?? ($i + 1) }}</span>
+                                        <span class="flex-1 min-w-0 truncate text-sm font-semibold text-gray-800">{{ $p->nombre }}</span>
+                                        <span class="text-sm font-black text-gray-900">{{ $soles($p->total) }}</span>
+                                    </div>
+                                    <div class="ml-8 mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div class="h-1.5 rounded-full bg-indigo-500" style="width: {{ min(100, $p->participacion) }}%"></div></div>
+                                    <p class="ml-8 mt-0.5 text-[11px] text-gray-500">{{ $p->tickets }} {{ $p->tickets === 1 ? 'venta' : 'ventas' }} · ticket {{ $soles($p->promedio) }} · {{ $p->participacion }}%
+                                        @if ($r)
+                                            · <b>{{ $p->noches }} {{ $p->noches === 1 ? $r['unidad'] : ($r['unidad'] === 'noche' ? 'noches' : 'días') }}</b>
+                                        @else
+                                            · {{ \Carbon\Carbon::parse($p->primera)->format('H:i') }}–{{ \Carbon\Carbon::parse($p->ultima)->format('H:i') }}
+                                        @endif
+                                    </p>
+                                    @if ($r)
+                                        <p class="ml-8 text-xs font-bold text-emerald-700" x-show="hayPago('{{ $clave }}')">A pagar: <span x-text="soles(pagar('{{ $clave }}', {{ $p->total }}, {{ $p->noches }}))"></span></p>
+                                    @endif
+                                </div>
+                            @empty
+                                <p class="px-4 py-6 text-center text-sm text-gray-400">Sin ventas.</p>
+                            @endforelse
+                            @if ($clave === 'mozos' && $t['sinMozo'] > 0)
+                                <p class="px-4 py-2.5 text-xs text-gray-500">Sin mozo (venta directa en caja): <b>{{ $soles($t['sinMozo']) }}</b></p>
+                            @endif
+                        </div>
+                    </section>
+                @endforeach
+            </div>
+
+            @if ($r && $t['dias'])
+                {{-- Lo de cada uno, noche por noche --}}
+                <section class="bg-white rounded-2xl shadow-sm overflow-hidden" x-data="{ grupo: 'mozos' }">
+                    <div class="px-4 py-3 border-b flex flex-wrap items-center gap-2">
+                        <p class="font-bold text-gray-800 mr-auto">📋 {{ $r['unidad'] === 'noche' ? 'Noche por noche' : 'Día por día' }}</p>
+                        @foreach ($columnas as [$clave, $titulo])
+                            <button type="button" @click="grupo = '{{ $clave }}'" class="h-8 px-3 rounded-full text-xs font-bold" :class="grupo === '{{ $clave }}' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'">{{ $titulo }}</button>
+                        @endforeach
+                        <button type="button" @click="excel(grupo)" class="h-8 px-3 rounded-full text-xs font-bold bg-emerald-600 text-white">⬇️ Excel</button>
                     </div>
+                    @foreach ($columnas as [$clave, $titulo])
+                        <div class="overflow-x-auto" x-show="grupo === '{{ $clave }}'" @if ($clave !== 'mozos') x-cloak @endif>
+                            <table class="w-full text-xs" data-tabla="{{ $clave }}">
+                                <thead class="bg-gray-50 text-gray-500"><tr>
+                                    <th class="px-3 py-2 text-left sticky left-0 bg-gray-50">Persona</th>
+                                    @foreach ($t['dias'] as $dia)
+                                        <th class="px-2 py-2 text-right whitespace-nowrap">{{ \Carbon\Carbon::parse($dia)->locale('es')->translatedFormat('D d/m') }}</th>
+                                    @endforeach
+                                    <th class="px-3 py-2 text-right">{{ $r['unidad'] === 'noche' ? 'Noches' : 'Días' }}</th>
+                                    <th class="px-3 py-2 text-right">Total</th>
+                                    <th class="px-3 py-2 text-right text-emerald-700" x-show="hayPago('{{ $clave }}')">A pagar</th>
+                                </tr></thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    @forelse ($t[$clave] as $p)
+                                        <tr data-fila>
+                                            <td class="px-3 py-1.5 font-semibold text-gray-800 whitespace-nowrap sticky left-0 bg-white">{{ $p->nombre }}</td>
+                                            @foreach ($t['dias'] as $dia)
+                                                <td class="px-2 py-1.5 text-right whitespace-nowrap {{ isset($p->porNoche[$dia]) ? 'text-gray-800' : 'text-gray-300' }}" data-valor="{{ $p->porNoche[$dia] ?? 0 }}">{{ isset($p->porNoche[$dia]) ? number_format($p->porNoche[$dia], 2) : '—' }}</td>
+                                            @endforeach
+                                            <td class="px-3 py-1.5 text-right" data-valor="{{ $p->noches }}">{{ $p->noches }}</td>
+                                            <td class="px-3 py-1.5 text-right font-black" data-valor="{{ $p->total }}">{{ number_format($p->total, 2) }}</td>
+                                            <td class="px-3 py-1.5 text-right font-black text-emerald-700" x-show="hayPago('{{ $clave }}')" x-text="soles(pagar('{{ $clave }}', {{ $p->total }}, {{ $p->noches }}))"></td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="{{ count($t['dias']) + 4 }}" class="px-3 py-6 text-center text-gray-400">Sin ventas.</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    @endforeach
                 </section>
-            @endforeach
+            @endif
         </div>
-        <p class="text-xs text-gray-400">Para ver una noche pasada, elige su fecha en "Noche del". Para un mes o fechas más largas, usa <a href="{{ url('/reportes/ventas-vendedor') }}" class="text-indigo-600 underline">Reportes → Ventas por Vendedor</a>. Las anuladas no cuentan; las notas de crédito restan.</p>
+        <p class="text-xs text-gray-400">Las anuladas no cuentan; las notas de crédito restan. Mozo = quien atendió la mesa; cajero = quien cobró; promotor = quien trajo al cliente.</p>
     @endif
 
     {{-- ===================================================== Mi equipo --}}
@@ -370,6 +488,43 @@
 </div>
 
 <script>
+    /** Cuánto pagar a cada uno: S/ por noche trabajada + % de lo que vendió (por columna, guardado en este equipo) */
+    function pagosEquipo(activo, sucursal) {
+        const clave = 'tushpa_pagos_equipo_' + sucursal;
+        const vacio = { mozos: { base: '', pct: '' }, cajeros: { base: '', pct: '' }, promotores: { base: '', pct: '' } };
+        let guardado = {};
+        try { guardado = JSON.parse(localStorage.getItem(clave) || '{}'); } catch (e) { guardado = {}; }
+        return {
+            pago: { mozos: { ...vacio.mozos, ...(guardado.mozos || {}) }, cajeros: { ...vacio.cajeros, ...(guardado.cajeros || {}) }, promotores: { ...vacio.promotores, ...(guardado.promotores || {}) } },
+            init() {
+                if (activo) this.$watch('pago', v => { try { localStorage.setItem(clave, JSON.stringify(v)); } catch (e) { /* sin almacenamiento */ } }, { deep: true });
+            },
+            hayPago(grupo) { return activo && (Number(this.pago[grupo].base) > 0 || Number(this.pago[grupo].pct) > 0); },
+            pagar(grupo, total, noches) { return (Number(this.pago[grupo].base) || 0) * noches + total * (Number(this.pago[grupo].pct) || 0) / 100; },
+            soles(n) { return 'S/ ' + (Math.round(n * 100) / 100).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+            /** La tabla noche por noche en un archivo que abre Excel (separado por ; y con tildes) */
+            excel(grupo) {
+                const tabla = document.querySelector(`[data-tabla="${grupo}"]`);
+                if (!tabla) return;
+                const celda = t => '"' + String(t).trim().replace(/"/g, '""') + '"';
+                const cabecera = [...tabla.querySelectorAll('thead th')].map(th => celda(th.textContent));
+                const filas = [...tabla.querySelectorAll('tbody tr[data-fila]')].map(tr => {
+                    const tds = [...tr.querySelectorAll('td')];
+                    const datos = [celda(tds[0].textContent), ...tds.slice(1).filter(td => td.dataset.valor !== undefined).map(td => String(td.dataset.valor).replace('.', ','))];
+                    const total = Number(tds[tds.length - 2].dataset.valor), noches = Number(tds[tds.length - 3].dataset.valor);
+                    if (this.hayPago(grupo)) datos.push(String(this.pagar(grupo, total, noches).toFixed(2)).replace('.', ','));
+                    return datos.join(';');
+                });
+                if (!this.hayPago(grupo)) cabecera.pop();
+                const csv = '\ufeff' + [cabecera.join(';'), ...filas].join('\r\n');
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+                a.download = `produccion-${grupo}-` + @js(($turno['rango']['desde'] ?? '').'-al-'.($turno['rango']['hasta'] ?? '')) + '.csv';
+                document.body.appendChild(a); a.click(); a.remove();
+            },
+        };
+    }
+
     function panelDueno() {
         return {
             resumen: false, config: false, texto: '', enlaces: [], copiado: false, error: '', fecha: @js(request('fecha', now()->toDateString())),

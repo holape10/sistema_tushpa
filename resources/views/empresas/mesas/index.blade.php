@@ -13,6 +13,9 @@
             <a href="{{ route('mesas.create') }}" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">
                 + Nueva Mesa
             </a>
+            @if (auth()->user()->esAdmin())
+                <a href="{{ route('mesas.plano') }}" class="px-4 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 transition">🗺️ Plano del local</a>
+            @endif
         </div>
     </div>
 

@@ -1,15 +1,22 @@
 <?php
+
 // app/Models/Turno.php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Turno extends Model
 {
     protected $table = 'turnos';
+
     protected $primaryKey = 'id_turno';
+
     public $timestamps = false;
+
     protected $guarded = [];
+
     protected $casts = ['apertura' => 'datetime', 'cierre' => 'datetime'];
 
     // Denominaciones del arqueo: campo => valor en soles
@@ -20,7 +27,10 @@ class Turno extends Model
         'cant_c_100_soles' => 100, 'cant_c_200_soles' => 200,
     ];
 
-    public function usuario() { return $this->belongsTo(User::class, 'IdUsuario', 'IdUsuario'); }
+    public function usuario()
+    {
+        return $this->belongsTo(User::class, 'IdUsuario', 'IdUsuario');
+    }
 
     // Turno abierto del usuario en su sucursal (null si no tiene)
     public static function abiertoDe(User $user): ?self
@@ -30,5 +40,15 @@ class Turno extends Model
             ->where('estado', 'ABIERTO')
             ->latest('id_turno')
             ->first();
+    }
+
+    /**
+     * Cierre de caja ciego (si la sucursal lo activó): mientras el turno está abierto, el cajero no ve cuánto debería
+     * haber; cuenta el efectivo, lo escribe y recién al cerrar se ve la diferencia. El administrador siempre ve todo.
+     */
+    public function esCiegoPara(User $user): bool
+    {
+        return $this->estado === 'ABIERTO' && ! $user->esAdmin()
+            && (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $this->id_empresa_negocio)->value('cierre_ciego');
     }
 }

@@ -92,9 +92,19 @@ class Comprobante
         $esContado = $cre->cre_dia_tip === 'CONTADO';
         $cliente = self::cliente($user, $datos, $esContado);
 
+        // ---- Promociones automáticas del restaurante (2x1, 3x2...): valen si se abrió la mesa o se cobra en su horario ----
+        $promosAplicadas = [];
+        if (in_array(mb_strtoupper((string) ($extra['ped_tip'] ?? '')), PromocionesVenta::ORIGENES, true)) {
+            $abierto = ! empty($extra['ped_id']) ? DB::table('pedidos')->where('ped_id', $extra['ped_id'])->value('fecha_hora') : null;
+            $promos = PromocionesVenta::vigentes((int) $user->id_empresa_negocio, array_filter([now(), $abierto ? Carbon::parse($abierto) : null]));
+            if ($promos->isNotEmpty()) {
+                [$lineas, $promosAplicadas] = PromocionesVenta::aplicar($promos, $lineas);
+            }
+        }
+
         // ---- Descuento a la cuenta y cortesías (revisa permisos y reparte el descuento entre las líneas) ----
         [$lineas, $descuento] = Descuentos::aplicar($user, $lineas, $datos);
-        $extra = $descuento + $extra;
+        $extra = $descuento + $extra + ($promosAplicadas ? ['promo_descuento' => round(array_sum(array_column($promosAplicadas, 'ahorro')), 2)] : []);
 
         // ---- Serie y correlativo (bloqueado para que dos cajas no repitan número) ----
         [$colSerie, $colNum] = self::SERIES[$tdocod];
@@ -150,6 +160,10 @@ class Comprobante
         self::registrarDetalle($user, $cabId, $lineas, $sucursal, $almacen, $gravado, $factorIgv, [
             'tdocod' => $tdocod, 'serie' => $serie, 'numero' => (string) $numero, 'cliente' => strtoupper(trim($datos['clinom'])), 'fecha' => $fecEmi,
         ], ! empty($extra['ped_id']));
+        foreach ($promosAplicadas as $promo) {
+            DB::table('cpe_promociones')->insert(['IdCpe_cabecera' => $cabId, 'promocion_id' => $promo['id'], 'nombre' => mb_substr($promo['nombre'], 0, 80),
+                'veces' => $promo['veces'], 'ahorro' => $promo['ahorro']]);
+        }
 
         Fidelizacion::acumular($cabId);       // puntos del cliente (si la sucursal tiene fidelización)
         EnvioAutomatico::programar($cabId);   // si la empresa tiene envío automático

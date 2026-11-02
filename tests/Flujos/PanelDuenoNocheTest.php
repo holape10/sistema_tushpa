@@ -2,6 +2,7 @@
 
 namespace Tests\Flujos;
 
+use App\Http\Controllers\PanelDuenoController;
 use App\Support\PanelDueno;
 use App\Support\VentaDirecta;
 use Carbon\Carbon;
@@ -71,6 +72,40 @@ class PanelDuenoNocheTest extends FlujoTestCase
         DB::table('push_suscripciones')->insert(['IdUsuario' => $this->usuario->IdUsuario, 'id_empresa_negocio' => $this->sucursal, 'huella' => str_repeat('a', 64),
             'endpoint' => 'https://fcm.googleapis.com/fcm/send/x', 'p256dh' => 'p', 'auth' => 'a', 'mozo' => false, 'dueno' => true]);
         $this->assertTrue(PanelDueno::avisarCierre($this->sucursal, now()));
+    }
+
+    public function test_varias_noches_suman_la_produccion_de_cada_mozo_noche_por_noche(): void
+    {
+        Carbon::setTestNow('2026-11-02 03:00:00');
+        $this->deNoche(true);
+        $turnoViernes = DB::table('turnos')->insertGetId(['turno' => 1, 'IdUsuario' => $this->usuario->IdUsuario, 'apertura' => '2026-10-30 21:00:00',
+            'IdEmpresa' => $this->usuario->IdEmpresa, 'id_empresa_negocio' => $this->sucursal, 'estado' => 'CERRADO']);
+        $turnoSabado = DB::table('turnos')->insertGetId(['turno' => 2, 'IdUsuario' => $this->usuario->IdUsuario, 'apertura' => '2026-10-31 21:00:00',
+            'IdEmpresa' => $this->usuario->IdEmpresa, 'id_empresa_negocio' => $this->sucursal, 'estado' => 'CERRADO']);
+        $this->vendidoA('2026-10-30 23:00:00', 50);   // viernes
+        $this->vendidoA('2026-10-31 02:00:00', 30);   // madrugada: sigue siendo el viernes
+        $this->vendidoA('2026-10-31 23:30:00', 100);  // sábado
+        DB::table('cpe_cabecera')->where('id_empresa_negocio', $this->sucursal)->update(['mozo' => $this->usuario->IdUsuario]);
+        DB::table('cpe_cabecera')->where('id_empresa_negocio', $this->sucursal)->where('fecha_hora', '<', '2026-10-31 12:00:00')->update(['id_turno' => $turnoViernes]);
+        DB::table('cpe_cabecera')->where('id_empresa_negocio', $this->sucursal)->where('fecha_hora', '>', '2026-10-31 12:00:00')->update(['id_turno' => $turnoSabado]);
+
+        $rango = ['ver' => 'turno', 'periodo' => 'rango', 'desde' => '2026-10-30', 'hasta' => '2026-11-01'];
+        $t = $this->get(route('dueno.index', $rango))->assertOk()->assertSee('Noche por noche')->assertSee('Para pagarles')->viewData('turno');
+        $this->assertSame(180.0, $t['total']->total);
+        $this->assertSame(['2026-10-30', '2026-10-31'], $t['dias']);
+        $mozo = $t['mozos'][0];
+        $this->assertSame(['2026-10-30' => 80.0, '2026-10-31' => 100.0], $mozo->porNoche, 'Lo de madrugada va en la noche del viernes.');
+        $this->assertSame(2, $mozo->noches);
+
+        // El dueño deja fuera el turno del sábado
+        $soloViernes = $this->get(route('dueno.index', $rango + ['elegir' => 1, 'turnos' => [$turnoViernes]]))->assertOk()->viewData('turno');
+        $this->assertSame(80.0, $soloViernes['total']->total);
+        $this->assertSame([$turnoViernes], $soloViernes['rango']['marcados']);
+
+        foreach (array_keys(PanelDuenoController::RANGOS) as $periodo) {
+            $this->get(route('dueno.index', ['ver' => 'turno', 'periodo' => $periodo]))->assertOk();
+        }
+        Carbon::setTestNow();
     }
 
     public function test_las_horas_se_dicen_como_la_gente(): void

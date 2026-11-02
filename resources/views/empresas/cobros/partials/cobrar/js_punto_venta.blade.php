@@ -37,6 +37,7 @@
         }
         BRUTO = Math.round(carrito.reduce((a, it) => a + (it.cortesia ? 0 : it.cantidad * it.precio), 0) * 100) / 100;
         GRATIS = Math.round(carrito.reduce((a, it) => a + (it.cortesia ? it.cantidad * it.precio : 0), 0) * 100) / 100;
+        aplicarPromos(carrito.filter(it => !it.cortesia).map(it => ({ id: it.id, cantidad: it.cantidad, precio: it.precio, base: true })));
         aplicarDescuento();
     }
 

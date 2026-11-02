@@ -22,6 +22,12 @@ class PanelDuenoController extends Controller
     /** Qué se mira en "Ventas del turno" */
     public const PERIODOS = ['jornada' => 'Esta jornada', 'anterior' => 'Jornada anterior', 'hoy' => 'Hoy (00:00 a 23:59)', 'abiertos' => 'Turnos de caja abiertos'];
 
+    /** Varias noches o días juntos: para ver la producción de cada uno y pagarle */
+    public const RANGOS = ['semana' => 'Esta semana', 'semana_pasada' => 'Semana pasada', 'mes' => 'Este mes', 'mes_pasado' => 'Mes pasado'];
+
+    /** Lo más largo que se puede ver de una vez en "Ventas del turno" */
+    private const MAX_DIAS_RANGO = 92;
+
     private function sucursal(): int
     {
         abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador ve el panel del dueño.');
@@ -68,6 +74,9 @@ class PanelDuenoController extends Controller
      */
     private function ventasDelTurno(Request $request, int $suc): array
     {
+        if (array_key_exists($request->get('periodo'), self::RANGOS) || $request->get('periodo') === 'rango') {
+            return $this->ventasDelRango($request, $suc);
+        }
         // Una noche pasada: la jornada de esa fecha (desde ese día a mediodía hasta el día siguiente a mediodía)
         try {
             $fecha = $request->filled('fecha') ? Carbon::parse((string) $request->get('fecha'))->startOfDay() : null;
@@ -105,7 +114,59 @@ class PanelDuenoController extends Controller
         };
 
         return PanelDueno::ventasDelTurno($suc, $desde, $hasta, $ids) + ['periodo' => $periodo, 'texto' => $texto, 'turnos' => $turnos,
-            'elegido' => $elegido?->id_turno, 'fecha' => $fecha?->toDateString()];
+            'elegido' => $elegido?->id_turno, 'fecha' => $fecha?->toDateString(), 'rango' => null];
+    }
+
+    /**
+     * Semana, mes o fechas elegidas: lo de cada mozo, cajero y promotor en esas noches (o días) y en cada una, para
+     * pagarles según su producción. Se pueden dejar fuera turnos de caja (los que no se quieren sumar).
+     */
+    private function ventasDelRango(Request $request, int $suc): array
+    {
+        $periodo = (string) $request->get('periodo');
+        $corte = PanelDueno::corte($suc);
+        // La noche (o el día) de hoy: de madrugada todavía es la noche de ayer
+        $hoy = $corte ? PanelDueno::jornada()[0]->copy()->startOfDay() : now()->startOfDay();
+        [$desde, $hasta] = match ($periodo) {
+            'semana' => [$hoy->copy()->startOfWeek(), $hoy->copy()],
+            'semana_pasada' => [$hoy->copy()->startOfWeek()->subWeek(), $hoy->copy()->startOfWeek()->subDay()],
+            'mes' => [$hoy->copy()->startOfMonth(), $hoy->copy()],
+            'mes_pasado' => [$hoy->copy()->subMonthNoOverflow()->startOfMonth(), $hoy->copy()->subMonthNoOverflow()->endOfMonth()->startOfDay()],
+            default => (function () use ($request, $hoy) {
+                try {
+                    $d = Carbon::parse((string) $request->get('desde'))->startOfDay();
+                    $h = Carbon::parse((string) $request->get('hasta', $hoy->toDateString()))->startOfDay();
+                } catch (\Throwable) {
+                    return [$hoy->copy()->startOfWeek(), $hoy->copy()];
+                }
+
+                return $h->lt($d) ? [$h, $d] : [$d, $h];
+            })(),
+        };
+        $hasta = $hasta->min($hoy);
+        $desde = $desde->min($hasta);
+        if ($desde->diffInDays($hasta) >= self::MAX_DIAS_RANGO) {
+            $desde = $hasta->copy()->subDays(self::MAX_DIAS_RANGO - 1);
+        }
+        [$inicio, $fin] = array_map(fn ($m) => Carbon::parse($m), PanelDueno::limites($suc, $desde->toDateString(), $hasta->toDateString()));
+        $fin = $fin->min(now());
+
+        // Turnos de caja de esas fechas: todos suman, salvo los que el dueño desmarca
+        $turnos = PanelDueno::turnosEntre($suc, $inicio, $fin);
+        $marcados = array_map('intval', (array) $request->input('turnos', []));
+        $soloAlgunos = $request->boolean('elegir') && count(array_intersect($turnos->pluck('id_turno')->map(fn ($id) => (int) $id)->all(), $marcados)) < $turnos->count();
+        $ids = $soloAlgunos ? array_values(array_intersect($turnos->pluck('id_turno')->map(fn ($id) => (int) $id)->all(), $marcados)) : null;
+
+        $unidad = $corte ? 'noche' : 'día';
+        $cuantos = (int) $desde->diffInDays($hasta) + 1;
+        $texto = 'Del '.$desde->locale('es')->translatedFormat('D d/m').' al '.$hasta->locale('es')->translatedFormat('D d/m/Y')
+            .' · '.$cuantos.' '.($cuantos === 1 ? $unidad : ($corte ? 'noches' : 'días'))
+            .($soloAlgunos ? ' · solo '.count($ids).' de '.$turnos->count().' turnos de caja' : '');
+
+        return PanelDueno::ventasDelTurno($suc, $inicio, $fin, $ids, $corte) + ['periodo' => $periodo === 'rango' || ! array_key_exists($periodo, self::RANGOS) ? 'rango' : $periodo,
+            'texto' => $texto, 'turnos' => $turnos, 'elegido' => null, 'fecha' => null,
+            'rango' => ['desde' => $desde->toDateString(), 'hasta' => $hasta->toDateString(), 'unidad' => $unidad,
+                'marcados' => $ids ?? $turnos->pluck('id_turno')->map(fn ($id) => (int) $id)->all()]];
     }
 
     /** Más de la cuarta parte de lo vendido en las últimas 4 semanas fue entre las 12 am y las 6 am */

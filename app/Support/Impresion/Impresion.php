@@ -9,6 +9,7 @@ use App\Support\Descuentos;
 use App\Support\Encuestas;
 use App\Support\Fidelizacion;
 use App\Support\NombreCorto;
+use App\Support\PromocionesVenta;
 use App\Support\Propinas;
 use App\Support\Sunat\CodigoQr;
 use App\Support\Sunat\NumeroLetras;
@@ -610,9 +611,15 @@ class Impresion
     /** Consumo y descuento a la cuenta, y el valor de las cortesías (operaciones gratuitas) */
     private static function lineasDescuento(Escpos $p, object $cab, string $sufijo): void
     {
-        if ((float) ($cab->descuento ?? 0) > 0) {
-            $p->dosColumnas('CONSUMO'.$sufijo, number_format((float) $cab->ccaitv + (float) $cab->descuento, 2))
-                ->dosColumnas('DESCUENTO'.$sufijo, '-'.number_format((float) $cab->descuento, 2));
+        $promo = (float) ($cab->promo_descuento ?? 0);
+        if ((float) ($cab->descuento ?? 0) > 0 || $promo > 0) {
+            $p->dosColumnas('CONSUMO'.$sufijo, number_format((float) $cab->ccaitv + (float) $cab->descuento + $promo, 2));
+            foreach (PromocionesVenta::delComprobante($cab) as $pr) {
+                $p->dosColumnas('PROMO '.mb_strtoupper(mb_substr($pr->nombre, 0, 18)), '-'.number_format((float) $pr->ahorro, 2));
+            }
+            if ((float) ($cab->descuento ?? 0) > 0) {
+                $p->dosColumnas('DESCUENTO'.$sufijo, '-'.number_format((float) $cab->descuento, 2));
+            }
         }
         if ((float) ($cab->ccagra ?? 0) > 0) {
             $p->dosColumnas('OP. GRATUITAS'.$sufijo, number_format((float) $cab->ccagra, 2));
@@ -886,9 +893,17 @@ class Impresion
         foreach ($items as $i) {
             $p->item($i->descripcion, $i->cantidad, $i->precio, $i->cantidad * $i->precio);
         }
-        $p->linea()->negrita()->tamano(1, 2)->dosColumnas('TOTAL S/', number_format($total, 2))->tamano()->negrita(false);
+        $promos = PromocionesVenta::delPedido($pedId);
+        $ahorro = round(array_sum(array_column($promos, 'ahorro')), 2);
+        $p->linea()->negrita()->tamano(1, 2)->dosColumnas($ahorro > 0 ? 'CONSUMO S/' : 'TOTAL S/', number_format($total, 2))->tamano()->negrita(false);
         if ($pagado > 0) {
-            $p->dosColumnas('YA PAGADO', '-'.number_format($pagado, 2))->negrita()->dosColumnas('SALDO S/', number_format($total - $pagado, 2))->negrita(false);
+            $p->dosColumnas('YA PAGADO', '-'.number_format($pagado, 2));
+        }
+        foreach ($promos as $pr) {
+            $p->dosColumnas('PROMO '.mb_strtoupper(mb_substr($pr['nombre'], 0, 18)), '-'.number_format($pr['ahorro'], 2));
+        }
+        if ($pagado > 0 || $ahorro > 0) {
+            $p->negrita()->tamano(1, 2)->dosColumnas('A PAGAR S/', number_format($total - $pagado - $ahorro, 2))->tamano()->negrita(false);
         }
         $p->linea()->alinear('centro')->texto('*** NO VÁLIDO COMO COMPROBANTE ***')->texto('Solicite su boleta o factura')->avanzar(3)->cortar();
 

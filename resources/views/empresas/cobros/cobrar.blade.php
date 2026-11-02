@@ -52,6 +52,8 @@
     let BRUTO = TOTAL;      // lo que se cobra antes del descuento (sin las cortesías)
     let GRATIS = 0;         // valor de las cortesías
     const cortesias = {};   // cobrar mesa: { clave: { cantidad, motivo } }
+    const PROMOS = @json($promos ?? []);   // promociones automáticas vigentes (2x1, 3x2...)
+    let PROMOS_APLICADAS = [];              // [{ nombre, veces, ahorro }]
 
     const el = id => document.getElementById(id);
     const fmt = n => (Math.round(n * 100) / 100).toFixed(2);
@@ -84,6 +86,7 @@
     @include('empresas.cobros.partials.cobrar.js_cliente')
     @include('empresas.cobros.partials.cobrar.js_punto_venta')
     @include('empresas.cobros.partials.cobrar.js_registrar')
+    @include('empresas.cobros.partials.cobrar.js_promociones')
 </script>
 @include('partials.avisos')
 @include('partials.aviso_servicio')

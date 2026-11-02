@@ -104,7 +104,7 @@
 
         {{-- Mesas --}}
         <div id="mesas_container" class="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(130px,1fr))] sm:gap-3">
-            @include('empresas.comandas.partials.mesas_grid', ['mesas' => $mesas])
+            @include('empresas.comandas.partials.mesas_piso', ['mesas' => $mesas])
         </div>
 
         {{-- Otros tipos de pedido (según el usuario) --}}

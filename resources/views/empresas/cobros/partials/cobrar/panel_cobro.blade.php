@@ -57,7 +57,7 @@
                                 </thead>
                                 <tbody>
                                     @foreach ($detalle as $d)
-                                        <tr data-clave="{{ $d->clave }}" data-precio="{{ $d->ped_det_pre }}" data-max="{{ $d->cantidad_pendiente }}">
+                                        <tr data-clave="{{ $d->clave }}" data-precio="{{ $d->ped_det_pre }}" data-max="{{ $d->cantidad_pendiente }}" data-producto="{{ $d->IdProducto }}" data-base="{{ $d->id_presentacion ? 0 : 1 }}">
                                             <td>{{ $d->descripcion }}@if ($d->item_obs)<br><small class="text-muted">{{ $d->item_obs }}</small>@endif<small class="cort-info"></small></td>
                                             <td class="text-center">{{ rtrim(rtrim(number_format($d->cantidad_pendiente, 2), '0'), '.') }}</td>
                                             @if ($separadas)

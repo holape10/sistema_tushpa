@@ -11,21 +11,27 @@
         <div class="flex gap-2">
             <a href="{{ route('comandas.seleccion') }}" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Ir a Comandas</a>
             <a href="{{ route('offline.index') }}" title="Para vender en esta PC si se cae el internet (actívala una vez con internet)" class="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-700 text-sm font-semibold hover:bg-emerald-200">Caja sin internet</a>
-            <a href="{{ route('turnos.show', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Ver reporte</a>
+            @unless ($ciego)
+                <a href="{{ route('turnos.show', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Ver reporte</a>
+            @endunless
             <a href="{{ route('turnos.productos', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 text-sm font-semibold hover:bg-sky-200">Productos</a>
             <a href="{{ route('turnos.categorias', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 text-sm font-semibold hover:bg-sky-200">Categorías</a>
         </div>
     </div>
 
-    {{-- Tarjetas de resumen --}}
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-        @foreach ([
+    {{-- Tarjetas de resumen (cierre ciego: sin lo vendido ni lo esperado, se ve al cerrar) --}}
+    @if ($ciego)
+        <div class="mb-4 rounded-2xl bg-slate-800 text-white px-4 py-3 text-sm">🙈 <b>Cierre de caja ciego:</b> al cerrar, cuenta el efectivo de la caja y escribe cuánto hay.
+            Lo que debería haber y la diferencia se ven recién al cerrar el turno.</div>
+    @endif
+    <div class="grid grid-cols-2 {{ $ciego ? 'lg:grid-cols-3' : 'lg:grid-cols-5' }} gap-3 mb-6">
+        @foreach (array_filter([
             ['Fondo inicial', $turno->monto, 'text-gray-800'],
-            ['Ventas del turno', $r['ventasTotal'], 'text-indigo-700'],
+            $ciego ? null : ['Ventas del turno', $r['ventasTotal'], 'text-indigo-700'],
             ['Otros ingresos', $r['ingresos'], 'text-green-700'],
             ['Egresos / gastos', $r['egresos'], 'text-red-600'],
-            ['Efectivo esperado', $r['efectivoEsperado'], 'text-emerald-700'],
-        ] as [$label, $valor, $color])
+            $ciego ? null : ['Efectivo esperado', $r['efectivoEsperado'], 'text-emerald-700'],
+        ]) as [$label, $valor, $color])
             <div class="bg-white rounded-2xl shadow-sm p-4">
                 <p class="text-xs text-gray-500 uppercase">{{ $label }}</p>
                 <p class="text-xl font-bold {{ $color }}">S/ {{ number_format($valor, 2) }}</p>
@@ -33,7 +39,7 @@
         @endforeach
     </div>
 
-    @if ($r['dolaresUsd'] > 0 || $r['propinas']->isNotEmpty())
+    @if (! $ciego && ($r['dolaresUsd'] > 0 || $r['propinas']->isNotEmpty()))
         {{-- Lo que hay en caja además de los soles: dólares y propinas (no son venta) --}}
         <div class="flex flex-wrap gap-3 mb-6 -mt-3">
             @if ($r['dolaresUsd'] > 0)
@@ -83,11 +89,11 @@
                                     :class="medio === {{ (int) $v->id_med_pag }} ? 'ring-4 ring-offset-2 ring-indigo-300' : ''"
                                     class="{{ $colorMedio($v->nom_med_pag) }} text-white rounded-xl p-3 text-left shadow-sm hover:opacity-90 transition">
                                 <span class="block text-xs font-semibold uppercase opacity-90">{{ $v->nom_med_pag ?? 'SIN MEDIO' }}</span>
-                                <span class="block text-xl font-bold">S/ {{ number_format($v->monto, 2) }}</span>
+                                <span class="block text-xl font-bold">{{ $ciego ? '•••' : 'S/ '.number_format($v->monto, 2) }}</span>
                                 <span class="block text-xs opacity-80">{{ $v->operaciones }} {{ $v->operaciones == 1 ? 'cobro' : 'cobros' }}</span>
                             </button>
                         @endforeach
-                        @if ($r['ventasCredito'] > 0)
+                        @if ($r['ventasCredito'] > 0 && ! $ciego)
                             <div class="bg-amber-100 text-amber-800 rounded-xl p-3">
                                 <span class="block text-xs font-semibold uppercase">Crédito (no entra a caja)</span>
                                 <span class="block text-xl font-bold">S/ {{ number_format($r['ventasCredito'], 2) }}</span>
@@ -124,7 +130,7 @@
                 @if ($r['comprobantes']->isNotEmpty())
                     <div class="mt-3 flex flex-wrap gap-2 text-xs">
                         @foreach ($r['comprobantes'] as $c)
-                            <span class="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">{{ $c->tdodes }}: {{ $c->cantidad }} · S/ {{ number_format($c->total, 2) }}</span>
+                            <span class="px-2 py-1 rounded-lg bg-gray-100 text-gray-600">{{ $c->tdodes }}: {{ $c->cantidad }}@unless ($ciego) · S/ {{ number_format($c->total, 2) }}@endunless</span>
                         @endforeach
                     </div>
                 @endif
@@ -170,7 +176,7 @@
         </div>
 
         {{-- Cierre de turno --}}
-        <div class="bg-white rounded-2xl shadow-sm p-4 h-fit" x-data="cierre({{ $r['efectivoEsperado'] }})">
+        <div class="bg-white rounded-2xl shadow-sm p-4 h-fit" x-data="cierre({{ $ciego ? 'null' : $r['efectivoEsperado'] }})">
             <h3 class="font-semibold text-gray-700 mb-3">Cerrar turno (arqueo)</h3>
             @if ($pedidosAbiertos > 0)
                 <div class="mb-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-xs">
@@ -187,8 +193,11 @@
                   onsubmit="if (window.CajaOffline && this.dataset.offline > 0) { alert('Primero sube las ventas hechas sin internet en esta PC (botón Caja sin internet).'); return false; } return confirm('¿Cerrar el turno? Ya no podrás cobrar hasta abrir otro.')"
                   x-init="window.CajaOffline && CajaOffline.pendientes().then((l) => $el.dataset.offline = l.filter((v) => !v.usuario || v.usuario === {{ (int) auth()->user()->IdUsuario }}).length).catch(() => {})">
                 @csrf
-                <label class="block text-sm text-gray-700 mb-1">Efectivo contado (S/) <span class="text-xs text-gray-400">opcional</span></label>
-                <input type="number" step="0.01" min="0" name="montocierre" x-model="contado" placeholder="Si no lo cuentas, déjalo vacío"
+                @if ($ciego)
+                    <p class="mb-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">🙈 Cuenta todo el efectivo en soles de la caja (con el fondo inicial) y escribe el total, o cuéntalo billete por billete.</p>
+                @endif
+                <label class="block text-sm text-gray-700 mb-1">Efectivo contado (S/) <span class="text-xs {{ $ciego ? 'text-rose-600 font-semibold' : 'text-gray-400' }}">{{ $ciego ? 'obligatorio' : 'opcional' }}</span></label>
+                <input type="number" step="0.01" min="0" name="montocierre" x-model="contado" placeholder="{{ $ciego ? 'Total de soles en la caja' : 'Si no lo cuentas, déjalo vacío' }}" @if ($ciego) :required="!verArqueo" @endif
                        :readonly="verArqueo" :class="verArqueo ? 'bg-gray-50' : ''"
                        class="w-full rounded-lg border-gray-300 text-lg font-bold text-center mb-2">
 
@@ -206,8 +215,8 @@
                         </label>
                     @endforeach
                 </div>
-                <div class="text-sm space-y-1 mb-4">
-                    <div class="flex justify-between"><span>Esperado</span><span class="font-semibold">S/ <span x-text="esperado.toFixed(2)"></span></span></div>
+                <div class="text-sm space-y-1 mb-4" x-show="esperado !== null">
+                    <div class="flex justify-between"><span>Esperado</span><span class="font-semibold">S/ <span x-text="(esperado || 0).toFixed(2)"></span></span></div>
                     <div class="flex justify-between" x-show="contado !== ''"><span>Diferencia</span>
                         <span class="font-bold" :class="dif() < 0 ? 'text-red-600' : (dif() > 0 ? 'text-amber-600' : 'text-green-700')">
                             S/ <span x-text="dif().toFixed(2)"></span>

@@ -46,10 +46,16 @@
         </tbody>
     </table>
     <hr>
-    <div class="fila" style="font-size:15px;"><strong>TOTAL</strong><strong>S/ {{ number_format($total, 2) }}</strong></div>
+    @php $ahorro = round(array_sum(array_column($promos, 'ahorro')), 2); @endphp
+    <div class="fila" style="font-size:15px;"><strong>{{ $ahorro > 0 ? 'CONSUMO' : 'TOTAL' }}</strong><strong>S/ {{ number_format($total, 2) }}</strong></div>
     @if ($pagado > 0)
         <div class="fila"><span>YA PAGADO (cuentas separadas)</span><span>- {{ number_format($pagado, 2) }}</span></div>
-        <div class="fila" style="font-size:14px;"><strong>SALDO</strong><strong>S/ {{ number_format($total - $pagado, 2) }}</strong></div>
+    @endif
+    @foreach ($promos as $pr)
+        <div class="fila"><span>🎉 PROMO {{ mb_strtoupper($pr['nombre']) }}</span><span>- {{ number_format($pr['ahorro'], 2) }}</span></div>
+    @endforeach
+    @if ($pagado > 0 || $ahorro > 0)
+        <div class="fila" style="font-size:14px;"><strong>A PAGAR</strong><strong>S/ {{ number_format($total - $pagado - $ahorro, 2) }}</strong></div>
     @endif
     <hr>
     <div class="c" style="font-size:10px;">

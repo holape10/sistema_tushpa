@@ -21,6 +21,7 @@
 
     function recalcular() {
         let total = 0, gratis = 0;
+        const items = [];
         document.querySelectorAll('tr[data-clave]').forEach(tr => {
             const cant = cantidadDe(tr);
             const precio = parseFloat(tr.dataset.precio);
@@ -35,9 +36,11 @@
             tr.classList.toggle('sep-elegido', cant > 0);
             total += linea;
             gratis += cort * precio;
+            if (cant - cort > 0) items.push({ id: tr.dataset.producto, cantidad: cant - cort, precio, base: tr.dataset.base === '1' });
         });
         BRUTO = Math.round(total * 100) / 100;
         GRATIS = Math.round(gratis * 100) / 100;
+        aplicarPromos(items);
         aplicarDescuento();
     }
 

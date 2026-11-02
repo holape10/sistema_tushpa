@@ -220,21 +220,32 @@ class PanelDueno
      * Ventas de un turno o una jornada por persona: cuánto vendió cada mozo (sus mesas), cuánto cobró cada cajero y
      * cuánto trajo cada promotor. Con $turnos, solo las ventas cobradas en esos turnos de caja.
      *
+     * Con $corte (varias noches o días: semana, mes, un rango) también se cuenta cuántas noches trabajó cada uno y
+     * cuánto hizo en cada una (para pagarle según su producción); la noche va de mediodía a mediodía si $corte es 12.
+     *
      * @param  array<int, int>|null  $turnos
-     * @return array{total: object, mozos: Collection, cajeros: Collection, promotores: Collection}
+     * @return array{total: object, mozos: Collection, cajeros: Collection, promotores: Collection, sinMozo: float, dias: array<int, string>}
      */
-    public static function ventasDelTurno(int $suc, ?Carbon $desde, ?Carbon $hasta, ?array $turnos = null): array
+    public static function ventasDelTurno(int $suc, ?Carbon $desde, ?Carbon $hasta, ?array $turnos = null, ?int $corte = null): array
     {
         $base = fn () => self::ventas($suc)
             ->when($turnos !== null, fn ($q) => $q->whereIn('c.id_turno', $turnos ?: [0]))
             ->when($turnos === null, fn ($q) => $q->whereBetween('c.fecha_hora', [$desde, $hasta]));
         $total = $base()->selectRaw('COALESCE(SUM('.self::SIGNO.' * c.ccaitv), 0) as total, SUM(c.tdocod NOT IN (\'07\',\'08\')) as tickets')->first();
         $suma = round((float) $total->total, 2);
-        $por = function (string $columna) use ($base, $suma) {
+        $noche = 'DATE(DATE_SUB(c.fecha_hora, INTERVAL '.(int) $corte.' HOUR))';
+        $dias = [];
+        $por = function (string $columna) use ($base, $suma, $corte, $noche, &$dias) {
             $filas = $base()->whereNotNull($columna)->groupBy($columna)
                 ->selectRaw($columna.' as usuario, SUM('.self::SIGNO.' * c.ccaitv) as total, SUM(c.tdocod NOT IN (\'07\',\'08\')) as tickets, MIN(c.fecha_hora) as primera, MAX(c.fecha_hora) as ultima')
                 ->get();
             $nombres = DB::table('users')->whereIn('IdUsuario', $filas->pluck('usuario'))->get(['IdUsuario', 'apeusu', 'name'])->keyBy('IdUsuario');
+            // Lo de cada uno en cada noche (o día)
+            $porNoche = $corte === null ? collect() : $base()->whereNotNull($columna)->groupBy($columna, DB::raw($noche))
+                ->selectRaw($columna.' as usuario, '.$noche.' as dia, SUM('.self::SIGNO.' * c.ccaitv) as total')->get()->groupBy('usuario');
+            foreach ($porNoche->flatten(1) as $f) {
+                $dias[$f->dia] = true;
+            }
 
             return $filas->map(fn ($f) => (object) [
                 'nombre' => trim((string) ($nombres[$f->usuario]->apeusu ?? '')) ?: (string) ($nombres[$f->usuario]->name ?? 'Usuario '.$f->usuario),
@@ -242,14 +253,31 @@ class PanelDueno
                 'promedio' => $f->tickets ? round((float) $f->total / $f->tickets, 2) : 0.0,
                 'participacion' => $suma > 0 ? round((float) $f->total / $suma * 100, 1) : 0.0,
                 'primera' => $f->primera, 'ultima' => $f->ultima,
+                'porNoche' => ($porNoche[$f->usuario] ?? collect())->mapWithKeys(fn ($n) => [(string) $n->dia => round((float) $n->total, 2)])->all(),
+                'noches' => ($porNoche[$f->usuario] ?? collect())->count(),
             ])->sortByDesc('total')->values();
         };
-
-        return [
+        $resultado = [
             'total' => (object) ['total' => $suma, 'tickets' => (int) $total->tickets, 'promedio' => $total->tickets ? round($suma / $total->tickets, 2) : 0.0],
             'mozos' => $por('c.mozo'), 'cajeros' => $por('c.IdUsuario'), 'promotores' => $por('c.promotor_id'),
             'sinMozo' => round((float) $base()->whereNull('c.mozo')->sum(DB::raw(self::SIGNO.' * c.ccaitv')), 2),
         ];
+        ksort($dias);
+
+        return $resultado + ['dias' => array_keys($dias)];
+    }
+
+    /**
+     * Turnos de caja abiertos entre dos momentos (para elegir cuáles sumar en una semana, un mes o un rango)
+     *
+     * @return Collection<int, object>
+     */
+    public static function turnosEntre(int $suc, Carbon $desde, Carbon $hasta): Collection
+    {
+        return DB::table('turnos as t')->leftJoin('users as u', 'u.IdUsuario', '=', 't.IdUsuario')
+            ->where('t.id_empresa_negocio', $suc)->whereBetween('t.apertura', [$desde, $hasta])
+            ->orderBy('t.apertura')->limit(400)
+            ->get(['t.id_turno', 't.turno', 't.estado', 't.apertura', 't.cierre', DB::raw("COALESCE(NULLIF(u.apeusu, ''), u.name) as cajero")]);
     }
 
     /**

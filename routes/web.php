@@ -74,6 +74,7 @@ use App\Http\Controllers\NotaController;
 use App\Http\Controllers\PanelDuenoController;
 use App\Http\Controllers\PisoController;
 use App\Http\Controllers\PlanillaController;
+use App\Http\Controllers\PlanoMesasController;
 use App\Http\Controllers\PosMovilController;
 use App\Http\Controllers\PreparadoController;
 use App\Http\Controllers\PrestamoClienteController;
@@ -83,6 +84,7 @@ use App\Http\Controllers\PrestamoController;
 use App\Http\Controllers\PrestamoReporteController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProformaController;
+use App\Http\Controllers\PromocionVentaController;
 use App\Http\Controllers\PromotorController;
 use App\Http\Controllers\PropinaController;
 use App\Http\Controllers\PuntoVentaController;
@@ -159,6 +161,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/cupones', [CuponController::class, 'index'])->name('cupones.index');
     Route::post('/cupones/{id?}', [CuponController::class, 'guardar'])->whereNumber('id')->name('cupones.guardar');
     Route::post('/cupones/{id}/estado', [CuponController::class, 'estado'])->whereNumber('id')->name('cupones.estado');
+    Route::get('/promociones', [PromocionVentaController::class, 'index'])->name('promociones.index');
+    Route::post('/promociones/{id?}', [PromocionVentaController::class, 'guardar'])->whereNumber('id')->name('promociones.guardar');
+    Route::post('/promociones/{id}/estado', [PromocionVentaController::class, 'estado'])->whereNumber('id')->name('promociones.estado');
+    Route::post('/promociones/{id}/eliminar', [PromocionVentaController::class, 'eliminar'])->whereNumber('id')->name('promociones.eliminar');
     Route::get('/reportes/consumo-cajas/excel', [ConsumoCajasController::class, 'excel'])->name('consumo_cajas.excel');
     Route::post('/comandas/carrito/vaciar', [ComandaCarritoController::class, 'clearCart'])->name('comandas.clear_cart');
     Route::get('/comandas/solicitudes', [SolicitudCartaController::class, 'index'])->name('comandas.solicitudes');
@@ -1019,6 +1025,8 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('productos', ProductoController::class)->except('show');
     Route::resource('categorias', CategoriaController::class)->except('show');
+    Route::get('mesas/plano', [PlanoMesasController::class, 'index'])->name('mesas.plano');
+    Route::post('mesas/plano/{piso}', [PlanoMesasController::class, 'guardar'])->whereNumber('piso')->name('mesas.plano.guardar');
     Route::post('mesas/lote', [MesaController::class, 'lote'])->name('mesas.lote');
     Route::resource('mesas', MesaController::class)->except('show');
     Route::resource('pisos', PisoController::class)->except('show');

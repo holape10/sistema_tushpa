@@ -114,6 +114,7 @@ class TurnoController extends Controller
         return view('empresas.turnos.panel', [
             'turno' => $turno, 'r' => $resumen, 'tiposCaja' => $tiposCaja,
             'pedidosAbiertos' => $pedidosAbiertos, 'denominaciones' => Turno::DENOMINACIONES,
+            'ciego' => $turno->esCiegoPara($user),
         ]);
     }
 
@@ -209,7 +210,11 @@ class TurnoController extends Controller
         $this->autorizar();
         $user = Auth::user();
 
-        $request->validate(['montocierre' => 'nullable|numeric|min:0'], [], ['montocierre' => 'Efectivo contado']);
+        // Cierre ciego: el cajero tiene que contar el efectivo (con el monto o billete por billete)
+        $abierto = Turno::abiertoDe($user);
+        $contoBilletes = collect(array_keys(Turno::DENOMINACIONES))->contains(fn ($campo) => (int) $request->input('cierre_'.$campo, 0) > 0);
+        $request->validate(['montocierre' => [$abierto?->esCiegoPara($user) && ! $contoBilletes ? 'required' : 'nullable', 'numeric', 'min:0']],
+            ['montocierre.required' => 'Cuenta el efectivo de la caja y escribe cuánto hay para cerrar el turno.'], ['montocierre' => 'Efectivo contado']);
 
         $idTurno = DB::transaction(function () use ($request, $user) {
             $turno = Turno::where('IdUsuario', $user->IdUsuario)
@@ -364,6 +369,10 @@ class TurnoController extends Controller
     {
         $this->autorizar();
         $turno = $this->turnoVisible($id);
+        // Cierre ciego: lo esperado se ve recién al cerrar
+        if ($turno->esCiegoPara(Auth::user())) {
+            return redirect()->route('turnos.index')->with('error', 'El reporte del turno se ve al cerrarlo.');
+        }
         $r = self::resumen($turno);
 
         return view('empresas.turnos.show', [
