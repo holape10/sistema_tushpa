@@ -58,8 +58,9 @@ class ComandasController extends Controller
         $miMeta = Auth::user()->esMozo() ? MetasMozo::delMozo((int) $id_empresa_negocio, (int) Auth::id()) : null;
         // Pedidos, llamadas y cuentas que piden los clientes desde el QR de su mesa
         $cartaMesa = (bool) DB::table('empresa_negocios')->where('id_empresa_negocio', $id_empresa_negocio)->value('carta_pedido_mesa');
+        $fotoRedes = self::fotoRedes((int) $id_empresa_negocio);
 
-        return view('empresas.comandas.seleccion_servicio', compact('pisos', 'mesas', 'primerPisoId', 'puedeCobrar', 'permisos', 'miMeta', 'cartaMesa'));
+        return view('empresas.comandas.seleccion_servicio', compact('pisos', 'mesas', 'primerPisoId', 'puedeCobrar', 'permisos', 'miMeta', 'cartaMesa', 'fotoRedes'));
     }
 
     /**

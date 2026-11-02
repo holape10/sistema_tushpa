@@ -155,9 +155,16 @@
                 @endif
                 <button type="button" id="btn_modal_cambiar" class="{{ $btnModal }} bg-amber-500">⇄ Pasar a otra mesa</button>
                 <button type="button" id="btn_modal_unir" class="{{ $btnModal }} bg-cyan-600">🔗 Juntar mesas</button>
+                @if ($fotoRedes)
+                    <button type="button" onclick="cerrarModal('modal_mesa'); window.dispatchEvent(new CustomEvent('foto-redes'))"
+                            class="{{ $btnModal }} col-span-2 bg-pink-600">📸 Foto para redes</button>
+                @endif
             </div>
         </div>
     </div>
+    @if ($fotoRedes)
+        @include('empresas.comandas.partials.foto_redes')
+    @endif
 
     {{-- Reservas de hoy --}}
     <div id="modal_reservas" class="modal-t fixed inset-0 z-50 hidden items-end justify-center bg-black/50 sm:items-center sm:p-4">
