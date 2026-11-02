@@ -282,7 +282,7 @@
                                         <p class="text-sm font-semibold text-gray-700 mb-1">Estilo del marco</p>
                                         <div class="grid grid-cols-3 gap-2">
                                             @foreach (['DEGRADADO' => ['🌅', 'Sombra', 'Sobre la foto'], 'BANDA' => ['▬', 'Franja', 'Debajo de la foto'], 'BORDE' => ['🖼️', 'Marco', 'Alrededor, tipo polaroid']] as $valor => [$icono, $titulo, $detalle])
-                                                <label class="cursor-pointer rounded-xl border-2 px-2 py-2 text-center transition" :class="estilo === '{{ $valor }}' ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-200 hover:border-gray-300'">
+                                                <label class="relative cursor-pointer rounded-xl border-2 px-2 py-2 text-center transition" :class="estilo === '{{ $valor }}' ? 'border-indigo-500 bg-indigo-50/50' : 'border-gray-200 hover:border-gray-300'">
                                                     <input type="radio" name="foto_marco_estilo" value="{{ $valor }}" x-model="estilo" class="sr-only">
                                                     <span class="block text-lg">{{ $icono }}</span><span class="block text-sm font-bold text-gray-800">{{ $titulo }}</span>
                                                     <span class="block text-[11px] text-gray-500">{{ $detalle }}</span>
