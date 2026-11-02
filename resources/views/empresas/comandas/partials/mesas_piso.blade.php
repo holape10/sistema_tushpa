@@ -8,8 +8,11 @@
     @include('empresas.comandas.partials.mesas_grid', ['mesas' => $mesas])
 @else
     <div class="col-span-full overflow-x-auto -mx-1 px-1 pb-2">
-        @php $alto = $alto ?? \App\Support\PlanoMesas::ALTO; @endphp
-        <div class="plano-lienzo relative w-full rounded-2xl bg-slate-50 ring-1 ring-slate-200" style="aspect-ratio: 1000 / {{ $alto }}; width: min(100%, calc(75vh * 1000 / {{ $alto }})); margin: 0 auto; min-width: {{ $alto > 1000 ? 300 : 640 }}px">
+        @php
+            $alto = $alto ?? \App\Support\PlanoMesas::ALTO;
+            $ancho = $ancho ?? \App\Support\PlanoMesas::ANCHO;
+        @endphp
+        <div class="plano-lienzo relative w-full rounded-2xl bg-slate-50 ring-1 ring-slate-200" style="aspect-ratio: {{ $ancho }} / {{ $alto }}; width: {{ round(100 * $ancho / max($ancho, 1000), 3) }}%; min-width: {{ round(640 * $ancho / max($ancho, 1000)) }}px">
             @foreach ($elementos ?? [] as $e)
                 @php
                     $c = $e->color ?: (\App\Support\PlanoMesas::ELEMENTOS[$e->tipo][2] ?? '#475569');
@@ -21,11 +24,11 @@
                     };
                 @endphp
                 <div class="pointer-events-none absolute z-10 flex items-center justify-center text-center text-[11px] font-bold leading-tight sm:text-xs"
-                     style="{{ \App\Support\PlanoMesas::estilo($e->x, $e->y, $e->w, $e->h, $alto) }};{{ $estiloElemento }}">
+                     style="{{ \App\Support\PlanoMesas::estilo($e->x, $e->y, $e->w, $e->h, $alto, $ancho) }};{{ $estiloElemento }}">
                     {{ trim((\App\Support\PlanoMesas::ELEMENTOS[$e->tipo][0] ?? '').' '.$e->texto) }}</div>
             @endforeach
             @foreach ($enPlano as $m)
-                @include('empresas.comandas.partials.mesa_boton', ['m' => $m, 'plano' => true, 'alto' => $alto])
+                @include('empresas.comandas.partials.mesa_boton', ['m' => $m, 'plano' => true, 'alto' => $alto, 'ancho' => $ancho])
             @endforeach
         </div>
     </div>

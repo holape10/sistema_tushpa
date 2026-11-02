@@ -38,15 +38,24 @@ class PlanoMesas
 
     public const MINIMO = 20;
 
-    /** Alto del ambiente que se puede elegir (el ancho siempre es 1000): de bien apaisado a bien alargado */
-    public const ALTO_MIN = 400;
+    /** 1 unidad del plano = 2 cm: 50 unidades por metro (el plano de siempre, 1000 x 625, es un local de 20 x 12.5 m) */
+    public const POR_METRO = 50;
 
-    public const ALTO_MAX = 2000;
+    /** Medidas del local que se pueden poner: de 2 m a 60 m de ancho o de largo */
+    public const MEDIDA_MIN = 100;
 
-    /** Alto del ambiente de un piso (625 si nunca se cambió) */
+    public const MEDIDA_MAX = 3000;
+
+    /** Largo del local de un piso, en unidades (625 si nunca se cambió) */
     public static function alto(int $piso): int
     {
         return (int) (DB::table('pisos')->where('pis_id', $piso)->value('plano_alto') ?: self::ALTO);
+    }
+
+    /** Ancho del local de un piso, en unidades (1000 si nunca se cambió) */
+    public static function ancho(int $piso): int
+    {
+        return (int) (DB::table('pisos')->where('pis_id', $piso)->value('plano_ancho') ?: self::ANCHO);
     }
 
     /** ¿La sucursal ve sus mesas en el plano? */
@@ -76,12 +85,13 @@ class PlanoMesas
      * @param  array<int, array{tipo: string, texto: ?string, x: int, y: int, w: int, h: int, color: ?string}>  $elementos
      * @return int mesas en el plano
      */
-    public static function guardar(int $sucursal, int $idEmpresa, int $piso, array $mesas, array $elementos, int $alto = self::ALTO, array $eliminar = []): int
+    public static function guardar(int $sucursal, int $idEmpresa, int $piso, array $mesas, array $elementos, int $alto = self::ALTO, array $eliminar = [], int $ancho = self::ANCHO): int
     {
-        $alto = (int) max(self::ALTO_MIN, min(self::ALTO_MAX, round($alto / 5) * 5));
+        $alto = (int) max(self::MEDIDA_MIN, min(self::MEDIDA_MAX, round($alto / 5) * 5));
+        $ancho = (int) max(self::MEDIDA_MIN, min(self::MEDIDA_MAX, round($ancho / 5) * 5));
 
-        return DB::transaction(function () use ($sucursal, $idEmpresa, $piso, $mesas, $elementos, $alto, $eliminar) {
-            DB::table('pisos')->where('pis_id', $piso)->update(['plano_alto' => $alto]);
+        return DB::transaction(function () use ($sucursal, $idEmpresa, $piso, $mesas, $elementos, $alto, $eliminar, $ancho) {
+            DB::table('pisos')->where('pis_id', $piso)->update(['plano_alto' => $alto, 'plano_ancho' => $ancho]);
             // Mesas que el dueño eliminó en el plano (una ocupada no: primero se cobra o se libera)
             foreach (Mesa::where('id_empresa_negocio', $sucursal)->where('pis_id', $piso)->whereIn('mes_id', array_map('intval', $eliminar) ?: [0])->get() as $mesa) {
                 if (MesasUnidas::pedidoDe($mesa->mes_id)) {
@@ -108,10 +118,10 @@ class PlanoMesas
                 }
                 $nombres[$nombre] = true;
                 $forma = array_key_exists($m['forma'] ?? '', self::FORMAS) ? $m['forma'] : 'CUADRADA';
-                $w = self::medida($m['w'] ?? 90, self::MINIMO, self::ANCHO);
+                $w = self::medida($m['w'] ?? 90, self::MINIMO, $ancho);
                 $h = self::medida($m['h'] ?? 90, self::MINIMO, $alto);
                 $fila = ['mes_nom' => $nombre, 'plano_forma' => $forma, 'plano_w' => $w, 'plano_h' => $h,
-                    'plano_x' => self::medida($m['x'] ?? 0, 0, self::ANCHO - $w), 'plano_y' => self::medida($m['y'] ?? 0, 0, $alto - $h)];
+                    'plano_x' => self::medida($m['x'] ?? 0, 0, $ancho - $w), 'plano_y' => self::medida($m['y'] ?? 0, 0, $alto - $h)];
                 $id = (int) ($m['id'] ?? 0);
                 if ($id && $propias->has($id)) {
                     Mesa::where('mes_id', $id)->update($fila);
@@ -130,12 +140,12 @@ class PlanoMesas
                 if (! array_key_exists($e['tipo'] ?? '', self::ELEMENTOS)) {
                     continue;
                 }
-                $w = self::medida($e['w'] ?? 100, 10, self::ANCHO);
+                $w = self::medida($e['w'] ?? 100, 10, $ancho);
                 $h = self::medida($e['h'] ?? 40, 10, $alto);
                 DB::table('plano_elementos')->insert([
                     'id_empresa_negocio' => $sucursal, 'pis_id' => $piso, 'tipo' => $e['tipo'],
                     'texto' => trim(mb_substr((string) ($e['texto'] ?? ''), 0, 40)) ?: null,
-                    'x' => self::medida($e['x'] ?? 0, 0, self::ANCHO - $w), 'y' => self::medida($e['y'] ?? 0, 0, $alto - $h), 'w' => $w, 'h' => $h,
+                    'x' => self::medida($e['x'] ?? 0, 0, $ancho - $w), 'y' => self::medida($e['y'] ?? 0, 0, $alto - $h), 'w' => $w, 'h' => $h,
                     'color' => preg_match('/^#[0-9a-f]{6}$/i', (string) ($e['color'] ?? '')) ? strtolower($e['color']) : self::ELEMENTOS[$e['tipo']][2],
                 ]);
             }
@@ -145,10 +155,10 @@ class PlanoMesas
     }
 
     /** Estilo de posición de algo en el plano (en % del lienzo, así se ve igual en cualquier pantalla) */
-    public static function estilo(int|float $x, int|float $y, int|float $w, int|float $h, int $alto = self::ALTO): string
+    public static function estilo(int|float $x, int|float $y, int|float $w, int|float $h, int $alto = self::ALTO, int $ancho = self::ANCHO): string
     {
         $p = fn ($v, $total) => round($v / $total * 100, 3).'%';
 
-        return 'left:'.$p($x, self::ANCHO).';top:'.$p($y, $alto).';width:'.$p($w, self::ANCHO).';height:'.$p($h, $alto);
+        return 'left:'.$p($x, $ancho).';top:'.$p($y, $alto).';width:'.$p($w, $ancho).';height:'.$p($h, $alto);
     }
 }

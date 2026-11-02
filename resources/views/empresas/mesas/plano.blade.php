@@ -4,7 +4,7 @@
 @use('App\Support\PlanoMesas')
     {{-- En el celular el dedo arrastra la mesa, no la página --}}
     <style>.plano-item { touch-action: none; -webkit-user-select: none; user-select: none; }</style>
-    <div class="space-y-4" x-data="planoEditor({ mesas: @js($mesas), elementos: @js($elementos), usaPlano: @js($usaPlano), alto: @js($alto),
+    <div class="space-y-4" x-data="planoEditor({ mesas: @js($mesas), elementos: @js($elementos), usaPlano: @js($usaPlano), alto: @js($alto), ancho: @js($ancho),
             formas: @js(PlanoMesas::FORMAS), tipos: @js(PlanoMesas::ELEMENTOS), url: @js($piso ? route('mesas.plano.guardar', $piso->pis_id) : null) })"
          @keydown.window.delete="if (!['INPUT','TEXTAREA'].includes($event.target.tagName)) quitar()">
         <section class="rounded-3xl bg-gradient-to-br from-slate-800 to-indigo-900 text-white p-5 sm:p-6 shadow-lg">
@@ -35,7 +35,7 @@
                 {{-- Lienzo --}}
                 <div class="bg-white rounded-2xl shadow-sm p-3 overflow-x-auto">
                     <div x-ref="lienzo" class="relative w-full rounded-xl bg-slate-50 ring-1 ring-slate-200 select-none overflow-hidden"
-                         :style="'aspect-ratio: 1000 / ' + alto + '; width: min(100%, calc(72vh * 1000 / ' + alto + ')); margin: 0 auto; min-width: ' + (alto > 1000 ? 260 : 560) + 'px; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px;'"
+                         :style="'aspect-ratio: ' + ancho + ' / ' + alto + '; width: ' + (100 * ancho / Math.max(ancho, 1000)) + '%; min-width: ' + Math.round(560 * ancho / Math.max(ancho, 1000)) + 'px; background-image: radial-gradient(#94a3b8 1.2px, transparent 1.2px); background-size: ' + (5000 / ancho) + '% ' + (5000 / alto) + '%;'"
                          @pointerdown.self="sel = null">
                         {{-- Barra, paredes, DJ... (debajo de las mesas) --}}
                         <template x-for="(e, i) in elementos" :key="'e' + i">
@@ -65,7 +65,7 @@
                     <div class="bg-white rounded-2xl shadow-sm p-4" x-show="sel" x-cloak>
                         <template x-if="sel && sel.kind === 'mesa'">
                             <div class="space-y-3">
-                                <p class="font-bold text-gray-800">Mesa elegida</p>
+                                <p class="font-bold text-gray-800">Mesa elegida <span class="text-xs font-normal text-gray-500" x-text="metros(actual().w) + ' × ' + metros(actual().h) + ' m'"></span></p>
                                 <label class="block text-sm text-gray-600">Nombre
                                     <input x-model="actual().nombre" @input="cambios = true" maxlength="40" class="mt-1 w-full h-10 rounded-lg border-gray-300 uppercase font-bold"></label>
                                 <div class="grid grid-cols-2 gap-1.5">
@@ -104,20 +104,16 @@
                     </div>
 
                     <div class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
-                        <p class="font-bold text-gray-800">📐 Forma del ambiente</p>
-                        <div class="grid grid-cols-3 gap-1.5">
-                            <template x-for="[nombre, valor] in [['▭ Ancho', 625], ['□ Cuadrado', 1000], ['▯ Largo', 1600]]" :key="valor">
-                                <button type="button" @click="cambiarAlto(valor)" class="h-9 rounded-lg text-xs font-bold"
-                                        :class="alto === valor ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'" x-text="nombre"></button>
-                            </template>
+                        <p class="font-bold text-gray-800">📏 Medidas del local</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="text-xs font-semibold text-gray-600">↔ Ancho
+                                <span class="mt-1 flex items-center gap-1"><input type="number" min="2" max="60" step="0.5" :value="metros(ancho)" @change="cambiarMedidas(Number($event.target.value), metros(alto))"
+                                    class="w-full h-10 rounded-lg border-gray-300 text-center font-bold"> m</span></label>
+                            <label class="text-xs font-semibold text-gray-600">↕ Largo
+                                <span class="mt-1 flex items-center gap-1"><input type="number" min="2" max="60" step="0.5" :value="metros(alto)" @change="cambiarMedidas(metros(ancho), Number($event.target.value))"
+                                    class="w-full h-10 rounded-lg border-gray-300 text-center font-bold"> m</span></label>
                         </div>
-                        <label class="block text-xs font-semibold text-gray-600 mt-1">↔ Ancho del local</label>
-                        <div class="flex items-center gap-2 text-[11px] text-gray-500">
-                            <span>Angosto</span>
-                            <input type="range" min="500" max="2500" step="25" :value="Math.round(1000000 / alto)" @input="cambiarAlto(Math.round(1000000 / Number($event.target.value)))" class="flex-1">
-                            <span>Ancho</span>
-                        </div>
-                        <p class="text-[11px] text-gray-500" x-text="alto < 1000 ? 'Más ancho que largo' : (alto === 1000 ? 'Cuadrado' : 'Más largo que ancho (angosto)')"></p>
+                        <p class="text-[11px] text-gray-500">Las medidas reales del ambiente. Las mesas conservan su tamaño: si achicas el local, queda menos espacio alrededor. Cada punto de la cuadrícula es 1 metro.</p>
                     </div>
 
                     <div class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
@@ -157,7 +153,7 @@
 
     <script>
         function planoEditor(cfg) {
-            const ANCHO = {{ PlanoMesas::ANCHO }}, ALTO_MIN = {{ PlanoMesas::ALTO_MIN }}, ALTO_MAX = {{ PlanoMesas::ALTO_MAX }};
+            const POR_METRO = {{ PlanoMesas::POR_METRO }}, MEDIDA_MIN = {{ PlanoMesas::MEDIDA_MIN }}, MEDIDA_MAX = {{ PlanoMesas::MEDIDA_MAX }};
             const paso = v => Math.round(v / 5) * 5;
             const entre = (v, min, max) => Math.max(min, Math.min(max, v));
             return {
@@ -166,7 +162,7 @@
                 init() {
                     window.addEventListener('beforeunload', e => { if (this.cambios) { e.preventDefault(); e.returnValue = ''; } });
                 },
-                pos(o) { return `left:${o.x / ANCHO * 100}%;top:${o.y / this.alto * 100}%;width:${o.w / ANCHO * 100}%;height:${o.h / this.alto * 100}%`; },
+                pos(o) { return `left:${o.x / this.ancho * 100}%;top:${o.y / this.alto * 100}%;width:${o.w / this.ancho * 100}%;height:${o.h / this.alto * 100}%`; },
                 claseMesa(m) {
                     return { REDONDA: 'rounded-full bg-emerald-600', CUADRADA: 'rounded-xl bg-emerald-600', RECTANGULAR: 'rounded-xl bg-emerald-600',
                         BOX: 'rounded-2xl bg-violet-700 border-2 border-amber-300' }[m.forma] || 'rounded-xl bg-emerald-600';
@@ -183,12 +179,16 @@
                 sinUbicar() { return this.mesas.filter(m => !m.ubicada && m.id); },
                 /** Que nada quede fuera del lienzo (al moverlo o al achicar el ambiente) */
                 acomodar(o) {
-                    o.w = entre(o.w, 10, ANCHO); o.h = entre(o.h, 10, this.alto);
-                    o.x = entre(o.x, 0, ANCHO - o.w); o.y = entre(o.y, 0, this.alto - o.h);
+                    o.w = entre(o.w, 10, this.ancho); o.h = entre(o.h, 10, this.alto);
+                    o.x = entre(o.x, 0, this.ancho - o.w); o.y = entre(o.y, 0, this.alto - o.h);
                 },
-                /** Forma del ambiente: el ancho es fijo (1000) y el alto se elige */
-                cambiarAlto(valor) {
-                    this.alto = entre(paso(valor), ALTO_MIN, ALTO_MAX);
+                /** Unidades del plano a metros (1 unidad = 2 cm) */
+                metros(u) { return Math.round((Number(u) || 0) / POR_METRO * 10) / 10; },
+                /** Medidas reales del local: las mesas conservan su tamaño; lo que queda fuera se acomoda adentro */
+                cambiarMedidas(anchoM, largoM) {
+                    if (!(anchoM > 0) || !(largoM > 0)) return;
+                    this.ancho = entre(paso(anchoM * POR_METRO), MEDIDA_MIN, MEDIDA_MAX);
+                    this.alto = entre(paso(largoM * POR_METRO), MEDIDA_MIN, MEDIDA_MAX);
                     [...this.mesas.filter(m => m.ubicada), ...this.elementos].forEach(o => this.acomodar(o));
                     this.cambios = true;
                 },
@@ -199,7 +199,7 @@
                     const o = kind === 'mesa' ? this.mesas[idx] : this.elementos[idx];
                     // En el celular el dedo queda "pegado" a la mesa aunque salga de ella
                     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* sin captura: igual funciona con el mouse */ }
-                    const escala = ANCHO / this.$refs.lienzo.getBoundingClientRect().width;
+                    const escala = this.ancho / this.$refs.lienzo.getBoundingClientRect().width;
                     const ini = { px: e.clientX, py: e.clientY, x: o.x, y: o.y, w: o.w, h: o.h };
                     const minimo = kind === 'mesa' ? 20 : 10;
                     const mover = ev => {
@@ -207,10 +207,10 @@
                         if (Math.abs(dx) + Math.abs(dy) < 2) return;
                         ev.preventDefault();
                         if (modo === 'mover') {
-                            o.x = entre(paso(ini.x + dx), 0, ANCHO - o.w);
+                            o.x = entre(paso(ini.x + dx), 0, this.ancho - o.w);
                             o.y = entre(paso(ini.y + dy), 0, this.alto - o.h);
                         } else {
-                            o.w = entre(paso(ini.w + dx), minimo, ANCHO - o.x);
+                            o.w = entre(paso(ini.w + dx), minimo, this.ancho - o.x);
                             o.h = entre(paso(ini.h + dy), minimo, this.alto - o.y);
                             if (o.forma === 'REDONDA') o.h = o.w = Math.min(o.w, this.alto - o.y);
                         }
@@ -228,13 +228,13 @@
                 /** Botones de mover y de tamaño (fácil en el celular) */
                 mover(dx, dy) {
                     const o = this.actual();
-                    o.x = entre(o.x + dx, 0, ANCHO - o.w); o.y = entre(o.y + dy, 0, this.alto - o.h);
+                    o.x = entre(o.x + dx, 0, this.ancho - o.w); o.y = entre(o.y + dy, 0, this.alto - o.h);
                     this.cambios = true;
                 },
                 crecer(d) {
                     const o = this.actual();
                     const minimo = this.sel.kind === 'mesa' ? 20 : 10;
-                    o.w = entre(o.w + d, minimo, ANCHO - o.x);
+                    o.w = entre(o.w + d, minimo, this.ancho - o.x);
                     o.h = o.forma === 'REDONDA' ? o.w : entre(o.h + d, minimo, this.alto - o.y);
                     this.acomodar(o);
                     this.cambios = true;
@@ -243,11 +243,11 @@
                 lugarLibre(w, h) {
                     const ocupados = [...this.mesas.filter(m => m.ubicada), ...this.elementos];
                     for (let y = 20; y + h <= this.alto; y += 25) {
-                        for (let x = 20; x + w <= ANCHO; x += 25) {
+                        for (let x = 20; x + w <= this.ancho; x += 25) {
                             if (!ocupados.some(o => x < o.x + o.w + 10 && x + w + 10 > o.x && y < o.y + o.h + 10 && y + h + 10 > o.y)) return { x, y };
                         }
                     }
-                    return { x: paso((ANCHO - w) / 2), y: paso(Math.max(0, this.alto - h) / 2) };
+                    return { x: paso((this.ancho - w) / 2), y: paso(Math.max(0, this.alto - h) / 2) };
                 },
                 siguienteNombre(prefijo) {
                     const usados = this.mesas.map(m => (m.nombre || '').trim().toUpperCase());
@@ -338,7 +338,7 @@
                     this.guardando = true; this.mensaje = '';
                     const cuerpo = {
                         mesas: this.mesas.filter(m => m.ubicada).map(({ id, nombre, forma, x, y, w, h }) => ({ id, nombre, forma, x, y, w, h })),
-                        elementos: this.elementos, usar_plano: this.usaPlano, alto: this.alto, eliminar: this.eliminar,
+                        elementos: this.elementos, usar_plano: this.usaPlano, alto: this.alto, ancho: this.ancho, eliminar: this.eliminar,
                     };
                     const r = await fetch(this.url, { method: 'POST', body: JSON.stringify(cuerpo),
                         headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) } }).catch(() => null);

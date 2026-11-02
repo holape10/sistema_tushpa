@@ -92,7 +92,7 @@ class PlanoMesasTest extends FlujoTestCase
         $this->assertSame(1600, (int) DB::table('pisos')->where('pis_id', $this->piso)->value('plano_alto'));
         $this->assertSame(1400, (int) DB::table('mesas')->where('mes_id', $this->mesa1)->value('plano_y'), 'En un ambiente largo la mesa puede ir más abajo.');
         $this->get(route('comandas.seleccion'))->assertOk()->assertSee('aspect-ratio: 1000 / 1600', false);
-        $this->get(route('mesas.plano'))->assertOk()->assertSee('Forma del ambiente');
+        $this->get(route('mesas.plano'))->assertOk()->assertSee('Medidas del local');
 
         // Si se achica el ambiente, nada queda fuera
         $this->postJson(route('mesas.plano.guardar', $this->piso), [
@@ -100,5 +100,19 @@ class PlanoMesasTest extends FlujoTestCase
             'elementos' => [], 'alto' => 625,
         ])->assertOk();
         $this->assertSame(535, (int) DB::table('mesas')->where('mes_id', $this->mesa1)->value('plano_y'));
+    }
+
+    public function test_un_local_de_12_por_30_metros_conserva_el_tamano_de_las_mesas(): void
+    {
+        // 12 m = 600 unidades de ancho, 30 m = 1500 de largo (1 unidad = 2 cm); un box de 4 m (200) sigue midiendo 4 m
+        $this->postJson(route('mesas.plano.guardar', $this->piso), [
+            'mesas' => [['id' => $this->mesa1, 'nombre' => 'BOX 01', 'forma' => 'BOX', 'x' => 900, 'y' => 1000, 'w' => 200, 'h' => 130]],
+            'elementos' => [], 'ancho' => 600, 'alto' => 1500, 'usar_plano' => true,
+        ])->assertOk();
+        $this->assertSame([600, 1500], [(int) DB::table('pisos')->where('pis_id', $this->piso)->value('plano_ancho'), (int) DB::table('pisos')->where('pis_id', $this->piso)->value('plano_alto')]);
+        $box = DB::table('mesas')->where('mes_id', $this->mesa1)->first();
+        $this->assertSame([200, 400], [(int) $box->plano_w, (int) $box->plano_x], 'El box mide lo mismo y se acomoda dentro de los 12 m (600 - 200).');
+        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('aspect-ratio: 600 / 1500', false);
+        $this->get(route('mesas.plano'))->assertOk()->assertSee('Medidas del local');
     }
 }

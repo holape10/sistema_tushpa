@@ -36,6 +36,7 @@ class PlanoMesasController extends Controller
                 'x' => (int) $e->x, 'y' => (int) $e->y, 'w' => (int) $e->w, 'h' => (int) $e->h, 'color' => $e->color])->values() : collect(),
             'usaPlano' => PlanoMesas::usaPlano($suc),
             'alto' => $piso ? PlanoMesas::alto((int) $piso->pis_id) : PlanoMesas::ALTO,
+            'ancho' => $piso ? PlanoMesas::ancho((int) $piso->pis_id) : PlanoMesas::ANCHO,
         ]);
     }
 
@@ -51,12 +52,13 @@ class PlanoMesasController extends Controller
             'elementos.*.x' => 'required|numeric', 'elementos.*.y' => 'required|numeric', 'elementos.*.w' => 'required|numeric', 'elementos.*.h' => 'required|numeric',
             'elementos.*.color' => 'nullable|string|max:7',
             'usar_plano' => 'nullable|boolean',
-            'alto' => 'nullable|integer|min:'.PlanoMesas::ALTO_MIN.'|max:'.PlanoMesas::ALTO_MAX,
+            'alto' => 'nullable|integer|min:'.PlanoMesas::MEDIDA_MIN.'|max:'.PlanoMesas::MEDIDA_MAX,
+            'ancho' => 'nullable|integer|min:'.PlanoMesas::MEDIDA_MIN.'|max:'.PlanoMesas::MEDIDA_MAX,
             'eliminar' => 'nullable|array|max:300', 'eliminar.*' => 'integer',
         ]);
         try {
             $n = PlanoMesas::guardar($suc, (int) Auth::user()->IdEmpresa, $piso, $d['mesas'], $d['elementos'],
-                (int) ($d['alto'] ?? PlanoMesas::alto($piso)), $d['eliminar'] ?? []);
+                (int) ($d['alto'] ?? PlanoMesas::alto($piso)), $d['eliminar'] ?? [], (int) ($d['ancho'] ?? PlanoMesas::ancho($piso)));
         } catch (\RuntimeException $e) {
             return response()->json(['ok' => false, 'mensaje' => $e->getMessage()], 422);
         }
