@@ -56,6 +56,8 @@ class Provisionador
                 'estado' => 'ACTIVO',
                 'plan' => $d['plan'] ?? null,
                 'vence_el' => $d['vence_el'] ?? null,
+                'representante' => isset($d['representante']) ? mb_strtoupper(trim($d['representante'])) ?: null : null,
+                'representante_dni' => $d['representante_dni'] ?? null,
                 'contacto_nombre' => $d['contacto_nombre'] ?? null,
                 'contacto_telefono' => $d['contacto_telefono'] ?? null,
                 'contacto_correo' => $d['contacto_correo'] ?? null,

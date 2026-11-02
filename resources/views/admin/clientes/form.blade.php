@@ -118,6 +118,15 @@
                     <span class="text-sm font-semibold text-slate-600">Vence el</span>
                     <input type="date" name="vence_el" value="{{ old('vence_el', $cliente->vence_el?->format('Y-m-d')) }}" class="mt-1 w-full rounded-xl border-slate-300">
                 </label>
+                {{-- Representante legal: sale en su contrato de servicio --}}
+                <label class="block">
+                    <span class="text-sm font-semibold text-slate-600">Representante legal</span>
+                    <input type="text" name="representante" value="{{ old('representante', $cliente->representante) }}" maxlength="150" placeholder="Nombres y apellidos" class="mt-1 w-full rounded-xl border-slate-300 uppercase">
+                </label>
+                <label class="block">
+                    <span class="text-sm font-semibold text-slate-600">DNI del representante</span>
+                    <input type="text" name="representante_dni" value="{{ old('representante_dni', $cliente->representante_dni) }}" maxlength="12" inputmode="numeric" class="mt-1 w-full rounded-xl border-slate-300">
+                </label>
                 <label class="block">
                     <span class="text-sm font-semibold text-slate-600">Contacto</span>
                     <input type="text" name="contacto_nombre" value="{{ old('contacto_nombre', $cliente->contacto_nombre) }}" class="mt-1 w-full rounded-xl border-slate-300">

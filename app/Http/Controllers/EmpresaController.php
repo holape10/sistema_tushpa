@@ -8,6 +8,8 @@ use App\Support\EmpresaInicial;
 use App\Support\LogoNegocio;
 use App\Support\Sunat\Certificado;
 use App\Support\Sunat\Sire;
+use App\Support\Tenancy\Contratos;
+use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -90,7 +92,11 @@ class EmpresaController extends Controller
         } catch (\Exception $e) {
         }
 
-        return view('empresas.edit', compact('empresa', 'tip_env_fac'));
+        // Su contrato de servicio con TUSHPA (multi-empresa), para verlo con sus documentos
+        $cliente = Tenancy::cliente();
+        $contrato = $cliente ? Contratos::deCliente($cliente->id) : null;
+
+        return view('empresas.edit', compact('empresa', 'tip_env_fac', 'contrato'));
     }
 
     public function update(Request $request, $id)

@@ -59,7 +59,8 @@ class Contratos
         $id = self::tabla()->insertGetId([
             'cliente_id' => $cliente->id, 'token' => Str::random(40), 'periodo' => $periodo, 'monto' => round($monto, 2),
             'plan' => $cliente->planContratado?->nombre ?? $cliente->plan, 'estado' => 'PENDIENTE',
-            'firmante' => $cliente->contacto_nombre, 'correo' => $cliente->contacto_correo, 'telefono' => $cliente->contacto_telefono,
+            'firmante' => $cliente->representante ?: $cliente->contacto_nombre, 'firmante_dni' => $cliente->representante_dni,
+            'correo' => $cliente->contacto_correo, 'telefono' => $cliente->contacto_telefono,
             'creado_por' => $superadmin, 'created_at' => now(), 'updated_at' => now(),
         ]);
 
@@ -117,6 +118,9 @@ class Contratos
         $final = (object) array_merge((array) $contrato, $cambios);
         $cambios['huella'] = hash('sha256', self::texto($final));
         self::tabla()->where('id', $contrato->id)->update($cambios);
+        // La empresa sin representante registrado se queda con el de quien firmó
+        Cliente::where('id', $contrato->cliente_id)->whereNull('representante')
+            ->update(['representante' => $cambios['firmante'], 'representante_dni' => $cambios['firmante_dni']]);
 
         return self::tabla()->find($contrato->id);
     }
@@ -162,13 +166,10 @@ class Contratos
         $firma = $contrato->firma && Storage::disk('local')->exists($contrato->firma)
             ? 'data:image/png;base64,'.base64_encode(Storage::disk('local')->get($contrato->firma)) : null;
         $logo = public_path(config('contrato.logo'));
-        $firmaProveedor = (string) config('contrato.firma_proveedor');
-        $firmaProveedor = $firmaProveedor !== '' && Storage::disk('local')->exists($firmaProveedor)
-            ? 'data:image/png;base64,'.base64_encode(Storage::disk('local')->get($firmaProveedor)) : null;
 
         return [
             'contrato' => $contrato, 'cliente' => $cliente, 'numero' => self::numero($contrato), 'proveedor' => config('contrato.proveedor'),
-            'periodo' => self::PERIODOS[$contrato->periodo] ?? $contrato->periodo, 'firma' => $firma, 'firmaProveedor' => $firmaProveedor,
+            'periodo' => self::PERIODOS[$contrato->periodo] ?? $contrato->periodo, 'firma' => $firma,
             'logo' => is_file($logo) ? 'data:image/png;base64,'.base64_encode(file_get_contents($logo)) : null,
         ];
     }
@@ -178,7 +179,6 @@ class Contratos
     {
         $datos = self::datos($contrato);
         $datos['firma'] = null;
-        $datos['firmaProveedor'] = null;
         $datos['logo'] = null;
 
         return trim(preg_replace('/\s+/', ' ', strip_tags(view('contratos.cuerpo', $datos)->render())));

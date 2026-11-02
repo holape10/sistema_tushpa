@@ -183,6 +183,7 @@ class ClienteController extends Controller
             'sol_usuario' => 'nullable|string|max:20', 'sol_clave' => 'nullable|string|max:60'], $this->mensajes(), $this->nombres());
         $d['sol_usuario'] = mb_strtoupper(trim((string) ($d['sol_usuario'] ?? ''))) ?: null;
         $d['sol_clave'] = ($d['sol_clave'] ?? null) ?: null;
+        $d['representante'] = mb_strtoupper(trim((string) ($d['representante'] ?? ''))) ?: null;
         if (! $this->esDueno()) {
             unset($d['creado_por']);   // solo el dueño reasigna empresas
         }
@@ -493,6 +494,8 @@ class ClienteController extends Controller
             'plan_id' => 'nullable|integer|exists:central.planes,id',
             'subdominio' => ['nullable', 'string', 'max:40', 'regex:/^(?!\d+$)[a-z0-9][a-z0-9-]*[a-z0-9]$/'],
             'vence_el' => 'nullable|date',
+            'representante' => 'nullable|string|max:150',
+            'representante_dni' => ['nullable', 'regex:/^(\d{8}|[A-Za-z0-9]{9,12})$/'],
             'contacto_nombre' => 'nullable|string|max:120',
             'contacto_telefono' => 'nullable|string|max:20',
             'contacto_correo' => 'nullable|email|max:120',
@@ -509,7 +512,7 @@ class ClienteController extends Controller
     {
         return [
             'ruc' => 'RUC', 'razon_social' => 'razón social', 'nombre_comercial' => 'nombre comercial',
-            'direccion' => 'dirección', 'vence_el' => 'vencimiento', 'contacto_correo' => 'correo de contacto',
+            'direccion' => 'dirección', 'vence_el' => 'vencimiento', 'contacto_correo' => 'correo de contacto', 'representante_dni' => 'DNI del representante',
             'password' => 'contraseña',
         ];
     }

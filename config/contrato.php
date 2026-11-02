@@ -13,8 +13,6 @@ return [
     ],
     // Logo del encabezado del contrato (dentro de public/)
     'logo' => 'imagenes/holape-logo.png',
-    // Firma del representante de EL PROVEEDOR (PNG con fondo transparente, dentro de storage/app). Vacío = se firma a mano
-    'firma_proveedor' => env('CONTRATO_FIRMA_PROVEEDOR', 'contratos/firma-proveedor.png'),
     // Archivos que sube el cliente (copia del DNI y contrato escaneado): fuera de public/, solo los ve el panel
     'carpeta' => 'contratos',
     'max_kb' => 8192,

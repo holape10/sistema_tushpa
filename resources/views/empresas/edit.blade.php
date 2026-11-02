@@ -7,7 +7,8 @@
     @php
         $input = 'block w-full mt-1 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500';
         $secciones = ['datos' => ['Datos', 'fa-building'], 'logo' => ['Logo', 'fa-image'], 'sunat' => ['SUNAT', 'fa-file-code'],
-                      'sire' => ['SIRE / API', 'fa-book'], 'certificado' => ['Certificado', 'fa-key']];
+                      'sire' => ['SIRE / API', 'fa-book'], 'certificado' => ['Certificado', 'fa-key']]
+            + ($contrato ? ['contrato' => ['Contrato', 'fa-file-signature']] : []);
         $sireListo = \App\Support\Sunat\Sire::configurado($empresa);
         $logo = $empresa->LogEmpresa && is_file(public_path($empresa->LogEmpresa)) ? $empresa->LogEmpresa : null;
         $venceCert = $empresa->fec_fin_cer ? \Carbon\Carbon::parse($empresa->fec_fin_cer) : null;
@@ -178,6 +179,50 @@
                             <span class="relative block"><input type="password" name="txtPassCert" id="txtPassCert" value="{{ old('txtPassCert', $empresa->passcert) }}" class="{{ $input }} pr-9">{!! $ojo('txtPassCert') !!}</span></label>
                     </div>
                 </section>
+
+                {{-- Su contrato de servicio con TUSHPA y los documentos que subió --}}
+                @if ($contrato)
+                    @php
+                        $estadoContrato = \App\Support\Tenancy\Contratos::ESTADOS[$contrato->estado] ?? $contrato->estado;
+                        $colorContrato = ['PENDIENTE' => 'bg-slate-100 text-slate-700', 'ENVIADO' => 'bg-sky-100 text-sky-800', 'APROBADO' => 'bg-emerald-100 text-emerald-800',
+                            'OBSERVADO' => 'bg-amber-100 text-amber-900'][$contrato->estado] ?? 'bg-slate-100 text-slate-700';
+                        $esImagen = fn ($ruta) => (bool) preg_match('/\.(jpe?g|png|webp)$/i', (string) $ruta);
+                    @endphp
+                    <section id="contrato" class="bg-white rounded-2xl shadow-sm scroll-mt-4">
+                        <header class="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
+                            <span class="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center"><i class="fas fa-file-signature"></i></span>
+                            <div class="flex-1"><h3 class="font-bold text-gray-800">Contrato de servicio {{ config('contrato.proveedor.marca') }}</h3>
+                                <p class="text-xs text-gray-400">{{ \App\Support\Tenancy\Contratos::numero($contrato) }} · {{ \App\Support\Tenancy\Contratos::PERIODOS[$contrato->periodo] ?? $contrato->periodo }} · S/ {{ number_format((float) $contrato->monto, 2) }}</p></div>
+                            <span class="text-[11px] font-bold px-2 py-0.5 rounded-full {{ $colorContrato }}">{{ $estadoContrato }}</span>
+                        </header>
+                        <div class="p-5 space-y-4">
+                            @if ($contrato->estado === 'OBSERVADO')<p class="text-sm text-amber-900 bg-amber-50 rounded-xl px-3 py-2"><b>Observación:</b> {{ $contrato->observacion }}</p>@endif
+                            <div class="flex flex-wrap gap-2">
+                                @if (\App\Support\Tenancy\Contratos::editable($contrato) && \Illuminate\Support\Facades\Route::has('sitio.contrato'))
+                                    <a href="{{ route('sitio.contrato', $contrato->token) }}" target="_blank" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold">
+                                        <i class="fas fa-pen-nib mr-1"></i>{{ $contrato->estado === 'OBSERVADO' ? 'Corregir mi contrato' : 'Firmar mi contrato' }}</a>
+                                @endif
+                                <a href="{{ route('mi_contrato.pdf') }}" target="_blank" class="px-4 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-sm font-semibold"><i class="fas fa-file-pdf mr-1"></i>Ver contrato (PDF)</a>
+                            </div>
+                            @if ($contrato->firmado_el)
+                                <p class="text-xs text-gray-500">Firmado por <b>{{ $contrato->firmante }}</b> (DNI {{ $contrato->firmante_dni }}) el {{ \Carbon\Carbon::parse($contrato->firmado_el)->format('d/m/Y H:i') }}.</p>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    @foreach (['dni_frente' => 'DNI delantero', 'dni_reverso' => 'DNI posterior', 'firma' => 'Firma', 'escaneado' => 'Contrato firmado'] as $campo => $texto)
+                                        @if ($contrato->{$campo})
+                                            <a href="{{ route('mi_contrato.archivo', $campo) }}" target="_blank" class="block rounded-xl ring-1 ring-gray-200 p-2 text-center hover:ring-indigo-300">
+                                                @if ($esImagen($contrato->{$campo}))<img src="{{ route('mi_contrato.archivo', $campo) }}" alt="{{ $texto }}" class="w-full h-24 object-contain bg-gray-50 rounded-lg">
+                                                @else<span class="flex h-24 items-center justify-center text-3xl bg-gray-50 rounded-lg">📄</span>@endif
+                                                <span class="block mt-1 text-xs font-semibold text-gray-600">{{ $texto }}</span>
+                                            </a>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            @else
+                                <p class="text-sm text-gray-500">Aún no lo firmas: sube tu DNI y fírmalo desde el celular, la tablet o la PC con el botón de arriba.</p>
+                            @endif
+                        </div>
+                    </section>
+                @endif
             </div>
         </div>
 

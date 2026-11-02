@@ -67,6 +67,7 @@ use App\Http\Controllers\MedioPagoController;
 use App\Http\Controllers\MermaController;
 use App\Http\Controllers\MesaController;
 use App\Http\Controllers\MetaMozoController;
+use App\Http\Controllers\MiContratoController;
 use App\Http\Controllers\MisComprobantesController;
 use App\Http\Controllers\MotorizadoController;
 use App\Http\Controllers\NotaController;
@@ -1034,6 +1035,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/empresas', [EmpresaController::class, 'index'])->name('empresas.index');
     Route::get('/empresa/{id}/editar', [EmpresaController::class, 'edit'])->name('empresas.edit');
     Route::patch('/empresa/{id}/update', [EmpresaController::class, 'update'])->name('empresas.update');
+    // Su contrato de servicio con TUSHPA: el PDF y los documentos que subió (Editar empresa → Contrato)
+    Route::get('/empresa/contrato/pdf', [MiContratoController::class, 'pdf'])->name('mi_contrato.pdf');
+    Route::get('/empresa/contrato/{campo}', [MiContratoController::class, 'archivo'])->whereIn('campo', ['dni_frente', 'dni_reverso', 'firma', 'escaneado'])->name('mi_contrato.archivo');
 });
 
 // Registro inicial: público solo mientras no exista ninguna empresa (ver EmpresaController::puedeRegistrar)

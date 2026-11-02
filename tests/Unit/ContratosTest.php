@@ -54,17 +54,29 @@ class ContratosTest extends TestCase
             $t->string('contacto_nombre')->nullable();
             $t->string('contacto_telefono')->nullable();
             $t->string('contacto_correo')->nullable();
+            $t->string('representante')->nullable();
+            $t->string('representante_dni')->nullable();
             $t->timestamps();
         });
         (include database_path('migrations/central/2027_01_12_000001_contratos.php'))->up();
         $plan = DB::connection('central')->table('planes')->insertGetId(['nombre' => 'RESTAURANTE', 'precio' => 100]);
-        $this->cliente = Cliente::create(['ruc' => '20609838427', 'razon_social' => 'COCOROCO E.I.R.L.', 'plan_id' => $plan, 'contacto_nombre' => 'JUAN PEREZ']);
+        $this->cliente = Cliente::create(['ruc' => '20609838427', 'razon_social' => 'INVERSIONES COCOROCO EMPRESA INDIVIDUAL DE RESPONSABILIDAD LIMITADA', 'plan_id' => $plan,
+            'contacto_nombre' => 'JUAN PEREZ', 'representante' => 'MARIA LOPEZ', 'representante_dni' => '87654321',
+            'direccion' => 'AV. LAS GARDENIAS NRO. 1234 URB. LOS JARDINES DE SAN JUAN LORETO - MAYNAS - SAN JUAN BAUTISTA']);
     }
 
     private function completar(object $contrato, ?string $firma, ?UploadedFile $escaneado = null): object
     {
         return Contratos::completar($contrato, ['firmante' => 'Juan Pérez', 'firmante_dni' => '12345678', 'firmante_cargo' => 'gerente', 'correo' => null, 'telefono' => null],
             UploadedFile::fake()->image('frente.jpg'), UploadedFile::fake()->image('reverso.jpg'), $firma, $escaneado, '190.12.34.56', 'Pruebas');
+    }
+
+    public function test_el_contrato_nace_con_el_representante_de_la_empresa(): void
+    {
+        $contrato = Contratos::generar($this->cliente, 'MENSUAL', 100, 1);
+
+        $this->assertSame('MARIA LOPEZ', $contrato->firmante);
+        $this->assertSame('87654321', $contrato->firmante_dni);
     }
 
     public function test_el_monto_sale_del_plan_mensual_o_anual(): void
@@ -89,6 +101,7 @@ class ContratosTest extends TestCase
 
         $pdf = Contratos::pdf($firmado);
         $this->assertStringStartsWith('%PDF', $pdf);
+        $this->assertSame(1, preg_match_all('#/Type\s*/Page[^s]#', $pdf), 'El contrato firmado cabe en una sola hoja.');
     }
 
     public function test_sin_dni_o_sin_firma_no_se_puede_enviar(): void
