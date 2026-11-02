@@ -79,8 +79,8 @@ class ProductoController extends Controller
             'descripcion' => 'nullable|string|max:255',
             'propun' => $sinPrecioVenta ? 'nullable|numeric|min:0' : 'required|numeric|min:0.01',
             'costo' => $esInsumo ? 'required|numeric|gt:0' : 'nullable|numeric|min:0',
-            'debe' => 'nullable|string|max:12|regex:/^[0-9A-Za-z]+$/',
-            'haber' => 'nullable|string|max:12|regex:/^[0-9A-Za-z]+$/',
+            'debe' => 'nullable|string|min:4|max:12|regex:/^[0-9A-Za-z]+$/',
+            'haber' => 'nullable|string|min:4|max:12|regex:/^[0-9A-Za-z]+$/',
             'codigo_barra' => 'nullable|string|max:50',
             // Kardex SUNAT (PLE 12.1 / 13.1)
             'unspsc' => ['nullable', 'regex:'.KardexSunat::REGLA_CODIGO],

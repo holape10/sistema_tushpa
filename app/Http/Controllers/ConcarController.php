@@ -26,6 +26,7 @@ class ConcarController extends Controller
         return view('empresas.concar.index', [
             'periodo' => $periodo,
             'cfg' => Concar::config($ruc),
+            'incompletas' => Concar::productosConCuentaIncompleta($ruc),
             'ventas' => Concar::ventas($ruc, $periodo),
             'compras' => Concar::compras($ruc, $periodo),
         ]);

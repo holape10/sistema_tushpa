@@ -1,7 +1,10 @@
 <?php
+
 namespace App\Support;
 
-use Illuminate\Support\Facades\{DB, Schema};
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Exporta ventas y compras como asientos para la plantilla "Importar asientos desde Excel" de CONCAR (SQL/CB):
@@ -24,7 +27,7 @@ class Concar
         ['Cuenta Contable', 'Debe existir en el Plan de Cuentas', '12 Caracteres'],
         ['Código de Anexo', 'Si Cuenta Contable tiene seleccionado Tipo de Anexo, debe existir en la tabla de Anexos', '18 Caracteres'],
         ['Código de Centro de Costo', 'Si Cuenta Contable tiene habilitado C. Costo, Ver T.G. 05', '6 Caracteres'],
-        ['Debe / Haber', "D ó H", '1 Caracter'],
+        ['Debe / Haber', 'D ó H', '1 Caracter'],
         ['Importe Original', 'Importe positivo siempre', 'Numérico 14,2'],
         ['Importe en Dólares', "Importe de Conversión a Dólares. Si Flag de Conversión de Moneda es 'N' debe llenarse", 'Numérico 14,2'],
         ['Importe en Soles', "Importe de Conversión a Soles. Si Flag de Conversión de Moneda es 'N' debe llenarse", 'Numérico 14,2'],
@@ -42,7 +45,7 @@ class Concar
         ['Nro Máq. Registradora Tipo Doc. Ref.', "Si Tipo de Documento es 'NC', 'NA' ó 'ND' y Tipo Doc. Ref. es Ticket", '20 Caracteres'],
         ['Base Imponible Documento Referencia', "Si Tipo de Documento es 'NA' ó 'ND'", 'Numérico 14,2'],
         ['IGV Documento Provisión', "Si Tipo de Documento es 'NA' ó 'ND'", 'Numérico 14,2'],
-        ['Tipo Referencia en estado MQ', "MQ", '10 Caracteres'],
+        ['Tipo Referencia en estado MQ', 'MQ', '10 Caracteres'],
         ['Número Serie Caja Registradora', 'Si Tipo de Documento es Ticket', '20 Caracteres'],
         ['Fecha de Operación', '', 'dd/mm/aaaa'],
         ['Tipo de Tasa', 'Si la Cuenta Contable tiene habilitada la detracción/percepción', '5 Caracteres'],
@@ -68,7 +71,8 @@ class Concar
     public static function config(string $ruc): array
     {
         $c = DB::table('concar_config')->where('IdEmpresa', $ruc)->first();
-        return array_merge(self::DEFECTO, $c ? array_filter(array_intersect_key((array) $c, self::DEFECTO), fn($v) => $v !== null && $v !== '') : []);
+
+        return array_merge(self::DEFECTO, $c ? array_filter(array_intersect_key((array) $c, self::DEFECTO), fn ($v) => $v !== null && $v !== '') : []);
     }
 
     /** Códigos de tipo de documento de la empresa */
@@ -83,6 +87,7 @@ class Concar
         if (($cfg['formato'] ?? 'PLANTILLA') === 'ANTERIOR') {
             return [array_merge([''], str_replace('Tipo Cambio para F', "Tipo Cambio para 'F'", array_column(self::CAMPOS, 0)))];
         }
+
         return [
             array_merge(['Campo'], array_column(self::CAMPOS, 0)),
             array_merge(['Restricciones'], array_column(self::CAMPOS, 1)),
@@ -94,7 +99,7 @@ class Concar
     private static function repartir(float $total, array $pesos): array
     {
         $suma = array_sum($pesos);
-        if (!$pesos || $suma <= 0) {
+        if (! $pesos || $suma <= 0) {
             return [];
         }
         $r = [];
@@ -106,13 +111,15 @@ class Concar
             $mayor = array_search(max($pesos), $pesos, true);
             $r[$mayor] = round($r[$mayor] + $dif, 2);
         }
-        return array_filter($r, fn($v) => $v != 0);
+
+        return array_filter($r, fn ($v) => $v != 0);
     }
 
     /**
      * Asientos de ventas: uno por comprobante y, dentro, una línea por cuenta contable.
      * Cuenta de cada línea: la guardada al vender (cpe_detalle.debe/haber) -> la actual del producto -> la de su tipo de producto
      * -> las generales de CONCAR. Las notas de crédito van al revés.
+     *
      * @return array{filas: array, asientos: int, total: float, omitidos: array}
      */
     public static function ventas(string $ruc, string $periodo, int $desde = 1): array
@@ -129,7 +136,7 @@ class Concar
         // Detalle con sus cuentas (y las del producto / tipo de producto para lo vendido antes de configurarlas)
         $tipoCtas = Schema::hasColumn('tipo_producto', 'cta_contable_12');
         $detalles = DB::table('cpe_detalle as d')->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
-            ->when($tipoCtas, fn($w) => $w->leftJoin('tipo_producto as t', 't.tip_pro_id', '=', 'p.tip_pro_id'))
+            ->when($tipoCtas, fn ($w) => $w->leftJoin('tipo_producto as t', 't.tip_pro_id', '=', 'p.tip_pro_id'))
             ->whereIn('d.IdCpe_cabecera', $docs->pluck('IdCpe_cabecera'))
             ->get(array_merge(['d.IdCpe_cabecera', 'd.cdevve', 'd.cdepve', 'd.tigcod', 'd.debe', 'd.haber', 'p.debe as p_debe', 'p.haber as p_haber'],
                 $tipoCtas ? ['t.cta_contable_12 as t_debe', 't.cta_contable_70 as t_haber'] : []))
@@ -140,38 +147,42 @@ class Concar
         $n = $desde;
         $total = 0;
         foreach ($docs as $d) {
-            if (!isset($tipos[$d->tdocod])) {
+            if (! isset($tipos[$d->tdocod])) {
                 $omitidos['Notas de venta (no van a contabilidad)']++;
+
                 continue;
             }
             $anulado = (bool) $d->ccabaj;
             // Plantilla: los anulados no van. Formato anterior: van con importe 0 (así los registraba el sistema antiguo)
-            if ($anulado && !$anterior) {
+            if ($anulado && ! $anterior) {
                 $omitidos['Anulados']++;
+
                 continue;
             }
 
             $esNota = $d->tdocod === '07';                 // nota de crédito: el asiento va al revés
-            $numero = $d->serdoc . '-' . ($anterior ? (int) $d->numdoc : str_pad($d->numdoc, 8, '0', STR_PAD_LEFT));
+            $numero = $d->serdoc.'-'.($anterior ? (int) $d->numdoc : str_pad($d->numdoc, 8, '0', STR_PAD_LEFT));
             $anexo = in_array(trim((string) $d->ccandi), ['', '0', '00000000'], true) ? $cfg['anexo_varios'] : trim($d->ccandi);
-            $glosa = $anterior ? 'VENTAS ' . $tipos[$d->tdocod] . ' ' . $numero : ($esNota ? 'N.CRED. ' : 'VENTA ') . $numero . ' ' . $d->ccanom;
+            $glosa = $anterior ? 'VENTAS '.$tipos[$d->tdocod].' '.$numero : ($esNota ? 'N.CRED. ' : 'VENTA ').$numero.' '.$d->ccanom;
             $cab = self::cabecera($cfg, $cfg['subdiario_ventas'], $periodo, $n++, $d->ccafem, $d->moncod ?: 'PEN', null, $glosa);
             $doc = [
                 'tipo' => $tipos[$d->tdocod], 'numero' => $numero, 'fecha' => $d->ccafem, 'vence' => $d->ccafve ?: $d->ccafem,
                 'ref' => $d->tdocod_ref ? [$tipos[$d->tdocod_ref] ?? $d->tdocod_ref,
-                    $d->serie_ref . '-' . ($anterior ? (int) $d->num_ref : str_pad((string) $d->num_ref, 8, '0', STR_PAD_LEFT)), $d->ccafem_ref] : null,
-                'glosa' => $anterior ? $tipos[$d->tdocod] . ' ' . $numero : null,
+                    $d->serie_ref.'-'.($anterior ? (int) $d->num_ref : str_pad((string) $d->num_ref, 8, '0', STR_PAD_LEFT)), $d->ccafem_ref] : null,
+                'glosa' => $anterior ? $tipos[$d->tdocod].' '.$numero : null,
             ];
-            $dh = fn(string $normal) => $esNota ? ($normal === 'D' ? 'H' : 'D') : $normal;
+            $dh = fn (string $normal) => $esNota ? ($normal === 'D' ? 'H' : 'D') : $normal;
             $lineas = $detalles[$d->IdCpe_cabecera] ?? collect();
             $porCobrarDef = ($d->cuenta12 ?? null) ?: $cfg['cta_por_cobrar'];
-            $debeDe = fn($l) => $l->debe ?: $l->p_debe ?: ($l->t_debe ?? null) ?: $porCobrarDef;
-            $haberDe = fn($l, bool $grav) => $l->haber ?: $l->p_haber ?: ($l->t_haber ?? null) ?: ($grav ? $cfg['cta_ventas'] : $cfg['cta_ventas_exo']);
+            // Una cuenta incompleta guardada al vender ("70") no sirve en CONCAR: se usa la siguiente (la del producto hoy, etc.)
+            $debeDe = fn ($l) => self::util($l->debe) ?: self::util($l->p_debe) ?: self::util($l->t_debe ?? null) ?: $porCobrarDef;
+            $haberDe = fn ($l, bool $grav) => self::util($l->haber) ?: self::util($l->p_haber) ?: self::util($l->t_haber ?? null) ?: ($grav ? $cfg['cta_ventas'] : $cfg['cta_ventas_exo']);
 
             if ($anulado) {
                 $l = $lineas->first();
                 $filas[] = self::linea($cab, $l ? $debeDe($l) : $porCobrarDef, $anexo, $dh('D'), 0, $doc, 'ANULADO', $anterior);
                 $filas[] = self::linea($cab, $l ? $haberDe($l, $l->tigcod === '10') : $cfg['cta_ventas_exo'], $anexo, $dh('H'), 0, $doc, 'ANULADO', $anterior);
+
                 continue;
             }
 
@@ -181,7 +192,11 @@ class Concar
             $tot = round((float) $d->ccaitv, 2);
             // Lo que no cuadre por redondeo (o ICBPER) se carga a la venta
             $resto = round($tot - $igv - $grav - $exo, 2);
-            if ($exo > 0 && $grav <= 0) $exo = round($exo + $resto, 2); else $grav = round($grav + $resto, 2);
+            if ($exo > 0 && $grav <= 0) {
+                $exo = round($exo + $resto, 2);
+            } else {
+                $grav = round($grav + $resto, 2);
+            }
 
             // Pesos por cuenta según el detalle; los importes salen de los totales del comprobante (siempre cuadra)
             $pDebe = $pGrav = $pExo = [];
@@ -203,7 +218,9 @@ class Concar
             foreach ($debe as $cta => $imp) {
                 $filas[] = self::linea($cab, (string) $cta, $anexo, $dh('D'), $imp, $doc, 'POR COBRAR', $anterior);
             }
-            if ($igv > 0) $filas[] = self::linea($cab, $cfg['cta_igv'], $anexo, $dh('H'), $igv, $doc, 'IGV', $anterior);
+            if ($igv > 0) {
+                $filas[] = self::linea($cab, $cfg['cta_igv'], $anexo, $dh('H'), $igv, $doc, 'IGV', $anterior);
+            }
             foreach ($hGrav as $cta => $imp) {
                 $filas[] = self::linea($cab, (string) $cta, $anexo, $dh('H'), $imp, $doc, 'VENTA GRAVADA', $anterior);
             }
@@ -213,7 +230,49 @@ class Concar
             $total += $esNota ? -$tot : $tot;
         }
 
-        return ['filas' => $filas, 'asientos' => $n - $desde, 'total' => round($total, 2), 'omitidos' => array_filter($omitidos)];
+        return ['filas' => $filas, 'asientos' => $n - $desde, 'total' => round($total, 2), 'omitidos' => array_filter($omitidos),
+            'revisar' => self::cuentasRaras($filas)];
+    }
+
+    /**
+     * Productos con una cuenta que no sirve para CONCAR ("70"): sus ventas se van a la cuenta general hasta corregirlos
+     *
+     * @return Collection<int, object>
+     */
+    public static function productosConCuentaIncompleta(string $ruc)
+    {
+        return DB::table('productos')->where('IdEmpresa', $ruc)
+            ->where(fn ($q) => $q->where(fn ($d) => $d->where('debe', '<>', '')->whereRaw('CHAR_LENGTH(TRIM(debe)) < 4'))
+                ->orWhere(fn ($h) => $h->where('haber', '<>', '')->whereRaw('CHAR_LENGTH(TRIM(haber)) < 4')))
+            ->orderBy('pronom')->limit(50)->get(['IdProducto', 'pronom', 'debe', 'haber']);
+    }
+
+    /** Cuenta que sirve para CONCAR: al menos 4 caracteres (una de 2, como "70", es solo el elemento del plan) */
+    private static function util(?string $cuenta): ?string
+    {
+        $cuenta = trim((string) $cuenta);
+
+        return strlen($cuenta) >= 4 ? $cuenta : null;
+    }
+
+    /**
+     * Cuentas que no tienen el largo de las demás (ej. "7599901" entre cuentas de 6 dígitos): seguro un error al escribirla
+     * en el producto; CONCAR las rechaza si no están en su plan. Se avisan antes de descargar.
+     *
+     * @return array<int, array{cuenta: string, lineas: int, documento: string, glosa: string}>
+     */
+    private static function cuentasRaras(array $filas): array
+    {
+        $porCuenta = collect($filas)->filter(fn ($f) => $f[10] !== null)->groupBy(fn ($f) => (string) $f[10]);
+        $largos = $porCuenta->map(fn ($g) => $g->count())->groupBy(fn ($n, $cta) => strlen((string) $cta), true)->map(fn ($g) => $g->sum());
+        if ($largos->count() < 2) {
+            return [];
+        }
+        $comun = $largos->sortDesc()->keys()->first();
+
+        return $porCuenta->filter(fn ($g, $cta) => strlen((string) $cta) !== $comun)
+            ->map(fn ($g, $cta) => ['cuenta' => (string) $cta, 'lineas' => $g->count(), 'documento' => (string) $g->first()[18], 'glosa' => (string) $g->first()[5]])
+            ->values()->all();
     }
 
     /** @return array{filas: array, asientos: int, total: float, omitidos: array} */
@@ -232,24 +291,29 @@ class Concar
         $n = $desde;
         $total = 0;
         foreach ($docs as $d) {
-            if (!isset($tipos[$d->tdocod])) {
+            if (! isset($tipos[$d->tdocod])) {
                 $omitidos['Notas de venta / otros sin tipo CONCAR']++;
+
                 continue;
             }
             $esNota = $d->tdocod === '07';
-            $numero = $d->com_doc_ser . '-' . str_pad((string) $d->com_doc_num, 8, '0', STR_PAD_LEFT);
+            $numero = $d->com_doc_ser.'-'.str_pad((string) $d->com_doc_num, 8, '0', STR_PAD_LEFT);
             $usd = $d->mon_id === 'USD' && (float) $d->tip_cam > 0;
             $cab = self::cabecera($cfg, $cfg['subdiario_compras'], $periodo, $n++, $d->com_fec, $usd ? 'USD' : 'PEN', $usd ? (float) $d->tip_cam : null,
-                ($esNota ? 'N.CRED. ' : 'COMPRA ') . $numero . ' ' . $d->prov_raz);
+                ($esNota ? 'N.CRED. ' : 'COMPRA ').$numero.' '.$d->prov_raz);
             $doc = ['tipo' => $tipos[$d->tdocod], 'numero' => $numero, 'fecha' => $d->com_fec, 'vence' => $d->com_fec_ven ?: $d->com_fec, 'ref' => null, 'glosa' => null];
 
             $igv = round((float) $d->igv_com, 2);
             $tot = round((float) $d->total_com, 2);
             $base = round($tot - $igv, 2);
 
-            $dh = fn(string $normal) => $esNota ? ($normal === 'D' ? 'H' : 'D') : $normal;
-            if ($base > 0) $filas[] = self::linea($cab, $cfg['cta_compras'], $d->prov_ruc, $dh('D'), $base, $doc, 'COMPRA');
-            if ($igv > 0) $filas[] = self::linea($cab, $cfg['cta_igv'], $d->prov_ruc, $dh('D'), $igv, $doc, 'IGV');
+            $dh = fn (string $normal) => $esNota ? ($normal === 'D' ? 'H' : 'D') : $normal;
+            if ($base > 0) {
+                $filas[] = self::linea($cab, $cfg['cta_compras'], $d->prov_ruc, $dh('D'), $base, $doc, 'COMPRA');
+            }
+            if ($igv > 0) {
+                $filas[] = self::linea($cab, $cfg['cta_igv'], $d->prov_ruc, $dh('D'), $igv, $doc, 'IGV');
+            }
             $filas[] = self::linea($cab, $cfg['cta_por_pagar'], $d->prov_ruc, $dh('H'), $tot, $doc, 'POR PAGAR');
             $total += ($esNota ? -$tot : $tot) * ($usd ? (float) $d->tip_cam : 1);
         }
@@ -263,9 +327,10 @@ class Concar
         $usd = $moneda === 'USD';
         // Dólares con tipo de cambio conocido: conversión especial 'C' con ese tipo de cambio
         $conversion = $usd && $tc ? 'C' : $cfg['tipo_conversion'];
+
         return [
             'subdiario' => $subdiario,
-            'numero' => substr($periodo, 4, 2) . str_pad((string) $correlativo, 4, '0', STR_PAD_LEFT),
+            'numero' => substr($periodo, 4, 2).str_pad((string) $correlativo, 4, '0', STR_PAD_LEFT),
             'fecha' => self::fecha($fecha),
             'moneda' => $usd ? 'US' : 'MN',
             'glosa' => mb_substr(mb_strtoupper($glosa), 0, 40),
@@ -313,6 +378,7 @@ class Concar
             $f[29] = 0;
             $f[30] = 0;
         }
+
         return $f;
     }
 
@@ -323,7 +389,8 @@ class Concar
 
     private static function rango(string $periodo): array
     {
-        $ini = substr($periodo, 0, 4) . '-' . substr($periodo, 4, 2) . '-01';
+        $ini = substr($periodo, 0, 4).'-'.substr($periodo, 4, 2).'-01';
+
         return [$ini, date('Y-m-t', strtotime($ini))];
     }
 }

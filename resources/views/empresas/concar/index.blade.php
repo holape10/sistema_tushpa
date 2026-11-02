@@ -41,6 +41,19 @@
         </form>
     </div>
 
+    @if ($incompletas->isNotEmpty())
+        {{-- Una cuenta como "70" no existe en el plan de CONCAR: esas ventas van a la cuenta general hasta corregir el producto --}}
+        <div class="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+            <p class="font-bold">⚠ {{ $incompletas->count() }} producto(s) con la cuenta contable incompleta</p>
+            <p class="text-xs mt-0.5">Sus ventas se exportan con la cuenta general de CONCAR (abajo) hasta que corrijas la cuenta del producto:</p>
+            <ul class="mt-2 grid sm:grid-cols-2 gap-1 text-xs">
+                @foreach ($incompletas as $p)
+                    <li><a href="{{ route('productos.edit', $p->IdProducto) }}" class="font-semibold underline">{{ $p->pronom }}</a> · Debe {{ $p->debe ?: '—' }} · Haber {{ $p->haber ?: '—' }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div class="grid md:grid-cols-2 gap-4">
         @foreach ($libros as $clave => $l)
             @php [$debe, $haber] = $sumas($l['datos']['filas']); $cuadra = abs($debe - $haber) < 0.01; @endphp
@@ -68,6 +81,18 @@
                 @foreach ($l['datos']['omitidos'] as $motivo => $cant)
                     <p class="text-xs text-amber-700 mt-1">No se exportan {{ $cant }}: {{ mb_strtolower($motivo) }}.</p>
                 @endforeach
+                @if (! empty($l['datos']['revisar']))
+                    {{-- Cuentas con un largo distinto al de las demás: CONCAR las rechaza si no están en su plan --}}
+                    <div class="mt-3 rounded-xl bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-800">
+                        <p class="font-bold">⚠ Revisa estas cuentas antes de importar (no tienen el largo de las demás):</p>
+                        <ul class="mt-1 space-y-0.5">
+                            @foreach ($l['datos']['revisar'] as $r)
+                                <li><b>{{ $r['cuenta'] }}</b> · {{ $r['lineas'] }} línea(s) · ej. {{ $r['documento'] }} {{ $r['glosa'] }}</li>
+                            @endforeach
+                        </ul>
+                        <p class="mt-1">Corrígela en <b>Productos → Editar → Cuenta Debe / Haber</b> y vuelve a descargar, o créala en el plan de cuentas de CONCAR si es correcta.</p>
+                    </div>
+                @endif
 
                 <form method="GET" action="{{ route('concar.excel', $clave) }}" class="mt-auto pt-4 flex items-end gap-2">
                     <input type="hidden" name="periodo" value="{{ $periodo }}">
