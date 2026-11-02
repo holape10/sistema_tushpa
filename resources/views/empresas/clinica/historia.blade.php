@@ -9,7 +9,7 @@
         $edad = \App\Support\Clinica::edad($h->fecha_nac);
     @endphp
 
-    <div x-data="historia()" class="space-y-5">
+    <div x-data="historia()" @ficha-paciente.window="Object.assign(f, $event.detail); recordarFicha()" class="space-y-5">
         {{-- Cabecera del paciente --}}
         <div class="bg-white rounded-2xl shadow-sm p-5 flex flex-wrap gap-4 items-start justify-between">
             <div>
@@ -192,7 +192,11 @@
             return {
                 f: @js(collect((array) $h)->only(['alergias', 'antecedentes', 'fecha_nac', 'sexo', 'especie', 'raza', 'grupo_sanguineo', 'ocupacion', 'contacto_emergencia', 'origen'])),
                 aviso: '', ok: true, consentimiento: false,
+                init() { this.recordarFicha(); },
+                // El "Nuevo tratamiento" completa la ficha aquí mismo: le pasa lo que el paciente ya tiene
+                recordarFicha() { window.fichaPaciente = { [{{ (int) $h->his_cli_id }}]: { alergias: this.f.alergias, antecedentes: this.f.antecedentes } }; },
                 async guardarFicha() {
+                    this.recordarFicha();
                     const r = await fetch('{{ route('clinica.ficha', $h->his_cli_id) }}', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }, body: JSON.stringify(this.f) });
                     const j = await r.json().catch(() => ({}));
                     this.ok = r.ok && j.ok; this.aviso = j.mensaje || Object.values(j.errors || {}).flat()[0] || 'Error';

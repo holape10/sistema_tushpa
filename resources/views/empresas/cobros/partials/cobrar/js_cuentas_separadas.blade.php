@@ -40,6 +40,8 @@
         });
         BRUTO = Math.round(total * 100) / 100;
         GRATIS = Math.round(gratis * 100) / 100;
+        // El consumo de la mesa con los precios que haya cambiado el administrador
+        if (el('consumo_pie')) el('consumo_pie').textContent = 'S/ ' + fmt(BRUTO + GRATIS);
         aplicarPromos(items);
         aplicarDescuento();
     }
@@ -56,6 +58,22 @@
             if (cant <= 0) { alert('Primero elige cuántos de este producto se cobran en esta cuenta.'); return; }
             abrirCortesia(tr.children[0].firstChild.textContent.trim(), cant, (n, motivo) => { cortesias[clave] = { cantidad: n, motivo }; recalcular(); });
         });
+    }
+
+    // Administrador: precio nuevo de una fila (el servidor lo vuelve a revisar)
+    document.addEventListener('input', e => {
+        if (!e.target.classList.contains('precio-admin')) return;
+        const tr = e.target.closest('tr[data-clave]');
+        const v = parseFloat(e.target.value);
+        if (!(v > 0)) return;
+        tr.dataset.precio = v;
+        e.target.classList.toggle('cambiado', Math.abs(v - parseFloat(e.target.dataset.original)) > 0.001);
+        recalcular();
+    });
+    function preciosCambiados() {
+        const r = {};
+        document.querySelectorAll('.precio-admin.cambiado').forEach(i => { r[i.closest('tr[data-clave]').dataset.clave] = parseFloat(i.value); });
+        return r;
     }
 
     if (SEPARADAS) {

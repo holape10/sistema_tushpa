@@ -52,7 +52,13 @@
                                             <button type="button" class="sep-mas">+</button>
                                         </div></td>
                                     @endif
-                                    <td class="text-right text-muted">{{ number_format($d->ped_det_pre, 2) }}</td>
+                                    @if (auth()->user()->esAdmin())
+                                        {{-- El administrador cambia el precio ahí mismo (adelantos, un precio mal puesto) --}}
+                                        <td class="text-right"><input type="number" step="0.01" min="0.01" class="precio-admin" value="{{ number_format($d->ped_det_pre, 2, '.', '') }}"
+                                                                      data-original="{{ number_format($d->ped_det_pre, 2, '.', '') }}" title="Solo el administrador cambia el precio"></td>
+                                    @else
+                                        <td class="text-right text-muted">{{ number_format($d->ped_det_pre, 2) }}</td>
+                                    @endif
                                     <td class="text-right"><strong class="linea-total">{{ number_format($separadas ? 0 : $d->cantidad_pendiente * $d->ped_det_pre, 2) }}</strong></td>
                                     @if ($descuentos->cortesias)
                                         <td class="text-center"><button type="button" class="btn-cortesia btn-cortesia-mesa" title="Dar de cortesía (gratis)">🎁</button></td>
@@ -63,7 +69,7 @@
                     </table>
                     <div class="cuenta-pie">
                         <span class="text-muted">{{ $detalle->count() }} {{ $detalle->count() === 1 ? 'producto' : 'productos' }} · {{ rtrim(rtrim(number_format($detalle->sum('cantidad_pendiente'), 2), '0'), '.') }} unid.</span>
-                        <span>{{ $separadas ? 'Pendiente en la mesa' : 'Consumo' }}: <b>S/ {{ number_format($total, 2) }}</b></span>
+                        <span>{{ $separadas ? 'Pendiente en la mesa' : 'Consumo' }}: <b @unless ($separadas) id="consumo_pie" @endunless>S/ {{ number_format($total, 2) }}</b></span>
                     </div>
                     @if ($cuentasPrevias->isNotEmpty())
                         <div class="previas">

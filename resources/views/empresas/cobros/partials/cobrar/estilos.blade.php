@@ -60,6 +60,8 @@
         .sep-ctrl button { width: 28px; height: 28px; padding: 0; border: none; border-radius: 8px; background: #7c3aed; color: #fff; font-weight: bold; font-size: 15px; }
         .sep-ctrl input { width: 46px; text-align: center; height: 28px; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 700; }
         tr.sep-elegido td { background: #f5f3ff !important; }
+        .precio-admin { width: 76px; height: 30px; text-align: right; border: 1px dashed #a5b4fc; border-radius: 8px; padding: 0 6px; font-weight: 700; background: #f8faff; }
+        .precio-admin.cambiado { border: 2px solid #f59e0b; background: #fffbeb; }
 
         /* Cliente */
         .sug-wrap { position: relative; }

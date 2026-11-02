@@ -491,6 +491,36 @@ class Clinica
         return $regId;
     }
 
+    /**
+     * Lo que el paciente ya pagó antes de pasar su tratamiento al sistema (del cuaderno): en el plan mensual, las primeras
+     * $cuotas del plan (inicial incluida); en el normal, un monto. Queda como un pago ya cobrado (no va a caja), con la
+     * fecha de inicio del tratamiento. Devuelve el monto registrado.
+     */
+    public static function registrarPagosAnteriores(object $tra, int $cuotas, float $monto, User $user): float
+    {
+        $detalle = 'PAGOS ANTERIORES AL SISTEMA';
+        if (($tra->modalidad ?? 'UNICO') === 'MENSUAL') {
+            $pagadas = array_slice(self::cuotasDe($tra, 0), 0, max(0, $cuotas));
+            if (! $pagadas) {
+                return 0.0;
+            }
+            $monto = array_sum(array_column($pagadas, 'monto'));
+            $mes = fn ($c) => ucfirst(Carbon::parse($c['vence'])->locale('es')->isoFormat('MMM YYYY'));
+            $detalle .= ': '.count($pagadas).' cuota(s), '.$mes($pagadas[0]).' a '.$mes(end($pagadas));
+        }
+        $monto = round(min($monto, (float) $tra->costo), 2);
+        if ($monto <= 0) {
+            return 0.0;
+        }
+        DB::table('clinica_tratamiento_registros')->insert([
+            'tra_id' => $tra->tra_id, 'fecha_hora' => $tra->creado, 'detalle' => $detalle, 'adelanto' => $monto,
+            'saldo' => round((float) $tra->costo - $monto, 2), 'ped_id' => null, 'IdUsuario' => $user->IdUsuario, 'creado' => now(),
+        ]);
+        self::actualizarEstado((int) $tra->tra_id);
+
+        return $monto;
+    }
+
     /** ¿El pago de la sesión ya se cobró en caja con comprobante? Ese monto ya no se cambia desde aquí. */
     public static function pagoCobrado(?int $pedId): bool
     {

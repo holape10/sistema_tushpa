@@ -44,8 +44,12 @@
             // ---- Tratamiento ----
             nuevoTratamiento() {
                 const mes = new Date(); mes.setMonth(mes.getMonth() + 1);
+                // La ficha que ya tiene el paciente (la historia la deja en window.fichaPaciente) para completarla aquí mismo
+                const ficha = (window.fichaPaciente || {})[this.hisId] || {};
                 this.modalTrat = { tra_id: null, descripcion: '', esp_id: '', costo: '', detalle: '', adelanto: '', conSesion: true, fecha: '', hora: this.horaAhora(), ya_cobrado: true,
-                    modalidad: 'UNICO', cuota_inicial: '', cuotas: 12, cuota: '', primer_vencimiento: mes.toISOString().slice(0, 10) };
+                    modalidad: 'UNICO', cuota_inicial: '', cuotas: 12, cuota: '', primer_vencimiento: mes.toISOString().slice(0, 10),
+                    inicio: '', marcarPagadas: true, cuotas_pagadas: null, pagado_antes: '',
+                    alergias: ficha.alergias || '', antecedentes: ficha.antecedentes || '', consentimiento: true, riesgos: '' };
                 this.$nextTick(() => this.prepararFirma('firma_trat'));
             },
             editarTratamiento(t) {
@@ -67,6 +71,28 @@
             esPasada(f) { return !!f && f.slice(0, 10) < this.hoy(); },
             datosFecha(m) { return m.fecha ? { fecha_hora: m.fecha + ' ' + (m.hora || '12:00'), ya_cobrado: this.esPasada(m.fecha) && m.ya_cobrado } : {}; },
             mesCorto(f) { return f ? new Date(f + 'T00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : ''; },
+            // ---- Tratamientos que empezaron antes (se pasan del cuaderno): lo que ya pagó ----
+            /** Cuotas del plan mensual con su vencimiento (igual que el servidor): la inicial el día de inicio y una por mes */
+            planCuotas(m) {
+                if (m.modalidad !== 'MENSUAL') return [];
+                const inicio = m.inicio || this.hoy();
+                const plan = [];
+                if (Number(m.cuota_inicial) > 0) plan.push({ etiqueta: 'Inicial', vence: inicio, monto: Number(m.cuota_inicial) });
+                const [a, mm, d] = String(m.primer_vencimiento || inicio).split('-').map(Number);
+                for (let i = 1; i <= (Number(m.cuotas) || 0); i++) {
+                    const f = new Date(a, mm - 1 + i - 1, 1);
+                    const ultimo = new Date(f.getFullYear(), f.getMonth() + 1, 0).getDate();
+                    f.setDate(Math.min(d, ultimo));
+                    const vence = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
+                    plan.push({ etiqueta: f.toLocaleDateString('es-PE', { month: 'short', year: 'numeric' }), vence, monto: Number(m.cuota) || 0 });
+                }
+                return plan;
+            },
+            /** Cuotas que ya vencieron hasta hoy (las que normalmente ya pagó) */
+            cuotasVencidas(m) { return this.planCuotas(m).filter(c => c.vence <= this.hoy()); },
+            cuotasPagadas(m) { return m.cuotas_pagadas === null ? this.cuotasVencidas(m).length : Math.max(0, Number(m.cuotas_pagadas) || 0); },
+            montoPagadas(m) { return this.planCuotas(m).slice(0, this.cuotasPagadas(m)).reduce((s, c) => s + c.monto, 0); },
+            empezoAntes(m) { return (m.inicio && m.inicio < this.hoy()) || (m.modalidad === 'MENSUAL' && this.cuotasVencidas(m).length > 0); },
             async guardarTratamiento() {
                 const m = this.modalTrat;
                 const datos = { descripcion: m.descripcion, esp_id: m.esp_id || null, costo: m.costo || 0, modalidad: m.modalidad, ...(m.tra_id && m.creado ? { creado: m.creado } : {}),
@@ -74,8 +100,18 @@
                 const r = m.tra_id
                     ? await this.post('{{ url('clinica/tratamientos') }}/' + m.tra_id, datos)
                     : await this.post('{{ url('clinica/historia') }}/' + this.hisId + '/tratamientos',
-                        { ...datos, ...this.datosFecha(m), detalle: m.detalle, adelanto: m.adelanto || 0, firma: this.firmaDe('firma_trat') });
-                if (r.ok) { this.modalTrat = null; this.cargar(this.hisId); }
+                        { ...datos, ...this.datosFecha(m), detalle: m.detalle, adelanto: m.adelanto || 0, firma: this.firmaDe('firma_trat'), inicio: m.inicio || null,
+                          cuotas_pagadas: m.modalidad === 'MENSUAL' && m.marcarPagadas && this.empezoAntes(m) ? this.cuotasPagadas(m) : 0,
+                          pagado_antes: m.modalidad !== 'MENSUAL' && this.empezoAntes(m) ? (m.pagado_antes || 0) : 0,
+                          alergias: m.alergias, antecedentes: m.antecedentes, consentimiento: m.consentimiento, riesgos: m.riesgos });
+                if (r.ok) {
+                    // Lo escrito en la ficha rápida también se ve en la ficha de la historia
+                    if (!m.tra_id && (m.alergias || m.antecedentes)) {
+                        window.dispatchEvent(new CustomEvent('ficha-paciente', { detail: Object.fromEntries(Object.entries({ alergias: m.alergias, antecedentes: m.antecedentes }).filter(([, v]) => v)) }));
+                    }
+                    if (!m.tra_id && m.consentimiento) setTimeout(() => location.reload(), 900);
+                    this.modalTrat = null; this.cargar(this.hisId);
+                }
             },
             // ---- Sesión ----
             nuevaSesion(t) {
@@ -226,7 +262,7 @@
             <h3 class="font-bold text-gray-800" x-text="modalTrat?.tra_id ? 'Corregir tratamiento' : 'Nuevo tratamiento'"></h3>
             <template x-if="modalTrat">
                 <div class="space-y-3">
-                    <label class="block text-xs font-semibold text-gray-500">Tratamiento
+                    <label class="block text-xs font-semibold text-gray-500">Tratamiento <span class="font-normal" x-show="!modalTrat.tra_id">(si lo dejas vacío, va el nombre de la especialidad)</span>
                         <input x-model="modalTrat.descripcion" maxlength="200" placeholder="Ej. ENDODONCIA PIEZA 1.4 + CORONA" class="{{ $in }} mt-1 uppercase"></label>
                     <label class="block text-xs font-semibold text-gray-500">Especialidad
                         <select x-model="modalTrat.esp_id" class="{{ $in }} mt-1"><option value="">—</option>
@@ -256,6 +292,27 @@
                             <span x-text="'= ' + (Number(modalTrat.cuota_inicial) > 0 ? soles(modalTrat.cuota_inicial) + ' de inicial + ' : '') + (Number(modalTrat.cuotas) || 0) + ' × ' + soles(modalTrat.cuota)"></span>.
                             La inicial vence el día que se registra el tratamiento. Si se alarga, aquí mismo se suben los meses.</p>
                     </div>
+                    {{-- Tratamiento que empezó antes (se pasa del cuaderno): su fecha y lo que ya pagó --}}
+                    <template x-if="!modalTrat.tra_id">
+                        <div class="space-y-2">
+                            <label class="block text-xs font-semibold text-gray-500">Empezó el <span class="font-normal">(vacío = hoy; pon la fecha real si viene de antes)</span>
+                                <input type="date" x-model="modalTrat.inicio" :max="hoy()" class="{{ $in }} mt-1"></label>
+                            <div x-show="empezoAntes(modalTrat) && modalTrat.modalidad === 'MENSUAL'" class="rounded-xl bg-emerald-50 border border-emerald-200 p-3 space-y-2">
+                                <label class="flex items-start gap-2 text-sm font-bold text-emerald-900">
+                                    <input type="checkbox" x-model="modalTrat.marcarPagadas" class="mt-0.5 rounded text-emerald-600">
+                                    <span>Ya pagó las cuotas hasta hoy <span class="block text-xs font-normal">No van a caja: quedan como pagadas antes del sistema.</span></span></label>
+                                <div x-show="modalTrat.marcarPagadas" class="flex flex-wrap items-center gap-2 text-xs text-emerald-900">
+                                    Cuotas pagadas
+                                    <input type="number" min="0" :max="planCuotas(modalTrat).length" :value="cuotasPagadas(modalTrat)" @input="modalTrat.cuotas_pagadas = $event.target.value"
+                                           class="w-20 h-9 rounded-lg border-emerald-300 text-center font-bold">
+                                    <span x-text="cuotasPagadas(modalTrat) ? '(' + planCuotas(modalTrat)[0].etiqueta + ' a ' + planCuotas(modalTrat)[Math.min(cuotasPagadas(modalTrat), planCuotas(modalTrat).length) - 1].etiqueta + ') = ' + soles(montoPagadas(modalTrat)) : ''"></span>
+                                </div>
+                            </div>
+                            <label x-show="empezoAntes(modalTrat) && modalTrat.modalidad !== 'MENSUAL'" class="block rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-900">
+                                Ya pagó antes del sistema S/ <span class="font-normal">(no va a caja)</span>
+                                <input type="number" step="0.01" min="0" x-model="modalTrat.pagado_antes" placeholder="0.00" class="{{ $in }} mt-1 text-right font-bold"></label>
+                        </div>
+                    </template>
                     <label x-show="modalTrat.tra_id && esAdmin" class="block text-xs font-semibold text-gray-500">Fecha de inicio del tratamiento
                         <input type="date" x-model="modalTrat.creado" :max="hoy()" class="{{ $in }} mt-1"></label>
                     <p x-show="modalTrat.tra_id" class="text-xs text-gray-500">Ya pagado: <b x-text="soles(modalTrat.pagado)"></b> (el costo no puede quedar por debajo).</p>
@@ -276,12 +333,30 @@
                                 <input type="number" step="0.01" min="0" x-model="modalTrat.adelanto" class="{{ $in }} mt-1 text-right font-bold"></label>
                             <button type="button" x-show="modalTrat.modalidad === 'MENSUAL' && Number(modalTrat.cuota_inicial) > 0" @click="modalTrat.adelanto = modalTrat.cuota_inicial"
                                     class="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold" x-text="'Paga la inicial (' + soles(modalTrat.cuota_inicial) + ')'"></button>
-                            <p class="text-xs text-gray-500" x-show="totalPlan(modalTrat) > 0">Saldo después del adelanto: <b x-text="soles(totalPlan(modalTrat) - (Number(modalTrat.adelanto) || 0))"></b></p>
+                            <p class="text-xs text-gray-500" x-show="totalPlan(modalTrat) > 0">Saldo después del adelanto: <b x-text="soles(totalPlan(modalTrat) - (Number(modalTrat.adelanto) || 0)
+                                - (empezoAntes(modalTrat) ? (modalTrat.modalidad === 'MENSUAL' ? (modalTrat.marcarPagadas ? montoPagadas(modalTrat) : 0) : (Number(modalTrat.pagado_antes) || 0)) : 0))"></b></p>
+                            {{-- Ficha rápida: lo que se escriba se guarda en la historia (vacío no borra lo que ya tenía) --}}
+                            <details class="rounded-xl border border-gray-200" :open="!modalTrat.alergias">
+                                <summary class="cursor-pointer px-3 py-2 text-xs font-bold text-gray-600">🩺 Ficha del paciente (alergias y antecedentes)</summary>
+                                <div class="px-3 pb-3 space-y-2">
+                                    <label class="block text-xs font-semibold text-gray-500">Alergias
+                                        <input x-model="modalTrat.alergias" maxlength="2000" placeholder="Penicilina, AINES… (o NINGUNA)" class="{{ $in }} mt-1"></label>
+                                    <label class="block text-xs font-semibold text-gray-500">Antecedentes
+                                        <textarea x-model="modalTrat.antecedentes" rows="2" maxlength="5000" placeholder="Diabetes, HTA, cirugías…" class="{{ $in }} mt-1"></textarea></label>
+                                </div>
+                            </details>
                             <div>
                                 <div class="flex justify-between items-center"><span class="text-xs font-semibold text-gray-500">Firma del paciente</span>
                                     <button type="button" @click="borrarFirma('firma_trat')" class="text-xs text-gray-500 underline">Borrar</button></div>
                                 <canvas x-ref="firma_trat" class="mt-1 w-full h-32 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 touch-none"></canvas>
                             </div>
+                            {{-- La misma firma sirve para el consentimiento informado del tratamiento --}}
+                            <label class="flex items-start gap-2 rounded-xl bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+                                <input type="checkbox" x-model="modalTrat.consentimiento" class="mt-0.5 rounded text-indigo-600">
+                                <span><b>Crear el consentimiento informado</b> de este tratamiento y firmarlo con esta misma firma
+                                    <span class="block text-indigo-700">Queda en la historia, listo para imprimir. Sin firma, se crea para firmarlo después.</span></span></label>
+                            <label x-show="modalTrat.consentimiento" class="block text-xs font-semibold text-gray-500">Riesgos explicados <span class="font-normal">(opcional)</span>
+                                <textarea x-model="modalTrat.riesgos" rows="2" maxlength="1500" placeholder="Dolor e inflamación, sangrado…" class="{{ $in }} mt-1"></textarea></label>
                         </div>
                     </template>
                 </div>

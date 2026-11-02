@@ -140,6 +140,7 @@
             separadas: SEPARADAS ? seleccionSeparada() : null,
             // Cortesías de la mesa y descuento a la cuenta (el servidor revisa permisos y la clave del administrador)
             cortesias: cortesias,
+            precios: DIRECTA ? {} : preciosCambiados(),
             ...(cupon ? { cupon: cupon.codigo } : (DSCTO && montoDescuento() > 0 ? {
                 descuento_tipo: el('dscto_tipo').value, descuento_valor: parseFloat(el('dscto_valor').value) || 0,
                 descuento_motivo: el('dscto_motivo').value.trim(), clave_admin: el('clave_admin').value || null,

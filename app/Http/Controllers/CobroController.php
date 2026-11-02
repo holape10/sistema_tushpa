@@ -13,6 +13,7 @@ use App\Models\Piso;
 use App\Models\ProductoPresentacion;
 use App\Models\Turno;
 use App\Support\ClienteDirecciones;
+use App\Support\Clinica;
 use App\Support\Cocina;
 use App\Support\Comprobante;
 use App\Support\ConsultaPeru;
@@ -165,6 +166,52 @@ class CobroController extends Controller
             'negocio' => EmpresaNegocio::find($user->id_empresa_negocio),
             'categorias' => DB::table('categorias')->where('id_empresa_negocio', $user->id_empresa_negocio)->where('visible', 1)->get(),
         ]);
+    }
+
+    /**
+     * El administrador cambia el precio de un producto al cobrar (adelantos de la clínica, un precio mal puesto).
+     * Solo lo que aún no se cobró en parte; en la clínica, la sesión del tratamiento queda con el monto nuevo.
+     *
+     * @param  array<string, float|string>  $precios  [clave de la pantalla => precio nuevo]
+     * @return array<string, string> clave de antes => clave nueva
+     */
+    private function cambiarPrecios(Pedido $pedido, $items, array $precios): array
+    {
+        $claves = [];
+        foreach ($this->agrupar($items) as $g) {
+            if (! isset($precios[$g->clave])) {
+                continue;
+            }
+            $nuevo = round((float) $precios[$g->clave], 2);
+            if (abs($nuevo - (float) $g->ped_det_pre) < 0.001) {
+                continue;
+            }
+            if ($g->lineas->contains(fn ($l) => (float) $l->item_facturado > 0)) {
+                throw new \RuntimeException("De {$g->descripcion} ya se cobró una parte: su precio se cambia en la comanda.");
+            }
+            PedidoDetalle::whereIn('ped_det_id', $g->lineas->pluck('ped_det_id'))->update(['ped_det_pre' => $nuevo]);
+            $claves[$g->clave] = preg_replace('/\|[^|]*$/', '|'.number_format($nuevo, 2, '.', ''), $g->clave);
+        }
+        if (! $claves) {
+            return [];
+        }
+        $total = (float) PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')->sum(DB::raw('ped_det_can * ped_det_pre'));
+        $pedido->update(['ped_tot' => round($total, 2)]);
+        // Adelanto de un tratamiento de la clínica: la sesión queda con lo que de verdad se cobra (y el saldo se recalcula)
+        if ($pedido->ped_tip === 'Clinica') {
+            $reg = DB::table('clinica_tratamiento_registros')->where('ped_id', $pedido->ped_id)->first();
+            if ($reg) {
+                $tra = DB::table('clinica_tratamientos')->where('tra_id', $reg->tra_id)->first();
+                $otros = (float) DB::table('clinica_tratamiento_registros')->where('tra_id', $reg->tra_id)->where('reg_id', '!=', $reg->reg_id)->sum('adelanto');
+                if ((float) $tra->costo > 0 && $otros + $total > (float) $tra->costo + 0.001) {
+                    throw new \RuntimeException('Con ese precio lo pagado pasaría el costo del tratamiento (S/ '.number_format((float) $tra->costo, 2).'): corrige primero el costo del tratamiento.');
+                }
+                DB::table('clinica_tratamiento_registros')->where('reg_id', $reg->reg_id)->update(['adelanto' => round($total, 2)]);
+                Clinica::actualizarEstado((int) $reg->tra_id);
+            }
+        }
+
+        return $claves;
     }
 
     /** Promociones que la pantalla de cobro muestra antes de cobrar (al registrar se vuelven a calcular en el servidor) */
@@ -368,8 +415,10 @@ class CobroController extends Controller
             'propina_medio' => 'nullable|integer',
             'usd_med_pag' => 'nullable|array|max:10',
             'usd_med_pag.*' => 'nullable|boolean',
+            'precios' => 'nullable|array|max:200',
+            'precios.*' => 'numeric|min:0.01|max:999999',
         ], [], [
-            'clinum' => 'DNI / RUC', 'clinom' => 'Nombre o razón social', 'fecEmi' => 'Fecha de emisión',
+            'clinum' => 'DNI / RUC', 'clinom' => 'Nombre o razón social', 'fecEmi' => 'Fecha de emisión', 'precios.*' => 'precio',
         ]);
 
         $user = Auth::user();
@@ -415,8 +464,16 @@ class CobroController extends Controller
                     throw new \RuntimeException('El pedido no tiene ítems pendientes de cobro.');
                 }
 
+                // ---- El administrador cambia el precio ahí mismo (las claves de la pantalla llevan el precio: se traducen) ----
+                $claves = [];
+                if ($user->esAdmin() && $request->filled('precios')) {
+                    $claves = $this->cambiarPrecios($pedido, $items, (array) $request->input('precios'));
+                    $items = $this->itemsPendientes($pedido->ped_id);
+                }
+                $traducir = fn ($lista) => is_array($lista) ? collect($lista)->mapWithKeys(fn ($v, $k) => [$claves[$k] ?? $k => $v])->all() : $lista;
+
                 // ---- Qué se cobra: todo lo pendiente, o solo lo elegido (cuentas separadas) ----
-                $seleccion = $request->input('separadas'); // [clave => cantidad] o null = todo
+                $seleccion = $traducir($request->input('separadas')); // [clave => cantidad] o null = todo
                 $aCobrar = collect();
                 foreach ($this->agrupar($items) as $g) {
                     $cant = $seleccion === null ? $g->cantidad_pendiente : round((float) ($seleccion[$g->clave] ?? 0), 2);
@@ -437,7 +494,7 @@ class CobroController extends Controller
                 // Presentación (TORTA ENTERA = 8 tajadas): del stock salen cantidad x factor unidades base
                 $presentaciones = ProductoPresentacion::whereIn('id_presentacion', $aCobrar->pluck('id_presentacion')->filter())->get()->keyBy('id_presentacion');
                 // Cortesías: de cada producto, cuántos van gratis y por qué ({clave: {cantidad, motivo}})
-                $cortesias = (array) $request->input('cortesias', []);
+                $cortesias = (array) $traducir((array) $request->input('cortesias', []));
                 $lineas = [];
                 foreach ($aCobrar as $g) {
                     $base = [

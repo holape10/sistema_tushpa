@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EmpresaNegocio;
 use App\Support\Clinica;
+use App\Support\ClinicaFirmas;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -92,34 +93,73 @@ class TratamientoClinicoController extends Controller
         }));
     }
 
-    /** Nuevo tratamiento (con su primera sesión, si se llena) */
+    /**
+     * Nuevo tratamiento, todo de una vez: la ficha rápida (alergias y antecedentes), el tratamiento, lo que ya pagó antes
+     * del sistema (tratamientos que se pasan del cuaderno), la primera sesión con su adelanto y la firma del paciente, que
+     * también firma el consentimiento informado si se pide. Lo que se deje vacío se completa después.
+     */
     public function guardar(Request $request, int $hisId): JsonResponse
     {
         $this->usa();
-        abort_unless(DB::table('historia_clinica')->where('his_cli_id', $hisId)->where('id_empresa_negocio', $this->suc())->exists(), 404);
+        $h = DB::table('historia_clinica')->where('his_cli_id', $hisId)->where('id_empresa_negocio', $this->suc())->first();
+        abort_unless($h, 404);
         $d = $request->validate([
-            'descripcion' => 'required|string|max:200', 'esp_id' => 'nullable|integer', 'costo' => 'required_unless:modalidad,MENSUAL|nullable|numeric|min:0|max:999999',
+            'descripcion' => 'nullable|string|max:200', 'esp_id' => 'nullable|integer', 'costo' => 'required_unless:modalidad,MENSUAL|nullable|numeric|min:0|max:999999',
             'detalle' => 'nullable|string|max:3000', 'adelanto' => 'nullable|numeric|min:0|max:999999', 'firma' => 'nullable|string|max:600000',
-        ] + self::REGLAS_PLAN + self::reglasFecha(), [], self::NOMBRES_PLAN + self::NOMBRES_FECHA + ['descripcion' => 'tratamiento', 'costo' => 'costo total']);
+            'inicio' => 'nullable|date|after:2000-01-01|before_or_equal:today',
+            // Lo pagado antes de pasar el tratamiento al sistema (no va a caja): cuotas del plan mensual o un monto
+            'cuotas_pagadas' => 'nullable|integer|min:0|max:121', 'pagado_antes' => 'nullable|numeric|min:0|max:999999',
+            'alergias' => 'nullable|string|max:2000', 'antecedentes' => 'nullable|string|max:5000',
+            'consentimiento' => 'nullable|boolean', 'riesgos' => 'nullable|string|max:1500',
+        ] + self::REGLAS_PLAN + self::reglasFecha(), [], self::NOMBRES_PLAN + self::NOMBRES_FECHA + ['costo' => 'costo total', 'inicio' => 'fecha de inicio']);
 
-        return $this->json(function () use ($hisId, $d) {
+        return $this->json(function () use ($h, $d) {
             $user = Auth::user();
             $espId = ! empty($d['esp_id']) && DB::table('especialidad')->where('esp_id', $d['esp_id'])->where('id_empresa_negocio', $this->suc())->exists()
                 ? (int) $d['esp_id'] : null;
+            // Sin nombre: el de la especialidad (lo importante es registrar rápido; se corrige con ✏️)
+            $descripcion = mb_strtoupper(trim((string) ($d['descripcion'] ?? '')))
+                ?: ($espId ? 'TRATAMIENTO DE '.mb_strtoupper((string) DB::table('especialidad')->where('esp_id', $espId)->value('esp_des')) : 'TRATAMIENTO');
+            $inicio = ! empty($d['inicio']) ? $d['inicio'].' '.now()->format('H:i:s') : ($d['fecha_hora'] ?? now());
+
+            // Ficha rápida: solo lo que se escribió (lo vacío no borra lo que ya tenía)
+            $ficha = array_filter(['alergias' => trim((string) ($d['alergias'] ?? '')), 'antecedentes' => trim((string) ($d['antecedentes'] ?? ''))], fn ($v) => $v !== '');
+            if ($ficha) {
+                DB::table('historia_clinica')->where('his_cli_id', $h->his_cli_id)->update($ficha);
+            }
+
             $id = DB::table('clinica_tratamientos')->insertGetId(self::plan($d) + [
-                'his_cli_id' => $hisId, 'esp_id' => $espId, 'descripcion' => mb_strtoupper(trim($d['descripcion'])),
+                'his_cli_id' => $h->his_cli_id, 'esp_id' => $espId, 'descripcion' => mb_substr($descripcion, 0, 200),
                 'doctor' => Clinica::esDoctor($user) ? $user->IdUsuario : null, 'IdUsuario' => $user->IdUsuario,
-                'id_empresa_negocio' => $this->suc(), 'creado' => $d['fecha_hora'] ?? now(),
+                'id_empresa_negocio' => $this->suc(), 'creado' => $inicio,
             ]);
             $tra = DB::table('clinica_tratamientos')->where('tra_id', $id)->first();
+            $antes = Clinica::registrarPagosAnteriores($tra, (int) ($d['cuotas_pagadas'] ?? 0), (float) ($d['pagado_antes'] ?? 0), $user);
             if (trim((string) ($d['detalle'] ?? '')) !== '' || (float) ($d['adelanto'] ?? 0) > 0) {
+                $tra = DB::table('clinica_tratamientos')->where('tra_id', $id)->first();
                 $reg = Clinica::registrarSesion($tra, $d, $user);
                 if (! empty($d['firma'])) {
                     Clinica::guardarFirma($reg, $this->suc(), $d['firma']);
                 }
             }
+            // Consentimiento informado del tratamiento, firmado con la misma firma
+            $firmoConsentimiento = false;
+            if (! empty($d['consentimiento'])) {
+                $conId = DB::table('clinica_consentimientos')->insertGetId([
+                    'his_cli_id' => $h->his_cli_id, 'tratamiento' => mb_substr($descripcion, 0, 300), 'riesgos' => trim((string) ($d['riesgos'] ?? '')) ?: null,
+                    'doctor' => $user->IdUsuario, 'IdUsuario' => $user->IdUsuario, 'id_empresa_negocio' => $this->suc(), 'creado' => now(),
+                ]);
+                if (! empty($d['firma'])) {
+                    ClinicaFirmas::guardar(ClinicaFirmas::documento('consentimiento', $conId, $this->suc()), $d['firma']);
+                    $firmoConsentimiento = true;
+                }
+            }
 
-            return ['mensaje' => 'Tratamiento registrado.'.(Clinica::vaACaja($d) ? ' El adelanto ya aparece en "Por cobrar" de recepción.' : ''), 'tra_id' => $id];
+            return ['mensaje' => 'Tratamiento registrado.'
+                .($antes > 0 ? ' Pagos anteriores: S/ '.number_format($antes, 2).'.' : '')
+                .(Clinica::vaACaja($d) ? ' El adelanto ya aparece en "Por cobrar" de recepción.' : '')
+                .(! empty($d['consentimiento']) ? ($firmoConsentimiento ? ' Consentimiento firmado.' : ' Consentimiento creado (falta firmarlo).') : ''),
+                'tra_id' => $id];
         });
     }
 
