@@ -143,6 +143,12 @@
                     await Promise.all(Array.from({ length: Math.min(juntos, ids.length) }, trabajador));
                     this.progreso = `Listo: ${ok} bien, ${ids.length - ok} con problema (mira el mensaje de cada fila).`;
                     this.sel = [];
+                    // Algo cambió: la lista y los contadores se actualizan solos (los mensajes de cada comprobante quedan guardados)
+                    if (ok > 0 && @js($filtro) !== 'todos') {
+                        this.progreso += ' Actualizando la lista…';
+                        setTimeout(() => location.reload(), 1500);
+                        return;
+                    }
                     this.trabajando = false;
                 },
             };

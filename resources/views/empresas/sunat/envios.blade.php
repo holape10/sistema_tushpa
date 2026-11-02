@@ -240,6 +240,11 @@
             document.querySelectorAll('.chk:checked').forEach(c => c.checked = false);
             actualizarSeleccion();
             progreso.textContent = `Listo: ${ok} aceptado(s), ${ids.length - ok} con problema.`;
+            // La lista y los contadores se actualizan solos (los que fallaron siguen con su mensaje)
+            if (ok > 0) {
+                progreso.textContent += ' Actualizando la lista…';
+                setTimeout(() => location.reload(), 1500);
+            }
         });
     </script>
 @endsection
