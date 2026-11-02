@@ -35,7 +35,7 @@
                 {{-- Lienzo --}}
                 <div class="bg-white rounded-2xl shadow-sm p-3 overflow-x-auto">
                     <div x-ref="lienzo" class="relative w-full rounded-xl bg-slate-50 ring-1 ring-slate-200 select-none overflow-hidden"
-                         :style="'aspect-ratio: 1000 / ' + alto + '; min-width: ' + (alto > 1000 ? 300 : 560) + 'px; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px;'"
+                         :style="'aspect-ratio: 1000 / ' + alto + '; width: min(100%, calc(72vh * 1000 / ' + alto + ')); margin: 0 auto; min-width: ' + (alto > 1000 ? 260 : 560) + 'px; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px;'"
                          @pointerdown.self="sel = null">
                         {{-- Barra, paredes, DJ... (debajo de las mesas) --}}
                         <template x-for="(e, i) in elementos" :key="'e' + i">
@@ -111,8 +111,13 @@
                                         :class="alto === valor ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'" x-text="nombre"></button>
                             </template>
                         </div>
-                        <input type="range" min="{{ PlanoMesas::ALTO_MIN }}" max="{{ PlanoMesas::ALTO_MAX }}" step="25" :value="alto" @input="cambiarAlto(Number($event.target.value))" class="w-full">
-                        <p class="text-[11px] text-gray-500" x-text="alto < 1000 ? 'Más ancho que largo' : (alto === 1000 ? 'Cuadrado' : 'Más largo que ancho')"></p>
+                        <label class="block text-xs font-semibold text-gray-600 mt-1">↔ Ancho del local</label>
+                        <div class="flex items-center gap-2 text-[11px] text-gray-500">
+                            <span>Angosto</span>
+                            <input type="range" min="500" max="2500" step="25" :value="Math.round(1000000 / alto)" @input="cambiarAlto(Math.round(1000000 / Number($event.target.value)))" class="flex-1">
+                            <span>Ancho</span>
+                        </div>
+                        <p class="text-[11px] text-gray-500" x-text="alto < 1000 ? 'Más ancho que largo' : (alto === 1000 ? 'Cuadrado' : 'Más largo que ancho (angosto)')"></p>
                     </div>
 
                     <div class="bg-white rounded-2xl shadow-sm p-4 space-y-2">

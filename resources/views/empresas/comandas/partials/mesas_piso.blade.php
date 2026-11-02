@@ -9,7 +9,7 @@
 @else
     <div class="col-span-full overflow-x-auto -mx-1 px-1 pb-2">
         @php $alto = $alto ?? \App\Support\PlanoMesas::ALTO; @endphp
-        <div class="plano-lienzo relative w-full rounded-2xl bg-slate-50 ring-1 ring-slate-200" style="aspect-ratio: 1000 / {{ $alto }}; min-width: {{ $alto > 1000 ? 360 : 640 }}px">
+        <div class="plano-lienzo relative w-full rounded-2xl bg-slate-50 ring-1 ring-slate-200" style="aspect-ratio: 1000 / {{ $alto }}; width: min(100%, calc(75vh * 1000 / {{ $alto }})); margin: 0 auto; min-width: {{ $alto > 1000 ? 300 : 640 }}px">
             @foreach ($elementos ?? [] as $e)
                 @php
                     $c = $e->color ?: (\App\Support\PlanoMesas::ELEMENTOS[$e->tipo][2] ?? '#475569');
