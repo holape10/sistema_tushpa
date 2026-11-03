@@ -115,4 +115,18 @@ class PlanoMesasTest extends FlujoTestCase
         $this->get(route('comandas.seleccion'))->assertOk()->assertSee('aspect-ratio: 600 / 1500', false);
         $this->get(route('mesas.plano'))->assertOk()->assertSee('Medidas del local');
     }
+
+    public function test_la_mesa_mas_chica_se_ve_como_un_boton_de_la_cuadricula_y_hay_cocina(): void
+    {
+        // La mesa más chica mide 100 x 80: en la PC la mesa más chica es de al menos 110 x 88 px: el plano va a 1.1 px por unidad
+        $this->postJson(route('mesas.plano.guardar', $this->piso), [
+            'mesas' => [
+                ['id' => $this->mesa1, 'nombre' => 'MESA 01', 'forma' => 'CUADRADA', 'x' => 0, 'y' => 0, 'w' => 100, 'h' => 80],
+                ['id' => $this->mesa2, 'nombre' => 'MESA 02', 'forma' => 'BOX', 'x' => 300, 'y' => 0, 'w' => 200, 'h' => 130],
+            ],
+            'elementos' => [['tipo' => 'COCINA', 'texto' => 'Cocina', 'x' => 600, 'y' => 300, 'w' => 200, 'h' => 120]], 'usar_plano' => true,
+        ])->assertOk();
+        $this->assertSame('COCINA', DB::table('plano_elementos')->where('pis_id', $this->piso)->value('tipo'));
+        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('--min-pc: 1100px', false)->assertSee('--min-movil: 1000px', false)->assertSee('🍳 Cocina');
+    }
 }

@@ -32,6 +32,7 @@ class PlanoMesas
         'DJ' => ['🎧', 'DJ / escenario', '#7e22ce', 160, 100],
         'BANO' => ['🚻', 'Baños', '#0369a1', 100, 70],
         'PISTA' => ['💃', 'Pista de baile', '#db2777', 240, 160],
+        'COCINA' => ['🍳', 'Cocina', '#ea580c', 200, 120],
         'PLANTA' => ['🌿', 'Planta', '#15803d', 50, 50],
         'TEXTO' => ['', 'Texto', '#111827', 160, 40],
     ];
@@ -152,6 +153,21 @@ class PlanoMesas
 
             return count($ubicadas);
         });
+    }
+
+    /**
+     * Píxeles por unidad para que la mesa más chica del plano se vea como un botón de la cuadrícula ($botonAncho x $botonAlto px).
+     * Con un tope, para que una mesa diminuta no vuelva gigante todo el plano.
+     *
+     * @param  Collection<int, object{plano_w: int, plano_h: int}>  $mesas
+     */
+    public static function escalaMinima(Collection $mesas, int $botonAncho, int $botonAlto): float
+    {
+        if ($mesas->isEmpty()) {
+            return 0;
+        }
+
+        return round(min(2.5, max($botonAncho / max(self::MINIMO, (int) $mesas->min('plano_w')), $botonAlto / max(self::MINIMO, (int) $mesas->min('plano_h')))), 3);
     }
 
     /**
