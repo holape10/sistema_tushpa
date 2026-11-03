@@ -17,7 +17,7 @@ class Cliente extends Model
 
     protected $guarded = [];
 
-    /** sol_clave: clave SOL principal (referencia), guardada cifrada */
+    /** sol_clave: clave SOL principal, guardada cifrada (con ella se traen los XML de las compras por json.pe) */
     protected $casts = ['vence_el' => 'date', 'prueba_hasta' => 'date', 'suspendido_el' => 'date', 'cert_vence' => 'date', 'sol_clave' => 'encrypted'];
 
     protected $hidden = ['sol_clave'];

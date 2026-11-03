@@ -6,6 +6,9 @@ RAMA="${RAMA:-main}"
 DIR="/var/www/html/${APP}"
 cd "${DIR}"
 export COMPOSER_ALLOW_SUPERUSER=1
+# Cuánto demora cada paso (para saber qué hace lenta la actualización)
+PASO=$SECONDS
+tiempo() { echo "    ($(( SECONDS - PASO )) s)"; PASO=$SECONDS; }
 
 echo "==> Modo mantenimiento"
 # Pantalla amable "Estamos actualizando el sistema" (resources/views/errors/503.blade.php), armada antes de tocar el código
@@ -16,18 +19,21 @@ echo "==> Código"
 git config --global --add safe.directory "${DIR}" || true
 git fetch origin "${RAMA}"
 git reset --hard "origin/${RAMA}"
+tiempo
 
 # Mensajes del sistema (validaciones, login) en español
 sed -i 's/^APP_LOCALE=en$/APP_LOCALE=es/; s/^APP_FALLBACK_LOCALE=en$/APP_FALLBACK_LOCALE=es/' .env
 
 echo "==> Dependencias y base de datos"
 composer install --no-dev --optimize-autoloader --no-interaction
+tiempo
 php artisan migrate --force
 # Multi-empresa: base central (planes, subdominios) y bases de cada cliente
 if grep -qE '^TENANCY_DOMINIO=.+' .env; then
     php artisan migrate --database=central --path=database/migrations/central --force
     php artisan clientes:migrar || true
 fi
+tiempo
 
 # Claves de los avisos al celular del mozo (solo la primera vez; si ya existen no las toca)
 php artisan push:claves || true
@@ -35,17 +41,27 @@ php artisan push:claves || true
 php artisan cobros:optimizar-qr || true
 
 echo "==> Estilos"
-npm ci --no-audit --no-fund
+# Los paquetes solo se reinstalan si cambió package-lock.json (reinstalar todo cada vez demora minutos)
+HUELLA_NPM="$(sha1sum package-lock.json | cut -d' ' -f1)"
+if [ -d node_modules ] && [ "$(cat node_modules/.tushpa-lock 2>/dev/null)" = "${HUELLA_NPM}" ]; then
+    echo "    paquetes sin cambios"
+else
+    npm ci --no-audit --no-fund
+    echo "${HUELLA_NPM}" > node_modules/.tushpa-lock
+fi
 npm run build
+tiempo
 
 echo "==> Cachés y permisos"
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+tiempo
 chown -R apache:apache "${DIR}"
 chmod -R ug+rwX storage bootstrap/cache public/imagenes
 command -v restorecon >/dev/null && restorecon -R "${DIR}" || true
+echo "    permisos"; tiempo
 # No mostrar a internet las versiones exactas de Apache y PHP (si Apache no acepta el cambio, se quita)
 [ -f /etc/httpd/conf.d/00-tushpa-seguridad.conf ] || printf 'ServerTokens Prod\nServerSignature Off\n' > /etc/httpd/conf.d/00-tushpa-seguridad.conf
 apachectl configtest >/dev/null 2>&1 || rm -f /etc/httpd/conf.d/00-tushpa-seguridad.conf
@@ -62,4 +78,4 @@ fi
 [ -f /usr/local/sbin/tushpa-ssl ] && install -o root -g root -m 755 deploy/ssl-clientes.sh /usr/local/sbin/tushpa-ssl
 [ -f /usr/local/sbin/tushpa-respaldos-nube ] && install -o root -g root -m 755 deploy/respaldos-nube.sh /usr/local/sbin/tushpa-respaldos-nube
 
-echo "==> Listo: $(git log -1 --format='%h %s')"
+echo "==> Listo en ${SECONDS} s: $(git log -1 --format='%h %s')"

@@ -79,6 +79,23 @@
         </button>
     </div>
 
+    @if ($faltan)
+        <section class="bg-white rounded-2xl shadow-sm p-4 flex flex-wrap items-center gap-3">
+            <div class="flex-1 min-w-[240px] text-sm">
+                <p class="font-bold text-slate-800">Traer de SUNAT los {{ $faltan }} XML que faltan</p>
+                @if ($faltaJsonPe)
+                    <p class="text-amber-700">{{ $faltaJsonPe }}</p>
+                @else
+                    <p class="text-slate-500" x-text="progreso || 'Se bajan solos con la Clave SOL de la empresa. Puedes seguir trabajando en otra pestaña.'"></p>
+                @endif
+            </div>
+            <button type="button" @click="traer()" :disabled="trayendo || {{ $faltaJsonPe ? 'true' : 'false' }}"
+                    class="h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold disabled:opacity-50">
+                <span x-text="trayendo ? 'Trayendo…' : '⬇ Traer XML de SUNAT'"></span>
+            </button>
+        </section>
+    @endif
+
     <p class="text-xs text-slate-500">
         💡 Escribe la cuenta de una línea y presiona Enter: el sistema la recuerda y la pone sola a las líneas iguales de ese proveedor, ahora y en los próximos meses.
     </p>
@@ -163,6 +180,33 @@
         return {
             filtro: 'todos',
             subiendo: false,
+            trayendo: false,
+            progreso: '',
+            /** Pide los XML de a pocos hasta que no quede ninguno; al final recarga para mostrarlos */
+            async traer() {
+                this.trayendo = true;
+                let traidos = 0, sinXml = 0;
+                try {
+                    while (true) {
+                        const r = await fetch(@json(route('sire.detalle.traer', ['periodo' => $periodo])), {
+                            method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
+                        });
+                        const d = await r.json();
+                        traidos += d.traidos || 0;
+                        sinXml += (d.errores || []).length;
+                        if (!d.ok) {
+                            tushpaAviso(d.mensaje || 'No se pudo traer los XML.', false);
+                            break;
+                        }
+                        this.progreso = `${traidos} XML traídos` + (sinXml ? ` · ${sinXml} que SUNAT no entregó` : '') + (d.quedan ? ` · quedan ${d.quedan}…` : '');
+                        if (!d.quedan) break;
+                    }
+                } catch (e) {
+                    tushpaAviso('Se cortó la conexión. Vuelve a presionar "Traer XML de SUNAT" para seguir.', false);
+                }
+                this.trayendo = false;
+                if (traidos) location.reload();
+            },
             /** Guarda la cuenta; si se aprendió para otras líneas, recarga para mostrarlas */
             async guardar(lineas, campo, todas = false) {
                 const cuenta = campo.value.trim();

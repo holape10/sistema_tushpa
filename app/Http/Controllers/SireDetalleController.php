@@ -8,10 +8,12 @@ use App\Support\Excel;
 use App\Support\Sunat\CompraXml;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
+use App\Support\Sunat\XmlJsonPe;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -61,7 +63,7 @@ class SireDetalleController extends Controller
         $ruc = $this->autorizar();
         $periodo = $this->periodo($request);
 
-        return view('empresas.sire.detalle', ['periodo' => $periodo, 'cfg' => Concar::config($ruc)] + $this->datos($ruc, $periodo));
+        return view('empresas.sire.detalle', ['periodo' => $periodo, 'cfg' => Concar::config($ruc), 'faltaJsonPe' => XmlJsonPe::falta()] + $this->datos($ruc, $periodo));
     }
 
     public function subir(Request $request): RedirectResponse
@@ -87,6 +89,45 @@ class SireDetalleController extends Controller
         }
 
         return back()->with('success', implode(' · ', $partes).'.');
+    }
+
+    /**
+     * Trae de SUNAT (json.pe) los XML que faltan, unos pocos por llamada: la pantalla vuelve a llamar hasta que no
+     * quede ninguno. Los que SUNAT no tiene no se vuelven a pedir en el día (cada consulta usa créditos).
+     */
+    public function traer(Request $request): JsonResponse
+    {
+        $ruc = $this->autorizar();
+        $periodo = $this->periodo($request);
+        if ($falta = XmlJsonPe::falta()) {
+            return response()->json(['ok' => false, 'mensaje' => $falta]);
+        }
+        set_time_limit(240);
+        $claveFallidos = "compras-xml-fallidos:{$ruc}:{$periodo}";
+        $fallidos = Cache::get($claveFallidos, []);
+        $pendientes = collect($this->datos($ruc, $periodo)['comprobantes'])
+            ->filter(fn ($c) => ! $c['xml'] && in_array($c['tipo'], XmlJsonPe::TIPOS, true) && ! isset($fallidos["{$c['ruc']}|{$c['tipo']}|{$c['serie']}|{$c['numero']}"]))
+            ->values();
+
+        $traidos = 0;
+        $errores = [];
+        foreach ($pendientes->take(4) as $c) {
+            $r = XmlJsonPe::traer($ruc, $c['ruc'], $c['tipo'], $c['serie'], $c['numero']);
+            if ($r['xml'] && ($leido = CompraXml::leer($r['xml'])) && ComprasDetalle::guardar($ruc, [$leido])['nuevos']) {
+                $traidos++;
+
+                continue;
+            }
+            $r['error'] ??= 'El XML que llegó no es de una compra de esta empresa.';
+            if ($r['detener']) {
+                return response()->json(['ok' => false, 'traidos' => $traidos, 'mensaje' => $r['error']]);
+            }
+            $fallidos["{$c['ruc']}|{$c['tipo']}|{$c['serie']}|{$c['numero']}"] = true;
+            $errores[] = "{$c['serie']}-{$c['numero']}: {$r['error']}";
+        }
+        Cache::put($claveFallidos, $fallidos, now()->addHours(12));
+
+        return response()->json(['ok' => true, 'traidos' => $traidos, 'errores' => $errores, 'quedan' => max(0, $pendientes->count() - 4)]);
     }
 
     /** Pone la cuenta a una o varias líneas (y la aprende para las próximas) */

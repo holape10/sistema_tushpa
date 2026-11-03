@@ -2,12 +2,15 @@
 
 namespace Tests\Flujos;
 
+use App\Models\Central\Cliente;
 use App\Support\ComprasDetalle;
 use App\Support\Concar;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
+use Illuminate\Http\Client\Request as Peticion;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\Unit\CompraXmlTest;
 
@@ -95,5 +98,45 @@ class ComprasDetalleTest extends FlujoTestCase
 
         $this->get(route('sire.detalle.excel', ['periodo' => '202607']))->assertOk()->assertDownload('COMPRAS_DETALLE_'.$ruc.'_202607.xlsx');
         $this->get(route('sire.detalle.concar', ['periodo' => '202607']))->assertOk()->assertDownload('CONCAR_COMPRAS_DETALLE_'.$ruc.'_202607.xlsx');
+    }
+
+    public function test_trae_de_sunat_por_json_pe_los_xml_que_faltan(): void
+    {
+        $ruc = $this->usuario->IdEmpresa;
+        $this->propuesta();
+        config(['services.jsonpe.token' => 'token-de-prueba']);
+        $this->get(route('sire.detalle', ['periodo' => '202607']))->assertSee('Falta la Clave SOL principal');
+
+        app()->instance('tenancy.cliente', (new Cliente)->forceFill(['ruc' => $ruc, 'sol_usuario' => 'USUARIO1', 'sol_clave' => 'clave-de-prueba']));
+        $zip = tempnam(sys_get_temp_dir(), 'zip');
+        $z = new \ZipArchive;
+        $z->open($zip, \ZipArchive::OVERWRITE);
+        $z->addFromString('20553510661-01-F001-134277.xml', CompraXmlTest::factura($ruc));
+        $z->close();
+        Http::fake(fn (Peticion $p) => $p['serie'] === 'F001'
+            ? Http::response(['success' => true, 'message' => 'ok', 'data' => base64_encode(file_get_contents($zip))])
+            : Http::response(['success' => false, 'message' => 'Comprobante no encontrado']));
+
+        $this->postJson(route('sire.detalle.traer', ['periodo' => '202607']))->assertOk()
+            ->assertJson(['ok' => true, 'traidos' => 1, 'quedan' => 0])->assertJsonCount(1, 'errores');
+        Http::assertSent(fn (Peticion $p) => $p['proveedor'] === '20553510661' && $p['usuario'] === 'USUARIO1' && $p['correlativo'] === '134277'
+            && $p->hasHeader('Authorization', 'Bearer token-de-prueba'));
+        $this->assertSame(2, DB::table('compras_xml_lineas')->count(), 'Llegó la factura con sus líneas.');
+
+        // La que SUNAT no tiene no se vuelve a pedir (cada consulta cuesta)
+        $this->postJson(route('sire.detalle.traer', ['periodo' => '202607']))->assertJson(['ok' => true, 'traidos' => 0, 'quedan' => 0]);
+        Http::assertSentCount(2);
+    }
+
+    public function test_si_la_clave_sol_esta_mal_se_detiene_al_primer_intento(): void
+    {
+        $this->propuesta();
+        config(['services.jsonpe.token' => 'token-de-prueba']);
+        app()->instance('tenancy.cliente', (new Cliente)->forceFill(['ruc' => $this->usuario->IdEmpresa, 'sol_usuario' => 'USUARIO1', 'sol_clave' => 'mala']));
+        Http::fake(['*' => Http::response(['success' => false, 'message' => 'Usuario o clave SOL incorrectos'], 400)]);
+
+        $this->postJson(route('sire.detalle.traer', ['periodo' => '202607']))->assertJson(['ok' => false])
+            ->assertJsonPath('mensaje', fn ($m) => str_contains($m, 'clave SOL'));
+        Http::assertSentCount(1);
     }
 }

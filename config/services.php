@@ -34,6 +34,12 @@ return [
         'url' => env('APIPERU_URL', 'https://api.apiperu.dev'),
     ],
 
+    // XML de las facturas de compra (con la Clave SOL principal del cliente): https://json.pe (token de su panel)
+    'jsonpe' => [
+        'token' => env('JSONPE_TOKEN'),
+        'url' => env('JSONPE_URL', 'https://api.json.pe/api'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

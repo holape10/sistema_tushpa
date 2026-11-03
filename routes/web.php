@@ -626,6 +626,7 @@ Route::middleware('auth')->group(function () {
     // Compras con su detalle (XML de cada factura) y cuenta contable por línea
     Route::get('/sire/compras/detalle', [SireDetalleController::class, 'index'])->name('sire.detalle');
     Route::post('/sire/compras/detalle/xml', [SireDetalleController::class, 'subir'])->name('sire.detalle.subir');
+    Route::post('/sire/compras/detalle/traer', [SireDetalleController::class, 'traer'])->middleware('throttle:60,1')->name('sire.detalle.traer');
     Route::post('/sire/compras/detalle/cuenta', [SireDetalleController::class, 'cuenta'])->name('sire.detalle.cuenta');
     Route::get('/sire/compras/detalle/excel', [SireDetalleController::class, 'excel'])->name('sire.detalle.excel');
     Route::get('/sire/compras/detalle/concar', [SireDetalleController::class, 'concar'])->name('sire.detalle.concar');
