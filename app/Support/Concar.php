@@ -321,6 +321,58 @@ class Concar
         return ['filas' => $filas, 'asientos' => $n - $desde, 'total' => round($total, 2), 'omitidos' => array_filter($omitidos)];
     }
 
+    /**
+     * Compras del SIRE con su detalle: un asiento por comprobante de la propuesta de SUNAT y, dentro, una línea por
+     * cuenta contable. La base (total − IGV, como la declara SUNAT) se reparte según el valor de cada línea del XML;
+     * sin XML o sin cuenta va a la cuenta de compras. Las notas de crédito van al revés.
+     *
+     * @param  array<int, array>  $comprobantes  de ComprasDetalle::delPeriodo
+     * @return array{filas: array, asientos: int, total: float, omitidos: array}
+     */
+    public static function comprasConDetalle(string $ruc, string $periodo, array $comprobantes, int $desde = 1): array
+    {
+        $cfg = self::config($ruc);
+        $tipos = self::tiposDoc($cfg);
+        $filas = [];
+        $omitidos = [];
+        $n = $desde;
+        $total = 0;
+        foreach (collect($comprobantes)->sortBy(fn ($c) => ($c['fecha'] ?? '').$c['ruc'].$c['serie'].str_pad($c['numero'], 8, '0', STR_PAD_LEFT)) as $c) {
+            if (! isset($tipos[$c['tipo']])) {
+                $omitidos["Tipo {$c['tipo']} sin código en CONCAR"] = ($omitidos["Tipo {$c['tipo']} sin código en CONCAR"] ?? 0) + 1;
+
+                continue;
+            }
+            $esNota = $c['tipo'] === '07';
+            $numero = $c['serie'].'-'.str_pad($c['numero'], 8, '0', STR_PAD_LEFT);
+            $usd = $c['moneda'] === 'USD';
+            $cab = self::cabecera($cfg, $cfg['subdiario_compras'], $periodo, $n++, $c['fecha'] ?? self::rango($periodo)[0], $usd ? 'USD' : 'PEN',
+                $usd ? $c['tc'] : null, ($esNota ? 'N.CRED. ' : 'COMPRA ').$numero.' '.$c['nombre']);
+            $doc = ['tipo' => $tipos[$c['tipo']], 'numero' => $numero, 'fecha' => $c['fecha'], 'vence' => $c['vence'] ?: $c['fecha'],
+                'ref' => $c['ref'] ? [$tipos[$c['ref'][0]] ?? $c['ref'][0], $c['ref'][1], $c['ref'][2]] : null, 'glosa' => null];
+            $dh = fn (string $normal) => $esNota ? ($normal === 'D' ? 'H' : 'D') : $normal;
+
+            $pesos = [];
+            foreach ($c['lineas'] as $l) {
+                $cuenta = $l->cuenta ?: $cfg['cta_compras'];
+                $pesos[$cuenta] = ($pesos[$cuenta] ?? 0) + abs((float) $l->base);
+            }
+            $base = round($c['total'] - $c['igv'], 2);
+            $reparto = array_sum($pesos) > 0 ? self::repartir($base, $pesos) : ($base > 0 ? [$cfg['cta_compras'] => $base] : []);
+            $detalle = collect($c['lineas'])->keyBy(fn ($l) => $l->cuenta ?: $cfg['cta_compras'])->map(fn ($l) => $l->descripcion);
+            foreach ($reparto as $cuenta => $importe) {
+                $filas[] = self::linea($cab, (string) $cuenta, $c['ruc'], $dh('D'), $importe, ['glosa' => $detalle[$cuenta] ?? null] + $doc, 'COMPRA');
+            }
+            if ($c['igv'] > 0) {
+                $filas[] = self::linea($cab, $cfg['cta_igv'], $c['ruc'], $dh('D'), $c['igv'], $doc, 'IGV');
+            }
+            $filas[] = self::linea($cab, $cfg['cta_por_pagar'], $c['ruc'], $dh('H'), $c['total'], $doc, 'POR PAGAR');
+            $total += ($esNota ? -$c['total'] : $c['total']) * ($usd && $c['tc'] ? $c['tc'] : 1);
+        }
+
+        return ['filas' => $filas, 'asientos' => $n - $desde, 'total' => round($total, 2), 'omitidos' => $omitidos];
+    }
+
     /** Datos comunes a todas las líneas de un asiento */
     private static function cabecera(array $cfg, string $subdiario, string $periodo, int $correlativo, string $fecha, string $moneda, ?float $tc, string $glosa): array
     {

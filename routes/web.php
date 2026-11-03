@@ -102,6 +102,7 @@ use App\Http\Controllers\RespaldoEmpresaController;
 use App\Http\Controllers\SeguimientoController;
 use App\Http\Controllers\SerieController;
 use App\Http\Controllers\SireController;
+use App\Http\Controllers\SireDetalleController;
 use App\Http\Controllers\SocioController;
 use App\Http\Controllers\SocioPortalController;
 use App\Http\Controllers\SolicitudCartaController;
@@ -622,6 +623,12 @@ Route::middleware('auth')->group(function () {
     // SIRE (SUNAT): credenciales, propuesta RVIE/RCE y cuadre con el sistema
     Route::get('/sire/credenciales', [SireController::class, 'credenciales'])->name('sire.credenciales');
     Route::post('/sire/credenciales', [SireController::class, 'guardarCredenciales'])->name('sire.credenciales.guardar');
+    // Compras con su detalle (XML de cada factura) y cuenta contable por línea
+    Route::get('/sire/compras/detalle', [SireDetalleController::class, 'index'])->name('sire.detalle');
+    Route::post('/sire/compras/detalle/xml', [SireDetalleController::class, 'subir'])->name('sire.detalle.subir');
+    Route::post('/sire/compras/detalle/cuenta', [SireDetalleController::class, 'cuenta'])->name('sire.detalle.cuenta');
+    Route::get('/sire/compras/detalle/excel', [SireDetalleController::class, 'excel'])->name('sire.detalle.excel');
+    Route::get('/sire/compras/detalle/concar', [SireDetalleController::class, 'concar'])->name('sire.detalle.concar');
     Route::get('/sire/{libro}', [SireController::class, 'index'])->whereIn('libro', ['ventas', 'compras'])->name('sire.index');
     Route::post('/sire/{libro}/solicitar', [SireController::class, 'solicitar'])->whereIn('libro', ['ventas', 'compras'])->name('sire.solicitar');
     Route::get('/sire/{libro}/solicitud/{id}/estado', [SireController::class, 'estado'])->whereIn('libro', ['ventas', 'compras'])->whereNumber('id')->name('sire.estado');

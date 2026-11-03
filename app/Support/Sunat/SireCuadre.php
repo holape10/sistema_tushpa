@@ -262,6 +262,61 @@ class SireCuadre
         return $cuadre;
     }
 
+    /**
+     * Comprobantes de la propuesta de compras (RCE) con lo que necesita el asiento: proveedor, fechas, IGV, total,
+     * moneda y la factura que modifica una nota. Indexados por RUC|tipo|serie|número (dos proveedores pueden repetir
+     * serie y número). Montos siempre en positivo.
+     *
+     * @return array<string, array{ruc: string, nombre: string, tipo: string, serie: string, numero: string, fecha: ?string,
+     *     vence: ?string, igv: float, total: float, moneda: string, tc: ?float, ref: ?array{0: string, 1: string, 2: ?string}}>
+     */
+    public static function comprasPropuesta(array $propuesta): array
+    {
+        $c = self::columnas($propuesta['cabecera']);
+        if ($c['tipo'] === null || $c['serie'] === null || $c['numero'] === null || $c['doc'] === null) {
+            return [];
+        }
+        $norm = array_map(fn ($h) => self::normalizar($h), $propuesta['cabecera']);
+        $donde = fn (callable $cumple) => array_keys(array_filter($norm, $cumple));
+        $igvs = $donde(fn ($h) => str_starts_with($h, 'igv'));
+        $uno = fn (callable $cumple) => $donde($cumple)[0] ?? null;
+        $col = [
+            'vence' => $uno(fn ($h) => str_starts_with($h, 'fecha vcto')),
+            'moneda' => $uno(fn ($h) => $h === 'moneda'),
+            'tc' => $uno(fn ($h) => $h === 'tipo de cambio'),
+            'refFecha' => $uno(fn ($h) => str_starts_with($h, 'fecha emision doc modificado')),
+            'refTipo' => $uno(fn ($h) => str_starts_with($h, 'tipo cp modificado')),
+            'refSerie' => $uno(fn ($h) => str_starts_with($h, 'serie cp modificado')),
+            'refNumero' => $uno(fn ($h) => str_starts_with($h, 'nro cp modificado')),
+        ];
+        $valor = fn (array $f, ?int $i) => $i === null ? '' : trim((string) ($f[$i] ?? ''));
+        $fecha = fn (string $v) => preg_match('#^(\d{2})/(\d{2})/(\d{4})$#', $v, $m) ? "{$m[3]}-{$m[2]}-{$m[1]}" : null;
+
+        $res = [];
+        foreach ($propuesta['filas'] as $f) {
+            $tipo = str_pad($valor($f, $c['tipo']), 2, '0', STR_PAD_LEFT);
+            $serie = strtoupper($valor($f, $c['serie']));
+            $numero = ltrim($valor($f, $c['numero']), '0') ?: '0';
+            $ruc = $valor($f, $c['doc']);
+            if ($serie === '' || $ruc === '') {
+                continue;
+            }
+            $tc = (float) $valor($f, $col['tc']);
+            $refSerie = $valor($f, $col['refSerie']);
+            $res["{$ruc}|{$tipo}|{$serie}|{$numero}"] = [
+                'ruc' => $ruc, 'nombre' => $valor($f, $c['nombre']), 'tipo' => $tipo, 'serie' => $serie, 'numero' => $numero,
+                'fecha' => $fecha($valor($f, $c['fecha'])), 'vence' => $fecha($valor($f, $col['vence'])),
+                'igv' => abs(round(array_sum(array_map(fn ($i) => self::numero($f[$i] ?? 0), $igvs)), 2)),
+                'total' => abs(self::numero($valor($f, $c['total']))),
+                'moneda' => $valor($f, $col['moneda']) ?: 'PEN', 'tc' => $tc > 0 ? $tc : null,
+                'ref' => $refSerie !== '' ? [str_pad($valor($f, $col['refTipo']), 2, '0', STR_PAD_LEFT),
+                    $refSerie.'-'.str_pad(ltrim($valor($f, $col['refNumero']), '0'), 8, '0', STR_PAD_LEFT), $fecha($valor($f, $col['refFecha']))] : null,
+            ];
+        }
+
+        return $res;
+    }
+
     /** SUNAT muestra las notas de crédito en negativo; el sistema las guarda en positivo */
     private static function conSigno(string $tipo, $total): float
     {
