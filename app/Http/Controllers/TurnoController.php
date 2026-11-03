@@ -123,7 +123,7 @@ class TurnoController extends Controller
         $this->autorizar();
         $user = Auth::user();
 
-        $request->validate(['monto' => 'required|numeric|min:0'], [], ['monto' => 'Fondo inicial']);
+        $request->validate(['monto' => 'required|numeric|min:0|max:9999999'], [], ['monto' => 'Fondo inicial']);
 
         DB::transaction(function () use ($request, $user) {
             // Bloqueo por usuario para que un doble clic no abra dos turnos
@@ -160,7 +160,7 @@ class TurnoController extends Controller
 
         $request->validate([
             'tip_caj_id' => 'required|exists:tiposcaja,tip_caj_id',
-            'importe' => 'required|numeric|min:0.01',
+            'importe' => 'required|numeric|min:0.01|max:9999999',
             'mov_com' => 'required|string|max:255',
         ], [], ['tip_caj_id' => 'Tipo', 'importe' => 'Importe', 'mov_com' => 'Descripción']);
 
@@ -213,7 +213,7 @@ class TurnoController extends Controller
         // Cierre ciego: el cajero tiene que contar el efectivo (con el monto o billete por billete)
         $abierto = Turno::abiertoDe($user);
         $contoBilletes = collect(array_keys(Turno::DENOMINACIONES))->contains(fn ($campo) => (int) $request->input('cierre_'.$campo, 0) > 0);
-        $request->validate(['montocierre' => [$abierto?->esCiegoPara($user) && ! $contoBilletes ? 'required' : 'nullable', 'numeric', 'min:0']],
+        $request->validate(['montocierre' => [$abierto?->esCiegoPara($user) && ! $contoBilletes ? 'required' : 'nullable', 'numeric', 'min:0', 'max:9999999']],
             ['montocierre.required' => 'Cuenta el efectivo de la caja y escribe cuánto hay para cerrar el turno.'], ['montocierre' => 'Efectivo contado']);
 
         $idTurno = DB::transaction(function () use ($request, $user) {

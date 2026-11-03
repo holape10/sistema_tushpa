@@ -7,6 +7,7 @@ use App\Http\Middleware\RegistrarVisita;
 use App\Http\Middleware\SoloMenuContador;
 use App\Http\Middleware\SoloWifiLocal;
 use App\Support\MonitorErrores;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -48,4 +49,15 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
         // Monitor de errores: se anota en el panel y avisa al Telegram del dueño (además del log de siempre)
         $exceptions->report(fn (Throwable $e) => MonitorErrores::registrar($e));
+        // Un número más grande de lo que entra en la base (alguien escribió 1243124124): se avisa como dato mal escrito
+        $exceptions->render(function (QueryException $e, Request $request) {
+            if (! MonitorErrores::numeroFueraDeRango($e)) {
+                return null;
+            }
+            $mensaje = 'Uno de los números es demasiado grande. Revisa los montos o cantidades.';
+
+            return $request->expectsJson()
+                ? response()->json(['message' => $mensaje, 'mensaje' => $mensaje], 422)
+                : back()->withInput()->withErrors(['numero' => $mensaje]);
+        });
     })->create();

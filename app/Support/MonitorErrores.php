@@ -6,6 +6,7 @@ use App\Support\Tenancy\Tenancy;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -37,7 +38,13 @@ class MonitorErrores
             }
         }
 
-        return $e instanceof HttpExceptionInterface && $e->getStatusCode() < 500;
+        return self::numeroFueraDeRango($e) || ($e instanceof HttpExceptionInterface && $e->getStatusCode() < 500);
+    }
+
+    /** MySQL 1264: el número escrito no entra en la columna (un dato mal escrito, no una falla) */
+    public static function numeroFueraDeRango(\Throwable $e): bool
+    {
+        return $e instanceof QueryException && ($e->errorInfo[1] ?? null) === 1264;
     }
 
     /** El mismo error aunque cambien los números del mensaje (ids, montos, horas) */

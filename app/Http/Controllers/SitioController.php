@@ -144,6 +144,9 @@ class SitioController extends Controller
 
     public function consultarRuc(string $ruc): JsonResponse
     {
+        if (! ConsultaPeru::rucValido($ruc)) {
+            return response()->json(['error' => 'Ese RUC no es válido. Revisa los 11 dígitos.'], 422);
+        }
         if ($error = $this->errorRucTomado($ruc)) {
             return response()->json(['error' => $error], 409);
         }
@@ -161,7 +164,7 @@ class SitioController extends Controller
             abort(422);
         }
         $d = $request->validate([
-            'ruc' => ['required', 'regex:/^(10|15|17|20)\d{9}$/'],
+            'ruc' => ['required', 'regex:/^(10|15|17|20)\d{9}$/', fn ($campo, $valor, $falla) => ConsultaPeru::rucValido((string) $valor) || $falla('Ese RUC no es válido. Revisa los 11 dígitos.')],
             'nombre_comercial' => 'nullable|string|max:120',
             'rubro' => ['required', Rule::in(collect(Rubros::RUBROS)->except('COMPLETO')->keys())],
             'plan_id' => ['required', 'integer', Rule::exists('central.planes', 'id')->where('activo', 1)],

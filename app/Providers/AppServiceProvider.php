@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Support\ContactoWeb;
 use App\Support\HoraLocal\ConexionMysql;
+use App\Support\LimiteIntentos;
 use App\View\Composers\MenuComposer;
+use Illuminate\Cache\RateLimiter;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -18,6 +20,8 @@ class AppServiceProvider extends ServiceProvider
     {
         // Las ventas y demás registros con hora toman la de Perú (PHP), no la del reloj de MySQL (UTC en el servidor)
         Connection::resolverFor('mysql', fn ($pdo, $database, $prefix, $config) => new ConexionMysql($pdo, $database, $prefix, $config));
+        // El contador de intentos no tumba la página si MySQL se traba (deadlock en la tabla cache)
+        $this->app->extend(RateLimiter::class, fn ($limiter, $app) => new LimiteIntentos($app->make('cache')->driver($app['config']->get('cache.limiter'))));
     }
 
     /**

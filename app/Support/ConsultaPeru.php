@@ -106,10 +106,27 @@ class ConsultaPeru
         return $resultado;
     }
 
+    /**
+     * ¿Es un RUC que puede existir? Empieza con 10, 15, 16, 17 o 20 y su último dígito cuadra (módulo 11 de SUNAT).
+     * Así no se gasta una consulta en números inventados.
+     */
+    public static function rucValido(string $ruc): bool
+    {
+        if (! preg_match('/^(10|15|16|17|20)\d{9}$/', $ruc)) {
+            return false;
+        }
+        $suma = 0;
+        foreach ([5, 4, 3, 2, 7, 6, 5, 4, 3, 2] as $i => $factor) {
+            $suma += (int) $ruc[$i] * $factor;
+        }
+
+        return (11 - $suma % 11) % 10 === (int) $ruc[10];
+    }
+
     /** @return array{nombre:string, direccion:?string, estado:?string, condicion:?string, ubigeo:?string}|null */
     public static function ruc(string $ruc): ?array
     {
-        if (! preg_match('/^\d{11}$/', $ruc)) {
+        if (! self::rucValido($ruc)) {
             return null;
         }
         // Primero el padrón de SUNAT cargado en el propio sistema; si no está (RUC nuevo de hoy), apiperu.dev

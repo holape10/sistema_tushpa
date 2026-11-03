@@ -31,7 +31,7 @@ Route::post('/ingresar', [SitioController::class, 'irAEmpresa'])->middleware('th
 Route::get('/registro', [SitioController::class, 'registro'])->name('registro');
 Route::post('/registro', [SitioController::class, 'registrar'])->middleware('throttle:6,10,sitio-registro')->name('registrar');
 Route::get('/registro/ruc/{ruc}', [SitioController::class, 'consultarRuc'])->where('ruc', '(10|15|17|20)\d{9}')
-    ->middleware('throttle:20,1,sitio-ruc')->name('registro.ruc');
+    ->middleware('throttle:10,10,sitio-ruc')->name('registro.ruc');
 Route::get('/registro/subdominio/{sub}', [SitioController::class, 'revisarSubdominio'])->where('sub', '[A-Za-z0-9-]{1,40}')
     ->middleware('throttle:40,1,sitio-subdominio')->name('registro.subdominio');
 Route::get('/registro/listo/{cliente}', [SitioController::class, 'listo'])->whereNumber('cliente')->middleware('signed')->name('registro.listo');

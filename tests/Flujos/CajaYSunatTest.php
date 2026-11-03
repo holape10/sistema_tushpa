@@ -44,6 +44,13 @@ class CajaYSunatTest extends FlujoTestCase
             'pagos' => [['medio' => $this->efectivo, 'monto' => $precio]]];
     }
 
+    public function test_un_movimiento_de_caja_con_un_monto_gigante_se_rechaza_sin_error_del_sistema(): void
+    {
+        $this->from(route('turnos.index'))->post(route('turnos.movimiento'), ['tip_caj_id' => '007', 'mov_com' => 'PRUEBA', 'importe' => 1243124124])
+            ->assertRedirect(route('turnos.index'))->assertSessionHasErrors('importe');
+        $this->assertSame(0, DB::table('movimientoscaja')->where('mov_com', 'PRUEBA')->count());
+    }
+
     public function test_la_caja_sin_internet_nunca_duplica_una_venta_ni_un_numero(): void
     {
         $plato = $this->producto('ARROZ CHAUFA', 20, 10);
