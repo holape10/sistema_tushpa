@@ -628,6 +628,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/sire/dbf', [SireDbfController::class, 'index'])->name('sire.dbf');
     Route::post('/sire/dbf/guardar', [SireDbfController::class, 'guardar'])->name('sire.dbf.guardar');
     Route::post('/sire/dbf/aplicar', [SireDbfController::class, 'aplicar'])->name('sire.dbf.aplicar');
+    Route::get('/sire/dbf/{libro}/excel', [SireDbfController::class, 'excel'])->whereIn('libro', ['ventas', 'compras'])->name('sire.dbf.excel');
     Route::get('/sire/dbf/{libro}/descargar', [SireDbfController::class, 'descargar'])->whereIn('libro', ['ventas', 'compras'])->name('sire.dbf.descargar');
     // Compras con su detalle (XML de cada factura) y cuenta contable por línea
     Route::get('/sire/compras/detalle', [SireDetalleController::class, 'index'])->name('sire.detalle');

@@ -20,8 +20,8 @@ class SireDbf
     /** Montos de una compra (por destino del crédito fiscal, como el RCE) */
     public const MONTOS_COMPRA = ['base_dg', 'igv_dg', 'base_dgng', 'igv_dgng', 'base_dng', 'igv_dng', 'no_gravado', 'isc', 'otros', 'total'];
 
-    /** Destino de la base e IGV de una compra: el que usa el RCE */
-    public const DESTINOS = ['dg' => 'Gravada (DG)', 'dgng' => 'Mixta (DGNG)', 'dng' => 'No gravada (DNG)'];
+    /** Hasta cuánto se corrige solo una diferencia de redondeo del proveedor (su total y sus líneas no cuadran por céntimos) */
+    public const REDONDEO_MAXIMO = 0.10;
 
     private const DESCRIPCION = ['01' => 'FACTURA', '02' => 'R/H', '03' => 'BOLETA', '07' => 'NOTA CRED', '08' => 'NOTA DEB', '12' => 'TICKET', '14' => 'RSP'];
 
@@ -171,12 +171,36 @@ class SireDbf
                 $c['ctaabono'] = $a->ctaabono ?? $u->ctaabono ?? ($c['montos']['gravada'] != 0 ? $cfg['cta_ventas'] : $cfg['cta_ventas_exo']);
             }
             $c['cuentaPropia'] = (bool) ($a?->ctacargo || $a?->ctaabono);
+            $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
             $c['diferencia'] = self::diferencia($libro, $c['montos']);
             $lista[] = $c;
         }
         usort($lista, fn ($x, $y) => [$x['fecha'], $x['tipo'], $x['serie'], (int) $x['numero']] <=> [$y['fecha'], $y['tipo'], $y['serie'], (int) $y['numero']]);
 
         return ['comprobantes' => $lista, 'propuesta' => true];
+    }
+
+    /**
+     * Si las partes no suman el total por unos céntimos (el redondeo del proveedor: SUNAT copia lo que dice su XML),
+     * la diferencia se suma al monto más grande. El total, que es lo que se pagó, no se toca.
+     *
+     * @return float lo que se corrigió (0 si no hizo falta)
+     */
+    private static function redondear(string $libro, array &$montos): float
+    {
+        $dif = self::diferencia($libro, $montos);
+        if (abs($dif) < 0.01 || abs($dif) > self::REDONDEO_MAXIMO) {
+            return 0.0;
+        }
+        $partes = array_diff_key($montos, ['total' => 0]);
+        uasort($partes, fn ($a, $b) => abs($b) <=> abs($a));
+        $mayor = array_key_first($partes);
+        if ($mayor === null || $partes[$mayor] == 0) {
+            return 0.0;
+        }
+        $montos[$mayor] = round($montos[$mayor] + $dif, 2);
+
+        return $dif;
     }
 
     /** Lo que falta (o sobra) para que las partes sumen el total; 0 = cuadra */

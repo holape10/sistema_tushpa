@@ -8,18 +8,17 @@
     $tabla = $compras ? 'almaingr' : 'tienfact';
     $soles = fn ($n) => number_format((float) $n, 2);
     $sinXml = $compras ? collect($comprobantes)->filter(fn ($c) => ! $c['lineas'])->count() : 0;
-    // Lo que se edita de cada fila: en compras la base y el IGV de su destino (gravada, mixta o no gravada)
+    // Lo que se edita de cada fila: en compras la base y el IGV de cada destino (IGV_1, IGV_2, IGV_3); el ISC va en "otros"
     $fila = function (array $c) use ($compras) {
         $m = $c['montos'];
         if ($compras) {
-            $destino = collect(['dg', 'dgng', 'dng'])->first(fn ($d) => ($m["base_{$d}"] ?? 0) != 0 || ($m["igv_{$d}"] ?? 0) != 0) ?? 'dg';
-            $m = ['destino' => $destino, 'base' => round(($m['base_dg'] ?? 0) + ($m['base_dgng'] ?? 0) + ($m['base_dng'] ?? 0), 2),
-                'igv' => round(($m['igv_dg'] ?? 0) + ($m['igv_dgng'] ?? 0) + ($m['igv_dng'] ?? 0), 2), 'no_gravado' => $m['no_gravado'] ?? 0,
-                'otros' => round(($m['isc'] ?? 0) + ($m['otros'] ?? 0), 2), 'total' => $m['total'] ?? 0];
+            $m = collect(\App\Support\Contabilidad\SireDbf::MONTOS_COMPRA)->mapWithKeys(fn ($k) => [$k => (float) ($m[$k] ?? 0)])->all();
+            $m['otros'] = round($m['otros'] + $m['isc'], 2);
+            $m['isc'] = 0;
         }
 
         return ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'],
-            'montos' => $m, 'diferencia' => $c['diferencia'], 'editado' => $c['editado'], 'xml' => (bool) $c['lineas']];
+            'montos' => $m, 'diferencia' => $c['diferencia'], 'editado' => $c['editado'], 'redondeo' => $c['redondeo'], 'xml' => (bool) $c['lineas']];
     };
 @endphp
 
@@ -51,6 +50,10 @@
             @endforeach
         </div>
         <div class="flex-1"></div>
+        <a href="{{ route('sire.dbf.excel', [$libro, 'periodo' => $periodo]) }}"
+           class="h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-bold {{ $propuesta ? '' : 'pointer-events-none opacity-50' }}">
+            ⬇ Excel
+        </a>
         <a href="{{ route('sire.dbf.descargar', [$libro, 'periodo' => $periodo]) }}" @click="if (totales.descuadrados) { $event.preventDefault(); tushpaAviso('Hay ' + totales.descuadrados + ' comprobante(s) que no cuadran: corrígelos o no los lleves.', false); }"
            class="h-10 px-5 inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold {{ $propuesta ? '' : 'pointer-events-none opacity-50' }}">
             ⬇ Descargar {{ $tabla }}.dbf
@@ -145,16 +148,14 @@
                         <span x-show="guardando" class="text-[11px] text-slate-400">Guardando…</span>
                     </div>
 
-                    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-[repeat(8,minmax(0,1fr))] gap-2 px-4 pb-3 text-xs">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 {{ $compras ? 'lg:grid-cols-[repeat(11,minmax(0,1fr))]' : 'lg:grid-cols-[repeat(8,minmax(0,1fr))]' }} gap-2 px-4 pb-3 text-xs">
                         @if ($compras)
-                            <label class="font-semibold text-slate-500">Destino
-                                <select x-model="fila.montos.destino" @change="cambiarMontos()" class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-xs">
-                                    @foreach (\App\Support\Contabilidad\SireDbf::DESTINOS as $d => $texto)<option value="{{ $d }}">{{ $texto }}</option>@endforeach
-                                </select></label>
-                            @foreach (['base' => 'Base', 'igv' => 'IGV', 'no_gravado' => 'No gravado', 'otros' => 'Otros / ISC', 'total' => 'Total'] as $k => $texto)
-                                <label class="font-semibold text-slate-500">{{ $texto }}
+                            @foreach (['base_dg' => ['B.I. gravadas', ''], 'igv_dg' => ['IGV 1', 'bg-indigo-50/60'], 'base_dgng' => ['B.I. grav. y no grav.', ''],
+                                'igv_dgng' => ['IGV 2', 'bg-indigo-50/60'], 'base_dng' => ['B.I. no gravadas', ''], 'igv_dng' => ['IGV 3', 'bg-indigo-50/60'],
+                                'no_gravado' => ['No gravado', ''], 'otros' => ['Otros / ISC', ''], 'total' => ['Total', '']] as $k => [$texto, $fondo])
+                                <label class="font-semibold text-slate-500 whitespace-nowrap">{{ $texto }}
                                     <input type="number" step="0.01" x-model.number="fila.montos.{{ $k }}" @change="cambiarMontos()"
-                                           class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-right text-sm {{ $k === 'total' ? 'font-bold' : '' }}"></label>
+                                           class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 px-2 text-right text-sm {{ $fondo }} {{ $k === 'total' ? 'font-bold' : '' }}"></label>
                             @endforeach
                         @else
                             @foreach (['gravada' => 'Gravada', 'igv' => 'IGV', 'exonerada' => 'Exonerada', 'inafecta' => 'Inafecta', 'total' => 'Total'] as $k => $texto)
@@ -170,7 +171,9 @@
                             <input type="text" maxlength="12" inputmode="numeric" x-model="fila.ctaabono" @change="guardar({ ctaabono: fila.ctaabono })"
                                    class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
                     </div>
-                    <div x-show="Math.abs(fila.diferencia) >= 0.01 || fila.editado" class="flex flex-wrap items-center gap-3 px-4 pb-3 text-xs">
+                    <div x-show="Math.abs(fila.diferencia) >= 0.01 || fila.editado || fila.redondeo" class="flex flex-wrap items-center gap-3 px-4 pb-3 text-xs">
+                        <span x-show="fila.redondeo && !fila.editado && Math.abs(fila.diferencia) < 0.01" class="font-semibold text-sky-700"
+                              x-text="'Redondeo del proveedor corregido solo: ' + soles(fila.redondeo) + ' (su XML no cuadraba por céntimos)'"></span>
                         <span x-show="Math.abs(fila.diferencia) >= 0.01" class="font-bold text-rose-600" x-text="'No cuadra: las partes suman ' + soles(fila.montos.total - fila.diferencia) + ' y el total es ' + soles(fila.montos.total)"></span>
                         <button type="button" x-show="fila.editado" @click="restaurar()" class="font-semibold text-slate-500 hover:text-indigo-700 underline">Volver a los montos de SUNAT</button>
                     </div>
@@ -246,7 +249,8 @@
             /** Al tocar un monto se ve al instante si cuadra; se guarda igual */
             cambiarMontos() {
                 const m = this.fila.montos;
-                this.fila.diferencia = Math.round((m.total - (m.base + m.igv + m.no_gravado + m.otros)) * 100) / 100;
+                const partes = Object.entries(m).filter(([k]) => k !== 'total').reduce((s, [, v]) => s + (Number(v) || 0), 0);
+                this.fila.diferencia = Math.round((m.total - partes) * 100) / 100;
                 this.guardar({ montos: m });
             },
             async restaurar() {

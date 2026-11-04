@@ -111,7 +111,8 @@ class SireDetalleController extends Controller
 
         $traidos = 0;
         $errores = [];
-        foreach ($pendientes->take(4) as $c) {
+        // De a dos: cada XML demora unos segundos en SUNAT y así la pantalla muestra el avance seguido
+        foreach ($pendientes->take(2) as $c) {
             $r = XmlJsonPe::traer($ruc, $c['ruc'], $c['tipo'], $c['serie'], $c['numero']);
             if ($r['xml'] && ($leido = CompraXml::leer($r['xml'])) && ComprasDetalle::guardar($ruc, [$leido])['nuevos']) {
                 $traidos++;
@@ -127,7 +128,8 @@ class SireDetalleController extends Controller
         }
         Cache::put($claveFallidos, $fallidos, now()->addHours(12));
 
-        return response()->json(['ok' => true, 'traidos' => $traidos, 'errores' => $errores, 'quedan' => max(0, $pendientes->count() - 4)]);
+        return response()->json(['ok' => true, 'traidos' => $traidos, 'errores' => $errores, 'pendientes' => $pendientes->count(),
+            'quedan' => max(0, $pendientes->count() - 2)]);
     }
 
     /** Pone la cuenta a una o varias líneas (y la aprende para las próximas) */

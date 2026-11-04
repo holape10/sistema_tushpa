@@ -57,6 +57,8 @@ class SireDbfTest extends FlujoTestCase
             $this->compra('22/05/2026', '01', 'F001', '134277', '20553510661', 'LLAMA PE SA', ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177]),
             $this->compra('13/05/2026', '07', 'FC02', '152', '20601312710', 'CONSORCIO FLUVIAL DEL AMAZONAS', ['ng' => -160, 'total' => -160], ['22/04/2026', '01', 'FE02', '5907']),
             $this->compra('26/05/2026', '01', 'FX02', '3444', '20603067534', 'INVERSIONES FU YUAN S.A.C.', ['ng' => 42, 'total' => 42]),
+            // El XML del proveedor dice 40.10 pero sus líneas suman 40.09: SUNAT lo copia así
+            $this->compra('27/05/2026', '01', 'F001', '47676', '20603837739', 'COMERCIAL KARINA HYM E.I.R.L.', ['ng' => 40.09, 'total' => 40.10]),
         ]);
         // El detalle de la factura de internet ya tiene su cuenta: se propone como cuenta de cargo
         ComprasDetalle::guardar($ruc, [CompraXml::leer(CompraXmlTest::factura($ruc))]);
@@ -67,24 +69,26 @@ class SireDbfTest extends FlujoTestCase
 
         $guardar = fn (string $clave, array $datos) => $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202605', 'clave' => $clave] + $datos)->assertOk();
         // Corrige el IGV sin cuadrar: no deja descargar
-        $r = $guardar('20553510661|01|F001|134277', ['montos' => ['destino' => 'dg', 'base' => 150, 'igv' => 20, 'no_gravado' => 0, 'otros' => 0, 'total' => 177]]);
+        $r = $guardar('20553510661|01|F001|134277', ['montos' => ['base_dg' => 150, 'igv_dg' => 20, 'total' => 177]]);
         $this->assertEquals(7, $r->json('diferencia'));
         $this->assertSame(1, $r->json('totales.descuadrados'));
         $this->from(route('sire.dbf', ['libro' => 'compras', 'periodo' => '202605']))
             ->get(route('sire.dbf.descargar', ['compras', 'periodo' => '202605']))->assertRedirect()->assertSessionHas('error');
-        // Ahora cuadra, cambia la cuenta y la tercera compra no se lleva
-        $guardar('20553510661|01|F001|134277', ['montos' => ['destino' => 'dg', 'base' => 157, 'igv' => 20, 'no_gravado' => 0, 'otros' => 0, 'total' => 177], 'ctaabono' => '42121']);
+        // El IGV va a la segunda columna (IGV 2): ahora cuadra; cambia la cuenta y la tercera compra no se lleva
+        $guardar('20553510661|01|F001|134277', ['montos' => ['base_dg' => 150, 'igv_dgng' => 27, 'total' => 177], 'ctaabono' => '42121']);
         $guardar('20603067534|01|FX02|3444', ['excluido' => true]);
         $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202605', 'clave' => '1|01|X|1', 'excluido' => true])->assertNotFound();
 
         [$bytes, $filas] = $this->dbf('compras');
         $plantilla = file_get_contents(resource_path('dbf/almaingr.dbf'));
         $this->assertSame(substr($plantilla, 32, 4776), substr($bytes, 32, 4776), 'La misma estructura de la tabla del sistema contable.');
-        $this->assertCount(2, $filas, 'La excluida no va.');
-        [$nota, $factura] = $filas;
-        $this->assertSame(['SIRE', 'F001', '000000134277', '20553510661', '01', 'FACTURA', '2026-05-22', 157.0, 20.0, 177.0, '63691', '42121', '050002', '0002', '052026', 'S/'],
+        $this->assertCount(3, $filas, 'La excluida no va.');
+        [$nota, $factura, $redondeo] = $filas;
+        $this->assertSame(['SIRE', 'F001', '000000134277', '20553510661', '01', 'FACTURA', '2026-05-22', 150.0, null, 27.0, null, 177.0, '63691', '42121', '050002', '0002', '052026', 'S/'],
             [$factura['ORIGEN'], $factura['SERIEDOC'], $factura['NUMDOC'], $factura['RUC_DNI'], $factura['CODDOC'], $factura['DESDOC'], $factura['FECHADOC'],
-                $factura['OGYE'], $factura['IGV_1'], $factura['TOTAL'], $factura['CTACARGO'], $factura['CTAABONO'], $factura['NORDEN'], $factura['NUM1'], $factura['FCON'], $factura['MONEDA']]);
+                $factura['OGYE'], $factura['IGV_1'], $factura['IGV_2'], $factura['IGV_3'], $factura['TOTAL'], $factura['CTACARGO'], $factura['CTAABONO'], $factura['NORDEN'], $factura['NUM1'], $factura['FCON'], $factura['MONEDA']]);
+        $this->assertSame([40.10, 40.10], [$redondeo['NG'], $redondeo['TOTAL']], 'El céntimo de redondeo del proveedor se corrige solo.');
+        $this->get(route('sire.dbf.excel', ['compras', 'periodo' => '202605']))->assertOk()->assertDownload("almaingr_{$ruc}_202605.xlsx");
         $this->assertSame(['07', 'NOTA CRED', -160.0, -160.0, '01', 'FE02', '000000005907', '2026-04-22', '601111', '421201'],
             [$nota['CODDOC'], $nota['DESDOC'], $nota['NG'], $nota['TOTAL'], $nota['FCODDOC'], $nota['FSERIE'], $nota['FNUMERO'], $nota['FECHANC'], $nota['CTACARGO'], $nota['CTAABONO']],
             'La nota de crédito en negativo como la da SUNAT; sin cuentas propias, las de CONCAR.');

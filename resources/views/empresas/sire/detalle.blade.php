@@ -97,6 +97,20 @@
         </section>
     @endif
 
+    {{-- Avance mientras se traen los XML: que se vea que el sistema está trabajando --}}
+    <div x-show="trayendo" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl text-center">
+            <div class="mx-auto h-12 w-12 rounded-full border-4 border-amber-200 border-t-amber-500 animate-spin"></div>
+            <p class="mt-4 text-lg font-extrabold text-slate-800">Trayendo los XML de SUNAT…</p>
+            <p class="mt-1 text-3xl font-black text-amber-600" x-text="total ? `${hechos} de ${total}` : ''"></p>
+            <div class="mt-3 h-3 w-full overflow-hidden rounded-full bg-slate-100">
+                <div class="h-full rounded-full bg-amber-500 transition-all duration-500" :style="`width: ${total ? Math.round(hechos * 100 / total) : 3}%`"></div>
+            </div>
+            <p class="mt-3 text-sm text-slate-600" x-text="progreso"></p>
+            <p class="mt-2 text-xs text-slate-400">Cada XML demora unos segundos en SUNAT. No cierres esta pestaña.</p>
+        </div>
+    </div>
+
     <p class="text-xs text-slate-500">
         💡 Escribe la cuenta de una línea y presiona Enter: el sistema la recuerda y la pone sola a las líneas iguales de ese proveedor, ahora y en los próximos meses.
     </p>
@@ -183,9 +197,14 @@
             subiendo: false,
             trayendo: false,
             progreso: '',
-            /** Pide los XML de a pocos hasta que no quede ninguno; al final recarga para mostrarlos */
+            total: 0,
+            hechos: 0,
+            /** Pide los XML de a dos hasta que no quede ninguno, mostrando el avance; al final recarga para mostrarlos */
             async traer() {
                 this.trayendo = true;
+                this.total = 0;
+                this.hechos = 0;
+                this.progreso = 'Conectando con SUNAT…';
                 let traidos = 0, sinXml = 0;
                 try {
                     while (true) {
@@ -193,20 +212,25 @@
                             method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
                         });
                         const d = await r.json();
+                        if (!this.total) this.total = d.pendientes || 0;
                         traidos += d.traidos || 0;
                         sinXml += (d.errores || []).length;
+                        this.hechos = traidos + sinXml;
                         if (!d.ok) {
                             tushpaAviso(d.mensaje || 'No se pudo traer los XML.', false);
                             break;
                         }
-                        this.progreso = `${traidos} XML traídos` + (sinXml ? ` · ${sinXml} que SUNAT no entregó` : '') + (d.quedan ? ` · quedan ${d.quedan}…` : '');
+                        this.progreso = `${traidos} XML traídos` + (sinXml ? ` · ${sinXml} que SUNAT no entregó` : '');
                         if (!d.quedan) break;
                     }
                 } catch (e) {
-                    tushpaAviso('Se cortó la conexión. Vuelve a presionar "Traer XML de SUNAT" para seguir.', false);
+                    tushpaAviso('Se cortó la conexión. Vuelve a presionar "Traer XML de SUNAT" para seguir: lo ya traído no se pierde.', false);
                 }
                 this.trayendo = false;
-                if (traidos) location.reload();
+                if (traidos) {
+                    this.progreso = `Listo: ${traidos} XML traídos. Mostrando el detalle…`;
+                    location.reload();
+                }
             },
             /** Guarda la cuenta; si se aprendió para otras líneas, recarga para mostrarlas */
             async guardar(lineas, campo, todas = false) {
