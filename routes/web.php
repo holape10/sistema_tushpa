@@ -102,6 +102,7 @@ use App\Http\Controllers\RespaldoEmpresaController;
 use App\Http\Controllers\SeguimientoController;
 use App\Http\Controllers\SerieController;
 use App\Http\Controllers\SireController;
+use App\Http\Controllers\SireDbfController;
 use App\Http\Controllers\SireDetalleController;
 use App\Http\Controllers\SocioController;
 use App\Http\Controllers\SocioPortalController;
@@ -623,6 +624,11 @@ Route::middleware('auth')->group(function () {
     // SIRE (SUNAT): credenciales, propuesta RVIE/RCE y cuadre con el sistema
     Route::get('/sire/credenciales', [SireController::class, 'credenciales'])->name('sire.credenciales');
     Route::post('/sire/credenciales', [SireController::class, 'guardarCredenciales'])->name('sire.credenciales.guardar');
+    // SIRE → sistema contable en FoxPro: revisar cuentas y montos y descargar tienfact.dbf / almaingr.dbf
+    Route::get('/sire/dbf', [SireDbfController::class, 'index'])->name('sire.dbf');
+    Route::post('/sire/dbf/guardar', [SireDbfController::class, 'guardar'])->name('sire.dbf.guardar');
+    Route::post('/sire/dbf/aplicar', [SireDbfController::class, 'aplicar'])->name('sire.dbf.aplicar');
+    Route::get('/sire/dbf/{libro}/descargar', [SireDbfController::class, 'descargar'])->whereIn('libro', ['ventas', 'compras'])->name('sire.dbf.descargar');
     // Compras con su detalle (XML de cada factura) y cuenta contable por línea
     Route::get('/sire/compras/detalle', [SireDetalleController::class, 'index'])->name('sire.detalle');
     Route::post('/sire/compras/detalle/xml', [SireDetalleController::class, 'subir'])->name('sire.detalle.subir');

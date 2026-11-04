@@ -16,6 +16,7 @@
         <a href="{{ route('sire.index', ['ventas', 'periodo' => $periodo]) }}" class="px-4 h-10 inline-flex items-center rounded-xl text-sm font-bold bg-white text-slate-600 hover:bg-slate-50">Ventas (RVIE)</a>
         <a href="{{ route('sire.index', ['compras', 'periodo' => $periodo]) }}" class="px-4 h-10 inline-flex items-center rounded-xl text-sm font-bold bg-white text-slate-600 hover:bg-slate-50">Compras (RCE)</a>
         <span class="px-4 h-10 inline-flex items-center rounded-xl text-sm font-bold bg-indigo-600 text-white">Compras con detalle</span>
+        <a href="{{ route('sire.dbf', ['periodo' => $periodo]) }}" class="px-4 h-10 inline-flex items-center rounded-xl text-sm font-bold bg-white text-slate-600 hover:bg-slate-50">Contabilidad (DBF)</a>
     </div>
 
     {{-- Periodo, subir XML y descargas --}}
