@@ -189,6 +189,8 @@ class SucursalController extends Controller
         $datos['permite_propina'] = $request->boolean('permite_propina');
         $datos['foto_redes'] = $request->boolean('foto_redes');
         $datos['cierre_ciego'] = $request->boolean('cierre_ciego');
+        // Solo una persona natural (RUC 10) puede ocultar su nombre en el ticket
+        $datos['ocultar_titular'] = $request->boolean('ocultar_titular') && str_starts_with((string) $sucursal->IdEmpresa, '10');
         $datos['vista_mesas'] = $datos['vista_mesas'] ?? 'GRILLA';
         $datos['foto_marco_estilo'] = $datos['foto_marco_estilo'] ?? 'DEGRADADO';
         $datos['foto_marco_color'] = strtolower($datos['foto_marco_color'] ?? '#111827');

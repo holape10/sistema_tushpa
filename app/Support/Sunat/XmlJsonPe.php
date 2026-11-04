@@ -66,17 +66,24 @@ class XmlJsonPe
         if (! $r->successful() || ! $r->json('success')) {
             return ['xml' => null, 'error' => $mensaje ?: 'SUNAT no tiene ese XML.', 'detener' => false];
         }
-        $xml = self::extraer($r->json('data'));
+        $soloCdr = false;
+        $xml = self::extraer($r->json('data'), $soloCdr);
+        if ($xml) {
+            return ['xml' => $xml, 'error' => null, 'detener' => false];
+        }
 
-        return $xml ? ['xml' => $xml, 'error' => null, 'detener' => false] : ['xml' => null, 'error' => 'La respuesta de json.pe no trae el XML.', 'detener' => false];
+        // Si solo devuelve la constancia de SUNAT, lo mismo pasará con todas: no se gastan más créditos
+        return $soloCdr
+            ? ['xml' => null, 'error' => 'json.pe devolvió solo la constancia de SUNAT (CDR), que no trae el detalle de la factura. Consulta con json.pe.', 'detener' => true]
+            : ['xml' => null, 'error' => 'La respuesta de json.pe no trae el XML.', 'detener' => false];
     }
 
     /** El XML dentro de la respuesta: un .zip o el XML en Base64 (directo o dentro de algún campo) */
-    private static function extraer(mixed $data): ?string
+    private static function extraer(mixed $data, bool &$soloCdr = false): ?string
     {
         if (is_array($data)) {
             foreach ($data as $valor) {
-                if ($xml = self::extraer($valor)) {
+                if ($xml = self::extraer($valor, $soloCdr)) {
                     return $xml;
                 }
             }
@@ -100,6 +107,8 @@ class XmlJsonPe
                     $contenido = (string) $zip->getFromIndex($i);
                     if (str_ends_with(strtolower($zip->getNameIndex($i)), '.xml') && CompraXml::leer($contenido)) {
                         $xml = $contenido;
+                    } elseif (str_contains($contenido, 'ApplicationResponse')) {
+                        $soloCdr = true;
                     }
                 }
                 $zip->close();

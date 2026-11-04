@@ -114,7 +114,7 @@ class ComprasDetalleTest extends FlujoTestCase
         $z->addFromString('20553510661-01-F001-134277.xml', CompraXmlTest::factura($ruc));
         $z->close();
         Http::fake(fn (Peticion $p) => $p['serie'] === 'F001'
-            ? Http::response(['success' => true, 'message' => 'ok', 'data' => base64_encode(file_get_contents($zip))])
+            ? Http::response(['success' => true, 'message' => 'ok', 'data' => ['xml_base64' => base64_encode(file_get_contents($zip))]])
             : Http::response(['success' => false, 'message' => 'Comprobante no encontrado']));
 
         $this->postJson(route('sire.detalle.traer', ['periodo' => '202607']))->assertOk()
@@ -137,6 +137,23 @@ class ComprasDetalleTest extends FlujoTestCase
 
         $this->postJson(route('sire.detalle.traer', ['periodo' => '202607']))->assertJson(['ok' => false])
             ->assertJsonPath('mensaje', fn ($m) => str_contains($m, 'clave SOL'));
+        Http::assertSentCount(1);
+    }
+
+    public function test_si_json_pe_solo_devuelve_la_constancia_cdr_no_gasta_mas_creditos(): void
+    {
+        $this->propuesta();
+        config(['services.jsonpe.token' => 'token-de-prueba']);
+        app()->instance('tenancy.cliente', (new Cliente)->forceFill(['ruc' => $this->usuario->IdEmpresa, 'sol_usuario' => 'USUARIO1', 'sol_clave' => 'clave']));
+        $zip = tempnam(sys_get_temp_dir(), 'zip');
+        $z = new \ZipArchive;
+        $z->open($zip, \ZipArchive::OVERWRITE);
+        $z->addFromString('R-20553510661-01-F001-134277.xml', '<?xml version="1.0"?><ar:ApplicationResponse xmlns:ar="urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2"/>');
+        $z->close();
+        Http::fake(['*' => Http::response(['success' => true, 'message' => 'exito', 'data' => ['xml_base64' => base64_encode(file_get_contents($zip))]])]);
+
+        $this->postJson(route('sire.detalle.traer', ['periodo' => '202607']))->assertJson(['ok' => false])
+            ->assertJsonPath('mensaje', fn ($m) => str_contains($m, 'constancia'));
         Http::assertSentCount(1);
     }
 }

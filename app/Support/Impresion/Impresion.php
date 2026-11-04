@@ -391,12 +391,16 @@ class Impresion
         $p->logo($conLogo ? public_path($logo) : null)->alinear('centro');
         $comercial = trim((string) ($negocio->nombre_comercial ?: $empresa->NomEmpresa));
         $mismoNombre = mb_strtoupper(preg_replace('/\s+/', ' ', $comercial)) === mb_strtoupper(preg_replace('/\s+/', ' ', (string) $empresa->NomEmpresa));
-        if (! $conLogo) {
+        // Persona natural que pidió no imprimir su nombre: solo el nombre comercial (si es otro) y el RUC
+        $sinTitular = ! empty($negocio->ocultar_titular);
+        if (! $conLogo && ! ($sinTitular && $mismoNombre)) {
             $p->negrita()->tamano(1, 2)->parrafo($comercial)->tamano()->negrita(false);
         }
-        if (! $mismoNombre) {
+        if ($sinTitular && $conLogo && ! $mismoNombre) {
+            $p->negrita()->parrafo($comercial)->negrita(false);
+        } elseif (! $sinTitular && ! $mismoNombre) {
             $p->parrafo('DE: '.$empresa->NomEmpresa);
-        } elseif ($conLogo) {
+        } elseif (! $sinTitular && $conLogo) {
             $p->negrita()->parrafo($comercial)->negrita(false);
         }
         $p->parrafo((string) $negocio->direccion);

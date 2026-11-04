@@ -266,6 +266,14 @@
                             <span><span class="font-bold text-gray-800">🙈 Cierre de caja ciego</span>
                                 <span class="block text-xs text-gray-500 mt-0.5">El cajero no ve lo vendido ni cuánto efectivo debería haber: al cerrar el turno cuenta la caja y escribe cuánto hay (obligatorio). La diferencia se ve recién al cerrar y, si falta dinero, te llega el aviso al celular. El administrador siempre ve todo.</span></span>
                         </label>
+                        @if (str_starts_with((string) $sucursal->IdEmpresa, '10'))
+                        {{-- Persona natural: por seguridad, el ticket compacto puede salir sin su nombre --}}
+                        <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer hover:border-gray-300">
+                            <input type="checkbox" name="ocultar_titular" value="1" @checked($campo('ocultar_titular')) class="mt-0.5 rounded text-indigo-600">
+                            <span><span class="font-bold text-gray-800">🔒 No imprimir mi nombre en el ticket</span>
+                                <span class="block text-xs text-gray-500 mt-0.5">Con el diseño "Pequeño y compacto", el ticket sale solo con el nombre comercial de la sucursal (o tu logo) y el RUC, sin tus nombres y apellidos. Pon el nombre comercial arriba para que el ticket tenga un nombre.</span></span>
+                        </label>
+                        @endif
                         @if (\App\Support\Rubros::permite('restaurante'))
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer hover:border-gray-300">
                             <input type="checkbox" name="comandas_solo_mesas" value="1" @checked($campo('comandas_solo_mesas')) class="mt-0.5 rounded text-indigo-600">
