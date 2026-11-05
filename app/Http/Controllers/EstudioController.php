@@ -137,10 +137,12 @@ class EstudioController extends Controller
     public function cambiar(Request $request): RedirectResponse
     {
         abort_unless(Estudio::activo(), 404);
-        $ruc = (string) $request->validate(['ruc' => 'required|digits:11'])['ruc'];
+        // ir: a qué pantalla del sistema entrar después (solo del SIRE o de contabilidad, nunca una dirección de afuera)
+        $d = $request->validate(['ruc' => 'required|digits:11', 'ir' => ['nullable', 'string', 'max:200', 'regex:#^/(sire|contabilidad)(/[A-Za-z0-9/_-]*)?(\?[A-Za-z0-9=&_-]*)?$#']]);
+        $ruc = (string) $d['ruc'];
         Estudio::cambiar(Auth::user(), $ruc);
         $nombre = DB::table('empresa')->where('IdEmpresa', $ruc)->value('NomEmpresa');
 
-        return redirect()->route('inicio')->with('success', "Ahora trabajas en {$nombre} ({$ruc}).");
+        return redirect()->to(! empty($d['ir']) ? url($d['ir']) : route('inicio'))->with('success', "Ahora trabajas en {$nombre} ({$ruc}).");
     }
 }

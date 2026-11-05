@@ -6,6 +6,7 @@ use App\Models\Empresa;
 use App\Support\Excel;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
+use App\Support\Sunat\SireSolicitudes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -119,23 +120,9 @@ class SireController extends Controller
         $codLibro = self::LIBROS[$libro] ?? abort(404);
         $periodo = $request->validate(['periodo' => 'required|digits:6'])['periodo'];
 
-        try {
-            $ticket = (new Sire($empresa))->solicitarPropuesta($codLibro, $periodo);
-        } catch (\RuntimeException $e) {
-            return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
-        } catch (\Throwable $e) {
-            report($e);
+        $r = SireSolicitudes::pedir($empresa, $codLibro, $periodo);
 
-            return response()->json(['estado' => 'error', 'mensaje' => 'No se pudo conectar con SUNAT. Intenta en unos minutos.']);
-        }
-
-        DB::table('sire_solicitudes')->insert([
-            'IdEmpresa' => $empresa->IdEmpresa, 'libro' => $codLibro, 'periodo' => $periodo,
-            'num_ticket' => $ticket, 'cod_estado' => '01', 'des_estado' => Sire::ESTADOS['01'],
-            'IdUsuario' => Auth::id(), 'created_at' => now(), 'updated_at' => now(),
-        ]);
-
-        return response()->json(['estado' => 'ok', 'ticket' => $ticket]);
+        return response()->json(array_intersect_key($r, array_flip(['estado', 'mensaje', 'ticket'])));
     }
 
     /** Revisa el ticket; si SUNAT terminó, descarga y guarda el .zip */
@@ -146,44 +133,7 @@ class SireController extends Controller
         $s = DB::table('sire_solicitudes')->where('id', $id)->where('IdEmpresa', $empresa->IdEmpresa)->where('libro', $codLibro)->first();
         abort_unless($s, 404);
 
-        if ($s->archivo) {
-            return response()->json(['estado' => 'listo']);
-        }
-
-        try {
-            $sire = new Sire($empresa);
-            $registro = $sire->estadoTicket($codLibro, $s->periodo, $s->num_ticket);
-            if (! $registro) {
-                return response()->json(['estado' => 'proceso', 'descripcion' => 'SUNAT aún está registrando el pedido…']);
-            }
-
-            $cod = str_pad((string) ($registro['codEstadoProceso'] ?? ''), 2, '0', STR_PAD_LEFT);
-            $des = $registro['desEstadoProceso'] ?? (Sire::ESTADOS[$cod] ?? 'En proceso');
-            DB::table('sire_solicitudes')->where('id', $id)->update(['cod_estado' => $cod, 'des_estado' => mb_substr($des, 0, 60), 'updated_at' => now()]);
-
-            if ($cod === '03') {
-                return response()->json(['estado' => 'error', 'mensaje' => 'SUNAT procesó el pedido con errores: '.$des]);
-            }
-            if (! in_array($cod, ['04', '06'], true)) {
-                return response()->json(['estado' => 'proceso', 'descripcion' => $des]);
-            }
-
-            $zip = $sire->descargarArchivo($codLibro, $registro);
-            $ruta = "sire/{$empresa->IdEmpresa}/{$codLibro}/{$s->periodo}-{$s->num_ticket}.zip";
-            Storage::put($ruta, $zip);
-            $filas = count(Sire::leerZip(Storage::path($ruta))['filas']);
-            DB::table('sire_solicitudes')->where('id', $id)->update(['archivo' => $ruta, 'filas' => $filas, 'updated_at' => now()]);
-
-            return response()->json(['estado' => 'listo', 'filas' => $filas]);
-        } catch (\RuntimeException $e) {
-            DB::table('sire_solicitudes')->where('id', $id)->update(['mensaje' => mb_substr($e->getMessage(), 0, 250), 'updated_at' => now()]);
-
-            return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
-        } catch (\Throwable $e) {
-            report($e);
-
-            return response()->json(['estado' => 'error', 'mensaje' => 'No se pudo consultar a SUNAT. Intenta en unos minutos.']);
-        }
+        return response()->json(SireSolicitudes::revisar($empresa, $s));
     }
 
     /** Excel de la propuesta: hoja 1 = el .txt de SUNAT con cada campo en su columna; hoja 2 = cuadre con el sistema */

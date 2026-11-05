@@ -14,6 +14,7 @@
             <p class="text-3xl font-black">{{ $activas }}@if ($limite)<span class="text-lg font-bold text-indigo-200"> / {{ $limite }}</span>@endif</p>
             <p class="text-xs text-indigo-100">{{ $limite ? 'empresas activas de tu plan' : 'empresas activas' }}</p>
         </div>
+        <a href="{{ route('sire.bandeja') }}" class="h-11 px-5 inline-flex items-center rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold">📥 Bandeja SIRE</a>
         @if (! $limite || $activas < $limite)
             <button type="button" @click="nueva = !nueva" class="h-11 px-5 rounded-xl bg-white text-indigo-700 font-bold hover:bg-indigo-50">+ Nueva empresa</button>
         @else

@@ -102,6 +102,7 @@ use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\RespaldoEmpresaController;
 use App\Http\Controllers\SeguimientoController;
 use App\Http\Controllers\SerieController;
+use App\Http\Controllers\SireBandejaController;
 use App\Http\Controllers\SireController;
 use App\Http\Controllers\SireDbfController;
 use App\Http\Controllers\SireDetalleController;
@@ -633,6 +634,11 @@ Route::middleware('auth')->group(function () {
     // SIRE (SUNAT): credenciales, propuesta RVIE/RCE y cuadre con el sistema
     Route::get('/sire/credenciales', [SireController::class, 'credenciales'])->name('sire.credenciales');
     Route::post('/sire/credenciales', [SireController::class, 'guardarCredenciales'])->name('sire.credenciales.guardar');
+    // Bandeja SIRE del estudio contable: las propuestas de todas sus empresas de una vez
+    Route::get('/sire/bandeja', [SireBandejaController::class, 'index'])->name('sire.bandeja');
+    Route::post('/sire/bandeja/{ruc}/{libro}/pedir', [SireBandejaController::class, 'pedir'])->where('ruc', '\d{11}')->whereIn('libro', ['ventas', 'compras'])->middleware('throttle:120,1')->name('sire.bandeja.pedir');
+    Route::post('/sire/bandeja/{ruc}/{libro}/revisar', [SireBandejaController::class, 'revisar'])->where('ruc', '\d{11}')->whereIn('libro', ['ventas', 'compras'])->middleware('throttle:240,1')->name('sire.bandeja.revisar');
+
     // SIRE → sistema contable en FoxPro: revisar cuentas y montos y descargar tienfact.dbf / almaingr.dbf
     Route::get('/sire/dbf', [SireDbfController::class, 'index'])->name('sire.dbf');
     Route::post('/sire/dbf/guardar', [SireDbfController::class, 'guardar'])->name('sire.dbf.guardar');

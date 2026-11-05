@@ -19,6 +19,9 @@
            class="px-4 h-10 inline-flex items-center rounded-xl text-sm font-bold {{ $libro === 'compras' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50' }}">Compras (RCE)</a>
         <a href="{{ route('sire.detalle', ['periodo' => $periodo]) }}" class="px-4 h-10 inline-flex items-center rounded-xl text-sm font-bold bg-white text-slate-600 hover:bg-slate-50">Compras con detalle</a>
         <a href="{{ route('sire.dbf', ['periodo' => $periodo]) }}" class="px-4 h-10 inline-flex items-center rounded-xl text-sm font-bold bg-white text-slate-600 hover:bg-slate-50">Contabilidad (DBF)</a>
+        @if (\App\Support\Estudio::activo())
+            <a href="{{ route('sire.bandeja', ['periodo' => $periodo]) }}" class="px-4 h-10 inline-flex items-center rounded-xl text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700">📥 Bandeja (todas las empresas)</a>
+        @endif
         <a href="{{ route('sire.credenciales') }}" class="ml-auto text-sm font-semibold text-slate-500 hover:text-indigo-700">⚙ Credenciales SIRE</a>
     </div>
 

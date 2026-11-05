@@ -29,6 +29,9 @@
                     </form>
                 @endforeach
             </div>
+            @if (auth()->user()->esAdmin() || auth()->user()->tieneModulo('/sire/compras') || auth()->user()->tieneModulo('/sire/ventas'))
+                <a href="{{ route('sire.bandeja') }}" class="mt-1 block rounded-xl border-t border-slate-100 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50">📥 Bandeja SIRE (todas las empresas)</a>
+            @endif
             @if (auth()->user()->esAdmin())
                 <a href="{{ route('estudio.index') }}" class="mt-1 block rounded-xl border-t border-slate-100 px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50">⚙ Empresas del estudio</a>
             @endif
