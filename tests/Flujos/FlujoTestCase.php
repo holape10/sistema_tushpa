@@ -6,6 +6,7 @@ use App\Models\Producto;
 use App\Models\Turno;
 use App\Models\User;
 use App\Support\EmpresaInicial;
+use App\Support\Estudio;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
@@ -67,6 +68,8 @@ abstract class FlujoTestCase extends TestCase
 
     protected function tearDown(): void
     {
+        // El estudio contable se lee una vez por base: que no pase de una prueba a otra
+        Estudio::olvidar();
         Carbon::setTestNow();
         Auth::logout();
         if (DB::transactionLevel() > 0) {

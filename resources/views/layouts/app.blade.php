@@ -218,6 +218,7 @@
             <h1 class="text-gray-700 font-semibold text-sm sm:text-base">@yield('title', 'Panel')</h1>
             <div class="flex items-center gap-4">
                 @include('partials.pwa_boton')
+                @include('partials.empresa_estudio')
                 {{-- Multisucursal: en qué sucursal trabaja (el administrador puede cambiarla) --}}
                 @if (!empty($sucursalActual))
                     @if ($usuario->esAdmin())

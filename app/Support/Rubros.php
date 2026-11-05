@@ -105,6 +105,14 @@ class Rubros
             '/planilla/trabajadores', '/planilla', '/planilla/parametros',
             '/asistencia', '/asistencia/motivos', '/asistencia/tareo', '/asistencia/jornadas', '/asistencia/matriz', '/asistencia/turnos', '/asistencia/configuracion',
         ]],
+        // Estudio contable con las empresas de sus clientes: cada una con su contabilidad, SIRE, planilla y asistencia
+        'ESTUDIO' => ['icono' => 'fa-building-columns', 'nombre' => 'Estudio contable (multiempresa)', 'ejemplos' => 'Estudio contable que lleva muchas empresas: SIRE, DBF, contabilidad, planilla', 'sin_base' => true, 'estudio' => true, 'modulos' => [
+            '/inicio', '/estudio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo',
+            ...self::CONTABLE,
+            '/sire/ventas', '/sire/compras', '/sire/credenciales', '/tributos',
+            '/planilla/trabajadores', '/planilla', '/planilla/parametros',
+            '/asistencia', '/asistencia/motivos', '/asistencia/tareo', '/asistencia/jornadas', '/asistencia/matriz', '/asistencia/turnos', '/asistencia/configuracion',
+        ]],
         'COMPLETO' => ['icono' => 'fa-table-cells', 'nombre' => 'Todo el menú', 'ejemplos' => 'Todas las opciones del sistema', 'modulos' => ['*']],
     ];
 

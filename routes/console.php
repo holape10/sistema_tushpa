@@ -8,6 +8,7 @@ use App\Support\Antiguo\CargadorSql;
 use App\Support\AvisosCelular;
 use App\Support\ClinicaRecordatorios;
 use App\Support\DemoDatos;
+use App\Support\Estudio;
 use App\Support\GeoIp;
 use App\Support\PadronRuc;
 use App\Support\PanelDueno;
@@ -93,6 +94,19 @@ Artisan::command('demo:cargar {cuenta=demos : Subdominio o RUC de la empresa dem
     }
     $this->info('Listo.');
 })->purpose('Carga productos, clientes y datos de todos los rubros en la empresa demo, y una sucursal con solo sus datos por cada rubro (se puede repetir sin duplicar)');
+
+Artisan::command('estudio:activar {ruc : RUC de la empresa que será el estudio contable} {--cliente= : RUC del cliente TUSHPA en cuya base (vacío = la base actual)}', function () {
+    $activar = function () {
+        Estudio::activar($this->argument('ruc'));
+        $this->info('Estudio contable activado con la empresa '.$this->argument('ruc').'. Su administrador ya ve "Empresas del estudio".');
+    };
+    if ($ruc = $this->option('cliente')) {
+        $cliente = Cliente::where('ruc', $ruc)->firstOrFail();
+        Tenancy::en($cliente->base_datos, $activar);
+    } else {
+        $activar();
+    }
+})->purpose('Convierte una base en estudio contable: su empresa es el estudio y registra dentro las empresas de sus clientes');
 
 Artisan::command('clientes:migrar {--ruc= : Solo este cliente}', function () {
     $clientes = Cliente::query()

@@ -48,6 +48,7 @@ use App\Http\Controllers\EncuestaController;
 use App\Http\Controllers\EntradaController;
 use App\Http\Controllers\EntrenadorController;
 use App\Http\Controllers\EstacionamientoController;
+use App\Http\Controllers\EstudioController;
 use App\Http\Controllers\FidelizacionController;
 use App\Http\Controllers\GastoController;
 use App\Http\Controllers\GimnasioController;
@@ -620,6 +621,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/soporte/tickets/{id}/responder', [SoporteController::class, 'responder'])->whereNumber('id')->middleware('throttle:30,10')->name('soporte.responder');
     Route::post('/soporte/tickets/{id}/cerrar', [SoporteController::class, 'cerrar'])->whereNumber('id')->name('soporte.cerrar');
     Route::get('/soporte/tickets/{id}/archivo/{mensaje}/{n}', [SoporteController::class, 'archivo'])->whereNumber(['id', 'mensaje', 'n'])->name('soporte.archivo');
+
+    // Estudio contable: las empresas de sus clientes, quién trabaja cada una y el cambio de empresa
+    Route::get('/estudio', [EstudioController::class, 'index'])->name('estudio.index');
+    Route::post('/estudio/empresas', [EstudioController::class, 'guardar'])->name('estudio.guardar');
+    Route::post('/estudio/empresas/{ruc}/estado', [EstudioController::class, 'estado'])->where('ruc', '\d{11}')->name('estudio.estado');
+    Route::post('/estudio/empresas/{ruc}/accesos', [EstudioController::class, 'accesos'])->where('ruc', '\d{11}')->name('estudio.accesos');
+    Route::post('/estudio/cambiar', [EstudioController::class, 'cambiar'])->name('estudio.cambiar');
 
     // SIRE (SUNAT): credenciales, propuesta RVIE/RCE y cuadre con el sistema
     Route::get('/sire/credenciales', [SireController::class, 'credenciales'])->name('sire.credenciales');

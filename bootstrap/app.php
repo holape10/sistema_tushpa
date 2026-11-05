@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AvisarCambios;
 use App\Http\Middleware\CabecerasSeguridad;
+use App\Http\Middleware\EmpresaDelEstudio;
 use App\Http\Middleware\IdentificarEmpresa;
 use App\Http\Middleware\RegistrarVisita;
 use App\Http\Middleware\SoloMenuContador;
@@ -37,7 +38,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(IdentificarEmpresa::class);
         // El contador solo entra a las secciones de su menú
         // Mozos y promotores solo con el Wi-Fi del local (si la sucursal lo activó)
-        $middleware->web(append: [SoloMenuContador::class, SoloWifiLocal::class, AvisarCambios::class, CabecerasSeguridad::class, RegistrarVisita::class.':demos']);
+        // Estudio contable: cada usuario solo en las empresas que puede ver (antes que cualquier pantalla)
+        $middleware->web(append: [EmpresaDelEstudio::class, SoloMenuContador::class, SoloWifiLocal::class, AvisarCambios::class, CabecerasSeguridad::class, RegistrarVisita::class.':demos']);
         // Los avisos de Culqi llegan de su servidor (sin sesión): se confirman preguntándole a Culqi
         $middleware->validateCsrfTokens(except: ['culqi/webhook']);
 

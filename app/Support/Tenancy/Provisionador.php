@@ -4,6 +4,8 @@ namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
 use App\Support\EmpresaInicial;
+use App\Support\Estudio;
+use App\Support\Rubros;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 
@@ -40,6 +42,10 @@ class Provisionador
                     throw new \RuntimeException('Fallaron las migraciones: '.trim(Artisan::output()));
                 }
                 DB::transaction(fn () => EmpresaInicial::crear($d));
+                // Estudio contable: su propia empresa queda como el estudio y su administrador registra las de sus clientes
+                if (! empty(Rubros::RUBROS[$d['rubro'] ?? '']['estudio'])) {
+                    Estudio::activar($d['ruc']);
+                }
             });
 
             // Una empresa eliminada antes (su base ya no existe) se vuelve a crear desde cero

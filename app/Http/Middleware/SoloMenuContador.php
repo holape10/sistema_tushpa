@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
 class SoloMenuContador
 {
     /** Siempre permitido: bienvenida, salir, soporte, la campanita de SUNAT y la app instalable */
-    private const LIBRES = ['inicio', 'logout', 'soporte', 'sunat/campana', 'manifest.webmanifest', 'login'];
+    private const LIBRES = ['inicio', 'logout', 'soporte', 'sunat/campana', 'manifest.webmanifest', 'login', 'estudio/cambiar'];
 
     public function handle(Request $request, Closure $next): Response
     {

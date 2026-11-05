@@ -66,6 +66,7 @@
                     <span x-show="consultando && !error" class="inline-block w-3 h-3 mr-1 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin align-middle"></span>
                     <span x-text="mensaje || @js($solicitud->des_estado ?: 'Pedido enviado')"></span>
                 </p>
+                <button type="button" x-show="pausado" x-cloak @click="reanudar()" class="mt-1 text-xs font-bold text-indigo-700 underline">Revisar de nuevo en SUNAT</button>
                 @if ($solicitud->archivo)
                     <p class="text-emerald-700 font-semibold">✔ Propuesta descargada · {{ number_format($solicitud->filas) }} comprobantes
                     </p>
@@ -260,8 +261,9 @@
     // Pide la propuesta y espera a que SUNAT termine de generarla (consulta el ticket cada 8 s)
     function sirePagina(urlEstado) {
         return {
-            urlEstado, enviando: false, consultando: false, listo: false, error: false, mensaje: '', _timer: null,
+            urlEstado, enviando: false, consultando: false, listo: false, error: false, pausado: false, mensaje: '', _timer: null, inicio: Date.now(),
             iniciar() { if (this.urlEstado) this.consultar(); },
+            reanudar() { this.pausado = false; this.inicio = Date.now(); this.consultar(); },
             async solicitar() {
                 this.enviando = true;
                 try {
@@ -281,8 +283,16 @@
                     const d = await (await fetch(this.urlEstado, { headers: { Accept: 'application/json' } })).json();
                     if (d.estado === 'listo') { this.listo = true; window.location.reload(); return; }
                     if (d.estado === 'error') { this.error = true; this.mensaje = d.mensaje; return; }
-                    this.mensaje = (d.descripcion || 'SUNAT está generando el archivo') + '… (se revisa sola cada 8 segundos)';
-                    this._timer = setTimeout(() => this.consultar(), 8000);
+                    // SUNAT a veces tarda mucho (sobre todo en meses ya presentados): después de 15 min deja de preguntar
+                    const minutos = Math.floor((Date.now() - this.inicio) / 60000);
+                    if (minutos >= 15) {
+                        this.consultando = false;
+                        this.pausado = true;
+                        this.mensaje = 'SUNAT sigue procesando el pedido después de 15 minutos. El pedido no se pierde: vuelve más tarde o revisa de nuevo.';
+                        return;
+                    }
+                    this.mensaje = (d.descripcion || 'SUNAT está generando el archivo') + (minutos ? ` (hace ${minutos} min)` : '') + '… se revisa sola';
+                    this._timer = setTimeout(() => this.consultar(), minutos >= 3 ? 30000 : 8000);
                 } catch (e) {
                     this.mensaje = 'Sin conexión; reintentando…';
                     this._timer = setTimeout(() => this.consultar(), 15000);

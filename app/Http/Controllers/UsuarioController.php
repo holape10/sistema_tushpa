@@ -8,6 +8,7 @@ use App\Models\Modulo;
 use App\Models\User;
 use App\Support\ConsultaPeru;
 use App\Support\Delivery;
+use App\Support\Estudio;
 use App\Support\Rubros;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\JsonResponse;
@@ -53,10 +54,19 @@ class UsuarioController extends Controller
         abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador gestiona usuarios.');
     }
 
-    /** Usuario de la misma empresa (nunca de otra) */
+    /**
+     * Empresa dueña de los usuarios: la del administrador o, en un estudio contable, el estudio (sus usuarios pasan de
+     * una empresa cliente a otra, pero siguen siendo del estudio).
+     */
+    private function empresaUsuarios(): string
+    {
+        return Estudio::ruc() ?? (string) Auth::user()->IdEmpresa;
+    }
+
+    /** Usuario de la misma empresa (nunca de otra); en un estudio, todos los de su base son del estudio */
     private function propio(User $usuario): void
     {
-        abort_unless($usuario->IdEmpresa === Auth::user()->IdEmpresa, 404);
+        abort_unless(Estudio::activo() || $usuario->IdEmpresa === Auth::user()->IdEmpresa, 404);
     }
 
     /** @return array<int, int> mod_id que el administrador conectado puede dar a sus usuarios */
@@ -90,7 +100,7 @@ class UsuarioController extends Controller
             'roles' => DB::table('roles')->orderBy('id')->get()->filter(fn ($r) => Rubros::permiteRol((int) $r->id))->values(),
             'modulos' => $modulos->groupBy('mod_gen'),
             'presets' => $presets,
-            'sucursales' => EmpresaNegocio::where('IdEmpresa', Auth::user()->IdEmpresa)->get(),
+            'sucursales' => EmpresaNegocio::where('IdEmpresa', $this->empresaUsuarios())->get(),
             'documentos' => DB::table('tipo_documento_identidad')->whereIn('tdicod', ['1', '4', '7'])->orderBy('orden')->get(),
         ];
     }
@@ -104,7 +114,7 @@ class UsuarioController extends Controller
             ->leftJoin('role_user as ru', 'ru.user_IdUsuario', '=', 'users.IdUsuario')
             ->leftJoin('roles as r', 'r.id', '=', 'ru.role_id')
             ->leftJoin('empleado as e', 'e.emp_id', '=', 'users.emp_id')
-            ->where('users.IdEmpresa', Auth::user()->IdEmpresa)
+            ->when(! Estudio::activo(), fn ($w) => $w->where('users.IdEmpresa', Auth::user()->IdEmpresa))
             ->when($q, fn ($w) => $w->where(fn ($x) => $x->where('users.apeusu', 'like', "%$q%")
                 ->orWhere('users.email', 'like', "%$q%")->orWhere('e.emp_num_doc', 'like', "$q%")))
             ->orderBy('users.apeusu')
@@ -127,7 +137,7 @@ class UsuarioController extends Controller
         $nuevo = $usuario === null;
 
         $d = $request->validate([
-            'id_empresa_negocio' => ['required', Rule::exists('empresa_negocios', 'id_empresa_negocio')->where('IdEmpresa', Auth::user()->IdEmpresa)],
+            'id_empresa_negocio' => ['required', Rule::exists('empresa_negocios', 'id_empresa_negocio')->where('IdEmpresa', $this->empresaUsuarios())],
             'tdicod' => 'required|in:1,4,7',
             'emp_num_doc' => 'nullable|string|max:15',
             'nombre_completo' => 'required|string|max:200',
@@ -230,7 +240,8 @@ class UsuarioController extends Controller
         $this->autorizar();
         // Límite de usuarios del plan contratado (multi-empresa)
         $plan = Tenancy::plan();
-        if ($plan && $plan->max_usuarios && User::where('IdEmpresa', Auth::user()->IdEmpresa)->count() >= $plan->max_usuarios) {
+        $delPlan = Estudio::activo() ? User::query() : User::where('IdEmpresa', Auth::user()->IdEmpresa);
+        if ($plan && $plan->max_usuarios && $delPlan->count() >= $plan->max_usuarios) {
             return back()->withInput()->with('error', "Tu plan {$plan->nombre} permite hasta {$plan->max_usuarios} usuarios. Para agregar más, cámbiate a un plan mayor.")
                 ->withErrors(['plan' => "Tu plan {$plan->nombre} permite hasta {$plan->max_usuarios} usuarios. Para agregar más, cámbiate a un plan mayor."]);
         }
@@ -247,7 +258,7 @@ class UsuarioController extends Controller
                 // Mozo o promotor sin contraseña: una al azar (entra con su código móvil)
                 'password' => bcrypt(($d['password'] ?? null) ?: Str::random(32)),
                 'estusu' => (int) $d['estusu'],
-                'IdEmpresa' => Auth::user()->IdEmpresa,
+                'IdEmpresa' => $this->empresaUsuarios(),
                 'id_empresa_negocio' => $d['id_empresa_negocio'],
                 'emp_id' => $empleado->emp_id,
             ]);
@@ -301,6 +312,8 @@ class UsuarioController extends Controller
                 'name' => strtok($d['nombre_completo'], ' '), 'apeusu' => $this->nombreCompleto($d),
                 'email' => trim($d['email']), 'codigo_movil' => $d['codigo_movil'] ?? null,
                 'estusu' => (int) $d['estusu'], 'id_empresa_negocio' => $d['id_empresa_negocio'],
+                // La sucursal elegida es del estudio: el usuario vuelve a él (nunca queda con RUC de una y sucursal de otra)
+                'IdEmpresa' => $this->empresaUsuarios(),
             ]);
             if (! empty($d['password'])) {
                 $usuario->password = bcrypt($d['password']);
