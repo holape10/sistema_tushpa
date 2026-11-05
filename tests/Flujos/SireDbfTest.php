@@ -74,9 +74,19 @@ class SireDbfTest extends FlujoTestCase
         $this->assertSame(1, $r->json('totales.descuadrados'));
         $this->from(route('sire.dbf', ['libro' => 'compras', 'periodo' => '202605']))
             ->get(route('sire.dbf.descargar', ['compras', 'periodo' => '202605']))->assertRedirect()->assertSessionHas('error');
-        // El IGV va a la segunda columna (IGV 2): ahora cuadra; cambia la cuenta y la tercera compra no se lleva
-        $guardar('20553510661|01|F001|134277', ['montos' => ['base_dg' => 150, 'igv_dgng' => 27, 'total' => 177], 'ctaabono' => '42121']);
-        $guardar('20603067534|01|FX02|3444', ['excluido' => true]);
+        // El IGV en otra casilla (IGV 2, que no es el de su base): suma el total, pero no deja descargar
+        $r = $guardar('20553510661|01|F001|134277', ['montos' => ['base_dg' => 150, 'igv_dgng' => 27, 'total' => 177]]);
+        $this->assertEquals(0, $r->json('diferencia'));
+        $this->assertStringContainsString('IGV 1', $r->json('alerta'));
+        $this->assertSame(1, $r->json('totales.descuadrados'));
+        // Lo mismo con el IGV escrito en la base y la base en el IGV
+        $r = $guardar('20553510661|01|F001|134277', ['montos' => ['igv_dg' => 150, 'base_dgng' => 27, 'total' => 177]]);
+        $this->assertNotNull($r->json('alerta'));
+        // Cada IGV junto a su base: ahora sí; cambia la cuenta y la tercera compra no se lleva
+        $r = $guardar('20553510661|01|F001|134277', ['montos' => ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177], 'ctaabono' => '42121']);
+        $this->assertNull($r->json('alerta'));
+        $r = $guardar('20603067534|01|FX02|3444', ['excluido' => true]);
+        $this->assertGreaterThan(0, $r->json('totales.no_llevan.total'), 'Lo que no se lleva se ve aparte (la diferencia con SUNAT).');
         $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202605', 'clave' => '1|01|X|1', 'excluido' => true])->assertNotFound();
 
         [$bytes, $filas] = $this->dbf('compras');
@@ -84,7 +94,7 @@ class SireDbfTest extends FlujoTestCase
         $this->assertSame(substr($plantilla, 32, 4776), substr($bytes, 32, 4776), 'La misma estructura de la tabla del sistema contable.');
         $this->assertCount(3, $filas, 'La excluida no va.');
         [$nota, $factura, $redondeo] = $filas;
-        $this->assertSame(['SIRE', 'F001', '000000134277', '20553510661', '01', 'FACTURA', '2026-05-22', 150.0, null, 27.0, null, 177.0, '63691', '42121', '050002', '0002', '052026', 'S/'],
+        $this->assertSame(['SIRE', 'F001', '000000134277', '20553510661', '01', 'FACTURA', '2026-05-22', 150.0, 27.0, null, null, 177.0, '63691', '42121', '050002', '0002', '052026', 'S/'],
             [$factura['ORIGEN'], $factura['SERIEDOC'], $factura['NUMDOC'], $factura['RUC_DNI'], $factura['CODDOC'], $factura['DESDOC'], $factura['FECHADOC'],
                 $factura['OGYE'], $factura['IGV_1'], $factura['IGV_2'], $factura['IGV_3'], $factura['TOTAL'], $factura['CTACARGO'], $factura['CTAABONO'], $factura['NORDEN'], $factura['NUM1'], $factura['FCON'], $factura['MONEDA']]);
         $this->assertSame([40.10, 40.10], [$redondeo['NG'], $redondeo['TOTAL']], 'El céntimo de redondeo del proveedor se corrige solo.');

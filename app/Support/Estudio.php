@@ -81,8 +81,8 @@ class Estudio
     }
 
     /**
-     * Las empresas en las que puede trabajar el usuario: primero el propio estudio, luego sus clientes activos
-     * (todos para el administrador; los asignados para los demás).
+     * Las empresas en las que puede trabajar el usuario. El administrador: el propio estudio y todos sus clientes
+     * activos; los demás, solo los clientes que se les asignaron (la empresa del estudio no es para ellos).
      *
      * @return Collection<int, object{IdEmpresa: string, NomEmpresa: string, propia: int}>
      */
@@ -94,8 +94,8 @@ class Estudio
 
         return DB::table('estudio_empresas as ee')->join('empresa as e', 'e.IdEmpresa', '=', 'ee.IdEmpresa')
             ->where(fn ($q) => $q->where('ee.propia', true)->orWhere('ee.activa', true))
-            ->when(! $usuario->esAdmin(), fn ($q) => $q->where(fn ($q) => $q->where('ee.propia', true)
-                ->orWhereIn('ee.IdEmpresa', DB::table('estudio_accesos')->where('IdUsuario', $usuario->IdUsuario)->select('IdEmpresa'))))
+            ->when(! $usuario->esAdmin(), fn ($q) => $q->where('ee.propia', false)
+                ->whereIn('ee.IdEmpresa', DB::table('estudio_accesos')->where('IdUsuario', $usuario->IdUsuario)->select('IdEmpresa')))
             ->orderByDesc('ee.propia')->orderBy('e.NomEmpresa')
             ->get(['ee.IdEmpresa', 'e.NomEmpresa', 'ee.propia']);
     }
@@ -103,6 +103,12 @@ class Estudio
     public static function puede(User $usuario, string $ruc): bool
     {
         return self::empresas($usuario)->contains('IdEmpresa', $ruc);
+    }
+
+    /** Dónde trabaja el usuario si está en una empresa que no le toca: el estudio (administrador) o su primer cliente */
+    public static function inicioDe(User $usuario): ?string
+    {
+        return $usuario->esAdmin() ? self::ruc() : self::empresas($usuario)->first()?->IdEmpresa;
     }
 
     /** La sucursal en la que se trabaja una empresa (la primera que se creó) */

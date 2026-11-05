@@ -121,7 +121,9 @@ class BandejaSireTest extends FlujoTestCase
         DB::table('modulos_usuario')->insert(['user_IdUsuario' => $contador->IdUsuario, 'mod_id' => DB::table('modulos')->where('mod_url', '/sire/compras')->value('mod_id')]);
         Estudio::guardarAccesos(self::LISTA, [$contador->IdUsuario]);
 
-        $this->actingAs($contador)->get(route('sire.bandeja'))->assertOk()->assertSee('LLAMA PE SA')->assertDontSee('SUPERMERCADOS PERUANOS SA');
+        // El contador trae las propuestas de sus empresas (ni las de otros ni la del estudio)
+        $this->actingAs($contador)->get(route('sire.bandeja'))->assertOk()->assertSee('LLAMA PE SA')->assertDontSee('SUPERMERCADOS PERUANOS SA')
+            ->assertViewHas('filas', fn ($filas) => collect($filas)->pluck('ruc')->unique()->values()->all() === [self::LISTA]);
         $this->actingAs($contador)->postJson(route('sire.bandeja.pedir', [self::LENTA, 'compras', 'periodo' => '202605']))->assertForbidden();
         $this->actingAs($contador)->postJson(route('sire.bandeja.pedir', [self::LISTA, 'compras', 'periodo' => '202605']))->assertOk();
 
@@ -130,6 +132,7 @@ class BandejaSireTest extends FlujoTestCase
         $cajero->email = 'cajero'.uniqid().'@prueba.test';
         $cajero->save();
         DB::table('role_user')->insert(['role_id' => 4, 'user_IdUsuario' => $cajero->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
+        Estudio::guardarAccesos(self::LENTA, [$cajero->IdUsuario]);
         $this->actingAs($cajero)->get(route('sire.bandeja'))->assertForbidden();
     }
 

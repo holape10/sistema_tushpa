@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Empresa;
 use App\Support\ComprasDetalle;
 use App\Support\Concar;
+use App\Support\Contabilidad\SireDbf;
 use App\Support\Excel;
 use App\Support\Sunat\CompraXml;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
 use App\Support\Sunat\XmlJsonPe;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -63,7 +67,37 @@ class SireDetalleController extends Controller
         $ruc = $this->autorizar();
         $periodo = $this->periodo($request);
 
-        return view('empresas.sire.detalle', ['periodo' => $periodo, 'cfg' => Concar::config($ruc), 'faltaJsonPe' => XmlJsonPe::falta()] + $this->datos($ruc, $periodo));
+        // Lo mismo que "Contabilidad (DBF)": montos, cuentas y cuáles se llevan, editables aquí mismo
+        $dbf = SireDbf::delPeriodo($ruc, 'compras', $periodo)['comprobantes'];
+
+        return view('empresas.sire.detalle', ['periodo' => $periodo, 'cfg' => Concar::config($ruc), 'faltaJsonPe' => XmlJsonPe::falta(),
+            'libro' => 'compras', 'dbf' => $dbf, 'totales' => SireDbf::totales('compras', $dbf)] + $this->datos($ruc, $periodo));
+    }
+
+    /**
+     * El comprobante de compra en PDF (A4, con el diseño de los comprobantes de venta), armado con lo que dice su XML:
+     * para tenerlo a la mano o archivarlo sin entrar a SUNAT.
+     */
+    public function pdf(int $id)
+    {
+        $ruc = $this->autorizar();
+        $xml = DB::table('compras_xml')->where('id', $id)->where('IdEmpresa', $ruc)->first();
+        abort_unless($xml, 404);
+        $lineas = DB::table('compras_xml_lineas')->where('compra_xml_id', $xml->id)->orderBy('orden')->get();
+        $numero = $xml->serie.'-'.str_pad($xml->numero, 8, '0', STR_PAD_LEFT);
+
+        $opciones = new Options;
+        $opciones->set('defaultFont', 'DejaVu Sans');
+        $opciones->set('isRemoteEnabled', false);
+        $opciones->setChroot(public_path());
+        $pdf = new Dompdf($opciones);
+        $pdf->loadHtml(view('empresas.sire.compra_pdf', ['x' => $xml, 'lineas' => $lineas, 'numero' => $numero,
+            'comprador' => Empresa::find($ruc)])->render(), 'UTF-8');
+        $pdf->setPaper('A4');
+        $pdf->render();
+        $nombre = mb_substr(trim($xml->ruc_emisor.' '.$numero.' '.preg_replace('/[^A-Za-z0-9 &.-]/', '', (string) $xml->razon_emisor)), 0, 90).'.pdf';
+
+        return response($pdf->output(), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="'.$nombre.'"']);
     }
 
     public function subir(Request $request): RedirectResponse

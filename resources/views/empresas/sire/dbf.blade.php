@@ -6,20 +6,7 @@
     $nombrePeriodo = \Carbon\Carbon::createFromFormat('Ym', $periodo)->locale('es')->translatedFormat('F Y');
     $compras = $libro === 'compras';
     $tabla = $compras ? 'almaingr' : 'tienfact';
-    $soles = fn ($n) => number_format((float) $n, 2);
     $sinXml = $compras ? collect($comprobantes)->filter(fn ($c) => ! $c['lineas'])->count() : 0;
-    // Lo que se edita de cada fila: en compras la base y el IGV de cada destino (IGV_1, IGV_2, IGV_3); el ISC va en "otros"
-    $fila = function (array $c) use ($compras) {
-        $m = $c['montos'];
-        if ($compras) {
-            $m = collect(\App\Support\Contabilidad\SireDbf::MONTOS_COMPRA)->mapWithKeys(fn ($k) => [$k => (float) ($m[$k] ?? 0)])->all();
-            $m['otros'] = round($m['otros'] + $m['isc'], 2);
-            $m['isc'] = 0;
-        }
-
-        return ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'],
-            'montos' => $m, 'diferencia' => $c['diferencia'], 'editado' => $c['editado'], 'redondeo' => $c['redondeo'], 'xml' => (bool) $c['lineas']];
-    };
 @endphp
 
 @section('content')
@@ -85,50 +72,13 @@
         @endif
 
         {{-- Lo que se va a descargar --}}
-        <div class="grid grid-cols-2 lg:grid-cols-6 gap-3">
-            <div class="bg-white rounded-2xl shadow-sm p-4">
-                <p class="text-xs font-semibold text-slate-500">Registros a descargar</p>
-                <p class="text-2xl font-extrabold" x-text="totales.registros"></p>
-                <p class="text-[11px] text-slate-400" x-text="totales.excluidos ? totales.excluidos + ' no se llevan' : 'de {{ count($comprobantes) }}'"></p>
-            </div>
-            <div class="bg-white rounded-2xl shadow-sm p-4">
-                <p class="text-xs font-semibold text-slate-500">{{ $compras ? 'Base imponible' : 'Gravada' }}</p>
-                <p class="text-xl font-extrabold" x-text="soles(totales.base)"></p>
-            </div>
-            <div class="bg-white rounded-2xl shadow-sm p-4">
-                <p class="text-xs font-semibold text-slate-500">IGV</p>
-                <p class="text-xl font-extrabold" x-text="soles(totales.igv)"></p>
-            </div>
-            <div class="bg-white rounded-2xl shadow-sm p-4">
-                <p class="text-xs font-semibold text-slate-500">{{ $compras ? 'No gravado' : 'Exonerado / inafecto' }}</p>
-                <p class="text-xl font-extrabold" x-text="soles(totales.no_gravado)"></p>
-            </div>
-            <div class="bg-white rounded-2xl shadow-sm p-4">
-                <p class="text-xs font-semibold text-slate-500">Total</p>
-                <p class="text-xl font-extrabold text-indigo-700" x-text="soles(totales.total)"></p>
-            </div>
-            <button type="button" @click="filtro = filtro === 'descuadre' ? 'todos' : 'descuadre'" class="text-left bg-white rounded-2xl shadow-sm p-4 ring-2"
-                    :class="filtro === 'descuadre' ? 'ring-rose-500' : 'ring-transparent'">
-                <p class="text-xs font-semibold text-slate-500">No cuadran</p>
-                <p class="text-2xl font-extrabold" :class="totales.descuadrados ? 'text-rose-600' : 'text-emerald-600'" x-text="totales.descuadrados || '✔ 0'"></p>
-            </button>
-        </div>
+        @include('empresas.sire.partials.dbf_resumen')
 
         {{-- Las mismas cuentas a todos --}}
-        <form method="POST" action="{{ route('sire.dbf.aplicar') }}" class="bg-white rounded-2xl shadow-sm p-4 flex flex-wrap items-end gap-3 text-sm">
-            @csrf
-            <input type="hidden" name="libro" value="{{ $libro }}"><input type="hidden" name="periodo" value="{{ $periodo }}">
-            <p class="w-full sm:w-auto sm:flex-1 text-slate-600"><strong class="text-slate-800">Mismas cuentas a todos</strong>
-                <span class="block text-xs text-slate-500">{{ $compras ? 'Luego cambias las de cada compra según lo que se compró. El sistema recuerda la cuenta de cada proveedor para el próximo mes.' : 'Por ejemplo: cargo 1212 y abono 70001 para todas las ventas.' }}</span></p>
-            <label class="text-xs font-semibold text-slate-500">Cta. cargo
-                <input name="ctacargo" maxlength="12" inputmode="numeric" class="block mt-1 w-28 h-10 rounded-xl border-slate-300 text-sm font-mono" placeholder="{{ $compras ? '63141' : '1212' }}"></label>
-            <label class="text-xs font-semibold text-slate-500">Cta. abono
-                <input name="ctaabono" maxlength="12" inputmode="numeric" class="block mt-1 w-28 h-10 rounded-xl border-slate-300 text-sm font-mono" placeholder="{{ $compras ? '42121' : '70001' }}"></label>
-            <button class="h-10 px-4 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold">Poner a todos</button>
-        </form>
+        @include('empresas.sire.partials.dbf_cuentas_todos')
 
         <div class="flex flex-wrap items-center gap-2 text-sm">
-            @foreach (['todos' => 'Todos', 'descuadre' => 'No cuadran', 'excluidos' => 'No se llevan'] + ($compras ? ['sinxml' => 'Sin detalle (XML)'] : []) as $valor => $texto)
+            @foreach (['todos' => 'Todos', 'descuadre' => 'No cuadran / IGV mal', 'excluidos' => 'No se llevan'] + ($compras ? ['sinxml' => 'Sin detalle (XML)', 'sincuenta' => 'Líneas sin cuenta'] : []) as $valor => $texto)
                 <button type="button" @click="filtro = '{{ $valor }}'" class="px-3 h-8 rounded-full font-semibold"
                         :class="filtro === '{{ $valor }}' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'">{{ $texto }}</button>
             @endforeach
@@ -138,79 +88,7 @@
         {{-- Comprobantes --}}
         <div class="space-y-2">
             @forelse ($comprobantes as $c)
-                <section class="bg-white rounded-2xl shadow-sm overflow-hidden" x-data="filaDbf(@js($fila($c)))" x-show="visible(fila)"
-                         :class="{ 'opacity-50': fila.excluido, 'ring-2 ring-rose-300': !fila.excluido && Math.abs(fila.diferencia) >= 0.01 }">
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-                        <label class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 cursor-pointer" title="Llevar al .dbf">
-                            <input type="checkbox" :checked="!fila.excluido" @change="fila.excluido = !$event.target.checked; guardar({ excluido: fila.excluido })" class="rounded text-indigo-600">
-                            Llevar
-                        </label>
-                        <span class="font-bold whitespace-nowrap">{{ $c['serie'] }}-{{ $c['numero'] }}</span>
-                        <span class="text-xs text-slate-400 whitespace-nowrap">{{ $tipos[$c['tipo']] ?? 'Tipo '.$c['tipo'] }} · {{ $c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '' }}@if ($c['moneda'] !== 'PEN') · {{ $c['moneda'] }} TC {{ $c['tc'] }}@endif</span>
-                        <span class="flex-1 min-w-[180px] text-sm text-slate-700">{{ $c['nombre'] }} <span class="text-xs text-slate-400">{{ $c['ruc'] }}</span>
-                            @if ($c['anulado'])<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">ANULADO</span>@endif</span>
-                        @if ($compras)
-                            @if ($c['lineas'])
-                                <button type="button" @click="detalle = !detalle" class="text-xs font-bold text-indigo-700 hover:underline" x-text="detalle ? 'Ocultar detalle' : 'Ver detalle ({{ count($c['lineas']) }})'"></button>
-                            @else
-                                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">sin XML</span>
-                            @endif
-                        @endif
-                        <span x-show="guardando" class="text-[11px] text-slate-400">Guardando…</span>
-                    </div>
-
-                    <div class="grid grid-cols-2 sm:grid-cols-4 {{ $compras ? 'lg:grid-cols-[repeat(11,minmax(0,1fr))]' : 'lg:grid-cols-[repeat(8,minmax(0,1fr))]' }} gap-2 px-4 pb-3 text-xs">
-                        @if ($compras)
-                            @foreach (['base_dg' => ['B.I. gravadas', ''], 'igv_dg' => ['IGV 1', 'bg-indigo-50/60'], 'base_dgng' => ['B.I. grav. y no grav.', ''],
-                                'igv_dgng' => ['IGV 2', 'bg-indigo-50/60'], 'base_dng' => ['B.I. no gravadas', ''], 'igv_dng' => ['IGV 3', 'bg-indigo-50/60'],
-                                'no_gravado' => ['No gravado', ''], 'otros' => ['Otros / ISC', ''], 'total' => ['Total', '']] as $k => [$texto, $fondo])
-                                <label class="font-semibold text-slate-500 whitespace-nowrap">{{ $texto }}
-                                    <input type="number" step="0.01" x-model.number="fila.montos.{{ $k }}" @change="cambiarMontos()"
-                                           class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 px-2 text-right text-sm {{ $fondo }} {{ $k === 'total' ? 'font-bold' : '' }}"></label>
-                            @endforeach
-                        @else
-                            @foreach (['gravada' => 'Gravada', 'igv' => 'IGV', 'exonerada' => 'Exonerada', 'inafecta' => 'Inafecta', 'total' => 'Total'] as $k => $texto)
-                                <div class="font-semibold text-slate-500">{{ $texto }}
-                                    <p class="mt-0.5 h-9 flex items-center justify-end rounded-lg bg-slate-50 px-2 text-sm text-slate-800 {{ $k === 'total' ? 'font-bold' : '' }}">{{ $soles($c['montos'][$k] ?? 0) }}</p></div>
-                            @endforeach
-                            <div></div>
-                        @endif
-                        <label class="font-semibold text-slate-500">Cta. cargo
-                            <input type="text" maxlength="12" inputmode="numeric" x-model="fila.ctacargo" @change="guardar({ ctacargo: fila.ctacargo })"
-                                   class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
-                        <label class="font-semibold text-slate-500">Cta. abono
-                            <input type="text" maxlength="12" inputmode="numeric" x-model="fila.ctaabono" @change="guardar({ ctaabono: fila.ctaabono })"
-                                   class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
-                    </div>
-                    <div x-show="Math.abs(fila.diferencia) >= 0.01 || fila.editado || fila.redondeo" class="flex flex-wrap items-center gap-3 px-4 pb-3 text-xs">
-                        <span x-show="fila.redondeo && !fila.editado && Math.abs(fila.diferencia) < 0.01" class="font-semibold text-sky-700"
-                              x-text="'Redondeo del proveedor corregido solo: ' + soles(fila.redondeo) + ' (su XML no cuadraba por céntimos)'"></span>
-                        <span x-show="Math.abs(fila.diferencia) >= 0.01" class="font-bold text-rose-600" x-text="'No cuadra: las partes suman ' + soles(fila.montos.total - fila.diferencia) + ' y el total es ' + soles(fila.montos.total)"></span>
-                        <button type="button" x-show="fila.editado" @click="restaurar()" class="font-semibold text-slate-500 hover:text-indigo-700 underline">Volver a los montos de SUNAT</button>
-                    </div>
-
-                    @if ($compras && $c['lineas'])
-                        <div x-show="detalle" x-cloak class="border-t border-slate-100 overflow-x-auto">
-                            <table class="w-full text-xs">
-                                <thead class="bg-slate-50 text-slate-500 uppercase">
-                                    <tr><th class="text-left px-4 py-1.5">Lo que se compró</th><th class="text-right px-3 py-1.5">Cant.</th><th class="text-right px-3 py-1.5">V. unit.</th>
-                                        <th class="text-right px-3 py-1.5">Base</th><th class="text-right px-3 py-1.5">IGV</th></tr>
-                                </thead>
-                                <tbody>
-                                    @foreach ($c['lineas'] as $l)
-                                        <tr class="border-t border-slate-100">
-                                            <td class="px-4 py-1.5">{{ $l->descripcion }}</td>
-                                            <td class="px-3 py-1.5 text-right whitespace-nowrap">{{ rtrim(rtrim(number_format($l->cantidad, 4, '.', ''), '0'), '.') }} {{ $l->unidad }}</td>
-                                            <td class="px-3 py-1.5 text-right">{{ $soles($l->precio) }}</td>
-                                            <td class="px-3 py-1.5 text-right">{{ $soles($l->base) }}</td>
-                                            <td class="px-3 py-1.5 text-right">{{ $soles($l->igv) }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @endif
-                </section>
+                @include('empresas.sire.partials.dbf_fila')
             @empty
                 <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-slate-500">La propuesta de {{ $nombrePeriodo }} no tiene comprobantes.</div>
             @endforelse
@@ -218,57 +96,5 @@
     @endunless
 </div>
 
-<script>
-    const SIRE_DBF = { libro: @json($libro), periodo: @json($periodo), url: @json(route('sire.dbf.guardar')) };
-    const solesDbf = n => 'S/ ' + (Number(n) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    function sireDbf(totales) {
-        return {
-            totales, filtro: 'todos', soles: solesDbf,
-            visible(f) {
-                return this.filtro === 'todos' || (this.filtro === 'descuadre' && !f.excluido && Math.abs(f.diferencia) >= 0.01)
-                    || (this.filtro === 'excluidos' && f.excluido) || (this.filtro === 'sinxml' && !f.xml);
-            },
-        };
-    }
-
-    function filaDbf(fila) {
-        return {
-            fila, detalle: false, guardando: false, soles: solesDbf,
-            async guardar(cambios) {
-                this.guardando = true;
-                try {
-                    const r = await fetch(SIRE_DBF.url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
-                        body: JSON.stringify({ libro: SIRE_DBF.libro, periodo: SIRE_DBF.periodo, clave: this.fila.clave, ...cambios }),
-                    });
-                    const d = await r.json();
-                    if (!r.ok) {
-                        tushpaAviso(d.message || 'No se pudo guardar.', false);
-                        return;
-                    }
-                    this.fila.diferencia = d.diferencia;
-                    this.fila.editado = d.editado;
-                    this.totales = d.totales;
-                } catch (e) {
-                    tushpaAviso('Se cortó la conexión: el cambio no se guardó.', false);
-                } finally {
-                    this.guardando = false;
-                }
-            },
-            /** Al tocar un monto se ve al instante si cuadra; se guarda igual */
-            cambiarMontos() {
-                const m = this.fila.montos;
-                const partes = Object.entries(m).filter(([k]) => k !== 'total').reduce((s, [, v]) => s + (Number(v) || 0), 0);
-                this.fila.diferencia = Math.round((m.total - partes) * 100) / 100;
-                this.guardar({ montos: m });
-            },
-            async restaurar() {
-                await this.guardar({ montos: null });
-                location.reload();
-            },
-        };
-    }
-</script>
+@include('empresas.sire.partials.dbf_js')
 @endsection

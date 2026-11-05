@@ -26,9 +26,14 @@
             @endif
         </div>
 
+        @if ($bloqueadas)
+            <div class="mt-4 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600">
+                🔒 Ya están configuradas y funcionando. Solo el <strong>administrador</strong> puede cambiarlas.
+            </div>
+        @endif
         <form method="POST" action="{{ route('sire.credenciales.guardar') }}" class="mt-5 space-y-4" x-data="{ guardando: false }" @submit="guardando = true">
             @csrf
-            <div class="grid sm:grid-cols-2 gap-4">
+            <fieldset @disabled($bloqueadas) class="grid sm:grid-cols-2 gap-4 disabled:opacity-60">
                 <label class="block sm:col-span-2">
                     <span class="text-sm font-semibold text-slate-600">ID <span class="font-normal text-slate-400">(client_id)</span></span>
                     <input name="client_id" value="{{ old('client_id', $empresa->client_id) }}" required autocomplete="off"
@@ -51,8 +56,8 @@
                     <input type="password" name="sire_clave" autocomplete="new-password"
                            placeholder="{{ $empresa->sire_clave ? '•••••••• guardada' : 'Vacío = la de facturación' }}" class="mt-1 w-full rounded-xl border-slate-300 text-sm">
                 </label>
-            </div>
-            <div class="flex justify-end">
+            </fieldset>
+            <div class="flex justify-end" @if ($bloqueadas) hidden @endif>
                 <button :disabled="guardando" class="h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:opacity-60"
                         x-text="guardando ? 'Probando conexión con SUNAT…' : 'Guardar y probar conexión'"></button>
             </div>

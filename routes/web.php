@@ -653,6 +653,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/sire/compras/detalle/cuenta', [SireDetalleController::class, 'cuenta'])->name('sire.detalle.cuenta');
     Route::get('/sire/compras/detalle/excel', [SireDetalleController::class, 'excel'])->name('sire.detalle.excel');
     Route::get('/sire/compras/detalle/concar', [SireDetalleController::class, 'concar'])->name('sire.detalle.concar');
+    Route::get('/sire/compras/detalle/{id}/pdf', [SireDetalleController::class, 'pdf'])->whereNumber('id')->name('sire.detalle.pdf');
     Route::get('/sire/{libro}', [SireController::class, 'index'])->whereIn('libro', ['ventas', 'compras'])->name('sire.index');
     Route::post('/sire/{libro}/solicitar', [SireController::class, 'solicitar'])->whereIn('libro', ['ventas', 'compras'])->name('sire.solicitar');
     Route::get('/sire/{libro}/solicitud/{id}/estado', [SireController::class, 'estado'])->whereIn('libro', ['ventas', 'compras'])->whereNumber('id')->name('sire.estado');

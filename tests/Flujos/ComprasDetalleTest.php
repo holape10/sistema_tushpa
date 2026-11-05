@@ -5,6 +5,7 @@ namespace Tests\Flujos;
 use App\Models\Central\Cliente;
 use App\Support\ComprasDetalle;
 use App\Support\Concar;
+use App\Support\Sunat\CompraXml;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
 use Illuminate\Http\Client\Request as Peticion;
@@ -34,6 +35,19 @@ class ComprasDetalleTest extends FlujoTestCase
     {
         $this->from(route('sire.detalle', ['periodo' => '202607']))
             ->post(route('sire.detalle.subir'), ['archivos' => [$this->zip($archivos)]])->assertSessionHas('success');
+    }
+
+    public function test_el_pdf_de_una_compra_sale_de_su_xml_y_solo_para_esta_empresa(): void
+    {
+        $ruc = $this->usuario->IdEmpresa;
+        ComprasDetalle::guardar($ruc, [CompraXml::leer(CompraXmlTest::factura($ruc))]);
+        $id = DB::table('compras_xml')->where('IdEmpresa', $ruc)->value('id');
+
+        $r = $this->get(route('sire.detalle.pdf', $id))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $r->getContent());
+
+        $ajena = DB::table('compras_xml')->insertGetId(['IdEmpresa' => '20999999990', 'ruc_emisor' => '20553510661', 'tipo' => '01', 'serie' => 'F001', 'numero' => '9']);
+        $this->get(route('sire.detalle.pdf', $ajena))->assertNotFound();
     }
 
     /** La propuesta del RCE como la baja SUNAT (columnas reales del .txt) */
@@ -82,7 +96,7 @@ class ComprasDetalleTest extends FlujoTestCase
         // Con la propuesta de SUNAT: se ve qué factura tiene detalle y cuál falta
         $this->propuesta();
         $this->get(route('sire.detalle', ['periodo' => '202607']))->assertOk()
-            ->assertSee('INTERNET DEDICADO JULIO 2026')->assertSee('ROUTER WIFI')->assertSee('Falta XML')->assertSee('SUPERMERCADOS SA');
+            ->assertSee('INTERNET DEDICADO JULIO 2026')->assertSee('ROUTER WIFI')->assertSee('sin XML')->assertSee('SUPERMERCADOS SA')->assertSee('Descargar almaingr.dbf');
 
         $propuesta = SireCuadre::comprasPropuesta(Sire::leerZip(Storage::path("sire/{$ruc}/080000/202607-1.zip")));
         $periodo = ComprasDetalle::delPeriodo($ruc, '202607', $propuesta);

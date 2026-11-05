@@ -24,7 +24,8 @@ class SireBandejaController extends Controller
     {
         abort_unless(Estudio::activo(), 404);
         $u = Auth::user();
-        abort_unless($u->esAdmin() || $u->tieneModulo('/sire/ventas') || $u->tieneModulo('/sire/compras'), 403, 'No tienes acceso al SIRE.');
+        abort_unless($u->esAdmin() || $u->contadorCon('/sire/ventas', '/sire/compras') || $u->tieneModulo('/sire/ventas') || $u->tieneModulo('/sire/compras'),
+            403, 'No tienes acceso al SIRE.');
     }
 
     /** Una empresa que el usuario puede trabajar (nunca otra, aunque se cambie el RUC en la dirección) */

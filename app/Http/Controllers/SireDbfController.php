@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Concar;
 use App\Support\Contabilidad\SireARegistro;
 use App\Support\Contabilidad\SireDbf;
 use App\Support\Excel;
@@ -43,7 +44,7 @@ class SireDbfController extends Controller
         $datos = SireDbf::delPeriodo($ruc, $libro, $periodo);
 
         return view('empresas.sire.dbf', $datos + [
-            'libro' => $libro, 'periodo' => $periodo, 'totales' => SireDbf::totales($libro, $datos['comprobantes']),
+            'libro' => $libro, 'periodo' => $periodo, 'totales' => SireDbf::totales($libro, $datos['comprobantes']), 'cfg' => Concar::config($ruc),
         ]);
     }
 
@@ -75,7 +76,7 @@ class SireDbfController extends Controller
         SireDbf::guardar($ruc, $d['libro'], $d['periodo'], $d['clave'], $c['ruc'], $cambios);
         $c = $this->comprobante($ruc, $d['libro'], $d['periodo'], $d['clave']);
 
-        return response()->json(['ok' => true, 'diferencia' => $c['diferencia'], 'montos' => $c['montos'], 'editado' => $c['editado'],
+        return response()->json(['ok' => true, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'montos' => $c['montos'], 'editado' => $c['editado'],
             'totales' => SireDbf::totales($d['libro'], SireDbf::delPeriodo($ruc, $d['libro'], $d['periodo'])['comprobantes'])]);
     }
 
@@ -135,7 +136,7 @@ class SireDbfController extends Controller
             return back()->with('error', 'No hay comprobantes para pasar al registro en ese periodo.');
         }
         if ($totales['descuadrados']) {
-            return back()->with('error', "Hay {$totales['descuadrados']} comprobante(s) que no cuadran: corrígelos o no los lleves antes de pasarlos al registro.");
+            return back()->with('error', "Hay {$totales['descuadrados']} comprobante(s) que no cuadran o tienen el IGV en otra casilla: corrígelos o no los lleves antes de pasarlos al registro.");
         }
         set_time_limit(300);
         $r = SireARegistro::importar($ruc, $libro, $periodo, $comprobantes);
@@ -199,7 +200,7 @@ class SireDbfController extends Controller
             return back()->with('error', 'No hay comprobantes para descargar en ese periodo.');
         }
         if ($totales['descuadrados']) {
-            return back()->with('error', "Hay {$totales['descuadrados']} comprobante(s) que no cuadran: revisa sus montos (están marcados en rojo) o no los lleves.");
+            return back()->with('error', "Hay {$totales['descuadrados']} comprobante(s) que no cuadran o tienen el IGV en otra casilla: revisa sus montos (están marcados en rojo) o no los lleves.");
         }
         // Las cuentas con que se descargó quedan como las de cada proveedor o cliente para los próximos meses
         foreach ($comprobantes as $c) {

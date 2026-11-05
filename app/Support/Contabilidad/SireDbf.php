@@ -173,6 +173,7 @@ class SireDbf
             $c['cuentaPropia'] = (bool) ($a?->ctacargo || $a?->ctaabono);
             $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
             $c['diferencia'] = self::diferencia($libro, $c['montos']);
+            $c['alerta'] = $libro === 'compras' ? self::revisarIgv($c['montos']) : null;
             $lista[] = $c;
         }
         usort($lista, fn ($x, $y) => [$x['fecha'], $x['tipo'], $x['serie'], (int) $x['numero']] <=> [$y['fecha'], $y['tipo'], $y['serie'], (int) $y['numero']]);
@@ -209,6 +210,40 @@ class SireDbf
         $partes = array_sum(array_diff_key($m, ['total' => 0]));
 
         return round(($m['total'] ?? 0) - $partes, 2);
+    }
+
+    /** Pares base → IGV de una compra (IGV 1, 2 y 3) con su nombre en pantalla */
+    private const IGV_COMPRA = [['base_dg', 'igv_dg', 'IGV 1', 'B.I. gravadas'], ['base_dgng', 'igv_dgng', 'IGV 2', 'B.I. grav. y no grav.'],
+        ['base_dng', 'igv_dng', 'IGV 3', 'B.I. no gravadas']];
+
+    /**
+     * ¿Cada IGV está junto a su base? El IGV va del 10 % (restaurantes y hoteles MYPE) al 18 % de su base; si no, los
+     * montos están en otra casilla (por ejemplo, el IGV escrito en la base). Que las partes sumen el total no basta.
+     *
+     * @return string|null el aviso para el contador, o null si está bien
+     */
+    public static function revisarIgv(array $m): ?string
+    {
+        foreach (self::IGV_COMPRA as [$kBase, $kIgv, $nIgv, $nBase]) {
+            $base = round((float) ($m[$kBase] ?? 0), 2);
+            $igv = round((float) ($m[$kIgv] ?? 0), 2);
+            if ($base == 0 && $igv == 0) {
+                continue;
+            }
+            if ($base == 0) {
+                return "{$nIgv} tiene monto pero su base ({$nBase}) está en 0: el IGV va al lado de su base.";
+            }
+            if ($igv == 0) {
+                return "{$nBase} tiene monto pero su {$nIgv} está en 0. Si no lleva IGV, va en «No gravado».";
+            }
+            $tolerancia = max(0.10, abs($base) * 0.005);
+            if (($igv > 0) !== ($base > 0) || abs($igv) < abs($base) * 0.10 - $tolerancia || abs($igv) > abs($base) * 0.18 + $tolerancia) {
+                return "{$nIgv} (".number_format($igv, 2).") no corresponde a su base {$nBase} (".number_format($base, 2)
+                    .'; al 18 % sería '.number_format($base * 0.18, 2).'). Revisa que cada monto esté en su casilla.';
+            }
+        }
+
+        return null;
     }
 
     /** @return array<string, array<int, object>> líneas de los XML de compras por clave */
@@ -249,20 +284,33 @@ class SireDbf
             : DB::table('sire_ajustes')->insert($llave + $fila + ['created_at' => now()]);
     }
 
-    /** Suma de lo que se va a llevar al .dbf (sin los excluidos) */
+    /** ¿Este comprobante impide descargar? (no cuadra o su IGV no está junto a su base) */
+    public static function conError(array $c): bool
+    {
+        return abs($c['diferencia']) >= 0.01 || ! empty($c['alerta']);
+    }
+
+    /** Suma de lo que se va a llevar al .dbf y, aparte, de lo que no se lleva (para ver la diferencia con SUNAT) */
     public static function totales(string $libro, array $comprobantes): array
     {
         $llevar = array_filter($comprobantes, fn ($c) => ! $c['excluido']);
-        $suma = fn (string ...$k) => round(array_sum(array_map(fn ($c) => array_sum(array_intersect_key($c['montos'], array_flip($k))), $llevar)), 2);
+        $fuera = array_filter($comprobantes, fn ($c) => $c['excluido']);
+        $montos = function (array $lista) use ($libro): array {
+            $suma = fn (string ...$k) => round(array_sum(array_map(fn ($c) => array_sum(array_intersect_key($c['montos'], array_flip($k))), $lista)), 2);
+
+            return [
+                'base' => $libro === 'compras' ? $suma('base_dg', 'base_dgng', 'base_dng') : $suma('gravada'),
+                'igv' => $libro === 'compras' ? $suma('igv_dg', 'igv_dgng', 'igv_dng') : $suma('igv'),
+                'no_gravado' => $libro === 'compras' ? $suma('no_gravado') : $suma('exonerada', 'inafecta', 'exporta'),
+                'total' => $suma('total'),
+            ];
+        };
 
         return [
-            'registros' => count($llevar), 'excluidos' => count($comprobantes) - count($llevar),
-            'descuadrados' => count(array_filter($llevar, fn ($c) => abs($c['diferencia']) >= 0.01)),
-            'base' => $libro === 'compras' ? $suma('base_dg', 'base_dgng', 'base_dng') : $suma('gravada'),
-            'igv' => $libro === 'compras' ? $suma('igv_dg', 'igv_dgng', 'igv_dng') : $suma('igv'),
-            'no_gravado' => $libro === 'compras' ? $suma('no_gravado') : $suma('exonerada', 'inafecta', 'exporta'),
-            'total' => $suma('total'),
-        ];
+            'registros' => count($llevar), 'excluidos' => count($fuera),
+            'descuadrados' => count(array_filter($llevar, fn ($c) => self::conError($c))),
+            'no_llevan' => $montos($fuera),
+        ] + $montos($llevar);
     }
 
     private static function plantilla(string $tabla): Dbf

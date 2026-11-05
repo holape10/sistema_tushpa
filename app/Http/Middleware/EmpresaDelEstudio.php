@@ -21,7 +21,19 @@ class EmpresaDelEstudio
         // Solo los usuarios del sistema (en el panel TUSHPA el que entra es un superadmin)
         if ($usuario instanceof User && Estudio::activo()) {
             if (! Estudio::enOrden($usuario)) {
-                Estudio::cambiar($usuario, Estudio::ruc());
+                $destino = Estudio::inicioDe($usuario);
+                // Un usuario del estudio sin empresas asignadas no tiene dónde trabajar (la del estudio es del administrador)
+                if ($destino === null) {
+                    Auth::logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                    $mensaje = 'Aún no tienes empresas asignadas. Pide al administrador del estudio que te dé acceso a las empresas que trabajas.';
+
+                    return $request->expectsJson()
+                        ? response()->json(['ok' => false, 'message' => $mensaje], 403)
+                        : redirect()->route('login')->withErrors(['email' => $mensaje]);
+                }
+                Estudio::cambiar($usuario, $destino);
             }
             // Guardar desde una pantalla abierta para otra empresa (se cambió en otra pestaña): se rechaza
             $deLaPantalla = (string) ($request->header('X-Empresa') ?? $request->input('_empresa', ''));

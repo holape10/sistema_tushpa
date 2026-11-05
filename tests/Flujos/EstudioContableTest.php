@@ -75,22 +75,52 @@ class EstudioContableTest extends FlujoTestCase
         $contador = $this->contador();
         $this->post(route('estudio.accesos', self::EMPRESA_A), ['usuarios' => [$contador->IdUsuario]])->assertSessionHas('success');
 
-        $this->assertSame([$this->estudio, self::EMPRESA_A], Estudio::empresas($contador)->pluck('IdEmpresa')->all());
+        // La empresa del estudio es solo del administrador: el contador ve únicamente las que le asignaron
+        $this->assertSame([self::EMPRESA_A], Estudio::empresas($contador)->pluck('IdEmpresa')->all());
+        $this->assertContains($this->estudio, Estudio::empresas($this->usuario)->pluck('IdEmpresa')->all(), 'El administrador sí la ve.');
+        $this->actingAs($contador)->post(route('estudio.cambiar'), ['ruc' => $this->estudio])->assertForbidden();
         $this->actingAs($contador)->post(route('estudio.cambiar'), ['ruc' => self::EMPRESA_B])->assertForbidden();
         $this->cambiar(self::EMPRESA_A, $contador);
         $this->assertSame(self::EMPRESA_A, (string) $contador->IdEmpresa);
         $this->actingAs($contador)->get(route('estudio.index'))->assertForbidden();
     }
 
+    public function test_las_credenciales_sire_ya_configuradas_solo_las_cambia_el_administrador(): void
+    {
+        $contador = $this->contador();
+        DB::table('role_user')->where('user_IdUsuario', $contador->IdUsuario)->update(['role_id' => 15]);
+        foreach (['/sire/credenciales', '/sire/compras'] as $url) {
+            DB::table('modulos_usuario')->insert(['user_IdUsuario' => $contador->IdUsuario, 'mod_id' => DB::table('modulos')->where('mod_url', $url)->value('mod_id')]);
+        }
+        Estudio::guardarAccesos(self::EMPRESA_A, [$contador->IdUsuario]);
+        $this->cambiar(self::EMPRESA_A, $contador);
+        $empresa = Empresa::find(self::EMPRESA_A);
+        $empresa->client_id = 'ID-DEL-ADMIN';
+        $empresa->client_secret = 'clave-del-admin';
+        $empresa->save();
+
+        $this->actingAs($contador)->get(route('sire.credenciales'))->assertOk()->assertSee('Solo el');
+        $this->actingAs($contador)->post(route('sire.credenciales.guardar'), ['client_id' => 'OTRO-ID', 'client_secret' => 'otra'])->assertForbidden();
+        $this->assertSame('ID-DEL-ADMIN', Empresa::find(self::EMPRESA_A)->client_id);
+    }
+
     public function test_si_le_quitan_el_acceso_o_se_desactiva_la_empresa_vuelve_al_estudio(): void
     {
         $contador = $this->contador();
         Estudio::guardarAccesos(self::EMPRESA_A, [$contador->IdUsuario]);
+        Estudio::guardarAccesos(self::EMPRESA_B, [$contador->IdUsuario]);
         $this->cambiar(self::EMPRESA_A, $contador);
 
+        // Le quitan A: pasa a la otra que tiene (nunca a la del estudio)
         Estudio::guardarAccesos(self::EMPRESA_A, []);
         $this->actingAs($contador)->get(route('inicio'))->assertOk();
-        $this->assertSame([$this->estudio, $this->sucursal], [(string) $contador->fresh()->IdEmpresa, (int) $contador->fresh()->id_empresa_negocio]);
+        $this->assertSame([self::EMPRESA_B, Estudio::sucursalDe(self::EMPRESA_B)], [(string) $contador->fresh()->IdEmpresa, (int) $contador->fresh()->id_empresa_negocio]);
+
+        // Sin ninguna empresa no tiene dónde trabajar: sale con el aviso
+        Estudio::guardarAccesos(self::EMPRESA_B, []);
+        $this->actingAs($contador->fresh())->get(route('inicio'))->assertRedirect(route('login'))->assertSessionHasErrors('email');
+        $this->assertGuest();
+        $this->actingAs($this->usuario);
 
         // El administrador en una empresa que se desactiva también vuelve
         $this->cambiar(self::EMPRESA_B);

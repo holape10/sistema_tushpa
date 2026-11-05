@@ -2,14 +2,16 @@
 @section('title', 'Compras con detalle')
 
 @php
-    $tipos = ['01' => 'Factura', '02' => 'Rec. honorarios', '03' => 'Boleta', '07' => 'N. Crédito', '08' => 'N. Débito', '14' => 'Serv. público'];
+    $tipos = ['01' => 'Factura', '02' => 'Rec. honorarios', '03' => 'Boleta', '07' => 'N. Crédito', '08' => 'N. Débito', '12' => 'Ticket', '14' => 'Serv. público'];
+    $compras = true;
+    $soloXml = $propuesta ? $sinPropuesta : $comprobantes;
     $nombrePeriodo = \Carbon\Carbon::createFromFormat('Ym', $periodo)->locale('es')->translatedFormat('F Y');
     $total = count($comprobantes);
     $faltan = $total - $conDetalle;
 @endphp
 
 @section('content')
-<div class="max-w-7xl mx-auto space-y-4" x-data="comprasDetalle()">
+<div class="max-w-7xl mx-auto space-y-4" x-data="Object.assign(sireDbf(@js($totales)), comprasDetalle())">
 
     {{-- Pestañas del SIRE --}}
     <div class="flex flex-wrap items-center gap-2">
@@ -20,7 +22,7 @@
     </div>
 
     {{-- Periodo, subir XML y descargas --}}
-    <section class="bg-white rounded-2xl shadow-sm p-4 grid gap-4 lg:grid-cols-[auto_1fr_auto] lg:items-end">
+    <section class="bg-white rounded-2xl shadow-sm p-4 grid gap-4 lg:grid-cols-[auto_1fr] xl:grid-cols-[auto_1fr_auto] lg:items-end">
         <form method="GET">
             <label class="text-xs font-semibold text-slate-500">Periodo
                 <input type="month" value="{{ substr($periodo, 0, 4) }}-{{ substr($periodo, 4, 2) }}"
@@ -41,8 +43,15 @@
             </button>
         </form>
 
-        <div class="flex flex-wrap gap-2">
-            <a href="{{ route('sire.detalle.excel', ['periodo' => $periodo]) }}" class="h-10 px-4 inline-flex items-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">Excel con detalle</a>
+        <div class="flex flex-wrap gap-2 lg:justify-end">
+            @if ($propuesta)
+                <a href="{{ route('sire.dbf.excel', ['compras', 'periodo' => $periodo]) }}"
+                   class="h-10 px-4 inline-flex items-center rounded-xl bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-bold">⬇ Excel (DBF)</a>
+                <a href="{{ route('sire.dbf.descargar', ['compras', 'periodo' => $periodo]) }}"
+                   @click="if (totales.descuadrados) { $event.preventDefault(); tushpaAviso('Hay ' + totales.descuadrados + ' comprobante(s) que no cuadran o tienen el IGV en otra casilla: corrígelos o no los lleves.', false); }"
+                   class="h-10 px-4 inline-flex items-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">⬇ Descargar almaingr.dbf</a>
+            @endif
+            <a href="{{ route('sire.detalle.excel', ['periodo' => $periodo]) }}" class="h-10 px-4 inline-flex items-center rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-bold">Excel con detalle</a>
             <form method="GET" action="{{ route('sire.detalle.concar') }}" class="flex">
                 <input type="hidden" name="periodo" value="{{ $periodo }}">
                 <input type="number" name="desde" min="1" max="9999" placeholder="Desde 1" title="Número del primer asiento"
@@ -69,7 +78,7 @@
             <p class="text-xs font-semibold text-slate-500">Con detalle</p>
             <p class="text-2xl font-extrabold text-emerald-600">{{ $conDetalle }}</p>
         </div>
-        <button type="button" @click="filtro = 'falta'" class="text-left bg-white rounded-2xl shadow-sm p-4 ring-2" :class="filtro === 'falta' ? 'ring-amber-500' : 'ring-transparent'">
+        <button type="button" @click="filtro = 'sinxml'" class="text-left bg-white rounded-2xl shadow-sm p-4 ring-2" :class="filtro === 'sinxml' ? 'ring-amber-500' : 'ring-transparent'">
             <p class="text-xs font-semibold text-slate-500">Falta su XML</p>
             <p class="text-2xl font-extrabold {{ $faltan ? 'text-amber-600' : 'text-emerald-600' }}">{{ $faltan }}</p>
         </button>
@@ -111,21 +120,38 @@
         </div>
     </div>
 
-    <p class="text-xs text-slate-500">
-        💡 Escribe la cuenta de una línea y presiona Enter: el sistema la recuerda y la pone sola a las líneas iguales de ese proveedor, ahora y en los próximos meses.
-    </p>
+    @if ($propuesta)
+        @include('empresas.sire.partials.dbf_resumen', ['comprobantes' => $dbf])
+        @include('empresas.sire.partials.dbf_cuentas_todos')
 
-    @forelse (array_merge($comprobantes, $sinPropuesta) as $i => $c)
-        @php
-            $sinCuenta = collect($c['lineas'])->whereNull('cuenta')->count();
-            $soloXml = $i >= count($comprobantes);
-        @endphp
-        @if ($soloXml && $i === count($comprobantes))
-            <p class="pt-2 text-sm font-bold text-slate-700">XML que no están en la propuesta de {{ $nombrePeriodo }}
-                <span class="font-normal text-slate-500">(de otro mes o SUNAT aún no los registra; no entran al CONCAR de este mes)</span></p>
-        @endif
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+            @foreach (['todos' => 'Todos', 'descuadre' => 'No cuadran / IGV mal', 'excluidos' => 'No se llevan', 'sinxml' => 'Sin detalle (XML)', 'sincuenta' => 'Líneas sin cuenta'] as $valor => $texto)
+                <button type="button" @click="filtro = '{{ $valor }}'" class="px-3 h-8 rounded-full font-semibold"
+                        :class="filtro === '{{ $valor }}' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'">{{ $texto }}</button>
+            @endforeach
+            <span class="text-xs text-slate-400 ml-auto">Los cambios se guardan solos · desmarca «Llevar» lo que no va al .dbf.</span>
+        </div>
+        <p class="text-xs text-slate-500">
+            💡 En «Ver detalle» escribe la cuenta de cada línea y presiona Enter: el sistema la recuerda y la pone sola a las líneas iguales de ese proveedor, ahora y en los próximos meses.
+        </p>
+
+        <div class="space-y-2">
+            @forelse ($dbf as $c)
+                @include('empresas.sire.partials.dbf_fila')
+            @empty
+                <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-slate-500">La propuesta de {{ $nombrePeriodo }} no tiene comprobantes.</div>
+            @endforelse
+        </div>
+    @endif
+
+    @if ($propuesta && $soloXml)
+        <p class="pt-2 text-sm font-bold text-slate-700">XML que no están en la propuesta de {{ $nombrePeriodo }}
+            <span class="font-normal text-slate-500">(de otro mes o SUNAT aún no los registra; no entran al .dbf ni al CONCAR de este mes)</span></p>
+    @endif
+    @forelse ($soloXml as $c)
+        @php $sinCuenta = collect($c['lineas'])->whereNull('cuenta')->count(); @endphp
         <section class="bg-white rounded-2xl shadow-sm overflow-hidden" x-data="{ abierto: false }"
-                 x-show="filtro === 'todos' || (filtro === 'falta' && {{ $c['xml'] ? 'false' : 'true' }}) || (filtro === 'sincuenta' && {{ $sinCuenta ? 'true' : 'false' }})">
+                 x-show="filtro === 'todos' || (filtro === 'sinxml' && {{ $c['xml'] ? 'false' : 'true' }}) || (filtro === 'sincuenta' && {{ $sinCuenta ? 'true' : 'false' }})">
             <button type="button" @click="abierto = !abierto" class="w-full flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left">
                 <span class="font-bold whitespace-nowrap">{{ $c['serie'] }}-{{ $c['numero'] }}</span>
                 <span class="text-xs text-slate-400">{{ $tipos[$c['tipo']] ?? 'Tipo '.$c['tipo'] }} · {{ $c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '' }}</span>
@@ -138,7 +164,8 @@
                 @else
                     <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">✔ {{ count($c['lineas']) }} línea(s)</span>
                 @endif
-                @if ($c['xml'])<span x-text="abierto ? '−' : '+'" class="text-slate-400 text-lg w-4 text-center"></span>@endif
+                @if ($c['xml'])<a href="{{ route('sire.detalle.pdf', $c['xml']->id) }}" target="_blank" @click.stop class="text-xs font-bold text-slate-600 hover:text-indigo-700">📄 PDF</a>
+                    <span x-text="abierto ? '−' : '+'" class="text-slate-400 text-lg w-4 text-center"></span>@endif
             </button>
             @if ($c['xml'])
                 <div x-show="abierto" x-cloak class="border-t border-slate-100">
@@ -184,16 +211,18 @@
             @endif
         </section>
     @empty
-        <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-slate-500">
-            No hay compras de {{ $nombrePeriodo }}. Trae la propuesta de SUNAT o sube los XML de tus facturas.
-        </div>
+        @unless ($propuesta)
+            <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-slate-500">
+                No hay compras de {{ $nombrePeriodo }}. Trae la propuesta de SUNAT o sube los XML de tus facturas.
+            </div>
+        @endunless
     @endforelse
 </div>
 
+@include('empresas.sire.partials.dbf_js')
 <script>
     function comprasDetalle() {
         return {
-            filtro: 'todos',
             subiendo: false,
             trayendo: false,
             progreso: '',

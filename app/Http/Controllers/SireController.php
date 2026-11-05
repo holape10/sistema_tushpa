@@ -27,16 +27,23 @@ class SireController extends Controller
         return Empresa::findOrFail(Auth::user()->IdEmpresa);
     }
 
+    /** Ya configuradas (ID y CLAVE del API), solo el administrador las cambia: el contador las usa, no las toca */
+    public static function credencialesBloqueadas(Empresa $empresa): bool
+    {
+        return ! Auth::user()->esAdmin() && $empresa->client_id && $empresa->client_secret;
+    }
+
     public function credenciales()
     {
         $empresa = $this->autorizar();
 
-        return view('empresas.sire.credenciales', compact('empresa'));
+        return view('empresas.sire.credenciales', ['empresa' => $empresa, 'bloqueadas' => self::credencialesBloqueadas($empresa)]);
     }
 
     public function guardarCredenciales(Request $request)
     {
         $empresa = $this->autorizar();
+        abort_if(self::credencialesBloqueadas($empresa), 403, 'Las credenciales del SIRE ya están configuradas: solo el administrador puede cambiarlas.');
         $d = $request->validate([
             'client_id' => 'required|string|max:100',
             'client_secret' => 'nullable|string|max:255',
