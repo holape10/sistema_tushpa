@@ -5,7 +5,6 @@ namespace App\Support;
 use App\Models\EmpresaNegocio;
 use App\Models\Pedido;
 use App\Models\PedidoDetalle;
-use App\Models\Producto;
 use App\Models\User;
 use App\Support\Impresion\Impresion;
 use Illuminate\Support\Facades\DB;
@@ -37,17 +36,11 @@ class Autoservicio
             $numero = DB::table('pedidos')->where('id_empresa_negocio', $suc)->where('entrega_origen', self::ORIGEN)
                 ->whereDate('fecha_hora', now()->toDateString())->count() + 1;
 
-            $porciones = [];
-            foreach ($lineas as $l) {
-                $porciones[$l['IdProducto']] = ($porciones[$l['IdProducto']] ?? 0) + $l['cantidad'] * $l['factor'];
-            }
-            if ($falta = Porciones::faltante($suc, $porciones, true)) {
+            if ($falta = Porciones::faltante($suc, CartaMesa::porciones($lineas), true)) {
                 throw new \RuntimeException('Lo sentimos: '.strtok($falta, '.').'. Quítalo de tu pedido.');
             }
-            $productos = Producto::whereIn('IdProducto', array_keys($porciones))->get()->keyBy('IdProducto');
             try {
-                ControlStock::asegurar($suc, collect($lineas)->filter(fn ($l) => isset($productos[$l['IdProducto']]))
-                    ->map(fn ($l) => ['producto' => $productos[$l['IdProducto']], 'cantidad' => $l['cantidad'], 'factor' => $l['factor']])->values()->all());
+                CartaMesa::asegurarStock($suc, $lineas);
             } catch (\RuntimeException $e) {
                 throw new \RuntimeException('Lo sentimos: '.strtok($e->getMessage(), '.').'. Quítalo o cambia la cantidad.');
             }
@@ -60,11 +53,7 @@ class Autoservicio
             ]);
             DB::table('pedidos')->where('ped_id', $pedido->ped_id)->update(['entrega_origen' => self::ORIGEN]);
             foreach ($lineas as $l) {
-                PedidoDetalle::create([
-                    'ped_id' => $pedido->ped_id, 'IdProducto' => $l['IdProducto'], 'id_presentacion' => $l['presentacion'], 'IdEmpresa' => $usuario->IdEmpresa,
-                    'descripcion' => $l['nombre'], 'detalle' => $l['nombre'], 'ped_det_can' => $l['cantidad'], 'ped_det_pre' => $l['precio'],
-                    'item_obs' => $l['nota'] ?: null, 'estadoitem' => 'Ingresado', 'impreso' => 'imprimir', 'fecha_hora' => now(),
-                ]);
+                PedidoDetalle::create(CartaMesa::detalle((int) $pedido->ped_id, (string) $usuario->IdEmpresa, $l));
             }
             $total = round(collect($lineas)->sum(fn ($l) => $l['precio'] * $l['cantidad']), 2);
             $pedido->update(['ped_tot' => $total]);
@@ -74,7 +63,7 @@ class Autoservicio
 
         // Comanda: a cocina ya, o al cobrar si la sucursal así lo tiene. Un fallo aquí no pierde el pedido.
         $cocina = collect($lineas)->map(fn ($l) => ['IdProducto' => $l['IdProducto'], 'nombre' => $l['nombre'], 'cantidad' => $l['cantidad'],
-            'observacion' => trim('KIOSKO N° '.$numero.' '.$nombre.($paraLlevar ? ' · PARA LLEVAR' : '').($l['nota'] ? ' · '.$l['nota'] : ''))])->all();
+            'observacion' => trim('KIOSKO N° '.$numero.' '.$nombre.($paraLlevar ? ' · PARA LLEVAR' : '').($l['opciones_texto'] ? ' · '.$l['opciones_texto'] : '').($l['nota'] ? ' · '.$l['nota'] : ''))])->all();
         $alCobrar = Impresion::comandaAlCobrar($suc);
         try {
             if ($alCobrar) {

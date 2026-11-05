@@ -43,6 +43,9 @@ class AutoservicioController extends Controller
             'items.*.cantidad' => 'required|integer|min:1|max:30',
             'items.*.presentacion' => 'nullable|integer',
             'items.*.nota' => 'nullable|string|max:80',
+            'items.*.opciones' => 'nullable|array|max:5',
+            'items.*.opciones.*' => 'array|max:10',
+            'items.*.opciones.*.*' => 'integer',
             'nombre' => 'required|string|min:2|max:40',
             'llevar' => 'required|boolean',
         ], ['nombre.required' => 'Escribe tu nombre para llamarte.', 'nombre.min' => 'Escribe tu nombre para llamarte.', 'items.required' => 'Agrega al menos un producto.']);

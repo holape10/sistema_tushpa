@@ -250,10 +250,44 @@
             <div @click.stop class="bg-white rounded-3xl w-full max-w-md p-5 space-y-2">
                 <p class="font-black text-slate-800" x-text="eligiendo && eligiendo.nombre"></p>
                 <template x-for="op in (eligiendo ? eligiendo.opciones : [])" :key="op.id ?? 0">
-                    <button type="button" @click="sumar(eligiendo.id, op.id); eligiendo = null" class="w-full flex justify-between items-center h-12 px-4 rounded-xl ring-1 ring-slate-200 font-bold text-slate-700">
+                    <button type="button" @click="armar(eligiendo.id, op.id); eligiendo = null" class="w-full flex justify-between items-center h-12 px-4 rounded-xl ring-1 ring-slate-200 font-bold text-slate-700">
                         <span x-text="op.nombre"></span><span class="acento" x-text="soles(op.precio)"></span>
                     </button>
                 </template>
+            </div>
+        </div>
+
+        {{-- Elegir la entrada / armar el trío (como en la comanda del mozo) --}}
+        <div x-show="armando" x-cloak @click="armando = null" class="fixed inset-0 z-50 bg-slate-900/60 flex items-end sm:items-center justify-center p-4">
+            <div @click.stop class="bg-white rounded-3xl w-full max-w-md max-h-[88vh] flex flex-col">
+                <div class="p-5 pb-3">
+                    <p class=" font-black text-slate-800" x-text="armando && armando.nombre"></p>
+                    <p class="text-xs text-slate-500">Elige con qué lo acompañas</p>
+                </div>
+                <div class="px-5 overflow-y-auto space-y-4">
+                    <template x-for="g in (armando ? armando.grupos : [])" :key="g.grupo_id">
+                        <div>
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <p class=" font-bold text-slate-700" x-text="g.nombre + (g.cantidad > 1 ? ' · elige ' + g.cantidad + ' distintos' : ' · elige 1')"></p>
+                                <span class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-black" :class="armando.sel[g.grupo_id].length === g.cantidad ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'" x-text="armando.sel[g.grupo_id].length + ' de ' + g.cantidad"></span>
+                            </div>
+                            <p x-show="!g.items.length" class="text-sm text-slate-400">Por ahora no hay opciones. Consulta con el mozo.</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <template x-for="it in g.items" :key="it.id">
+                                    <button type="button" @click="tocar(g, it.id)" class="min-h-12 px-3 py-2 rounded-xl text-sm font-bold text-left flex items-center gap-2"
+                                        :class="armando.sel[g.grupo_id].includes(it.id) ? 'ring-2 ring-[color:var(--acento)] bg-white text-slate-900' : 'ring-1 ring-slate-200 text-slate-600'">
+                                        <span class="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] text-white" :class="armando.sel[g.grupo_id].includes(it.id) ? 'bg-acento' : 'ring-1 ring-slate-300'" x-text="armando.sel[g.grupo_id].includes(it.id) ? '✓' : ''"></span>
+                                        <span x-text="it.nombre"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <div class="p-5 pt-3 flex gap-2">
+                    <button type="button" @click="armando = null" class="h-12 px-4 rounded-xl bg-slate-100 font-bold text-slate-600">Cancelar</button>
+                    <button type="button" @click="confirmarArmado()" :disabled="!completo()" class="flex-1 h-12 rounded-xl bg-acento text-white font-black disabled:opacity-40">Agregar al pedido</button>
+                </div>
             </div>
         </div>
     @endif
@@ -417,7 +451,7 @@
     <script>
         function carta() {
             const n = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-            const PRODUCTOS = @js($pide ? collect($categorias)->flatMap(fn ($c) => $c['productos'])->mapWithKeys(fn ($p) => [$p['id'] => ['nombre' => $p['nombre'], 'precio' => $p['precio'], 'presentaciones' => $p['presentaciones']]]) : []);
+            const PRODUCTOS = @js($pide ? collect($categorias)->flatMap(fn ($c) => $c['productos'])->mapWithKeys(fn ($p) => [$p['id'] => ['nombre' => $p['nombre'], 'precio' => $p['precio'], 'presentaciones' => $p['presentaciones'], 'opciones' => $p['opciones'] ?? []]]) : []);
             const LOCAL = @js($local ?? null);
             // Pedido desde la mesa: { id, k } (el QR firmado de la mesa)
             const MESA = @js($pedidoMesa);
@@ -427,7 +461,7 @@
             let mapa = null, pin = null;
             return {
                 // Pedido delivery
-                carrito: (leer(CLAVE) || []).filter(i => PRODUCTOS[i.id]), abierto: false, eligiendo: null, enviando: false, error: '', ubicando: false, errorUbicacion: '', mapaVisible: false,
+                carrito: (leer(CLAVE) || []).filter(i => PRODUCTOS[i.id] && (!PRODUCTOS[i.id].opciones.length || i.opciones)), abierto: false, eligiendo: null, armando: null, enviando: false, error: '', ubicando: false, errorUbicacion: '', mapaVisible: false,
                 conTarifas: @js((bool) ($conTarifas ?? false)), envio: { costo: null, km: null, fuera: false },
                 datos: Object.assign({ cliente: '', telefono: '', direccion: '', referencia: '', lat: null, lng: null, pago: 'EFECTIVO', paga_con: '', nota: '' }, leer(CLAVE + '-datos') || {}, { nota: '', paga_con: '' }),
                 soles(n) { return 'S/ ' + Number(n || 0).toFixed(2); },
@@ -440,15 +474,35 @@
                         this.eligiendo = { id, nombre: p.nombre, opciones: [{ id: null, nombre: 'Normal', precio: p.precio }, ...p.presentaciones] };
                         return;
                     }
-                    this.sumar(id, null);
+                    this.armar(id, null);
                 },
-                sumar(id, presentacion) {
+                armar(id, presentacion) {
+                    const p = PRODUCTOS[id];
+                    if (!p.opciones.length) return this.sumar(id, presentacion, null);
+                    this.armando = { id, presentacion, nombre: p.nombre, grupos: p.opciones, sel: Object.fromEntries(p.opciones.map(g => [g.grupo_id, []])) };
+                },
+                tocar(g, itemId) {
+                    const s = this.armando.sel[g.grupo_id];
+                    const k = s.indexOf(itemId);
+                    if (k >= 0) s.splice(k, 1);
+                    else if (g.cantidad === 1) s.splice(0, s.length, itemId);
+                    else if (s.length < g.cantidad) s.push(itemId);
+                },
+                completo() { return !!this.armando && this.armando.grupos.every(g => this.armando.sel[g.grupo_id].length === g.cantidad); },
+                confirmarArmado() {
+                    if (!this.completo()) return;
+                    const a = this.armando;
+                    this.armando = null;
+                    this.sumar(a.id, a.presentacion, JSON.parse(JSON.stringify(a.sel)));
+                },
+                sumar(id, presentacion, sel) {
                     const p = PRODUCTOS[id];
                     const pr = presentacion ? p.presentaciones.find(x => x.id === presentacion) : null;
-                    const clave = id + '-' + (presentacion || 0);
+                    const texto = sel ? p.opciones.map(g => g.nombre + ': ' + sel[g.grupo_id].map(x => (g.items.find(i => i.id === x) || {}).nombre).join(', ')).join(' · ') : '';
+                    const clave = id + '-' + (presentacion || 0) + (sel ? '-' + p.opciones.map(g => [...sel[g.grupo_id]].sort((a, b) => a - b).join('.')).join('_') : '');
                     const fila = this.carrito.find(i => i.clave === clave);
                     if (fila) fila.cantidad++;
-                    else this.carrito.push({ clave, id, presentacion, nombre: p.nombre + (pr ? ' (' + pr.nombre + ')' : ''), precio: pr ? pr.precio : p.precio, cantidad: 1, nota: '' });
+                    else this.carrito.push({ clave, id, presentacion, opciones: sel, nombre: p.nombre + (pr ? ' (' + pr.nombre + ')' : '') + (texto ? ' — ' + texto : ''), precio: pr ? pr.precio : p.precio, cantidad: 1, nota: '' });
                     guardar(CLAVE, this.carrito);
                 },
                 cambiar(i, n) {
@@ -509,7 +563,7 @@
                     this.error = '';
                     if (this.conTarifas && !this.datos.lat) { this.error = 'Marca tu ubicación en el mapa para calcular el envío.'; return; }
                     this.enviando = true;
-                    const cuerpo = Object.assign({}, this.datos, { items: this.carrito.map(i => ({ id: i.id, cantidad: i.cantidad, presentacion: i.presentacion, nota: i.nota })) });
+                    const cuerpo = Object.assign({}, this.datos, { items: this.carrito.map(i => ({ id: i.id, cantidad: i.cantidad, presentacion: i.presentacion, opciones: i.opciones || null, nota: i.nota })) });
                     if (cuerpo.paga_con === '') delete cuerpo.paga_con;
                     fetch(@js(route('carta.pedir', $negocio->id_empresa_negocio)), { method: 'POST', headers: this.cabeceras(), body: JSON.stringify(cuerpo) })
                         .then(async r => {
@@ -533,7 +587,7 @@
                     this.error = '';
                     this.enviando = true;
                     const cuerpo = { k: MESA.k, tipo, nombre: this.nombreMesa };
-                    if (tipo === 'PEDIDO') cuerpo.items = this.carrito.map(i => ({ id: i.id, cantidad: i.cantidad, presentacion: i.presentacion, nota: i.nota }));
+                    if (tipo === 'PEDIDO') cuerpo.items = this.carrito.map(i => ({ id: i.id, cantidad: i.cantidad, presentacion: i.presentacion, opciones: i.opciones || null, nota: i.nota }));
                     fetch(@js(url('/carta/'.$negocio->id_empresa_negocio.'/mesa')) + '/' + MESA.id, { method: 'POST', headers: this.cabeceras(), body: JSON.stringify(cuerpo) })
                         .then(async r => {
                             const d = await r.json().catch(() => ({}));

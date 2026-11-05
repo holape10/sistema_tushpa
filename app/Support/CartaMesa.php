@@ -85,9 +85,10 @@ class CartaMesa
     }
 
     /**
-     * Productos y precios de la carta (no los del navegador). También lo usa el kiosko de autoservicio.
+     * Productos y precios de la carta (no los del navegador). También lo usan el delivery de la carta y el kiosko de
+     * autoservicio. Un plato con entrada o "arma tu trío" trae lo que eligió el cliente, validado igual que en la comanda.
      *
-     * @return array<int, array{IdProducto: int, presentacion: ?int, factor: float, nombre: string, precio: float, cantidad: float, nota: string}>
+     * @return array<int, array{IdProducto: int, presentacion: ?int, factor: float, nombre: string, precio: float, cantidad: float, nota: string, opciones: ?array, opciones_texto: string}>
      */
     public static function lineasDeCarta(int $suc, array $items): array
     {
@@ -102,15 +103,77 @@ class CartaMesa
             if (! empty($item['presentacion']) && ! $presentacion) {
                 throw new \RuntimeException("La presentación elegida de {$producto['nombre']} ya no está disponible.");
             }
+            // Lleva entrada o arma tu trío: lo elegido se valida en el servidor (como el mozo en la comanda)
+            $opciones = null;
+            if (! empty($producto['opciones'])) {
+                try {
+                    $opciones = OpcionesPlato::elegir($producto['id'], (array) ($item['opciones'] ?? []));
+                } catch (\RuntimeException $e) {
+                    throw new \RuntimeException("{$producto['nombre']}: ".lcfirst($e->getMessage()));
+                }
+            }
             $lineas[] = [
                 'IdProducto' => $producto['id'], 'presentacion' => $presentacion['id'] ?? null, 'factor' => (float) ($presentacion['factor'] ?? 1),
                 'nombre' => $producto['nombre'].($presentacion ? ' ('.mb_strtoupper($presentacion['nombre']).')' : ''),
-                'precio' => (float) ($presentacion['precio'] ?? $producto['precio']), 'cantidad' => (float) $item['cantidad'],
+                'precio' => round((float) ($presentacion['precio'] ?? $producto['precio']) + (float) ($opciones['extra'] ?? 0), 2), 'cantidad' => (float) $item['cantidad'],
                 'nota' => mb_substr(mb_strtoupper(trim((string) ($item['nota'] ?? ''))), 0, 80),
+                'opciones' => $opciones && $opciones['grupos'] ? ['grupos' => $opciones['grupos'], 'kardex' => $opciones['kardex'], 'firma' => $opciones['firma']] : null,
+                'opciones_texto' => $opciones['texto'] ?? '',
             ];
         }
 
         return $lineas;
+    }
+
+    /**
+     * Porciones del día que ocupa el pedido, contando las entradas elegidas.
+     *
+     * @param  array<int, array>  $lineas  de lineasDeCarta
+     * @return array<int, float>
+     */
+    public static function porciones(array $lineas): array
+    {
+        $porciones = [];
+        foreach ($lineas as $l) {
+            $porciones[$l['IdProducto']] = ($porciones[$l['IdProducto']] ?? 0) + $l['cantidad'] * $l['factor'];
+            foreach ($l['opciones']['kardex'] ?? [] as $id => $porPlato) {
+                $porciones[(int) $id] = ($porciones[(int) $id] ?? 0) + $l['cantidad'] * (float) $porPlato;
+            }
+        }
+
+        return $porciones;
+    }
+
+    /** Revisa el stock del pedido (con las entradas elegidas) y lo reserva; lanza el aviso si algo falta */
+    public static function asegurarStock(int $suc, array $lineas): void
+    {
+        $productos = Producto::whereIn('IdProducto', array_column($lineas, 'IdProducto'))->get()->keyBy('IdProducto');
+        ControlStock::asegurar($suc, collect($lineas)->filter(fn ($l) => isset($productos[$l['IdProducto']]))
+            ->map(fn ($l) => ['producto' => $productos[$l['IdProducto']], 'cantidad' => $l['cantidad'], 'factor' => $l['factor'],
+                'opciones' => $l['opciones']['kardex'] ?? []])->values()->all());
+    }
+
+    /**
+     * La línea del pedido como la guarda la comanda (lo elegido va en "opciones": cocina, precuenta y almacén).
+     *
+     * @return array<string, mixed>
+     */
+    public static function detalle(int $pedId, string $idEmpresa, array $l, ?string $obs = null): array
+    {
+        return [
+            'ped_id' => $pedId, 'IdProducto' => $l['IdProducto'], 'id_presentacion' => $l['presentacion'], 'IdEmpresa' => $idEmpresa,
+            'opciones' => ! empty($l['opciones']) ? json_encode($l['opciones'], JSON_UNESCAPED_UNICODE) : null,
+            'descripcion' => $l['nombre'], 'detalle' => $l['nombre'], 'ped_det_can' => $l['cantidad'], 'ped_det_pre' => $l['precio'],
+            'item_obs' => mb_substr((string) ($obs ?? $l['nota']), 0, 255) ?: null, 'estadoitem' => 'Ingresado', 'impreso' => 'imprimir', 'fecha_hora' => now(),
+        ];
+    }
+
+    /** El nombre con lo elegido, para mostrarlo: "MENÚ DEL DÍA (ENTRADA: SOPA)" */
+    public static function nombreConOpciones(array $l): string
+    {
+        $texto = $l['opciones_texto'] ?? OpcionesPlato::texto($l['opciones']['grupos'] ?? []);
+
+        return $l['nombre'].($texto !== '' ? ' ('.$texto.')' : '');
     }
 
     /**
@@ -127,7 +190,7 @@ class CartaMesa
             ->orderBy('s.id')->get(['s.id', 's.tipo', 's.items', 's.total', 's.nombre', 's.nota', 's.created_at', 'm.mes_nom', 'p.pis_nom'])
             ->map(fn ($s) => (object) [
                 'id' => (int) $s->id, 'tipo' => $s->tipo, 'mesa' => Mesa::etiqueta($s->pis_nom, $s->mes_nom),
-                'items' => collect(json_decode((string) $s->items, true) ?: [])->map(fn ($l) => ['cantidad' => $l['cantidad'], 'nombre' => $l['nombre'], 'nota' => $l['nota'], 'precio' => (float) ($l['precio'] ?? 0)])->all(),
+                'items' => collect(json_decode((string) $s->items, true) ?: [])->map(fn ($l) => ['cantidad' => $l['cantidad'], 'nombre' => self::nombreConOpciones($l), 'nota' => $l['nota'], 'precio' => (float) ($l['precio'] ?? 0)])->all(),
                 'total' => $s->total !== null ? (float) $s->total : null, 'nombre' => $s->nombre, 'nota' => $s->nota,
                 'hace' => now()->diffInMinutes($s->created_at, true),
             ]);
@@ -175,17 +238,11 @@ class CartaMesa
             $pedidoId = MesasUnidas::pedidoDe((int) $mesa->mes_id);
             $pedido = $pedidoId ? Pedido::where('ped_id', $pedidoId)->lockForUpdate()->first() : null;
 
-            // Solo con stock y porciones del día que alcancen
-            $porciones = [];
-            foreach ($lineas as $l) {
-                $porciones[$l['IdProducto']] = ($porciones[$l['IdProducto']] ?? 0) + $l['cantidad'] * $l['factor'];
-            }
-            if ($falta = Porciones::faltante($suc, $porciones, true)) {
+            // Solo con stock y porciones del día que alcancen (también de las entradas elegidas)
+            if ($falta = Porciones::faltante($suc, self::porciones($lineas), true)) {
                 throw new \RuntimeException($falta);
             }
-            $productos = Producto::whereIn('IdProducto', array_keys($porciones))->get()->keyBy('IdProducto');
-            ControlStock::asegurar($suc, collect($lineas)->filter(fn ($l) => isset($productos[$l['IdProducto']]))
-                ->map(fn ($l) => ['producto' => $productos[$l['IdProducto']], 'cantidad' => $l['cantidad'], 'factor' => $l['factor']])->values()->all());
+            self::asegurarStock($suc, $lineas);
 
             if (! $pedido) {
                 $pedido = Pedido::create([
@@ -196,12 +253,9 @@ class CartaMesa
             }
             foreach ($lineas as $l) {
                 $obs = collect([$l['nota'], $s->nombre ? 'PIDIÓ '.$s->nombre : null])->filter()->implode(' · ');
-                PedidoDetalle::create([
-                    'ped_id' => $pedido->ped_id, 'IdProducto' => $l['IdProducto'], 'id_presentacion' => $l['presentacion'], 'IdEmpresa' => $usuario->IdEmpresa,
-                    'descripcion' => $l['nombre'], 'detalle' => $l['nombre'], 'ped_det_can' => $l['cantidad'], 'ped_det_pre' => $l['precio'],
-                    'item_obs' => mb_substr($obs, 0, 255) ?: null, 'estadoitem' => 'Ingresado', 'impreso' => 'imprimir', 'fecha_hora' => now(),
-                ]);
-                $cocina[] = ['IdProducto' => $l['IdProducto'], 'nombre' => $l['nombre'], 'cantidad' => $l['cantidad'], 'observacion' => trim('(CARTA QR) '.$obs)];
+                PedidoDetalle::create(self::detalle((int) $pedido->ped_id, (string) $usuario->IdEmpresa, $l, $obs));
+                $cocina[] = ['IdProducto' => $l['IdProducto'], 'nombre' => $l['nombre'], 'cantidad' => $l['cantidad'],
+                    'observacion' => trim('(CARTA QR) '.collect([$l['opciones_texto'] ?? '', $obs])->filter()->implode(' · '))];
             }
             $total = (float) PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')->sum(DB::raw('ped_det_can * ped_det_pre'));
             $pedido->update(['ped_tot' => $total, 'fecha_hora_modificacion' => now()]);
@@ -288,8 +342,9 @@ class CartaMesa
     {
         $pedido = MesasUnidas::pedidoDe($mesId);
         $items = $pedido ? DB::table('pedidos_detalle')->where('ped_id', $pedido)->where('estadoitem', '!=', 'Eliminado')->orderBy('ped_det_id')
-            ->get(['descripcion', 'ped_det_can', 'ped_det_pre'])
-            ->map(fn ($l) => ['cantidad' => (float) $l->ped_det_can, 'nombre' => (string) $l->descripcion,
+            ->get(['descripcion', 'ped_det_can', 'ped_det_pre', 'opciones'])
+            ->map(fn ($l) => ['cantidad' => (float) $l->ped_det_can,
+                'nombre' => (string) $l->descripcion.(($t = OpcionesPlato::texto($l->opciones)) !== '' ? ' ('.$t.')' : ''),
                 'total' => round((float) $l->ped_det_can * (float) $l->ped_det_pre, 2)])->all() : [];
 
         return ['items' => $items, 'total' => round(array_sum(array_column($items, 'total')), 2)];

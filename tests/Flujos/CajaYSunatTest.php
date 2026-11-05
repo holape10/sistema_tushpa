@@ -4,6 +4,7 @@ namespace Tests\Flujos;
 
 use App\Http\Controllers\TurnoController;
 use App\Models\EmpresaNegocio;
+use App\Models\Producto;
 use App\Support\AnulacionVenta;
 use App\Support\CajaSinInternet;
 use App\Support\CartaMesa;
@@ -94,6 +95,36 @@ class CajaYSunatTest extends FlujoTestCase
         $this->assertEquals(2.0, (float) DB::table('pedidos_detalle')->where('ped_id', $pedido->ped_id)->where('IdProducto', $cerveza->IdProducto)->sum('ped_det_can'));
         $this->assertSame('Ocupado', DB::table('mesas')->where('mes_id', $mesaId)->value('mes_est'));
         $this->assertEquals(50.00, CartaMesa::consumo($mesaId)['total']);
+    }
+
+    public function test_el_menu_pedido_desde_la_carta_qr_llega_a_la_cocina_con_la_entrada_que_eligio_el_cliente(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['carta_activa' => 1, 'carta_pedido_mesa' => 1]);
+        $piso = DB::table('pisos')->insertGetId(['pis_nom' => 'SALON', 'id_empresa_negocio' => $this->sucursal]);
+        $mesaId = DB::table('mesas')->insertGetId(['mes_nom' => 'MESA 07', 'pis_id' => $piso, 'mes_est' => 'Libre',
+            'IdEmpresa' => $this->usuario->IdEmpresa, 'id_empresa_negocio' => $this->sucursal]);
+        $menu = $this->producto('MENU EJECUTIVO', 15, 10);
+        DB::table('productos')->where('IdProducto', $menu->IdProducto)->update(['lleva_entrada' => 1]);
+        $sopa = $this->producto('SOPA DE CASA', 0, 10);
+        DB::table('productos')->where('IdProducto', $sopa->IdProducto)->update(['promocion' => Producto::OPCION]);
+        $negocio = EmpresaNegocio::find($this->sucursal);
+        $mesa = DB::table('mesas')->where('mes_id', $mesaId)->first();
+
+        try {
+            CartaMesa::solicitar($negocio, $mesa, 'PEDIDO', [['id' => $menu->IdProducto, 'cantidad' => 2]]);
+            $this->fail('Sin elegir la entrada no debe pasar el pedido');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('MENU EJECUTIVO', $e->getMessage());
+        }
+
+        $r = CartaMesa::solicitar($negocio, $mesa, 'PEDIDO', [['id' => $menu->IdProducto, 'cantidad' => 2, 'opciones' => ['entrada' => [$sopa->IdProducto]]]]);
+        CartaMesa::aceptar($this->usuario, DB::table('carta_solicitudes')->where('token', $r['token'])->value('id'), []);
+
+        $pedido = DB::table('pedidos')->where('mes_id', $mesaId)->where('ped_est', 'Aperturado')->first();
+        $detalle = DB::table('pedidos_detalle')->where('ped_id', $pedido->ped_id)->first();
+        $this->assertEquals(30.00, (float) $pedido->ped_tot);
+        $this->assertSame([$sopa->IdProducto => 1], array_map('intval', json_decode($detalle->opciones, true)['kardex']));
+        $this->assertStringContainsString('SOPA DE CASA', CartaMesa::consumo($mesaId)['items'][0]['nombre']);
     }
 
     public function test_corregir_la_fecha_de_una_factura_vencida_mueve_tambien_su_vencimiento(): void

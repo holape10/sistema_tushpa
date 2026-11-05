@@ -40,6 +40,7 @@ class Carta
             ->orderBy('c.cat_id')->orderBy('p.IdProducto')
             ->get(['p.IdProducto', 'p.pronom', 'p.descripcion', 'p.propun', 'p.imagenproducto', 'p.cat_id', 'c.cat_nom']);
         $precios = Precios::vigentes($filas);
+        $conOpciones = OpcionesPlato::conOpciones($filas->pluck('IdProducto'));
         $presentaciones = DB::table('producto_presentacion')->whereIn('IdProducto', $filas->pluck('IdProducto'))
             ->where('estado', 1)->where('precio', '>', 0)->orderBy('precio')->get(['id_presentacion', 'IdProducto', 'nombre', 'precio', 'factor'])->groupBy('IdProducto');
 
@@ -57,6 +58,8 @@ class Carta
                     'img' => $p->imagenproducto && is_file(public_path($p->imagenproducto)) ? asset($p->imagenproducto) : null,
                     'presentaciones' => ($presentaciones[$p->IdProducto] ?? collect())
                         ->map(fn ($x) => ['id' => (int) $x->id_presentacion, 'nombre' => $x->nombre, 'precio' => (float) $x->precio, 'factor' => (float) $x->factor])->values()->all(),
+                    // Lleva entrada o arma tu trío: lo que el cliente elige al pedir (como el mozo en la comanda)
+                    'opciones' => isset($conOpciones[$p->IdProducto]) ? OpcionesPlato::de((int) $p->IdProducto) : [],
                 ])->values()->all(),
             ])->values()->all();
     }
