@@ -59,6 +59,7 @@ class ContratosTest extends TestCase
             $t->timestamps();
         });
         (include database_path('migrations/central/2027_01_12_000001_contratos.php'))->up();
+        (include database_path('migrations/central/2027_01_23_000001_planes_implementacion_y_web.php'))->up();
         $plan = DB::connection('central')->table('planes')->insertGetId(['nombre' => 'RESTAURANTE', 'precio' => 100]);
         $this->cliente = Cliente::create(['ruc' => '20609838427', 'razon_social' => 'INVERSIONES COCOROCO EMPRESA INDIVIDUAL DE RESPONSABILIDAD LIMITADA', 'plan_id' => $plan,
             'contacto_nombre' => 'JUAN PEREZ', 'representante' => 'MARIA LOPEZ', 'representante_dni' => '87654321',
@@ -83,6 +84,20 @@ class ContratosTest extends TestCase
     {
         $this->assertSame(100.0, Contratos::montoSugerido($this->cliente, 'MENSUAL'));
         $this->assertSame(1000.0, Contratos::montoSugerido($this->cliente, 'ANUAL'), 'El año cobra 10 meses.');
+    }
+
+    public function test_la_implementacion_del_plan_sale_en_el_contrato_como_pago_unico(): void
+    {
+        DB::connection('central')->table('planes')->where('id', $this->cliente->plan_id)->update(['implementacion' => 2000]);
+        $this->assertSame(2000.0, Contratos::implementacionSugerida($this->cliente->fresh()));
+
+        $contrato = Contratos::generar($this->cliente, 'MENSUAL', 200, 1, 2000);
+        $texto = Contratos::texto($contrato);
+        $this->assertStringContainsString('S/ 200.00 por cada mes', $texto);
+        $this->assertStringContainsString('pago único de S/ 2,000.00 por la implementación', $texto);
+
+        $sinImplementacion = Contratos::generar($this->cliente, 'MENSUAL', 200, 1);
+        $this->assertStringNotContainsString('implementación', Contratos::texto($sinImplementacion));
     }
 
     public function test_firmar_en_pantalla_deja_el_contrato_por_revisar_con_su_constancia(): void

@@ -41,6 +41,7 @@ class ContratoController extends Controller
         return view('admin.clientes.contrato', [
             'cliente' => $cliente, 'contrato' => Contratos::deCliente($cliente->id), 'cobraElDueno' => DatosCobro::cobraElDueno($cliente),
             'sugeridos' => collect(Contratos::PERIODOS)->keys()->mapWithKeys(fn ($p) => [$p => Contratos::montoSugerido($cliente, $p)])->all(),
+            'implementacion' => Contratos::implementacionSugerida($cliente),
             'anteriores' => DB::connection('central')->table('contratos')->where('cliente_id', $cliente->id)->where('estado', 'ANULADO')->latest('id')->limit(5)->get(),
         ]);
     }
@@ -49,8 +50,9 @@ class ContratoController extends Controller
     {
         $this->autorizar($cliente);
         abort_unless(DatosCobro::cobraElDueno($cliente), 403, 'Esta empresa le paga a su revendedor.');
-        $d = $request->validate(['periodo' => 'required|in:'.implode(',', array_keys(Contratos::PERIODOS)), 'monto' => 'required|numeric|min:1|max:999999']);
-        Contratos::generar($cliente, $d['periodo'], (float) $d['monto'], Auth::guard('superadmin')->id());
+        $d = $request->validate(['periodo' => 'required|in:'.implode(',', array_keys(Contratos::PERIODOS)), 'monto' => 'required|numeric|min:1|max:999999',
+            'implementacion' => 'nullable|numeric|min:0|max:999999'], [], ['implementacion' => 'implementación']);
+        Contratos::generar($cliente, $d['periodo'], (float) $d['monto'], Auth::guard('superadmin')->id(), (float) ($d['implementacion'] ?? 0));
 
         return back()->with('ok', 'Contrato generado. Copia el enlace o mándalo por WhatsApp a la empresa.');
     }

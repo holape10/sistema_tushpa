@@ -51,13 +51,20 @@ class Contratos
         return $plan ? ($periodo === 'ANUAL' ? $plan->precioAnual() : round((float) $plan->precio, 2)) : 0.0;
     }
 
+    /** Implementación sugerida según el plan (pago único al empezar) */
+    public static function implementacionSugerida(Cliente $cliente): float
+    {
+        return round((float) ($cliente->planContratado?->implementacion ?? 0), 2);
+    }
+
     /** Genera un contrato nuevo (el anterior sin aprobar queda anulado: vale el último) */
-    public static function generar(Cliente $cliente, string $periodo, float $monto, ?int $superadmin): object
+    public static function generar(Cliente $cliente, string $periodo, float $monto, ?int $superadmin, float $implementacion = 0): object
     {
         self::tabla()->where('cliente_id', $cliente->id)->whereIn('estado', ['PENDIENTE', 'OBSERVADO', 'ENVIADO'])
             ->update(['estado' => 'ANULADO', 'updated_at' => now()]);
         $id = self::tabla()->insertGetId([
             'cliente_id' => $cliente->id, 'token' => Str::random(40), 'periodo' => $periodo, 'monto' => round($monto, 2),
+            'implementacion' => $implementacion > 0 ? round($implementacion, 2) : null,
             'plan' => $cliente->planContratado?->nombre ?? $cliente->plan, 'estado' => 'PENDIENTE',
             'firmante' => $cliente->representante ?: $cliente->contacto_nombre, 'firmante_dni' => $cliente->representante_dni,
             'correo' => $cliente->contacto_correo, 'telefono' => $cliente->contacto_telefono,

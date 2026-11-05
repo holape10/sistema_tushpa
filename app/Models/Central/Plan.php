@@ -16,7 +16,14 @@ class Plan extends Model
     /** Meses que se cobran en el plan anual cuando no se escribe su precio (12 - 2 meses gratis) */
     public const MESES_ANUAL = 10;
 
-    protected $casts = ['precio' => 'float', 'precio_anual' => 'float', 'destacado' => 'boolean', 'tienda_virtual' => 'boolean', 'activo' => 'boolean', 'max_usuarios' => 'integer'];
+    protected $casts = ['precio' => 'float', 'precio_anual' => 'float', 'implementacion' => 'float', 'destacado' => 'boolean', 'tienda_virtual' => 'boolean',
+        'activo' => 'boolean', 'en_web' => 'boolean', 'max_usuarios' => 'integer'];
+
+    /** Los que se ofrecen en la web (tushpa.app y el registro): activos y marcados "mostrar en la web" */
+    public function scopeEnWeb($query)
+    {
+        return $query->where('activo', true)->where('en_web', true);
+    }
 
     /** Lo que se paga al año: el precio anual escrito o 10 meses (2 gratis) */
     public function precioAnual(): float

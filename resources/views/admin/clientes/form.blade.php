@@ -103,6 +103,8 @@
                                     @if ($pl->destacado)<span class="absolute -top-2 right-3 px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">MÁS POPULAR</span>@endif
                                     <p class="font-bold text-slate-800">{{ $pl->nombre }}</p>
                                     <p class="text-2xl font-black text-indigo-700">S/ {{ number_format($pl->precio, 0) }}<span class="text-xs font-semibold text-slate-400"> /mes</span></p>
+                                    @if ($pl->implementacion)<p class="text-xs font-bold text-slate-600">+ S/ {{ number_format($pl->implementacion, 0) }} de implementación</p>@endif
+                                    @unless ($pl->en_web)<p class="text-[10px] font-semibold text-slate-400">No sale en la web</p>@endunless
                                     <ul class="mt-2 text-xs text-slate-500 space-y-0.5">
                                         @foreach ($pl->listaCaracteristicas() as $c)<li>✔ {{ $c }}</li>@endforeach
                                     </ul>

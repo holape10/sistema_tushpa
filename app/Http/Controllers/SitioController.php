@@ -167,7 +167,7 @@ class SitioController extends Controller
             'ruc' => ['required', 'regex:/^(10|15|17|20)\d{9}$/', fn ($campo, $valor, $falla) => ConsultaPeru::rucValido((string) $valor) || $falla('Ese RUC no es válido. Revisa los 11 dígitos.')],
             'nombre_comercial' => 'nullable|string|max:120',
             'rubro' => ['required', Rule::in(collect(Rubros::RUBROS)->except('COMPLETO')->keys())],
-            'plan_id' => ['required', 'integer', Rule::exists('central.planes', 'id')->where('activo', 1)],
+            'plan_id' => ['required', 'integer', Rule::exists('central.planes', 'id')->where('activo', 1)->where('en_web', 1)],
             'subdominio' => 'nullable|string|max:40',
             'contacto_nombre' => 'required|string|max:120',
             'contacto_telefono' => ['required', 'regex:/^9\d{8}$/'],
@@ -280,6 +280,6 @@ class SitioController extends Controller
 
     private function planes()
     {
-        return Plan::where('activo', true)->orderBy('orden')->orderBy('precio')->get();
+        return Plan::enWeb()->orderBy('orden')->orderBy('precio')->get();
     }
 }

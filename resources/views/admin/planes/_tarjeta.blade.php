@@ -20,6 +20,10 @@
                class="mt-1 w-full rounded-xl border-slate-300 text-sm text-right font-bold">
         <span class="block mt-0.5 font-normal text-[11px] text-slate-400">Si lo dejas vacío se cobra 10 meses (2 meses gratis).@unless ($nuevo) Hoy en la web: S/ {{ number_format($pl->precioAnual(), 2) }} al año.@endunless</span>
     </label>
+    <label class="block text-xs font-semibold text-slate-500">Implementación S/ <span class="font-normal text-slate-400">(pago único al empezar)</span>
+        <input type="number" step="0.01" min="0" name="implementacion" value="{{ $pl->implementacion }}" placeholder="Sin implementación"
+               class="mt-1 w-full rounded-xl border-slate-300 text-sm text-right font-bold">
+    </label>
     <label class="block text-xs font-semibold text-slate-500">Descripción corta
         <input name="descripcion" value="{{ $pl->descripcion }}" maxlength="255" class="mt-1 w-full rounded-xl border-slate-300 text-sm">
     </label>
@@ -37,7 +41,9 @@
     <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <label class="inline-flex items-center gap-2"><input type="checkbox" name="tienda_virtual" value="1" @checked($pl->tienda_virtual) class="rounded"> Tienda virtual</label>
         <label class="inline-flex items-center gap-2"><input type="checkbox" name="destacado" value="1" @checked($pl->destacado) class="rounded"> Más popular</label>
-        <label class="inline-flex items-center gap-2"><input type="hidden" name="activo" value="0"><input type="checkbox" name="activo" value="1" @checked($pl->activo) class="rounded"> Activo</label>
+        <label class="inline-flex items-center gap-2"><input type="hidden" name="activo" value="0"><input type="checkbox" name="activo" value="1" @checked($pl->activo ?? true) class="rounded"> Activo</label>
+        <label class="inline-flex items-center gap-2"><input type="hidden" name="en_web" value="0"><input type="checkbox" name="en_web" value="1" @checked($pl->en_web ?? true) class="rounded"> Mostrar en la web</label>
     </div>
+    <p class="text-[11px] text-slate-400">Activo = se puede asignar a clientes en el panel. Mostrar en la web = sale en tushpa.app y en el registro.</p>
     <button class="w-full h-10 rounded-xl {{ $nuevo ? 'bg-slate-800' : 'bg-indigo-600 hover:bg-indigo-700' }} text-white text-sm font-bold">{{ $nuevo ? 'Crear plan' : 'Guardar' }}</button>
 </form>

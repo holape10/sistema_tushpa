@@ -41,6 +41,8 @@
                 <label class="block text-sm font-semibold text-slate-600">Monto (S/)
                     <input type="number" step="0.01" min="1" name="monto" x-model="monto" required class="{{ $in }}">
                     <span class="text-xs font-normal text-slate-400">Sale del plan {{ $cliente->planContratado?->nombre ?? $cliente->plan ?? '—' }}; puedes cambiarlo.</span></label>
+                <label class="block text-sm font-semibold text-slate-600">Implementación (S/, pago único)
+                    <input type="number" step="0.01" min="0" name="implementacion" value="{{ $implementacion ?: '' }}" placeholder="Sin implementación" class="{{ $in }}"></label>
                 <button class="w-full h-10 rounded-xl bg-indigo-600 text-white text-sm font-bold"
                         @if ($contrato) onclick="return confirm('El contrato actual quedará anulado y la empresa tendrá que firmar el nuevo. ¿Seguir?')" @endif>
                     {{ $contrato ? 'Generar nuevo (reemplaza al actual)' : 'Generar contrato' }}</button>
@@ -53,7 +55,7 @@
                 @else
                     <section class="bg-white rounded-2xl shadow-sm p-4 space-y-3" x-data="{ copiado: false }">
                         <div class="flex flex-wrap items-center gap-2">
-                            <h2 class="font-bold text-slate-800 flex-1">{{ Contratos::numero($contrato) }} · {{ Contratos::PERIODOS[$contrato->periodo] }} · S/ {{ number_format((float) $contrato->monto, 2) }}</h2>
+                            <h2 class="font-bold text-slate-800 flex-1">{{ Contratos::numero($contrato) }} · {{ Contratos::PERIODOS[$contrato->periodo] }} · S/ {{ number_format((float) $contrato->monto, 2) }}@if ((float) ($contrato->implementacion ?? 0) > 0) · implementación S/ {{ number_format((float) $contrato->implementacion, 2) }}@endif</h2>
                             <span class="px-2.5 py-1 rounded-full text-xs font-bold {{ $colores[$contrato->estado] }}">{{ Contratos::ESTADOS[$contrato->estado] }}</span>
                         </div>
                         @if ($contrato->estado === 'OBSERVADO')<p class="text-sm text-amber-800 bg-amber-50 rounded-xl px-3 py-2">Observación: {{ $contrato->observacion }}</p>@endif

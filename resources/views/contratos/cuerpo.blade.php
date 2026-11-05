@@ -24,7 +24,7 @@
     actualizaciones y mejoras que EL PROVEEDOR publique.</p>
 
 <p><b>SEGUNDA · PLAN, PRECIO Y PAGO:</b> EL CLIENTE contrata el plan <b>{{ $contrato->plan ?: '—' }}</b> en modalidad <b>{{ mb_strtoupper($periodo) }}</b> por
-    <b>{{ $soles($contrato->monto) }}</b> {{ $esAnual ? 'por cada año' : 'por cada mes' }} de servicio, incluidos los impuestos de ley que correspondan. El pago es adelantado,
+    <b>{{ $soles($contrato->monto) }}</b> {{ $esAnual ? 'por cada año' : 'por cada mes' }} de servicio{!! (float) ($contrato->implementacion ?? 0) > 0 ? ', más un pago único de <b>'.e($soles($contrato->implementacion)).'</b> por la implementación (instalación, configuración y capacitación inicial), que se paga al empezar' : '' !!}, incluidos los impuestos de ley que correspondan. El pago es adelantado,
     por transferencia, depósito, billetera digital o pago en línea, y cada pago extiende el servicio por el periodo pagado.</p>
 
 <p><b>TERCERA · VIGENCIA Y SUSPENSIÓN:</b> El contrato rige desde su firma por {{ $esAnual ? 'doce (12) meses' : 'un (1) mes' }} y se renueva automáticamente por periodos iguales
