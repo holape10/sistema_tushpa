@@ -19,10 +19,10 @@ class Plan extends Model
     protected $casts = ['precio' => 'float', 'precio_anual' => 'float', 'implementacion' => 'float', 'destacado' => 'boolean', 'tienda_virtual' => 'boolean',
         'activo' => 'boolean', 'en_web' => 'boolean', 'max_usuarios' => 'integer'];
 
-    /** Los que se ofrecen en la web (tushpa.app y el registro): activos y marcados "mostrar en la web" */
+    /** Los que se ofrecen en la web (tushpa.app y el registro): de TUSHPA, activos y marcados "mostrar en la web" */
     public function scopeEnWeb($query)
     {
-        return $query->where('activo', true)->where('en_web', true);
+        return $query->whereNull('marca_id')->where('activo', true)->where('en_web', true);
     }
 
     /** Lo que se paga al año: el precio anual escrito o 10 meses (2 gratis) */

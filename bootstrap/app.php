@@ -6,6 +6,7 @@ use App\Http\Middleware\EmpresaDelEstudio;
 use App\Http\Middleware\IdentificarEmpresa;
 use App\Http\Middleware\PermisoDelMenu;
 use App\Http\Middleware\RegistrarVisita;
+use App\Http\Middleware\SoloEnPanel;
 use App\Http\Middleware\SoloMenuContador;
 use App\Http\Middleware\SoloWifiLocal;
 use App\Support\MonitorErrores;
@@ -24,10 +25,12 @@ return Application::configure(basePath: dirname(__DIR__))
         channels: __DIR__.'/../routes/channels.php',
         health: '/up',
         then: function () {
-            // Panel multi-empresa: https://admin.{dominio}/{ruta} (solo si el multi-empresa está activo)
-            if ($dominio = config('tenancy.dominio')) {
-                Route::middleware('web')
-                    ->domain(config('tenancy.subdominio_admin').'.'.$dominio)
+            // Panel multi-empresa: https://admin.{dominio}/{ruta} (solo si el multi-empresa está activo). El dominio es el
+            // de TUSHPA o el de una marca (admin.wilcatsystems.pe): IdentificarEmpresa decide cuál vale y SoloEnPanel cierra el resto
+            if (config('tenancy.dominio')) {
+                Route::middleware(['web', SoloEnPanel::class])
+                    ->domain(config('tenancy.subdominio_admin').'.{panelDominio}')
+                    ->where(['panelDominio' => '[a-z0-9._-]+'])
                     ->prefix(config('tenancy.ruta_admin'))
                     ->name('admin.')
                     ->group(base_path('routes/admin.php'));

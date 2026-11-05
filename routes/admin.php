@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ContratoController;
 use App\Http\Controllers\Admin\DatosCobroController;
 use App\Http\Controllers\Admin\ErrorController;
 use App\Http\Controllers\Admin\LoginController;
+use App\Http\Controllers\Admin\MarcaController;
 use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\PromocionController;
 use App\Http\Controllers\Admin\ProspectoController;
@@ -99,6 +100,9 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/tickets/{id}/responder', [TicketController::class, 'responder'])->whereNumber('id')->name('tickets.responder');
     Route::post('/tickets/{id}/estado', [TicketController::class, 'estado'])->whereNumber('id')->name('tickets.estado');
     Route::get('/tickets/{id}/archivo/{mensaje}/{n}', [TicketController::class, 'archivo'])->whereNumber(['id', 'mensaje', 'n'])->name('tickets.archivo');
+    // Marcas: revendedores con dominio propio (solo el dueño)
+    Route::get('/marcas', [MarcaController::class, 'index'])->name('marcas.index');
+    Route::post('/marcas/{id?}', [MarcaController::class, 'guardar'])->whereNumber('id')->name('marcas.guardar');
     Route::get('/usuarios', [UsuarioController::class, 'index'])->name('usuarios.index');
     Route::post('/usuarios', [UsuarioController::class, 'store'])->name('usuarios.store');
     Route::post('/usuarios/{usuario}/permiso', [UsuarioController::class, 'permiso'])->whereNumber('usuario')->name('usuarios.permiso');

@@ -123,12 +123,12 @@ class Tenancy
      *
      * @return array{ok: bool, mensaje: string, sugerencias: array<int, string>}
      */
-    public static function revisarSubdominio(string $sub, ?Cliente $actual = null): array
+    public static function revisarSubdominio(string $sub, ?Cliente $actual = null, ?string $dominio = null): array
     {
         $sub = mb_strtolower(trim($sub));
         $error = self::errorSubdominio($sub, $actual);
 
-        return ['ok' => $error === null, 'mensaje' => $error ?? "{$sub}.".config('tenancy.dominio').' está libre.',
+        return ['ok' => $error === null, 'mensaje' => $error ?? "{$sub}.".($dominio ?: config('tenancy.dominio')).' está libre.',
             'sugerencias' => $error && preg_match('/^[a-z0-9-]+$/', $sub) ? self::sugerenciasSubdominio($sub) : []];
     }
 

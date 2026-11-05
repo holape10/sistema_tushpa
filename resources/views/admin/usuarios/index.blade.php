@@ -30,6 +30,14 @@
                     <span>También puede crear usuarios</span>
                 </label>
             @endif
+            @if ($marcas->isNotEmpty())
+                <label class="block text-xs font-semibold text-slate-500">Panel
+                    <select name="marca_id" class="mt-1 w-full rounded-xl border-slate-300 text-sm">
+                        <option value="">TUSHPA (admin.{{ config('tenancy.dominio') }})</option>
+                        @foreach ($marcas as $idMarca => $nombreMarca)<option value="{{ $idMarca }}" @selected((int) old('marca_id') === (int) $idMarca)>{{ $nombreMarca }} (su propio panel)</option>@endforeach
+                    </select>
+                    <span class="font-normal text-[11px] text-slate-400">El usuario de una marca entra solo por su panel y crea empresas con su dominio.</span></label>
+            @endif
             <button class="w-full h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">Crear usuario</button>
         </form>
 
@@ -48,6 +56,7 @@
                                 <div class="min-w-0">
                                 <p class="font-semibold">{{ $u->nombre }}
                                     @if ($u->es_dueno)<span class="ml-1 px-1.5 rounded bg-amber-100 text-amber-800 text-[11px] font-bold">DUEÑO</span>@endif
+                                    @if ($u->marca_id)<span class="ml-1 px-1.5 rounded bg-sky-100 text-sky-800 text-[11px] font-bold">{{ $marcas[$u->marca_id] ?? 'MARCA' }}</span>@endif
                                     @unless ($u->activo)<span class="ml-1 px-1.5 rounded bg-rose-100 text-rose-700 text-[11px] font-bold">DESACTIVADO</span>@endunless</p>
                                 <p class="text-xs text-slate-500">{{ $u->email }}</p>
                                 @if ($u->celular)<p class="text-xs text-slate-500">📱 {{ $u->celular }}</p>@endif

@@ -36,6 +36,20 @@ class ClienteController extends Controller
         return Cliente::query()->when(! $this->esDueno(), fn ($q) => $q->where('creado_por', Auth::guard('superadmin')->id()));
     }
 
+    /** La marca del usuario del panel (null = TUSHPA) */
+    private function marcaId(): ?int
+    {
+        $marca = Auth::guard('superadmin')->user()->marca_id;
+
+        return $marca ? (int) $marca : null;
+    }
+
+    /** Un plan solo vale para las empresas de su misma marca (los de TUSHPA para las de TUSHPA) */
+    private function planDeOtraMarca(?int $planId, ?int $marcaId): bool
+    {
+        return $planId && (int) (Plan::find($planId)?->marca_id ?? 0) !== (int) ($marcaId ?? 0);
+    }
+
     private function autorizar(Cliente $cliente): void
     {
         abort_unless($this->esDueno() || (int) $cliente->creado_por === (int) Auth::guard('superadmin')->id(), 404);
@@ -121,7 +135,8 @@ class ClienteController extends Controller
 
     public function create()
     {
-        return view('admin.clientes.form', ['cliente' => new Cliente, 'planes' => $this->planes(),
+        return view('admin.clientes.form', ['cliente' => new Cliente, 'planes' => $this->planes($this->marcaId()),
+            'dominio' => $this->marcaId() ? (string) Auth::guard('superadmin')->user()->marca?->dominio : config('tenancy.dominio'),
             'rubros' => Rubros::RUBROS, 'catalogo' => Rubros::catalogo(), 'menuActual' => null]);
     }
 
@@ -143,7 +158,12 @@ class ClienteController extends Controller
         if ($error = $this->errorSubdominio($d['subdominio'] ?? null)) {
             return back()->withInput()->withErrors(['subdominio' => $error]);
         }
+        if ($this->planDeOtraMarca($d['plan_id'] ?? null, $this->marcaId())) {
+            return back()->withInput()->withErrors(['plan_id' => 'Ese plan no es de tu panel.']);
+        }
         $d['plan'] = isset($d['plan_id']) ? Plan::find($d['plan_id'])?->nombre : null;
+        // La empresa de un revendedor con marca entra por su dominio y su base lleva su prefijo (bd_ws_…)
+        $d['marca_id'] = $this->marcaId();
 
         // Si no se escriben, el usuario y la contraseña son el RUC (igual que el registro inicial /config)
         $d['usuario'] = ($d['usuario'] ?? null) ?: $d['ruc'];
@@ -177,8 +197,10 @@ class ClienteController extends Controller
     {
         $this->autorizar($cliente);
 
-        return view('admin.clientes.form', ['cliente' => $cliente, 'planes' => $this->planes(),
-            'usuarios' => $this->esDueno() ? Superadmin::orderBy('nombre')->pluck('nombre', 'id') : collect(),
+        return view('admin.clientes.form', ['cliente' => $cliente, 'planes' => $this->planes($cliente->marca_id ? (int) $cliente->marca_id : null),
+            'dominio' => $cliente->dominio(),
+            'usuarios' => $this->esDueno() ? Superadmin::when($cliente->marca_id, fn ($q) => $q->where('marca_id', $cliente->marca_id), fn ($q) => $q->whereNull('marca_id'))
+                ->orderBy('nombre')->pluck('nombre', 'id') : collect(),
             'rubros' => Rubros::RUBROS, 'catalogo' => Rubros::catalogo(), 'menuActual' => $this->menuAdministrador($cliente),
             'historialXml' => ConsumoXml::historial((int) $cliente->id)]);
     }
@@ -195,6 +217,13 @@ class ClienteController extends Controller
         $d['representante'] = mb_strtoupper(trim((string) ($d['representante'] ?? ''))) ?: null;
         if (! $this->esDueno()) {
             unset($d['creado_por']);   // solo el dueño reasigna empresas
+        }
+        // Se reasigna solo a un usuario de su misma marca (su dominio y su base no cambian)
+        if (! empty($d['creado_por']) && (int) (Superadmin::find($d['creado_por'])?->marca_id ?? 0) !== (int) ($cliente->marca_id ?? 0)) {
+            return back()->withInput()->withErrors(['creado_por' => 'Ese usuario es de otra marca: la empresa solo puede pasar a un usuario de su misma marca.']);
+        }
+        if ($this->planDeOtraMarca($d['plan_id'] ?? null, $cliente->marca_id ? (int) $cliente->marca_id : null)) {
+            return back()->withInput()->withErrors(['plan_id' => 'Ese plan no es de la marca de esta empresa.']);
         }
         if ($error = $this->errorSubdominio($d['subdominio'] ?? null, $cliente)) {
             return back()->withInput()->withErrors(['subdominio' => $error]);
@@ -445,9 +474,16 @@ class ClienteController extends Controller
 
     // ------------------------------------------------------------------ planes
 
+    /** Planes: el dueño maneja los de TUSHPA; un revendedor con marca, los suyos (con sus propios precios) */
+    private function puedeEditarPlanes(): bool
+    {
+        return $this->esDueno() || $this->marcaId() !== null;
+    }
+
     public function planesIndex()
     {
-        $planes = Plan::orderBy('orden')->orderBy('precio')->get();
+        $planes = Plan::query()->when($this->marcaId(), fn ($q, $m) => $q->where('marca_id', $m), fn ($q) => $q->whereNull('marca_id'))
+            ->orderBy('orden')->orderBy('precio')->get();
         $uso = Cliente::where('estado', 'ACTIVO')->whereNotNull('plan_id')->groupBy('plan_id')->selectRaw('plan_id, COUNT(*) n')->pluck('n', 'plan_id');
 
         return view('admin.planes.index', compact('planes', 'uso'));
@@ -455,7 +491,9 @@ class ClienteController extends Controller
 
     public function planesGuardar(Request $request, ?Plan $plan = null)
     {
-        abort_unless($this->esDueno(), 403, 'Solo el dueño del sistema cambia los planes.');
+        abort_unless($this->puedeEditarPlanes(), 403, 'Solo el dueño del sistema cambia los planes.');
+        // Cada uno solo los de su marca
+        abort_if($plan && $plan->exists && (int) ($plan->marca_id ?? 0) !== (int) ($this->marcaId() ?? 0), 404);
         $d = $request->validate([
             'nombre' => 'required|string|max:60', 'precio' => 'required|numeric|min:0|max:99999', 'precio_anual' => 'nullable|numeric|min:0|max:999999',
             'implementacion' => 'nullable|numeric|min:0|max:999999',
@@ -469,21 +507,25 @@ class ClienteController extends Controller
         $d['orden'] = $d['orden'] ?? 0;
 
         if ($d['destacado']) {
-            Plan::where('id', '!=', $plan?->id ?? 0)->update(['destacado' => false]);   // un solo "Más popular"
+            // Un solo "Más popular" en cada marca
+            Plan::where('id', '!=', $plan?->id ?? 0)->when($this->marcaId(), fn ($q, $m) => $q->where('marca_id', $m), fn ($q) => $q->whereNull('marca_id'))
+                ->update(['destacado' => false]);
         }
         if ($plan && $plan->exists) {
             $plan->update($d);
             Cliente::where('plan_id', $plan->id)->update(['plan' => $d['nombre']]);
         } else {
-            Plan::create($d);
+            Plan::create($d + ['marca_id' => $this->marcaId()]);
         }
 
         return redirect()->route('admin.planes.index')->with('ok', "Plan {$d['nombre']} guardado.");
     }
 
-    private function planes()
+    /** Los planes que se pueden asignar a una empresa de esa marca (null = los de TUSHPA) */
+    private function planes(?int $marcaId = null)
     {
-        return Plan::where('activo', true)->orderBy('orden')->orderBy('precio')->get();
+        return Plan::where('activo', true)->when($marcaId, fn ($q, $m) => $q->where('marca_id', $m), fn ($q) => $q->whereNull('marca_id'))
+            ->orderBy('orden')->orderBy('precio')->get();
     }
 
     private function errorSubdominio(?string $sub, ?Cliente $actual = null): ?string
@@ -496,7 +538,9 @@ class ClienteController extends Controller
     {
         $actual = $request->filled('cliente') ? Cliente::find((int) $request->cliente) : null;
 
-        return response()->json(Tenancy::revisarSubdominio($sub, $actual));
+        $dominio = $actual ? $actual->dominio() : ($this->marcaId() ? (string) Auth::guard('superadmin')->user()->marca?->dominio : null);
+
+        return response()->json(Tenancy::revisarSubdominio($sub, $actual, $dominio));
     }
 
     public function consultarRuc(string $ruc)

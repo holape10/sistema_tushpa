@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Central\Marca;
 use App\Models\Central\Superadmin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -48,6 +49,7 @@ class UsuarioController extends Controller
         $nombres = Superadmin::pluck('nombre', 'id');
 
         return view('admin.usuarios.index', ['usuarios' => $usuarios, 'empresas' => $empresas, 'nombres' => $nombres,
+            'marcas' => $this->yo()->es_dueno ? Marca::orderBy('nombre')->pluck('nombre', 'id') : collect(),
             'esDueno' => (bool) $this->yo()->es_dueno, 'puedeManejar' => fn ($u) => $this->puedeManejar($u)]);
     }
 
@@ -58,7 +60,10 @@ class UsuarioController extends Controller
             'nombre' => 'required|string|max:120',
             'email' => ['required', 'email', 'max:120', Rule::unique('central.superadmins', 'email')],
             'password' => 'required|string|min:10',
-        ], [], ['password' => 'contraseña', 'email' => 'correo']);
+            'marca_id' => 'nullable|integer|exists:central.marcas,id',
+        ], [], ['password' => 'contraseña', 'email' => 'correo', 'marca_id' => 'marca']);
+        // El dueño elige de qué marca es (vacío = TUSHPA); los que crea un revendedor son de su misma marca
+        $datos['marca_id'] = $this->yo()->es_dueno ? (($datos['marca_id'] ?? null) ?: null) : $this->yo()->marca_id;
 
         Superadmin::create($datos + [
             'activo' => 1, 'creado_por' => $this->yo()->id,

@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>@yield('title', 'Panel') · TUSHPA</title>
+    @php $marcaPanel = request()->attributes->get('panel_marca') ? \App\Models\Central\Marca::find(request()->attributes->get('panel_marca')) : null; @endphp
+    <title>@yield('title', 'Panel') · {{ $marcaPanel->nombre ?? 'TUSHPA' }}</title>
     <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
     <style>
         [x-cloak]{display:none!important}
@@ -49,6 +50,7 @@
                 ] : [],
                 'Sistema' => array_filter([
                     $yo->es_dueno || $yo->puede_crear_usuarios ? ['Usuarios', 'admin.usuarios.index', 'admin.usuarios.*', 0, 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'] : null,
+                    $yo->es_dueno ? ['Marcas', 'admin.marcas.index', 'admin.marcas.*', 0, 'M7 7h10v10H7zM3 3h4v4H3zm14 0h4v4h-4zM3 17h4v4H3zm14 0h4v4h-4z'] : null,
                     $yo->es_dueno ? ['Errores del sistema', 'admin.errores.index', 'admin.errores.*', $erroresNuevos, 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z'] : null,
                     $yo->es_dueno ? ['Agente', 'admin.agente.index', 'admin.agente.*', 0, 'M9 17v2m6-2v2M5 7h14a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2zm7-4v4'] : null,
                     $yo->es_dueno ? ['Respaldos', 'admin.respaldos.index', 'admin.respaldos.*', 0, 'M4 7v10c0 2 3.6 3 8 3s8-1 8-3V7M4 7c0 2 3.6 3 8 3s8-1 8-3M4 7c0-2 3.6-3 8-3s8 1 8 3m-16 5c0 2 3.6 3 8 3s8-1 8-3'] : null,
@@ -70,9 +72,9 @@
                    class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full bg-indigo-950 text-white transition-transform duration-200 shadow-2xl flex flex-col isolate">
                 <div class="kene kene-meandro absolute inset-0 -z-10 text-white/[0.04]" aria-hidden="true"></div>
                 <div class="px-4 pt-4 pb-3 flex items-center gap-2 shrink-0">
-                    <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-9 h-9 rounded-lg bg-white p-1">
+                    <img src="{{ asset($marcaPanel && $marcaPanel->logo ? $marcaPanel->logo : 'imagenes/icono.png') }}" alt="" class="w-9 h-9 rounded-lg bg-white p-1 object-contain">
                     <div class="min-w-0 flex-1">
-                        <p class="font-bold text-sm leading-tight">TUSHPA</p>
+                        <p class="font-bold text-sm leading-tight">{{ $marcaPanel->nombre ?? 'TUSHPA' }}</p>
                         <p class="text-xs text-indigo-300 leading-tight truncate">Panel · {{ $yo->nombre }}</p>
                     </div>
                     <button type="button" x-show="grande" @click="alternarFijo()" class="p-1.5 rounded-lg hover:bg-indigo-800"
@@ -134,7 +136,7 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
                     @if ($ticketsNuevos + $mensajesNuevos + $erroresNuevos)<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 ring-2 ring-white"></span>@endif
                 </button>
-                <p class="font-bold text-slate-800">TUSHPA <span class="font-normal text-slate-400">· @yield('title', 'Panel')</span></p>
+                <p class="font-bold text-slate-800">{{ $marcaPanel->nombre ?? 'TUSHPA' }} <span class="font-normal text-slate-400">· @yield('title', 'Panel')</span></p>
             </header>
         </div>
         <style>@media (min-width: 1024px) { body.menu-anclado .contenido-panel { padding-left: 16rem; } }</style>

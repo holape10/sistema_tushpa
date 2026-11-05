@@ -7,6 +7,7 @@ use App\Support\SeoSitio;
 use App\Support\Tenancy\Tenancy;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -57,12 +58,12 @@ class IdentificarEmpresa
             // Una marca desactivada: su dominio no abre nada
             abort_unless($deMarca['marca']['activa'], 404);
 
-            return $this->deMarca($request, $next, $deMarca['subdominio'], $deMarca['marca']['id']);
+            return $this->deMarca($request, $next, $deMarca['subdominio'], $deMarca['marca']);
         }
         $subdominio = substr($host, 0, -strlen($sufijo));
 
         if ($subdominio === config('tenancy.subdominio_admin')) {
-            return $this->panel($request, $next);
+            return $this->panel($request, $next, null);
         }
         if (in_array($subdominio, config('tenancy.principales', []), true)) {
             return $next($request);
@@ -71,14 +72,21 @@ class IdentificarEmpresa
         return $this->abrirCliente($request, $next, $subdominio, null);
     }
 
-    /** El dominio de una marca: sus empresas; su página de inicio y su panel llegan en las siguientes fases */
-    private function deMarca(Request $request, Closure $next, string $subdominio, int $marcaId): Response
+    /**
+     * El dominio de una marca: su panel (admin.wilcatsystems.pe) y sus empresas; su página de inicio llega después.
+     *
+     * @param  array{id: int, dominio: string, prefijo_bd: string, activa: bool}  $marca
+     */
+    private function deMarca(Request $request, Closure $next, string $subdominio, array $marca): Response
     {
-        abort_if(in_array($subdominio, ['', 'www', config('tenancy.subdominio_admin')], true), 404);
+        abort_if(in_array($subdominio, ['', 'www'], true), 404);
         // Su sesión vive solo en su dirección (nunca con el dominio de cookies de tushpa.app, que el navegador rechazaría)
         config(['session.domain' => null]);
+        if ($subdominio === config('tenancy.subdominio_admin')) {
+            return $this->panel($request, $next, $marca);
+        }
 
-        return $this->abrirCliente($request, $next, $subdominio, $marcaId);
+        return $this->abrirCliente($request, $next, $subdominio, $marca['id']);
     }
 
     /**
@@ -105,7 +113,8 @@ class IdentificarEmpresa
         return $next($request);
     }
 
-    private function panel(Request $request, Closure $next): Response
+    /** @param  array{id: int, dominio: string}|null  $marca  la del dominio (null = el panel de TUSHPA) */
+    private function panel(Request $request, Closure $next, ?array $marca): Response
     {
         // Fuera de la ruta del panel o desde una IP no permitida, el subdominio admin "no existe"
         $ruta = config('tenancy.ruta_admin');
@@ -115,6 +124,10 @@ class IdentificarEmpresa
 
         Tenancy::conectar(Tenancy::baseCentral());
         $request->attributes->set('panel_admin', true);
+        // De qué marca es este panel: solo entran sus usuarios y solo ven lo suyo
+        $request->attributes->set('panel_marca', $marca ? (int) $marca['id'] : null);
+        // Los enlaces del panel salen con su propio dominio
+        URL::defaults(['panelDominio' => $marca['dominio'] ?? strtolower((string) config('tenancy.dominio'))]);
 
         return $next($request);
     }

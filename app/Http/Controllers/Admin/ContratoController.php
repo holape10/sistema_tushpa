@@ -26,6 +26,12 @@ class ContratoController extends Controller
         abort_unless($yo->es_dueno || (int) $cliente->creado_por === (int) $yo->id, 404);
     }
 
+    /** El contrato lo hace quien cobra: el dueño o, en las empresas de una marca, el revendedor (sale a su nombre) */
+    private function haceContrato(Cliente $cliente): bool
+    {
+        return (bool) $cliente->marca_id || DatosCobro::cobraElDueno($cliente);
+    }
+
     private function delCliente(Cliente $cliente, int $id): object
     {
         $contrato = DB::connection('central')->table('contratos')->where('id', $id)->where('cliente_id', $cliente->id)->first();
@@ -39,7 +45,7 @@ class ContratoController extends Controller
         $this->autorizar($cliente);
 
         return view('admin.clientes.contrato', [
-            'cliente' => $cliente, 'contrato' => Contratos::deCliente($cliente->id), 'cobraElDueno' => DatosCobro::cobraElDueno($cliente),
+            'cliente' => $cliente, 'contrato' => Contratos::deCliente($cliente->id), 'cobraElDueno' => $this->haceContrato($cliente),
             'sugeridos' => collect(Contratos::PERIODOS)->keys()->mapWithKeys(fn ($p) => [$p => Contratos::montoSugerido($cliente, $p)])->all(),
             'implementacion' => Contratos::implementacionSugerida($cliente),
             'anteriores' => DB::connection('central')->table('contratos')->where('cliente_id', $cliente->id)->where('estado', 'ANULADO')->latest('id')->limit(5)->get(),
@@ -49,7 +55,7 @@ class ContratoController extends Controller
     public function generar(Request $request, Cliente $cliente): RedirectResponse
     {
         $this->autorizar($cliente);
-        abort_unless(DatosCobro::cobraElDueno($cliente), 403, 'Esta empresa le paga a su revendedor.');
+        abort_unless($this->haceContrato($cliente), 403, 'Esta empresa le paga a su revendedor.');
         $d = $request->validate(['periodo' => 'required|in:'.implode(',', array_keys(Contratos::PERIODOS)), 'monto' => 'required|numeric|min:1|max:999999',
             'implementacion' => 'nullable|numeric|min:0|max:999999'], [], ['implementacion' => 'implementación']);
         Contratos::generar($cliente, $d['periodo'], (float) $d['monto'], Auth::guard('superadmin')->id(), (float) ($d['implementacion'] ?? 0));

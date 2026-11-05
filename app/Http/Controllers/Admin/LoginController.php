@@ -35,8 +35,10 @@ class LoginController extends Controller
             ]);
         }
 
-        // Un usuario desactivado por el dueño ya no entra
-        if (! Auth::guard('superadmin')->attempt($datos + ['activo' => 1])) {
+        // Un usuario desactivado por el dueño ya no entra; cada panel, solo con los usuarios de su marca
+        $marca = $request->attributes->get('panel_marca');
+        if (! Auth::guard('superadmin')->attempt($datos + ['activo' => 1,
+            fn ($q) => $marca ? $q->where('marca_id', $marca) : $q->whereNull('marca_id')])) {
             RateLimiter::hit($llave, 300);
             throw ValidationException::withMessages(['email' => 'Correo o contraseña incorrectos.']);
         }

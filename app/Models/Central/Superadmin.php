@@ -2,6 +2,7 @@
 
 namespace App\Models\Central;
 
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
@@ -17,6 +18,12 @@ class Superadmin extends Authenticatable
     protected $hidden = ['password', 'remember_token'];
 
     protected $casts = ['ultimo_acceso' => 'datetime', 'password' => 'hashed', 'fecha_nacimiento' => 'date', 'clave_cambiada_el' => 'datetime'];
+
+    /** La marca del revendedor (null = usuario del panel de TUSHPA); solo entra por el admin.{dominio} de su marca */
+    public function marca(): BelongsTo
+    {
+        return $this->belongsTo(Marca::class, 'marca_id');
+    }
 
     /** Sus cuentas y QR de cobro */
     public function cobros(): HasMany

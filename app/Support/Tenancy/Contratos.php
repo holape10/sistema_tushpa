@@ -3,6 +3,7 @@
 namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
+use App\Models\Central\Marca;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\UploadedFile;
@@ -172,12 +173,31 @@ class Contratos
         $cliente = Cliente::find($contrato->cliente_id);
         $firma = $contrato->firma && Storage::disk('local')->exists($contrato->firma)
             ? 'data:image/png;base64,'.base64_encode(Storage::disk('local')->get($contrato->firma)) : null;
-        $logo = public_path(config('contrato.logo'));
+        $marca = $cliente?->marca_id ? $cliente->marca : null;
+        $logo = public_path($marca && $marca->logo ? $marca->logo : config('contrato.logo'));
 
         return [
-            'contrato' => $contrato, 'cliente' => $cliente, 'numero' => self::numero($contrato), 'proveedor' => config('contrato.proveedor'),
+            'contrato' => $contrato, 'cliente' => $cliente, 'numero' => self::numero($contrato), 'proveedor' => self::proveedor($marca),
             'periodo' => self::PERIODOS[$contrato->periodo] ?? $contrato->periodo, 'firma' => $firma,
             'logo' => is_file($logo) ? 'data:image/png;base64,'.base64_encode(file_get_contents($logo)) : null,
+        ];
+    }
+
+    /**
+     * Quién da el servicio: el dueño del sistema (config/contrato.php) o, en las empresas de una marca, el revendedor.
+     *
+     * @return array{razon_social: string, ruc: string, direccion: string, representante: string, dni_representante: string, marca: string, web: string}
+     */
+    public static function proveedor(?Marca $marca): array
+    {
+        if (! $marca) {
+            return config('contrato.proveedor');
+        }
+
+        return [
+            'razon_social' => (string) ($marca->razon_social ?: $marca->nombre), 'ruc' => (string) $marca->ruc, 'direccion' => (string) $marca->direccion,
+            'representante' => (string) $marca->representante, 'dni_representante' => (string) $marca->representante_dni,
+            'marca' => (string) $marca->nombre, 'web' => 'www.'.$marca->dominio,
         ];
     }
 
