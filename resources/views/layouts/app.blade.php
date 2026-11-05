@@ -5,9 +5,9 @@
     <style>[x-cloak]{display:none!important}</style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
-    <title>@yield('title', 'Sistema Tushpa')</title>
+    @if (config('marca.es_tushpa'))<link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">@endif
+    <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
+    <title>@yield('title', 'Sistema '.config('marca.nombre'))</title>
     @php
         // Menú: solo módulos que ya tienen pantalla (los '#' aún no existen) y el grupo de la página actual abierto
         $esActual = function ($mod) {
@@ -114,7 +114,7 @@
 
         <div class="px-4 pt-4 pb-3 shrink-0">
             <div class="flex items-center gap-2">
-                <img src="{{ asset('imagenes/icono.png') }}" alt="Logo" class="w-9 h-9 rounded-lg object-contain bg-white p-1">
+                <img src="{{ asset(config('marca.icono')) }}" alt="Logo" class="w-9 h-9 rounded-lg object-contain bg-white p-1">
                 <div class="min-w-0 flex-1">
                     <p class="font-bold text-sm leading-tight truncate">{{ auth()->user()->IdEmpresa }}</p>
                     <p class="text-xs text-indigo-300 leading-tight truncate">{{ auth()->user()->apeusu }}</p>

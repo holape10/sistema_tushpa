@@ -28,7 +28,7 @@ class XmlJsonPe
         if (! self::credenciales()) {
             return self::enEmpresaDelEstudio()
                 ? 'Falta la Clave SOL principal de esta empresa (Empresas del estudio → Configurar).'
-                : 'Falta la Clave SOL principal de esta empresa en el panel de TUSHPA (Clientes → Editar).';
+                : 'Falta la Clave SOL principal de esta empresa en el panel de '.config('marca.nombre').' (Clientes → Editar).';
         }
 
         return null;

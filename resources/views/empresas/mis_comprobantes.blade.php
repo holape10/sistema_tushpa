@@ -12,12 +12,12 @@
             <x-kene-adorno patron="laberinto" />
             <div class="p-6 sm:p-8">
                 <h1 class="text-2xl font-extrabold">🧾 Mis comprobantes</h1>
-                <p class="text-indigo-200 text-sm mt-1">Los comprobantes que te emitió {{ $emisor ?: 'TUSHPA' }} por tu sistema. Descárgalos o imprímelos cuando quieras; de las facturas, boletas y notas también tienes el XML y el CDR de SUNAT.</p>
+                <p class="text-indigo-200 text-sm mt-1">Los comprobantes que te emitió {{ $emisor ?: config('marca.nombre') }} por tu sistema. Descárgalos o imprímelos cuando quieras; de las facturas, boletas y notas también tienes el XML y el CDR de SUNAT.</p>
             </div>
         </section>
 
         @if (! $docs)
-            <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-gray-500">Aquí verás los comprobantes que TUSHPA le emite a tu empresa.</div>
+            <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-gray-500">Aquí verás los comprobantes que {{ config('marca.nombre') }} le emite a tu empresa.</div>
         @else
             {{-- Filtro por tipo --}}
             <div class="flex flex-wrap gap-2 text-sm">

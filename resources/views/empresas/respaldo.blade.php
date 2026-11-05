@@ -4,7 +4,7 @@
 @php
     $s = config('soporte');
     $ruc = auth()->user()->IdEmpresa;
-    $mensaje = "Hola, necesito restaurar la copia de seguridad de mi sistema TUSHPA (RUC {$ruc}). Les envío el archivo.";
+    $mensaje = "Hola, necesito restaurar la copia de seguridad de mi sistema ".config('marca.nombre')." (RUC {$ruc}). Les envío el archivo.";
 @endphp
 
 @section('content')

@@ -15,10 +15,13 @@ class PwaController extends Controller
     {
         $empresa = rescue(fn () => DB::table('empresa')->orderBy('IdEmpresa')->value('NomEmpresa'), null, false);
         $portal = $request->get('app') === 'socio';
-        $nombre = $portal ? 'Mi cuenta · '.($empresa ?: 'TUSHPA') : ($empresa ? $empresa.' · TUSHPA' : 'TUSHPA');
+        $marca = (string) config('marca.nombre');
+        $nombre = $portal ? 'Mi cuenta · '.($empresa ?: $marca) : ($empresa ? $empresa.' · '.$marca : $marca);
         $inicio = $portal ? url('/socio') : url('/');
         // Nombre bajo el ícono: palabras completas hasta 12 letras ("HOLAPE", no "HOLAPE E.I.R")
-        $corto = collect(explode(' ', trim((string) $empresa)))->reduce(fn ($c, $p) => mb_strlen(trim("$c $p")) <= 12 ? trim("$c $p") : $c, '') ?: 'TUSHPA';
+        $corto = collect(explode(' ', trim((string) $empresa)))->reduce(fn ($c, $p) => mb_strlen(trim("$c $p")) <= 12 ? trim("$c $p") : $c, '') ?: $marca;
+        // Los íconos de TUSHPA tienen su tamaño exacto; el logo de una marca, el suyo
+        $tamano = fn (string $t) => config('marca.es_tushpa') ? $t : 'any';
 
         return response()->json([
             'name' => $nombre,
@@ -33,9 +36,9 @@ class PwaController extends Controller
             'theme_color' => $portal ? '#065f46' : '#312e81',
             'lang' => 'es-PE',
             'icons' => [
-                ['src' => asset('imagenes/192.png'), 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any'],
-                ['src' => asset('imagenes/512.png'), 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any'],
-                ['src' => asset('imagenes/512.png'), 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
+                ['src' => asset(config('marca.icono192')), 'sizes' => $tamano('192x192'), 'type' => 'image/png', 'purpose' => 'any'],
+                ['src' => asset(config('marca.icono512')), 'sizes' => $tamano('512x512'), 'type' => 'image/png', 'purpose' => 'any'],
+                ['src' => asset(config('marca.icono512')), 'sizes' => $tamano('512x512'), 'type' => 'image/png', 'purpose' => 'maskable'],
             ],
             // Accesos directos al mantener presionado el ícono
             'shortcuts' => $portal ? [] : [

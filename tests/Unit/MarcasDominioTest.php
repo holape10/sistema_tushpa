@@ -5,6 +5,8 @@ namespace Tests\Unit;
 use App\Http\Middleware\IdentificarEmpresa;
 use App\Models\Central\Cliente;
 use App\Models\Central\Marca;
+use App\Support\MarcaBlanca;
+use App\Support\Tenancy\Contratos;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
@@ -54,6 +56,7 @@ class MarcasDominioTest extends TestCase
     protected function tearDown(): void
     {
         Tenancy::olvidarMarcas();
+        MarcaBlanca::olvidar();
         parent::tearDown();
     }
 
@@ -100,11 +103,61 @@ class MarcasDominioTest extends TestCase
         $this->assertSame('404', $this->entrar('mirestaurante.wilcatsystems.pe'));
     }
 
-    public function test_la_portada_y_el_panel_de_la_marca_aun_no_abren_nada(): void
+    /** Lo que responde esa dirección: el código y, si redirige, a dónde ('siguió' = pasó a las rutas) */
+    private function responder(string $url): string
     {
-        foreach (['wilcatsystems.pe', 'www.wilcatsystems.pe', 'admin.wilcatsystems.pe', 'a.b.wilcatsystems.pe'] as $host) {
-            $this->assertSame('404', $this->entrar($host), $host);
+        try {
+            $r = (new IdentificarEmpresa)->handle(Request::create($url), fn () => response('siguió'));
+
+            return $r->isRedirect() ? $r->getStatusCode().' '.$r->headers->get('Location') : $r->getStatusCode().' '.($r->getContent() === 'siguió' ? 'siguió' : 'página');
+        } catch (HttpException $e) {
+            return (string) $e->getStatusCode();
+        } finally {
+            app()->forgetInstance('tenancy.cliente');
         }
+    }
+
+    public function test_la_portada_de_la_marca_lleva_a_cada_empresa_solo_si_es_suya(): void
+    {
+        $this->assertSame('200 página', $this->responder('https://wilcatsystems.pe/'));
+        $this->assertSame('301 https://wilcatsystems.pe/', $this->responder('https://www.wilcatsystems.pe/'));
+        // Con el RUC o el nombre de su sistema (o la dirección completa pegada) va a su login
+        $this->assertSame('302 https://contadores.wilcatsystems.pe/login', $this->responder('https://wilcatsystems.pe/?cuenta='.self::DE_WILCAT));
+        $this->assertSame('302 https://contadores.wilcatsystems.pe/login', $this->responder('https://wilcatsystems.pe/?cuenta=https://contadores.wilcatsystems.pe/login'));
+        // Una empresa de TUSHPA no se encuentra desde la portada de la marca
+        $this->assertSame('200 página', $this->responder('https://wilcatsystems.pe/?cuenta='.self::DE_TUSHPA));
+        // Cualquier otra página de la portada vuelve al inicio; su contrato sí pasa (lo atiende su ruta)
+        $this->assertSame('302 https://wilcatsystems.pe/', $this->responder('https://wilcatsystems.pe/registro'));
+        $this->assertSame('200 siguió', $this->responder('https://wilcatsystems.pe/contrato/'.str_repeat('a', 40)));
+        $this->assertSame('404', $this->entrar('a.b.wilcatsystems.pe'));
+        $this->assertSame('404', $this->responder('https://admin.wilcatsystems.pe/otra-cosa'));
+    }
+
+    public function test_en_su_dominio_todo_se_ve_con_la_marca_y_su_soporte(): void
+    {
+        $this->wilcat->update(['telefono' => '965 123 456', 'correo' => 'soporte@wilcatsystems.pe', 'razon_social' => 'WILCAT SYSTEMS E.I.R.L.']);
+        Tenancy::olvidarMarcas();
+        $this->entrar(self::DE_WILCAT.'.wilcatsystems.pe');
+
+        $this->assertSame(['WILCAT SYSTEMS', false, '51965123456', 'soporte@wilcatsystems.pe', 'WILCAT SYSTEMS E.I.R.L.'],
+            [config('marca.nombre'), config('marca.es_tushpa'), config('soporte.whatsapp'), config('soporte.correo'), config('soporte.nombre')]);
+        $this->assertStringContainsString('wilcatsystems.pe', config('soporte.firma_comprobante'), 'El pie de sus comprobantes es el de la marca.');
+    }
+
+    public function test_en_tushpa_todo_sigue_con_tushpa(): void
+    {
+        $soporte = config('soporte.whatsapp');
+        $this->entrar(self::DE_TUSHPA.'.tushpa.app');
+
+        $this->assertSame(['TUSHPA', true, $soporte], [config('marca.nombre'), config('marca.es_tushpa'), config('soporte.whatsapp')]);
+    }
+
+    public function test_el_enlace_del_contrato_va_al_dominio_de_su_marca(): void
+    {
+        $deWilcat = Cliente::where('ruc', self::DE_WILCAT)->first();
+        $enlace = Contratos::enlace((object) ['cliente_id' => $deWilcat->id, 'token' => str_repeat('b', 40)]);
+
+        $this->assertSame('https://wilcatsystems.pe/contrato/'.str_repeat('b', 40), $enlace);
     }
 
     public function test_una_marca_desactivada_no_abre_nada_y_un_dominio_ajeno_sigue_como_siempre(): void

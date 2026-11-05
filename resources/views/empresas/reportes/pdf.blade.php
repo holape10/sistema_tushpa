@@ -45,6 +45,6 @@
         @endif
     </table>
     @if (!empty($nota))<p class="nota">{{ $nota }}</p>@endif
-    <div class="pie">Generado el {{ now()->format('d/m/Y H:i') }} · Sistema Tushpa</div>
+    <div class="pie">Generado el {{ now()->format('d/m/Y H:i') }} · Sistema {{ config('marca.nombre') }}</div>
 </body>
 </html>

@@ -451,7 +451,7 @@ class PanelDueno
             $lineas[] = '🛒 Se acaba pronto: '.$comprar->take(5)->pluck('nombre')->implode(', ');
         }
         $lineas[] = '';
-        $lineas[] = '_Enviado desde tu sistema TUSHPA_';
+        $lineas[] = '_Enviado desde tu sistema '.config('marca.nombre').'_';
 
         return implode("\n", $lineas);
     }

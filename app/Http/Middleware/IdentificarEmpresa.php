@@ -3,6 +3,8 @@
 namespace App\Http\Middleware;
 
 use App\Models\Central\Cliente;
+use App\Models\Central\Marca;
+use App\Support\MarcaBlanca;
 use App\Support\SeoSitio;
 use App\Support\Tenancy\Tenancy;
 use Closure;
@@ -79,14 +81,60 @@ class IdentificarEmpresa
      */
     private function deMarca(Request $request, Closure $next, string $subdominio, array $marca): Response
     {
-        abort_if(in_array($subdominio, ['', 'www'], true), 404);
         // Su sesión vive solo en su dirección (nunca con el dominio de cookies de tushpa.app, que el navegador rechazaría)
         config(['session.domain' => null]);
+        // Todo se ve con su nombre, su logo, sus colores y su soporte
+        if ($modelo = Marca::find($marca['id'])) {
+            MarcaBlanca::aplicar($modelo);
+        }
+        if ($subdominio === 'www') {
+            return redirect()->away(config('tenancy.esquema').'://'.$marca['dominio'].$request->getRequestUri(), 301);
+        }
+        if ($subdominio === '') {
+            return $this->raizDeMarca($request, $next, $marca);
+        }
         if ($subdominio === config('tenancy.subdominio_admin')) {
             return $this->panel($request, $next, $marca);
         }
 
         return $this->abrirCliente($request, $next, $subdominio, $marca['id']);
+    }
+
+    /**
+     * wilcatsystems.pe: la portada para ingresar (el RUC o el nombre del sistema lleva a la dirección de la empresa) y el
+     * contrato de servicio de sus empresas. Nada más.
+     *
+     * @param  array{id: int, dominio: string}  $marca
+     */
+    private function raizDeMarca(Request $request, Closure $next, array $marca): Response
+    {
+        $ruta = $request->path();
+        if (preg_match('~^contrato/[A-Za-z0-9]{40}(/pdf)?$~', $ruta)) {
+            $request->attributes->set('marca_raiz', $marca['id']);
+
+            return $next($request);
+        }
+        if ($ruta !== '/') {
+            return redirect()->away(config('tenancy.esquema').'://'.$marca['dominio'].'/');
+        }
+        $cuenta = mb_strtolower(trim((string) $request->query('cuenta', '')));
+        // Si pegan la dirección completa (https://miempresa.wilcatsystems.pe/login) queda solo "miempresa"
+        $cuenta = (string) preg_replace('~^(https?://)?([a-z0-9-]+)(\.'.preg_quote($marca['dominio'], '~').')?(/.*)?$~', '$2', $cuenta);
+        $error = null;
+        if ($cuenta !== '') {
+            $cliente = null;
+            if (preg_match('/^\d{11}$/', $cuenta)) {
+                $cliente = Cliente::where('ruc', $cuenta)->where('marca_id', $marca['id'])->where('estado', '!=', 'ELIMINADO')->first();
+            } elseif (preg_match('/^[a-z0-9][a-z0-9-]{0,39}$/', $cuenta)) {
+                $cliente = Cliente::where('subdominio', $cuenta)->where('marca_id', $marca['id'])->where('estado', '!=', 'ELIMINADO')->first();
+            }
+            if ($cliente) {
+                return redirect()->away($cliente->url().'/login');
+            }
+            $error = 'No encontramos un sistema con ese RUC o nombre. Revisa lo que escribiste.';
+        }
+
+        return response()->view('marca.ingresar', ['cuenta' => $cuenta, 'error' => $error]);
     }
 
     /**

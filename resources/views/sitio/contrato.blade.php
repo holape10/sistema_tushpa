@@ -1,4 +1,4 @@
-@extends('sitio.base')
+@extends($layout ?? 'sitio.base')
 @section('titulo', 'Contrato '.$numero)
 @section('robots', 'noindex, nofollow')
 
@@ -31,7 +31,7 @@
                         <h1 class="h4 fw-bold mb-0">{{ $empresa }}</h1>
                         <p class="text-muted small mb-0">RUC {{ $cliente?->ruc }} · Plan {{ $contrato->plan ?: '—' }} · {{ $periodo }} · S/ {{ number_format((float) $contrato->monto, 2) }}</p>
                     </div>
-                    <a href="{{ route('sitio.contrato.pdf', $token) }}" class="btn btn-outline-primary rounded-pill fw-semibold"><i class="fas fa-file-pdf me-1"></i> Descargar PDF</a>
+                    <a href="{{ route(($ruta ?? 'sitio.contrato').'.pdf', $token) }}" class="btn btn-outline-primary rounded-pill fw-semibold"><i class="fas fa-file-pdf me-1"></i> Descargar PDF</a>
                 </div>
 
                 @if (session('ok'))<div class="alert alert-success">{{ session('ok') }}</div>@endif
@@ -49,7 +49,7 @@
                         <div class="alert alert-danger">@foreach ($errors->all() as $e)<div>• {{ $e }}</div>@endforeach</div>
                     @endif
 
-                    <form method="POST" action="{{ route('sitio.contrato.enviar', $token) }}" enctype="multipart/form-data" id="form-contrato">
+                    <form method="POST" action="{{ route(($ruta ?? 'sitio.contrato').'.enviar', $token) }}" enctype="multipart/form-data" id="form-contrato">
                         @csrf
                         {{-- 1. Quién firma --}}
                         <h2 class="h6 fw-bold mt-2"><span class="paso-n me-2">1</span>¿Quién firma por la empresa?</h2>

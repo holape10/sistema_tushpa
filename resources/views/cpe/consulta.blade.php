@@ -135,7 +135,7 @@
 
     <footer class="mt-6 text-center text-xs text-slate-400">
         También puedes validar en <a href="https://e-consultaruc.sunat.gob.pe/cl-ti-itconsvalicpe/ConsValiCpe.htm" class="underline" target="_blank" rel="noopener">SUNAT</a>
-        · Sistema TUSHPA
+        · Sistema {{ config('marca.nombre') }}
     </footer>
 </main>
 @if ($resultado)

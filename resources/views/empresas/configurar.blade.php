@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configurar Empresa - Sistema Tushpa</title>
+    <title>Configurar Empresa - Sistema {{ config('marca.nombre') }}</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-gray-50 min-h-screen">

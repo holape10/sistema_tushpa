@@ -130,7 +130,7 @@
     </table>
 
     <div class="pie">
-        Documento generado por TUSHPA con los datos del XML que el proveedor envió a SUNAT. No reemplaza al comprobante original del emisor.<br>
+        Documento generado por {{ config('marca.nombre') }} con los datos del XML que el proveedor envió a SUNAT. No reemplaza al comprobante original del emisor.<br>
         Consúltalo en SUNAT: RUC {{ $x->ruc_emisor }} · {{ $numero }}
     </div>
 </div>

@@ -50,7 +50,7 @@
             @if ($cartaMesa && \App\Support\AvisosCelular::configurado())
                 {{-- Usan el QR de mesas: el celular se registra solo; si el navegador aún no dio permiso, se pide con este botón --}}
                 <button type="button" data-avisos-celular data-clave="{{ config('services.push.publica') }}" data-guardar="{{ route('avisos_celular.suscribir') }}"
-                    data-quitar="{{ route('avisos_celular.quitar') }}" data-icono="{{ asset('imagenes/192.png') }}"
+                    data-quitar="{{ route('avisos_celular.quitar') }}" data-icono="{{ asset(config('marca.icono192')) }}"
                     class="hidden h-10 items-center gap-2 rounded-full bg-amber-400 px-4 text-sm font-bold text-gray-900 shadow-sm">🔔 Permitir avisos del QR</button>
             @endif
             <button type="button" id="btn_reservas" class="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-violet-700 shadow-sm ring-1 ring-gray-200">

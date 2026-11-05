@@ -92,7 +92,7 @@
                     @if ($t['titulo'])<div class="mesa">{{ $t['titulo'] }}</div>@endif
                     <div class="llamado">📱 Escanea y mira nuestra carta</div>
                     <div class="paso">Abre la cámara de tu celular y apunta al código</div>
-                    <div class="marca">Carta digital · TUSHPA</div>
+                    <div class="marca">Carta digital · {{ config('marca.nombre') }}</div>
                 </div>
             </div>
         @empty

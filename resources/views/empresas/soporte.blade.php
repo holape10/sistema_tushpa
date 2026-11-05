@@ -8,7 +8,7 @@
     $sucursal = \App\Models\EmpresaNegocio::find($u->id_empresa_negocio);
     $datos = "Empresa: " . ($empresa->NomEmpresa ?? '') . "\nRUC: {$u->IdEmpresa}\nSucursal: " . ($sucursal->nombre_comercial ?? '')
         . "\nUsuario: {$u->name} {$u->apeusu}\nSistema: " . request()->getHost();
-    $mensaje = "Hola, necesito ayuda con el sistema TUSHPA.\n\n" . $datos . "\n\nMi consulta: ";
+    $mensaje = 'Hola, necesito ayuda con el sistema '.config('marca.nombre').".\n\n" . $datos . "\n\nMi consulta: ";
 @endphp
 
 @section('content')
@@ -18,10 +18,10 @@
     <section class="rounded-3xl overflow-hidden shadow-sm bg-gradient-to-br from-indigo-700 to-indigo-900 text-white relative isolate">
         <x-kene-adorno patron="laberinto" />
         <div class="p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-5">
-            <img src="{{ asset('imagenes/icono.png') }}" alt="" class="w-16 h-16 rounded-2xl bg-white p-2 shrink-0">
+            <img src="{{ asset(config('marca.icono')) }}" alt="" class="w-16 h-16 rounded-2xl bg-white p-2 shrink-0">
             <div class="flex-1">
                 <h1 class="text-2xl font-extrabold">¿Necesitas ayuda?</h1>
-                <p class="text-indigo-200 text-sm mt-1">Soporte de TUSHPA · {{ $s['nombre'] }}. Escríbenos y te ayudamos con tu sistema, SUNAT, el SIRE o tus reportes.</p>
+                <p class="text-indigo-200 text-sm mt-1">Soporte de {{ config('marca.nombre') }} · {{ $s['nombre'] }}. Escríbenos y te ayudamos con tu sistema, SUNAT, el SIRE o tus reportes.</p>
             </div>
             <a href="https://wa.me/{{ $s['whatsapp'] }}?text={{ rawurlencode($mensaje) }}" target="_blank" rel="noopener"
                class="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-2xl bg-emerald-500 hover:bg-emerald-400 font-bold shadow-lg shrink-0">
@@ -49,7 +49,7 @@
                 <span class="block text-lg font-bold">{{ chunk_split($s['telefono'], 3, ' ') }}</span>
                 <span class="block text-xs text-slate-400">{{ $s['horario'] }}</span></span>
         </a>
-        <a href="mailto:{{ $s['correo'] }}?subject={{ rawurlencode('Soporte TUSHPA - RUC ' . $u->IdEmpresa) }}&body={{ rawurlencode($mensaje) }}"
+        <a href="mailto:{{ $s['correo'] }}?subject={{ rawurlencode('Soporte '.config('marca.nombre').' - RUC ' . $u->IdEmpresa) }}&body={{ rawurlencode($mensaje) }}"
            class="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4 hover:ring-2 hover:ring-sky-300 transition">
             <span class="w-12 h-12 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center text-2xl shrink-0">✉️</span>
             <span class="min-w-0"><span class="block text-xs font-semibold text-slate-500">Correo</span>

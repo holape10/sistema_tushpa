@@ -3,6 +3,7 @@
 namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
+use App\Models\Central\Marca;
 use App\Models\Central\Superadmin;
 use Illuminate\Http\UploadedFile;
 
@@ -21,9 +22,15 @@ class DatosCobro
         return $usuario && $usuario->activo && $usuario->cobros()->exists();
     }
 
-    /** ¿La empresa le paga al dueño del sistema? (las del revendedor que puso sus propias cuentas le pagan a él) */
+    /**
+     * ¿La empresa le paga al dueño del sistema? (las del revendedor que puso sus propias cuentas le pagan a él). Las de
+     * una marca nunca: le pagan a su revendedor aunque aún no haya puesto sus cuentas.
+     */
     public static function cobraElDueno(Cliente $cliente): bool
     {
+        if ($cliente->marca_id) {
+            return false;
+        }
         $creador = $cliente->creado_por ? Superadmin::find($cliente->creado_por) : null;
 
         return ! self::tienePropios($creador) || (bool) $creador->es_dueno;
@@ -37,8 +44,14 @@ class DatosCobro
     {
         $soporte = config('soporte');
         $creador = $cliente->creado_por ? Superadmin::find($cliente->creado_por) : null;
-        $usuario = self::tienePropios($creador) ? $creador : Superadmin::where('es_dueno', 1)->where('activo', 1)->orderBy('id')->get()
-            ->first(fn ($u) => self::tienePropios($u));
+        // Las de una marca: las cuentas de quien la creó o de otro usuario de su marca; nunca las del dueño
+        $quienCobra = $cliente->marca_id
+            ? Superadmin::where('marca_id', $cliente->marca_id)->where('activo', 1)->orderBy('id')
+            : Superadmin::where('es_dueno', 1)->where('activo', 1)->orderBy('id');
+        $usuario = self::tienePropios($creador) ? $creador : $quienCobra->get()->first(fn ($u) => self::tienePropios($u));
+        if (! $usuario && $cliente->marca_id) {
+            return self::soloContacto($cliente->marca);
+        }
 
         if ($usuario) {
             $titular = (string) ($usuario->cobro_titular ?: $usuario->nombre);
@@ -68,6 +81,23 @@ class DatosCobro
             'cuentas' => [['banco' => $p['banco'], 'titular' => $p['titular'], 'cuenta' => $p['cuenta'], 'cci' => $p['cci']]],
             'qrs' => [['nombre' => 'QR de pago', 'titular' => $p['titular'], 'url' => asset($p['qr'])]],
         ];
+    }
+
+    /** Una marca que aún no puso sus cuentas: solo su contacto (la empresa le escribe para saber cómo pagar) */
+    private static function soloContacto(?Marca $marca): array
+    {
+        $telefono = (string) ($marca->telefono ?? '');
+
+        return ['titular' => (string) ($marca->razon_social ?? $marca->nombre ?? ''), 'banco' => '', 'cuenta' => null, 'cci' => null, 'qr' => null,
+            'whatsapp' => self::whatsapp($telefono), 'telefono' => $telefono, 'horario' => null, 'cuentas' => [], 'qrs' => []];
+    }
+
+    /** 965 123 456 → 51965123456 (el formato de wa.me) */
+    public static function whatsapp(string $telefono): string
+    {
+        $digitos = preg_replace('/\D/', '', $telefono);
+
+        return strlen($digitos) === 9 ? '51'.$digitos : $digitos;
     }
 
     /** Guarda la imagen de un QR (en public/: la ve la pantalla de suspendido sin sesión) */

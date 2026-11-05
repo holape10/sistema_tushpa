@@ -8,7 +8,7 @@
     <style>[x-cloak]{display:none!important}</style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     <title>Caja sin internet</title>
     <script>
         window.TUSHPA_CAJA = {

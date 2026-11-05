@@ -1,8 +1,8 @@
 @php
-    // Datos de cobro de quien le vendió el sistema (usuario del panel) o, si no los puso, los de TUSHPA
+    // Datos de cobro de quien le vendió el sistema (usuario del panel) o, si no los puso, los de TUSHPA (en una marca, solo los suyos)
     $pago = \App\Support\Tenancy\DatosCobro::para($cliente);
     $empresa = $cliente->nombre_comercial ?: $cliente->razon_social;
-    $mensaje = "Hola, soy de {$empresa} (RUC {$cliente->ruc}). Ya realicé el pago del servicio TUSHPA, les envío el comprobante para reactivar el acceso.";
+    $mensaje = "Hola, soy de {$empresa} (RUC {$cliente->ruc}). Ya realicé el pago del servicio ".config('marca.nombre').", les envío el comprobante para reactivar el acceso.";
     // Pago en línea (Culqi): se reactiva solo, sin mandar captura
     $enLinea = \Illuminate\Support\Facades\Route::has('sitio.pagar') && \App\Support\Tenancy\PagosOnline::disponiblePara($cliente)
         ? \Illuminate\Support\Facades\URL::signedRoute('sitio.pagar', $cliente) : null;
@@ -13,8 +13,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex">
-    <title>Servicio suspendido · TUSHPA</title>
-    <link rel="icon" href="{{ asset('imagenes/icono.png') }}">
+    <title>Servicio suspendido · {{ config('marca.nombre') }}</title>
+    <link rel="icon" href="{{ asset(config('marca.icono')) }}">
     @if ($pago['qr'])<link rel="preload" as="image" href="{{ $pago['qrs'][0]['url'] ?? $pago['qr'] }}" fetchpriority="high">@endif
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -84,7 +84,7 @@
 <body>
     <main class="tarjeta {{ $pago['qr'] ? '' : 'sin-qr' }}">
         <section class="info">
-            <div class="marca"><img src="{{ asset('imagenes/192.png') }}" alt="">TUSHPA</div>
+            <div class="marca"><img src="{{ asset(config('marca.icono192')) }}" alt="" style="object-fit:contain">{{ config('marca.nombre') }}</div>
 
             <span class="chip"><i></i> Acceso suspendido</span>
             <h1>Reactiva tu sistema en minutos</h1>
@@ -106,7 +106,8 @@
                 <li><b class="n">1</b><span>
                     @if ($pago['qr'] && $pago['cuenta'])Escanea el QR con Yape, Plin o la app de tu banco, o transfiere a la cuenta {{ $pago['banco'] }}.
                     @elseif ($pago['qr'])Escanea el QR con Yape, Plin o la app de tu banco.
-                    @else Transfiere a la cuenta {{ $pago['banco'] }}.@endif
+                    @elseif ($pago['cuenta']) Transfiere a la cuenta {{ $pago['banco'] }}.
+                    @else Escríbenos por WhatsApp y te enviamos los datos para pagar.@endif
                 </span></li>
                 <li><b class="n">2</b><span>Envíanos la captura del pago por WhatsApp.</span></li>
                 <li><b class="n">3</b><span>Reactivamos tu acceso y sigues trabajando.</span></li>

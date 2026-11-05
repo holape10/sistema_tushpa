@@ -75,6 +75,14 @@ class Contratos
         return self::tabla()->find($id);
     }
 
+    /** El enlace que se le manda a la empresa: en tushpa.app o, si es de una marca, en el dominio de su marca */
+    public static function enlace(object $contrato): string
+    {
+        $marca = Cliente::find($contrato->cliente_id)?->marca;
+
+        return $marca ? config('tenancy.esquema').'://'.$marca->dominio.'/contrato/'.$contrato->token : route('sitio.contrato', $contrato->token);
+    }
+
     /** Número que sale en el contrato: CT-00012 */
     public static function numero(object $contrato): string
     {

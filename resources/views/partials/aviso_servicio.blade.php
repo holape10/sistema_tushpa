@@ -8,6 +8,13 @@
     $clienteTenancy = \App\Support\Tenancy\Tenancy::cliente();
     $pago = config('soporte.pago');
     $soporteWa = config('soporte.whatsapp');
+    $qrPago = is_file(public_path((string) $pago['qr'])) ? asset($pago['qr']) : null;
+    // Las empresas de una marca le pagan a su revendedor: sus cuentas (o solo su contacto si aún no puso ninguna)
+    if ($clienteTenancy && $clienteTenancy->marca_id) {
+        $pago = \App\Support\Tenancy\DatosCobro::para($clienteTenancy);
+        $soporteWa = $pago['whatsapp'];
+        $qrPago = $pago['qr'];
+    }
     // Pago en línea (Culqi): paga y se renueva solo, sin mandar captura
     $enLinea = $clienteTenancy && ($clienteTenancy->aviso_mensaje || $clienteTenancy->enPrueba()) && \Illuminate\Support\Facades\Route::has('sitio.pagar') && \App\Support\Tenancy\PagosOnline::disponiblePara($clienteTenancy)
         ? \Illuminate\Support\Facades\URL::signedRoute('sitio.pagar', $clienteTenancy) : null;
@@ -78,17 +85,18 @@
 @if ($enPrueba || ($clienteTenancy && $clienteTenancy->aviso_mensaje))
     <div id="pago-servicio" onclick="if (event.target === this) this.style.display='none'" style="display:none;position:fixed;inset:0;z-index:2147481500;background:rgba(15,23,42,.65);align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
         <div style="background:#fff;border-radius:22px;max-width:380px;width:100%;padding:20px;text-align:center;max-height:92vh;overflow:auto">
-            <p style="margin:0 0 4px;font-weight:800;font-size:18px;color:#0f172a">Paga tu servicio TUSHPA</p>
+            <p style="margin:0 0 4px;font-weight:800;font-size:18px;color:#0f172a">Paga tu servicio {{ config('marca.nombre') }}</p>
             @if ($enLinea)
                 <a href="{{ $enLinea }}" target="_blank" rel="noopener" style="display:block;margin:10px 0 14px;background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;font-weight:800;border-radius:14px;padding:13px;text-decoration:none">💳 Pagar en línea (tarjeta, Yape o QR)
                     <span style="display:block;font-weight:500;font-size:12px;color:#dbeafe">Se renueva solo apenas se confirma el pago</span></a>
                 <p style="margin:0 0 10px;font-size:12px;color:#94a3b8">O por transferencia y nos envías la captura:</p>
             @endif
             <p style="margin:0 0 12px;font-size:13px;color:#64748b">Yape, Plin o transferencia a {{ $pago['titular'] }}</p>
-            @if (is_file(public_path($pago['qr'])))<img src="{{ asset($pago['qr']) }}" alt="QR de pago" style="width:100%;border-radius:14px">@endif
-            <p style="margin:12px 0 2px;font-size:13px;color:#334155">Cuenta {{ $pago['banco'] }}: <b>{{ $pago['cuenta'] }}</b></p>
-            <p style="margin:0 0 12px;font-size:13px;color:#334155">CCI: <b>{{ $pago['cci'] }}</b></p>
-            <a href="https://wa.me/{{ $soporteWa }}?text={{ rawurlencode('Hola, soy de '.($clienteTenancy->nombre_comercial ?: $clienteTenancy->razon_social).' (RUC '.$clienteTenancy->ruc.'). Ya pagué el servicio TUSHPA, les envío el comprobante.') }}"
+            @if ($qrPago)<img src="{{ $qrPago }}" alt="QR de pago" style="width:100%;border-radius:14px">@endif
+            @if ($pago['cuenta'])<p style="margin:12px 0 2px;font-size:13px;color:#334155">Cuenta {{ $pago['banco'] }}: <b>{{ $pago['cuenta'] }}</b></p>@endif
+            @if ($pago['cci'])<p style="margin:0 0 12px;font-size:13px;color:#334155">CCI: <b>{{ $pago['cci'] }}</b></p>@endif
+            @if (! $qrPago && ! $pago['cuenta'])<p style="margin:12px 0;font-size:13px;color:#334155">Escríbenos por WhatsApp y te enviamos los datos para pagar.</p>@endif
+            <a href="https://wa.me/{{ $soporteWa }}?text={{ rawurlencode('Hola, soy de '.($clienteTenancy->nombre_comercial ?: $clienteTenancy->razon_social).' (RUC '.$clienteTenancy->ruc.'). Ya pagué el servicio '.config('marca.nombre').', les envío el comprobante.') }}"
                target="_blank" rel="noopener" style="display:block;background:#16a34a;color:#fff;font-weight:800;border-radius:14px;padding:12px;text-decoration:none">Ya pagué · enviar comprobante</a>
             <button type="button" onclick="document.getElementById('pago-servicio').style.display='none'" style="margin-top:8px;border:0;background:#f1f5f9;border-radius:12px;padding:10px;width:100%;font-weight:700;color:#475569;cursor:pointer">Cerrar</button>
         </div>

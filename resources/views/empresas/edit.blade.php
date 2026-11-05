@@ -199,7 +199,7 @@
                             @if ($contrato->estado === 'OBSERVADO')<p class="text-sm text-amber-900 bg-amber-50 rounded-xl px-3 py-2"><b>Observación:</b> {{ $contrato->observacion }}</p>@endif
                             <div class="flex flex-wrap gap-2">
                                 @if (\App\Support\Tenancy\Contratos::editable($contrato) && \Illuminate\Support\Facades\Route::has('sitio.contrato'))
-                                    <a href="{{ route('sitio.contrato', $contrato->token) }}" target="_blank" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold">
+                                    <a href="{{ \App\Support\Tenancy\Contratos::enlace($contrato) }}" target="_blank" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold">
                                         <i class="fas fa-pen-nib mr-1"></i>{{ $contrato->estado === 'OBSERVADO' ? 'Corregir mi contrato' : 'Firmar mi contrato' }}</a>
                                 @endif
                                 <a href="{{ route('mi_contrato.pdf') }}" target="_blank" class="px-4 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-sm font-semibold"><i class="fas fa-file-pdf mr-1"></i>Ver contrato (PDF)</a>

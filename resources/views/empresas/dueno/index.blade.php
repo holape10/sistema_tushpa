@@ -24,7 +24,7 @@
             @if (\App\Support\AvisosCelular::configurado())
                 {{-- Avisos al celular del dueño: anulaciones, platos quitados, cortesías, descuentos y faltantes de caja al momento --}}
                 <button type="button" data-avisos-celular data-para="dueno" data-clave="{{ config('services.push.publica') }}" data-guardar="{{ route('avisos_celular.suscribir') }}"
-                    data-quitar="{{ route('avisos_celular.quitar') }}" data-icono="{{ asset('imagenes/192.png') }}"
+                    data-quitar="{{ route('avisos_celular.quitar') }}" data-icono="{{ asset(config('marca.icono192')) }}"
                     data-bienvenida="Te avisaré al momento si anulan una venta, quitan un plato de cocina, dan cortesías o descuentos, o falta plata en caja."
                     class="hidden px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-gray-900 font-black text-sm shadow">🔔 Avisarme al celular</button>
             @endif

@@ -216,7 +216,7 @@
     <footer class="text-center text-xs text-slate-400 {{ $pide ? 'pb-28' : 'pb-8' }} px-4 space-y-1">
         @if ($negocio->direccion)<p>📍 {{ $negocio->direccion }}</p>@endif
         @if ($negocio->telefono)<p>📞 <a href="tel:{{ preg_replace('/\D/', '', $negocio->telefono) }}" class="underline">{{ $negocio->telefono }}</a></p>@endif
-        <p class="pt-2">Precios en soles, incluyen impuestos · Carta digital por <b class="text-slate-500">TUSHPA</b></p>
+        <p class="pt-2">Precios en soles, incluyen impuestos · Carta digital por <b class="text-slate-500">{{ config('marca.nombre') }}</b></p>
     </footer>
 
     {{-- Foto ampliada --}}

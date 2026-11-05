@@ -30,6 +30,7 @@ use App\Http\Controllers\ConsumoCajasController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContabilidadRegistroController;
 use App\Http\Controllers\ContactoController;
+use App\Http\Controllers\ContratoController;
 use App\Http\Controllers\CourierController;
 use App\Http\Controllers\CourierCreditoController;
 use App\Http\Controllers\CourierManifiestoController;
@@ -124,11 +125,18 @@ use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\VentaController;
 use App\Http\Controllers\VentaMasivaController;
 use App\Http\Middleware\RegistrarVisita;
+use App\Http\Middleware\SoloRaizDeMarca;
 
 // Web pública del dominio principal (tushpa.app): va primero para que "/" de ese dominio sea la web y no el login
 if ($dominioSitio = config('tenancy.dominio')) {
     Route::domain($dominioSitio)->name('sitio.')->middleware(RegistrarVisita::class)->group(base_path('routes/sitio.php'));
 }
+// El contrato de servicio de las empresas de una marca, en el dominio de la marca (wilcatsystems.pe/contrato/{enlace})
+Route::middleware(SoloRaizDeMarca::class)->name('marca.')->group(function () {
+    Route::get('/contrato/{token}', [ContratoController::class, 'pagina'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:60,1,marca-contrato')->name('contrato');
+    Route::get('/contrato/{token}/pdf', [ContratoController::class, 'pdf'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:20,1,marca-contrato-pdf')->name('contrato.pdf');
+    Route::post('/contrato/{token}', [ContratoController::class, 'enviar'])->where('token', '[A-Za-z0-9]{40}')->middleware('throttle:10,10,marca-contrato-enviar')->name('contrato.enviar');
+});
 
 Route::get('/', function () {
     if (auth()->check()) {

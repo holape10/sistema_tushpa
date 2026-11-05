@@ -7,7 +7,7 @@
         $in = 'mt-1 block w-full rounded-xl border-slate-300 text-sm focus:border-indigo-500 focus:ring-indigo-500';
         $colores = ['PENDIENTE' => 'bg-slate-100 text-slate-700', 'ENVIADO' => 'bg-sky-100 text-sky-800', 'APROBADO' => 'bg-emerald-100 text-emerald-800',
             'OBSERVADO' => 'bg-amber-100 text-amber-900', 'ANULADO' => 'bg-rose-100 text-rose-700'];
-        $enlace = $contrato ? route('sitio.contrato', $contrato->token) : null;
+        $enlace = $contrato ? \App\Support\Tenancy\Contratos::enlace($contrato) : null;
         $telefono = preg_replace('/\D/', '', (string) ($contrato->telefono ?? $cliente->contacto_telefono));
         $mensaje = $contrato ? 'Hola, te envío el contrato de servicio de '.config('contrato.proveedor.marca').' de '.($cliente->nombre_comercial ?: $cliente->razon_social)
             .'. En este enlace subes tu DNI (ambas caras), descargas el contrato y lo firmas desde tu celular o PC: '.$enlace : '';

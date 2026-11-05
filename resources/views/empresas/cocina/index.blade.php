@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="tushpa-canal" content="{{ \App\Events\CambioEnSucursal::canal((string) auth()->user()->IdEmpresa, (int) auth()->user()->id_empresa_negocio) }}" data-clave="{{ config('broadcasting.default') === 'reverb' ? config('broadcasting.connections.reverb.key') : '' }}">
     <title>Pantalla de Cocina</title>
-    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         [x-cloak] { display: none !important; }

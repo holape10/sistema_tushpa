@@ -16,25 +16,35 @@ use Illuminate\View\View;
  */
 class ContratoController extends Controller
 {
-    private function contrato(string $token): object
+    /** El contrato del enlace, solo en el dominio de su marca (el de una empresa de WILCAT no se abre en tushpa.app ni al revés) */
+    private function contrato(Request $request, string $token): object
     {
         $contrato = Contratos::porToken($token);
         abort_unless($contrato, 404);
+        $marca = (int) (Cliente::where('id', $contrato->cliente_id)->value('marca_id') ?? 0);
+        abort_unless($marca === (int) ($request->attributes->get('marca_raiz') ?? 0), 404);
 
         return $contrato;
     }
 
-    public function pagina(string $token): View
+    /** Las rutas de la página: las de tushpa.app o las del dominio de la marca */
+    private function ruta(Request $request): string
     {
-        $contrato = $this->contrato($token);
+        return $request->attributes->get('marca_raiz') ? 'marca.contrato' : 'sitio.contrato';
+    }
 
-        return view('sitio.contrato', Contratos::datos($contrato) + ['token' => $token, 'editable' => Contratos::editable($contrato)]);
+    public function pagina(Request $request, string $token): View
+    {
+        $contrato = $this->contrato($request, $token);
+
+        return view('sitio.contrato', Contratos::datos($contrato) + ['token' => $token, 'editable' => Contratos::editable($contrato),
+            'ruta' => $this->ruta($request), 'layout' => $request->attributes->get('marca_raiz') ? 'marca.base' : 'sitio.base']);
     }
 
     /** El contrato en PDF: sin firmar para firmarlo a mano, o ya firmado con su constancia */
-    public function pdf(string $token): Response
+    public function pdf(Request $request, string $token): Response
     {
-        $contrato = $this->contrato($token);
+        $contrato = $this->contrato($request, $token);
 
         return response(Contratos::pdf($contrato), 200, ['Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.Contratos::nombrePdf($contrato).'"']);
@@ -42,7 +52,7 @@ class ContratoController extends Controller
 
     public function enviar(Request $request, string $token): RedirectResponse
     {
-        $contrato = $this->contrato($token);
+        $contrato = $this->contrato($request, $token);
         abort_unless(Contratos::editable($contrato), 422, 'Este contrato ya se envió.');
         $archivo = 'file|mimes:'.Contratos::MIMES.'|max:'.config('contrato.max_kb');
         $d = $request->validate([
@@ -72,7 +82,7 @@ class ContratoController extends Controller
             return back()->withInput()->withErrors(['firma' => $e->getMessage()]);
         }
 
-        return redirect()->route('sitio.contrato', $token)->with('ok', '¡Listo! Recibimos tu contrato firmado. Lo revisaremos y te avisaremos.');
+        return redirect()->route($this->ruta($request), $token)->with('ok', '¡Listo! Recibimos tu contrato firmado. Lo revisaremos y te avisaremos.');
     }
 
     /** La empresa desde su sistema: el enlace de su contrato pendiente (el aviso dentro del sistema lo usa) */
@@ -83,6 +93,6 @@ class ContratoController extends Controller
         }
         $contrato = Contratos::deCliente($cliente->id);
 
-        return $contrato && Contratos::editable($contrato) ? route('sitio.contrato', $contrato->token) : null;
+        return $contrato && Contratos::editable($contrato) ? Contratos::enlace($contrato) : null;
     }
 }

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#1e1b4b">
     <title>Ingresar · Mozos, promotores y cobradores</title>
-    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -73,8 +73,8 @@
         $halloween = \App\Support\Temporada::halloween();
     @endphp
     <header class="cab">
-        <img src="{{ asset('imagenes/192.png') }}" alt="">
-        <div><small @class(['saludo-hw' => $halloween])>{{ $halloween ? '🎃 Feliz Halloween' : $saludo }}</small><b>{{ $sucursal->nombre_comercial ?? 'TUSHPA' }}</b></div>
+        <img src="{{ asset(config('marca.icono192')) }}" alt="">
+        <div><small @class(['saludo-hw' => $halloween])>{{ $halloween ? '🎃 Feliz Halloween' : $saludo }}</small><b>{{ $sucursal->nombre_comercial ?? config('marca.nombre') }}</b></div>
         <div class="hora" id="reloj">{{ now()->format('H:i') }}<span>{{ now()->locale('es')->isoFormat('ddd D MMM') }}</span></div>
     </header>
 

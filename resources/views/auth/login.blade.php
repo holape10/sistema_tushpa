@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar Sesión - Sistema Tushpa</title>
+    <title>Iniciar Sesión - Sistema {{ config('marca.nombre') }}</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     {{-- Íconos sin frenar la pantalla: se cargan en paralelo y se aplican al llegar --}}
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
@@ -20,7 +20,8 @@
 
         <!-- Panel izquierdo: marca + rubros (no va cuando se elige el rubro: ahí los rubros ocupan toda la pantalla) -->
         @unless ($rubros)
-        <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-indigo-950 via-indigo-800 to-blue-700 flex-col items-center justify-center overflow-hidden px-10 py-12 isolate">
+        <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-indigo-950 via-indigo-800 to-blue-700 flex-col items-center justify-center overflow-hidden px-10 py-12 isolate"
+             @unless (config('marca.es_tushpa')) style="background-image: linear-gradient(135deg, {{ config('marca.color') }}, {{ config('marca.color_secundario') }})" @endunless>
             <x-kene-adorno patron="laberinto" color="text-white/[0.07]" :franja="false" />
             <!-- Decoración de fondo -->
             <div class="absolute -top-24 -left-24 w-80 h-80 bg-white/5 rounded-full"></div>
@@ -28,8 +29,8 @@
             <div class="absolute top-1/3 right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-xl"></div>
 
             <div class="relative text-center max-w-md">
-                <img src="{{ asset('imagenes/logo.webp') }}" alt="Sistema Tushpa" width="320" height="128" fetchpriority="high" class="w-80 h-28 object-contain mx-auto drop-shadow-2xl mb-4">
-                <!--<h1 class="text-white text-3xl font-bold tracking-wide">TUSHPA</h1>
+                <img src="{{ asset(config('marca.logo')) }}" alt="Sistema {{ config('marca.nombre') }}" width="320" height="128" fetchpriority="high" class="w-80 h-28 object-contain mx-auto drop-shadow-2xl mb-4">
+                <!--<h1 class="text-white text-3xl font-bold tracking-wide">{{ config('marca.nombre') }}</h1>
                 <p class="text-indigo-200 text-sm mt-1 mb-2 tracking-wider uppercase">Facturación Electrónica</p>-->
                 <p class="text-indigo-100/80 text-sm mb-8">Un solo sistema para gestionar y facturar cualquier tipo de negocio</p>
 
@@ -68,14 +69,14 @@
                 @if ($rubros)
                     <!-- Logo arriba (pantalla de elegir el tipo de negocio) -->
                     <div class="flex flex-col items-center mb-6">
-                        <img src="{{ asset('imagenes/logo.webp') }}" alt="TUSHPA" width="320" height="128" fetchpriority="high" class="w-64 sm:w-80 h-24 sm:h-28 object-contain drop-shadow">
+                        <img src="{{ asset(config('marca.logo')) }}" alt="{{ config('marca.nombre') }}" width="320" height="128" fetchpriority="high" class="w-64 sm:w-80 h-24 sm:h-28 object-contain drop-shadow">
                         <p class="text-gray-500 text-sm -mt-1">Un solo sistema para gestionar y facturar cualquier tipo de negocio</p>
                     </div>
                 @else
                     <!-- Logo visible solo en móvil -->
                     <div class="flex lg:hidden flex-col items-center mb-8">
-                        <img src="{{ asset('imagenes/icono.png') }}" alt="Logo" class="w-16 h-16 mb-2">
-                        <span class="font-bold text-gray-700 tracking-wide">TUSHPA</span>
+                        <img src="{{ asset(config('marca.icono')) }}" alt="Logo" class="w-16 h-16 mb-2">
+                        <span class="font-bold text-gray-700 tracking-wide">{{ config('marca.nombre') }}</span>
                     </div>
                 @endif
 
@@ -158,7 +159,8 @@
                         </label>
 
                         <button type="submit"
-                            class="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-800 to-blue-600 text-white text-sm font-semibold tracking-wide hover:opacity-90 active:scale-[0.98] transition shadow-lg shadow-indigo-900/20">
+                            class="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-800 to-blue-600 text-white text-sm font-semibold tracking-wide hover:opacity-90 active:scale-[0.98] transition shadow-lg shadow-indigo-900/20"
+                            @unless (config('marca.es_tushpa')) style="background-image: linear-gradient(90deg, {{ config('marca.color') }}, {{ config('marca.color_secundario') }})" @endunless>
                             INGRESAR
                         </button>
                     </form>
@@ -171,7 +173,7 @@
                     </div>
                 </div>
 
-                <p class="text-center text-gray-400 text-xs mt-6">© {{ date('Y') }} Sistema Tushpa · Todos los derechos reservados</p>
+                <p class="text-center text-gray-400 text-xs mt-6">© {{ date('Y') }} Sistema {{ config('marca.nombre') }} · Todos los derechos reservados</p>
             </div>
         </div>
     </div>
