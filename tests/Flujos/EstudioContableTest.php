@@ -276,4 +276,12 @@ class EstudioContableTest extends FlujoTestCase
         (new Sire(Empresa::find(self::EMPRESA_A)))->token(true);
         Http::assertSent(fn (Peticion $p) => $p['username'] === self::EMPRESA_A.'SIRE01' && $p['password'] === 'CLAVE-SIRE');
     }
+
+    public function test_tambien_se_registran_personas_naturales_con_ruc_10(): void
+    {
+        $this->post(route('estudio.guardar'), ['ruc' => '10609005110', 'razon_social' => 'PERSONA NATURAL CON NEGOCIO'])->assertSessionHasNoErrors()->assertSessionHas('success');
+        $this->assertTrue(Estudio::puede($this->usuario, '10609005110'));
+        $this->cambiar('10609005110');
+        $this->assertSame('10609005110', (string) $this->usuario->IdEmpresa);
+    }
 }

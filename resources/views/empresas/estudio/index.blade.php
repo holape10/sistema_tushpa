@@ -38,7 +38,7 @@
         @csrf
         <label class="text-sm font-semibold text-gray-700">RUC *
             <input name="ruc" x-model="ruc" @input.debounce.400ms="buscar()" maxlength="11" inputmode="numeric" required
-                   class="mt-1 w-full rounded-xl border-gray-300 font-mono" placeholder="20xxxxxxxxx">
+                   class="mt-1 w-full rounded-xl border-gray-300 font-mono" placeholder="10… o 20… (11 dígitos)">
             <span class="text-xs font-normal" :class="aviso ? 'text-amber-600' : 'text-gray-400'" x-text="buscando ? 'Buscando en SUNAT…' : (aviso || 'Se llenan solos la razón social y la dirección.')"></span>
         </label>
         <label class="text-sm font-semibold text-gray-700">Razón social *
