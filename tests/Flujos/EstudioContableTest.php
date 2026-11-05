@@ -3,8 +3,10 @@
 namespace Tests\Flujos;
 
 use App\Models\Central\Cliente;
+use App\Models\Empresa;
 use App\Models\User;
 use App\Support\Estudio;
+use App\Support\Sunat\Sire;
 use App\Support\Sunat\XmlJsonPe;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\Request as Peticion;
@@ -245,5 +247,33 @@ class EstudioContableTest extends FlujoTestCase
         $this->postJson(route('estudio.configurar', self::EMPRESA_A), ['cta_compras' => '63141'], ['X-Empresa' => self::EMPRESA_B])->assertRedirect();
         $this->post(route('estudio.cambiar'), ['ruc' => self::EMPRESA_A, '_empresa' => self::EMPRESA_B])->assertRedirect(route('inicio'));
         $this->assertSame(self::EMPRESA_A, (string) $this->usuario->fresh()->IdEmpresa);
+    }
+
+    public function test_al_registrar_la_empresa_se_ponen_de_una_vez_sus_claves_y_cuentas(): void
+    {
+        $this->post(route('estudio.guardar'), ['ruc' => '20600695771', 'razon_social' => 'NUBEFACT SA',
+            'sol_usuario' => 'nubeprin', 'sol_clave' => 'CLAVE-PRINCIPAL', 'client_id' => 'ID-API', 'client_secret' => 'SECRETO-API',
+            'cta_compras' => '6365', 'cta_por_pagar' => '42121'])->assertSessionHasNoErrors()->assertSessionHas('success');
+
+        $fila = DB::table('empresa')->where('IdEmpresa', '20600695771')->first();
+        $this->assertSame(['NUBEPRIN', 'ID-API'], [$fila->sol_usuario, $fila->client_id]);
+        $this->assertSame('CLAVE-PRINCIPAL', decrypt($fila->sol_clave, false));
+        $this->assertSame('6365', DB::table('concar_config')->where('IdEmpresa', '20600695771')->value('cta_compras'));
+    }
+
+    public function test_el_sire_entra_con_la_clave_sol_principal_si_no_hay_otro_usuario(): void
+    {
+        $this->post(route('estudio.configurar', self::EMPRESA_A), ['client_id' => 'ID-A', 'client_secret' => 'SECRETO-A', 'sol_usuario' => 'PRINCIPAL', 'sol_clave' => 'CLAVE-PRIN']);
+        Http::fake(['*oauth2/token*' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]), '*' => Http::response([])]);
+
+        $empresa = Empresa::find(self::EMPRESA_A);
+        $this->assertTrue(Sire::configurado($empresa), 'Con la Clave SOL principal basta.');
+        (new Sire($empresa))->token();
+        Http::assertSent(fn (Peticion $p) => $p['username'] === self::EMPRESA_A.'PRINCIPAL' && $p['password'] === 'CLAVE-PRIN');
+
+        // Si se puso un usuario secundario para el SIRE, entra con ese
+        $this->post(route('estudio.configurar', self::EMPRESA_A), ['client_id' => 'ID-A', 'sire_usuario' => 'SIRE01', 'sire_clave' => 'CLAVE-SIRE', 'sol_usuario' => 'PRINCIPAL']);
+        (new Sire(Empresa::find(self::EMPRESA_A)))->token(true);
+        Http::assertSent(fn (Peticion $p) => $p['username'] === self::EMPRESA_A.'SIRE01' && $p['password'] === 'CLAVE-SIRE');
     }
 }

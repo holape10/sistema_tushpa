@@ -64,31 +64,34 @@ class EstudioController extends Controller
             'razon_social' => 'required|string|max:200',
             'nombre_comercial' => 'nullable|string|max:150',
             'direccion' => 'nullable|string|max:250',
-        ], ['ruc.unique' => 'Esa empresa ya está registrada en el estudio.'], ['ruc' => 'RUC', 'razon_social' => 'razón social']);
+        ] + $this->reglasConfiguracion(), ['ruc.unique' => 'Esa empresa ya está registrada en el estudio.', 'regex' => 'Solo letras y números, sin espacios ni puntos.'],
+            ['ruc' => 'RUC', 'razon_social' => 'razón social'] + self::NOMBRES);
         Estudio::crearEmpresa(['ruc' => $d['ruc'], 'razon_social' => mb_strtoupper(trim($d['razon_social'])),
             'nombre_comercial' => ! empty($d['nombre_comercial']) ? mb_strtoupper(trim($d['nombre_comercial'])) : null, 'direccion' => $d['direccion'] ?? null]);
+        // Credenciales y cuentas de una vez (lo que no se escriba se pone luego con "Configurar")
+        $this->aplicarConfiguracion($d['ruc'], $d);
 
-        return redirect()->route('estudio.index')->with('success', "Empresa {$d['ruc']} registrada. Entra a ella con \"Trabajar aquí\" para poner sus credenciales SIRE y su Clave SOL.");
+        return redirect()->route('estudio.index')->with('success', "Empresa {$d['ruc']} registrada.".(empty($d['client_id']) ? ' Ponle sus credenciales SIRE con "Configurar" cuando las tengas.' : ''));
     }
 
-    /**
-     * Lo que necesita cada empresa para trabajar: sus credenciales del API SIRE, su Clave SOL principal (para traer los
-     * XML de compras) y las cuentas por defecto de sus asientos y del .dbf. Las claves solo cambian si se escriben.
-     */
-    public function configurar(Request $request, string $ruc): RedirectResponse
+    /** @return array<string, mixed> reglas de las credenciales y cuentas de una empresa (todas opcionales) */
+    private function reglasConfiguracion(): array
     {
-        $this->administrar();
-        abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->where('propia', false)->exists(), 404);
         $cuenta = ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]+$/'];
-        $d = $request->validate([
+
+        return [
             'client_id' => 'nullable|string|max:100', 'client_secret' => 'nullable|string|max:255',
             'sire_usuario' => ['nullable', 'string', 'max:30', 'regex:/^[A-Za-z0-9]+$/'], 'sire_clave' => 'nullable|string|max:100',
             'sol_usuario' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'], 'sol_clave' => 'nullable|string|max:60',
             'cta_compras' => $cuenta, 'cta_por_pagar' => $cuenta, 'cta_por_cobrar' => $cuenta, 'cta_ventas' => $cuenta, 'cta_ventas_exo' => $cuenta,
-        ], ['regex' => 'Solo letras y números, sin espacios ni puntos.'], [
-            'client_id' => 'ID del API SIRE', 'sire_usuario' => 'usuario SOL del SIRE', 'sol_usuario' => 'usuario SOL principal',
-        ]);
+        ];
+    }
 
+    private const NOMBRES = ['client_id' => 'ID del API SIRE', 'sire_usuario' => 'usuario SOL del SIRE', 'sol_usuario' => 'usuario SOL principal'];
+
+    /** Guarda las credenciales (las claves solo si se escriben) y las cuentas por defecto de una empresa */
+    private function aplicarConfiguracion(string $ruc, array $d): void
+    {
         $empresa = Empresa::findOrFail($ruc);
         $empresa->client_id = trim((string) ($d['client_id'] ?? '')) ?: null;
         $empresa->sire_usuario = mb_strtoupper(trim((string) ($d['sire_usuario'] ?? ''))) ?: null;
@@ -105,6 +108,18 @@ class EstudioController extends Controller
         if ($cuentas) {
             DB::table('concar_config')->updateOrInsert(['IdEmpresa' => $ruc], $cuentas + ['updated_at' => now()]);
         }
+    }
+
+    /**
+     * Lo que necesita cada empresa para trabajar: sus credenciales del API SIRE, su Clave SOL principal (para traer los
+     * XML de compras y, si no se pone otro, para entrar al SIRE) y las cuentas por defecto de sus asientos y del .dbf.
+     */
+    public function configurar(Request $request, string $ruc): RedirectResponse
+    {
+        $this->administrar();
+        abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->where('propia', false)->exists(), 404);
+        $d = $request->validate($this->reglasConfiguracion(), ['regex' => 'Solo letras y números, sin espacios ni puntos.'], self::NOMBRES);
+        $this->aplicarConfiguracion($ruc, $d);
 
         return back()->with('success', "Datos de la empresa {$ruc} guardados.");
     }

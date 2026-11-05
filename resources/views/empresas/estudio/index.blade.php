@@ -47,6 +47,12 @@
             <input name="nombre_comercial" value="{{ old('nombre_comercial') }}" maxlength="150" class="mt-1 w-full rounded-xl border-gray-300"></label>
         <label class="text-sm font-semibold text-gray-700">Dirección
             <input name="direccion" x-model="direccion" maxlength="250" class="mt-1 w-full rounded-xl border-gray-300"></label>
+        <div class="sm:col-span-2 rounded-xl bg-slate-50 p-4">
+            <p class="text-sm font-bold text-slate-700">Claves y cuentas <span class="font-normal text-slate-500">— de una vez (opcional: lo que no tengas lo pones luego con "Configurar")</span></p>
+            <div class="mt-3 grid gap-4 lg:grid-cols-3">
+                @include('empresas.estudio._credenciales')
+            </div>
+        </div>
         <div class="sm:col-span-2 flex justify-end gap-2">
             <button type="button" @click="nueva = false" class="h-10 px-4 rounded-xl bg-gray-100 font-semibold text-gray-600">Cancelar</button>
             <button class="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold">Registrar empresa</button>
@@ -120,26 +126,7 @@
                             <td colspan="5" class="px-4 py-4">
                                 <form method="POST" action="{{ route('estudio.configurar', $e->IdEmpresa) }}" class="grid gap-4 lg:grid-cols-3">
                                     @csrf
-                                    <fieldset class="space-y-2">
-                                        <legend class="text-xs font-bold uppercase text-slate-500">API SIRE (SUNAT)</legend>
-                                        <input name="client_id" value="{{ $e->client_id }}" placeholder="ID (client_id)" autocomplete="off" class="w-full h-9 rounded-lg border-slate-300 text-sm">
-                                        <input type="password" name="client_secret" placeholder="{{ $e->client_id ? 'CLAVE guardada · escribe para cambiar' : 'CLAVE (client_secret)' }}" autocomplete="new-password" class="w-full h-9 rounded-lg border-slate-300 text-sm">
-                                        <input name="sire_usuario" value="{{ $e->sire_usuario }}" placeholder="Usuario SOL del SIRE" autocomplete="off" class="w-full h-9 rounded-lg border-slate-300 text-sm uppercase">
-                                        <input type="password" name="sire_clave" placeholder="{{ $e->sire_usuario ? 'Clave guardada · escribe para cambiar' : 'Clave SOL del SIRE' }}" autocomplete="new-password" class="w-full h-9 rounded-lg border-slate-300 text-sm">
-                                    </fieldset>
-                                    <fieldset class="space-y-2">
-                                        <legend class="text-xs font-bold uppercase text-slate-500">Clave SOL principal (XML de compras)</legend>
-                                        <input name="sol_usuario" value="{{ $e->sol_usuario }}" placeholder="Usuario SOL principal" autocomplete="off" class="w-full h-9 rounded-lg border-slate-300 text-sm uppercase">
-                                        <input type="password" name="sol_clave" placeholder="{{ $e->sol_usuario ? 'Clave guardada · escribe para cambiar' : 'Clave SOL principal' }}" autocomplete="new-password" class="w-full h-9 rounded-lg border-slate-300 text-sm">
-                                        <p class="text-xs text-slate-400">Con ella se traen los XML de SUNAT por json.pe. Se guarda cifrada.</p>
-                                    </fieldset>
-                                    <fieldset class="grid grid-cols-2 gap-2 content-start">
-                                        <legend class="col-span-2 text-xs font-bold uppercase text-slate-500">Cuentas por defecto (asientos y .dbf)</legend>
-                                        @foreach (['cta_compras' => 'Compras (cargo)', 'cta_por_pagar' => 'Por pagar (abono)', 'cta_por_cobrar' => 'Por cobrar (cargo)', 'cta_ventas' => 'Ventas gravadas', 'cta_ventas_exo' => 'Ventas exoneradas'] as $campo => $texto)
-                                            <label class="text-xs font-semibold text-slate-500">{{ $texto }}
-                                                <input name="{{ $campo }}" value="{{ $cta->{$campo} ?? '' }}" maxlength="12" inputmode="numeric" placeholder="{{ \App\Support\Concar::DEFECTO[$campo] }}" class="mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
-                                        @endforeach
-                                    </fieldset>
+                                    @include('empresas.estudio._credenciales', ['e' => $e, 'cta' => $cta])
                                     <div class="lg:col-span-3 flex justify-end gap-2">
                                         <button type="button" @click="configurar = false" class="h-9 px-4 rounded-lg bg-white ring-1 ring-slate-200 text-sm font-semibold text-slate-600">Cerrar</button>
                                         <button class="h-9 px-5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">Guardar datos de {{ $e->IdEmpresa }}</button>
