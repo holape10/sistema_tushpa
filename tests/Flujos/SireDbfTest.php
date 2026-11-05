@@ -119,4 +119,68 @@ class SireDbfTest extends FlujoTestCase
             [$f['CODMOV'], $f['NUM_MES'], $f['ID'], $f['COD_DOC'], $f['SERIEDOC'], $f['NUM_DOC'], $f['RUC'], $f['DES_DOC'], $f['NOTA'], $f['NOMBRE'], $f['EXONERADA'], $f['TOTAL'], $f['MONEDA'], $f['CTACARGO'], $f['CTAABONO']]);
         $this->assertSame([100.0, 18.0, 118.0], [$filas[1]['GRAVADA'], $filas[1]['IGV'], $filas[1]['TOTAL']]);
     }
+
+    public function test_lo_revisado_pasa_al_registro_de_compras_y_ventas_con_su_asiento(): void
+    {
+        Storage::fake();
+        $ruc = $this->usuario->IdEmpresa;
+        $this->propuesta(Sire::COMPRAS, self::RCE, [
+            $this->compra('22/05/2026', '01', 'F001', '134277', '20553510661', 'LLAMA PE SA', ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177]),
+            $this->compra('13/05/2026', '07', 'FC02', '152', '20601312710', 'CONSORCIO FLUVIAL DEL AMAZONAS', ['ng' => -160, 'total' => -160], ['22/04/2026', '01', 'FE02', '5907']),
+            // Una factura de abril que el SIRE trae en mayo: se anota en mayo
+            $this->compra('28/04/2026', '01', 'FX02', '3444', '20603067534', 'INVERSIONES FU YUAN S.A.C.', ['ng' => 42, 'total' => 42]),
+        ]);
+        $guardar = fn (string $clave, array $datos) => $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202605', 'clave' => $clave] + $datos)->assertOk();
+        $guardar('20553510661|01|F001|134277', ['ctacargo' => '6365']);
+        $guardar('20603067534|01|FX02|3444', ['ctacargo' => '99999']);
+
+        $this->from(route('sire.dbf', ['periodo' => '202605']))->post(route('sire.dbf.registrar', ['compras', 'periodo' => '202605']))->assertSessionHas('success');
+        $reg = DB::table('conta_registros')->where('IdEmpresa', $ruc)->where('tipo', 'COMPRA')->get()->keyBy('numero');
+        $this->assertCount(3, $reg);
+        $this->assertSame(['6365', 150.0, 27.0, 177.0, '202605'], [$reg['134277']->cuenta, (float) $reg['134277']->base, (float) $reg['134277']->igv, (float) $reg['134277']->total, $reg['134277']->periodo]);
+        $this->assertSame(['07', 160.0, 160.0], [$reg['152']->tdocod, (float) $reg['152']->no_gravado, (float) $reg['152']->total], 'La nota de crédito en positivo: el registro la asienta al revés.');
+        $this->assertSame(['2026-04-28', '202605', '601111'], [substr($reg['3444']->fecha, 0, 10), $reg['3444']->periodo, $reg['3444']->cuenta],
+            'Fecha del comprobante, anotada en el mes del SIRE; su cuenta no está en el plan: va la de compras.');
+
+        // Cada comprobante con su asiento, que cuadra
+        foreach ($reg as $r) {
+            $asiento = DB::table('conta_asientos')->where('ref_tabla', 'conta_registros')->where('ref_id', $r->id)->where('subdiario', '11')->first();
+            $this->assertNotNull($asiento);
+            $sumas = DB::table('conta_asiento_detalle')->where('asiento_id', $asiento->id)->selectRaw('SUM(debe) d, SUM(haber) h')->first();
+            $this->assertEquals((float) $sumas->d, (float) $sumas->h);
+        }
+
+        // Pasarlo otra vez no duplica nada
+        $this->from(route('sire.dbf', ['periodo' => '202605']))->post(route('sire.dbf.registrar', ['compras', 'periodo' => '202605']))
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '3 ya estaban registrados'));
+        $this->assertSame(3, DB::table('conta_registros')->where('IdEmpresa', $ruc)->where('tipo', 'COMPRA')->count());
+    }
+
+    public function test_las_ventas_del_sire_pasan_al_registro_de_ventas(): void
+    {
+        Storage::fake();
+        $ruc = $this->usuario->IdEmpresa;
+        $venta = fn (string $num, string $exo, string $grav, string $igv, string $total, string $estado = '1') => "{$ruc}|WILCAT|202605|CAR|30/05/2026|30/05/2026|01|F001|{$num}||6|20607721956|SANTA MARIA CAPITAL S.A.C.|0.00|{$grav}|0.00|{$igv}|0.00|{$exo}|0.00|0.00|0.00|0.00|0.00|0.00|{$total}|PEN|1.000|||||||{$estado}";
+        $this->propuesta(Sire::VENTAS, self::RVIE, [$venta('8066', '50.00', '0.00', '0.00', '50.00'), $venta('8067', '0.00', '100.00', '18.00', '118.00'),
+            $venta('8068', '0.00', '0.00', '0.00', '0.00', '2')]);
+
+        $this->from(route('sire.dbf', ['libro' => 'ventas', 'periodo' => '202605']))->post(route('sire.dbf.registrar', ['ventas', 'periodo' => '202605']))->assertSessionHas('success');
+        $reg = DB::table('conta_registros')->where('IdEmpresa', $ruc)->where('tipo', 'VENTA')->get()->keyBy('numero');
+        $this->assertCount(2, $reg, 'El anulado no se registra.');
+        $this->assertSame([0.0, 50.0, '6', '20607721956'], [(float) $reg['8066']->base, (float) $reg['8066']->no_gravado, $reg['8066']->doc_tipo, $reg['8066']->doc_num]);
+        $this->assertSame([100.0, 18.0, 118.0], [(float) $reg['8067']->base, (float) $reg['8067']->igv, (float) $reg['8067']->total]);
+    }
+
+    public function test_sin_permiso_del_registro_no_aparece_ni_se_puede(): void
+    {
+        $cajero = $this->usuario->replicate();
+        $cajero->email = 'cajero'.uniqid().'@prueba.test';
+        $cajero->save();
+        DB::table('role_user')->insert(['role_id' => 4, 'user_IdUsuario' => $cajero->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
+        $sire = DB::table('modulos')->where('mod_url', '/sire/compras')->value('mod_id');
+        DB::table('modulos_usuario')->insert(['user_IdUsuario' => $cajero->IdUsuario, 'mod_id' => $sire]);
+        DB::table('role_user')->where('user_IdUsuario', $cajero->IdUsuario)->update(['role_id' => 15]);
+
+        $this->actingAs($cajero)->post(route('sire.dbf.registrar', ['compras', 'periodo' => '202605']))->assertForbidden();
+    }
 }

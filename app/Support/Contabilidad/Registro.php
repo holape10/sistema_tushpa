@@ -116,13 +116,16 @@ class Registro
 
     /**
      * Guarda (o reemplaza) el comprobante y sus asientos. $lineas: el asiento cambiado a mano (null = el propuesto).
+     * $d['fecha_registro'] (opcional): día en que se anota, si es de otro mes que el comprobante (una compra de agosto
+     * que el SIRE trae en setiembre se registra en setiembre).
      */
     public static function guardar(string $ruc, array $d, ?array $lineas = null, ?int $id = null): int
     {
         return DB::transaction(function () use ($ruc, $d, $lineas, $id) {
             $cfg = Contabilidad::config($ruc);
             $imputables = Contabilidad::imputables($ruc);
-            $periodo = Carbon::parse($d['fecha'])->format('Ym');
+            $fechaAsiento = $d['fecha_registro'] ?? $d['fecha'];
+            $periodo = Carbon::parse($fechaAsiento)->format('Ym');
             Contabilidad::validarPeriodo($ruc, $periodo);
 
             $repetido = DB::table('conta_registros')->where('IdEmpresa', $ruc)->where('tipo', $d['tipo'])->where('tdocod', $d['tdocod'])
@@ -151,7 +154,7 @@ class Registro
             $doc = trim(($d['serie'] ?? '') !== '' ? $d['serie'].'-'.$d['numero'] : (string) $d['numero']);
             $tipoDoc = self::DOCUMENTOS[$d['tipo']][$d['tdocod']] ?? 'Doc.';
             $glosa = ($d['glosa'] ?? null) ?: ($d['tipo'] === 'VENTA' ? 'VENTA ' : 'COMPRA ')."{$tipoDoc} {$doc} - {$d['nombre']}";
-            $cab = ['fecha' => $d['fecha'], 'tdocod' => $d['tdocod'], 'documento' => mb_substr($doc, 0, 30), 'ref_tabla' => 'conta_registros', 'ref_id' => $id];
+            $cab = ['fecha' => $fechaAsiento, 'tdocod' => $d['tdocod'], 'documento' => mb_substr($doc, 0, 30), 'ref_tabla' => 'conta_registros', 'ref_id' => $id];
 
             Contabilidad::crearAsiento($ruc, $cab + ['glosa' => $glosa, 'subdiario' => $d['tipo'] === 'VENTA' ? '05' : '11', 'origen' => self::ORIGEN[$d['tipo']]],
                 $lineas ?? $propuesta['provision'], $imputables);

@@ -50,6 +50,17 @@
             @endforeach
         </div>
         <div class="flex-1"></div>
+        @if ($propuesta && \App\Http\Controllers\SireDbfController::puedeRegistrar($libro))
+            {{-- Lo revisado pasa al Registro de Contabilidad con su asiento (sin digitar de nuevo; lo ya registrado no se repite) --}}
+            <form method="POST" action="{{ route('sire.dbf.registrar', [$libro, 'periodo' => $periodo]) }}"
+                  onsubmit="return confirm('¿Pasar los ' + {{ $totales['registros'] }} + ' comprobantes revisados al Registro de {{ $compras ? 'Compras' : 'Ventas' }} de Contabilidad? Los que ya están registrados no se repiten.')">
+                @csrf
+                <button class="h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold"
+                        @click="if (totales.descuadrados) { $event.preventDefault(); tushpaAviso('Hay ' + totales.descuadrados + ' comprobante(s) que no cuadran: corrígelos o no los lleves.', false); }">
+                    📒 Pasar al Registro de {{ $compras ? 'Compras' : 'Ventas' }}
+                </button>
+            </form>
+        @endif
         <a href="{{ route('sire.dbf.excel', [$libro, 'periodo' => $periodo]) }}"
            class="h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-bold {{ $propuesta ? '' : 'pointer-events-none opacity-50' }}">
             ⬇ Excel

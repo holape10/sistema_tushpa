@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Contabilidad\SireARegistro;
 use App\Support\Contabilidad\SireDbf;
 use App\Support\Excel;
 use Illuminate\Http\JsonResponse;
@@ -113,6 +114,44 @@ class SireDbfController extends Controller
         }
 
         return back()->with('success', "Cuentas puestas a {$n} comprobante(s).");
+    }
+
+    /** ¿Puede pasar el SIRE al Registro de Ventas / Compras de Contabilidad? */
+    public static function puedeRegistrar(string $libro): bool
+    {
+        return Auth::user()->esAdmin() || Auth::user()->tieneModulo('/contabilidad/registro/'.$libro);
+    }
+
+    /** Pasa lo revisado al Registro de Ventas o Compras de Contabilidad (con su asiento), sin digitar de nuevo */
+    public function registrar(Request $request, string $libro): RedirectResponse
+    {
+        $ruc = $this->autorizar();
+        abort_unless(isset(SireDbf::LIBROS[$libro]), 404);
+        abort_unless(self::puedeRegistrar($libro), 403, 'No tienes acceso al registro contable.');
+        $periodo = $this->periodo($request);
+        $comprobantes = SireDbf::delPeriodo($ruc, $libro, $periodo)['comprobantes'];
+        $totales = SireDbf::totales($libro, $comprobantes);
+        if (! $totales['registros']) {
+            return back()->with('error', 'No hay comprobantes para pasar al registro en ese periodo.');
+        }
+        if ($totales['descuadrados']) {
+            return back()->with('error', "Hay {$totales['descuadrados']} comprobante(s) que no cuadran: corrígelos o no los lleves antes de pasarlos al registro.");
+        }
+        set_time_limit(300);
+        $r = SireARegistro::importar($ruc, $libro, $periodo, $comprobantes);
+
+        $partes = ["✔ {$r['nuevos']} comprobante(s) pasados al Registro de ".($libro === 'ventas' ? 'Ventas' : 'Compras').' con su asiento'];
+        if ($r['repetidos']) {
+            $partes[] = "{$r['repetidos']} ya estaban registrados";
+        }
+        if ($r['cuentaDefecto']) {
+            $partes[] = "{$r['cuentaDefecto']} con la cuenta por defecto (su cuenta no está en el plan contable)";
+        }
+        $mensaje = implode(' · ', $partes).'.';
+
+        return $r['errores']
+            ? back()->with('error', $mensaje.' No se pudieron pasar: '.implode(' | ', array_slice($r['errores'], 0, 5)))
+            : back()->with('success', $mensaje);
     }
 
     /** Lo mismo que va al .dbf, en Excel: un comprobante por fila con sus montos y cuentas, y los totales al final */

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use App\Support\Estudio;
 use Closure;
 use Illuminate\Http\Request;
@@ -16,8 +17,9 @@ class EmpresaDelEstudio
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (Auth::check() && Estudio::activo()) {
-            $usuario = Auth::user();
+        $usuario = Auth::user();
+        // Solo los usuarios del sistema (en el panel TUSHPA el que entra es un superadmin)
+        if ($usuario instanceof User && Estudio::activo()) {
             if (! Estudio::enOrden($usuario)) {
                 Estudio::cambiar($usuario, Estudio::ruc());
             }

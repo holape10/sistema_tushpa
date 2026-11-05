@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,9 +26,10 @@ class PermisoDelMenu
 
     public function handle(Request $request, Closure $next): Response
     {
+        // Solo los usuarios del sistema (en el panel TUSHPA el que entra es un superadmin)
         $usuario = Auth::user();
         $ruta = (string) $request->route()?->getName();
-        if ($usuario && $ruta !== '' && ! $usuario->esAdmin()) {
+        if ($usuario instanceof User && $ruta !== '' && ! $usuario->esAdmin()) {
             foreach (self::PERMISOS as $prefijo => $opciones) {
                 if ($ruta === $prefijo || (str_ends_with($prefijo, '.') && str_starts_with($ruta, $prefijo))) {
                     $permitido = collect($opciones)->contains(fn ($url) => $usuario->tieneModulo($url));

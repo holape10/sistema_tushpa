@@ -2,7 +2,13 @@
 
 namespace Tests\Flujos;
 
+use App\Http\Middleware\EmpresaDelEstudio;
+use App\Http\Middleware\PermisoDelMenu;
+use App\Models\Central\Superadmin;
 use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Route;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /** Lo delicado (precios, stock, medios de pago, pisos) solo para quien tiene la opción en su menú y de su sucursal */
@@ -68,5 +74,17 @@ class PermisosSeguridadTest extends FlujoTestCase
         // La búsqueda de RUC sigue para los usuarios logueados (la usa "Nueva empresa" del estudio)
         config(['services.apiperu.token' => null]); // sin gastar consultas de apiperu.dev
         $this->assertContains($this->actingAs($this->usuario)->get(route('api.ruc', '20553510661'))->status(), [200, 404]);
+    }
+
+    public function test_los_guardias_dejan_pasar_al_superadmin_del_panel(): void
+    {
+        // En admin.tushpa.app el que entra es un superadmin (no tiene roles ni menú): antes daba error 500
+        Auth::setUser((new Superadmin)->forceFill(['id' => 1, 'nombre' => 'DUEÑO']));
+        $peticion = Request::create('/productos', 'GET');
+        $peticion->setRouteResolver(fn () => (new Route('GET', '/productos', []))->name('productos.index'));
+        $siguiente = fn () => response('ok');
+
+        $this->assertSame('ok', (new PermisoDelMenu)->handle($peticion, $siguiente)->getContent());
+        $this->assertSame('ok', (new EmpresaDelEstudio)->handle($peticion, $siguiente)->getContent());
     }
 }
