@@ -23,6 +23,17 @@ class EmpresaDelEstudio
             if (! Estudio::enOrden($usuario)) {
                 Estudio::cambiar($usuario, Estudio::ruc());
             }
+            // Guardar desde una pantalla abierta para otra empresa (se cambió en otra pestaña): se rechaza
+            $deLaPantalla = (string) ($request->header('X-Empresa') ?? $request->input('_empresa', ''));
+            if (! $request->isMethodSafe() && $deLaPantalla !== '' && $deLaPantalla !== (string) $usuario->IdEmpresa
+                && ! in_array($request->route()?->getName(), ['estudio.cambiar', 'logout'], true)) {
+                $mensaje = 'Esta pantalla era de la empresa '.$deLaPantalla.', pero ahora trabajas en '.$usuario->IdEmpresa
+                    .' (cambiaste en otra pestaña). No se guardó nada: recarga la página.';
+
+                return $request->expectsJson()
+                    ? response()->json(['ok' => false, 'message' => $mensaje, 'mensaje' => $mensaje], 409)
+                    : redirect()->back()->with('error', $mensaje);
+            }
         }
 
         return $next($request);

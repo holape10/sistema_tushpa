@@ -32,6 +32,8 @@ class RegistroWeb
             'subdominio' => $d['subdominio'] ?? null,
             'rubro' => $d['rubro'],
             'modulos' => Rubros::urls($d['rubro']),
+            // Estudio contable en prueba: pocas empresas (sin límite podría registrar todas las que quiera gratis)
+            'max_empresas' => ! empty(Rubros::RUBROS[$d['rubro']]['estudio']) ? config('sitio.estudio_empresas_prueba') : null,
             'plan_id' => $plan?->id,
             'plan' => $plan?->nombre,
             'usuario' => $d['ruc'],

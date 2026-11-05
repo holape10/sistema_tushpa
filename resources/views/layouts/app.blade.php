@@ -68,6 +68,34 @@
     @auth
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta name="tushpa-canal" content="{{ \App\Events\CambioEnSucursal::canal((string) auth()->user()->IdEmpresa, (int) auth()->user()->id_empresa_negocio) }}" data-clave="{{ config('broadcasting.default') === 'reverb' ? config('broadcasting.connections.reverb.key') : '' }}">
+        @if (\App\Support\Estudio::activo())
+            {{-- Estudio contable: cada pantalla dice para qué empresa se abrió. Si en otra pestaña se cambió de empresa,
+                 guardar desde esta se rechaza (nunca se guarda en la empresa equivocada) --}}
+            <meta name="empresa-activa" content="{{ auth()->user()->IdEmpresa }}">
+            <script>
+                (function () {
+                    const empresa = document.querySelector('meta[name="empresa-activa"]').content;
+                    document.addEventListener('submit', function (e) {
+                        const f = e.target;
+                        if (!(f instanceof HTMLFormElement) || (f.method || 'get').toLowerCase() === 'get' || f.querySelector('input[name="_empresa"]')) return;
+                        const i = document.createElement('input');
+                        i.type = 'hidden'; i.name = '_empresa'; i.value = empresa;
+                        f.appendChild(i);
+                    }, true);
+                    const original = window.fetch;
+                    window.fetch = function (url, opciones = {}) {
+                        const metodo = (opciones.method || (url instanceof Request ? url.method : 'GET')).toUpperCase();
+                        const destino = new URL(url instanceof Request ? url.url : String(url), location.href);
+                        if (metodo !== 'GET' && metodo !== 'HEAD' && destino.origin === location.origin) {
+                            const cabeceras = new Headers(opciones.headers || {});
+                            cabeceras.set('X-Empresa', empresa);
+                            opciones = { ...opciones, headers: cabeceras };
+                        }
+                        return original.call(this, url, opciones);
+                    };
+                })();
+            </script>
+        @endif
     @endauth
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.pwa')

@@ -1076,7 +1076,7 @@ Route::middleware('auth')->group(function () {
 // Registro inicial: público solo mientras no exista ninguna empresa (ver EmpresaController::puedeRegistrar)
 Route::get('/config', [EmpresaController::class, 'crearempresa'])->name('empresa.config');
 Route::post('/config', [EmpresaController::class, 'store'])->name('empresa.store');
-Route::get('/api/ruc/{ruc}', [EmpresaController::class, 'consultaRucSunat'])->name('api.ruc');
+Route::get('/api/ruc/{ruc}', [EmpresaController::class, 'consultaRucSunat'])->middleware('throttle:30,1')->name('api.ruc');
 
 // Route::get('/config', [EmpresaController::class, 'crearempresa'])->name('empresa.config');
 // Route::post('/config', [EmpresaController::class, 'store'])->name('empresa.store');

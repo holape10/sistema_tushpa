@@ -16,6 +16,9 @@ return [
     // Días de prueba gratis al registrarse desde la web
     'dias_prueba' => (int) env('SITIO_DIAS_PRUEBA', 15),
 
+    // Un estudio contable que se registra desde la web prueba con pocas empresas; el panel le sube el límite al pagar
+    'estudio_empresas_prueba' => (int) env('SITIO_ESTUDIO_EMPRESAS_PRUEBA', 3),
+
     // Días después de suspendida (por fin de la prueba) en que el panel la marca como "para eliminar"
     'dias_para_eliminar' => (int) env('SITIO_DIAS_ELIMINAR', 30),
 

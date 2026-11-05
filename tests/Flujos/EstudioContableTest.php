@@ -226,4 +226,24 @@ class EstudioContableTest extends FlujoTestCase
         $this->assertTrue(XmlJsonPe::traer(self::EMPRESA_B, '20553510661', '01', 'F001', '1')['detener']);
         Http::assertSentCount(1);
     }
+
+    public function test_guardar_desde_una_pestana_de_otra_empresa_se_rechaza(): void
+    {
+        // Pestaña 1 abierta en A; en la pestaña 2 se cambió a B
+        $this->cambiar(self::EMPRESA_A);
+        $this->get(route('inicio'))->assertOk()->assertSee('<meta name="empresa-activa" content="'.self::EMPRESA_A.'">', false);
+        $this->cambiar(self::EMPRESA_B);
+
+        // Lo que se guarda desde la pantalla de A no cae en B
+        $this->postJson(route('estudio.configurar', self::EMPRESA_A), ['cta_compras' => '63141'], ['X-Empresa' => self::EMPRESA_A])
+            ->assertStatus(409)->assertJsonPath('message', fn ($m) => str_contains($m, 'recarga la página'));
+        $this->from(route('inicio'))->post(route('estudio.configurar', self::EMPRESA_A), ['cta_compras' => '63141', '_empresa' => self::EMPRESA_A])
+            ->assertRedirect(route('inicio'))->assertSessionHas('error');
+        $this->assertNull(DB::table('concar_config')->where('IdEmpresa', self::EMPRESA_A)->value('cta_compras'));
+
+        // Desde una pantalla de la empresa actual sí se guarda, y el selector de una pestaña vieja sigue funcionando
+        $this->postJson(route('estudio.configurar', self::EMPRESA_A), ['cta_compras' => '63141'], ['X-Empresa' => self::EMPRESA_B])->assertRedirect();
+        $this->post(route('estudio.cambiar'), ['ruc' => self::EMPRESA_A, '_empresa' => self::EMPRESA_B])->assertRedirect(route('inicio'));
+        $this->assertSame(self::EMPRESA_A, (string) $this->usuario->fresh()->IdEmpresa);
+    }
 }
