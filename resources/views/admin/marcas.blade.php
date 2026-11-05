@@ -61,8 +61,16 @@
                         <input name="color" type="color" value="{{ $m->color ?: '#1565c0' }}" class="mt-1 h-10 w-full rounded-xl border-slate-300"></label>
                     <label class="text-xs font-semibold text-slate-500">Color secundario
                         <input name="color_secundario" type="color" value="{{ $m->color_secundario ?: '#65b32e' }}" class="mt-1 h-10 w-full rounded-xl border-slate-300"></label>
-                    <label class="sm:col-span-2 text-xs font-semibold text-slate-500">Logo <span class="font-normal text-slate-400">(PNG, JPG o WEBP; se guarda en PNG)</span>
+                    <label class="text-xs font-semibold text-slate-500">Logo <span class="font-normal text-slate-400">(mejor sin fondo; se guarda en PNG)</span>
                         <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" class="mt-1 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700"></label>
+                    <label class="text-xs font-semibold text-slate-500">Ícono cuadrado <span class="font-normal text-slate-400">(pestaña y app; opcional)</span>
+                        <span class="mt-1 flex items-center gap-2">
+                            @if (! $nueva && is_file(public_path(\App\Http\Controllers\Admin\MarcaController::rutaIcono($m))))
+                                <img src="{{ asset(\App\Http\Controllers\Admin\MarcaController::rutaIcono($m)) }}?v={{ @filemtime(public_path(\App\Http\Controllers\Admin\MarcaController::rutaIcono($m))) }}" alt="" class="h-10 w-10 rounded-lg bg-slate-100 object-contain">
+                            @endif
+                            <input name="icono" type="file" accept="image/png,image/jpeg,image/webp" class="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700">
+                        </span>
+                        <span class="block font-normal text-[11px] text-slate-400">Vacío = se arma solo con el logo.</span></label>
                 </div>
                 @if ($fija)<p class="text-[11px] text-slate-400">Ya tiene empresas: el dominio y el prefijo quedan fijos.</p>@endif
                 <div class="flex items-center justify-between gap-3">

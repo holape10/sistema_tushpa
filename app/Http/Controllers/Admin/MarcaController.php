@@ -63,6 +63,7 @@ class MarcaController extends Controller
             'telefono' => 'nullable|string|max:30',
             'correo' => 'nullable|email|max:150',
             'logo' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:4096',
+            'icono' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:4096',
         ];
     }
 
@@ -80,7 +81,8 @@ class MarcaController extends Controller
             return back()->withInput()->with('error', 'Esta marca ya tiene empresas: su dominio y el prefijo de sus bases no se pueden cambiar.');
         }
         $logo = $request->file('logo');
-        unset($d['logo']);
+        $icono = $request->file('icono');
+        unset($d['logo'], $d['icono']);
         $d['activa'] = $request->boolean('activa', true);
         $d['razon_social'] = isset($d['razon_social']) ? mb_strtoupper(trim($d['razon_social'])) : null;
         $d['representante'] = isset($d['representante']) ? mb_strtoupper(trim($d['representante'])) : null;
@@ -89,9 +91,62 @@ class MarcaController extends Controller
         if ($logo) {
             $marca->update(['logo' => self::guardarLogo($marca, $logo)]);
         }
+        // El ícono cuadrado (pestaña del navegador y app instalada): el que suban o, si no, el logo encajado en un cuadrado
+        if ($icono || ($logo && ! is_file(public_path(self::rutaIcono($marca))))) {
+            self::guardarIcono($marca, $icono ?? $logo);
+        }
         Tenancy::olvidarMarcas();
 
         return redirect()->route('admin.marcas.index')->with('ok', "Marca {$marca->nombre} guardada.");
+    }
+
+    /** Dónde está el ícono cuadrado de la marca (no va en la base: si el archivo existe, se usa) */
+    public static function rutaIcono(Marca $marca): string
+    {
+        return self::CARPETA.'/marca-'.$marca->id.'-icono.png';
+    }
+
+    /** Ícono de 512×512 con fondo transparente: la imagen se encaja centrada sin estirarse */
+    private static function guardarIcono(Marca $marca, UploadedFile $archivo): void
+    {
+        $origen = @imagecreatefromstring((string) file_get_contents($archivo->getRealPath()));
+        if (! $origen) {
+            return;
+        }
+        if (! is_dir(public_path(self::CARPETA))) {
+            mkdir(public_path(self::CARPETA), 0775, true);
+        }
+        $lado = 512;
+        $icono = imagecreatetruecolor($lado, $lado);
+        imagealphablending($icono, false);
+        imagefill($icono, 0, 0, imagecolorallocatealpha($icono, 0, 0, 0, 127));
+        imagealphablending($icono, true);
+        [$ancho, $alto] = [imagesx($origen), imagesy($origen)];
+        $escala = min(($lado - 24) / $ancho, ($lado - 24) / $alto);
+        [$w, $h] = [(int) round($ancho * $escala), (int) round($alto * $escala)];
+        imagecopyresampled($icono, $origen, intdiv($lado - $w, 2), intdiv($lado - $h, 2), 0, 0, $w, $h, $ancho, $alto);
+        self::limpiarFondo($icono);
+        imagesavealpha($icono, true);
+        imagepng($icono, public_path(self::rutaIcono($marca)), 9);
+        imagedestroy($icono);
+        imagedestroy($origen);
+    }
+
+    /**
+     * Un "fondo transparente" que en verdad es una neblina casi invisible (píxeles al 95 % transparentes) se ve sucio
+     * sobre los colores de la marca y pesa mucho: esos píxeles quedan transparentes del todo.
+     */
+    private static function limpiarFondo(\GdImage $imagen): void
+    {
+        imagealphablending($imagen, false);
+        $transparente = imagecolorallocatealpha($imagen, 0, 0, 0, 127);
+        for ($y = 0, $alto = imagesy($imagen); $y < $alto; $y++) {
+            for ($x = 0, $ancho = imagesx($imagen); $x < $ancho; $x++) {
+                if (((imagecolorat($imagen, $x, $y) >> 24) & 0x7F) >= 110) {
+                    imagesetpixel($imagen, $x, $y, $transparente);
+                }
+            }
+        }
     }
 
     /** El logo en PNG dentro de public/ (así sale igual en la pantalla y en los PDF de los contratos) */
@@ -104,8 +159,16 @@ class MarcaController extends Controller
         $ruta = self::CARPETA.'/marca-'.$marca->id.'.png';
         $imagen = @imagecreatefromstring((string) file_get_contents($archivo->getRealPath()));
         if ($imagen) {
+            // Liviano: sale en el login y en cada pantalla (un logo de 1400 px pesa megas)
+            if (imagesx($imagen) > 800) {
+                $chico = imagescale($imagen, 800, -1, IMG_BICUBIC);
+                imagedestroy($imagen);
+                $imagen = $chico;
+                imagealphablending($imagen, false);
+            }
+            self::limpiarFondo($imagen);
             imagesavealpha($imagen, true);
-            imagepng($imagen, public_path($ruta), 6);
+            imagepng($imagen, public_path($ruta), 9);
             imagedestroy($imagen);
         } else {
             copy($archivo->getRealPath(), public_path($ruta));

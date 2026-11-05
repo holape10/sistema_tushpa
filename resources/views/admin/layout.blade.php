@@ -6,7 +6,7 @@
     <meta name="robots" content="noindex, nofollow">
     @php $marcaPanel = request()->attributes->get('panel_marca') ? \App\Models\Central\Marca::find(request()->attributes->get('panel_marca')) : null; @endphp
     <title>@yield('title', 'Panel') · {{ $marcaPanel->nombre ?? 'TUSHPA' }}</title>
-    <link rel="icon" href="{{ asset('imagenes/icono.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     <style>
         [x-cloak]{display:none!important}
         /* Tablas del panel en celular: cada fila es una tarjeta y cada dato lleva su título (data-label) */
@@ -72,7 +72,7 @@
                    class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full bg-indigo-950 text-white transition-transform duration-200 shadow-2xl flex flex-col isolate">
                 <div class="kene kene-meandro absolute inset-0 -z-10 text-white/[0.04]" aria-hidden="true"></div>
                 <div class="px-4 pt-4 pb-3 flex items-center gap-2 shrink-0">
-                    <img src="{{ asset($marcaPanel && $marcaPanel->logo ? $marcaPanel->logo : 'imagenes/icono.png') }}" alt="" class="w-9 h-9 rounded-lg bg-white p-1 object-contain">
+                    <img src="{{ asset(config('marca.icono')) }}" alt="" class="w-9 h-9 rounded-lg bg-white p-1 object-contain">
                     <div class="min-w-0 flex-1">
                         <p class="font-bold text-sm leading-tight">{{ $marcaPanel->nombre ?? 'TUSHPA' }}</p>
                         <p class="text-xs text-indigo-300 leading-tight truncate">Panel · {{ $yo->nombre }}</p>

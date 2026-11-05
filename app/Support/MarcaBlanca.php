@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Http\Controllers\Admin\MarcaController;
 use App\Models\Central\Marca;
 use App\Support\Tenancy\DatosCobro;
 
@@ -18,6 +19,9 @@ class MarcaBlanca
     {
         self::$actual = $marca;
         $logo = $marca->logo && is_file(public_path($marca->logo)) ? $marca->logo : null;
+        // Para la pestaña y la app instalada, su ícono cuadrado (si no tiene, el logo)
+        $rutaIcono = MarcaController::rutaIcono($marca);
+        $icono = is_file(public_path($rutaIcono)) ? $rutaIcono : $logo;
         $telefono = trim((string) $marca->telefono);
         $color = $marca->color ?: '#1565c0';
 
@@ -30,7 +34,8 @@ class MarcaBlanca
             'soporte.correos_web' => array_values(array_filter([(string) $marca->correo])), 'soporte.direccion' => (string) $marca->direccion,
             'soporte.horario' => '',
             'soporte.firma_comprobante' => trim('Sistema '.$marca->nombre.' - '.$marca->dominio.($telefono !== '' ? ' - '.$telefono : '')),
-        ] + ($logo ? ['marca.logo' => $logo, 'marca.icono' => $logo, 'marca.icono180' => $logo, 'marca.icono192' => $logo, 'marca.icono512' => $logo] : []));
+        ] + ($logo ? ['marca.logo' => $logo] : [])
+          + ($icono ? ['marca.icono' => $icono, 'marca.icono180' => $icono, 'marca.icono192' => $icono, 'marca.icono512' => $icono] : []));
     }
 
     /** La marca con la que se ve el sistema en esta petición (null = TUSHPA) */
