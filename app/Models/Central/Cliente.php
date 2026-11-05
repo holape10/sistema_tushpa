@@ -4,10 +4,12 @@ namespace App\Models\Central;
 
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Empresa cliente del multi-empresa (base central). Entra por su RUC ({RUC}.dominio) o, si tiene,
- * por su subdominio propio (demo.dominio). Su base es bd_{RUC}.
+ * por su subdominio propio (demo.dominio). Su base es bd_{RUC}. Si es de una marca (revendedor con dominio propio),
+ * el dominio y el prefijo de la base son los de su marca: 2060….wilcatsystems.pe y bd_ws_{RUC}.
  */
 class Cliente extends Model
 {
@@ -26,6 +28,24 @@ class Cliente extends Model
     public function planContratado()
     {
         return $this->belongsTo(Plan::class, 'plan_id');
+    }
+
+    /** La marca del revendedor (null = TUSHPA) */
+    public function marca(): BelongsTo
+    {
+        return $this->belongsTo(Marca::class, 'marca_id');
+    }
+
+    /** Dominio por el que entra: el de su marca o el de TUSHPA */
+    public function dominio(): string
+    {
+        return $this->marca_id ? (string) $this->marca?->dominio : (string) config('tenancy.dominio');
+    }
+
+    /** Prefijo de su base de datos: el de su marca (bd_ws_) o el de TUSHPA (bd_) */
+    public function prefijoBd(): string
+    {
+        return $this->marca_id ? (string) $this->marca?->prefijo_bd : (string) config('tenancy.prefijo_bd');
     }
 
     public function activo(): bool
@@ -53,12 +73,12 @@ class Cliente extends Model
 
     public function host(): string
     {
-        return $this->subdominioAcceso().'.'.config('tenancy.dominio');
+        return $this->subdominioAcceso().'.'.$this->dominio();
     }
 
     public function url(): string
     {
-        return Tenancy::urlCliente($this->subdominioAcceso());
+        return Tenancy::urlCliente($this->subdominioAcceso(), $this->dominio());
     }
 
     /** ¿Ya tiene certificado https? (lo crea deploy/ssl-clientes.sh en el servidor) */

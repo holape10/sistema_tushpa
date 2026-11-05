@@ -29,7 +29,7 @@ class ConsultaCpe
     public static function direccion(): string
     {
         $cliente = Tenancy::cliente();
-        $url = $cliente ? Tenancy::urlCliente($cliente->subdominio ?: $cliente->ruc).'/cpe' : url('/cpe');
+        $url = $cliente ? $cliente->url().'/cpe' : url('/cpe');
 
         return preg_replace('~^https?://~', '', $url);
     }

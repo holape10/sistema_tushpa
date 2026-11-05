@@ -3,7 +3,9 @@
 namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
+use App\Models\Central\Marca;
 use App\Models\Central\Plan;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -12,6 +14,9 @@ use Illuminate\Support\Facades\DB;
  */
 class Tenancy
 {
+    /** @var array<int, array{id: int, dominio: string, prefijo_bd: string, activa: bool}>|null marcas (se leen una vez por petición) */
+    private static ?array $marcas = null;
+
     public static function activa(): bool
     {
         return (bool) config('tenancy.dominio');
@@ -38,9 +43,10 @@ class Tenancy
         return config('database.connections.central.database');
     }
 
-    public static function nombreBase(string $ruc): string
+    /** @param  string|null  $prefijo  el de la marca (bd_ws_); null = el de TUSHPA (TENANCY_PREFIJO_BD) */
+    public static function nombreBase(string $ruc, ?string $prefijo = null): string
     {
-        $nombre = config('tenancy.prefijo_bd').$ruc;
+        $nombre = ($prefijo ?? config('tenancy.prefijo_bd')).$ruc;
         // Solo letras, números y guion bajo: el nombre va dentro de CREATE/DROP DATABASE
         if (! preg_match('/^\d{11}$/', $ruc) || ! preg_match('/^[a-z0-9_]{1,64}$/i', $nombre)) {
             throw new \InvalidArgumentException('Nombre de base de datos no válido.');
@@ -49,10 +55,59 @@ class Tenancy
         return $nombre;
     }
 
-    /** @param string $subdominio el RUC o el subdominio propio del cliente (demo) */
-    public static function urlCliente(string $subdominio): string
+    /**
+     * @param  string  $subdominio  el RUC o el subdominio propio del cliente (demo)
+     * @param  string|null  $dominio  el de su marca (wilcatsystems.pe); null = el de TUSHPA
+     */
+    public static function urlCliente(string $subdominio, ?string $dominio = null): string
     {
-        return config('tenancy.esquema').'://'.$subdominio.'.'.config('tenancy.dominio');
+        return config('tenancy.esquema').'://'.$subdominio.'.'.($dominio ?? config('tenancy.dominio'));
+    }
+
+    /**
+     * Las marcas (dominio, prefijo y si está activa). Si la tabla aún no existe (mientras se actualiza el sistema),
+     * ninguna: así un dominio que no es de TUSHPA nunca rompe la entrada de las empresas de siempre.
+     *
+     * @return array<int, array{id: int, dominio: string, prefijo_bd: string, activa: bool}>
+     */
+    public static function marcas(): array
+    {
+        if (self::$marcas === null) {
+            try {
+                self::$marcas = Marca::query()->get(['id', 'dominio', 'prefijo_bd', 'activa'])
+                    ->map(fn ($m) => ['id' => (int) $m->id, 'dominio' => mb_strtolower($m->dominio), 'prefijo_bd' => (string) $m->prefijo_bd, 'activa' => (bool) $m->activa])->all();
+            } catch (QueryException) {
+                self::$marcas = [];
+            }
+        }
+
+        return self::$marcas;
+    }
+
+    /** Para las pruebas y después de crear o cambiar una marca: vuelve a leerlas */
+    public static function olvidarMarcas(): void
+    {
+        self::$marcas = null;
+    }
+
+    /**
+     * ¿Este host es de una marca? wilcatsystems.pe → subdominio '' ; 2060….wilcatsystems.pe → subdominio '2060…'.
+     *
+     * @return array{marca: array{id: int, dominio: string, prefijo_bd: string, activa: bool}, subdominio: string}|null
+     */
+    public static function marcaDeHost(string $host): ?array
+    {
+        $host = mb_strtolower($host);
+        foreach (self::marcas() as $m) {
+            if ($host === $m['dominio']) {
+                return ['marca' => $m, 'subdominio' => ''];
+            }
+            if (str_ends_with($host, '.'.$m['dominio'])) {
+                return ['marca' => $m, 'subdominio' => substr($host, 0, -strlen('.'.$m['dominio']))];
+            }
+        }
+
+        return null;
     }
 
     /** Subdominios que nunca puede usar un cliente */

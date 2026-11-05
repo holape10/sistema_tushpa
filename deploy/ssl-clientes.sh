@@ -26,10 +26,11 @@ HOSTS=("${PRINCIPAL}")
 if [ -n "${DOMINIO}" ]; then
     # La web pública (tushpa.app y www.tushpa.app) y el panel
     HOSTS+=("${DOMINIO}" "www.${DOMINIO}" "${ADMIN}.${DOMINIO}")
-    # Empresas activas: su subdominio propio (demo) o su RUC. Solo letras, números y guiones llegan al shell
+    # Empresas activas de TUSHPA (las de una marca entran por el dominio de su marca): su subdominio propio (demo) o su RUC.
+    # Solo letras, números y guiones llegan al shell
     while read -r sub; do
         [[ "${sub}" =~ ^[a-z0-9-]{1,40}$ ]] && HOSTS+=("${sub}.${DOMINIO}")
-    done < <(mysql -N -u"${USUARIO_BD}" -h"${HOST_BD}" "${CENTRAL}" -e "SELECT COALESCE(NULLIF(subdominio, ''), ruc) FROM clientes WHERE estado = 'ACTIVO'" 2>/dev/null)
+    done < <(mysql -N -u"${USUARIO_BD}" -h"${HOST_BD}" "${CENTRAL}" -e "SELECT COALESCE(NULLIF(subdominio, ''), ruc) FROM clientes WHERE estado = 'ACTIVO' AND marca_id IS NULL" 2>/dev/null)
 fi
 
 nuevos=0

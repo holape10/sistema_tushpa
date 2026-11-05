@@ -3,6 +3,7 @@
 namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
+use App\Models\Central\Marca;
 use App\Support\EmpresaInicial;
 use App\Support\Estudio;
 use App\Support\Rubros;
@@ -18,12 +19,17 @@ class Provisionador
 {
     /**
      * @param  array  $d  ruc, razon_social, nombre_comercial, direccion, ubigeo, usuario, password,
-     *                    plan, vence_el, contacto_nombre, contacto_telefono, contacto_correo, notas
+     *                    plan, vence_el, contacto_nombre, contacto_telefono, contacto_correo, notas,
+     *                    marca_id (opcional: empresa de un revendedor con dominio propio; su base lleva el prefijo de la marca)
      */
     public static function crear(array $d): Cliente
     {
         $ruc = $d['ruc'];
-        $base = Tenancy::nombreBase($ruc);
+        $marca = ! empty($d['marca_id']) ? Marca::where('activa', true)->find($d['marca_id']) : null;
+        if (! empty($d['marca_id']) && ! $marca) {
+            throw new \RuntimeException('La marca de esa empresa no existe o está desactivada.');
+        }
+        $base = Tenancy::nombreBase($ruc, $marca?->prefijo_bd);
         $central = DB::connection('central');
 
         if (Cliente::where('ruc', $ruc)->where('estado', '!=', 'ELIMINADO')->exists()) {
@@ -69,7 +75,7 @@ class Provisionador
                 'contacto_telefono' => $d['contacto_telefono'] ?? null,
                 'contacto_correo' => $d['contacto_correo'] ?? null,
                 'notas' => $d['notas'] ?? null,
-            ]);
+            ] + ($marca ? ['marca_id' => $marca->id] : []));
         } catch (\Throwable $e) {
             // Solo se borra la base creada en esta misma llamada (arriba se verificó que no existía)
             $central->statement("DROP DATABASE IF EXISTS `{$base}`");

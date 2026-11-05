@@ -15,7 +15,9 @@ use Symfony\Component\HttpFoundation\Response;
  *  - {subdominio}.{dominio} => el cliente con ese subdominio propio (ej. demo.{dominio})
  *  - admin.{dominio}   => base central, solo para la ruta del panel
  *  - subdominios principales (TENANCY_PRINCIPALES, ej. a.{dominio}) => la base del .env (la empresa dueña del sistema)
+ *  - {subdominio}.{dominio de una marca} (ej. 2060….wilcatsystems.pe) => una empresa de ese revendedor (bd_ws_{RUC})
  *  - cualquier otro host (dominio principal, IP, local) => la base del .env, como siempre
+ * Cada empresa solo abre en el dominio de su marca: una de TUSHPA no abre en wilcatsystems.pe, ni una de WILCAT en tushpa.app.
  */
 class IdentificarEmpresa
 {
@@ -46,7 +48,16 @@ class IdentificarEmpresa
             return $this->esPaginaDelSitio($request->path()) ? $next($request) : redirect('/ingresar');
         }
         if (! str_ends_with($host, $sufijo)) {
-            return $next($request);
+            // ¿El dominio de una marca (revendedor)? Si no, como siempre
+            $deMarca = Tenancy::marcaDeHost($host);
+
+            if (! $deMarca) {
+                return $next($request);
+            }
+            // Una marca desactivada: su dominio no abre nada
+            abort_unless($deMarca['marca']['activa'], 404);
+
+            return $this->deMarca($request, $next, $deMarca['subdominio'], $deMarca['marca']['id']);
         }
         $subdominio = substr($host, 0, -strlen($sufijo));
 
@@ -57,12 +68,32 @@ class IdentificarEmpresa
             return $next($request);
         }
 
-        // Los clientes entran por su RUC o por su subdominio propio; cualquier otro subdominio no existe
+        return $this->abrirCliente($request, $next, $subdominio, null);
+    }
+
+    /** El dominio de una marca: sus empresas; su página de inicio y su panel llegan en las siguientes fases */
+    private function deMarca(Request $request, Closure $next, string $subdominio, int $marcaId): Response
+    {
+        abort_if(in_array($subdominio, ['', 'www', config('tenancy.subdominio_admin')], true), 404);
+        // Su sesión vive solo en su dirección (nunca con el dominio de cookies de tushpa.app, que el navegador rechazaría)
+        config(['session.domain' => null]);
+
+        return $this->abrirCliente($request, $next, $subdominio, $marcaId);
+    }
+
+    /**
+     * Los clientes entran por su RUC o por su subdominio propio; cualquier otro subdominio no existe.
+     *
+     * @param  int|null  $marcaId  la marca del dominio por el que entró (null = tushpa)
+     */
+    private function abrirCliente(Request $request, Closure $next, string $subdominio, ?int $marcaId): Response
+    {
         abort_unless(preg_match('/^[a-z0-9][a-z0-9-]{0,39}$/', $subdominio), 404);
         $cliente = preg_match('/^\d{11}$/', $subdominio)
             ? Cliente::where('ruc', $subdominio)->first()
             : Cliente::where('subdominio', $subdominio)->first();
-        abort_unless($cliente, 404);
+        // Solo en el dominio de su marca (si la columna aún no existe mientras se actualiza, todas son de TUSHPA)
+        abort_unless($cliente && (int) ($cliente->marca_id ?? 0) === (int) ($marcaId ?? 0), 404);
 
         if (! $cliente->activo()) {
             return response()->view('tenancy.suspendido', ['cliente' => $cliente], 503);
