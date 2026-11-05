@@ -39,6 +39,7 @@
                 @endif
             @endforeach
             <span class="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700">Ingreso mensual S/ {{ number_format($totales['ingreso'], 2) }}</span>
+            <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800" title="Consultas de XML de compras a json.pe este mes (cada una usa créditos)">📄 XML este mes: {{ number_format($totales['xml']) }}</span>
         </div>
         {{-- Filtros: prueba gratis (registro desde la web) y las suspendidas hace tiempo, para eliminar --}}
         <div data-totales class="w-full flex flex-wrap gap-2 text-xs font-semibold">
@@ -89,6 +90,12 @@
                             <p class="font-semibold">{{ $cl->nombre_comercial ?: $cl->razon_social }}
                                 @if ($cl->rubro)<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700">{{ \App\Support\Rubros::RUBROS[$cl->rubro]['nombre'] ?? $cl->rubro }}</span>@endif</p>
                             <p class="text-xs text-slate-400">{{ $cl->ruc }} · {{ $cl->razon_social }}</p>
+                            @if ($xmlMes = $consumoXml[$cl->id] ?? null)
+                                <p class="mt-0.5 text-[11px] font-semibold text-amber-700" title="Consultas a json.pe este mes">📄 {{ number_format($xmlMes->consultas) }} XML pedidos · {{ number_format($xmlMes->traidos) }} traídos</p>
+                            @endif
+                            @if ($cl->max_empresas)
+                                <p class="text-[11px] text-indigo-600">Estudio: hasta {{ $cl->max_empresas }} empresas</p>
+                            @endif
                         </td>
                         <td class="px-4 py-3" data-label="Acceso">
                             <a href="{{ $cl->url() }}" target="_blank" class="text-indigo-700 hover:underline">{{ $cl->host() }}</a>

@@ -26,29 +26,33 @@ class EmpresaController extends Controller
         return view('empresas.index', compact('empresas'));
     }
 
-    // Registro libre solo en la instalación inicial; después, solo usuarios logueados
+    /**
+     * /config solo sirve para instalar el sistema la primera vez (base sin empresas). Después no existe: las empresas
+     * las crea el panel TUSHPA y las de un estudio, "Empresas del estudio". Antes cualquier usuario logueado podía
+     * crear ahí una empresa con un administrador nuevo.
+     */
     private function puedeRegistrar(): bool
     {
-        return Auth::check() || Empresa::count() === 0;
+        return Empresa::count() === 0;
     }
 
+    /** Solo el administrador y solo su empresa: aquí están la clave SOL, el certificado digital y el paso a producción */
     private function autorizarEmpresa($id): void
     {
+        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el administrador cambia los datos de la empresa.');
         abort_unless((string) $id === (string) Auth::user()->IdEmpresa, 403, 'No tienes acceso a esta empresa.');
     }
 
     public function crearempresa()
     {
-        if (! $this->puedeRegistrar()) {
-            return redirect()->route('login');
-        }
+        abort_unless($this->puedeRegistrar(), 404);
 
         return view('empresas.configurar');
     }
 
     public function store(Request $request)
     {
-        abort_unless($this->puedeRegistrar(), 403);
+        abort_unless($this->puedeRegistrar(), 404);
 
         $request->validate([
             'rucEmpresa' => 'required|size:11|unique:empresa,IdEmpresa',
@@ -127,9 +131,14 @@ class EmpresaController extends Controller
         $empresa->DirEmpresa = $request->get('dirEmpresa');
         $empresa->EstEmpresa = $request->get('estEmpresa', 'Activo');
         $empresa->wsusuario = $request->get('txtWsUsuario');
-        $empresa->claveSunat = $request->get('txtWsContrasena');
+        // Las claves no se muestran en la pantalla: vacías = se conserva la guardada
+        if ($request->filled('txtWsContrasena')) {
+            $empresa->claveSunat = $request->get('txtWsContrasena');
+        }
         $empresa->produccion = $request->get('produccion');
-        $empresa->passcert = $request->get('txtPassCert');
+        if ($request->filled('txtPassCert')) {
+            $empresa->passcert = $request->get('txtPassCert');
+        }
         $empresa->icbper = $request->get('icbper');
         $empresa->tip_env_fac_id = $request->get('tip_env_fac');
         $empresa->tipo_envio = $request->get('envio');
@@ -245,9 +254,10 @@ class EmpresaController extends Controller
         return redirect()->route('empresas.index')->with('success', $mensaje.$mensajeSire);
     }
 
+    /** Datos de un RUC en SUNAT: para la instalación inicial y para los usuarios logueados (Nueva empresa del estudio, clientes) */
     public function consultaRucSunat($ruc)
     {
-        abort_unless($this->puedeRegistrar(), 403);
+        abort_unless(Auth::check() || $this->puedeRegistrar(), 403);
         abort_unless(preg_match('/^\d{11}$/', $ruc), 422);
 
         // Padrón de SUNAT propio y, de respaldo, apiperu.dev

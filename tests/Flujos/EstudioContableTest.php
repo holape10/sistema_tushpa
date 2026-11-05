@@ -2,9 +2,16 @@
 
 namespace Tests\Flujos;
 
+use App\Models\Central\Cliente;
 use App\Models\User;
 use App\Support\Estudio;
+use App\Support\Sunat\XmlJsonPe;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Client\Request as Peticion;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
+use Tests\Unit\CompraXmlTest;
 
 /** Estudio contable: las empresas de sus clientes en una misma base, sin que se cruce la información entre ellas */
 class EstudioContableTest extends FlujoTestCase
@@ -144,5 +151,79 @@ class EstudioContableTest extends FlujoTestCase
         Estudio::olvidar();
         $this->get(route('inicio'))->assertOk()->assertDontSee('Empresa en la que trabajas', false);
         $this->get(route('estudio.index'))->assertNotFound();
+    }
+
+    public function test_el_plan_limita_cuantas_empresas_activas_lleva_el_estudio(): void
+    {
+        app()->instance('tenancy.cliente', (new Cliente)->forceFill(['id' => 999999, 'ruc' => $this->estudio, 'max_empresas' => 2]));
+        $this->get(route('estudio.index'))->assertOk()->assertSee('Llegaste al límite de tu plan');
+        $this->post(route('estudio.guardar'), ['ruc' => '20600695771', 'razon_social' => 'NUBEFACT SA'])->assertSessionHas('error');
+        $this->assertFalse(DB::table('empresa')->where('IdEmpresa', '20600695771')->exists());
+
+        // Desactiva una que ya no lleva: entra otra, pero la desactivada ya no puede volver sin cupo
+        $this->post(route('estudio.estado', self::EMPRESA_A))->assertSessionHas('success');
+        $this->post(route('estudio.guardar'), ['ruc' => '20600695771', 'razon_social' => 'NUBEFACT SA'])->assertSessionHasNoErrors()->assertSessionHas('success');
+        $this->post(route('estudio.estado', self::EMPRESA_A))->assertSessionHas('error');
+        $this->assertSame(2, Estudio::activas());
+    }
+
+    public function test_cada_empresa_guarda_sus_credenciales_cifradas_y_sus_cuentas(): void
+    {
+        $this->post(route('estudio.configurar', self::EMPRESA_A), [
+            'client_id' => 'ID-API-A', 'client_secret' => 'SECRETO-API-A', 'sire_usuario' => 'usuarioa', 'sire_clave' => 'CLAVE-SIRE-A',
+            'sol_usuario' => 'solprina', 'sol_clave' => 'CLAVE-SOL-A', 'cta_compras' => '63141', 'cta_por_pagar' => '42121',
+        ])->assertSessionHasNoErrors()->assertSessionHas('success');
+        $fila = DB::table('empresa')->where('IdEmpresa', self::EMPRESA_A)->first();
+        $this->assertSame(['ID-API-A', 'USUARIOA', 'SOLPRINA'], [$fila->client_id, $fila->sire_usuario, $fila->sol_usuario]);
+        foreach (['client_secret' => 'SECRETO-API-A', 'sire_clave' => 'CLAVE-SIRE-A', 'sol_clave' => 'CLAVE-SOL-A'] as $campo => $clave) {
+            $this->assertNotSame($clave, $fila->{$campo}, "{$campo} se guarda cifrada.");
+            $this->assertSame($clave, decrypt($fila->{$campo}, false));
+        }
+        $this->assertSame(['63141', '42121'], [DB::table('concar_config')->where('IdEmpresa', self::EMPRESA_A)->value('cta_compras'),
+            DB::table('concar_config')->where('IdEmpresa', self::EMPRESA_A)->value('cta_por_pagar')]);
+        $this->assertNull(DB::table('concar_config')->where('IdEmpresa', self::EMPRESA_B)->value('cta_compras'), 'La otra empresa no se toca.');
+
+        // Las claves nunca se muestran; si no se escriben, se conservan
+        $this->get(route('estudio.index'))->assertOk()->assertSee('SIRE ✔')->assertSee('SOL ✔')
+            ->assertDontSee('SECRETO-API-A')->assertDontSee('CLAVE-SIRE-A')->assertDontSee('CLAVE-SOL-A');
+        $this->post(route('estudio.configurar', self::EMPRESA_A), ['client_id' => 'ID-API-A', 'sire_usuario' => 'USUARIOA', 'sol_usuario' => 'SOLPRINA'])->assertSessionHas('success');
+        $this->assertSame('CLAVE-SOL-A', decrypt(DB::table('empresa')->where('IdEmpresa', self::EMPRESA_A)->value('sol_clave'), false));
+        // El propio estudio no se configura por esta vía
+        $this->post(route('estudio.configurar', $this->estudio), ['client_id' => 'X'])->assertNotFound();
+    }
+
+    public function test_cada_empresa_trae_sus_xml_con_su_propia_clave_sol_y_se_cuentan_en_el_panel(): void
+    {
+        // Base central de mentira en memoria para el contador del panel
+        config(['database.connections.central' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => ''], 'services.jsonpe.token' => 'token-de-prueba']);
+        DB::purge('central');
+        Schema::connection('central')->create('clientes', fn (Blueprint $t) => $t->id());
+        (include database_path('migrations/central/2027_01_22_000001_estudios_y_consumo_xml.php'))->up();
+        app()->instance('tenancy.cliente', (new Cliente)->forceFill(['id' => 7, 'ruc' => $this->estudio, 'sol_usuario' => 'SOLDELESTUDIO', 'sol_clave' => 'clave-estudio']));
+
+        foreach ([self::EMPRESA_A => 'SOLA', self::EMPRESA_B => 'SOLB'] as $ruc => $usuario) {
+            DB::table('empresa')->where('IdEmpresa', $ruc)->update(['sol_usuario' => $usuario, 'sol_clave' => encrypt('clave-'.$usuario, false)]);
+        }
+        $zip = tempnam(sys_get_temp_dir(), 'zip');
+        $z = new \ZipArchive;
+        $z->open($zip, \ZipArchive::OVERWRITE);
+        $z->addFromString('F001-134277.xml', CompraXmlTest::factura(self::EMPRESA_A));
+        $z->close();
+        Http::fake(['*' => Http::response(['success' => true, 'data' => ['xml_base64' => base64_encode(file_get_contents($zip))]])]);
+
+        $this->cambiar(self::EMPRESA_A);
+        $this->assertNotNull(XmlJsonPe::traer(self::EMPRESA_A, '20553510661', '01', 'F001', '134277')['xml']);
+        Http::assertSent(fn (Peticion $p) => $p['ruc'] === self::EMPRESA_A && $p['usuario'] === 'SOLA' && $p['password'] === 'clave-SOLA');
+        Http::assertNotSent(fn (Peticion $p) => $p['usuario'] === 'SOLB' || $p['usuario'] === 'SOLDELESTUDIO');
+
+        $mes = DB::connection('central')->table('consumo_xml')->where('cliente_id', 7)->first();
+        $this->assertSame([1, 1], [(int) $mes->consultas, (int) $mes->traidos], 'El panel cuenta cada XML pedido a json.pe.');
+
+        // Una empresa sin su Clave SOL no usa la del estudio
+        DB::table('empresa')->where('IdEmpresa', self::EMPRESA_B)->update(['sol_usuario' => null, 'sol_clave' => null]);
+        $this->cambiar(self::EMPRESA_B);
+        $this->assertStringContainsString('Empresas del estudio', (string) XmlJsonPe::falta());
+        $this->assertTrue(XmlJsonPe::traer(self::EMPRESA_B, '20553510661', '01', 'F001', '1')['detener']);
+        Http::assertSentCount(1);
     }
 }

@@ -212,6 +212,30 @@
                 @endforeach
             </div>
 
+            {{-- XML de compras pedidos a json.pe por mes (cada consulta usa créditos de la cuenta de TUSHPA) --}}
+            @if (! empty($historialXml) && $historialXml->isNotEmpty())
+                <div class="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                    <p class="text-sm font-bold text-amber-900">📄 XML de compras traídos de SUNAT (json.pe)</p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach ($historialXml as $m)
+                            <span class="rounded-lg bg-white px-3 py-1.5 text-xs ring-1 ring-amber-200">
+                                <b class="capitalize">{{ \Carbon\Carbon::createFromFormat('Ym', $m->mes)->locale('es')->translatedFormat('M Y') }}</b>:
+                                {{ number_format($m->consultas) }} consultas · {{ number_format($m->traidos) }} traídos</span>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            {{-- Estudio contable: cuántas empresas de sus clientes puede llevar (según lo que paga) --}}
+            <div x-show="rubro === 'ESTUDIO'" x-cloak class="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 grid sm:grid-cols-[1fr_auto] gap-3 items-center">
+                <div>
+                    <p class="text-sm font-bold text-indigo-900">Empresas que puede llevar el estudio</p>
+                    <p class="text-xs text-indigo-800/80">Cuántas empresas activas puede tener a la vez. Vacío = sin límite. Las que desactive no cuentan.</p>
+                </div>
+                <input type="number" name="max_empresas" min="1" max="9999" value="{{ old('max_empresas', $cliente->max_empresas) }}" placeholder="Sin límite"
+                       class="w-36 rounded-xl border-indigo-300 text-right font-bold">
+            </div>
+
             {{-- Módulos adicionales: se suman (o quitan) del menú sin tocar lo demás --}}
             <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
                 <p class="text-sm font-bold text-slate-700">Módulos adicionales <span class="font-normal text-xs text-slate-500">— para el cliente que quiere ampliar su sistema. Toca para agregar o quitar.</span></p>

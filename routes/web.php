@@ -626,6 +626,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/estudio', [EstudioController::class, 'index'])->name('estudio.index');
     Route::post('/estudio/empresas', [EstudioController::class, 'guardar'])->name('estudio.guardar');
     Route::post('/estudio/empresas/{ruc}/estado', [EstudioController::class, 'estado'])->where('ruc', '\d{11}')->name('estudio.estado');
+    Route::post('/estudio/empresas/{ruc}/configurar', [EstudioController::class, 'configurar'])->where('ruc', '\d{11}')->name('estudio.configurar');
     Route::post('/estudio/empresas/{ruc}/accesos', [EstudioController::class, 'accesos'])->where('ruc', '\d{11}')->name('estudio.accesos');
     Route::post('/estudio/cambiar', [EstudioController::class, 'cambiar'])->name('estudio.cambiar');
 

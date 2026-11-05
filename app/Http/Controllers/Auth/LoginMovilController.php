@@ -74,11 +74,15 @@ class LoginMovilController extends Controller
         $sucursal = $this->sucursal($request);
         abort_unless($sucursal, 403);
 
-        // Máximo 5 intentos por minuto por mozo y equipo
+        // Máximo 5 intentos por minuto por mozo y equipo, y 20 cada 15 minutos por mozo desde cualquier equipo
+        // (un código de 4 dígitos no se adivina probando desde muchas conexiones)
         $llave = 'login-movil:'.$request->usuario.'|'.$request->ip();
-        if (RateLimiter::tooManyAttempts($llave, 5)) {
-            return back()->withErrors(['codigo' => 'Demasiados intentos. Espera '.RateLimiter::availableIn($llave).' segundos.'])
-                ->withInput(['usuario' => $request->usuario]);
+        $llaveMozo = 'login-movil-mozo:'.$request->usuario;
+        foreach ([$llave => 5, $llaveMozo => 20] as $clave => $maximo) {
+            if (RateLimiter::tooManyAttempts($clave, $maximo)) {
+                return back()->withErrors(['codigo' => 'Demasiados intentos. Espera '.ceil(RateLimiter::availableIn($clave) / 60).' minuto(s) o pide ayuda al administrador.'])
+                    ->withInput(['usuario' => $request->usuario]);
+            }
         }
 
         $mozo = $this->mozos($sucursal)->firstWhere('IdUsuario', (int) $request->usuario);
@@ -86,11 +90,13 @@ class LoginMovilController extends Controller
 
         if (! $user || ! hash_equals((string) $user->codigo_movil, (string) $request->codigo)) {
             RateLimiter::hit($llave, 60);
+            RateLimiter::hit($llaveMozo, 900);
 
             return back()->withErrors(['codigo' => 'Código incorrecto.'])->withInput(['usuario' => $request->usuario]);
         }
 
         RateLimiter::clear($llave);
+        RateLimiter::clear($llaveMozo);
         if (! RedLocal::permite($user, (string) $request->ip())) {
             return back()->withErrors(['codigo' => RedLocal::mensaje()])->withInput(['usuario' => $request->usuario]);
         }

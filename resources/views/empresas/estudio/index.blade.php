@@ -11,10 +11,14 @@
             <p class="text-sm text-indigo-100 mt-0.5">Cada empresa guarda su contabilidad, SIRE, planilla y asistencia por separado. Elige arriba en cuál trabajas.</p>
         </div>
         <div class="text-center">
-            <p class="text-3xl font-black">{{ $activas }}</p>
-            <p class="text-xs text-indigo-100">empresas activas</p>
+            <p class="text-3xl font-black">{{ $activas }}@if ($limite)<span class="text-lg font-bold text-indigo-200"> / {{ $limite }}</span>@endif</p>
+            <p class="text-xs text-indigo-100">{{ $limite ? 'empresas activas de tu plan' : 'empresas activas' }}</p>
         </div>
-        <button type="button" @click="nueva = !nueva" class="h-11 px-5 rounded-xl bg-white text-indigo-700 font-bold hover:bg-indigo-50">+ Nueva empresa</button>
+        @if (! $limite || $activas < $limite)
+            <button type="button" @click="nueva = !nueva" class="h-11 px-5 rounded-xl bg-white text-indigo-700 font-bold hover:bg-indigo-50">+ Nueva empresa</button>
+        @else
+            <span class="rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold">Llegaste al límite de tu plan</span>
+        @endif
     </section>
 
     {{-- Nueva empresa: el RUC trae la razón social y la dirección de SUNAT --}}
@@ -65,19 +69,20 @@
                         <th class="text-right px-4 py-3"></th>
                     </tr>
                 </thead>
-                <tbody>
                     @forelse ($empresas as $e)
                         @php $conAcceso = $accesos[$e->IdEmpresa] ?? []; @endphp
-                        <tr class="border-t border-slate-100 {{ $e->activa ? '' : 'opacity-50' }}" x-data="{ accesos: false }">
+                        <tbody x-data="{ accesos: false, configurar: false }">
+                        <tr class="border-t border-slate-100 {{ $e->activa ? '' : 'opacity-50' }}">
                             <td class="px-4 py-3 font-mono font-bold text-indigo-700 whitespace-nowrap">{{ $e->IdEmpresa }}
                                 @unless ($e->activa)<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">INACTIVA</span>@endunless</td>
                             <td class="px-4 py-3"><p class="font-semibold text-slate-800">{{ $e->NomEmpresa }}</p><p class="text-xs text-slate-400">{{ $e->DirEmpresa }}</p></td>
                             <td class="px-4 py-3 whitespace-nowrap">
                                 @if ($e->client_id && $e->sire_usuario)
-                                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">Conectado</span>
+                                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">SIRE ✔</span>
                                 @else
                                     <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">Faltan credenciales</span>
                                 @endif
+                                <span class="ml-1 rounded-full px-2 py-0.5 text-xs font-bold {{ $e->sol_usuario ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ $e->sol_usuario ? 'SOL ✔' : 'Sin Clave SOL' }}</span>
                             </td>
                             <td class="px-4 py-3 relative">
                                 <button type="button" @click="accesos = !accesos" class="text-xs font-semibold text-slate-600 hover:text-indigo-700">
@@ -97,6 +102,7 @@
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-2">
+                                    <button type="button" @click="configurar = !configurar" class="h-9 px-3 rounded-lg bg-white ring-1 ring-indigo-200 hover:bg-indigo-50 text-indigo-700 text-xs font-bold">Configurar</button>
                                     @if ($e->activa)
                                         <form method="POST" action="{{ route('estudio.cambiar') }}">@csrf<input type="hidden" name="ruc" value="{{ $e->IdEmpresa }}">
                                             <button class="h-9 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold whitespace-nowrap">Trabajar aquí</button></form>
@@ -107,10 +113,43 @@
                                 </div>
                             </td>
                         </tr>
+                        {{-- Lo que necesita la empresa: API SIRE, Clave SOL principal (XML de compras) y cuentas por defecto --}}
+                        @php $cta = $cuentas[$e->IdEmpresa] ?? null; @endphp
+                        <tr x-show="configurar" x-cloak class="bg-slate-50">
+                            <td colspan="5" class="px-4 py-4">
+                                <form method="POST" action="{{ route('estudio.configurar', $e->IdEmpresa) }}" class="grid gap-4 lg:grid-cols-3">
+                                    @csrf
+                                    <fieldset class="space-y-2">
+                                        <legend class="text-xs font-bold uppercase text-slate-500">API SIRE (SUNAT)</legend>
+                                        <input name="client_id" value="{{ $e->client_id }}" placeholder="ID (client_id)" autocomplete="off" class="w-full h-9 rounded-lg border-slate-300 text-sm">
+                                        <input type="password" name="client_secret" placeholder="{{ $e->client_id ? 'CLAVE guardada · escribe para cambiar' : 'CLAVE (client_secret)' }}" autocomplete="new-password" class="w-full h-9 rounded-lg border-slate-300 text-sm">
+                                        <input name="sire_usuario" value="{{ $e->sire_usuario }}" placeholder="Usuario SOL del SIRE" autocomplete="off" class="w-full h-9 rounded-lg border-slate-300 text-sm uppercase">
+                                        <input type="password" name="sire_clave" placeholder="{{ $e->sire_usuario ? 'Clave guardada · escribe para cambiar' : 'Clave SOL del SIRE' }}" autocomplete="new-password" class="w-full h-9 rounded-lg border-slate-300 text-sm">
+                                    </fieldset>
+                                    <fieldset class="space-y-2">
+                                        <legend class="text-xs font-bold uppercase text-slate-500">Clave SOL principal (XML de compras)</legend>
+                                        <input name="sol_usuario" value="{{ $e->sol_usuario }}" placeholder="Usuario SOL principal" autocomplete="off" class="w-full h-9 rounded-lg border-slate-300 text-sm uppercase">
+                                        <input type="password" name="sol_clave" placeholder="{{ $e->sol_usuario ? 'Clave guardada · escribe para cambiar' : 'Clave SOL principal' }}" autocomplete="new-password" class="w-full h-9 rounded-lg border-slate-300 text-sm">
+                                        <p class="text-xs text-slate-400">Con ella se traen los XML de SUNAT por json.pe. Se guarda cifrada.</p>
+                                    </fieldset>
+                                    <fieldset class="grid grid-cols-2 gap-2 content-start">
+                                        <legend class="col-span-2 text-xs font-bold uppercase text-slate-500">Cuentas por defecto (asientos y .dbf)</legend>
+                                        @foreach (['cta_compras' => 'Compras (cargo)', 'cta_por_pagar' => 'Por pagar (abono)', 'cta_por_cobrar' => 'Por cobrar (cargo)', 'cta_ventas' => 'Ventas gravadas', 'cta_ventas_exo' => 'Ventas exoneradas'] as $campo => $texto)
+                                            <label class="text-xs font-semibold text-slate-500">{{ $texto }}
+                                                <input name="{{ $campo }}" value="{{ $cta->{$campo} ?? '' }}" maxlength="12" inputmode="numeric" placeholder="{{ \App\Support\Concar::DEFECTO[$campo] }}" class="mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
+                                        @endforeach
+                                    </fieldset>
+                                    <div class="lg:col-span-3 flex justify-end gap-2">
+                                        <button type="button" @click="configurar = false" class="h-9 px-4 rounded-lg bg-white ring-1 ring-slate-200 text-sm font-semibold text-slate-600">Cerrar</button>
+                                        <button class="h-9 px-5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">Guardar datos de {{ $e->IdEmpresa }}</button>
+                                    </div>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
                     @empty
-                        <tr><td colspan="5" class="px-4 py-10 text-center text-slate-400">{{ $q ? 'Ninguna empresa coincide con la búsqueda.' : 'Aún no registras empresas: usa "+ Nueva empresa".' }}</td></tr>
+                        <tbody><tr><td colspan="5" class="px-4 py-10 text-center text-slate-400">{{ $q ? 'Ninguna empresa coincide con la búsqueda.' : 'Aún no registras empresas: usa "+ Nueva empresa".' }}</td></tr></tbody>
                     @endforelse
-                </tbody>
             </table>
         </div>
     </div>

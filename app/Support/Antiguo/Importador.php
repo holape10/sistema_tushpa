@@ -68,7 +68,9 @@ class Importador
 
     public static function conectar(string $bd): void
     {
-        config(['database.connections.'.self::CONEXION => array_merge(config('database.connections.mysql'), ['database' => $bd])]);
+        // Una sola sentencia por vez: un respaldo no puede colar "...; DROP DATABASE otra" en la misma línea
+        config(['database.connections.'.self::CONEXION => array_merge(config('database.connections.mysql'), ['database' => $bd,
+            'options' => array_replace(config('database.connections.mysql.options') ?? [], [\PDO::MYSQL_ATTR_MULTI_STATEMENTS => false])])]);
         DB::purge(self::CONEXION);
         DB::connection(self::CONEXION)->getPdo();
     }

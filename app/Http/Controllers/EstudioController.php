@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Empresa;
 use App\Models\User;
 use App\Support\ConsultaPeru;
 use App\Support\Estudio;
@@ -33,7 +34,7 @@ class EstudioController extends Controller
             ->where('ee.propia', false)
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('e.NomEmpresa', 'like', "%{$q}%")->orWhere('ee.IdEmpresa', 'like', "{$q}%")))
             ->orderByDesc('ee.activa')->orderBy('e.NomEmpresa')
-            ->get(['ee.IdEmpresa', 'e.NomEmpresa', 'e.DirEmpresa', 'ee.activa', 'e.client_id', 'e.sire_usuario']);
+            ->get(['ee.IdEmpresa', 'e.NomEmpresa', 'e.DirEmpresa', 'ee.activa', 'e.client_id', 'e.sire_usuario', 'e.sol_usuario']);
         $accesos = DB::table('estudio_accesos')->get()->groupBy('IdEmpresa')->map(fn ($a) => $a->pluck('IdUsuario')->map(fn ($id) => (int) $id)->all());
         // Los usuarios del estudio que no son administradores (el administrador ya ve todas)
         $usuarios = User::query()->whereNotIn('IdUsuario', DB::table('role_user')->where('role_id', 2)->select('user_IdUsuario'))
@@ -42,13 +43,22 @@ class EstudioController extends Controller
         return view('empresas.estudio.index', [
             'estudio' => DB::table('empresa')->where('IdEmpresa', $estudio)->first(),
             'empresas' => $empresas, 'accesos' => $accesos, 'usuarios' => $usuarios, 'q' => $q,
-            'activas' => DB::table('estudio_empresas')->where('propia', false)->where('activa', true)->count(),
+            'activas' => Estudio::activas(), 'limite' => Estudio::limite(),
+            'cuentas' => DB::table('concar_config')->whereIn('IdEmpresa', $empresas->pluck('IdEmpresa'))->get()->keyBy('IdEmpresa'),
         ]);
+    }
+
+    private function sinCupo(): RedirectResponse
+    {
+        return back()->withInput()->with('error', 'Tu plan permite hasta '.Estudio::limite().' empresas activas. Desactiva una que ya no lleves o pide a TUSHPA ampliar tu plan.');
     }
 
     public function guardar(Request $request): RedirectResponse
     {
         $this->administrar();
+        if (! Estudio::hayCupo()) {
+            return $this->sinCupo();
+        }
         $d = $request->validate([
             'ruc' => ['required', 'digits:11', 'unique:empresa,IdEmpresa', fn ($campo, $valor, $falla) => ConsultaPeru::rucValido((string) $valor) || $falla('Ese RUC no es válido. Revisa los 11 dígitos.')],
             'razon_social' => 'required|string|max:200',
@@ -61,12 +71,53 @@ class EstudioController extends Controller
         return redirect()->route('estudio.index')->with('success', "Empresa {$d['ruc']} registrada. Entra a ella con \"Trabajar aquí\" para poner sus credenciales SIRE y su Clave SOL.");
     }
 
+    /**
+     * Lo que necesita cada empresa para trabajar: sus credenciales del API SIRE, su Clave SOL principal (para traer los
+     * XML de compras) y las cuentas por defecto de sus asientos y del .dbf. Las claves solo cambian si se escriben.
+     */
+    public function configurar(Request $request, string $ruc): RedirectResponse
+    {
+        $this->administrar();
+        abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->where('propia', false)->exists(), 404);
+        $cuenta = ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]+$/'];
+        $d = $request->validate([
+            'client_id' => 'nullable|string|max:100', 'client_secret' => 'nullable|string|max:255',
+            'sire_usuario' => ['nullable', 'string', 'max:30', 'regex:/^[A-Za-z0-9]+$/'], 'sire_clave' => 'nullable|string|max:100',
+            'sol_usuario' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'], 'sol_clave' => 'nullable|string|max:60',
+            'cta_compras' => $cuenta, 'cta_por_pagar' => $cuenta, 'cta_por_cobrar' => $cuenta, 'cta_ventas' => $cuenta, 'cta_ventas_exo' => $cuenta,
+        ], ['regex' => 'Solo letras y números, sin espacios ni puntos.'], [
+            'client_id' => 'ID del API SIRE', 'sire_usuario' => 'usuario SOL del SIRE', 'sol_usuario' => 'usuario SOL principal',
+        ]);
+
+        $empresa = Empresa::findOrFail($ruc);
+        $empresa->client_id = trim((string) ($d['client_id'] ?? '')) ?: null;
+        $empresa->sire_usuario = mb_strtoupper(trim((string) ($d['sire_usuario'] ?? ''))) ?: null;
+        $empresa->sol_usuario = mb_strtoupper(trim((string) ($d['sol_usuario'] ?? ''))) ?: null;
+        foreach (['client_secret', 'sire_clave', 'sol_clave'] as $secreto) {
+            if (! empty($d[$secreto])) {
+                $empresa->{$secreto} = $d[$secreto];
+            }
+        }
+        $empresa->save();
+        cache()->forget('sire_token_'.$ruc);
+
+        $cuentas = array_filter(array_intersect_key($d, array_flip(['cta_compras', 'cta_por_pagar', 'cta_por_cobrar', 'cta_ventas', 'cta_ventas_exo'])), fn ($v) => trim((string) $v) !== '');
+        if ($cuentas) {
+            DB::table('concar_config')->updateOrInsert(['IdEmpresa' => $ruc], $cuentas + ['updated_at' => now()]);
+        }
+
+        return back()->with('success', "Datos de la empresa {$ruc} guardados.");
+    }
+
     /** Una empresa que el estudio ya no lleva: deja de verse en el selector (sus datos se conservan) */
     public function estado(string $ruc): RedirectResponse
     {
         $this->administrar();
         $fila = DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->where('propia', false)->first();
         abort_unless($fila, 404);
+        if (! $fila->activa && ! Estudio::hayCupo()) {
+            return $this->sinCupo();
+        }
         DB::table('estudio_empresas')->where('id', $fila->id)->update(['activa' => ! $fila->activa, 'updated_at' => now()]);
 
         return back()->with('success', $fila->activa ? "Empresa {$ruc} desactivada: ya nadie la ve en el selector. Sus datos se conservan." : "Empresa {$ruc} activada de nuevo.");

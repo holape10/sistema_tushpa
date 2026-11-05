@@ -6,6 +6,7 @@ use App\Models\Almacen;
 use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Models\User;
+use App\Support\Tenancy\Tenancy;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,25 @@ class Estudio
     public static function activo(): bool
     {
         return self::ruc() !== null;
+    }
+
+    /** Cuántas empresas puede llevar el estudio según su plan (lo pone el panel TUSHPA); null = sin límite */
+    public static function limite(): ?int
+    {
+        $max = Tenancy::cliente()?->max_empresas;
+
+        return $max ? (int) $max : null;
+    }
+
+    public static function activas(): int
+    {
+        return DB::table('estudio_empresas')->where('propia', false)->where('activa', true)->count();
+    }
+
+    /** ¿Puede activar una empresa más sin pasarse de su plan? */
+    public static function hayCupo(): bool
+    {
+        return self::limite() === null || self::activas() < self::limite();
     }
 
     /** Para las pruebas y después de activar: vuelve a leer el estudio */

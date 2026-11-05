@@ -95,10 +95,36 @@ class CargadorSql
         return $res;
     }
 
+    /**
+     * Seguridad: el respaldo lo sube el administrador de la empresa y se carga con el usuario de MySQL del servidor.
+     * Solo pasa una sentencia sobre una tabla de la lista, sin tocar otras bases (`otra_base.tabla`), sin SELECT
+     * escondido (INSERT ... SELECT, CREATE ... SELECT), sin renombrar, sin leer o escribir archivos y una sola sentencia
+     * a la vez. Lo que va entre comillas (los datos) no cuenta.
+     */
+    public static function seguro(string $sql): bool
+    {
+        $sinDatos = preg_replace(["/'(?:[^'\\\\]++|\\\\.)*+'/s", '/"(?:[^"\\\\]++|\\\\.)*+"/s'], "''", $sql);
+        if ($sinDatos === null) {
+            return false;
+        }
+        $sinDatos = rtrim(trim($sinDatos), ';');
+        if (str_contains($sinDatos, ';')
+            || preg_match('/\b(SELECT|RENAME|LOAD_FILE|OUTFILE|DUMPFILE|GRANT|DATABASE|SCHEMA|USE|HANDLER|LOAD\s+DATA)\b/i', $sinDatos)
+            || preg_match('/(`[^`]+`|\b[A-Za-z_][A-Za-z0-9_$]*)\s*\.\s*(`[^`]+`|[A-Za-z_][A-Za-z0-9_$]*|\*)/', $sinDatos)) {
+            return false;
+        }
+        // DROP TABLE de una sola tabla
+        if (preg_match('/^DROP\s+TABLE/i', $sinDatos) && ! preg_match('/^DROP\s+TABLE(?:\s+IF\s+EXISTS)?\s+`?[A-Za-z0-9_]+`?\s*$/i', $sinDatos)) {
+            return false;
+        }
+
+        return true;
+    }
+
     private static function ejecutar(\PDO $pdo, string $sql, array &$res): void
     {
         if ($sql === '' || preg_match(self::RUTINA, $sql) || ! preg_match(self::TABLA, $sql, $m)
-            || ! in_array(strtolower($m[1]), self::TABLAS, true)) {
+            || ! in_array(strtolower($m[1]), self::TABLAS, true) || ! self::seguro($sql)) {
             $res['omitidas']++;
 
             return;

@@ -126,7 +126,7 @@
                         <label class="text-sm font-medium text-gray-600">Usuario SOL
                             <input name="txtWsUsuario" value="{{ old('txtWsUsuario', $empresa->wsusuario) }}" class="{{ $input }} uppercase"></label>
                         <label class="text-sm font-medium text-gray-600">Clave SOL
-                            <span class="relative block"><input type="password" name="txtWsContrasena" id="txtWsContrasena" value="{{ old('txtWsContrasena', $empresa->claveSunat) }}" class="{{ $input }} pr-9">{!! $ojo('txtWsContrasena') !!}</span></label>
+                            <span class="relative block"><input type="password" name="txtWsContrasena" id="txtWsContrasena" value="" autocomplete="new-password" placeholder="{{ $empresa->claveSunat ? 'Guardada · escribe para cambiarla' : 'Clave SOL' }}" class="{{ $input }} pr-9">{!! $ojo('txtWsContrasena') !!}</span></label>
                         <label class="text-sm font-medium text-gray-600">ICBPER (bolsas) S/
                             <input type="number" step="0.01" min="0" name="icbper" value="{{ old('icbper', $empresa->icbper) }}" class="{{ $input }}"></label>
                     </div>
@@ -176,7 +176,7 @@
                             @if ($empresa->certificado)<p class="text-xs text-emerald-600 mt-1"><i class="fas fa-circle-check"></i> Cargado: {{ $empresa->certificado }}</p>@endif
                         </div>
                         <label class="text-sm font-medium text-gray-600">Contraseña del certificado
-                            <span class="relative block"><input type="password" name="txtPassCert" id="txtPassCert" value="{{ old('txtPassCert', $empresa->passcert) }}" class="{{ $input }} pr-9">{!! $ojo('txtPassCert') !!}</span></label>
+                            <span class="relative block"><input type="password" name="txtPassCert" id="txtPassCert" value="" autocomplete="new-password" placeholder="{{ $empresa->passcert ? 'Guardada · escribe para cambiarla' : 'Contraseña del certificado' }}" class="{{ $input }} pr-9">{!! $ojo('txtPassCert') !!}</span></label>
                     </div>
                 </section>
 

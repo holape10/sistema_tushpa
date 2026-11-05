@@ -57,6 +57,7 @@ class Provisionador
                 'plan_id' => $d['plan_id'] ?? null,
                 'razon_social' => $d['razon_social'],
                 'rubro' => $d['rubro'] ?? null,
+                'max_empresas' => $d['max_empresas'] ?? null,
                 'nombre_comercial' => ($d['nombre_comercial'] ?? null) ?: null,
                 'base_datos' => $base,
                 'estado' => 'ACTIVO',

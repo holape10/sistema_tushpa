@@ -8,8 +8,10 @@ use App\Models\Central\Plan;
 use App\Models\Central\Superadmin;
 use App\Models\User;
 use App\Support\ConsultaPeru;
+use App\Support\Estudio;
 use App\Support\LogosClientes;
 use App\Support\Rubros;
+use App\Support\Tenancy\ConsumoXml;
 use App\Support\Tenancy\Eliminador;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Reiniciador;
@@ -106,12 +108,15 @@ class ClienteController extends Controller
             'para_eliminar' => $base()->where('estado', 'SUSPENDIDO')->where('suspendido_el', '<=', $limiteEliminar)->count(),
         ];
         $comprobantes = $clientes->getCollection()->mapWithKeys(fn ($cl) => [$cl->id => $this->comprobantes($cl)]);
+        // XML de compras pedidos a json.pe este mes (cada consulta usa créditos de la cuenta de TUSHPA)
+        $consumoXml = ConsumoXml::delMes();
+        $totales['xml'] = (int) $consumoXml->sum('consultas');
         $usuarios = $this->esDueno() ? Superadmin::orderBy('nombre')->pluck('nombre', 'id') : collect();
 
         $porUsuario = $this->esDueno() ? Cliente::where('estado', '!=', 'ELIMINADO')->groupBy('creado_por')
             ->select('creado_por', DB::raw('COUNT(*) as n'))->pluck('n', 'creado_por') : collect();
 
-        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'filtro', 'comprobantes', 'usuarios', 'limiteEliminar', 'usuario', 'porUsuario'));
+        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'filtro', 'comprobantes', 'usuarios', 'limiteEliminar', 'usuario', 'porUsuario', 'consumoXml'));
     }
 
     public function create()
@@ -174,7 +179,8 @@ class ClienteController extends Controller
 
         return view('admin.clientes.form', ['cliente' => $cliente, 'planes' => $this->planes(),
             'usuarios' => $this->esDueno() ? Superadmin::orderBy('nombre')->pluck('nombre', 'id') : collect(),
-            'rubros' => Rubros::RUBROS, 'catalogo' => Rubros::catalogo(), 'menuActual' => $this->menuAdministrador($cliente)]);
+            'rubros' => Rubros::RUBROS, 'catalogo' => Rubros::catalogo(), 'menuActual' => $this->menuAdministrador($cliente),
+            'historialXml' => ConsumoXml::historial((int) $cliente->id)]);
     }
 
     public function update(Request $request, Cliente $cliente)
@@ -197,7 +203,19 @@ class ClienteController extends Controller
         $d['plan'] = isset($d['plan_id']) ? Plan::find($d['plan_id'])?->nombre : null;
         $menu = ! empty($d['cambiar_menu']) ? ($d['modulos'] ?? []) : null;
         unset($d['cambiar_menu'], $d['modulos']);
+        $eraEstudio = ! empty(Rubros::RUBROS[$cliente->rubro ?? '']['estudio']);
         $cliente->update($d);
+
+        // Pasó a ser estudio contable: su empresa queda como el estudio y su administrador ve "Empresas del estudio"
+        if (! $eraEstudio && ! empty(Rubros::RUBROS[$cliente->rubro ?? '']['estudio'])) {
+            try {
+                Tenancy::en($cliente->base_datos, fn () => Estudio::activar($cliente->ruc));
+            } catch (\Throwable $e) {
+                report($e);
+
+                return redirect()->route('admin.clientes.index')->with('ok', "Se actualizó {$cliente->razon_social}, pero no se pudo activar su estudio: ".$e->getMessage());
+            }
+        }
 
         $aviso = '';
         if ($menu !== null) {
@@ -503,6 +521,8 @@ class ClienteController extends Controller
             'contacto_telefono' => 'nullable|string|max:20',
             'contacto_correo' => 'nullable|email|max:120',
             'notas' => 'nullable|string|max:2000',
+            // Solo cuenta en los estudios contables: cuántas empresas de sus clientes pueden llevar
+            'max_empresas' => 'nullable|integer|min:1|max:9999',
         ];
     }
 

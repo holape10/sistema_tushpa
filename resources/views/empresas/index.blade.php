@@ -10,11 +10,14 @@
             <p class="text-gray-500 text-sm mt-1">Gestiona las empresas del sistema</p>
         </div>
 
-        <a href="{{ route('empresa.config') }}"
-           class="inline-flex justify-center items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition whitespace-nowrap">
-            <i class="fas fa-plus"></i>
-            Nueva Empresa
-        </a>
+        {{-- Las empresas nuevas las crea el panel TUSHPA; en un estudio contable, "Empresas del estudio" --}}
+        @if (\App\Support\Estudio::activo() && auth()->user()->esAdmin())
+            <a href="{{ route('estudio.index') }}"
+               class="inline-flex justify-center items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition whitespace-nowrap">
+                <i class="fas fa-plus"></i>
+                Empresas del estudio
+            </a>
+        @endif
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">

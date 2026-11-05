@@ -2,7 +2,12 @@
 
 namespace App\Support\Sunat;
 
+use App\Models\Empresa;
+use App\Support\Estudio;
+use App\Support\Tenancy\ConsumoXml;
 use App\Support\Tenancy\Tenancy;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -21,15 +26,31 @@ class XmlJsonPe
             return 'Falta el token de json.pe en el servidor (JSONPE_TOKEN en el .env).';
         }
         if (! self::credenciales()) {
-            return 'Falta la Clave SOL principal de esta empresa en el panel de TUSHPA (Clientes → Editar).';
+            return self::enEmpresaDelEstudio()
+                ? 'Falta la Clave SOL principal de esta empresa (Empresas del estudio → Configurar).'
+                : 'Falta la Clave SOL principal de esta empresa en el panel de TUSHPA (Clientes → Editar).';
         }
 
         return null;
     }
 
-    /** @return array{usuario: string, clave: string}|null */
-    private static function credenciales(): ?array
+    /** ¿Se trabaja en la empresa de un cliente del estudio contable? (cada una tiene su propia Clave SOL) */
+    private static function enEmpresaDelEstudio(?string $ruc = null): bool
     {
+        $ruc ??= (string) Auth::user()?->IdEmpresa;
+
+        return Estudio::activo() && $ruc !== '' && $ruc !== Estudio::ruc();
+    }
+
+    /** @return array{usuario: string, clave: string}|null */
+    private static function credenciales(?string $ruc = null): ?array
+    {
+        $ruc ??= (string) Auth::user()?->IdEmpresa;
+        if (self::enEmpresaDelEstudio($ruc)) {
+            $empresa = Empresa::find($ruc);
+
+            return $empresa?->sol_usuario && $empresa->sol_clave ? ['usuario' => $empresa->sol_usuario, 'clave' => $empresa->sol_clave] : null;
+        }
         $cliente = Tenancy::cliente();
         if (! $cliente || ! $cliente->sol_usuario || ! $cliente->sol_clave) {
             return null;
@@ -45,7 +66,7 @@ class XmlJsonPe
      */
     public static function traer(string $ruc, string $rucEmisor, string $tipo, string $serie, string $numero): array
     {
-        $sol = self::credenciales();
+        $sol = self::credenciales($ruc);
         if (! $sol || ! config('services.jsonpe.token')) {
             return ['xml' => null, 'error' => self::falta(), 'detener' => true];
         }
@@ -58,6 +79,16 @@ class XmlJsonPe
         } catch (\Throwable) {
             return ['xml' => null, 'error' => 'json.pe no respondió. Intenta en unos minutos.', 'detener' => true];
         }
+        // Cada consulta que llegó a json.pe usa créditos: se cuenta para el panel de TUSHPA
+        $resultado = self::respuesta($r);
+        ConsumoXml::registrar($resultado['xml'] !== null);
+
+        return $resultado;
+    }
+
+    /** @return array{xml: ?string, error: ?string, detener: bool} */
+    private static function respuesta(Response $r): array
+    {
         $mensaje = trim((string) ($r->json('message') ?? ''));
         // Token, créditos o la Clave SOL: si fallan, fallarán todas las demás
         if (in_array($r->status(), [401, 402, 403, 429], true) || preg_match('/token|cr[eé]dito|saldo|clave|contrase|usuario|credencial|autentic/i', $mensaje) && ! $r->json('success')) {
