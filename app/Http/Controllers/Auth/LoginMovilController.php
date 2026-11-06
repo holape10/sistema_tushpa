@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\EmpresaNegocio;
 use App\Models\User;
 use App\Support\RedLocal;
+use App\Support\Rubros;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
@@ -58,6 +59,10 @@ class LoginMovilController extends Controller
         if (Auth::check()) {
             return redirect()->route(Auth::user()->rutaInicio());
         }
+        // Solo los rubros con mozos o cobradores entran con código desde el celular
+        if (! Rubros::eligeEnLogin() && ! Rubros::usaLoginMovil()) {
+            return redirect()->route('login');
+        }
         // Quien vuelve al login móvil deja de preferir el de escritorio
         Cookie::queue(Cookie::forget('login_escritorio'));
 
@@ -69,6 +74,7 @@ class LoginMovilController extends Controller
 
     public function store(Request $request)
     {
+        abort_unless(Rubros::eligeEnLogin() || Rubros::usaLoginMovil(), 404);
         $request->validate(['usuario' => 'required|integer', 'codigo' => 'required|regex:/^\d{1,8}$/']);
 
         $sucursal = $this->sucursal($request);

@@ -141,6 +141,20 @@ class Rubros
         return ! isset(self::ROLES[$rol]) || self::permite(self::ROLES[$rol]);
     }
 
+    /**
+     * Rubros que entran desde el celular con un código (login móvil): los que tienen mozos (restobar, hotel con
+     * restaurante, club) y préstamos (cobradores en la calle). Los demás solo usan usuario y contraseña.
+     */
+    public const LOGIN_MOVIL = ['RESTOBAR', 'HOTELERIA', 'CLUB', 'PRESTAMOS'];
+
+    /** ¿La empresa usa el login móvil? Sin rubro (se ve todo) también; en la demo, según el rubro elegido */
+    public static function usaLoginMovil(?string $rubro = null): bool
+    {
+        $rubro ??= self::actual();
+
+        return $rubro === null || in_array($rubro, self::LOGIN_MOVIL, true);
+    }
+
     /** Clave de sesión con el rubro elegido en el login (empresa demo sin rubro) */
     public const SESION = 'rubro_elegido';
 

@@ -188,6 +188,18 @@ class EstudioController extends Controller
     }
 
     /** Pasa a trabajar en otra empresa (el selector de arriba) */
+    /** Después de ingresar (y cuando se quiera): la lista de las empresas que le tocan al usuario para elegir una */
+    public function elegir(): View
+    {
+        abort_unless(Estudio::activo(), 404);
+        $empresas = Estudio::empresas(Auth::user());
+
+        return view('empresas.estudio.elegir', [
+            'empresas' => $empresas, 'actual' => (string) Auth::user()->IdEmpresa,
+            'digitos' => $empresas->where('propia', false)->countBy(fn ($e) => substr((string) $e->IdEmpresa, -1)),
+        ]);
+    }
+
     public function cambiar(Request $request): RedirectResponse
     {
         abort_unless(Estudio::activo(), 404);

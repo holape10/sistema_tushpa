@@ -165,9 +165,13 @@
                         </button>
                     </form>
 
-                    <a href="{{ route('login.movil') }}" class="block text-center text-sm text-indigo-600 hover:underline mt-5">
-                        <i class="fas fa-tablet-screen-button"></i> Login para tablet / celular (mozos)
-                    </a>
+                    {{-- Solo los rubros con mozos o cobradores (en la demo, según el rubro elegido) --}}
+                    @if ($rubros || \App\Support\Rubros::usaLoginMovil())
+                        <a href="{{ route('login.movil') }}" class="block text-center text-sm text-indigo-600 hover:underline mt-5"
+                           @if ($rubros) x-show="@js(\App\Support\Rubros::LOGIN_MOVIL).includes(rubro)" x-cloak @endif>
+                            <i class="fas fa-tablet-screen-button"></i> Login para tablet / celular ({{ \App\Support\Rubros::actual() === 'PRESTAMOS' ? 'cobradores' : 'mozos' }})
+                        </a>
+                    @endif
                     <div class="text-center mt-4">
                         @include('partials.pwa_boton', ['clase' => 'inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-indigo-200 text-indigo-700 text-sm font-semibold hover:bg-indigo-50'])
                     </div>

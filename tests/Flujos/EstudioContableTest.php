@@ -14,6 +14,7 @@ use App\Support\Sunat\XmlJsonPe;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\Request as Peticion;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -73,6 +74,32 @@ class EstudioContableTest extends FlujoTestCase
 
         // Los usuarios del estudio se siguen administrando aunque se esté dentro de un cliente
         $this->get(route('usuarios.index'))->assertOk()->assertSee($this->usuario->email);
+    }
+
+    public function test_al_ingresar_elige_con_cual_de_sus_empresas_trabajar(): void
+    {
+        $contador = $this->contador();
+        foreach ([self::EMPRESA_A, self::EMPRESA_B] as $ruc) {
+            $this->post(route('estudio.accesos', $ruc), ['usuarios' => [$contador->IdUsuario]])->assertSessionHas('success');
+        }
+        Auth::logout();
+
+        $this->post('/login', ['email' => $contador->email, 'password' => 'clave-de-prueba'])->assertRedirect(route('estudio.elegir'));
+
+        $this->get(route('estudio.elegir'))->assertOk()->assertSee('¿Con qué empresa vas a trabajar?')
+            ->assertSee('LLAMA PE SA')->assertSee('SUPERMERCADOS PERUANOS SA')
+            ->assertViewHas('empresas', fn ($e) => $e->pluck('IdEmpresa')->sort()->values()->all() === [self::EMPRESA_B, self::EMPRESA_A]);
+        $this->post(route('estudio.cambiar'), ['ruc' => self::EMPRESA_B])->assertRedirect(route('inicio'));
+        $this->assertSame(self::EMPRESA_B, (string) $contador->fresh()->IdEmpresa);
+    }
+
+    public function test_con_una_sola_empresa_entra_directo(): void
+    {
+        $contador = $this->contador();
+        $this->post(route('estudio.accesos', self::EMPRESA_A), ['usuarios' => [$contador->IdUsuario]])->assertSessionHas('success');
+        Auth::logout();
+
+        $this->post('/login', ['email' => $contador->email, 'password' => 'clave-de-prueba'])->assertRedirect(route('inicio'));
     }
 
     public function test_cada_usuario_solo_ve_las_empresas_que_le_asignaron(): void

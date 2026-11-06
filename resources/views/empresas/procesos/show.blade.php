@@ -17,6 +17,7 @@
             <div class="space-y-3">
                 <p class="text-5xl">✅</p>
                 <p class="font-semibold text-emerald-700" x-text="mensaje || 'Listo.'"></p>
+                <p class="text-sm text-gray-500">La descarga empieza sola. Si no empezó, tócalo aquí:</p>
                 <a href="{{ route('procesos.descargar', $proceso->id) }}" class="inline-flex items-center h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold">⬇ Descargar</a>
                 <p class="text-xs text-gray-400">El archivo se guarda {{ \App\Support\Procesos::HORAS }} horas.</p>
             </div>
@@ -37,8 +38,15 @@
     document.addEventListener('alpine:init', () => {
         Alpine.data('avanceProceso', (inicial) => ({
             estado: inicial.estado, mensaje: inicial.mensaje,
+            // Apenas está listo, se descarga solo (una vez: si recargan la página no se vuelve a bajar)
+            descargarSolo() {
+                const clave = 'proceso-descargado-{{ $proceso->id }}';
+                try { if (sessionStorage.getItem(clave)) return; sessionStorage.setItem(clave, '1'); } catch (e) {}
+                window.location.href = @json(route('procesos.descargar', $proceso->id));
+            },
             seguir() {
-                if (this.estado === 'LISTO' || this.estado === 'ERROR') return;
+                if (this.estado === 'LISTO') { this.descargarSolo(); return; }
+                if (this.estado === 'ERROR') return;
                 setTimeout(async () => {
                     try {
                         const r = await fetch(@json(route('procesos.estado', $proceso->id)), { headers: { Accept: 'application/json' } });

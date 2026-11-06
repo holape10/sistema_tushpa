@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\Empresa;
 use App\Support\DemoDatos;
+use App\Support\Estudio;
 use App\Support\Rubros;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,7 @@ class AuthenticatedSessionController extends Controller
         // (la preferencia se guarda en una cookie para que sobreviva al cerrar sesión)
         if ($request->boolean('escritorio')) {
             Cookie::queue('login_escritorio', '1', 60 * 24 * 30);
-        } elseif (LoginMovilController::esMovil($request) && ! $request->cookie('login_escritorio') && ! Rubros::eligeEnLogin()) {
+        } elseif (LoginMovilController::esMovil($request) && ! $request->cookie('login_escritorio') && ! Rubros::eligeEnLogin() && Rubros::usaLoginMovil()) {
             return redirect()->route('login.movil');
         }
 
@@ -56,6 +57,13 @@ class AuthenticatedSessionController extends Controller
 
         // Este equipo queda asociado a la sucursal: el login móvil mostrará a sus mozos
         LoginMovilController::recordarSucursal($request->user());
+
+        // Estudio contable: con varias empresas, primero se elige con cuál trabajar
+        if (Estudio::activo() && Estudio::empresas($request->user())->count() > 1) {
+            $request->session()->forget('url.intended');
+
+            return redirect()->route('estudio.elegir');
+        }
 
         return redirect()->intended(route($request->user()->rutaInicio(), absolute: false));
     }
