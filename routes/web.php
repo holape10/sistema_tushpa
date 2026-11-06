@@ -52,6 +52,7 @@ use App\Http\Controllers\EntrenadorController;
 use App\Http\Controllers\EstacionamientoController;
 use App\Http\Controllers\EstudioController;
 use App\Http\Controllers\FidelizacionController;
+use App\Http\Controllers\FlujoCajaController;
 use App\Http\Controllers\GastoController;
 use App\Http\Controllers\GimnasioController;
 use App\Http\Controllers\GimnasioReporteController;
@@ -687,6 +688,10 @@ Route::middleware('auth')->group(function () {
     Route::put('/compras/{id}', [CompraController::class, 'update'])->whereNumber('id')->name('compras.update');
     Route::post('/compras/{id}/anular', [CompraController::class, 'anular'])->whereNumber('id')->name('compras.anular');
     Route::post('/compras/meses', [CompraController::class, 'mes'])->name('compras.mes');
+    // Flujo de caja proyectado: lo que se va a cobrar y pagar en las próximas semanas
+    Route::get('/flujo-caja', [FlujoCajaController::class, 'index'])->name('flujo_caja.index');
+    Route::post('/flujo-caja/saldo', [FlujoCajaController::class, 'saldo'])->name('flujo_caja.saldo');
+    Route::get('/flujo-caja/exportar', [FlujoCajaController::class, 'exportar'])->middleware('throttle:20,1')->name('flujo_caja.exportar');
     Route::post('/compras/{id}/consultar-sunat', [CompraController::class, 'consultarSunat'])->whereNumber('id')->middleware('throttle:30,1')->name('compras.consultar_sunat');
     Route::get('/compras/productos', [CompraController::class, 'productos'])->name('compras.productos');
     Route::post('/compras/producto-nuevo', [CompraController::class, 'productoRapido'])->name('compras.producto_nuevo');
