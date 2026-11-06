@@ -3,12 +3,16 @@
 namespace App\Providers;
 
 use App\Support\BitacoraSesion;
+use App\Support\Colas;
 use App\Support\ContactoWeb;
 use App\Support\HoraLocal\ConexionMysql;
 use App\Support\LimiteIntentos;
 use App\View\Composers\MenuComposer;
 use Illuminate\Cache\RateLimiter;
 use Illuminate\Database\Connection;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Queue\Events\Looping;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -33,6 +37,19 @@ class AppServiceProvider extends ServiceProvider
         View::composer('layouts.app', MenuComposer::class);
         // Inicios de sesión, intentos fallidos y bloqueos en la bitácora de cada empresa
         BitacoraSesion::escuchar();
+        // El trabajador de colas deja su latido: así el sistema sabe si puede mandarle tareas (si no, las hace en el momento)
+        // (solo el trabajador de verdad: una tarea hecha en el momento, "sync", no cuenta)
+        // Ojo: no devolver nada; si quien escucha Looping devuelve false, el trabajador se pausa
+        Event::listen(Looping::class, function (Looping $e): void {
+            if ($e->connectionName !== 'sync') {
+                Colas::latido();
+            }
+        });
+        Event::listen(JobProcessing::class, function (JobProcessing $e): void {
+            if ($e->connectionName !== 'sync') {
+                Colas::latido();
+            }
+        });
         // Web pública: contacto del partner de la ciudad (Piura) o el nuestro
         View::composer('sitio.*', fn ($vista) => $vista->with('contactoPartner', ContactoWeb::aplicar()));
     }

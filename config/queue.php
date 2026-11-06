@@ -35,12 +35,14 @@ return [
             'driver' => 'sync',
         ],
 
+        // La cola vive en la base central (cada tarea lleva anotada la base de su empresa: ver App\Jobs\ProcesoEmpresa).
+        // retry_after mayor que el tiempo máximo de una tarea: una copia de seguridad larga no se vuelve a tomar a la mitad.
         'database' => [
             'driver' => 'database',
-            'connection' => env('DB_QUEUE_CONNECTION'),
+            'connection' => env('DB_QUEUE_CONNECTION', 'central'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 3700),
             'after_commit' => false,
         ],
 
@@ -122,7 +124,7 @@ return [
 
     'failed' => [
         'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuids'),
-        'database' => env('DB_CONNECTION', 'sqlite'),
+        'database' => env('DB_QUEUE_CONNECTION', 'central'),
         'table' => 'failed_jobs',
     ],
 

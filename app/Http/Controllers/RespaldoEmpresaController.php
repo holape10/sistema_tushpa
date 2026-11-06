@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Bitacora;
-use App\Support\Tenancy\Respaldos;
-use App\Support\Tenancy\Tenancy;
+use App\Jobs\GenerarRespaldo;
+use App\Support\Procesos;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -22,22 +20,17 @@ class RespaldoEmpresaController extends Controller
         return view('empresas.respaldo');
     }
 
+    /**
+     * La copia se prepara en segundo plano (si el trabajador de colas está corriendo) y la pantalla de avance la deja
+     * descargar al terminar; sin trabajador, se prepara en el momento como antes.
+     */
     public function descargar()
     {
         abort_unless(Auth::user()->esAdmin(), 403, 'Solo el administrador puede descargar la copia de seguridad.');
-        set_time_limit(1800);
-        try {
-            $ruta = Respaldos::crear(Tenancy::baseActual(), 'descarga', storage_path('app/respaldos-temporales'));
-        } catch (\RuntimeException $e) {
-            report($e);
+        set_time_limit(1800);   // por si se hace en el momento (sin trabajador de colas)
+        $id = Procesos::lanzar(Auth::user(), 'respaldo', 'Copia de seguridad de la empresa',
+            fn (string $base, int $proceso, int $usuario) => new GenerarRespaldo($base, $proceso, $usuario));
 
-            return back()->with('error', 'No se pudo preparar la copia en este momento. Inténtalo otra vez o escríbenos a soporte.');
-        }
-        $ruc = (string) DB::table('empresa')->value('IdEmpresa');
-        Bitacora::registrar('respaldo.descargar', 'Descargó la copia de seguridad completa de la empresa', null,
-            ['alerta' => true, 'datos' => ['tamano_mb' => round(filesize($ruta) / 1048576, 2)]]);
-
-        return response()->download($ruta, 'copia-tushpa-'.$ruc.'-'.now()->format('Y-m-d-Hi').'.sql.gz', ['Content-Type' => 'application/gzip'])
-            ->deleteFileAfterSend();
+        return redirect()->route('procesos.show', $id);
     }
 }

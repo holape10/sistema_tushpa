@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\ProbarCola;
 use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
 use App\Models\Central\SuperadminCobro;
@@ -7,11 +8,13 @@ use App\Models\User;
 use App\Support\Antiguo\CargadorSql;
 use App\Support\AvisosCelular;
 use App\Support\ClinicaRecordatorios;
+use App\Support\Colas;
 use App\Support\DemoDatos;
 use App\Support\Estudio;
 use App\Support\GeoIp;
 use App\Support\PadronRuc;
 use App\Support\PanelDueno;
+use App\Support\Procesos;
 use App\Support\Promociones;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\Tenancy\CertificadosClientes;
@@ -23,11 +26,13 @@ use App\Support\Tenancy\Tenancy;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Minishlink\WebPush\VAPID;
 
 Artisan::command('inspire', function () {
@@ -466,3 +471,37 @@ Artisan::command('bases:eliminar-huerfana {base : Nombre exacto de la base} {--s
 
     return 0;
 })->purpose('Borra una base que no usa ninguna empresa, siempre con su respaldo antes (nunca las del sistema, del panel ni de una empresa)');
+
+// ---------------------------------------------------------------- Trabajador de colas (deploy/colas-instalar.sh)
+Artisan::command('colas:estado', function () {
+    $e = Colas::estado();
+    $this->line($e['vivo'] ? '<info>✔ El trabajador de colas está trabajando</info> (último latido hace '.$e['latido'].' s)'
+        : '<comment>✘ No hay trabajador de colas corriendo</comment>'.($e['latido'] !== null ? ' (último latido hace '.$e['latido'].' s)' : ' (nunca ha corrido)')
+            ."\n  No pasa nada: las tareas se hacen en el momento, como siempre.");
+    $this->line('  Tareas esperando en la cola: '.($e['pendientes'] ?? 'la cola aún no existe (falta migrar la base central)'));
+    $this->line('  Tareas que fallaron: '.($e['fallidas'] ?? '-'));
+})->purpose('Dice si el trabajador de colas está corriendo y cuántas tareas esperan');
+
+Artisan::command('colas:probar', function () {
+    $marca = (string) Str::uuid();
+    @unlink(storage_path('framework/cola-prueba'));
+    Bus::dispatchToQueue((new ProbarCola($marca))->onConnection('database'));
+    $this->line('Mandé una tarea de prueba a la cola. Esperando que el trabajador la atienda (hasta 30 segundos)…');
+    for ($i = 0; $i < 30; $i++) {
+        sleep(1);
+        if (@file_get_contents(storage_path('framework/cola-prueba')) === $marca) {
+            $this->info('✔ El trabajador la atendió en '.($i + 1).' s: la cola funciona.');
+
+            return 0;
+        }
+    }
+    $this->error('✘ Nadie atendió la tarea en 30 s. Revisa: systemctl status tushpa-colas');
+
+    return 1;
+})->purpose('Manda una tarea de prueba y confirma que el trabajador de colas la atiende');
+
+Artisan::command('procesos:limpiar', function () {
+    $this->info(Procesos::limpiar().' archivo(s) de procesos vencidos borrados.');
+})->purpose('Borra los archivos listos para descargar que ya pasaron sus 24 horas');
+
+Schedule::command('procesos:limpiar')->dailyAt('04:30');

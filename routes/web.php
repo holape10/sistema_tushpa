@@ -90,6 +90,7 @@ use App\Http\Controllers\PrestamoCobranzaController;
 use App\Http\Controllers\PrestamoConfigController;
 use App\Http\Controllers\PrestamoController;
 use App\Http\Controllers\PrestamoReporteController;
+use App\Http\Controllers\ProcesoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProformaController;
 use App\Http\Controllers\PromocionVentaController;
@@ -585,6 +586,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/kardex/sunat/codigos', [KardexSunatController::class, 'codigos'])->name('kardex.sunat.codigos');
     Route::get('/respaldo', [RespaldoEmpresaController::class, 'index'])->name('respaldo.index');
     Route::post('/respaldo/descargar', [RespaldoEmpresaController::class, 'descargar'])->middleware('throttle:3,10')->name('respaldo.descargar');
+    // Procesos en segundo plano: su avance y el archivo que dejan listo
+    Route::get('/procesos/{id}', [ProcesoController::class, 'show'])->whereNumber('id')->name('procesos.show');
+    Route::get('/procesos/{id}/estado', [ProcesoController::class, 'estado'])->whereNumber('id')->name('procesos.estado');
+    Route::get('/procesos/{id}/descargar', [ProcesoController::class, 'descargar'])->whereNumber('id')->name('procesos.descargar');
     // Mis comprobantes: los que TUSHPA (sistema principal) le emitió a esta empresa
     Route::get('/mis-comprobantes', [MisComprobantesController::class, 'index'])->name('mis-comprobantes.index');
     Route::get('/mis-comprobantes/{id}/pdf', [MisComprobantesController::class, 'pdf'])->whereNumber('id')->name('mis-comprobantes.pdf');

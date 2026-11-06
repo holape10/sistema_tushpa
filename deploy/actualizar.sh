@@ -69,6 +69,11 @@ apachectl configtest >/dev/null 2>&1 || rm -f /etc/httpd/conf.d/00-tushpa-seguri
 systemctl reload php-fpm httpd
 # Tiempo real (deploy/reverb-instalar.sh): arranca con el código nuevo
 systemctl is-enabled --quiet tushpa-reverb 2>/dev/null && systemctl restart tushpa-reverb || true
+# Trabajador de colas (deploy/colas-instalar.sh): termina la tarea que tiene en curso y vuelve con el código nuevo.
+# queue:restart es suave (no corta una copia a medias); systemd lo levanta de nuevo al salir.
+if systemctl is-enabled --quiet tushpa-colas 2>/dev/null; then
+    sudo -u apache php artisan queue:restart || true
+fi
 # Tareas programadas de Laravel (limpieza de la cola de impresión a las 4 am, etc.)
 if [ ! -f /etc/cron.d/tushpa-schedule ]; then
     echo "* * * * * apache cd ${DIR} && php artisan schedule:run >> /dev/null 2>&1" > /etc/cron.d/tushpa-schedule

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ZipComprobantes;
 use App\Models\Turno;
 use App\Support\Impresion\ComprobantePdf;
+use App\Support\Procesos;
 use App\Support\VentaDirecta;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -207,16 +209,14 @@ class VentaMasivaController extends Controller
         $ids = array_slice(array_filter(array_map('intval', explode(',', (string) $request->get('ids')))), 0, 500);
         abort_if(! $ids, 404);
 
-        set_time_limit(0);
-        $ruta = tempnam(sys_get_temp_dir(), 'masiva');
-        $zip = new \ZipArchive;
-        $zip->open($ruta, \ZipArchive::OVERWRITE);
-        foreach ($ids as $id) {
-            [$nombre, $contenido] = $this->generarPdf($id);
-            $zip->addFromString($nombre, $contenido);
-        }
-        $zip->close();
+        // Solo comprobantes de la sucursal del usuario
+        $ids = DB::table('cpe_cabecera')->whereIn('IdCpe_cabecera', $ids)->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)
+            ->pluck('IdCpe_cabecera')->map(fn ($id) => (int) $id)->all();
+        abort_if(! $ids, 404);
+        set_time_limit(0);   // por si se hace en el momento (sin trabajador de colas)
+        $id = Procesos::lanzar(Auth::user(), 'zip_comprobantes', 'ZIP con '.count($ids).' comprobante(s) en PDF',
+            fn (string $base, int $proceso, int $usuario) => new ZipComprobantes($base, $proceso, $usuario, $ids));
 
-        return response()->download($ruta, 'comprobantes_'.now()->format('Ymd_His').'.zip', ['Content-Type' => 'application/zip'])->deleteFileAfterSend();
+        return redirect()->route('procesos.show', $id);
     }
 }
