@@ -2,6 +2,10 @@
 @section('title', 'Transferencias')
 @section('content')
     @include('empresas.partials.alert')
+    @if ($enTransito)
+        <div class="mb-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 text-sm font-semibold">
+            🚚 {{ $enTransito }} transferencia(s) en camino: aún no están en el almacén de destino. Ábrela y toca “Recibir en destino” cuando llegue.</div>
+    @endif
 
     <div class="flex flex-col sm:flex-row justify-between gap-3 mb-4">
         <form method="GET">
@@ -42,7 +46,7 @@
                         <td class="px-4 py-3 text-gray-500">{{ $t->observaciones }}</td>
                         <td class="px-4 py-3 text-right">{{ $t->items }}</td>
                         <td class="px-4 py-3 text-center">
-                            <span class="px-2 py-1 rounded-full text-xs font-bold {{ $t->estado === 'ANULADO' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700' }}">{{ $t->estado }}</span>
+                            <span class="px-2 py-1 rounded-full text-xs font-bold {{ $t->estado === 'ANULADO' ? 'bg-red-100 text-red-700' : ($t->estado === 'EN TRANSITO' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-700') }}">{{ $t->estado === 'EN TRANSITO' ? '🚚 EN TRÁNSITO' : $t->estado }}</span>
                         </td>
                         <td class="px-4 py-3 text-gray-500">{{ $t->apeusu }}</td>
                         <td class="px-4 py-3 text-right"><a href="{{ route('transferencias.show', $t->mov_cab_id) }}" class="text-indigo-600 hover:underline">Ver</a></td>

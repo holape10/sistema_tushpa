@@ -6,6 +6,7 @@ use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AutoservicioController;
 use App\Http\Controllers\AvisoCelularController;
+use App\Http\Controllers\BancoController;
 use App\Http\Controllers\BitacoraController;
 use App\Http\Controllers\CajaSinInternetController;
 use App\Http\Controllers\CartaController;
@@ -707,6 +708,21 @@ Route::middleware('auth')->group(function () {
     Route::get('/flujo-caja', [FlujoCajaController::class, 'index'])->name('flujo_caja.index');
     Route::post('/flujo-caja/saldo', [FlujoCajaController::class, 'saldo'])->name('flujo_caja.saldo');
     Route::get('/flujo-caja/exportar', [FlujoCajaController::class, 'exportar'])->middleware('throttle:20,1')->name('flujo_caja.exportar');
+    // Bancos y conciliación bancaria
+    Route::get('/bancos', [BancoController::class, 'index'])->name('bancos.index');
+    Route::post('/bancos', [BancoController::class, 'guardarCuenta'])->name('bancos.store');
+    Route::get('/bancos/extracto/formato', [BancoController::class, 'formato'])->name('bancos.formato');
+    Route::post('/bancos/movimiento/{movimiento}/anular', [BancoController::class, 'anularMovimiento'])->whereNumber('movimiento')->name('bancos.movimiento.anular');
+    Route::get('/bancos/{id}', [BancoController::class, 'show'])->whereNumber('id')->name('bancos.show');
+    Route::get('/bancos/{id}/editar', [BancoController::class, 'editar'])->whereNumber('id')->name('bancos.edit');
+    Route::put('/bancos/{id}', [BancoController::class, 'guardarCuenta'])->whereNumber('id')->name('bancos.update');
+    Route::post('/bancos/{id}/extracto', [BancoController::class, 'extracto'])->whereNumber('id')->middleware('throttle:20,1')->name('bancos.extracto');
+    Route::post('/bancos/{id}/automatico', [BancoController::class, 'automatico'])->whereNumber('id')->name('bancos.automatico');
+    Route::post('/bancos/{id}/conciliar', [BancoController::class, 'conciliar'])->whereNumber('id')->name('bancos.conciliar');
+    Route::post('/bancos/{id}/deshacer', [BancoController::class, 'deshacer'])->whereNumber('id')->name('bancos.deshacer');
+    Route::post('/bancos/{id}/registrar', [BancoController::class, 'registrar'])->whereNumber('id')->name('bancos.registrar');
+    Route::post('/bancos/{id}/movimiento', [BancoController::class, 'movimiento'])->whereNumber('id')->name('bancos.movimiento');
+    Route::get('/bancos/{id}/reporte/excel', [BancoController::class, 'reporteExcel'])->whereNumber('id')->name('bancos.reporte.excel');
     Route::post('/compras/{id}/consultar-sunat', [CompraController::class, 'consultarSunat'])->whereNumber('id')->middleware('throttle:30,1')->name('compras.consultar_sunat');
     Route::get('/compras/productos', [CompraController::class, 'productos'])->name('compras.productos');
     Route::post('/compras/producto-nuevo', [CompraController::class, 'productoRapido'])->name('compras.producto_nuevo');
@@ -1085,6 +1101,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/transferencias', [TransferenciaController::class, 'store'])->name('transferencias.store');
     Route::get('/transferencias/{id}', [TransferenciaController::class, 'show'])->whereNumber('id')->name('transferencias.show');
     Route::post('/transferencias/{id}/anular', [TransferenciaController::class, 'anular'])->whereNumber('id')->name('transferencias.anular');
+    Route::post('/transferencias/{id}/recibir', [TransferenciaController::class, 'recibir'])->whereNumber('id')->name('transferencias.recibir');
 
     // Productos en Excel (antes del resource para que no choquen con productos/{producto})
     Route::get('/productos/exportar', [ProductoController::class, 'exportar'])->name('productos.exportar');

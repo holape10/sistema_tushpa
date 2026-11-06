@@ -25,6 +25,17 @@
             </label>
             <label class="text-sm">Fecha<input type="date" name="fecha" value="{{ old('fecha', now()->toDateString()) }}" max="{{ now()->toDateString() }}" required class="block w-full rounded-lg border-gray-300 text-sm"></label>
             <label class="text-sm">Observación<input name="observaciones" value="{{ old('observaciones') }}" maxlength="255" class="block w-full rounded-lg border-gray-300 text-sm"></label>
+            <fieldset class="text-sm col-span-full">
+                <legend class="mb-1">¿Cómo llega al destino?</legend>
+                <div class="flex flex-wrap gap-2">
+                    <label class="flex items-start gap-2 rounded-xl border border-gray-200 px-3 py-2 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+                        <input type="radio" name="modo" value="inmediata" @checked(old('modo', 'inmediata') === 'inmediata') class="mt-0.5 text-indigo-600">
+                        <span><b>Inmediata</b><span class="block text-xs text-gray-500">Sale de un almacén y entra al otro ahora mismo.</span></span></label>
+                    <label class="flex items-start gap-2 rounded-xl border border-gray-200 px-3 py-2 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50">
+                        <input type="radio" name="modo" value="transito" @checked(old('modo') === 'transito') class="mt-0.5 text-amber-600">
+                        <span><b>🚚 En tránsito</b><span class="block text-xs text-gray-500">Sale ahora; entra al destino cuando allá lo reciban.</span></span></label>
+                </div>
+            </fieldset>
         </div>
         <p x-show="origen === destino" class="mb-3 text-sm text-red-600">El origen y el destino deben ser almacenes distintos.</p>
 

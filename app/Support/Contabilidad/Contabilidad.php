@@ -32,7 +32,7 @@ class Contabilidad
 {
     public const SUBDIARIOS = ['00' => 'APERTURA', '01' => 'CAJA Y BANCOS', '05' => 'VENTAS', '11' => 'COMPRAS', '35' => 'DIARIO'];
 
-    public const ORIGENES = ['VENTAS', 'COBRANZAS', 'COMPRAS', 'PAGOS', 'REG. VENTAS', 'REG. COBROS', 'REG. COMPRAS', 'REG. PAGOS', 'PLANILLA', 'MANUAL', 'APERTURA'];
+    public const ORIGENES = ['VENTAS', 'COBRANZAS', 'COMPRAS', 'PAGOS', 'REG. VENTAS', 'REG. COBROS', 'REG. COMPRAS', 'REG. PAGOS', 'PLANILLA', 'MANUAL', 'APERTURA', 'BANCOS'];
 
     public static function asegurar(string $ruc): void
     {

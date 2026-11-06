@@ -66,8 +66,10 @@ class TransferenciaController extends Controller
             ->paginate(20)->withQueryString();
 
         $almacenes = $this->almacenes();
+        $enTransito = DB::table('movimientos_cabecera')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->where('mov_tip', 'T')
+            ->where('estado', self::EN_TRANSITO)->count();
 
-        return view('empresas.transferencias.index', compact('transferencias', 'almacenes'));
+        return view('empresas.transferencias.index', compact('transferencias', 'almacenes', 'enTransito'));
     }
 
     public function create()
@@ -102,6 +104,7 @@ class TransferenciaController extends Controller
             'items' => 'required|array|min:1',
             'items.*.IdProducto' => 'required|integer|distinct',
             'items.*.cantidad' => 'required|numeric|min:0.01',
+            'modo' => 'nullable|in:inmediata,transito',
         ], ['des_alm.different' => 'El almacén de destino debe ser distinto al de origen.', 'items.*.IdProducto.distinct' => 'Hay productos repetidos.'],
             ['part_alm' => 'Almacén de origen', 'des_alm' => 'Almacén de destino', 'items' => 'Productos', 'items.*.cantidad' => 'Cantidad']);
 
@@ -120,11 +123,14 @@ class TransferenciaController extends Controller
             return back()->withInput()->withErrors(['items' => 'Hay productos que no existen o no manejan stock.']);
         }
 
+        // En tránsito: sale ahora del origen y entra al destino recién cuando la reciben
+        $enTransito = $request->input('modo') === 'transito';
         try {
-            $id = DB::transaction(function () use ($request, $user, $origen, $destino, $productos) {
+            $id = DB::transaction(function () use ($request, $user, $origen, $destino, $productos, $enTransito) {
                 $cabId = DB::table('movimientos_cabecera')->insertGetId([
                     'mov_tip' => 'T', 'cod_tip_ope' => '11', 'fecha' => $request->fecha, 'observaciones' => $request->observaciones,
-                    'estado' => 'REGISTRADO', 'usu_ent' => $user->IdUsuario, 'usu_rec' => $user->IdUsuario, 'fecha_recep' => $request->fecha,
+                    'estado' => $enTransito ? self::EN_TRANSITO : 'REGISTRADO', 'usu_ent' => $user->IdUsuario,
+                    'usu_rec' => $enTransito ? null : $user->IdUsuario, 'fecha_recep' => $enTransito ? null : $request->fecha,
                     'part_alm' => $origen->id_almacen, 'des_alm' => $destino->id_almacen,
                     'part_suc' => $origen->id_empresa_negocio, 'des_suc' => $destino->id_empresa_negocio,
                     'id_empresa_negocio' => $user->id_empresa_negocio,
@@ -133,7 +139,10 @@ class TransferenciaController extends Controller
                 foreach ($request->items as $it) {
                     $prod = $productos[$it['IdProducto']];
                     $cantidad = (float) $it['cantidad'];
-                    $this->moverStock($prod, $origen, $destino, $cantidad, (float) $prod->costo, $cabId, $request->fecha, 'TRANSFERENCIA TRF-'.$cabId);
+                    $partes = $this->sacar($prod, $origen, $destino, $cantidad, (float) $prod->costo, $cabId, $request->fecha, 'TRANSFERENCIA TRF-'.$cabId);
+                    if (! $enTransito) {
+                        $this->meter($prod->IdProducto, $destino, $origen, $partes, (float) $prod->costo, $cabId, $request->fecha, 'TRANSFERENCIA TRF-'.$cabId);
+                    }
                 }
 
                 return $cabId;
@@ -142,12 +151,30 @@ class TransferenciaController extends Controller
             return back()->withInput()->withErrors(['items' => $e->getMessage()]);
         }
 
+        Bitacora::registrar('almacen.transferencia', ($enTransito ? 'Envió en tránsito' : 'Transfirió').' TRF-'.$id." de {$origen->descripcion} a {$destino->descripcion} ("
+            .count($request->items).' producto(s))', null, ['referencia' => ['transferencia', $id]]);
+
         return redirect()->route('transferencias.show', $id)
-            ->with('success', "Transferencia registrada: {$origen->descripcion} → {$destino->descripcion}.");
+            ->with('success', $enTransito ? "🚚 Transferencia en tránsito: ya salió de {$origen->descripcion}; entrará a {$destino->descripcion} cuando la reciban."
+                : "Transferencia registrada: {$origen->descripcion} → {$destino->descripcion}.");
     }
 
     /** Sale del origen (11) y entra al destino (21). No deja el origen con stock negativo. */
+    /** Estado de la transferencia que salió del origen y aún no llega al destino */
+    public const EN_TRANSITO = 'EN TRANSITO';
+
+    /** Sale del origen y entra al destino en el mismo momento */
     private function moverStock($prod, Almacen $origen, Almacen $destino, float $cantidad, float $costo, int $cabId, string $fecha, string $glosa, ?string $lote = null): void
+    {
+        $this->meter($prod->IdProducto, $destino, $origen, $this->sacar($prod, $origen, $destino, $cantidad, $costo, $cabId, $fecha, $glosa, $lote), $costo, $cabId, $fecha, $glosa);
+    }
+
+    /**
+     * Salida del almacén de origen, por FEFO (o del lote indicado, al anular). Devuelve los lotes que salieron.
+     *
+     * @return array<int, array{cantidad: float, lote: ?string, vencimiento: ?string}>
+     */
+    private function sacar($prod, Almacen $origen, Almacen $destino, float $cantidad, float $costo, int $cabId, string $fecha, string $glosa, ?string $lote = null): array
     {
         $disponible = (float) (DB::table('producto_stock')->where('IdProducto', $prod->IdProducto)
             ->where('id_almacen', $origen->id_almacen)->lockForUpdate()->value('stock') ?? 0);
@@ -159,14 +186,58 @@ class TransferenciaController extends Controller
         $doc = ['mov_cab_id' => $cabId, 'fecha_mov' => $fecha, 'costo' => $costo, 'numero' => 'TRF-'.$cabId, 'descripcion' => $glosa,
             'id_almacen_origen' => $origen->id_almacen, 'id_almacen_destino' => $destino->id_almacen];
 
-        // Sale por FEFO del origen (o del lote indicado, al anular) y cada lote entra igual (mismo lote y vencimiento) al destino
-        $partes = Kardex::registrar($prod->IdProducto, $origen->id_almacen, $cantidad, 'E',
+        return Kardex::registrar($prod->IdProducto, $origen->id_almacen, $cantidad, 'E',
             $doc + ['cod_tip_ope' => '11', 'id_empresa_negocio' => $origen->id_empresa_negocio, 'lote' => $lote]);
+    }
+
+    /** Entrada al almacén de destino: cada lote entra igual (mismo lote y vencimiento) que como salió */
+    private function meter(int $productoId, Almacen $destino, Almacen $origen, array $partes, float $costo, int $cabId, string $fecha, string $glosa): void
+    {
+        $doc = ['mov_cab_id' => $cabId, 'fecha_mov' => $fecha, 'costo' => $costo, 'numero' => 'TRF-'.$cabId, 'descripcion' => $glosa,
+            'id_almacen_origen' => $origen->id_almacen, 'id_almacen_destino' => $destino->id_almacen];
         foreach ($partes as $p) {
-            Kardex::registrar($prod->IdProducto, $destino->id_almacen, $p['cantidad'], 'I',
-                ['lote' => $p['lote'], 'vencimiento' => $p['vencimiento']] + $doc
+            Kardex::registrar($productoId, $destino->id_almacen, (float) $p['cantidad'], 'I',
+                ['lote' => $p['lote'] ?? null, 'vencimiento' => $p['vencimiento'] ?? null] + $doc
                 + ['cod_tip_ope' => '21', 'id_empresa_negocio' => $destino->id_empresa_negocio]);
         }
+    }
+
+    /** Llegó lo que estaba en tránsito: entra al destino con los mismos lotes que salieron del origen */
+    public function recibir(Request $request, int $id)
+    {
+        $this->autorizar();
+        $d = $request->validate(['fecha' => 'required|date|before_or_equal:today'], [], ['fecha' => 'fecha de recepción']);
+        $t = $this->cabecera($id);
+        if ($t->estado !== self::EN_TRANSITO) {
+            return back()->withErrors(['estado' => 'Esta transferencia no está en tránsito.']);
+        }
+        if ($d['fecha'] < $t->fecha) {
+            return back()->withErrors(['estado' => 'La fecha de recepción no puede ser anterior a la de envío.']);
+        }
+        $almacenes = Almacen::whereIn('id_almacen', [$t->part_alm, $t->des_alm])->get()->keyBy('id_almacen');
+
+        try {
+            DB::transaction(function () use ($t, $almacenes, $d) {
+                // Bloquea la cabecera para que dos usuarios no la reciban a la vez
+                if (DB::table('movimientos_cabecera')->where('mov_cab_id', $t->mov_cab_id)->lockForUpdate()->value('estado') !== self::EN_TRANSITO) {
+                    throw new \RuntimeException('La transferencia ya fue recibida o anulada.');
+                }
+                foreach ($this->items($t) as $it) {
+                    $this->meter((int) $it->IdProducto, $almacenes[$t->des_alm], $almacenes[$t->part_alm],
+                        [['cantidad' => (float) $it->cantidad, 'lote' => $it->mov_lote, 'vencimiento' => $it->mov_vencimiento]], (float) $it->costo,
+                        $t->mov_cab_id, $d['fecha'], 'RECEPCIÓN TRF-'.$t->mov_cab_id);
+                }
+                DB::table('movimientos_cabecera')->where('mov_cab_id', $t->mov_cab_id)->update([
+                    'estado' => 'REGISTRADO', 'fecha_recep' => $d['fecha'], 'usu_rec' => Auth::id(),
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['estado' => $e->getMessage()]);
+        }
+        Bitacora::registrar('almacen.transferencia_recibir', "Recibió en {$t->destino} la transferencia TRF-{$t->mov_cab_id} (estaba en tránsito)", null,
+            ['referencia' => ['transferencia', $t->mov_cab_id]]);
+
+        return back()->with('success', "Transferencia recibida: los productos ya están en {$t->destino}.");
     }
 
     public function show(int $id)
@@ -198,8 +269,15 @@ class TransferenciaController extends Controller
                     throw new \RuntimeException('La transferencia ya está anulada.');
                 }
                 foreach ($items as $it) {
-                    $this->moverStock($productos[$it->IdProducto], $almacenes[$t->des_alm], $almacenes[$t->part_alm],
-                        (float) $it->cantidad, (float) $it->costo, $t->mov_cab_id, now()->toDateString(), 'ANULACIÓN TRF-'.$t->mov_cab_id, $it->mov_lote);
+                    if ($estado === self::EN_TRANSITO) {
+                        // Aún no llegaba: lo que salió vuelve al origen tal cual (mismo lote)
+                        $this->meter((int) $it->IdProducto, $almacenes[$t->part_alm], $almacenes[$t->des_alm],
+                            [['cantidad' => (float) $it->cantidad, 'lote' => $it->mov_lote, 'vencimiento' => $it->mov_vencimiento]], (float) $it->costo,
+                            $t->mov_cab_id, now()->toDateString(), 'ANULACIÓN TRF-'.$t->mov_cab_id);
+                    } else {
+                        $this->moverStock($productos[$it->IdProducto], $almacenes[$t->des_alm], $almacenes[$t->part_alm],
+                            (float) $it->cantidad, (float) $it->costo, $t->mov_cab_id, now()->toDateString(), 'ANULACIÓN TRF-'.$t->mov_cab_id, $it->mov_lote);
+                    }
                 }
                 DB::table('movimientos_cabecera')->where('mov_cab_id', $t->mov_cab_id)->update(['estado' => 'ANULADO']);
             });

@@ -6,6 +6,14 @@
     <div class="flex flex-wrap items-center gap-2 mb-4">
         <a href="{{ route('transferencias.index') }}" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">← Transferencias</a>
         <button onclick="window.print()" class="ml-auto px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Imprimir</button>
+        @if ($transferencia->estado === \App\Http\Controllers\TransferenciaController::EN_TRANSITO && auth()->user()->esAdminOCaja())
+            <form method="POST" action="{{ route('transferencias.recibir', $transferencia->mov_cab_id) }}" class="flex items-center gap-1"
+                  onsubmit="return confirm('¿Llegaron los productos a {{ $transferencia->destino }}? Entrarán a su stock.')">
+                @csrf
+                <input type="date" name="fecha" value="{{ now()->toDateString() }}" min="{{ $transferencia->fecha }}" max="{{ now()->toDateString() }}" class="h-9 rounded-xl border-gray-300 text-sm">
+                <button class="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600">Recibir en destino</button>
+            </form>
+        @endif
         @if ($transferencia->estado !== 'ANULADO' && auth()->user()->esAdminOCaja())
             <form method="POST" action="{{ route('transferencias.anular', $transferencia->mov_cab_id) }}"
                   onsubmit="return confirm('Los productos regresarán del almacén de destino al de origen. ¿Anular la transferencia?')">
@@ -21,7 +29,8 @@
         <div><p class="text-xs text-gray-400 uppercase">Origen</p><p class="font-semibold text-gray-700">{{ $transferencia->origen }}</p></div>
         <div><p class="text-xs text-gray-400 uppercase">Destino</p><p class="font-semibold text-gray-700">{{ $transferencia->destino }}</p></div>
         <div><p class="text-xs text-gray-400 uppercase">Estado</p>
-            <span class="px-2 py-1 rounded-full text-xs font-bold {{ $transferencia->estado === 'ANULADO' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700' }}">{{ $transferencia->estado }}</span></div>
+            <span class="px-2 py-1 rounded-full text-xs font-bold {{ $transferencia->estado === 'ANULADO' ? 'bg-red-100 text-red-700' : ($transferencia->estado === 'EN TRANSITO' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-700') }}">{{ $transferencia->estado === 'EN TRANSITO' ? '🚚 EN TRÁNSITO' : $transferencia->estado }}</span>
+            @if ($transferencia->fecha_recep && $transferencia->fecha_recep !== $transferencia->fecha)<p class="text-xs text-gray-500 mt-1">Recibida el {{ \Carbon\Carbon::parse($transferencia->fecha_recep)->format('d/m/Y') }}</p>@endif</div>
         @if ($transferencia->observaciones)
             <div class="col-span-full"><p class="text-xs text-gray-400 uppercase">Observación</p><p class="text-gray-700">{{ $transferencia->observaciones }}</p></div>
         @endif
