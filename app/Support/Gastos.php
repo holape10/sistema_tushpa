@@ -76,6 +76,9 @@ class Gastos
             'credito_fiscal' => (bool) ($d['credito_fiscal'] ?? ($d['tdocod'] === '01' && $igv > 0)),
             'forma_pago' => ($d['forma_pago'] ?? 'CONTADO') === 'CREDITO' ? 'CREDITO' : 'CONTADO',
             'id_med_pag' => $d['id_med_pag'] ?? null, 'updated_at' => now(),
+            // Centro de costo: el elegido (si es de la empresa) o el del local donde se registra
+            'centro_costo_id' => ! empty($d['centro_costo_id']) && CentrosCosto::valido((string) $ruc, (int) $d['centro_costo_id'])
+                ? (int) $d['centro_costo_id'] : CentrosCosto::deSucursal((string) $ruc, (int) $user->id_empresa_negocio),
         ];
         if ($id) {
             DB::table('gastos')->where('id', $id)->where('IdEmpresa', $ruc)->update($datos);

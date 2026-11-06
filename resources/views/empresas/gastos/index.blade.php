@@ -82,7 +82,7 @@
                                         <span class="mr-2">@include('empresas.sunat._boton_consultar', ['url' => route('gastos.consultar_sunat', $g->id),
                                             'estado' => $g->sunat_estado ?? null, 'consultado' => $g->sunat_consultado ?? null])</span>
                                     @endif
-                                    <button type="button" class="text-indigo-600 text-xs hover:underline" @click="editar({{ $g->id }}, @js(collect((array) $g)->only(['fecha', 'tdocod', 'serie', 'numero', 'prov_doc', 'prov_nombre', 'categoria_id', 'descripcion', 'moneda', 'tipo_cambio', 'base', 'igv', 'no_gravado', 'retencion', 'credito_fiscal', 'forma_pago', 'id_med_pag'])))">Editar</button>
+                                    <button type="button" class="text-indigo-600 text-xs hover:underline" @click="editar({{ $g->id }}, @js(collect((array) $g)->only(['fecha', 'tdocod', 'serie', 'numero', 'prov_doc', 'prov_nombre', 'categoria_id', 'descripcion', 'moneda', 'tipo_cambio', 'base', 'igv', 'no_gravado', 'retencion', 'credito_fiscal', 'forma_pago', 'id_med_pag', 'centro_costo_id'])))">Editar</button>
                                     <form method="POST" action="{{ route('gastos.anular', $g->id) }}" class="inline" onsubmit="return confirm('¿Anular este gasto?')">@csrf<button class="text-rose-600 text-xs hover:underline ml-2">Anular</button></form>
                                 @else<span class="text-xs text-gray-400 no-underline">Anulado</span>@endif
                             </td>
@@ -112,6 +112,11 @@
                         <label>Categoría
                             <select x-model="g.categoria_id" required class="block w-full mt-1 rounded-lg border-gray-300">
                                 <template x-for="c in categorias" :key="c.id"><option :value="c.id" x-text="c.nombre"></option></template>
+                            </select></label>
+                        <label x-show="centros.length" x-cloak>Centro de costo
+                            <select x-model="g.centro_costo_id" class="block w-full mt-1 rounded-lg border-gray-300">
+                                <option value="">— Sin centro —</option>
+                                <template x-for="c in centros" :key="c.id"><option :value="c.id" x-text="c.nombre"></option></template>
                             </select></label>
                     </div>
                     <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
@@ -218,14 +223,14 @@
             const post = (url, data) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF }, body: JSON.stringify(data) })
                 .then(async r => { const d = await r.json().catch(() => ({ message: 'Error del servidor.' })); if (r.status === 422) d.message = Object.values(d.errors)[0][0]; return d; });
             return {
-                categorias, modal: null, id: null, g: {}, rapido: null, conIgv: true, error: '', enviando: false,
+                categorias, centros: @js($centros), modal: null, id: null, g: {}, rapido: null, conIgv: true, error: '', enviando: false,
                 sire: { solicitud: @js($solicitudesSire->first()->id ?? null), filas: [], cargando: false, mensaje: '', ok: true },
                 n2(n) { return (Number(n) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
                 total() { return r2((Number(this.g.base) || 0) + (Number(this.g.igv) || 0) + (Number(this.g.no_gravado) || 0)); },
                 nuevo() {
                     this.id = null; this.error = ''; this.rapido = null; this.conIgv = true;
                     this.g = { fecha: new Date().toISOString().slice(0, 10), tdocod: '01', serie: '', numero: '', prov_doc: '', prov_nombre: '', categoria_id: categorias[0]?.id,
-                        descripcion: '', moneda: 'PEN', tipo_cambio: null, base: 0, igv: 0, no_gravado: 0, retencion: 0, credito_fiscal: true, forma_pago: 'CONTADO', id_med_pag: medio };
+                        descripcion: '', moneda: 'PEN', tipo_cambio: null, base: 0, igv: 0, no_gravado: 0, retencion: 0, credito_fiscal: true, forma_pago: 'CONTADO', id_med_pag: medio, centro_costo_id: @js($centroLocal) ?? '' };
                     this.modal = 'gasto';
                 },
                 editar(id, datos) {

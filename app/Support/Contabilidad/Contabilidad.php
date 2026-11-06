@@ -2,6 +2,7 @@
 
 namespace App\Support\Contabilidad;
 
+use App\Support\CentrosCosto;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -32,7 +33,7 @@ class Contabilidad
 {
     public const SUBDIARIOS = ['00' => 'APERTURA', '01' => 'CAJA Y BANCOS', '05' => 'VENTAS', '11' => 'COMPRAS', '35' => 'DIARIO'];
 
-    public const ORIGENES = ['VENTAS', 'COBRANZAS', 'COMPRAS', 'PAGOS', 'REG. VENTAS', 'REG. COBROS', 'REG. COMPRAS', 'REG. PAGOS', 'PLANILLA', 'MANUAL', 'APERTURA', 'BANCOS'];
+    public const ORIGENES = ['VENTAS', 'COBRANZAS', 'COMPRAS', 'PAGOS', 'REG. VENTAS', 'REG. COBROS', 'REG. COMPRAS', 'REG. PAGOS', 'PLANILLA', 'MANUAL', 'APERTURA', 'BANCOS', 'ACTIVOS'];
 
     public static function asegurar(string $ruc): void
     {
@@ -415,6 +416,7 @@ class Contabilidad
                 ->where('g.IdEmpresa', $ruc)->where('g.estado', 'Registrado')->whereBetween('g.fecha', [$desde, $hasta])
                 ->orderBy('g.fecha')->orderBy('g.id')->select('g.*', 'c.nombre as categoria', 'c.cuenta_contable', 'm.nom_med_pag', 'm.cuenta_contable as cuenta_medio')->get();
             $n['gastos'] = 0.0;
+            $destinos = [];   // fecha => centro => gasto (para el destino 9x → 79)
             foreach ($gastos as $g) {
                 $tc = $g->moneda === 'USD' ? (float) $g->tipo_cambio : 1.0;
                 $total = round((float) $g->total * $tc, 2);
@@ -436,6 +438,18 @@ class Contabilidad
                     ], $imp);
                 $n['asientos']++;
                 $n['gastos'] += $g->tdocod === '07' ? -$gasto : $gasto;
+                if ($g->centro_costo_id ?? null) {
+                    $destinos[$g->fecha][$g->centro_costo_id] = ($destinos[$g->fecha][$g->centro_costo_id] ?? 0) + ($g->tdocod === '07' ? -$gasto : $gasto);
+                }
+            }
+            // ---- Destino de gastos: cada centro de costo a su cuenta de la clase 9 contra 79 (si el destino está activado) ----
+            foreach ($destinos as $fecha => $porCentro) {
+                $lineas = CentrosCosto::lineasDestino($ruc, $porCentro, $imp);
+                if ($lineas) {
+                    self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '35', 'origen' => 'COMPRAS',
+                        'glosa' => 'DESTINO DE GASTOS A CENTROS DE COSTO DEL '.Carbon::parse($fecha)->format('d/m/Y')], $lineas, $imp);
+                    $n['asientos']++;
+                }
             }
             foreach ($gastos->where('forma_pago', 'CONTADO')->where('tdocod', '!=', '07')->groupBy('fecha') as $fecha => $grupo) {
                 $lineas = [];

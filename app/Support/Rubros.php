@@ -19,14 +19,14 @@ class Rubros
         '/inicio', '/dashboard', '/actividad', '/turnos', '/turnos/listado', '/ventas', '/notas', '/sunat/envios', '/sunat/resumenes',
         '/reportes/ventas', '/reportes/sunat', '/reportes/ventas-cliente', '/reportes/ventas-producto', '/reportes/productos-ranking',
         '/clientes', '/proveedores', '/usuarios', '/empresas', '/sucursales', '/mediospagos', '/categorias', '/productos',
-        '/impresoras', '/compras', '/ordenes-compra', '/gastos', '/almacenes', '/kardex', '/kardex/stock', '/kardex/inventario', '/kardex/sunat', '/cuentas/cobrar', '/cuentas/pagar', '/flujo-caja', '/bancos', '/soporte',
+        '/impresoras', '/compras', '/ordenes-compra', '/gastos', '/centros-costo', '/activos-fijos', '/almacenes', '/kardex', '/kardex/stock', '/kardex/inventario', '/kardex/sunat', '/cuentas/cobrar', '/cuentas/pagar', '/flujo-caja', '/bancos', '/soporte',
         '/respaldo', '/bitacora', '/mis-comprobantes', '/sunat/consulta-cpe',
     ];
 
     /** Contabilidad completa: libros, registro de ventas y compras, SIRE, tributos, planilla, asistencia y CONCAR */
     private const CONTABLE = [
         '/contabilidad/plan', '/contabilidad/registro/ventas', '/contabilidad/registro/compras', '/contabilidad/centralizar/ventas',
-        '/contabilidad/centralizar/compras', '/contabilidad/diario', '/contabilidad/mayor', '/contabilidad/balance', '/contabilidad/estados', '/concar', '/bancos',
+        '/contabilidad/centralizar/compras', '/contabilidad/diario', '/contabilidad/mayor', '/contabilidad/balance', '/contabilidad/estados', '/concar', '/bancos', '/centros-costo', '/activos-fijos',
     ];
 
     /**

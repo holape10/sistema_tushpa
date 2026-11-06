@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\Bitacora;
+use App\Support\CentrosCosto;
 use App\Support\ConsultaPeru;
 use App\Support\Excel;
 use App\Support\Gastos;
@@ -17,7 +18,7 @@ class GastoController extends Controller
 {
     /** Lo que se compara en la bitácora al editar un gasto */
     public const ETIQUETAS_BITACORA = ['fecha' => 'Fecha', 'tdocod' => 'Tipo de documento', 'serie' => 'Serie', 'numero' => 'Número', 'prov_doc' => 'RUC/DNI',
-        'prov_nombre' => 'Proveedor', 'categoria_id' => 'Categoría', 'descripcion' => 'Descripción', 'moneda' => 'Moneda', 'base' => 'Base', 'igv' => 'IGV',
+        'prov_nombre' => 'Proveedor', 'categoria_id' => 'Categoría', 'centro_costo_id' => 'Centro de costo', 'descripcion' => 'Descripción', 'moneda' => 'Moneda', 'base' => 'Base', 'igv' => 'IGV',
         'no_gravado' => 'No gravado', 'total' => 'Total', 'credito_fiscal' => 'Crédito fiscal', 'forma_pago' => 'Forma de pago'];
 
     private function ruc(bool $soloAdmin = false): string
@@ -33,6 +34,7 @@ class GastoController extends Controller
         'descripcion' => 'nullable|string|max:255', 'moneda' => 'required|in:PEN,USD', 'tipo_cambio' => 'nullable|numeric|min:0',
         'base' => 'nullable|numeric|min:0', 'igv' => 'nullable|numeric|min:0', 'no_gravado' => 'nullable|numeric|min:0', 'retencion' => 'nullable|numeric|min:0',
         'credito_fiscal' => 'boolean', 'forma_pago' => 'required|in:CONTADO,CREDITO', 'id_med_pag' => 'nullable|integer',
+        'centro_costo_id' => 'nullable|integer',
     ];
 
     public function index(Request $request)
@@ -71,6 +73,8 @@ class GastoController extends Controller
                 'n' => $registrados->count(), 'retencion' => $registrados->sum(fn ($x) => Gastos::soles($x, 'retencion'))],
             'medios' => DB::table('medios_pagos')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag']),
             'documentos' => Gastos::DOCUMENTOS,
+            'centros' => CentrosCosto::lista($ruc, true)->map(fn ($c) => ['id' => $c->id, 'nombre' => $c->codigo.' · '.$c->nombre])->values(),
+            'centroLocal' => CentrosCosto::deSucursal($ruc, (int) Auth::user()->id_empresa_negocio),
             'solicitudesSire' => DB::table('sire_solicitudes')->where('IdEmpresa', $ruc)->where('libro', Sire::COMPRAS)->whereNotNull('archivo')
                 ->orderByDesc('periodo')->get(['id', 'periodo', 'filas']),
         ]);

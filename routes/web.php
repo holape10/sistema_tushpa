@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivoFijoController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AlmacenController;
 use App\Http\Controllers\AsistenciaAdminController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\BitacoraController;
 use App\Http\Controllers\CajaSinInternetController;
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\CentroCostoController;
 use App\Http\Controllers\ClinicaArchivoController;
 use App\Http\Controllers\ClinicaController;
 use App\Http\Controllers\ClinicaFirmaController;
@@ -723,6 +725,24 @@ Route::middleware('auth')->group(function () {
     Route::post('/bancos/{id}/registrar', [BancoController::class, 'registrar'])->whereNumber('id')->name('bancos.registrar');
     Route::post('/bancos/{id}/movimiento', [BancoController::class, 'movimiento'])->whereNumber('id')->name('bancos.movimiento');
     Route::get('/bancos/{id}/reporte/excel', [BancoController::class, 'reporteExcel'])->whereNumber('id')->name('bancos.reporte.excel');
+    // Centros de costo
+    Route::get('/centros-costo', [CentroCostoController::class, 'index'])->name('centros_costo.index');
+    Route::post('/centros-costo', [CentroCostoController::class, 'guardar'])->name('centros_costo.store');
+    Route::put('/centros-costo/{id}', [CentroCostoController::class, 'guardar'])->whereNumber('id')->name('centros_costo.update');
+    Route::post('/centros-costo/locales', [CentroCostoController::class, 'crearLocales'])->name('centros_costo.locales');
+    Route::get('/centros-costo/resultados', [CentroCostoController::class, 'reporte'])->name('centros_costo.reporte');
+    Route::get('/centros-costo/resultados/excel', [CentroCostoController::class, 'excel'])->name('centros_costo.excel');
+    // Activos fijos y depreciación
+    Route::get('/activos-fijos', [ActivoFijoController::class, 'index'])->name('activos.index');
+    Route::get('/activos-fijos/nuevo', [ActivoFijoController::class, 'create'])->name('activos.create');
+    Route::post('/activos-fijos', [ActivoFijoController::class, 'guardar'])->name('activos.store');
+    Route::get('/activos-fijos/excel', [ActivoFijoController::class, 'excel'])->name('activos.excel');
+    Route::post('/activos-fijos/depreciar', [ActivoFijoController::class, 'depreciar'])->name('activos.depreciar');
+    Route::post('/activos-fijos/deshacer', [ActivoFijoController::class, 'deshacer'])->name('activos.deshacer');
+    Route::get('/activos-fijos/{id}', [ActivoFijoController::class, 'show'])->whereNumber('id')->name('activos.show');
+    Route::get('/activos-fijos/{id}/editar', [ActivoFijoController::class, 'edit'])->whereNumber('id')->name('activos.edit');
+    Route::put('/activos-fijos/{id}', [ActivoFijoController::class, 'guardar'])->whereNumber('id')->name('activos.update');
+    Route::post('/activos-fijos/{id}/baja', [ActivoFijoController::class, 'baja'])->whereNumber('id')->name('activos.baja');
     Route::post('/compras/{id}/consultar-sunat', [CompraController::class, 'consultarSunat'])->whereNumber('id')->middleware('throttle:30,1')->name('compras.consultar_sunat');
     Route::get('/compras/productos', [CompraController::class, 'productos'])->name('compras.productos');
     Route::post('/compras/producto-nuevo', [CompraController::class, 'productoRapido'])->name('compras.producto_nuevo');
