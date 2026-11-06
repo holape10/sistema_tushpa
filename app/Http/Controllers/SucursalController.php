@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EmpresaNegocio;
 use App\Models\Turno;
+use App\Support\Bitacora;
 use App\Support\ControlStock;
 use App\Support\DemoDatos;
 use App\Support\LogoNegocio;
@@ -82,6 +83,17 @@ class SucursalController extends Controller
 
         return view('empresas.sucursales.edit', ['sucursal' => $sucursal, 'series' => self::SERIES, 'ultimos' => $ultimos]);
     }
+
+    /** Nombres de los campos más usados para la bitácora (los demás salen con el nombre de la columna) */
+    public const ETIQUETAS_BITACORA = ['nombre_comercial' => 'Nombre comercial', 'direccion' => 'Dirección', 'telefono' => 'Teléfono', 'correo' => 'Correo',
+        'estado' => 'Estado', 'logo_suc' => 'Logo', 'FseEmpresa' => 'Serie de facturas', 'FnuEmpresa' => 'Último N° de factura', 'BseEmpresa' => 'Serie de boletas',
+        'BnuEmpresa' => 'Último N° de boleta', 'SerNota' => 'Serie de notas de venta', 'NumNota' => 'Último N° de nota de venta',
+        'SerNCF' => 'Serie de notas de crédito (factura)', 'NumNCF' => 'Último N° de nota de crédito (factura)', 'SerNCB' => 'Serie de notas de crédito (boleta)',
+        'NumNCB' => 'Último N° de nota de crédito (boleta)', 'SerNDF' => 'Serie de notas de débito (factura)', 'NumNDF' => 'Último N° de nota de débito (factura)',
+        'SerNDB' => 'Serie de notas de débito (boleta)', 'NumNDB' => 'Último N° de nota de débito (boleta)', 'SerGuia' => 'Serie de guías', 'NumGuia' => 'Último N° de guía',
+        'SerProforma' => 'Serie de proformas', 'NumProforma' => 'Último N° de proforma', 'tip_igv_pred' => 'IGV por defecto', 'tdocod_pred' => 'Comprobante por defecto',
+        'control_stock' => 'Control de stock', 'permite_descuentos' => 'Permite descuentos', 'permite_cortesias' => 'Permite cortesías',
+        'descuento_max_cajero' => 'Descuento máximo del cajero', 'exigir_operacion' => 'Exigir N° de operación', 'formato_impresion' => 'Formato de impresión'];
 
     public function update(Request $request, $id)
     {
@@ -212,11 +224,20 @@ class SucursalController extends Controller
             $datos['logo_suc'] = null;
         }
 
+        $antes = Bitacora::foto('empresa_negocios', ['id_empresa_negocio' => $sucursal->id_empresa_negocio]);
         DB::transaction(function () use ($sucursal, $datos) {
             // Bloqueo: si en este momento alguien está cobrando, se espera a que termine
             EmpresaNegocio::where('id_empresa_negocio', $sucursal->id_empresa_negocio)->lockForUpdate()->first();
             $sucursal->update($datos);
         });
+        $cambios = Bitacora::diferencias($antes, Bitacora::foto('empresa_negocios', ['id_empresa_negocio' => $sucursal->id_empresa_negocio]),
+            self::ETIQUETAS_BITACORA, true);
+        if ($cambios) {
+            // Cambiar una serie o su correlativo puede repetir números en SUNAT; los descuentos y cortesías tocan la caja
+            $delicados = array_filter(array_keys($cambios), fn ($c) => preg_match('/^(Fse|Fnu|Bse|Bnu|Ser|Num)|permite_|descuento|control_stock/', $c));
+            Bitacora::registrar('config.sucursal', "Cambió la configuración de la sucursal {$sucursal->nombre_comercial}", $cambios,
+                ['referencia' => ['sucursal', $sucursal->id_empresa_negocio], 'alerta' => (bool) $delicados]);
+        }
 
         return redirect()->route('sucursales.index')->with('success', "Sucursal {$sucursal->nombre_comercial} actualizada.");
     }

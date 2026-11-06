@@ -10,6 +10,7 @@
         'rose' => ['punto' => 'bg-rose-500', 'chip' => 'bg-rose-50 text-rose-700 ring-rose-200', 'activo' => 'bg-rose-600 text-white ring-rose-600'],
         'orange' => ['punto' => 'bg-orange-500', 'chip' => 'bg-orange-50 text-orange-700 ring-orange-200', 'activo' => 'bg-orange-500 text-white ring-orange-500'],
         'sky' => ['punto' => 'bg-sky-500', 'chip' => 'bg-sky-50 text-sky-700 ring-sky-200', 'activo' => 'bg-sky-600 text-white ring-sky-600'],
+        'violet' => ['punto' => 'bg-violet-500', 'chip' => 'bg-violet-50 text-violet-700 ring-violet-200', 'activo' => 'bg-violet-600 text-white ring-violet-600'],
     ];
     $avatar = ['bg-indigo-500', 'bg-pink-500', 'bg-emerald-500', 'bg-amber-500', 'bg-sky-500', 'bg-violet-500', 'bg-rose-500', 'bg-teal-500'];
     $iniciales = fn ($n) => collect(preg_split('/\s+/', trim((string) $n)))->filter()->take(2)->map(fn ($p) => mb_substr($p, 0, 1))->implode('');

@@ -20,7 +20,7 @@ class Rubros
         '/reportes/ventas', '/reportes/sunat', '/reportes/ventas-cliente', '/reportes/ventas-producto', '/reportes/productos-ranking',
         '/clientes', '/proveedores', '/usuarios', '/empresas', '/sucursales', '/mediospagos', '/categorias', '/productos',
         '/impresoras', '/compras', '/gastos', '/almacenes', '/kardex', '/kardex/stock', '/kardex/inventario', '/kardex/sunat', '/cuentas/cobrar', '/cuentas/pagar', '/soporte',
-        '/respaldo', '/mis-comprobantes', '/sunat/consulta-cpe',
+        '/respaldo', '/bitacora', '/mis-comprobantes', '/sunat/consulta-cpe',
     ];
 
     /** Contabilidad completa: libros, registro de ventas y compras, SIRE, tributos, planilla, asistencia y CONCAR */
@@ -85,7 +85,7 @@ class Rubros
         ]],
         // Préstamos con cobro diario ("gota a gota"), semanal o mensual: no vende ni emite comprobantes
         'PRESTAMOS' => ['icono' => 'fa-hand-holding-dollar', 'nombre' => 'Préstamos', 'ejemplos' => 'Préstamos diarios, cobranza en ruta y morosidad', 'sin_base' => true, 'modulos' => [
-            '/inicio', '/usuarios', '/empresas', '/sucursales', '/soporte', '/respaldo',
+            '/inicio', '/usuarios', '/empresas', '/sucursales', '/soporte', '/respaldo', '/bitacora',
             '/prestamos', '/prestamos/clientes', '/prestamos/cobranza', '/prestamos/reportes', '/prestamos/configuracion',
         ]],
         // Colegio: alumnos, matrícula, pensiones (con descuento de hermanos y por adelantado), sorteo y morosidad
@@ -99,7 +99,7 @@ class Rubros
         ]],
         // Estudio contable o empresa que solo lleva su contabilidad (sin vender con el sistema)
         'CONTABLE' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudio contable, contabilidad de la empresa, SIRE, planilla', 'sin_base' => true, 'modulos' => [
-            '/inicio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo',
+            '/inicio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo', '/bitacora',
             ...self::CONTABLE,
             '/sire/ventas', '/sire/compras', '/sire/credenciales', '/tributos',
             '/planilla/trabajadores', '/planilla', '/planilla/parametros',
@@ -107,7 +107,7 @@ class Rubros
         ]],
         // Estudio contable con las empresas de sus clientes: cada una con su contabilidad, SIRE, planilla y asistencia
         'ESTUDIO' => ['icono' => 'fa-building-columns', 'nombre' => 'Estudio contable (multiempresa)', 'ejemplos' => 'Estudio contable que lleva muchas empresas: SIRE, DBF, contabilidad, planilla', 'sin_base' => true, 'estudio' => true, 'modulos' => [
-            '/inicio', '/estudio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo',
+            '/inicio', '/estudio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo', '/bitacora',
             ...self::CONTABLE,
             '/sire/ventas', '/sire/compras', '/sire/credenciales', '/tributos',
             '/planilla/trabajadores', '/planilla', '/planilla/parametros',

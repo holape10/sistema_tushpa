@@ -5,6 +5,7 @@ namespace App\Support\Sunat;
 use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Support\AnulacionVenta;
+use App\Support\Bitacora;
 use App\Support\Comprobante;
 use App\Support\Unidades;
 use DateTime;
@@ -715,6 +716,10 @@ class SunatService
             ]);
             AnulacionVenta::anular((int) $cab->IdCpe_cabecera, (string) ($cab->motivo_baja ?: 'COMUNICACIÓN DE BAJA'),
                 $cab->IdUsuario_baja ? (int) $cab->IdUsuario_baja : null, 'BAJA SUNAT');
+            Bitacora::registrar('venta.baja_aceptada', "SUNAT aceptó la baja de {$cab->serdoc}-{$cab->numdoc}: la venta quedó anulada", null, [
+                'usuario' => null, 'nombre' => 'SUNAT', 'sucursal' => (int) $cab->id_empresa_negocio, 'empresa' => $cab->IdEmpresa,
+                'referencia' => ['venta', $cab->IdCpe_cabecera],
+            ]);
         }
     }
 

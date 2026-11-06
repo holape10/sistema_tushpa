@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Producto;
+use App\Support\Bitacora;
 use App\Support\Buscar;
 use App\Support\Mermas;
 use App\Support\Recetas;
@@ -92,11 +93,14 @@ class MermaController extends Controller
     public function anular(int $id): RedirectResponse
     {
         abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador anula mermas.');
+        $m = DB::table('mermas as m')->leftJoin('productos as p', 'p.IdProducto', '=', 'm.IdProducto')->where('m.merma_id', $id)->first(['p.pronom', 'm.cantidad', 'm.umecod']);
         try {
             Mermas::anular($id, $this->sucursal());
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
+        Bitacora::registrar('almacen.merma_anular', 'Anuló la merma de '.($m ? rtrim(rtrim(number_format((float) $m->cantidad, 3, '.', ''), '0'), '.').' '.$m->umecod.' de '.$m->pronom : 'N° '.$id),
+            null, ['referencia' => ['merma', $id], 'alerta' => true]);
 
         return back()->with('success', 'Merma anulada: lo que había salido regresó al almacén.');
     }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\Contabilidad\Contabilidad;
 use App\Support\Contabilidad\Registro;
@@ -134,10 +135,15 @@ class ContabilidadRegistroController extends Controller
     public function eliminar(string $tipo, int $id)
     {
         $ruc = $this->ruc($tipo);
+        $r = DB::table('conta_registros')->where('id', $id)->where('IdEmpresa', $ruc)->first();
         try {
             Registro::eliminar($ruc, $id);
         } catch (RuntimeException $e) {
             return back()->withErrors(['registro' => $e->getMessage()]);
+        }
+        if ($r) {
+            Bitacora::registrar('contabilidad.registro_eliminar', "Eliminó del registro de {$r->tipo} el comprobante {$r->serie}-{$r->numero} de {$r->nombre} (S/ "
+                .number_format((float) $r->total, 2).", periodo {$r->periodo}) y su asiento", null, ['referencia' => ['registro', $id], 'alerta' => true, 'empresa' => $ruc]);
         }
 
         return back()->with('success', 'Comprobante y su asiento eliminados.');

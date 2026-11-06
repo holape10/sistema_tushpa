@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Support\Bitacora;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +27,7 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
+        $antes = $request->user()->only(['name', 'email']);
         $request->user()->fill($request->validated());
 
         if ($request->user()->isDirty('email')) {
@@ -33,6 +35,8 @@ class ProfileController extends Controller
         }
 
         $request->user()->save();
+        Bitacora::siCambio('usuario.perfil', 'Cambió los datos de su perfil', $antes, $request->user()->only(['name', 'email']),
+            ['name' => 'Nombre', 'email' => 'Correo'], ['referencia' => ['usuario', $request->user()->IdUsuario]]);
 
         return Redirect::route('profile.edit')->with('status', 'profile-updated');
     }
@@ -47,6 +51,7 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+        Bitacora::registrar('usuario.eliminar', "Eliminó su propia cuenta ({$user->email})", null, ['referencia' => ['usuario', $user->IdUsuario], 'alerta' => true]);
 
         Auth::logout();
 

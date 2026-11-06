@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Empresa;
+use App\Support\Bitacora;
 use App\Support\Excel;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
 use App\Support\Sunat\SireSolicitudes;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -63,7 +65,12 @@ class SireController extends Controller
         if (! $empresa->client_secret) {
             return back()->withInput()->with('error', 'Ingresa la CLAVE (client_secret) del API SUNAT.');
         }
+        $sucio = array_keys($empresa->getDirty());
+        $antes = Arr::only($empresa->getRawOriginal(), $sucio);
         $empresa->save();
+        Bitacora::siCambio('config.sire', 'Cambió las credenciales del SIRE de '.$empresa->NomEmpresa, $antes, Arr::only($empresa->getAttributes(), $sucio),
+            ['client_id' => 'ID API SUNAT (SIRE)', 'client_secret' => 'Clave API SUNAT (SIRE)', 'sire_usuario' => 'Usuario SOL del SIRE',
+                'sire_clave' => 'Clave SOL del SIRE', 'sol_usuario' => 'Usuario SOL principal', 'sol_clave' => 'Clave SOL principal'], ['referencia' => ['empresa', $empresa->IdEmpresa], 'alerta' => true]);
         cache()->forget('sire_token_'.$empresa->IdEmpresa);
 
         // Se prueba la conexión al guardar

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Empresa;
 use App\Models\User;
+use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\Estudio;
 use App\Support\EstudioImportar;
@@ -110,7 +111,14 @@ class EstudioController extends Controller
         $this->administrar();
         abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->where('propia', false)->exists(), 404);
         $d = $request->validate(self::reglasConfiguracion(), ['regex' => 'Solo letras y números, sin espacios ni puntos.'], self::NOMBRES);
+        $antes = (Bitacora::foto('empresa', ['IdEmpresa' => $ruc]) ?? []) + (Bitacora::foto('concar_config', ['IdEmpresa' => $ruc]) ?? []);
         $this->aplicarConfiguracion($ruc, $d);
+        $etiquetas = ['client_id' => 'ID API SUNAT (SIRE)', 'client_secret' => 'Clave API SUNAT (SIRE)', 'sire_usuario' => 'Usuario SOL del SIRE',
+            'sire_clave' => 'Clave SOL del SIRE', 'sol_usuario' => 'Usuario SOL principal', 'sol_clave' => 'Clave SOL principal'] + ['cta_compras' => 'Cuenta compras', 'cta_por_pagar' => 'Cuenta por pagar', 'cta_por_cobrar' => 'Cuenta por cobrar',
+                'cta_ventas' => 'Cuenta ventas', 'cta_ventas_exo' => 'Cuenta ventas exoneradas'];
+        Bitacora::siCambio('config.estudio_empresa', "Cambió las credenciales o cuentas de la empresa {$ruc}", $antes,
+            (Bitacora::foto('empresa', ['IdEmpresa' => $ruc]) ?? []) + (Bitacora::foto('concar_config', ['IdEmpresa' => $ruc]) ?? []), $etiquetas,
+            ['referencia' => ['empresa', $ruc], 'alerta' => true]);
 
         return back()->with('success', "Datos de la empresa {$ruc} guardados.");
     }
@@ -138,6 +146,10 @@ class EstudioController extends Controller
         }
         set_time_limit(600);
         $r = EstudioImportar::importar($filas);
+        if ($r['nuevas']) {
+            Bitacora::registrar('config.estudio_importar', 'Importó '.count($r['nuevas']).' empresa(s) al estudio desde Excel', null,
+                ['datos' => ['nuevas' => array_values($r['nuevas']), 'omitidas' => array_values($r['omitidas'])]]);
+        }
 
         $partes = [count($r['nuevas']).' empresa(s) creada(s)'];
         if ($r['omitidas']) {

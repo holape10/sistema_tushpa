@@ -10,6 +10,7 @@ use App\Models\ProductoPrecioDinamico;
 use App\Models\ProductoPresentacion;
 use App\Models\Subcategoria;
 use App\Models\UnidadMedida;
+use App\Support\Bitacora;
 use App\Support\Buscar;
 use App\Support\Excel;
 use App\Support\ExcelLector;
@@ -414,6 +415,7 @@ class ProductoController extends Controller
         }
 
         $costoAntes = (float) $producto->costo;
+        $fotoAntes = self::fotoProducto((int) $producto->IdProducto);
         DB::transaction(function () use ($request, $producto, $tipo, $anterior, &$aviso, $costoAntes) {
             if ($tipo !== $anterior) {
                 $aviso = $this->cambiarTipo($producto, $anterior, $tipo);
@@ -450,8 +452,32 @@ class ProductoController extends Controller
             $this->guardarFotosExtra($request, $producto);
             $this->costoAlDia($producto, $costoAntes);
         });
+        Bitacora::siCambio('producto.editar', 'Editó el producto '.$producto->pronom, $fotoAntes, self::fotoProducto((int) $producto->IdProducto),
+            self::ETIQUETAS_BITACORA, ['referencia' => ['producto', $producto->IdProducto]]);
 
         return redirect()->route('productos.index')->with('success', 'Actualizado correctamente.'.$aviso);
+    }
+
+    /** Lo que se compara en la bitácora */
+    public const ETIQUETAS_BITACORA = ['pronom' => 'Nombre', 'propun' => 'Precio de venta', 'costo' => 'Costo', 'proest' => 'Estado', 'tipo' => 'Tipo',
+        'categoria' => 'Categoría', 'umecod' => 'Unidad', 'stock_min' => 'Stock mínimo', 'procod' => 'Código', 'codigo_barra' => 'Código de barras',
+        'descripcion' => 'Descripción', 'control_lote' => 'Control de lote', 'control_serie' => 'Control de serie', 'es_combustible' => 'Es combustible'];
+
+    /**
+     * El producto con nombres en vez de números (tipo y categoría) para la bitácora.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function fotoProducto(int $id): ?array
+    {
+        $p = Bitacora::foto('productos', ['IdProducto' => $id]);
+        if (! $p) {
+            return null;
+        }
+        $p['tipo'] = self::TIPOS[(int) ($p['promocion'] ?? 0)] ?? ($p['promocion'] ?? null);
+        $p['categoria'] = isset($p['cat_id']) ? (DB::table('categorias')->where('cat_id', $p['cat_id'])->value('cat_nom') ?? $p['cat_id']) : null;
+
+        return $p;
     }
 
     /** Qué impide cambiar el tipo (null si se puede) */
@@ -497,6 +523,9 @@ class ProductoController extends Controller
     public function destroy(Producto $producto)
     {
         $this->esDeMiSucursal($producto);
+        Bitacora::registrar('producto.eliminar', 'Eliminó el producto '.$producto->pronom,
+            Bitacora::diferencias(self::fotoProducto((int) $producto->IdProducto), null, self::ETIQUETAS_BITACORA),
+            ['referencia' => ['producto', $producto->IdProducto], 'alerta' => true]);
         $producto->itemsCombo()->delete();
         ProductoPresentacion::where('IdProducto', $producto->IdProducto)->delete();
         ProductoPrecioDinamico::where('IdProducto', $producto->IdProducto)->delete();
@@ -697,10 +726,11 @@ class ProductoController extends Controller
 
         $errores = [];
         $creados = $actualizados = 0;
+        $preciosCambiados = [];
         $stockInicial = [];
 
         DB::transaction(function () use ($filas, $v, $c, $tipos, $porCodUme, $porNomUme, &$categorias, &$porCodigo, &$porNombre,
-            $user, $sucursal, $almacen, &$errores, &$creados, &$actualizados, &$stockInicial) {
+            $user, $sucursal, $almacen, &$errores, &$creados, &$actualizados, &$stockInicial, &$preciosCambiados) {
 
             foreach (array_slice($filas, 1) as $i => $f) {
                 $n = $i + 2;
@@ -793,6 +823,9 @@ class ProductoController extends Controller
                     if ($codigo !== '') {
                         $datos['procod'] = $codigo;
                     }
+                    if (array_key_exists('propun', $datos) && abs((float) $producto->propun - (float) $datos['propun']) > 0.0001 && count($preciosCambiados) < 500) {
+                        $preciosCambiados[] = [$producto->pronom, (float) $producto->propun, (float) $datos['propun']];
+                    }
                     $producto->update($datos);
                     $actualizados++;
                 } else {
@@ -825,6 +858,11 @@ class ProductoController extends Controller
         });
 
         $mensaje = "Importación terminada: {$creados} productos creados y {$actualizados} actualizados";
+        if ($creados || $actualizados) {
+            Bitacora::registrar('producto.importar', "Importó productos desde Excel: {$creados} creados, {$actualizados} actualizados"
+                .($preciosCambiados ? ', '.count($preciosCambiados).' con precio nuevo' : ''), null,
+                ['datos' => ['archivo' => mb_substr((string) $request->file('archivo')->getClientOriginalName(), 0, 120), 'precios' => $preciosCambiados]]);
+        }
         $mensaje .= $stockInicial ? '; stock inicial cargado a '.count($stockInicial)." productos en {$almacen->descripcion}." : '.';
 
         return redirect()->route('productos.index')->with('success', $mensaje)->with('import_errores', $errores);

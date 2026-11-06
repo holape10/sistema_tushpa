@@ -6,6 +6,7 @@ use App\Models\Empleado;
 use App\Models\EmpresaNegocio;
 use App\Models\Modulo;
 use App\Models\User;
+use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\Delivery;
 use App\Support\Estudio;
@@ -271,7 +272,11 @@ class UsuarioController extends Controller
             return $empleado;
         });
         $this->guardarFoto($request, $empleado);
-        $this->sincronizarMotorizado((int) User::where('emp_id', $empleado->emp_id)->value('IdUsuario'), (int) $d['role_id']);
+        $nuevo = (int) User::where('emp_id', $empleado->emp_id)->value('IdUsuario');
+        $this->sincronizarMotorizado($nuevo, (int) $d['role_id']);
+        Bitacora::registrar('usuario.crear', 'Creó el usuario '.$this->nombreCompleto($d).' ('.trim($d['email']).')',
+            Bitacora::diferencias(null, self::fotoUsuario($nuevo), self::ETIQUETAS_BITACORA),
+            ['referencia' => ['usuario', $nuevo], 'alerta' => (int) $d['role_id'] === 2]);
 
         return redirect()->route('usuarios.index')->with('success', 'Usuario '.$this->nombreCompleto($d).' registrado.');
     }
@@ -299,6 +304,7 @@ class UsuarioController extends Controller
         if ((int) $usuario->IdUsuario === (int) Auth::id() && ((int) $d['role_id'] !== 2 || (int) $d['estusu'] !== 1)) {
             return back()->withInput()->withErrors(['role_id' => 'No puedes quitarte el rol de Administrador ni desactivar tu propio usuario.']);
         }
+        $antes = self::fotoUsuario((int) $usuario->IdUsuario);
 
         DB::transaction(function () use ($d, $usuario) {
             $datosEmp = $this->datosEmpleado($d);
@@ -328,8 +334,42 @@ class UsuarioController extends Controller
         });
         $this->guardarFoto($request, Empleado::find($usuario->emp_id));
         $this->sincronizarMotorizado((int) $usuario->IdUsuario, (int) $d['role_id']);
+        $cambios = Bitacora::diferencias($antes, self::fotoUsuario((int) $usuario->IdUsuario), self::ETIQUETAS_BITACORA);
+        if ($cambios) {
+            // Rol, permisos, estado y contraseña son lo que más importa revisar
+            Bitacora::registrar('usuario.editar', 'Editó el usuario '.$usuario->apeusu, $cambios, ['referencia' => ['usuario', $usuario->IdUsuario],
+                'alerta' => (bool) array_intersect(array_keys($cambios), ['rol', 'modulos', 'estado', 'password', 'pin'])]);
+        }
 
         return redirect()->route('usuarios.index')->with('success', 'Usuario actualizado.');
+    }
+
+    /** Lo que se compara en la bitácora */
+    public const ETIQUETAS_BITACORA = ['nombre' => 'Nombre', 'email' => 'Correo', 'estado' => 'Estado', 'sucursal' => 'Sucursal', 'rol' => 'Rol',
+        'modulos' => 'Opciones del menú', 'pin' => 'Código de ingreso móvil', 'password' => 'Contraseña'];
+
+    /**
+     * El usuario como se ve en pantalla (nombres en vez de números) para la bitácora. El código móvil y la contraseña
+     * van solo para saber si cambiaron: la bitácora no guarda su valor.
+     *
+     * @return array<string, mixed>
+     */
+    public static function fotoUsuario(int $id): array
+    {
+        $u = DB::table('users')->where('IdUsuario', $id)->first();
+        if (! $u) {
+            return [];
+        }
+
+        return [
+            'nombre' => $u->apeusu ?: $u->name, 'email' => $u->email, 'estado' => (int) $u->estusu === 1 ? 'Activo' : 'Inactivo',
+            'sucursal' => DB::table('empresa_negocios')->where('id_empresa_negocio', $u->id_empresa_negocio)->value('nombre_comercial') ?? $u->id_empresa_negocio,
+            'rol' => DB::table('role_user as r')->join('roles as ro', 'ro.id', '=', 'r.role_id')->where('r.user_IdUsuario', $id)->value('ro.description'),
+            'modulos' => DB::table('modulos_usuario as mu')->join('modulos as m', 'm.mod_id', '=', 'mu.mod_id')->where('mu.user_IdUsuario', $id)
+                ->orderBy('m.mod_nom')->pluck('m.mod_nom')->all(),
+            'pin' => $u->codigo_movil ?? null,
+            'password' => $u->password,
+        ];
     }
 
     /** Rol Motorizado: su ficha de motorizado (para asignarle pedidos) queda enlazada; si deja de serlo, se desactiva */
@@ -359,13 +399,20 @@ class UsuarioController extends Controller
             || DB::table('turnos')->where('IdUsuario', $usuario->IdUsuario)->exists();
 
         if ($tieneHistorial) {
+            if ((int) $usuario->estusu !== 0) {
+                Bitacora::registrar('usuario.desactivar', "Desactivó al usuario {$usuario->apeusu} ({$usuario->email})", null,
+                    ['referencia' => ['usuario', $usuario->IdUsuario], 'alerta' => true]);
+            }
             $usuario->update(['estusu' => 0]);
             $usuario->empleado?->update(['est_cod' => '0', 'emp_est' => 'INACTIVO']);
 
             return back()->with('success', 'El usuario tiene ventas o pedidos registrados: se DESACTIVÓ en vez de eliminarse.');
         }
 
-        DB::transaction(function () use ($usuario) {
+        $foto = self::fotoUsuario((int) $usuario->IdUsuario);
+        DB::transaction(function () use ($usuario, $foto) {
+            Bitacora::registrar('usuario.eliminar', "Eliminó al usuario {$usuario->apeusu} ({$usuario->email})",
+                Bitacora::diferencias($foto, null, self::ETIQUETAS_BITACORA), ['referencia' => ['usuario', $usuario->IdUsuario], 'alerta' => true]);
             DB::table('role_user')->where('user_IdUsuario', $usuario->IdUsuario)->delete();
             $usuario->modulos()->detach();
             $empleado = $usuario->empleado;

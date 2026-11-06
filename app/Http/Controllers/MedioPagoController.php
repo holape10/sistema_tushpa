@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MedioPago;
+use App\Support\Bitacora;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -35,13 +36,15 @@ class MedioPagoController extends Controller
         $this->autorizar();
         $request->validate(['nom_med_pag' => 'required|string|max:255'], [], ['nom_med_pag' => 'Nombre']);
 
-        MedioPago::create([
+        $nuevo = MedioPago::create([
             'nom_med_pag' => $request->nom_med_pag,
             'tipo_medio' => $request->tipo_medio,
             'predeterminado' => $request->predeterminado ? '1' : '0',
             'IdEmpresa' => Auth::user()->IdEmpresa,
             'id_empresa_negocio' => Auth::user()->id_empresa_negocio,
         ]);
+
+        Bitacora::registrar('config.medio_pago', 'Creó el medio de pago '.$nuevo->nom_med_pag, null, ['referencia' => ['medio_pago', $nuevo->id_med_pag]]);
 
         return redirect()->route('mediospagos.index')->with('success', 'Medio de pago creado.');
     }
@@ -57,7 +60,10 @@ class MedioPagoController extends Controller
     {
         $this->autorizar($medioPago);
         $request->validate(['nom_med_pag' => 'required|string|max:255'], [], ['nom_med_pag' => 'Nombre']);
+        $antes = $medioPago->only(['nom_med_pag', 'tipo_medio']);
         $medioPago->update($request->only(['nom_med_pag', 'tipo_medio']));
+        Bitacora::siCambio('config.medio_pago', 'Editó el medio de pago '.$medioPago->nom_med_pag, $antes, $medioPago->only(['nom_med_pag', 'tipo_medio']),
+            ['nom_med_pag' => 'Nombre', 'tipo_medio' => 'Tipo'], ['referencia' => ['medio_pago', $medioPago->id_med_pag]]);
 
         return redirect()->route('mediospagos.index')->with('success', 'Medio de pago actualizado.');
     }
@@ -65,6 +71,8 @@ class MedioPagoController extends Controller
     public function destroy(MedioPago $medioPago)
     {
         $this->autorizar($medioPago);
+        Bitacora::registrar('config.medio_pago', 'Eliminó el medio de pago '.$medioPago->nom_med_pag, null,
+            ['referencia' => ['medio_pago', $medioPago->id_med_pag], 'alerta' => true]);
         $medioPago->delete();
 
         return back()->with('success', 'Medio de pago eliminado.');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\MedioPago;
 use App\Models\Turno;
 use App\Support\AnulacionVenta;
+use App\Support\Bitacora;
 use App\Support\Impresion\ComprobantePdf;
 use App\Support\Notas;
 use App\Support\SucursalesVisibles;
@@ -133,6 +134,14 @@ class VentaController extends Controller
         ]);
     }
 
+    /** "Boleta B001-25" para la bitácora */
+    private static function documento(object $cab): string
+    {
+        $tipos = ['01' => 'Factura', '03' => 'Boleta', '07' => 'Nota de crédito', '08' => 'Nota de débito', '13' => 'Nota de venta'];
+
+        return ($tipos[$cab->tdocod] ?? 'Comprobante').' '.$cab->serdoc.'-'.$cab->numdoc;
+    }
+
     /** Ventas de un turno ya cerrado no se tocan: cambiarían el cuadre de caja que ya se entregó */
     private function validarTurnoAbierto(object $cab): ?string
     {
@@ -173,7 +182,14 @@ class VentaController extends Controller
                 .' y el total de la venta es S/ '.number_format($cab->ccaitv, 2).'.']);
         }
 
-        DB::transaction(function () use ($cab, $lineas) {
+        $nombres = MedioPago::where('id_empresa_negocio', $cab->id_empresa_negocio)->pluck('nom_med_pag', 'id_med_pag');
+        $texto = fn ($filas) => collect($filas)->map(fn ($m) => ($nombres[$m['id']] ?? 'Medio '.$m['id']).' S/ '.number_format($m['monto'], 2, '.', ''))->sort()->values()->all();
+        $antes = $texto(DB::table('venta_medio_pago')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->get(['id_med_pag', 'monto'])
+            ->map(fn ($m) => ['id' => (int) $m->id_med_pag, 'monto' => (float) $m->monto]));
+
+        DB::transaction(function () use ($cab, $lineas, $antes, $texto) {
+            Bitacora::siCambio('venta.medios', 'Cambió el medio de pago de '.self::documento($cab), ['medios' => $antes], ['medios' => $texto($lineas)],
+                ['medios' => 'Medios de pago'], ['referencia' => ['venta', $cab->IdCpe_cabecera], 'alerta' => true]);
             DB::table('venta_medio_pago')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->delete();
             foreach ($lineas as $l) {
                 DB::table('venta_medio_pago')->insert([
@@ -206,6 +222,10 @@ class VentaController extends Controller
         if ($cab->tdocod !== '13') {
             try {
                 $r = SunatService::paraUsuario(Auth::user())->comunicarBaja((int) $cab->IdCpe_cabecera, trim($request->motivo));
+                if ($r['ok']) {
+                    Bitacora::registrar('venta.baja', 'Pidió a SUNAT la baja de '.self::documento($cab).' (S/ '.number_format((float) $cab->ccaitv, 2).')', null,
+                        ['referencia' => ['venta', $cab->IdCpe_cabecera], 'alerta' => true, 'datos' => ['motivo' => trim($request->motivo)]]);
+                }
             } catch (\RuntimeException $e) {
                 return response()->json(['success' => false, 'message' => $e->getMessage()]);
             } catch (\Throwable $e) {
@@ -226,6 +246,8 @@ class VentaController extends Controller
         if ($devueltos === null) {
             return response()->json(['success' => false, 'message' => 'La venta ya fue anulada por otro usuario.']);
         }
+        Bitacora::registrar('venta.anular', 'Anuló '.self::documento($cab).' (S/ '.number_format((float) $cab->ccaitv, 2).')', null,
+            ['referencia' => ['venta', $cab->IdCpe_cabecera], 'alerta' => true, 'datos' => ['motivo' => trim($request->motivo), 'stock_devuelto' => $devueltos]]);
 
         return response()->json(['success' => true, 'message' => 'Venta anulada.'.($devueltos ? " Se devolvió al stock lo vendido ($devueltos movimiento(s) de kardex)." : '')]);
     }
@@ -249,6 +271,8 @@ class VentaController extends Controller
         DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->update([
             'ccabaj' => 'DESCARTADO '.now()->format('d/m/Y H:i'), 'motivo_baja' => mb_substr(trim($request->motivo), 0, 70), 'IdUsuario_baja' => Auth::id(),
         ]);
+        Bitacora::registrar('venta.descartar', 'Descartó el comprobante rechazado '.self::documento($cab), null,
+            ['referencia' => ['venta', $cab->IdCpe_cabecera], 'alerta' => true, 'datos' => ['motivo' => trim($request->motivo)]]);
 
         return response()->json(['success' => true, 'message' => 'Comprobante descartado: ya no sale en pendientes de SUNAT.']);
     }

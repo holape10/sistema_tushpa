@@ -6,6 +6,7 @@ use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AutoservicioController;
 use App\Http\Controllers\AvisoCelularController;
+use App\Http\Controllers\BitacoraController;
 use App\Http\Controllers\CajaSinInternetController;
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\CategoriaController;
@@ -1115,6 +1116,14 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::get('/actividad', [LineaTiempoController::class, 'index'])
     ->middleware(['auth'])
     ->name('actividad.index');
+
+// Bitácora de cambios: quién cambió qué y qué había antes (solo el administrador; solo se ve y se exporta)
+Route::get('/bitacora', [BitacoraController::class, 'index'])
+    ->middleware(['auth'])
+    ->name('bitacora.index');
+Route::get('/bitacora/exportar', [BitacoraController::class, 'exportar'])
+    ->middleware(['auth', 'throttle:10,1'])
+    ->name('bitacora.exportar');
 
 // Panel del dueño: cómo va el negocio, horas pico, ranking del equipo, alertas y resumen del día por WhatsApp
 Route::middleware('auth')->prefix('panel-dueno')->name('dueno.')->controller(PanelDuenoController::class)->group(function () {

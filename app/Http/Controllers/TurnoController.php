@@ -6,6 +6,7 @@ use App\Models\Mesa;
 use App\Models\Pedido;
 use App\Models\Turno;
 use App\Support\AvisosCelular;
+use App\Support\Bitacora;
 use App\Support\Propinas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -183,9 +184,15 @@ class TurnoController extends Controller
         $turno = Turno::abiertoDe(Auth::user());
         abort_unless($turno, 403, 'No tienes un turno abierto.');
 
+        $mov = DB::table('movimientoscaja')->where('mov_caj_id', $id)->where('id_turno', $turno->id_turno)->where('estado', 'ACTIVO')->first();
         $ok = DB::table('movimientoscaja')
             ->where('mov_caj_id', $id)->where('id_turno', $turno->id_turno)->where('estado', 'ACTIVO')
             ->update(['estado' => 'ANULADO']);
+        if ($ok && $mov) {
+            Bitacora::registrar('caja.movimiento_anular', 'Anuló un movimiento de caja de S/ '.number_format((float) $mov->importe, 2)
+                .(trim((string) $mov->mov_com) !== '' ? ': '.trim((string) $mov->mov_com) : ''), null,
+                ['referencia' => ['caja_movimiento', (int) $id], 'alerta' => true, 'datos' => ['turno' => $turno->id_turno]]);
+        }
 
         return redirect()->route('turnos.index')->with('success', $ok ? 'Movimiento anulado.' : 'No se encontró el movimiento.');
     }

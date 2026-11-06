@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Almacen;
 use App\Models\Producto;
 use App\Models\UnidadMedida;
+use App\Support\Bitacora;
 use App\Support\Compras;
 use App\Support\ConsultaPeru;
 use App\Support\Precios;
@@ -140,6 +141,7 @@ class CompraController extends Controller
             'prov_num' => 'documento del proveedor', 'prov_nom' => 'nombre del proveedor',
         ]);
 
+        $fotoAntes = $id ? self::fotoCompra($id) : null;
         try {
             $comId = Compras::guardar(Auth::user(), $d, $id);
         } catch (\RuntimeException $e) {
@@ -150,7 +152,15 @@ class CompraController extends Controller
             return response()->json(['estado' => 'error', 'mensaje' => config('app.debug') ? $e->getMessage() : 'No se pudo guardar la compra.']);
         }
 
-        $cab = DB::table('compras_cabecera')->where('com_cab_id', $comId)->first(['com_doc_ser', 'com_doc_num']);
+        $cab = DB::table('compras_cabecera')->where('com_cab_id', $comId)->first(['com_doc_ser', 'com_doc_num', 'prov_num', 'total_com', 'mon_id']);
+        if ($id) {
+            // Editar una compra cambia el stock y el costo: siempre se revisa
+            Bitacora::siCambio('compra.editar', "Editó la compra {$cab->com_doc_ser}-{$cab->com_doc_num}", $fotoAntes, self::fotoCompra($comId),
+                self::ETIQUETAS_BITACORA, ['referencia' => ['compra', $comId], 'alerta' => true]);
+        } else {
+            Bitacora::registrar('compra.registrar', "Registró la compra {$cab->com_doc_ser}-{$cab->com_doc_num} del proveedor {$cab->prov_num} por "
+                .($cab->mon_id === 'USD' ? 'US$ ' : 'S/ ').number_format((float) $cab->total_com, 2), null, ['referencia' => ['compra', $comId]]);
+        }
         session()->flash('success', ($id ? 'Se actualizó' : 'Se registró')." la compra {$cab->com_doc_ser}-{$cab->com_doc_num}.");
         if ($aviso = Recetas::avisoDeCompra((int) Auth::user()->id_empresa_negocio, $comId)) {
             session()->flash('costos', $aviso);
@@ -162,13 +172,44 @@ class CompraController extends Controller
     public function anular($id)
     {
         $this->autorizar();
+        $foto = self::fotoCompra((int) $id);
         try {
             Compras::anular(Auth::user(), (int) $id);
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
+        Bitacora::registrar('compra.anular', 'Anuló la compra '.($foto['documento'] ?? $id).' (proveedor '.($foto['proveedor'] ?? '').', total '.($foto['total'] ?? '').')',
+            null, ['referencia' => ['compra', (int) $id], 'alerta' => true, 'datos' => ['productos' => $foto['productos'] ?? []]]);
 
         return back()->with('success', 'Compra anulada: su mercadería salió del stock.');
+    }
+
+    /** Lo que se compara en la bitácora */
+    public const ETIQUETAS_BITACORA = ['documento' => 'Documento', 'proveedor' => 'Proveedor', 'emision' => 'Fecha de emisión', 'ingreso' => 'Fecha de ingreso',
+        'moneda' => 'Moneda', 'tipo_cambio' => 'Tipo de cambio', 'total' => 'Total', 'almacen' => 'Almacén', 'observacion' => 'Observación', 'productos' => 'Productos'];
+
+    /**
+     * La compra como se ve (documento, proveedor, total y cada producto con su cantidad y precio) para la bitácora.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function fotoCompra(int $id): ?array
+    {
+        $c = Bitacora::foto('compras_cabecera', ['com_cab_id' => $id]);
+        if (! $c) {
+            return null;
+        }
+        $numero = fn ($n) => rtrim(rtrim(number_format((float) $n, 4, '.', ''), '0'), '.');
+        $productos = DB::table('compras_detalle as d')->leftJoin('productos as p', 'p.IdProducto', '=', 'd.pro_id')->where('d.com_cab_id', $id)
+            ->orderBy('d.com_det_id')->get(['p.pronom', 'd.pro_id', 'd.cantidad', 'd.pre_uni'])
+            ->map(fn ($i) => ($i->pronom ?? 'Producto '.$i->pro_id).' × '.$numero($i->cantidad).' a '.number_format((float) $i->pre_uni, 2, '.', ''))->all();
+
+        return [
+            'documento' => $c['com_doc_ser'].'-'.$c['com_doc_num'], 'proveedor' => $c['prov_num'], 'emision' => $c['com_fec'], 'ingreso' => $c['com_fec_ing'],
+            'moneda' => $c['mon_id'], 'tipo_cambio' => $c['tip_cam'], 'total' => number_format((float) $c['total_com'], 2, '.', ''),
+            'almacen' => DB::table('almacenes')->where('id_almacen', $c['id_almacen'])->value('descripcion') ?? $c['id_almacen'],
+            'observacion' => $c['comp_obs'], 'productos' => $productos,
+        ];
     }
 
     /** Productos que se pueden comprar (simples e insumos), con su último costo */

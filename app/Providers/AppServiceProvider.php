@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\BitacoraSesion;
 use App\Support\ContactoWeb;
 use App\Support\HoraLocal\ConexionMysql;
 use App\Support\LimiteIntentos;
@@ -30,6 +31,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         View::composer('layouts.app', MenuComposer::class);
+        // Inicios de sesión, intentos fallidos y bloqueos en la bitácora de cada empresa
+        BitacoraSesion::escuchar();
         // Web pública: contacto del partner de la ciudad (Piura) o el nuestro
         View::composer('sitio.*', fn ($vista) => $vista->with('contactoPartner', ContactoWeb::aplicar()));
     }

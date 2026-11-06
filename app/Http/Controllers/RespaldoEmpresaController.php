@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Bitacora;
 use App\Support\Tenancy\Respaldos;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Support\Facades\Auth;
@@ -33,6 +34,8 @@ class RespaldoEmpresaController extends Controller
             return back()->with('error', 'No se pudo preparar la copia en este momento. Inténtalo otra vez o escríbenos a soporte.');
         }
         $ruc = (string) DB::table('empresa')->value('IdEmpresa');
+        Bitacora::registrar('respaldo.descargar', 'Descargó la copia de seguridad completa de la empresa', null,
+            ['alerta' => true, 'datos' => ['tamano_mb' => round(filesize($ruta) / 1048576, 2)]]);
 
         return response()->download($ruta, 'copia-tushpa-'.$ruc.'-'.now()->format('Y-m-d-Hi').'.sql.gz', ['Content-Type' => 'application/gzip'])
             ->deleteFileAfterSend();

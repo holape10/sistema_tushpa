@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Almacen;
 use App\Models\Producto;
+use App\Support\Bitacora;
 use App\Support\Buscar;
 use App\Support\Excel;
 use App\Support\Kardex;
@@ -451,6 +452,13 @@ class KardexController extends Controller
         } catch (\RuntimeException $e) {
             return back()->withInput()->withErrors(['items' => $e->getMessage()]);
         }
+
+        $numero = fn ($n) => rtrim(rtrim(number_format((float) $n, 3, '.', ''), '0'), '.');
+        Bitacora::registrar('almacen.movimiento', ($tipo === 'I' ? 'Registró un ingreso' : 'Registró una salida').' manual de '.count($request->items)
+            ." producto(s) en {$almacen->descripcion} (operación {$request->cod_tip_ope})".($request->observaciones ? ': '.$request->observaciones : ''), null, [
+                'referencia' => ['movimiento', $cabId], 'alerta' => $tipo === 'E',
+                'datos' => ['productos' => collect($request->items)->take(500)->map(fn ($it) => $productos[$it['IdProducto']]->pronom.' × '.$numero($it['cantidad']))->all()],
+            ]);
 
         return redirect()->route('kardex.movimiento.ver', $cabId)
             ->with('success', ($tipo === 'I' ? 'Ingreso' : 'Salida').' registrado y kardex actualizado.');

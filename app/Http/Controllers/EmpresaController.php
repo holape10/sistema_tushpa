@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Empresa;
+use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\EmpresaInicial;
 use App\Support\LogoNegocio;
@@ -12,6 +13,7 @@ use App\Support\Tenancy\Contratos;
 use App\Support\Tenancy\Tenancy;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -103,6 +105,13 @@ class EmpresaController extends Controller
 
         return view('empresas.edit', compact('empresa', 'tip_env_fac', 'contrato'));
     }
+
+    /** Lo que se compara en la bitácora */
+    public const ETIQUETAS_BITACORA = ['NomEmpresa' => 'Razón social', 'DirEmpresa' => 'Dirección', 'EstEmpresa' => 'Estado', 'LogEmpresa' => 'Logo',
+        'wsusuario' => 'Usuario SOL (envío a SUNAT)', 'claveSunat' => 'Clave SOL (envío a SUNAT)', 'produccion' => 'Envío a SUNAT en producción',
+        'passcert' => 'Contraseña del certificado', 'certificado_archivo' => 'Certificado digital', 'fec_ini_cer' => 'Certificado vigente desde',
+        'fec_fin_cer' => 'Certificado vigente hasta', 'icbper' => 'ICBPER', 'tip_env_fac_id' => 'Envío de facturas', 'tipo_envio' => 'Tipo de envío',
+        'client_id' => 'ID API SUNAT (SIRE)', 'client_secret' => 'Clave API SUNAT (SIRE)', 'sire_usuario' => 'Usuario SOL del SIRE', 'sire_clave' => 'Clave SOL del SIRE'];
 
     public function update(Request $request, $id)
     {
@@ -215,7 +224,19 @@ class EmpresaController extends Controller
             }
         }
 
+        // Bitácora: solo lo que cambió (las claves y el certificado se anotan sin su valor)
+        $sucio = array_keys($empresa->getDirty());
+        $antesEmpresa = Arr::only($empresa->getRawOriginal(), $sucio) + ($pfxNuevo !== null ? ['certificado_archivo' => 'anterior'] : []);
+        $despuesEmpresa = Arr::only($empresa->getAttributes(), $sucio) + ($pfxNuevo !== null ? ['certificado_archivo' => 'nuevo'] : []);
         $empresa->save();
+        $cambiosEmpresa = Bitacora::diferencias($antesEmpresa, $despuesEmpresa, self::ETIQUETAS_BITACORA);
+        if ($cambiosEmpresa) {
+            Bitacora::registrar('config.empresa', 'Cambió la configuración de la empresa '.$empresa->NomEmpresa, $cambiosEmpresa, [
+                'referencia' => ['empresa', $empresa->IdEmpresa],
+                'alerta' => (bool) array_intersect(array_keys($cambiosEmpresa), ['claveSunat', 'passcert', 'certificado_archivo', 'produccion', 'wsusuario',
+                    'client_id', 'client_secret', 'sire_usuario', 'sire_clave', 'EstEmpresa']),
+            ]);
+        }
         // El panel ve al instante la nueva vigencia del certificado
         if ($pfxNuevo !== null && ($cliente = Tenancy::cliente())) {
             $cliente->update(['cert_vence' => $empresa->fec_fin_cer ? Carbon::parse($empresa->fec_fin_cer)->toDateString() : null]);

@@ -8,6 +8,7 @@ use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Models\User;
 use App\Support\AnulacionVenta;
+use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\Impresion\ComprobantePdf;
 use App\Support\Sunat\CambioFecha;
@@ -257,6 +258,16 @@ class ComprobanteController extends Controller
                 }
                 AnulacionVenta::anular((int) $cab->IdCpe_cabecera, $motivo, $admin->IdUsuario, 'ANULADO');
                 break;
+        }
+
+        // Lo que el soporte cambió en los comprobantes del cliente queda en la bitácora de esa empresa
+        $hecho = ['fecha' => 'cambió la fecha (fuera de plazo) de', 'aceptado' => 'marcó como aceptado por SUNAT', 'descartar' => 'descartó', 'anular' => 'anuló'];
+        if (isset($hecho[$accion])) {
+            $tipos = ['01' => 'Factura', '03' => 'Boleta', '07' => 'Nota de crédito', '08' => 'Nota de débito', '13' => 'Nota de venta'];
+            Bitacora::registrar('venta.soporte', 'Soporte '.$hecho[$accion].' '.($tipos[$cab->tdocod] ?? 'Comprobante').' '.$cab->serdoc.'-'.$cab->numdoc, null, [
+                'usuario' => null, 'nombre' => mb_substr('Soporte: '.$quien, 0, 120), 'sucursal' => (int) $cab->id_empresa_negocio, 'empresa' => $cab->IdEmpresa,
+                'referencia' => ['venta', $cab->IdCpe_cabecera], 'alerta' => in_array($accion, ['descartar', 'anular'], true), 'datos' => ['motivo' => $motivo],
+            ]);
         }
     }
 }

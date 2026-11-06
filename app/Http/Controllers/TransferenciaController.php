@@ -1,10 +1,14 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Almacen, Producto};
+use App\Models\Almacen;
+use App\Models\Producto;
+use App\Support\Bitacora;
 use App\Support\Kardex;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Transferencia de productos entre almacenes de la sucursal.
@@ -33,6 +37,7 @@ class TransferenciaController extends Controller
             ->where('mc.id_empresa_negocio', Auth::user()->id_empresa_negocio)
             ->select('mc.*', 'o.descripcion as origen', 'd.descripcion as destino', 'u.apeusu')->first();
         abort_unless($t, 404);
+
         return $t;
     }
 
@@ -54,13 +59,14 @@ class TransferenciaController extends Controller
             ->leftJoin('users as u', 'u.IdUsuario', '=', 'mc.usu_ent')
             ->where('mc.id_empresa_negocio', Auth::user()->id_empresa_negocio)
             ->where('mc.mov_tip', 'T')
-            ->when($request->get('almacen'), fn($q, $a) => $q->where(fn($w) => $w->where('mc.part_alm', $a)->orWhere('mc.des_alm', $a)))
+            ->when($request->get('almacen'), fn ($q, $a) => $q->where(fn ($w) => $w->where('mc.part_alm', $a)->orWhere('mc.des_alm', $a)))
             ->orderByDesc('mc.mov_cab_id')
             ->select('mc.*', 'o.descripcion as origen', 'd.descripcion as destino', 'u.apeusu',
                 DB::raw("(SELECT COUNT(*) FROM movimientos_productos mp WHERE mp.mov_cab_id = mc.mov_cab_id AND mp.mov_tip = 'E' AND mp.id_almacen = mc.part_alm) as items"))
             ->paginate(20)->withQueryString();
 
         $almacenes = $this->almacenes();
+
         return view('empresas.transferencias.index', compact('transferencias', 'almacenes'));
     }
 
@@ -79,7 +85,7 @@ class TransferenciaController extends Controller
         // Stock de cada producto en cada almacén: { id_almacen: { IdProducto: stock } }
         $stocks = DB::table('producto_stock')->whereIn('id_almacen', $almacenes->pluck('id_almacen'))
             ->get(['id_almacen', 'IdProducto', 'stock'])
-            ->groupBy('id_almacen')->map(fn($g) => $g->pluck('stock', 'IdProducto')->map(fn($s) => (float) $s));
+            ->groupBy('id_almacen')->map(fn ($g) => $g->pluck('stock', 'IdProducto')->map(fn ($s) => (float) $s));
 
         return view('empresas.transferencias.create', compact('almacenes', 'productos', 'stocks'));
     }
@@ -89,13 +95,13 @@ class TransferenciaController extends Controller
         $this->autorizar();
         $user = Auth::user();
         $request->validate([
-            'part_alm'           => 'required|integer',
-            'des_alm'            => 'required|integer|different:part_alm',
-            'fecha'              => 'required|date|before_or_equal:today',
-            'observaciones'      => 'nullable|string|max:255',
-            'items'              => 'required|array|min:1',
+            'part_alm' => 'required|integer',
+            'des_alm' => 'required|integer|different:part_alm',
+            'fecha' => 'required|date|before_or_equal:today',
+            'observaciones' => 'nullable|string|max:255',
+            'items' => 'required|array|min:1',
             'items.*.IdProducto' => 'required|integer|distinct',
-            'items.*.cantidad'   => 'required|numeric|min:0.01',
+            'items.*.cantidad' => 'required|numeric|min:0.01',
         ], ['des_alm.different' => 'El almacén de destino debe ser distinto al de origen.', 'items.*.IdProducto.distinct' => 'Hay productos repetidos.'],
             ['part_alm' => 'Almacén de origen', 'des_alm' => 'Almacén de destino', 'items' => 'Productos', 'items.*.cantidad' => 'Cantidad']);
 
@@ -127,8 +133,9 @@ class TransferenciaController extends Controller
                 foreach ($request->items as $it) {
                     $prod = $productos[$it['IdProducto']];
                     $cantidad = (float) $it['cantidad'];
-                    $this->moverStock($prod, $origen, $destino, $cantidad, (float) $prod->costo, $cabId, $request->fecha, 'TRANSFERENCIA TRF-' . $cabId);
+                    $this->moverStock($prod, $origen, $destino, $cantidad, (float) $prod->costo, $cabId, $request->fecha, 'TRANSFERENCIA TRF-'.$cabId);
                 }
+
                 return $cabId;
             });
         } catch (\RuntimeException $e) {
@@ -146,10 +153,10 @@ class TransferenciaController extends Controller
             ->where('id_almacen', $origen->id_almacen)->lockForUpdate()->value('stock') ?? 0);
         if ($cantidad > $disponible + 0.00001) {
             throw new \RuntimeException("Stock insuficiente de {$prod->pronom} en {$origen->descripcion}: disponible "
-                . rtrim(rtrim(number_format($disponible, 3, '.', ''), '0'), '.') . '.');
+                .rtrim(rtrim(number_format($disponible, 3, '.', ''), '0'), '.').'.');
         }
 
-        $doc = ['mov_cab_id' => $cabId, 'fecha_mov' => $fecha, 'costo' => $costo, 'numero' => 'TRF-' . $cabId, 'descripcion' => $glosa,
+        $doc = ['mov_cab_id' => $cabId, 'fecha_mov' => $fecha, 'costo' => $costo, 'numero' => 'TRF-'.$cabId, 'descripcion' => $glosa,
             'id_almacen_origen' => $origen->id_almacen, 'id_almacen_destino' => $destino->id_almacen];
 
         // Sale por FEFO del origen (o del lote indicado, al anular) y cada lote entra igual (mismo lote y vencimiento) al destino
@@ -166,6 +173,7 @@ class TransferenciaController extends Controller
     {
         $transferencia = $this->cabecera($id);
         $items = $this->items($transferencia);
+
         return view('empresas.transferencias.show', compact('transferencia', 'items'));
     }
 
@@ -191,13 +199,16 @@ class TransferenciaController extends Controller
                 }
                 foreach ($items as $it) {
                     $this->moverStock($productos[$it->IdProducto], $almacenes[$t->des_alm], $almacenes[$t->part_alm],
-                        (float) $it->cantidad, (float) $it->costo, $t->mov_cab_id, now()->toDateString(), 'ANULACIÓN TRF-' . $t->mov_cab_id, $it->mov_lote);
+                        (float) $it->cantidad, (float) $it->costo, $t->mov_cab_id, now()->toDateString(), 'ANULACIÓN TRF-'.$t->mov_cab_id, $it->mov_lote);
                 }
                 DB::table('movimientos_cabecera')->where('mov_cab_id', $t->mov_cab_id)->update(['estado' => 'ANULADO']);
             });
         } catch (\RuntimeException $e) {
-            return back()->withErrors(['estado' => 'No se puede anular: ' . $e->getMessage()]);
+            return back()->withErrors(['estado' => 'No se puede anular: '.$e->getMessage()]);
         }
+        Bitacora::registrar('almacen.transferencia_anular', 'Anuló la transferencia TRF-'.$t->mov_cab_id.' de '.($almacenes[$t->part_alm]->descripcion ?? '')
+            .' a '.($almacenes[$t->des_alm]->descripcion ?? '').' ('.$items->count().' producto(s))', null,
+            ['referencia' => ['transferencia', $t->mov_cab_id], 'alerta' => true]);
 
         return back()->with('success', 'Transferencia anulada: los productos regresaron al almacén de origen.');
     }

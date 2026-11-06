@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Almacen;
 use App\Models\Producto;
+use App\Support\Bitacora;
 use App\Support\Excel;
 use App\Support\ExcelLector;
 use App\Support\Kardex;
@@ -111,10 +112,21 @@ class InventarioController extends Controller
             return back()->withInput()->withErrors(['items' => 'Hay productos que no existen o no manejan stock.']);
         }
 
+        $stockAntes = DB::table('producto_stock')->where('id_almacen', $almacen->id_almacen)->whereIn('IdProducto', $items->keys())
+            ->groupBy('IdProducto')->selectRaw('IdProducto, SUM(stock) as stock')->pluck('stock', 'IdProducto');
         $id = DB::transaction(fn () => self::procesar($almacen, $request->fecha, $request->observaciones, 'MANUAL',
             $items->map(fn ($i) => ['IdProducto' => (int) $i['IdProducto'], 'cantidad' => (float) $i['cantidad'],
                 'costo' => isset($i['costo']) && is_numeric($i['costo']) ? (float) $i['costo'] : null])->values()->all(),
             $productos));
+
+        // Solo lo que el conteo cambió: "INCA KOLA 500ML: 24 → 20"
+        $numero = fn ($n) => rtrim(rtrim(number_format((float) $n, 3, '.', ''), '0'), '.');
+        $diferencias = $items->filter(fn ($i) => abs((float) ($stockAntes[$i['IdProducto']] ?? 0) - (float) $i['cantidad']) > 0.0001)
+            ->map(fn ($i) => $productos[$i['IdProducto']]->pronom.': '.$numero($stockAntes[$i['IdProducto']] ?? 0).' → '.$numero($i['cantidad']))->values();
+        $faltantes = $items->filter(fn ($i) => (float) $i['cantidad'] < (float) ($stockAntes[$i['IdProducto']] ?? 0) - 0.0001)->count();
+        Bitacora::registrar('almacen.inventario', "Procesó un inventario físico en {$almacen->descripcion}: {$items->count()} producto(s) contado(s), "
+            .$diferencias->count().' con diferencia'.($faltantes ? " ({$faltantes} con faltante)" : ''), null,
+            ['referencia' => ['inventario', $id], 'alerta' => $faltantes > 0, 'datos' => ['diferencias' => $diferencias->take(500)->all()]]);
 
         return redirect()->route('inventarios.show', $id)->with('success', 'Inventario procesado: el stock quedó igual al conteo.');
     }

@@ -3,6 +3,8 @@
 namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
+use App\Support\Bitacora;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -107,6 +109,13 @@ class Reiniciador
                     DB::table('empresa_negocios')->update($numeros);
                 }
             });
+
+            // La bitácora no se borra: queda escrito que la empresa se reinició (y quién lo hizo desde el panel)
+            $quien = Auth::guard('superadmin')->user();
+            Bitacora::registrar('sistema.reinicio', "Se reinició la empresa: {$borrados} registro(s) de movimientos borrados (antes se sacó un respaldo)", null, [
+                'usuario' => null, 'nombre' => 'Soporte: '.($quien->nombre ?? $quien->email ?? 'panel'), 'sucursal' => null, 'empresa' => null, 'alerta' => true,
+                'datos' => ['respaldo' => basename($respaldo), 'reinicia_electronicos' => $reiniciaElectronicos],
+            ]);
 
             return ['respaldo' => $respaldo, 'borrados' => $borrados, 'reinicia_electronicos' => $reiniciaElectronicos];
         });

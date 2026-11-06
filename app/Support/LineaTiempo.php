@@ -24,6 +24,7 @@ class LineaTiempo
         'alerta' => ['Anulaciones y descuentos', 'rose'],
         'almacen' => ['Mermas', 'orange'],
         'compra' => ['Compras y gastos', 'sky'],
+        'cambios' => ['Cambios y seguridad', 'violet'],
     ];
 
     private const COMPROBANTES = ['01' => 'Factura', '03' => 'Boleta', '07' => 'Nota de crédito', '08' => 'Nota de débito', '13' => 'Nota de venta'];
@@ -123,6 +124,15 @@ class LineaTiempo
         if (Schema::hasTable('proformas')) {
             foreach (DB::table('proformas')->where('id_empresa_negocio', $sucursal)->whereBetween('created_at', [$desde, $hasta])->get() as $p) {
                 $agregar((string) $p->created_at, $p->IdUsuario, 'venta', '📝', 'Hizo la proforma '.$p->serie.'-'.$p->numero, $p->clinom, (float) $p->total);
+            }
+        }
+
+        // ---- Bitácora: cambios de precios, usuarios, configuración, ingresos al sistema… (lo que no sale de las tablas de arriba)
+        if (Bitacora::disponible()) {
+            foreach (DB::table('bitacora')->where('id_empresa_negocio', $sucursal)->whereBetween('fecha', [$desde, $hasta])
+                ->whereNotIn('accion', Bitacora::YA_EN_LINEA_TIEMPO)->orderBy('id')->get() as $b) {
+                $agregar((string) $b->fecha, $b->IdUsuario ? (int) $b->IdUsuario : null, 'cambios', Bitacora::ICONOS[$b->modulo] ?? '📝', $b->descripcion,
+                    Bitacora::resumen(json_decode((string) $b->cambios, true)) ?: null, null, (bool) $b->alerta);
             }
         }
 

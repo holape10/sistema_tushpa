@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\Excel;
 use App\Support\Gastos;
@@ -13,6 +14,11 @@ use Illuminate\Support\Facades\DB;
 
 class GastoController extends Controller
 {
+    /** Lo que se compara en la bitácora al editar un gasto */
+    public const ETIQUETAS_BITACORA = ['fecha' => 'Fecha', 'tdocod' => 'Tipo de documento', 'serie' => 'Serie', 'numero' => 'Número', 'prov_doc' => 'RUC/DNI',
+        'prov_nombre' => 'Proveedor', 'categoria_id' => 'Categoría', 'descripcion' => 'Descripción', 'moneda' => 'Moneda', 'base' => 'Base', 'igv' => 'IGV',
+        'no_gravado' => 'No gravado', 'total' => 'Total', 'credito_fiscal' => 'Crédito fiscal', 'forma_pago' => 'Forma de pago'];
+
     private function ruc(bool $soloAdmin = false): string
     {
         abort_unless($soloAdmin ? Auth::user()->esAdmin() : Auth::user()->esAdminOCaja(), 403, 'No tienes permiso para los gastos.');
@@ -83,10 +89,15 @@ class GastoController extends Controller
                 return response()->json(['success' => false, 'message' => 'Un gasto anulado no se edita.']);
             }
         }
+        $antes = $id ? Bitacora::foto('gastos', ['id' => $id]) : null;
         try {
             Gastos::guardar(Auth::user(), $d + ['credito_fiscal' => $request->boolean('credito_fiscal')], $id);
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+        if ($id) {
+            Bitacora::siCambio('gasto.editar', 'Editó el gasto '.trim(($antes['serie'] ?? '').'-'.($antes['numero'] ?? ''), '-').' de '.($antes['prov_nombre'] ?? ''),
+                $antes, Bitacora::foto('gastos', ['id' => $id]), self::ETIQUETAS_BITACORA, ['referencia' => ['gasto', $id]]);
         }
 
         return response()->json(['success' => true, 'mes' => substr($d['fecha'], 0, 7)]);
@@ -111,7 +122,12 @@ class GastoController extends Controller
     public function anular(int $id)
     {
         $ruc = $this->ruc();
+        $g = DB::table('gastos')->where('id', $id)->where('IdEmpresa', $ruc)->first();
         DB::table('gastos')->where('id', $id)->where('IdEmpresa', $ruc)->update(['estado' => 'Anulado', 'updated_at' => now()]);
+        if ($g && $g->estado !== 'Anulado') {
+            Bitacora::registrar('gasto.anular', 'Anuló el gasto '.trim($g->serie.'-'.$g->numero, '-').' de '.$g->prov_nombre.' por S/ '.number_format((float) $g->total, 2),
+                null, ['referencia' => ['gasto', $id], 'alerta' => true]);
+        }
 
         return back()->with('success', 'Gasto anulado.');
     }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Bitacora;
 use App\Support\Contabilidad\Contabilidad;
 use App\Support\Contabilidad\Pcge;
 use App\Support\Excel;
@@ -308,6 +309,8 @@ class ContabilidadController extends Controller
             return back()->withErrors(['asiento' => $e->getMessage()]);
         }
         DB::table('conta_asientos')->where('id', $id)->delete();
+        Bitacora::registrar('contabilidad.asiento_eliminar', "Eliminó el asiento {$a->subdiario}-{$a->numero} del periodo {$a->periodo}: {$a->glosa} (S/ "
+            .number_format((float) $a->total, 2).')', null, ['referencia' => ['asiento', $id], 'alerta' => true, 'empresa' => $ruc]);
 
         return back()->with('success', 'Asiento eliminado.');
     }
@@ -319,10 +322,16 @@ class ContabilidadController extends Controller
         if ($request->input('accion') === 'cerrar') {
             DB::table('conta_periodos')->updateOrInsert(['IdEmpresa' => $ruc, 'periodo' => $periodo],
                 ['estado' => 'CERRADO', 'IdUsuario' => Auth::id(), 'updated_at' => now(), 'created_at' => now()]);
+            Bitacora::registrar('contabilidad.periodo_cerrar', 'Cerró el periodo contable '.Contabilidad::nombrePeriodo($periodo).' de '.$ruc, null,
+                ['referencia' => ['periodo', $periodo], 'empresa' => $ruc]);
 
             return back()->with('success', 'Periodo '.Contabilidad::nombrePeriodo($periodo).' cerrado: ya no se puede modificar ni volver a centralizar.');
         }
-        DB::table('conta_periodos')->where('IdEmpresa', $ruc)->where('periodo', $periodo)->delete();
+        if (DB::table('conta_periodos')->where('IdEmpresa', $ruc)->where('periodo', $periodo)->delete()) {
+            // Reabrir un mes cerrado permite volver a cambiarlo: siempre se revisa
+            Bitacora::registrar('contabilidad.periodo_abrir', 'Volvió a abrir el periodo contable '.Contabilidad::nombrePeriodo($periodo).' de '.$ruc, null,
+                ['referencia' => ['periodo', $periodo], 'empresa' => $ruc, 'alerta' => true]);
+        }
 
         return back()->with('success', 'Periodo '.Contabilidad::nombrePeriodo($periodo).' abierto nuevamente.');
     }
