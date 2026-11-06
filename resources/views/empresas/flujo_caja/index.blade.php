@@ -49,7 +49,7 @@
         <div class="bg-white rounded-2xl shadow-sm p-4">
             <p class="text-xs font-bold uppercase text-gray-500">Vencido sin pagar</p>
             <p class="text-2xl font-extrabold {{ $flujo['atrasado']['pagar'] > 0 ? 'text-rose-600' : 'text-gray-300' }}">{{ $soles($flujo['atrasado']['pagar']) }}</p>
-            <p class="text-xs text-gray-400">Pagos a proveedores que ya vencieron.</p>
+            <p class="text-xs text-gray-400">Pagos a proveedores y órdenes aprobadas cuya fecha ya pasó.</p>
         </div>
     </div>
 
@@ -116,7 +116,7 @@
                                             <td class="py-1 pr-2 whitespace-nowrap text-gray-500">{{ $dia($d['fecha']) }}</td>
                                             <td class="py-1 pr-2"><span class="font-semibold text-gray-700">{{ $d['nombre'] ?: '—' }}</span>
                                                 <span class="block text-gray-400">{{ $tipos[$d['tipo']] }} · {{ $d['documento'] }}{{ $d['dolares'] ? ' · US$ '.number_format($d['dolares'], 2) : '' }}</span></td>
-                                            <td class="py-1 text-right font-semibold whitespace-nowrap {{ $d['tipo'] === 'pagar' ? 'text-rose-600' : 'text-emerald-700' }}">{{ $d['tipo'] === 'pagar' ? '−' : '+' }} {{ $soles($d['monto']) }}</td>
+                                            <td class="py-1 text-right font-semibold whitespace-nowrap {{ in_array($d['tipo'], \App\Http\Controllers\FlujoCajaController::SALEN, true) ? 'text-rose-600' : 'text-emerald-700' }}">{{ in_array($d['tipo'], \App\Http\Controllers\FlujoCajaController::SALEN, true) ? '−' : '+' }} {{ $soles($d['monto']) }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>

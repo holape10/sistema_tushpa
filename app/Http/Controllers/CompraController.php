@@ -11,6 +11,7 @@ use App\Support\Compras;
 use App\Support\ConsultaPeru;
 use App\Support\Contabilidad\Contabilidad;
 use App\Support\MesesCerrados;
+use App\Support\OrdenesCompra;
 use App\Support\Precios;
 use App\Support\Recetas;
 use App\Support\Rubros;
@@ -40,7 +41,8 @@ class CompraController extends Controller
             ->leftJoin('proveedor as p', 'p.prov_id', '=', 'c.prov_id')
             ->where('c.id_empresa_negocio', $sucursal)
             ->whereBetween('c.com_fec', [$desde, $hasta])
-            ->when($estado !== 'todos', fn ($w) => $w->where('c.est_compra', $estado))
+            ->when($estado === 'transito', fn ($w) => $w->where('c.est_compra', 'Registrado')->where('c.en_transito', true))
+            ->when(! in_array($estado, ['todos', 'transito'], true), fn ($w) => $w->where('c.est_compra', $estado))
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('p.prov_raz', 'like', "%{$q}%")
                 ->orWhere('p.prov_ruc', 'like', "{$q}%")
                 ->orWhere(DB::raw("CONCAT(c.com_doc_ser, '-', c.com_doc_num)"), 'like', "%{$q}%")));
@@ -58,7 +60,26 @@ class CompraController extends Controller
             'compras' => $compras, 'totales' => $totales, 'desde' => $desde, 'hasta' => $hasta,
             'q' => $q, 'estado' => $estado, 'documentos' => Compras::DOCUMENTOS,
             'mesesCerrados' => MesesCerrados::lista((string) Auth::user()->IdEmpresa),
+            'enTransito' => DB::table('compras_cabecera')->where('id_empresa_negocio', $sucursal)->where('est_compra', 'Registrado')
+                ->where('en_transito', true)->count(),
         ]);
+    }
+
+    /** Llegó la mercadería que estaba en tránsito: entra al almacén con la fecha en que se recibió */
+    public function recibir(Request $request, int $id): RedirectResponse
+    {
+        $this->autorizar();
+        $d = $request->validate(['fecha' => 'required|date'], [], ['fecha' => 'fecha de recepción']);
+        $foto = self::fotoCompra($id);
+        try {
+            Compras::recibir(Auth::user(), $id, $d['fecha']);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+        Bitacora::registrar('compra.recibir', 'Recibió en el almacén la mercadería de la compra '.($foto['documento'] ?? $id).' (estaba en tránsito)', null,
+            ['referencia' => ['compra', $id], 'datos' => ['fecha' => $d['fecha'], 'productos' => $foto['productos'] ?? []]]);
+
+        return back()->with('success', 'Mercadería recibida: ya está en el stock del almacén.');
     }
 
     /** Cierra o reabre un mes (el mismo cierre del Libro Diario): cerrado, sus compras y gastos ya no se tocan */
@@ -109,11 +130,20 @@ class CompraController extends Controller
         return response()->json($r);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $this->autorizar();
+        $desdeOrden = null;
+        if ($ordenId = (int) $request->query('orden')) {
+            $orden = DB::table('ordenes_compra')->where('id', $ordenId)->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->first();
+            abort_unless($orden, 404);
+            if ($orden->estado !== 'APROBADA') {
+                return redirect()->route('ordenes_compra.show', $orden->id)->with('error', 'Solo una orden aprobada se convierte en compra.');
+            }
+            $desdeOrden = OrdenesCompra::paraFormulario($orden);
+        }
 
-        return view('empresas.compras.form', $this->datosFormulario(null));
+        return view('empresas.compras.form', $this->datosFormulario(null) + ['desdeOrden' => $desdeOrden]);
     }
 
     public function edit($id)
@@ -156,6 +186,8 @@ class CompraController extends Controller
             'prov_dir' => 'nullable|string|max:255',
             'observaciones' => 'nullable|string|max:255',
             'actualizar_costo' => 'boolean',
+            'en_transito' => 'boolean',
+            'orden_id' => 'nullable|integer',
             'items' => 'required|array|min:1|max:300',
             'items.*.id' => 'required|integer',
             'items.*.tip_igv' => 'required|in:10,20,30',
@@ -195,7 +227,9 @@ class CompraController extends Controller
                 self::ETIQUETAS_BITACORA, ['referencia' => ['compra', $comId], 'alerta' => true]);
         } else {
             Bitacora::registrar('compra.registrar', "Registró la compra {$cab->com_doc_ser}-{$cab->com_doc_num} del proveedor {$cab->prov_num} por "
-                .($cab->mon_id === 'USD' ? 'US$ ' : 'S/ ').number_format((float) $cab->total_com, 2), null, ['referencia' => ['compra', $comId]]);
+                .($cab->mon_id === 'USD' ? 'US$ ' : 'S/ ').number_format((float) $cab->total_com, 2)
+                .(! empty($d['orden_id']) ? ' (de la orden de compra)' : '').(! empty($d['en_transito']) ? ' · mercadería en tránsito' : ''), null,
+                ['referencia' => ['compra', $comId]]);
         }
         session()->flash('success', ($id ? 'Se actualizó' : 'Se registró')." la compra {$cab->com_doc_ser}-{$cab->com_doc_num}.");
         if ($aviso = Recetas::avisoDeCompra((int) Auth::user()->id_empresa_negocio, $comId)) {
@@ -396,6 +430,7 @@ class CompraController extends Controller
                 'fecEmi' => $cab->com_fec, 'fecVen' => $cab->com_fec_ven, 'fecIng' => $cab->com_fec_ing,
                 'estadopago' => $cab->cre_dia_id, 'moneda' => $cab->mon_id, 'tip_cam' => $cab->tip_cam,
                 'id_almacen' => $cab->id_almacen, 'observaciones' => $cab->comp_obs,
+                'en_transito' => (bool) ($cab->en_transito ?? false), 'orden' => $cab->orden_compra ?? null,
                 'proveedor' => ['tdicod' => $prov->tdicod ?? '6', 'num' => $prov->prov_ruc ?? '', 'nom' => $prov->prov_raz ?? '', 'dir' => $prov->prov_dir ?? ''],
                 'items' => $items->map(fn ($i) => [
                     'id' => $i->pro_id, 'codigo' => $i->procod, 'nombre' => $i->pronom, 'tip_igv' => $i->tip_igv,

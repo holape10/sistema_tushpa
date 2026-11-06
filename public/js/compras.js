@@ -12,6 +12,7 @@ document.addEventListener('alpine:init', () => {
         items: [],
         conLote: false,
         actualizarCosto: true,
+        enTransito: false,
         guardando: false,
         _key: 1,
 
@@ -30,13 +31,24 @@ document.addEventListener('alpine:init', () => {
                 tdocod: '01', serie: '', numero: '', fecEmi: CFG.hoy, fecVen: CFG.hoy, fecIng: CFG.hoy,
                 estadopago: contado?.cre_dia_id, moneda: 'PEN', tip_cam: null, id_almacen: CFG.almacenes[0]?.id_almacen, observaciones: '',
             };
+            // Compra que viene de una orden aprobada: proveedor, moneda, almacén y productos ya llenos
+            const o = !c && CFG.desdeOrden;
+            if (o) {
+                this.doc.moneda = o.moneda || 'PEN';
+                this.doc.tip_cam = o.tip_cam;
+                if (o.id_almacen) this.doc.id_almacen = o.id_almacen;
+                this.doc.observaciones = o.observaciones || '';
+                this.prov = { ...o.proveedor };
+                this._ultimoProv = o.proveedor.num;
+                this.items = o.items.map(i => ({ ...i, key: this._key++, flash: false }));
+            }
             if (c) {
                 this.prov = { ...c.proveedor };
                 this._ultimoProv = c.proveedor.num;
                 this.items = c.items.map(i => ({ ...i, key: this._key++, flash: false }));
                 this.conLote = c.items.some(i => i.lote || i.vencimiento || i.control_lote);
             }
-            this.$nextTick(() => (c ? this.$refs.buscador : this.$refs.provNum)?.focus());
+            this.$nextTick(() => (c || o ? this.$refs.serie || this.$refs.buscador : this.$refs.provNum)?.focus());
         },
 
         get soloLectura() { return !!CFG.compra && CFG.compra.estado !== 'Registrado'; },
@@ -310,6 +322,8 @@ document.addEventListener('alpine:init', () => {
                 fecVen: this.esContado ? null : this.doc.fecVen,
                 prov_tdicod: this.prov.tdicod, prov_num: this.prov.num.trim(), prov_nom: this.prov.nom.trim(), prov_dir: this.prov.dir.trim(),
                 actualizar_costo: this.actualizarCosto,
+                en_transito: !CFG.compra && this.enTransito,
+                orden_id: CFG.desdeOrden ? CFG.desdeOrden.id : null,
                 items: this.items.map(it => ({
                     id: it.id, presentacion: it.presentacion || null, tip_igv: it.tip_igv, cantidad: it.cantidad, costo: it.costo, flete: Number(it.flete) || 0,
                     lote: this.conLote ? it.lote : null, vencimiento: this.conLote ? (it.vencimiento || null) : null,

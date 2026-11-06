@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Flujo de caja proyectado por semanas (lunes a domingo), de la sucursal:
  *  - Entra: lo que falta cobrar de las ventas al crédito (por su vencimiento) y las cuotas de los préstamos.
- *  - Sale: lo que falta pagar a los proveedores (por su vencimiento).
+ *  - Sale: lo que falta pagar a los proveedores (por su vencimiento) y las órdenes de compra aprobadas que aún no son
+ *    compra (por su fecha de entrega).
  *  - Estimado (opcional y marcado como tal): el promedio semanal de las ventas al contado, las compras al contado y los
  *    gastos de las últimas semanas, para que el dueño vea si le alcanza el día a día.
  * Lo que ya venció y no se cobró/pagó va aparte: no se sabe cuándo se va a mover.
@@ -36,7 +37,8 @@ class FlujoCaja
         $fin = $inicio->addWeeks($semanas)->subDay();
         $tc = self::tipoCambio();
 
-        $documentos = self::porCobrar($sucursal, $tc)->concat(self::cuotasPrestamos($sucursal, $hoy))->concat(self::porPagar($sucursal, $tc));
+        $documentos = self::porCobrar($sucursal, $tc)->concat(self::cuotasPrestamos($sucursal, $hoy))->concat(self::porPagar($sucursal, $tc))
+            ->concat(self::ordenesAprobadas($sucursal, $tc, $hoy));
         $atrasados = $documentos->filter(fn ($d) => $d['fecha'] < $hoy->toDateString());
         $futuros = $documentos->filter(fn ($d) => $d['fecha'] >= $hoy->toDateString() && $d['fecha'] <= $fin->toDateString());
         $promedios = $estimados ? self::promedios($sucursal, $hoy) : [];
@@ -54,7 +56,8 @@ class FlujoCaja
             $estimado = fn (string $clave) => round(($promedios[$clave] ?? 0) * $dias / 7, 2);
 
             $entradas = ['Por cobrar' => round($de->where('tipo', 'cobrar')->sum('monto'), 2), 'Cuotas de préstamos' => round($de->where('tipo', 'prestamo')->sum('monto'), 2)];
-            $salidas = ['Por pagar a proveedores' => round($de->where('tipo', 'pagar')->sum('monto'), 2)];
+            $salidas = ['Por pagar a proveedores' => round($de->where('tipo', 'pagar')->sum('monto'), 2),
+                'Órdenes de compra aprobadas' => round($de->where('tipo', 'orden')->sum('monto'), 2)];
             if ($estimados) {
                 $entradas['Ventas al contado (estimado)'] = $estimado('ventas');
                 $salidas['Compras al contado (estimado)'] = $estimado('compras');
@@ -73,7 +76,7 @@ class FlujoCaja
         return [
             'semanas' => $lista,
             'atrasado' => ['cobrar' => round($atrasados->whereIn('tipo', ['cobrar', 'prestamo'])->sum('monto'), 2),
-                'pagar' => round($atrasados->where('tipo', 'pagar')->sum('monto'), 2), 'detalle' => $atrasados->sortBy('fecha')->values()->all()],
+                'pagar' => round($atrasados->whereIn('tipo', ['pagar', 'orden'])->sum('monto'), 2), 'detalle' => $atrasados->sortBy('fecha')->values()->all()],
             'saldo_inicial' => $guardado ? ['saldo' => (float) $guardado->saldo, 'fecha' => (string) $guardado->fecha] : null,
             'tipo_cambio' => $tc,
             'negativa' => $negativa,
@@ -115,6 +118,22 @@ class FlujoCaja
                 'documento' => $r->com_doc_ser.'-'.$r->com_doc_num,
                 'monto' => self::enSoles((float) $r->saldo, $r->mon_id === 'USD', (float) $r->tip_cam > 0 ? (float) $r->tip_cam : $tc),
                 'dolares' => $r->mon_id === 'USD' ? (float) $r->saldo : null,
+            ]);
+    }
+
+    /** Órdenes de compra aprobadas que todavía no son compra: se pagarán cuando llegue lo pedido (sin fecha = dentro de una semana) */
+    private static function ordenesAprobadas(int $sucursal, ?float $tc, CarbonImmutable $hoy): Collection
+    {
+        if (! Schema::hasTable('ordenes_compra')) {
+            return collect();
+        }
+
+        return DB::table('ordenes_compra')->where('id_empresa_negocio', $sucursal)->where('estado', 'APROBADA')->get()
+            ->map(fn ($o) => [
+                'tipo' => 'orden', 'fecha' => (string) ($o->fecha_entrega ?: $hoy->addWeek()->toDateString()), 'nombre' => (string) $o->prov_nom,
+                'documento' => OrdenesCompra::codigo($o),
+                'monto' => self::enSoles((float) $o->total, $o->moneda === 'USD', (float) $o->tip_cam > 0 ? (float) $o->tip_cam : $tc),
+                'dolares' => $o->moneda === 'USD' ? (float) $o->total : null,
             ]);
     }
 

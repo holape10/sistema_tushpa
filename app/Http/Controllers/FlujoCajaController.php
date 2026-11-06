@@ -51,7 +51,7 @@ class FlujoCajaController extends Controller
         }
         $detalle = [];
         foreach (array_merge($flujo['atrasado']['detalle'], ...array_column($flujo['semanas'], 'detalle')) as $d) {
-            $detalle[] = [$fecha($d['fecha']), self::TIPOS[$d['tipo']], $d['documento'], $d['nombre'], $d['tipo'] === 'pagar' ? -$d['monto'] : $d['monto'],
+            $detalle[] = [$fecha($d['fecha']), self::TIPOS[$d['tipo']], $d['documento'], $d['nombre'], in_array($d['tipo'], self::SALEN, true) ? -$d['monto'] : $d['monto'],
                 $d['fecha'] < now()->toDateString() ? 'Vencido' : ''];
         }
 
@@ -64,7 +64,10 @@ class FlujoCajaController extends Controller
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend();
     }
 
-    public const TIPOS = ['cobrar' => 'Por cobrar', 'prestamo' => 'Cuota de préstamo', 'pagar' => 'Por pagar'];
+    public const TIPOS = ['cobrar' => 'Por cobrar', 'prestamo' => 'Cuota de préstamo', 'pagar' => 'Por pagar', 'orden' => 'Orden de compra aprobada'];
+
+    /** Lo que sale de caja (se muestra en negativo) */
+    public const SALEN = ['pagar', 'orden'];
 
     private function autorizar(): void
     {

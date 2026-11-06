@@ -224,6 +224,11 @@
                     <label class="block text-xs font-semibold text-slate-500">Observaciones
                         <textarea x-model="doc.observaciones" rows="2" maxlength="255" class="mt-1 w-full rounded-xl border-slate-300 text-sm"></textarea>
                     </label>
+                    <label x-show="!cfg.compra" class="flex items-start gap-2 text-sm text-slate-600">
+                        <input type="checkbox" x-model="enTransito" class="mt-0.5 rounded text-amber-600">
+                        <span>🚚 <strong>La mercadería aún no llega</strong> (en tránsito): registra la factura, pero el stock sube recién cuando la recibas desde la lista de compras</span>
+                    </label>
+                    <p x-show="cfg.compra && cfg.compra.en_transito" class="text-sm font-semibold text-amber-700">🚚 Mercadería en tránsito: el stock subirá cuando la recibas desde la lista de compras.</p>
                     <label class="flex items-center gap-2 text-sm text-slate-600">
                         <input type="checkbox" x-model="actualizarCosto" class="rounded text-indigo-600">
                         Actualizar el costo de los productos con el <strong>costo final</strong> de esta compra
@@ -359,6 +364,7 @@
     window.COMPRA = {
         csrf: @json(csrf_token()),
         compra: @json($compra),
+        desdeOrden: @json($desdeOrden ?? null),
         documentos: @json($documentos),
         tiposIgv: @json($tiposIgv),
         tipIgvPred: @json($tipIgvPred),

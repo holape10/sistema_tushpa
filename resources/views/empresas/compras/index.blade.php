@@ -22,6 +22,7 @@
                 <select name="estado" class="block mt-1 h-10 rounded-xl border-slate-300 text-sm">
                     <option value="Registrado" @selected($estado === 'Registrado')>Registradas</option>
                     <option value="Anulado" @selected($estado === 'Anulado')>Anuladas</option>
+                    <option value="transito" @selected($estado === 'transito')>En tránsito (por recibir)</option>
                     <option value="todos" @selected($estado === 'todos')>Todas</option>
                 </select>
             </label>
@@ -32,6 +33,12 @@
         </form>
         <a href="{{ route('compras.create') }}" class="h-10 px-5 inline-flex items-center rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Nueva compra</a>
     </div>
+
+    @if ($enTransito && $estado !== 'transito')
+        <a href="{{ route('compras.index', ['estado' => 'transito', 'desde' => '2000-01-01', 'hasta' => now()->toDateString()]) }}"
+           class="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 text-sm font-semibold hover:bg-amber-100">
+            🚚 {{ $enTransito }} compra(s) con mercadería en tránsito: aún no está en tu almacén. Ver y recibir →</a>
+    @endif
 
     {{-- Candado de meses: lo ya declarado no se toca (el mismo cierre del Libro Diario) --}}
     @php
@@ -132,6 +139,10 @@
                         <td class="px-4 py-3 text-right font-bold whitespace-nowrap">
                             {{ $c->mon_id === 'USD' ? '$' : 'S/' }} {{ number_format($c->total_com, 2) }}
                             @if ($c->est_compra === 'Anulado')<span class="block text-[11px] font-semibold text-rose-600">ANULADA</span>@endif
+                            @if ($c->est_compra === 'Registrado' && $c->en_transito)
+                                <span class="block text-[11px] font-semibold text-amber-700">🚚 EN TRÁNSITO · {{ \Carbon\Carbon::parse($c->com_fec)->diffInDays(now()) }} día(s)</span>
+                            @endif
+                            @if ($c->orden_compra)<span class="block text-[11px] text-slate-400">{{ $c->orden_compra }}</span>@endif
                         </td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             @if ($c->est_compra !== 'Anulado' && in_array($c->tdocod, ['01', '03', '07', '08'], true))
@@ -139,6 +150,14 @@
                                     'estado' => $c->sunat_consultado ?? null ? $c->sunat_estado : null, 'consultado' => $c->sunat_consultado ?? null])</span>
                             @endif
                             @php $bloqueada = $mesCerrado($c->com_fec) || $mesCerrado($c->com_fec_ing); @endphp
+                            @if ($c->est_compra === 'Registrado' && $c->en_transito)
+                                <form method="POST" action="{{ route('compras.recibir', $c->com_cab_id) }}" class="inline-flex items-center gap-1 mr-3"
+                                      onsubmit="return confirm('¿Llegó la mercadería de {{ $c->com_doc_ser }}-{{ $c->com_doc_num }}? Entrará al stock del almacén.')">
+                                    @csrf
+                                    <input type="date" name="fecha" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" class="h-8 rounded-lg border-slate-300 text-xs">
+                                    <button class="h-8 px-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold">Recibir</button>
+                                </form>
+                            @endif
                             @if ($bloqueada)<span class="text-xs font-semibold text-slate-400 mr-3" title="Mes cerrado: ya no se edita ni se anula">🔒 Mes cerrado</span>@endif
                             <a href="{{ route('compras.edit', $c->com_cab_id) }}" class="text-xs font-semibold text-indigo-700 hover:underline mr-3">
                                 {{ $c->est_compra === 'Registrado' && ! $bloqueada ? 'Editar' : 'Ver' }}

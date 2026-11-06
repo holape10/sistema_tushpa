@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\DB;
  * Centralización de COMPRAS (subdiario 11) y su pago (subdiario 01):
  *   Provisión           60 Compras (D) + 40 IGV (D) → 42 Cuentas por pagar (H)    (en soles si la compra es en dólares)
  *   Destino             un asiento por día de compra: 20 Mercaderías (D) → 61 Variación de inventarios (H)
+ *                       (mercadería en tránsito al cierre del mes: 28 Inventarios por recibir en vez de 20; el mes en que
+ *                        llega: 20 (D) → 28 (H))
  *   Pago contado        un asiento por día: 42 (D) → caja (H)
  *   Pago crédito        un asiento por día con los pagos de cuentas por pagar
  *
@@ -67,6 +69,12 @@ class Contabilidad
     }
 
     /** Cuentas imputables del plan (para validar y para los buscadores) */
+    /** Cuenta de la mercadería en tránsito: la primera 28 imputable del plan (en el PCGE del sistema, la 28) */
+    private static function cuentaPorRecibir($imputables): string
+    {
+        return collect($imputables)->keys()->map(fn ($c) => (string) $c)->filter(fn ($c) => str_starts_with($c, '28'))->sort()->first() ?? '28';
+    }
+
     public static function imputables(string $ruc)
     {
         return DB::table('conta_plan')->where('IdEmpresa', $ruc)->where('imputable', 1)->where('estado', 'Activo')->pluck('descripcion', 'cuenta');
@@ -327,18 +335,37 @@ class Contabilidad
             }
 
             // ---- Destino: lo comprado entra al almacén el mismo día (así los reportes a cualquier fecha cuadran) ----
+            // Lo que al cierre del mes todavía no llegaba (en tránsito) va a la 28 Inventarios por recibir
             if ($cfg->asiento_destino) {
-                foreach ($compras->groupBy('com_fec') as $fecha => $grupo) {
-                    // Mismo cálculo que la provisión (total e IGV convertidos por separado) para que 20/61 igualen a la 60
-                    $monto = round($grupo->sum(function ($c) {
-                        $tc = $c->mon_id === 'USD' ? (float) $c->tip_cam : 1.0;
+                $neto = function ($c) {
+                    $tc = $c->mon_id === 'USD' ? (float) $c->tip_cam : 1.0;
 
-                        return round((float) $c->total_com * $tc, 2) - round((float) $c->igv_com * $tc, 2);
-                    }), 2);
+                    // Mismo cálculo que la provisión (total e IGV convertidos por separado) para que 20/61 igualen a la 60
+                    return round((float) $c->total_com * $tc, 2) - round((float) $c->igv_com * $tc, 2);
+                };
+                $porRecibir = fn ($c) => ! empty($c->en_transito) || (! empty($c->fecha_recepcion) && $c->fecha_recepcion > $hasta);
+                $cta28 = self::cuentaPorRecibir($imp);
+                foreach ($compras->groupBy('com_fec') as $fecha => $grupo) {
+                    foreach ([false, true] as $enTransito) {
+                        $monto = round($grupo->filter(fn ($c) => $porRecibir($c) === $enTransito)->sum($neto), 2);
+                        if ($monto > 0) {
+                            self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '11', 'origen' => 'COMPRAS',
+                                'glosa' => ($enTransito ? 'DESTINO DE COMPRAS EN TRÁNSITO DEL ' : 'DESTINO DE COMPRAS DEL ').Carbon::parse($fecha)->format('d/m/Y')], [
+                                    ['cuenta' => $enTransito ? $cta28 : $cfg->cta_mercaderias, 'debe' => $monto], ['cuenta' => $cfg->cta_variacion, 'haber' => $monto],
+                                ], $imp);
+                            $n['asientos']++;
+                        }
+                    }
+                }
+                // Lo que estaba en tránsito de meses anteriores y llegó en este mes: pasa de la 28 a la 20
+                $llegadas = DB::table('compras_cabecera')->where('IdEmpresa', $ruc)->where('est_compra', 'Registrado')
+                    ->whereBetween('fecha_recepcion', [$desde, $hasta])->where('com_fec', '<', $desde)->get();
+                foreach ($llegadas->groupBy('fecha_recepcion') as $fecha => $grupo) {
+                    $monto = round($grupo->sum($neto), 2);
                     if ($monto > 0) {
                         self::crearAsiento($ruc, ['fecha' => $fecha, 'subdiario' => '11', 'origen' => 'COMPRAS',
-                            'glosa' => 'DESTINO DE COMPRAS DEL '.Carbon::parse($fecha)->format('d/m/Y')], [
-                                ['cuenta' => $cfg->cta_mercaderias, 'debe' => $monto], ['cuenta' => $cfg->cta_variacion, 'haber' => $monto],
+                            'glosa' => 'LLEGÓ AL ALMACÉN LO COMPRADO EN TRÁNSITO ('.$grupo->map(fn ($c) => $c->com_doc_ser.'-'.$c->com_doc_num)->implode(', ').')'], [
+                                ['cuenta' => $cfg->cta_mercaderias, 'debe' => $monto], ['cuenta' => $cta28, 'haber' => $monto],
                             ], $imp);
                         $n['asientos']++;
                     }

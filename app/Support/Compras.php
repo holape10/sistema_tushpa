@@ -45,6 +45,11 @@ class Compras
             // Ni meterla a un mes cerrado
             MesesCerrados::validar((string) $user->IdEmpresa, [$d['fecEmi'] ?? null, $d['fecIng'] ?? null], 'La compra');
 
+            // Mercadería en tránsito: se elige al registrarla; al editarla se mantiene como está (recibida o no)
+            $enTransito = $anterior ? (bool) ($anterior->en_transito ?? false) : ! empty($d['en_transito']);
+            // Compra que viene de una orden aprobada (solo al registrarla)
+            $orden = ! $anterior && ! empty($d['orden_id']) ? OrdenesCompra::paraComprar($user, (int) $d['orden_id']) : null;
+
             // ---- Forma de pago ----
             $cre = DB::table('credito_dias')->where('cre_dia_id', $d['estadopago'])->where('id_empresa_negocio', $sucursal)->first();
             if (! $cre) {
@@ -105,54 +110,40 @@ class Compras
                 'saldofactura' => $contado ? 0 : $tot['total'],
                 'cre_dia_id' => $cre->cre_dia_id, 'id_almacen' => $almacen->id_almacen,
                 'comp_obs' => ($d['observaciones'] ?? null) ?: null,
+                'actualizar_costo' => ! empty($d['actualizar_costo']),
                 'updated_at' => now(),
             ];
 
             if ($anterior) {
-                self::revertirStock($anterior, 'EDICIÓN DE COMPRA');
+                // Lo que aún no llegó nunca entró al stock: no hay nada que devolver
+                if (! $enTransito) {
+                    self::revertirStock($anterior, 'EDICIÓN DE COMPRA');
+                }
                 DB::table('compras_detalle')->where('com_cab_id', $id)->delete();
                 DB::table('compras_cabecera')->where('com_cab_id', $id)->update($cabecera);
                 $comId = $id;
             } else {
                 $comId = DB::table('compras_cabecera')->insertGetId($cabecera + [
                     'IdUsuario' => $user->IdUsuario, 'id_turno' => Turno::abiertoDe($user)?->id_turno,
-                    'est_compra' => 'Registrado', 'created_at' => now(),
-                ]);
+                    'est_compra' => 'Registrado', 'created_at' => now(), 'en_transito' => $enTransito,
+                ] + ($orden ? ['orden_id' => $orden->id, 'orden_compra' => OrdenesCompra::codigo($orden)] : []));
             }
 
-            // ---- Detalle + ingreso al kardex + costo del producto ----
-            $productosConSerie = Producto::whereIn('IdProducto', $lineas->pluck('pro_id'))->where('control_serie', true)->get()->keyBy('IdProducto');
+            // ---- Detalle; el ingreso al kardex y el costo del producto, solo si la mercadería ya llegó ----
             foreach ($lineas as $l) {
                 DB::table('compras_detalle')->insert(collect($l)->except('producto')->all() + [
                     'com_cab_id' => $comId, 'id_almacen_pro' => $almacen->id_almacen, 'IdEmpresa' => $user->IdEmpresa,
                 ]);
-
-                // Por presentación (1 SACO x 50) ingresan cantidad x factor unidades base, al costo por unidad base
-                $factor = (float) $l['factor'];
-                Kardex::registrar($l['pro_id'], $almacen->id_almacen, round((float) $l['cantidad'] * $factor, 3), 'I', [
-                    'cod_tip_ope' => '02', 'tdocod' => $d['tdocod'], 'serie' => $serie, 'numero' => $numero,
-                    'com_cab_id' => $comId, 'cliente' => $proveedor->prov_raz,
-                    'costo' => round($l['precio_costo'] / $factor, 4), 'fecha_mov' => $d['fecIng'],
-                    'lote' => $l['lote'], 'vencimiento' => $l['vencimiento'],
-                ]);
-                // Electrodomésticos: la serie de cada unidad que entra
-                if ($l['series'] !== null) {
-                    Series::ingresar($productosConSerie[$l['pro_id']], $almacen->id_almacen, Series::lista($l['series']),
-                        round((float) $l['cantidad'] * $factor, 3), ['com_cab_id' => $comId, 'fecha' => $d['fecIng'], 'id_empresa_negocio' => $sucursal]);
-                }
-
-                if (! empty($d['actualizar_costo'])) {
-                    $antes = (float) Producto::where('IdProducto', $l['pro_id'])->value('costo');
-                    $nuevo = round($l['precio_costo'] / $factor, 2);
-                    Producto::where('IdProducto', $l['pro_id'])->update(['costo' => $nuevo]);
-                    // Para avisar qué platos ganan menos si subió un insumo de sus recetas
-                    Recetas::registrarCambioCosto((int) $l['pro_id'], $antes, $nuevo, 'COMPRA', $comId, (int) $user->id_empresa_negocio);
-                    Recetas::refrescarCostos([(int) $l['pro_id']]);
-                }
+            }
+            if (! $enTransito) {
+                self::ingresar(DB::table('compras_cabecera')->where('com_cab_id', $comId)->first(), $d['fecIng'], ! empty($d['actualizar_costo']), $user);
             }
 
             // Cuenta por pagar si es al crédito (y respeta los pagos que ya tenga si se está editando)
             Cuentas::sincronizarPorPagar($comId);
+            if ($orden) {
+                OrdenesCompra::marcarComprada($orden, $comId);
+            }
 
             return $comId;
         });
@@ -173,11 +164,74 @@ class Compras
             MesesCerrados::validar((string) $user->IdEmpresa, [$cab->com_fec, $cab->com_fec_ing], 'Esta compra');
 
             Cuentas::anularPorDocumento('pagar', $id);   // si ya tiene pagos, no se deja anular
-            self::revertirStock($cab, 'ANULACIÓN DE COMPRA');
+            if (! ($cab->en_transito ?? false)) {
+                self::revertirStock($cab, 'ANULACIÓN DE COMPRA');
+            }
             DB::table('compras_cabecera')->where('com_cab_id', $id)->update([
                 'est_compra' => 'Anulado', 'saldofactura' => 0, 'usu_elimino' => $user->IdUsuario, 'updated_at' => now(),
             ]);
         });
+    }
+
+    /**
+     * Llegó la mercadería que estaba en tránsito: entra al almacén con la fecha en que se recibió (y recién ahí se
+     * actualiza el costo de los productos, si la compra lo pedía).
+     */
+    public static function recibir(User $user, int $id, string $fecha): void
+    {
+        DB::transaction(function () use ($user, $id, $fecha) {
+            $cab = DB::table('compras_cabecera')->where('com_cab_id', $id)
+                ->where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
+            if (! $cab || $cab->est_compra !== 'Registrado') {
+                throw new \RuntimeException('La compra no existe o está anulada.');
+            }
+            if (! $cab->en_transito) {
+                throw new \RuntimeException('Esta compra ya se recibió en el almacén.');
+            }
+            if ($fecha > now()->toDateString()) {
+                throw new \RuntimeException('La fecha de recepción no puede ser futura.');
+            }
+            MesesCerrados::validar((string) $user->IdEmpresa, [$fecha], 'La recepción');
+
+            self::ingresar($cab, $fecha, (bool) $cab->actualizar_costo, $user);
+            DB::table('compras_cabecera')->where('com_cab_id', $id)->update([
+                'en_transito' => false, 'fecha_recepcion' => $fecha, 'com_fec_ing' => $fecha, 'IdUsuario_recibe' => $user->IdUsuario, 'updated_at' => now(),
+            ]);
+        });
+    }
+
+    /** Entrada al kardex de lo comprado (con sus series y lotes) y, si se pide, el costo nuevo de cada producto */
+    private static function ingresar(object $cab, string $fecha, bool $actualizarCosto, User $user): void
+    {
+        $proveedor = DB::table('proveedor')->where('prov_id', $cab->prov_id)->value('prov_raz');
+        $detalle = DB::table('compras_detalle')->where('com_cab_id', $cab->com_cab_id)->whereNotNull('pro_id')->orderBy('com_det_id')->get();
+        $productosConSerie = Producto::whereIn('IdProducto', $detalle->pluck('pro_id'))->where('control_serie', true)->get()->keyBy('IdProducto');
+
+        foreach ($detalle as $l) {
+            // Por presentación (1 SACO x 50) ingresan cantidad x factor unidades base, al costo por unidad base
+            $factor = (float) ($l->factor ?? 1) ?: 1;
+            $almacen = (int) ($l->id_almacen_pro ?: $cab->id_almacen);
+            Kardex::registrar((int) $l->pro_id, $almacen, round((float) $l->cantidad * $factor, 3), 'I', [
+                'cod_tip_ope' => '02', 'tdocod' => $cab->tdocod, 'serie' => $cab->com_doc_ser, 'numero' => $cab->com_doc_num,
+                'com_cab_id' => $cab->com_cab_id, 'cliente' => $proveedor,
+                'costo' => round((float) $l->precio_costo / $factor, 4), 'fecha_mov' => $fecha,
+                'lote' => $l->lote, 'vencimiento' => $l->vencimiento,
+            ]);
+            // Electrodomésticos: la serie de cada unidad que entra
+            if (isset($productosConSerie[$l->pro_id])) {
+                Series::ingresar($productosConSerie[$l->pro_id], $almacen, Series::lista((string) $l->series),
+                    round((float) $l->cantidad * $factor, 3), ['com_cab_id' => $cab->com_cab_id, 'fecha' => $fecha, 'id_empresa_negocio' => $cab->id_empresa_negocio]);
+            }
+
+            if ($actualizarCosto) {
+                $antes = (float) Producto::where('IdProducto', $l->pro_id)->value('costo');
+                $nuevo = round((float) $l->precio_costo / $factor, 2);
+                Producto::where('IdProducto', $l->pro_id)->update(['costo' => $nuevo]);
+                // Para avisar qué platos ganan menos si subió un insumo de sus recetas
+                Recetas::registrarCambioCosto((int) $l->pro_id, $antes, $nuevo, 'COMPRA', (int) $cab->com_cab_id, (int) $user->id_empresa_negocio);
+                Recetas::refrescarCostos([(int) $l->pro_id]);
+            }
+        }
     }
 
     /** Salida en el kardex de todo lo que ingresó con la compra (queda la huella de la corrección) */

@@ -75,6 +75,7 @@ use App\Http\Controllers\MiContratoController;
 use App\Http\Controllers\MisComprobantesController;
 use App\Http\Controllers\MotorizadoController;
 use App\Http\Controllers\NotaController;
+use App\Http\Controllers\OrdenCompraController;
 use App\Http\Controllers\PanelDuenoController;
 use App\Http\Controllers\PisoController;
 use App\Http\Controllers\PlanillaController;
@@ -688,6 +689,20 @@ Route::middleware('auth')->group(function () {
     Route::put('/compras/{id}', [CompraController::class, 'update'])->whereNumber('id')->name('compras.update');
     Route::post('/compras/{id}/anular', [CompraController::class, 'anular'])->whereNumber('id')->name('compras.anular');
     Route::post('/compras/meses', [CompraController::class, 'mes'])->name('compras.mes');
+    Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])->whereNumber('id')->name('compras.recibir');
+    // Órdenes de compra: pedido → aprobación del administrador → compra
+    Route::get('/ordenes-compra', [OrdenCompraController::class, 'index'])->name('ordenes_compra.index');
+    Route::get('/ordenes-compra/nueva', [OrdenCompraController::class, 'create'])->name('ordenes_compra.create');
+    Route::post('/ordenes-compra', [OrdenCompraController::class, 'store'])->name('ordenes_compra.store');
+    Route::get('/ordenes-compra/{id}', [OrdenCompraController::class, 'show'])->whereNumber('id')->name('ordenes_compra.show');
+    Route::get('/ordenes-compra/{id}/editar', [OrdenCompraController::class, 'edit'])->whereNumber('id')->name('ordenes_compra.edit');
+    Route::put('/ordenes-compra/{id}', [OrdenCompraController::class, 'update'])->whereNumber('id')->name('ordenes_compra.update');
+    Route::post('/ordenes-compra/{id}/decidir', [OrdenCompraController::class, 'decidir'])->whereNumber('id')->name('ordenes_compra.decidir');
+    Route::post('/ordenes-compra/{id}/anular', [OrdenCompraController::class, 'anular'])->whereNumber('id')->name('ordenes_compra.anular');
+    Route::get('/ordenes-compra/{id}/imprimir', [OrdenCompraController::class, 'imprimir'])->whereNumber('id')->name('ordenes_compra.imprimir');
+    Route::get('/ordenes-compra/productos', [OrdenCompraController::class, 'productos'])->name('ordenes_compra.productos');
+    Route::get('/ordenes-compra/proveedor/{doc}', [OrdenCompraController::class, 'proveedor'])->where('doc', '[0-9]{8,11}')
+        ->middleware('throttle:30,1')->name('ordenes_compra.proveedor');
     // Flujo de caja proyectado: lo que se va a cobrar y pagar en las próximas semanas
     Route::get('/flujo-caja', [FlujoCajaController::class, 'index'])->name('flujo_caja.index');
     Route::post('/flujo-caja/saldo', [FlujoCajaController::class, 'saldo'])->name('flujo_caja.saldo');
