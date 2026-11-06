@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\Tenancy\Inventario;
 use App\Support\Tenancy\Respaldos;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -17,15 +18,18 @@ class RespaldoController extends Controller
 {
     public function index(Request $request)
     {
-        $bases = $this->bases();
+        $bases = $this->bases() + Respaldos::sueltas();
         $base = $request->get('base');
         $base = isset($bases[$base]) ? $base : array_key_first($bases);
+        $tamanos = Inventario::tamanos();
+        $huerfanas = collect(Inventario::huerfanas())->mapWithKeys(fn ($b) => [$b => $tamanos[$b] ?? 0])->all();
 
         $ultimas = Respaldos::ultimas();
         // La copia más vieja entre "la última de cada base": así se sabe desde cuándo está todo respaldado
         $desde = collect($ultimas)->map(fn ($r) => filemtime($r))->min();
 
         return view('admin.respaldos', ['bases' => $bases, 'base' => $base, 'copias' => Respaldos::listar($base),
+            'suelta' => ! isset($this->bases()[$base]), 'huerfanas' => $huerfanas,
             'esCentral' => Respaldos::esCentral($base), 'conCopia' => count($ultimas), 'todasDesde' => $desde ? Carbon::createFromTimestamp($desde) : null]);
     }
 
@@ -44,7 +48,7 @@ class RespaldoController extends Controller
 
     public function descargar(Request $request): BinaryFileResponse
     {
-        $base = $this->baseElegida($request);
+        $base = $this->baseElegida($request, true);
         try {
             $ruta = Respaldos::ruta($base, (string) $request->get('archivo'));
         } catch (\RuntimeException $e) {
@@ -56,7 +60,7 @@ class RespaldoController extends Controller
 
     public function eliminar(Request $request)
     {
-        $base = $this->baseElegida($request);
+        $base = $this->baseElegida($request, true);
         try {
             unlink(Respaldos::ruta($base, (string) $request->input('archivo')));
         } catch (\RuntimeException $e) {
@@ -145,12 +149,31 @@ class RespaldoController extends Controller
         return Respaldos::bases();
     }
 
-    private function baseElegida(Request $request): string
+    /** @param  bool  $tambienSueltas  las copias de lo que ya no existe (solo para descargarlas o borrarlas) */
+    private function baseElegida(Request $request, bool $tambienSueltas = false): string
     {
         $base = (string) $request->input('base');
-        abort_unless(isset($this->bases()[$base]), 404);
+        abort_unless(isset($this->bases()[$base]) || ($tambienSueltas && isset(Respaldos::sueltas()[$base])), 404);
 
         return $base;
+    }
+
+    /** Borra una base que no usa ninguna empresa (hay que escribir su nombre); con o sin copia antes */
+    public function eliminarHuerfana(Request $request)
+    {
+        $this->bases();
+        $d = $request->validate(['base' => 'required|string|max:64', 'confirmacion' => 'required|string|max:64', 'copia' => 'nullable|boolean']);
+        if ($d['confirmacion'] !== $d['base']) {
+            return back()->with('error', 'No se borró: el nombre escrito no coincide con la base.');
+        }
+        set_time_limit(1800);
+        try {
+            $copia = Inventario::eliminarHuerfana($d['base'], $request->boolean('copia'));
+        } catch (\Throwable $e) {
+            return back()->with('error', 'No se borró nada: '.$e->getMessage());
+        }
+
+        return back()->with('ok', "Base {$d['base']} borrada.".($copia ? ' Copia guardada: '.basename($copia).' (sale en la lista como "Ya no existe").' : ''));
     }
 
     private function tamano(int $bytes): string

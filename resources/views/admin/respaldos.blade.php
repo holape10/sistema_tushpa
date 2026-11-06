@@ -45,6 +45,11 @@
         </div>
     @endif
 
+    @if ($suelta)
+        <div class="mb-6 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+            🗑 <b>{{ $base }}</b> ya no existe en el servidor: aquí solo quedan sus copias guardadas. Descárgalas si las quieres o bórralas para liberar espacio.
+        </div>
+    @else
     <div class="grid lg:grid-cols-2 gap-4 mb-6">
         {{-- Sacar copia --}}
         <form method="POST" action="{{ route('admin.respaldos.crear') }}" class="bg-white rounded-2xl shadow-sm p-5" x-data="{ enviando: false }" @submit="enviando = true">
@@ -78,6 +83,7 @@
         </form>
         @endif
     </div>
+    @endif
 
     <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
         <table class="w-full text-sm tabla-movil">
@@ -93,7 +99,7 @@
                         <td class="px-4 py-3 text-right">{{ $tamano($c['tamano']) }}</td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             <a href="{{ route('admin.respaldos.descargar', ['base' => $base, 'archivo' => $c['archivo']]) }}" class="text-xs font-semibold text-indigo-700 hover:underline mr-3">Descargar</a>
-                            @unless ($esCentral)<button type="button" @click="restaurar = !restaurar" class="text-xs font-semibold text-rose-600 hover:underline mr-3">Restaurar</button>@endunless
+                            @unless ($esCentral || $suelta)<button type="button" @click="restaurar = !restaurar" class="text-xs font-semibold text-rose-600 hover:underline mr-3">Restaurar</button>@endunless
                             <form method="POST" action="{{ route('admin.respaldos.eliminar') }}" class="inline" onsubmit="return confirm('¿Borrar esta copia del servidor?')">
                                 @csrf
                                 <input type="hidden" name="base" value="{{ $base }}"><input type="hidden" name="archivo" value="{{ $c['archivo'] }}">
@@ -114,6 +120,38 @@
             </tbody>
         </table>
     </div>
+    {{-- Bases que no usa ninguna empresa (importaciones del sistema antiguo, restos de pruebas) --}}
+    @if ($huerfanas)
+        <div class="mt-8 bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-100">
+                <p class="font-bold">🧹 Bases que no usa ninguna empresa ({{ count($huerfanas) }})</p>
+                <p class="text-xs text-amber-700 mt-1"><b>Ojo:</b> "no la usa ninguna empresa" quiere decir que <b>este sistema</b> no la usa. Si en este servidor tienes <b>otros sistemas</b>, sus bases también salen aquí: esas no las borres.</p>
+            </div>
+            <table class="w-full text-sm">
+                <tbody class="divide-y divide-slate-100">
+                    @foreach ($huerfanas as $nombreBase => $mb)
+                        <tr x-data="{ abierto: false, escrito: '' }">
+                            <td class="px-4 py-2 font-mono text-xs">{{ $nombreBase }}</td>
+                            <td class="px-4 py-2 text-right text-xs text-slate-500 whitespace-nowrap">{{ $mb }} MB</td>
+                            <td class="px-4 py-2 text-right">
+                                <button type="button" @click="abierto = !abierto" class="text-xs font-bold text-rose-600 hover:text-rose-800">Eliminar base</button>
+                                <form x-show="abierto" x-cloak method="POST" action="{{ route('admin.respaldos.huerfana.eliminar') }}" class="mt-2 flex flex-wrap justify-end items-center gap-2"
+                                      x-data="{ enviando: false }" @submit="enviando = true">
+                                    @csrf
+                                    <input type="hidden" name="base" value="{{ $nombreBase }}">
+                                    <label class="inline-flex items-center gap-1 text-xs text-slate-600"><input type="hidden" name="copia" value="0"><input type="checkbox" name="copia" value="1" checked class="rounded"> Guardar copia antes</label>
+                                    <input name="confirmacion" x-model="escrito" placeholder="Escribe el nombre de la base" autocomplete="off" class="rounded-lg border-slate-300 text-xs w-56 font-mono">
+                                    <button class="px-3 h-8 rounded-lg bg-rose-600 text-white text-xs font-bold disabled:opacity-40" :disabled="escrito !== @js($nombreBase) || enviando"
+                                            x-text="enviando ? 'Borrando…' : 'Borrar para siempre'"></button>
+                                </form>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     <p class="mt-3 text-xs text-slate-500">Las copias se guardan en el servidor en <span class="font-mono">storage/app/respaldos</span>. <b>Descárgalas de vez en cuando</b> (con "Descargar todas") para tener una copia fuera del servidor:
         si el servidor se daña, las copias que están dentro también se pierden.</p>
 @endsection

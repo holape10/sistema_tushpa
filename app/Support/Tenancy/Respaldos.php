@@ -38,6 +38,26 @@ class Respaldos
         return $bases;
     }
 
+    /**
+     * Copias guardadas de bases que ya no están en la lista (empresas eliminadas, bases borradas): para descargarlas o
+     * borrarlas desde el panel. No se restauran ni se sacan copias nuevas de ellas.
+     *
+     * @return array<string, string> base => nombre visible
+     */
+    public static function sueltas(): array
+    {
+        $vivas = self::bases();
+        $sueltas = [];
+        foreach (glob(config('sitio.respaldos').'/*.sql.gz') ?: [] as $ruta) {
+            if (preg_match('/^([A-Za-z0-9_]{1,64})-\d{8}-\d{6}(?:-[a-z-]+)?\.sql\.gz$/', basename($ruta), $m) && ! isset($vivas[$m[1]])) {
+                $sueltas[$m[1]] = '🗑 Ya no existe: '.$m[1];
+            }
+        }
+        ksort($sueltas);
+
+        return $sueltas;
+    }
+
     /** La base central del panel: se respalda y descarga, pero no se restaura desde el panel */
     public static function esCentral(string $base): bool
     {

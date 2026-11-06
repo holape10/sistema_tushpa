@@ -45,6 +45,7 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/clientes/{cliente}/https', [ClienteController::class, 'https'])->whereNumber('cliente')->name('clientes.https');
     Route::post('/clientes/{cliente}/pagado', [ClienteController::class, 'pagado'])->whereNumber('cliente')->name('clientes.pagado');
     Route::post('/clientes/{cliente}/eliminar', [ClienteController::class, 'eliminar'])->whereNumber('cliente')->name('clientes.eliminar');
+    Route::post('/clientes/{cliente}/eliminar-todo', [ClienteController::class, 'eliminarTodo'])->whereNumber('cliente')->name('clientes.eliminar.todo');
     Route::get('/clientes/{cliente}/reiniciar', [ClienteController::class, 'reiniciarPrevia'])->whereNumber('cliente')->name('clientes.reiniciar');
     Route::post('/clientes/{cliente}/reiniciar', [ClienteController::class, 'reiniciar'])->whereNumber('cliente')->name('clientes.reiniciar.confirmar');
     Route::get('/mensajes', [ClienteController::class, 'mensajesWeb'])->name('mensajes.index');
@@ -58,6 +59,7 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/respaldos/descargar', [RespaldoController::class, 'descargar'])->name('respaldos.descargar');
     Route::post('/respaldos/eliminar', [RespaldoController::class, 'eliminar'])->name('respaldos.eliminar');
     Route::post('/respaldos/restaurar', [RespaldoController::class, 'restaurar'])->name('respaldos.restaurar');
+    Route::post('/respaldos/huerfana/eliminar', [RespaldoController::class, 'eliminarHuerfana'])->name('respaldos.huerfana.eliminar');
     Route::post('/logos', [ClienteController::class, 'logosSubir'])->name('logos.subir');
     Route::post('/logos/eliminar', [ClienteController::class, 'logoEliminar'])->name('logos.eliminar');
     Route::post('/mensajes/{id}/atendido', [ClienteController::class, 'mensajeWebAtendido'])->whereNumber('id')->name('mensajes.atendido');

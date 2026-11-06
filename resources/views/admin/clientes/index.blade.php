@@ -200,6 +200,14 @@
                                     <input type="hidden" name="confirmacion">
                                     <button class="ml-2 text-xs font-semibold text-slate-500 hover:text-rose-700">Eliminar</button>
                                 </form>
+                                {{-- Eliminar todo: su base, sus copias, sus contratos, tickets y pagos, y su registro del panel --}}
+                                <form method="POST" action="{{ route('admin.clientes.eliminar.todo', $cl) }}" class="inline"
+                                      data-aviso="{{ 'Se borrará TODO de '.$cl->razon_social.': su base de datos, sus copias, sus contratos, tickets y pagos, y desaparecerá del panel. No se puede deshacer. Para confirmar escribe su RUC: '.$cl->ruc }}"
+                                      onsubmit="const r = prompt(this.dataset.aviso); if (r === null) return false; this.confirmacion.value = r; this.copia.value = confirm('¿Guardar una copia de su base en Respaldos por si acaso?\n\nAceptar = sí, guardar copia · Cancelar = no, borrar todo sin copia') ? 1 : 0;">
+                                    @csrf
+                                    <input type="hidden" name="confirmacion"><input type="hidden" name="copia" value="1">
+                                    <button class="ml-2 text-xs font-bold text-rose-600 hover:text-rose-800">Eliminar todo</button>
+                                </form>
                             @endif
                             @endif
                             </div>

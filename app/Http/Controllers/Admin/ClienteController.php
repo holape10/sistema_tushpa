@@ -374,6 +374,25 @@ class ClienteController extends Controller
         return back()->with('ok', "Se eliminó {$cliente->razon_social}. Respaldo guardado en storage/app/respaldos/".basename($respaldo).'.');
     }
 
+    /** Borra todo de la empresa, también del panel (solo el dueño, solo suspendidas o eliminadas; hay que escribir su RUC) */
+    public function eliminarTodo(Request $request, Cliente $cliente)
+    {
+        abort_unless($this->esDueno(), 403, 'Solo el dueño del sistema elimina empresas.');
+        if (trim((string) $request->input('confirmacion')) !== $cliente->ruc) {
+            return back()->with('error', 'No se eliminó: el RUC escrito no coincide.');
+        }
+        set_time_limit(1800);
+        try {
+            $copia = Eliminador::eliminarDefinitivo($cliente, $request->boolean('copia'));
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+        Cache::store('file')->forget("panel-cpe-{$cliente->id}");
+
+        return redirect()->route('admin.clientes.index')->with('ok', "Se eliminó todo de {$cliente->razon_social} ({$cliente->ruc}): ya no está en el panel ni en el servidor."
+            .($copia ? ' Quedó una copia en Respaldos ("Ya no existe: '.$cliente->base_datos.'").' : ''));
+    }
+
     // ------------------------------------------------------------------ dejar la empresa en cero
 
     /** Qué se borrará al reiniciar (para revisar antes de confirmar) */

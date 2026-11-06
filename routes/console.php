@@ -16,6 +16,7 @@ use App\Support\Promociones;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\Tenancy\CertificadosClientes;
 use App\Support\Tenancy\DatosCobro;
+use App\Support\Tenancy\Inventario;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Respaldos;
 use App\Support\Tenancy\Tenancy;
@@ -415,3 +416,53 @@ Artisan::command('certificados:revisar', function () {
 
 // Cada mañana: certificados digitales por vencer (aviso al Telegram del dueño)
 Schedule::command('certificados:revisar')->dailyAt('08:00')->withoutOverlapping(30);
+
+// ---------------- Limpieza de lo de prueba (a mano, con cuidado) ----------------
+
+Artisan::command('clientes:inventario', function () {
+    $empresas = Inventario::empresas();
+    $this->info(count($empresas).' empresa(s) en el panel:');
+    $this->table(['ID', 'RUC', 'Empresa', 'Estado', 'Marca', 'Base', 'MB', 'Comprobantes', 'Último', 'Creada'], array_map(fn ($e) => [
+        $e['id'], $e['ruc'], mb_strimwidth($e['nombre'], 0, 34, '…'), $e['estado'], $e['marca'], $e['existe'] ? $e['base'] : $e['base'].' (no existe)',
+        $e['mb'], $e['comprobantes'] ?? '-', $e['ultimo'] ?? '-', $e['creada'],
+    ], $empresas));
+
+    $tamanos = Inventario::tamanos();
+    $huerfanas = Inventario::huerfanas();
+    $this->newLine();
+    if (! $huerfanas) {
+        $this->info('No hay bases huérfanas en el servidor.');
+
+        return 0;
+    }
+    $this->warn(count($huerfanas).' base(s) en el servidor que no usa ninguna empresa (huérfanas):');
+    $this->table(['Base', 'MB'], array_map(fn ($b) => [$b, $tamanos[$b] ?? 0], $huerfanas));
+    $this->warn('OJO: "huérfana" = este sistema no la usa. Si en este servidor tienes OTROS sistemas, sus bases también salen aquí: no las borres.');
+    $this->line('Para borrar una (saca su respaldo antes): php artisan bases:eliminar-huerfana NOMBRE_DE_LA_BASE');
+
+    return 0;
+})->purpose('Lista las empresas (tamaño, comprobantes, último uso) y las bases que no usa nadie. Solo lee: no cambia nada');
+
+Artisan::command('bases:eliminar-huerfana {base : Nombre exacto de la base} {--si : Confirmar (sin esto solo muestra lo que haría)}', function (string $base) {
+    if ($motivo = Inventario::motivoParaNoBorrar($base, Inventario::protegidas(), Inventario::basesDelServidor())) {
+        $this->error("No se borra {$base}: {$motivo}");
+
+        return 1;
+    }
+    $mb = Inventario::tamanos()[$base] ?? 0;
+    if (! $this->option('si')) {
+        $this->warn("Se sacaría un respaldo de {$base} ({$mb} MB) y luego se borraría. Para hacerlo de verdad agrega --si");
+
+        return 0;
+    }
+    try {
+        $respaldo = Inventario::eliminarHuerfana($base);
+    } catch (Throwable $e) {
+        $this->error('No se borró nada: '.$e->getMessage());
+
+        return 1;
+    }
+    $this->info("Base {$base} borrada. Respaldo: {$respaldo}");
+
+    return 0;
+})->purpose('Borra una base que no usa ninguna empresa, siempre con su respaldo antes (nunca las del sistema, del panel ni de una empresa)');
