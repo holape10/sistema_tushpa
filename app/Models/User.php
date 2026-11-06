@@ -4,6 +4,7 @@
 
 namespace App\Models;
 
+use App\Support\Acciones;
 use App\Support\Clinica;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -64,6 +65,12 @@ class User extends Authenticatable
     public function esAdmin(): bool
     {
         return $this->tieneRol([2]);
+    }
+
+    /** ¿Puede hacer esta acción especial (anular ventas, cobrar a otro precio…)? Ver App\Support\Acciones */
+    public function puede(string $accion): bool
+    {
+        return Acciones::puede($this, $accion);
     }
 
     /** ¿Tiene asignada esta opción del menú? (el administrador tiene todo) */

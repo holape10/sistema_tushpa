@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MedioPago;
 use App\Models\Turno;
+use App\Support\Acciones;
 use App\Support\AnulacionVenta;
 use App\Support\Bitacora;
 use App\Support\Impresion\ComprobantePdf;
@@ -155,6 +156,9 @@ class VentaController extends Controller
     public function actualizarMedios(Request $request, $id)
     {
         $this->autorizar();
+        if (! Auth::user()->puede('medio_pago')) {
+            return response()->json(['success' => false, 'message' => Acciones::mensaje('medio_pago')]);
+        }
         $cab = $this->venta($id);
         $request->validate([
             'medios' => 'required|array|min:1',
@@ -205,6 +209,9 @@ class VentaController extends Controller
     public function anular(Request $request, $id)
     {
         $this->autorizar();
+        if (! Auth::user()->puede('anular_ventas')) {
+            return response()->json(['success' => false, 'message' => Acciones::mensaje('anular_ventas')]);
+        }
         $request->validate(['motivo' => 'required|string|min:5|max:70'], [], ['motivo' => 'Motivo']);
         $cab = $this->venta($id);
 

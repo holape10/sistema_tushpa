@@ -3,7 +3,7 @@
 @section('content')
 @use('App\Support\Bitacora')
 @php
-    $nombresDatos = ['motivo' => 'Motivo', 'productos' => 'Productos', 'diferencias' => 'Diferencias del conteo', 'precios' => 'Precios que cambiaron',
+    $nombresDatos = ['motivo' => 'Motivo', 'productos' => 'Productos', 'diferencias' => 'Diferencias del conteo', 'precios' => 'Precios (antes o de lista → cobrado o nuevo)', 'autorizo' => 'Autorizó',
         'correo' => 'Usuario escrito', 'archivo' => 'Archivo', 'nuevas' => 'Empresas creadas', 'omitidas' => 'Ya existían', 'turno' => 'Turno',
         'stock_devuelto' => 'Movimientos de stock devueltos', 'tamano_mb' => 'Tamaño (MB)', 'respaldo' => 'Respaldo previo', 'reinicia_electronicos' => 'Reinició series electrónicas'];
     // Un dato de la bitácora en texto: listas una por línea; [nombre, antes, después] como "nombre: antes → después"

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Mesa;
 use App\Models\Pedido;
 use App\Models\Turno;
+use App\Support\Acciones;
 use App\Support\AvisosCelular;
 use App\Support\Bitacora;
 use App\Support\Propinas;
@@ -181,6 +182,9 @@ class TurnoController extends Controller
     public function anularMovimiento($id)
     {
         $this->autorizar();
+        if (! Auth::user()->puede('caja_anular')) {
+            return redirect()->route('turnos.index')->with('error', Acciones::mensaje('caja_anular'));
+        }
         $turno = Turno::abiertoDe(Auth::user());
         abort_unless($turno, 403, 'No tienes un turno abierto.');
 

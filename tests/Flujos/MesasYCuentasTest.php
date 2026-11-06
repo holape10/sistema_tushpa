@@ -117,6 +117,10 @@ class MesasYCuentasTest extends FlujoTestCase
         $cuentas = DB::table('cpe_cabecera')->where('ped_id', $pedId)->orderBy('IdCpe_cabecera')->get(['ccaitv', 'descuento']);
         $this->assertSame([27.0, 30.0], $cuentas->map(fn ($c) => (float) $c->ccaitv)->all());
         $this->assertEquals(3.0, (float) $cuentas[0]->descuento);
+        $bitacora = DB::table('bitacora')->where('accion', 'venta.descuento')->get();
+        $this->assertCount(1, $bitacora, 'El descuento queda en la bitácora (la cuenta sin descuento no).');
+        $this->assertTrue((bool) $bitacora[0]->alerta);
+        $this->assertStringStartsWith('Hizo un descuento de S/ 3.00', $bitacora[0]->descripcion);
         $this->assertSame('Libre', $this->estadoMesa(1));
         $this->assertEquals(4.0, (float) DB::table('pedidos_detalle')->where('ped_id', $pedId)->sum('item_facturado'), 'Todo lo pedido quedó cobrado una sola vez.');
     }
@@ -143,6 +147,10 @@ class MesasYCuentasTest extends FlujoTestCase
 
         $this->assertEquals(2.0, (float) DB::table('pedidos_detalle')->where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')->sum('ped_det_can'));
         $this->assertEquals(60.0, (float) DB::table('pedidos')->where('ped_id', $pedId)->value('ped_tot'));
+        $quitado = DB::table('bitacora')->where('accion', 'comanda.quitar')->first();
+        $this->assertSame((int) $mozo->IdUsuario, (int) $quitado->IdUsuario, 'Queda a nombre del mozo que lo quitó.');
+        $this->assertStringContainsString('1 × LOMO', $quitado->descripcion);
+        $this->assertSame('SE EQUIVOCÓ - Autorizado por: '.$this->usuario->email, json_decode($quitado->datos, true)['motivo'], 'Con el motivo y quién lo autorizó.');
     }
 
     /** Un usuario de la sucursal con ese rol (8 mozo, 4 caja, 13 promotor) */

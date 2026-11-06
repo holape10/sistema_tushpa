@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Models\MedioPago;
+use App\Support\Acciones;
 use App\Support\Bitacora;
 use App\Support\Cuentas;
 use App\Support\Excel;
@@ -109,6 +110,9 @@ class CuentaController extends Controller
     {
         $this->autorizar();
         $motivo = $request->validate(['motivo' => 'required|string|min:4|max:100'], [], ['motivo' => 'motivo'])['motivo'];
+        if (! Auth::user()->puede('caja_anular')) {
+            return response()->json(['estado' => 'error', 'mensaje' => Acciones::mensaje('caja_anular')]);
+        }
         $tabla = $tipo === 'pagar' ? ['cuentas_pagar_detalle', 'cue_pag_det_id'] : ['cuentas_cobrar_detalle', 'cue_cob_det_id'];
         $pago = in_array($tipo, ['cobrar', 'pagar'], true) ? DB::table($tabla[0])->where($tabla[1], $detId)->first(['abono', 'numero_recibo']) : null;
         try {

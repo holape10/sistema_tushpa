@@ -6,6 +6,7 @@ use App\Models\Empleado;
 use App\Models\EmpresaNegocio;
 use App\Models\Modulo;
 use App\Models\User;
+use App\Support\Acciones;
 use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\Delivery;
@@ -166,6 +167,9 @@ class UsuarioController extends Controller
                 Rule::unique('users', 'codigo_movil')->where('id_empresa_negocio', $sucursal)->ignore($usuario?->IdUsuario, 'IdUsuario')],
             // Mozo y promotor no necesitan contraseña: entran con su código
             'password' => [$nuevo && ! in_array((int) $request->input('role_id'), self::ROLES_CON_CODIGO, true) ? 'required' : 'nullable', 'string', 'min:4', 'confirmed'],
+            'acciones_enviadas' => 'nullable|in:1',
+            'acciones' => 'nullable|array',
+            'acciones.*' => 'string|in:'.implode(',', array_keys(Acciones::LISTA)),
             'modulos' => 'nullable|array',
             'modulos.*' => 'integer|exists:modulos,mod_id',
             'foto' => 'nullable|image|max:5120',
@@ -262,6 +266,7 @@ class UsuarioController extends Controller
                 'IdEmpresa' => $this->empresaUsuarios(),
                 'id_empresa_negocio' => $d['id_empresa_negocio'],
                 'emp_id' => $empleado->emp_id,
+                'acciones_bloqueadas' => $this->accionesBloqueadas($d),
             ]);
 
             DB::table('role_user')->insert([
@@ -324,6 +329,9 @@ class UsuarioController extends Controller
             if (! empty($d['password'])) {
                 $usuario->password = bcrypt($d['password']);
             }
+            if (array_key_exists('acciones_enviadas', $d)) {
+                $usuario->acciones_bloqueadas = $this->accionesBloqueadas($d);
+            }
             $usuario->save();
 
             DB::table('role_user')->where('user_IdUsuario', $usuario->IdUsuario)->delete();
@@ -344,9 +352,19 @@ class UsuarioController extends Controller
         return redirect()->route('usuarios.index')->with('success', 'Usuario actualizado.');
     }
 
+    /** Lo que el formulario dejó sin marcar (sin la sección en el formulario, todo permitido) */
+    private function accionesBloqueadas(array $d): ?string
+    {
+        if (! array_key_exists('acciones_enviadas', $d)) {
+            return null;
+        }
+
+        return Acciones::guardables(array_values((array) ($d['acciones'] ?? [])), (int) $d['role_id']);
+    }
+
     /** Lo que se compara en la bitácora */
     public const ETIQUETAS_BITACORA = ['nombre' => 'Nombre', 'email' => 'Correo', 'estado' => 'Estado', 'sucursal' => 'Sucursal', 'rol' => 'Rol',
-        'modulos' => 'Opciones del menú', 'pin' => 'Código de ingreso móvil', 'password' => 'Contraseña'];
+        'modulos' => 'Opciones del menú', 'acciones' => 'Permisos especiales', 'pin' => 'Código de ingreso móvil', 'password' => 'Contraseña'];
 
     /**
      * El usuario como se ve en pantalla (nombres en vez de números) para la bitácora. El código móvil y la contraseña
@@ -367,6 +385,8 @@ class UsuarioController extends Controller
             'rol' => DB::table('role_user as r')->join('roles as ro', 'ro.id', '=', 'r.role_id')->where('r.user_IdUsuario', $id)->value('ro.description'),
             'modulos' => DB::table('modulos_usuario as mu')->join('modulos as m', 'm.mod_id', '=', 'mu.mod_id')->where('mu.user_IdUsuario', $id)
                 ->orderBy('m.mod_nom')->pluck('m.mod_nom')->all(),
+            'acciones' => collect(Acciones::LISTA)->keys()->diff(json_decode((string) ($u->acciones_bloqueadas ?? ''), true) ?: [])
+                ->map(fn ($k) => Acciones::LISTA[$k][0])->values()->all(),
             'pin' => $u->codigo_movil ?? null,
             'password' => $u->password,
         ];

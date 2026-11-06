@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Acciones;
 use App\Support\Notas;
 use App\Support\Sunat\SunatService;
 use Carbon\Carbon;
@@ -150,6 +151,7 @@ class NotaController extends Controller
         ], [], ['motivo' => 'sustento (motivo)', 'tipnot' => 'tipo de nota']);
 
         try {
+            Acciones::exigir(Auth::user(), 'notas_credito');
             $id = Notas::emitir(Auth::user(), (int) $d['ref'], $d);
         } catch (\RuntimeException $e) {
             if ($request->expectsJson()) {

@@ -168,8 +168,31 @@ class Comprobante
         Fidelizacion::acumular($cabId);       // puntos del cliente (si la sucursal tiene fidelización)
         EnvioAutomatico::programar($cabId);   // si la empresa tiene envío automático
         self::avisarDescuentos($user, $serie.'-'.$numero, $lineas, $extra);
+        self::bitacoraDescuentos($cabId, $serie.'-'.$numero, $lineas, $extra);
 
         return $cabId;
+    }
+
+    /** Bitácora: cada descuento (a mano o con cupón) y cada cortesía, con quién lo autorizó y su motivo */
+    private static function bitacoraDescuentos(int $cabId, string $numero, array $lineas, array $extra): void
+    {
+        $descuento = (float) ($extra['descuento'] ?? 0);
+        $autorizo = ! empty($extra['IdUsuario_descuento']) ? DB::table('users')->where('IdUsuario', $extra['IdUsuario_descuento'])->value('apeusu') : null;
+        if ($descuento > 0) {
+            Bitacora::registrar('venta.descuento', 'Hizo un descuento de S/ '.number_format($descuento, 2).' en '.$numero.(! empty($extra['cupon_id']) ? ' (cupón)' : ''), null, [
+                'referencia' => ['venta', $cabId], 'alerta' => empty($extra['cupon_id']),
+                'datos' => array_filter(['motivo' => $extra['descuento_motivo'] ?? null, 'autorizo' => $autorizo]),
+            ]);
+        }
+        $cortesias = collect($lineas)->filter(fn ($l) => ! empty($l['cortesia']));
+        if ($cortesias->isNotEmpty()) {
+            $valor = round($cortesias->sum(fn ($l) => (float) $l['cantidad'] * (float) $l['precio']), 2);
+            Bitacora::registrar('venta.cortesia', 'Regaló (cortesía) en '.$numero.': '.$cortesias->map(fn ($l) => rtrim(rtrim(number_format((float) $l['cantidad'], 2, '.', ''), '0'), '.')
+                .' × '.$l['descripcion'])->implode(', ').' (valor S/ '.number_format($valor, 2).')', null, [
+                    'referencia' => ['venta', $cabId], 'alerta' => true,
+                    'datos' => array_filter(['motivo' => $cortesias->pluck('motivo')->filter()->unique()->implode(' · ') ?: null, 'autorizo' => $autorizo]),
+                ]);
+        }
     }
 
     /** Al celular del dueño (si lo activó): cortesías y descuentos a mano de S/ 5 o más (los cupones ya están autorizados) */

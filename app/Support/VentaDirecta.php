@@ -105,6 +105,11 @@ class VentaDirecta
                 $datos['paga'] = 0;
             }
             $lineas = self::lineas($user, collect($datos['items']));
+            // Cobrar a otro precio que el de lista: solo con permiso (la proforma y la atención de la clínica ya traen su precio)
+            $distintos = self::preciosDistintos($lineas);
+            if ($distintos && ! $proformaId && ! $pedidoClinica && ! $user->puede('cambiar_precio')) {
+                throw new \RuntimeException(Acciones::mensaje('cambiar_precio')." {$distintos[0][0]} se vende a S/ {$distintos[0][1]}.");
+            }
             if ($recargos) {
                 [$lineas, $datos] = self::aplicarRecargos($user, $lineas, $datos);
             }
@@ -119,6 +124,7 @@ class VentaDirecta
                 'mozo' => $pedidoClinica->mozo, 'IdUsuario_ven' => $pedidoClinica->mozo ?: $user->IdUsuario,
             ] : []));
 
+            self::bitacoraPrecios($user, $cabId, $distintos);
             if ($proformaId) {
                 Proformas::marcarFacturada($proformaId, $cabId);
             }
@@ -128,6 +134,53 @@ class VentaDirecta
 
             return $cabId;
         });
+    }
+
+    /**
+     * Productos cobrados a un precio distinto al de lista (el de ese momento, con su precio por horario o el de su
+     * presentación): [[descripción, lista, cobrado], ...]. No cuentan las cortesías ni la venta por importe (grifo).
+     *
+     * @return array<int, array{0: string, 1: string, 2: string}>
+     */
+    public static function preciosDistintos(array $lineas): array
+    {
+        try {
+            $conProducto = array_values(array_filter($lineas, fn ($l) => ! empty($l['IdProducto']) && empty($l['cortesia']) && ! isset($l['importe'])));
+            if (! $conProducto) {
+                return [];
+            }
+            $productos = Producto::whereIn('IdProducto', array_unique(array_column($conProducto, 'IdProducto')))->get()->keyBy('IdProducto');
+            $vigentes = Precios::vigentes($productos);
+            $presentaciones = ProductoPresentacion::whereIn('id_presentacion', array_filter(array_column($conProducto, 'presentacion')))->get()->keyBy('id_presentacion');
+            $distintos = [];
+            foreach ($conProducto as $l) {
+                $base = (float) ($vigentes[$l['IdProducto']] ?? 0);
+                $pres = ! empty($l['presentacion']) ? ($presentaciones[$l['presentacion']] ?? null) : null;
+                $lista = $pres ? ((float) $pres->precio > 0 ? (float) $pres->precio : round($base * (float) $pres->factor, 2)) : $base;
+                if ($lista > 0 && abs((float) $l['precio'] - $lista) >= 0.01) {
+                    $distintos[] = [$l['descripcion'], number_format($lista, 2, '.', ''), number_format((float) $l['precio'], 2, '.', '')];
+                }
+            }
+
+            return $distintos;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [];
+        }
+    }
+
+    /** Bitácora: lo cobrado a otro precio; más barato que el de lista es alerta */
+    private static function bitacoraPrecios(User $user, int $cabId, array $distintos): void
+    {
+        if (! $distintos) {
+            return;
+        }
+        $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->first(['serdoc', 'numdoc']);
+        Bitacora::registrar('venta.precio', 'Cobró '.count($distintos).' producto(s) a un precio distinto al de lista en '.$cab->serdoc.'-'.$cab->numdoc, null, [
+            'usuario' => $user, 'referencia' => ['venta', $cabId], 'alerta' => collect($distintos)->contains(fn ($d) => (float) $d[2] < (float) $d[1]),
+            'datos' => ['precios' => $distintos],
+        ]);
     }
 
     /**

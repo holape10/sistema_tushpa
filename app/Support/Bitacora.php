@@ -27,6 +27,7 @@ class Bitacora
         'sesion' => 'Inicios de sesión',
         'usuario' => 'Usuarios y permisos',
         'venta' => 'Ventas',
+        'comanda' => 'Comandas',
         'caja' => 'Caja',
         'cuenta' => 'Cobros y pagos',
         'compra' => 'Compras',
@@ -43,10 +44,10 @@ class Bitacora
      * Lo que la Línea de tiempo ya muestra desde sus propias tablas (para no repetirlo allí): el comprobante anulado
      * (nota de venta o baja aceptada por SUNAT) y la compra registrada.
      */
-    public const YA_EN_LINEA_TIEMPO = ['venta.anular', 'venta.baja_aceptada', 'compra.registrar'];
+    public const YA_EN_LINEA_TIEMPO = ['venta.anular', 'venta.baja_aceptada', 'compra.registrar', 'venta.descuento', 'venta.cortesia', 'comanda.quitar'];
 
     /** Ícono de cada módulo (Línea de tiempo y pantalla de la bitácora) */
-    public const ICONOS = ['sesion' => '🔑', 'usuario' => '👤', 'venta' => '🧾', 'caja' => '💵', 'cuenta' => '💳', 'compra' => '📦', 'gasto' => '🧾',
+    public const ICONOS = ['sesion' => '🔑', 'usuario' => '👤', 'venta' => '🧾', 'comanda' => '🍽️', 'caja' => '💵', 'cuenta' => '💳', 'compra' => '📦', 'gasto' => '🧾',
         'producto' => '🏷️', 'almacen' => '📦', 'config' => '⚙️', 'contabilidad' => '📒', 'respaldo' => '💾', 'sistema' => '🛠️'];
 
     /** Campos que nunca se comparan (cambian solos) */

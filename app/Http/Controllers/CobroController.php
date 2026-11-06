@@ -12,6 +12,7 @@ use App\Models\PedidoDetalle;
 use App\Models\Piso;
 use App\Models\ProductoPresentacion;
 use App\Models\Turno;
+use App\Support\Bitacora;
 use App\Support\ClienteDirecciones;
 use App\Support\Clinica;
 use App\Support\Cocina;
@@ -178,6 +179,7 @@ class CobroController extends Controller
     private function cambiarPrecios(Pedido $pedido, $items, array $precios): array
     {
         $claves = [];
+        $cambios = [];
         foreach ($this->agrupar($items) as $g) {
             if (! isset($precios[$g->clave])) {
                 continue;
@@ -190,11 +192,16 @@ class CobroController extends Controller
                 throw new \RuntimeException("De {$g->descripcion} ya se cobró una parte: su precio se cambia en la comanda.");
             }
             PedidoDetalle::whereIn('ped_det_id', $g->lineas->pluck('ped_det_id'))->update(['ped_det_pre' => $nuevo]);
+            $cambios[] = [$g->descripcion, number_format((float) $g->ped_det_pre, 2, '.', ''), number_format($nuevo, 2, '.', '')];
             $claves[$g->clave] = preg_replace('/\|[^|]*$/', '|'.number_format($nuevo, 2, '.', ''), $g->clave);
         }
         if (! $claves) {
             return [];
         }
+        Bitacora::registrar('venta.precio', 'Cambió el precio de '.count($cambios).' producto(s) al cobrar el pedido N° '.$pedido->ped_id, null, [
+            'referencia' => ['pedido', $pedido->ped_id], 'alerta' => collect($cambios)->contains(fn ($c) => (float) $c[2] < (float) $c[1]),
+            'datos' => ['precios' => $cambios],
+        ]);
         $total = (float) PedidoDetalle::where('ped_id', $pedido->ped_id)->where('estadoitem', '!=', 'Eliminado')->sum(DB::raw('ped_det_can * ped_det_pre'));
         $pedido->update(['ped_tot' => round($total, 2)]);
         // Adelanto de un tratamiento de la clínica: la sesión queda con lo que de verdad se cobra (y el saldo se recalcula)

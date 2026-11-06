@@ -104,6 +104,11 @@ class Cocina
 
         // Al celular del dueño (si lo activó): quitar lo ya pedido a cocina puede ser un error… o un plato que no se cobró
         if ($anulaciones) {
+            Bitacora::registrar('comanda.quitar', 'Quitó de la comanda de '.$destino.': '.collect($anulaciones)
+                ->map(fn ($a) => rtrim(rtrim(number_format((float) $a['cantidad'], 2, '.', ''), '0'), '.').' × '.$a['nombre'])->implode(', '), null, [
+                    'referencia' => ['pedido', $pedId], 'alerta' => true,
+                    'datos' => ['motivo' => collect($anulaciones)->pluck('observacion')->filter()->unique()->implode(' · ')],
+                ]);
             $platos = collect($anulaciones)->map(fn ($a) => rtrim(rtrim(number_format((float) $a['cantidad'], 2, '.', ''), '0'), '.').' × '.$a['nombre'])->implode(', ');
             $motivos = collect($anulaciones)->pluck('observacion')->filter()->unique()->implode(' · ');
             AvisosCelular::alDueno((int) $pedido->id_empresa_negocio, '❌ Quitaron de cocina · '.$destino,

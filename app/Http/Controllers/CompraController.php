@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Almacen;
 use App\Models\Producto;
 use App\Models\UnidadMedida;
+use App\Support\Acciones;
 use App\Support\Bitacora;
 use App\Support\Compras;
 use App\Support\ConsultaPeru;
@@ -143,6 +144,9 @@ class CompraController extends Controller
 
         $fotoAntes = $id ? self::fotoCompra($id) : null;
         try {
+            if ($id) {
+                Acciones::exigir(Auth::user(), 'compras_editar');
+            }
             $comId = Compras::guardar(Auth::user(), $d, $id);
         } catch (\RuntimeException $e) {
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
@@ -174,6 +178,7 @@ class CompraController extends Controller
         $this->autorizar();
         $foto = self::fotoCompra((int) $id);
         try {
+            Acciones::exigir(Auth::user(), 'compras_editar');
             Compras::anular(Auth::user(), (int) $id);
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());

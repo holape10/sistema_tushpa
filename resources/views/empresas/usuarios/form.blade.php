@@ -172,6 +172,28 @@
             </div>
         </div>
 
+        {{-- PERMISOS ESPECIALES: lo delicado, aparte del menú (el administrador siempre puede todo) --}}
+        @php
+            $bloqueadas = $usuario ? \App\Support\Acciones::bloqueadas($usuario) : [];
+            $accSel = old('acciones_enviadas') ? (array) old('acciones', []) : array_diff(array_keys(\App\Support\Acciones::LISTA), $bloqueadas);
+        @endphp
+        <div class="bg-white rounded-2xl shadow-sm p-5">
+            <input type="hidden" name="acciones_enviadas" value="1">
+            <h3 class="text-sm font-bold text-rose-700 uppercase tracking-wide mb-1">Permisos especiales</h3>
+            <p x-show="Number(rol) === 2" x-cloak class="text-sm text-gray-500">El administrador puede hacer todo esto siempre.</p>
+            <div x-show="Number(rol) !== 2">
+                <p class="text-xs text-gray-400 mb-4">Lo marcado está permitido. Desmarca lo que esta persona no debe hacer: si lo intenta, el sistema le avisa que lo pida al administrador. Todo queda en la bitácora.</p>
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    @foreach (\App\Support\Acciones::LISTA as $clave => [$nombre, $detalle])
+                        <label class="flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm cursor-pointer hover:border-rose-300">
+                            <input type="checkbox" name="acciones[]" value="{{ $clave }}" class="mt-0.5 rounded border-gray-300 text-rose-600" @checked(in_array($clave, $accSel, true))>
+                            <span><span class="font-semibold text-gray-700">{{ $nombre }}</span><span class="block text-xs text-gray-500">{{ $detalle }}</span></span>
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+
         <div class="flex justify-end gap-3">
             <a href="{{ route('usuarios.index') }}" class="px-6 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">✕ Cancelar</a>
             <button class="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">

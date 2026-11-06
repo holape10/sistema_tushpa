@@ -149,6 +149,46 @@ class BitacoraTest extends FlujoTestCase
             'Tampoco la clave cifrada.');
     }
 
+    public function test_cobrar_mas_barato_que_el_precio_de_lista_es_alerta(): void
+    {
+        $juane = $this->producto('JUANE', 15, 10);
+        $chicha = $this->producto('CHICHA MORADA', 5, 10);
+
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[$juane, 2, 12], [$chicha, 1]], '13'), 'PV');
+
+        $fila = $this->ultima('venta.precio');
+        $this->assertTrue((bool) $fila->alerta);
+        $this->assertSame((string) $id, $fila->referencia_id);
+        $this->assertSame([['JUANE', '15.00', '12.00']], json_decode($fila->datos, true)['precios'], 'La chicha se cobró a su precio: no se anota.');
+    }
+
+    public function test_vender_al_precio_de_lista_no_llena_la_bitacora(): void
+    {
+        $juane = $this->producto('JUANE', 15, 10);
+
+        VentaDirecta::registrar($this->usuario, $this->venta([[$juane, 2]], '13'), 'PV');
+
+        $this->assertNull($this->ultima('venta.precio'));
+    }
+
+    public function test_una_cortesia_queda_con_su_valor_y_motivo(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['permite_cortesias' => 1]);
+        $postre = $this->producto('MAZAMORRA', 6, 10);
+        $datos = $this->venta([[$postre, 1]], '13');
+        $datos['items'][0] += ['cortesia' => true, 'motivo_cortesia' => 'CUMPLEAÑOS'];
+        $datos['mon_med_pag'] = [0];
+        $datos['paga'] = 0;
+
+        VentaDirecta::registrar($this->usuario, $datos, 'PV');
+
+        $fila = $this->ultima('venta.cortesia');
+        $this->assertTrue((bool) $fila->alerta);
+        $this->assertStringContainsString('1 × MAZAMORRA (valor S/ 6.00)', $fila->descripcion);
+        $this->assertSame('CUMPLEAÑOS', json_decode($fila->datos, true)['motivo']);
+        $this->assertNull($this->ultima('venta.precio'), 'La cortesía no cuenta como precio cambiado.');
+    }
+
     public function test_si_la_operacion_se_deshace_su_registro_tambien(): void
     {
         try {
