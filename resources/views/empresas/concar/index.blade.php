@@ -2,7 +2,7 @@
 @section('title', 'Exportar a CONCAR')
 
 @php
-    $mes = \Carbon\Carbon::createFromFormat('Ym', $periodo)->locale('es')->translatedFormat('F Y');
+    $mes = \Carbon\Carbon::createFromFormat('!Ym', $periodo)->locale('es')->translatedFormat('F Y');
     $sumas = function (array $filas) {
         $debe = $haber = 0;
         foreach ($filas as $f) { $f[13] === 'D' ? $debe += $f[14] : $haber += $f[14]; }

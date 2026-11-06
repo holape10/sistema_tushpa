@@ -33,6 +33,52 @@
         <a href="{{ route('compras.create') }}" class="h-10 px-5 inline-flex items-center rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Nueva compra</a>
     </div>
 
+    {{-- Candado de meses: lo ya declarado no se toca (el mismo cierre del Libro Diario) --}}
+    @php
+        $nombreMes = fn ($p) => \Illuminate\Support\Str::ucfirst(\Carbon\Carbon::createFromFormat('!Ym', $p)->locale('es')->isoFormat('MMMM YYYY'));
+        $mesCerrado = fn ($fecha) => $fecha && in_array(substr(str_replace('-', '', (string) $fecha), 0, 6), $mesesCerrados, true);
+    @endphp
+    @if (auth()->user()->esAdmin())
+        <details class="bg-white rounded-2xl shadow-sm" @if (session('success') && str_contains((string) session('success'), 'cerrado') || str_contains((string) session('success'), 'abierto')) open @endif>
+            <summary class="cursor-pointer list-none px-4 py-3 flex flex-wrap items-center gap-2">
+                <span class="font-bold text-slate-700">🔒 Meses cerrados</span>
+                @forelse (array_slice($mesesCerrados, 0, 4) as $p)
+                    <span class="rounded-full bg-slate-100 text-slate-600 text-xs font-semibold px-2 py-0.5">{{ $nombreMes($p) }}</span>
+                @empty
+                    <span class="text-xs text-slate-400">Ninguno todavía</span>
+                @endforelse
+                @if (count($mesesCerrados) > 4)<span class="text-xs text-slate-400">y {{ count($mesesCerrados) - 4 }} más</span>@endif
+                <span class="ml-auto text-xs text-indigo-700 font-semibold">Administrar ▾</span>
+            </summary>
+            <div class="px-4 pb-4 space-y-3 text-sm">
+                <p class="text-slate-500">Cuando ya declaraste un mes, ciérralo: sus compras y gastos ya no se podrán registrar, editar ni anular
+                    (el stock, los costos y lo declarado quedan como están). Es el mismo cierre del Libro Diario.</p>
+                <form method="POST" action="{{ route('compras.mes') }}" class="flex flex-wrap items-end gap-2">
+                    @csrf
+                    <input type="hidden" name="accion" value="cerrar">
+                    <label class="text-xs font-semibold text-slate-500">Mes a cerrar
+                        <input type="month" name="mes" value="{{ now()->subMonth()->format('Y-m') }}" max="{{ now()->format('Y-m') }}" required class="block mt-1 h-10 rounded-xl border-slate-300 text-sm"></label>
+                    <button class="h-10 px-4 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold"
+                            onclick="return confirm('¿Cerrar este mes? Sus compras y gastos ya no se podrán cambiar.')">🔒 Cerrar mes</button>
+                </form>
+                @if ($mesesCerrados)
+                    <div class="flex flex-wrap gap-2">
+                        @foreach ($mesesCerrados as $p)
+                            <form method="POST" action="{{ route('compras.mes') }}" class="inline-flex items-center gap-2 rounded-xl bg-slate-50 ring-1 ring-slate-200 pl-3 pr-1 py-1">
+                                @csrf
+                                <input type="hidden" name="accion" value="abrir">
+                                <input type="hidden" name="mes" value="{{ substr($p, 0, 4).'-'.substr($p, 4, 2) }}">
+                                <span class="font-semibold text-slate-700">🔒 {{ $nombreMes($p) }}</span>
+                                <button class="text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg px-2 py-1"
+                                        onclick="return confirm('¿Reabrir {{ $nombreMes($p) }}? Se podrán cambiar sus compras y gastos (queda en la bitácora).')">Reabrir</button>
+                            </form>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </details>
+    @endif
+
     <div class="grid grid-cols-3 gap-3">
         <div class="bg-white rounded-2xl shadow-sm p-4">
             <p class="text-xs font-semibold text-slate-500">Compras</p>
@@ -92,10 +138,12 @@
                                 <span class="mr-3">@include('empresas.sunat._boton_consultar', ['url' => route('compras.consultar_sunat', $c->com_cab_id),
                                     'estado' => $c->sunat_consultado ?? null ? $c->sunat_estado : null, 'consultado' => $c->sunat_consultado ?? null])</span>
                             @endif
+                            @php $bloqueada = $mesCerrado($c->com_fec) || $mesCerrado($c->com_fec_ing); @endphp
+                            @if ($bloqueada)<span class="text-xs font-semibold text-slate-400 mr-3" title="Mes cerrado: ya no se edita ni se anula">🔒 Mes cerrado</span>@endif
                             <a href="{{ route('compras.edit', $c->com_cab_id) }}" class="text-xs font-semibold text-indigo-700 hover:underline mr-3">
-                                {{ $c->est_compra === 'Registrado' ? 'Editar' : 'Ver' }}
+                                {{ $c->est_compra === 'Registrado' && ! $bloqueada ? 'Editar' : 'Ver' }}
                             </a>
-                            @if ($c->est_compra === 'Registrado')
+                            @if ($c->est_compra === 'Registrado' && ! $bloqueada)
                                 <form method="POST" action="{{ route('compras.anular', $c->com_cab_id) }}" class="inline"
                                       onsubmit="return confirm('¿Anular la compra {{ $c->com_doc_ser }}-{{ $c->com_doc_num }}? Su mercadería saldrá del stock.')">
                                     @csrf

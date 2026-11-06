@@ -22,7 +22,7 @@ class SitioSeoTest extends TestCase
     public function createApplication()
     {
         $app = require Application::inferBasePath().'/bootstrap/app.php';
-        $app->afterBootstrapping(LoadConfiguration::class, fn ($app) => $app['config']->set('tenancy.dominio', 'tushpa.app'));
+        $app->afterBootstrapping(LoadConfiguration::class, fn ($app) => $app['config']->set(['tenancy.dominio' => 'tushpa.app', 'tenancy.esquema' => 'https']));
         $app->make(Kernel::class)->bootstrap();
 
         return $app;

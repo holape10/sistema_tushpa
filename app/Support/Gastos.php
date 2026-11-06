@@ -1,9 +1,12 @@
 <?php
+
 namespace App\Support;
 
 use App\Models\User;
-use App\Support\Sunat\{Sire, SireCuadre};
-use Illuminate\Support\Facades\{DB, Storage};
+use App\Support\Sunat\Sire;
+use App\Support\Sunat\SireCuadre;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Gastos del negocio que no son mercadería (servicios, alquiler, honorarios, tributos municipales…).
@@ -15,15 +18,18 @@ class Gastos
 {
     public const DOCUMENTOS = ['01' => 'Factura', '03' => 'Boleta', '02' => 'Recibo por honorarios', '14' => 'Recibo de servicios públicos',
         '12' => 'Ticket', '07' => 'Nota de crédito', '00' => 'Otro / sin comprobante'];
+
     public const TASA_IGV = 0.18;
+
     public const TASA_RETENCION_4TA = 0.08;
 
     public static function categorias(string $ruc)
     {
-        if (!DB::table('gasto_categorias')->where('IdEmpresa', $ruc)->exists()) {
+        if (! DB::table('gasto_categorias')->where('IdEmpresa', $ruc)->exists()) {
             DB::table('gasto_categorias')->insert(['IdEmpresa' => $ruc, 'nombre' => 'OTROS GASTOS', 'cuenta_contable' => '659', 'color' => '#9ca3af',
                 'created_at' => now(), 'updated_at' => now()]);
         }
+
         return DB::table('gasto_categorias')->where('IdEmpresa', $ruc)->orderBy('nombre')->get();
     }
 
@@ -31,6 +37,7 @@ class Gastos
     public static function guardar(User $user, array $d, ?int $id = null, string $origen = 'MANUAL'): int
     {
         $ruc = $user->IdEmpresa;
+        MesesCerrados::validar((string) $ruc, [$d['fecha'] ?? null, $id ? DB::table('gastos')->where('id', $id)->value('fecha') : null], 'El gasto');
         $base = round((float) ($d['base'] ?? 0), 2);
         $igv = round((float) ($d['igv'] ?? 0), 2);
         $ng = round((float) ($d['no_gravado'] ?? 0), 2);
@@ -42,7 +49,7 @@ class Gastos
         if ($ret > $total) {
             throw new \RuntimeException('La retención no puede ser mayor al total.');
         }
-        if (($d['moneda'] ?? 'PEN') === 'USD' && !((float) ($d['tipo_cambio'] ?? 0) > 0)) {
+        if (($d['moneda'] ?? 'PEN') === 'USD' && ! ((float) ($d['tipo_cambio'] ?? 0) > 0)) {
             throw new \RuntimeException('Ingresa el tipo de cambio para un gasto en dólares.');
         }
 
@@ -51,7 +58,7 @@ class Gastos
         $provDoc = trim((string) ($d['prov_doc'] ?? '')) ?: null;
         if ($serie && $numero && $provDoc) {
             $repetido = DB::table('gastos')->where('IdEmpresa', $ruc)->where('estado', 'Registrado')->where('prov_doc', $provDoc)
-                ->where('tdocod', $d['tdocod'])->where('serie', $serie)->where('numero', $numero)->when($id, fn($w) => $w->where('id', '!=', $id))->exists()
+                ->where('tdocod', $d['tdocod'])->where('serie', $serie)->where('numero', $numero)->when($id, fn ($w) => $w->where('id', '!=', $id))->exists()
                 || DB::table('compras_cabecera as c')->join('proveedor as p', 'p.prov_id', '=', 'c.prov_id')->where('c.IdEmpresa', $ruc)
                     ->where('c.est_compra', 'Registrado')->where('p.prov_ruc', $provDoc)->where('c.tdocod', $d['tdocod'])
                     ->where('c.com_doc_ser', $serie)->where('c.com_doc_num', $numero)->exists();
@@ -72,8 +79,10 @@ class Gastos
         ];
         if ($id) {
             DB::table('gastos')->where('id', $id)->where('IdEmpresa', $ruc)->update($datos);
+
             return $id;
         }
+
         return DB::table('gastos')->insertGetId($datos + ['IdEmpresa' => $ruc, 'id_empresa_negocio' => $user->id_empresa_negocio,
             'estado' => 'Registrado', 'origen' => $origen, 'IdUsuario' => $user->IdUsuario, 'created_at' => now()]);
     }
@@ -82,6 +91,7 @@ class Gastos
     public static function soles(object $g, string $campo = 'total'): float
     {
         $v = (float) $g->$campo * ($g->moneda === 'USD' ? (float) $g->tipo_cambio : 1);
+
         return round($g->tdocod === '07' ? -$v : $v, 2);
     }
 
@@ -94,23 +104,23 @@ class Gastos
     public static function pendientesSire(string $ruc, int $solicitudId): array
     {
         $s = DB::table('sire_solicitudes')->where('id', $solicitudId)->where('IdEmpresa', $ruc)->where('libro', Sire::COMPRAS)->first();
-        if (!$s || !$s->archivo || !Storage::exists($s->archivo)) {
+        if (! $s || ! $s->archivo || ! Storage::exists($s->archivo)) {
             throw new \RuntimeException('La propuesta RCE no está descargada. Descárgala primero en SIRE Compras.');
         }
         $propuesta = Sire::leerZip(Storage::path($s->archivo));
         $cuadre = SireCuadre::comparar(Sire::COMPRAS, $s->periodo, $propuesta, $ruc);
 
-        $cab = array_map(fn($h) => trim(preg_replace('/\s+/', ' ', preg_replace('/[^a-z0-9 ]/', ' ',
+        $cab = array_map(fn ($h) => trim(preg_replace('/\s+/', ' ', preg_replace('/[^a-z0-9 ]/', ' ',
             strtr(mb_strtolower((string) $h), ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n'])))), $propuesta['cabecera']);
-        $cols = fn(callable $f) => array_keys(array_filter($cab, $f));
+        $cols = fn (callable $f) => array_keys(array_filter($cab, $f));
         $col = SireCuadre::columnas($propuesta['cabecera']);
-        $cBase = $cols(fn($h) => str_starts_with($h, 'bi gravad') || str_starts_with($h, 'bi ') );
-        $cIgv = $cols(fn($h) => str_starts_with($h, 'igv'));
-        $cNg = $cols(fn($h) => str_contains($h, 'valor adq ng') || str_contains($h, 'no gravad') || str_contains($h, 'otros trib') || str_starts_with($h, 'isc') || str_starts_with($h, 'icbper'));
-        $cMon = $cols(fn($h) => $h === 'moneda' || str_starts_with($h, 'cod moneda') || str_starts_with($h, 'moneda'))[0] ?? null;
-        $cTc = $cols(fn($h) => str_contains($h, 'tipo de cambio') || str_contains($h, 'tipo cambio'))[0] ?? null;
+        $cBase = $cols(fn ($h) => str_starts_with($h, 'bi gravad') || str_starts_with($h, 'bi '));
+        $cIgv = $cols(fn ($h) => str_starts_with($h, 'igv'));
+        $cNg = $cols(fn ($h) => str_contains($h, 'valor adq ng') || str_contains($h, 'no gravad') || str_contains($h, 'otros trib') || str_starts_with($h, 'isc') || str_starts_with($h, 'icbper'));
+        $cMon = $cols(fn ($h) => $h === 'moneda' || str_starts_with($h, 'cod moneda') || str_starts_with($h, 'moneda'))[0] ?? null;
+        $cTc = $cols(fn ($h) => str_contains($h, 'tipo de cambio') || str_contains($h, 'tipo cambio'))[0] ?? null;
 
-        $num = fn($v) => round((float) str_replace(',', '', (string) $v), 2);
+        $num = fn ($v) => round((float) str_replace(',', '', (string) $v), 2);
         $filas = [];
         foreach ($propuesta['filas'] as $f) {
             $tipo = str_pad(trim($f[$col['tipo']] ?? ''), 2, '0', STR_PAD_LEFT);
@@ -122,10 +132,10 @@ class Gastos
         $res = [];
         foreach ($cuadre['soloSunat'] as $c) {
             $f = $filas["{$c['tipo']}|{$c['serie']}|{$c['numero']}"] ?? null;
-            if (!$f) {
+            if (! $f) {
                 continue;
             }
-            $sum = fn(array $idx) => round(array_sum(array_map(fn($i) => abs($num($f[$i] ?? 0)), $idx)), 2);
+            $sum = fn (array $idx) => round(array_sum(array_map(fn ($i) => abs($num($f[$i] ?? 0)), $idx)), 2);
             $base = $sum($cBase);
             $igv = $sum($cIgv);
             $total = abs((float) $c['total']);
@@ -139,6 +149,7 @@ class Gastos
                 'tipo_cambio' => $cTc !== null ? $num($f[$cTc] ?? 0) : null,
             ];
         }
+
         return ['periodo' => $s->periodo, 'filas' => $res, 'cuadre' => ['sunat' => $cuadre['cantSunat'], 'sistema' => $cuadre['cantSistema']]];
     }
 }

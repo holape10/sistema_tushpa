@@ -2,18 +2,21 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use Illuminate\Support\Facades\Auth;
+use Tests\Flujos\FlujoTestCase;
 
-class ExampleTest extends TestCase
+/** La dirección principal lleva a ingresar o, con la sesión abierta, al inicio del usuario */
+class ExampleTest extends FlujoTestCase
 {
-    /**
-     * A basic test example.
-     */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_sin_sesion_la_raiz_lleva_a_ingresar(): void
     {
-        $response = $this->get('/');
+        Auth::logout();
 
-        $response->assertStatus(200);
+        $this->get('/')->assertRedirect(route('login'));
+    }
+
+    public function test_con_sesion_la_raiz_lleva_a_su_inicio(): void
+    {
+        $this->get('/')->assertRedirect(route('home.usuario'));
     }
 }

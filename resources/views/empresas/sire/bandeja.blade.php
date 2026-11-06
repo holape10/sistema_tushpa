@@ -2,7 +2,7 @@
 @section('title', 'Bandeja SIRE')
 
 @php
-    $nombrePeriodo = \Carbon\Carbon::createFromFormat('Ym', $periodo)->locale('es')->translatedFormat('F Y');
+    $nombrePeriodo = \Carbon\Carbon::createFromFormat('!Ym', $periodo)->locale('es')->translatedFormat('F Y');
 @endphp
 
 @section('content')

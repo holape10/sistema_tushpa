@@ -1,8 +1,11 @@
 <?php
+
 namespace App\Support;
 
-use App\Models\{Turno, User};
+use App\Models\Turno;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -17,13 +20,14 @@ class Socios
     public static function config(int $suc): object
     {
         $c = DB::table('socio_config')->where('id_empresa_negocio', $suc)->first();
+
         return $c ?: (object) ['id_empresa_negocio' => $suc, 'meses_suspension' => 3, 'edad_max_hijos' => 25,
             'parentescos' => 'CONYUGE,HIJO(A),PADRE,MADRE', 'IdProducto_ordinaria' => null, 'ultimo_periodo' => null];
     }
 
     public static function parentescos(object $cfg): array
     {
-        return array_values(array_filter(array_map(fn($p) => mb_strtoupper(trim($p)), explode(',', (string) $cfg->parentescos))));
+        return array_values(array_filter(array_map(fn ($p) => mb_strtoupper(trim($p)), explode(',', (string) $cfg->parentescos))));
     }
 
     public static function token(): string
@@ -34,7 +38,7 @@ class Socios
     public static function nombreMes(string $periodo): string
     {
         // En Perú se escribe SETIEMBRE
-        return str_replace('SEPTIEMBRE', 'SETIEMBRE', mb_strtoupper(Carbon::createFromFormat('Ym', $periodo)->locale('es')->translatedFormat('F Y')));
+        return str_replace('SEPTIEMBRE', 'SETIEMBRE', mb_strtoupper(Carbon::createFromFormat('!Ym', $periodo)->locale('es')->translatedFormat('F Y')));
     }
 
     /**
@@ -44,12 +48,13 @@ class Socios
     public static function desdeClientes(User $user, ?int $catId): int
     {
         $suc = (int) $user->id_empresa_negocio;
+
         return DB::transaction(function () use ($user, $suc, $catId) {
             $ya = DB::table('socios')->where('id_empresa_negocio', $suc)->pluck('clicod')->flip();
             $ultimo = (int) DB::table('socios')->where('id_empresa_negocio', $suc)->whereRaw("codigo REGEXP '^[0-9]+$'")->max(DB::raw('CAST(codigo AS UNSIGNED)'));
             $clientes = DB::table('cliente')->where('rucemp', $user->IdEmpresa)->where('tdicod', '1')
                 ->whereRaw("clinum REGEXP '^[0-9]{8}$'")->where('clinum', '!=', '00000000')
-                ->where(fn($q) => $q->whereNull('cliest')->orWhere('cliest', '!=', 'Inactivo'))
+                ->where(fn ($q) => $q->whereNull('cliest')->orWhere('cliest', '!=', 'Inactivo'))
                 ->orderBy('clinom')->get(['clicod']);
             $filas = [];
             foreach ($clientes as $c) {
@@ -62,6 +67,7 @@ class Socios
             foreach (array_chunk($filas, 500) as $lote) {
                 DB::table('socios')->insert($lote);
             }
+
             return count($filas);
         });
     }
@@ -75,10 +81,11 @@ class Socios
         $socios = self::sociosParaCuota($suc);
         $yaTienen = $cfg->IdProducto_ordinaria ? DB::table('socio_cargos')->where('id_empresa_negocio', $suc)
             ->where('IdProducto', $cfg->IdProducto_ordinaria)->where('periodo', $periodo)->where('estado', '!=', 'ANULADO')->pluck('soc_id')->flip() : collect();
-        $nuevos = $socios->reject(fn($s) => isset($yaTienen[$s->soc_id]));
+        $nuevos = $socios->reject(fn ($s) => isset($yaTienen[$s->soc_id]));
+
         return ['socios' => $nuevos->count(), 'total' => round($nuevos->sum('cuota'), 2), 'ya_generados' => $yaTienen->count(),
             'sin_categoria' => DB::table('socios')->where('id_empresa_negocio', $suc)->whereIn('estado', ['ACTIVO', 'SUSPENDIDO'])
-                ->where(fn($q) => $q->whereNull('cat_soc_id')->orWhereNotIn('cat_soc_id', DB::table('socio_categorias')->where('cuota', '>', 0)->select('cat_soc_id')))->count()];
+                ->where(fn ($q) => $q->whereNull('cat_soc_id')->orWhereNotIn('cat_soc_id', DB::table('socio_categorias')->where('cuota', '>', 0)->select('cat_soc_id')))->count()];
     }
 
     /** Activos y suspendidos (el suspendido sigue debiendo) con categoría de cuota > 0 */
@@ -94,11 +101,11 @@ class Socios
     {
         $suc = (int) $user->id_empresa_negocio;
         $cfg = self::config($suc);
-        if (!$cfg->IdProducto_ordinaria) {
+        if (! $cfg->IdProducto_ordinaria) {
             throw new \RuntimeException('Primero elige en Configuración el concepto (producto) de la cuota ordinaria.');
         }
         $concepto = DB::table('productos')->where('IdProducto', $cfg->IdProducto_ordinaria)->value('pronom') ?: 'CUOTA ORDINARIA';
-        $descripcion = mb_substr(mb_strtoupper($concepto) . ' - ' . self::nombreMes($periodo), 0, 150);
+        $descripcion = mb_substr(mb_strtoupper($concepto).' - '.self::nombreMes($periodo), 0, 150);
 
         return DB::transaction(function () use ($user, $suc, $cfg, $periodo, $descripcion) {
             $n = 0;
@@ -116,6 +123,7 @@ class Socios
             DB::table('socio_config')->updateOrInsert(['id_empresa_negocio' => $suc],
                 ['ultimo_periodo' => max((string) $cfg->ultimo_periodo, $periodo)] + (array) self::config($suc));
             $suspendidos = self::actualizarMorosidad($suc);
+
             return ['cargos' => $n, 'total' => round($total, 2), 'suspendidos' => $suspendidos];
         });
     }
@@ -125,14 +133,14 @@ class Socios
     {
         $suc = (int) $user->id_empresa_negocio;
         $prod = DB::table('productos')->where('IdProducto', $d['IdProducto'])->where('id_empresa_negocio', $suc)->first();
-        if (!$prod) {
+        if (! $prod) {
             throw new \RuntimeException('Concepto no válido.');
         }
         $q = DB::table('socios')->where('id_empresa_negocio', $suc);
-        if (!empty($d['soc_ids'])) {
+        if (! empty($d['soc_ids'])) {
             $q->whereIn('soc_id', $d['soc_ids']);
         } else {
-            $q->whereIn('estado', ['ACTIVO', 'SUSPENDIDO'])->when($d['cat_soc_id'] ?? null, fn($w, $c) => $w->where('cat_soc_id', $c));
+            $q->whereIn('estado', ['ACTIVO', 'SUSPENDIDO'])->when($d['cat_soc_id'] ?? null, fn ($w, $c) => $w->where('cat_soc_id', $c));
         }
         $ids = $q->pluck('soc_id');
         if ($ids->isEmpty()) {
@@ -152,6 +160,7 @@ class Socios
             }
         });
         self::actualizarMorosidad($suc);
+
         return ['cargos' => $n, 'total' => round($n * (float) $d['monto'], 2)];
     }
 
@@ -159,25 +168,27 @@ class Socios
 
     /**
      * Cobra cargos del socio (completo o a cuenta): emite el comprobante con una línea por cargo y lo descuenta de la deuda.
-     * @param array $montos [car_id => monto a pagar]
+     *
+     * @param  array  $montos  [car_id => monto a pagar]
      * @return int IdCpe_cabecera
      */
     public static function cobrar(User $user, int $socId, array $montos, array $datos): int
     {
         $suc = (int) $user->id_empresa_negocio;
+
         return DB::transaction(function () use ($user, $suc, $socId, $montos, $datos) {
             $turno = Turno::where('IdUsuario', $user->IdUsuario)->where('id_empresa_negocio', $suc)->where('estado', 'ABIERTO')->lockForUpdate()->first();
-            if (!$turno) {
+            if (! $turno) {
                 throw new \RuntimeException('Debes aperturar tu turno antes de cobrar.');
             }
             $socio = DB::table('socios as s')->join('cliente as c', 'c.clicod', '=', 's.clicod')
                 ->where('s.soc_id', $socId)->where('s.id_empresa_negocio', $suc)->first(['s.*', 'c.clinum', 'c.clinom', 'c.tdicod', 'c.clidir', 'c.clicor', 'c.telefono']);
-            if (!$socio) {
+            if (! $socio) {
                 throw new \RuntimeException('Socio no encontrado.');
             }
 
-            $montos = array_filter(array_map(fn($m) => round((float) $m, 2), $montos), fn($m) => $m > 0);
-            if (!$montos) {
+            $montos = array_filter(array_map(fn ($m) => round((float) $m, 2), $montos), fn ($m) => $m > 0);
+            if (! $montos) {
                 throw new \RuntimeException('Elige al menos una cuota y el monto a pagar.');
             }
             $cargos = DB::table('socio_cargos')->where('soc_id', $socId)->whereIn('car_id', array_keys($montos))
@@ -191,10 +202,10 @@ class Socios
                 $saldo = round($c->monto - $c->pagado, 2);
                 $pago = $montos[$c->car_id];
                 if ($pago > $saldo + 0.001) {
-                    throw new \RuntimeException("{$c->descripcion}: el saldo es S/ " . number_format($saldo, 2) . '.');
+                    throw new \RuntimeException("{$c->descripcion}: el saldo es S/ ".number_format($saldo, 2).'.');
                 }
                 $lineas[] = ['IdProducto' => $c->IdProducto, 'cantidad' => 1, 'precio' => $pago,
-                    'descripcion' => mb_substr($c->descripcion . ($pago < $saldo - 0.001 ? ' (A CUENTA)' : ''), 0, 150)];
+                    'descripcion' => mb_substr($c->descripcion.($pago < $saldo - 0.001 ? ' (A CUENTA)' : ''), 0, 150)];
             }
 
             $contado = DB::table('credito_dias')->where('id_empresa_negocio', $suc)->where('cre_dia_tip', 'CONTADO')->value('cre_dia_id');
@@ -204,7 +215,7 @@ class Socios
                 'tdicod' => $datos['tdicod'] ?? ($socio->tdicod ?: (strlen($doc) === 11 ? '6' : '1')), 'clinum' => $doc,
                 'clinom' => $datos['clinom'] ?? $socio->clinom, 'clidir' => $datos['clidir'] ?? $socio->clidir,
                 'clicor' => $socio->clicor, 'telefono' => $socio->telefono,
-                'observaciones' => 'SOCIO N° ' . $socio->codigo,
+                'observaciones' => 'SOCIO N° '.$socio->codigo,
                 'id_med_pag' => $datos['id_med_pag'] ?? [], 'mon_med_pag' => $datos['mon_med_pag'] ?? [], 'paga' => $datos['paga'] ?? 0,
             ], $lineas, ['ped_tip' => 'SOCIO', 'IdUsuario_ven' => $user->IdUsuario]);
 
@@ -215,6 +226,7 @@ class Socios
                 DB::table('socio_cargos')->where('car_id', $c->car_id)->update(['pagado' => $pagado, 'estado' => $pagado >= $c->monto - 0.001 ? 'PAGADO' : 'PENDIENTE']);
             }
             self::actualizarMorosidad($suc, $socId);
+
             return $cabId;
         });
     }
@@ -239,12 +251,13 @@ class Socios
     // ------------------------------------------------------------------ morosidad
 
     /** Cuotas ordinarias vencidas sin pagar (completo) por socio */
-    public static function mesesDebe(int $suc): \Illuminate\Support\Collection
+    public static function mesesDebe(int $suc): Collection
     {
         $cfg = self::config($suc);
+
         // Cuotas del concepto configurado; sin configurar, todo cargo mensual (con periodo)
         return DB::table('socio_cargos')->where('id_empresa_negocio', $suc)
-            ->when($cfg->IdProducto_ordinaria, fn($q) => $q->where('IdProducto', $cfg->IdProducto_ordinaria), fn($q) => $q->whereNotNull('periodo'))
+            ->when($cfg->IdProducto_ordinaria, fn ($q) => $q->where('IdProducto', $cfg->IdProducto_ordinaria), fn ($q) => $q->whereNotNull('periodo'))
             ->where('estado', 'PENDIENTE')->groupBy('soc_id')->select('soc_id', DB::raw('COUNT(*) as meses'))->pluck('meses', 'soc_id');
     }
 
@@ -260,7 +273,7 @@ class Socios
         $suspendidos = 0;
 
         $q = DB::table('socios')->where('id_empresa_negocio', $suc)->whereIn('estado', ['ACTIVO', 'SUSPENDIDO'])
-            ->when($socId, fn($w) => $w->where('soc_id', $socId));
+            ->when($socId, fn ($w) => $w->where('soc_id', $socId));
         foreach ($q->get(['soc_id', 'estado', 'suspendido_auto']) as $s) {
             $meses = (int) ($debe[$s->soc_id] ?? 0);
             if ($limite > 0 && $meses >= $limite && $s->estado === 'ACTIVO') {
@@ -270,16 +283,26 @@ class Socios
                 DB::table('socios')->where('soc_id', $s->soc_id)->update(['estado' => 'ACTIVO', 'suspendido_auto' => 0]);
             }
         }
+
         return $suspendidos;
     }
 
     /** Para el carnet / portería: AL DÍA, DEBE n meses, SUSPENDIDO... */
     public static function situacion(object $socio, int $meses, float $deuda = 0): array
     {
-        if ($socio->estado === 'SUSPENDIDO') return ['SUSPENDIDO', 'red'];
-        if ($socio->estado !== 'ACTIVO') return [$socio->estado, 'gray'];
-        if ($meses > 0) return ['DEBE ' . $meses . ($meses === 1 ? ' MES' : ' MESES'), 'amber'];
-        if ($deuda > 0.009) return ['CON DEUDA', 'amber'];
+        if ($socio->estado === 'SUSPENDIDO') {
+            return ['SUSPENDIDO', 'red'];
+        }
+        if ($socio->estado !== 'ACTIVO') {
+            return [$socio->estado, 'gray'];
+        }
+        if ($meses > 0) {
+            return ['DEBE '.$meses.($meses === 1 ? ' MES' : ' MESES'), 'amber'];
+        }
+        if ($deuda > 0.009) {
+            return ['CON DEUDA', 'amber'];
+        }
+
         return ['AL DÍA', 'green'];
     }
 }

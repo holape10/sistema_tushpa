@@ -3,7 +3,7 @@
 
 @php
     $tipos = ['01' => 'Factura', '03' => 'Boleta', '07' => 'N. Crédito', '08' => 'N. Débito', '12' => 'Ticket'];
-    $nombrePeriodo = \Carbon\Carbon::createFromFormat('Ym', $periodo)->locale('es')->translatedFormat('F Y');
+    $nombrePeriodo = \Carbon\Carbon::createFromFormat('!Ym', $periodo)->locale('es')->translatedFormat('F Y');
     $compras = false;
     $total = count($dbf);
     $faltan = $total - $conDetalle;

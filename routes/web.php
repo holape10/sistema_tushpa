@@ -686,6 +686,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/compras/{id}/editar', [CompraController::class, 'edit'])->whereNumber('id')->name('compras.edit');
     Route::put('/compras/{id}', [CompraController::class, 'update'])->whereNumber('id')->name('compras.update');
     Route::post('/compras/{id}/anular', [CompraController::class, 'anular'])->whereNumber('id')->name('compras.anular');
+    Route::post('/compras/meses', [CompraController::class, 'mes'])->name('compras.mes');
     Route::post('/compras/{id}/consultar-sunat', [CompraController::class, 'consultarSunat'])->whereNumber('id')->middleware('throttle:30,1')->name('compras.consultar_sunat');
     Route::get('/compras/productos', [CompraController::class, 'productos'])->name('compras.productos');
     Route::post('/compras/producto-nuevo', [CompraController::class, 'productoRapido'])->name('compras.producto_nuevo');

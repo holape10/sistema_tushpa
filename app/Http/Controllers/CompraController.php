@@ -9,9 +9,12 @@ use App\Support\Acciones;
 use App\Support\Bitacora;
 use App\Support\Compras;
 use App\Support\ConsultaPeru;
+use App\Support\Contabilidad\Contabilidad;
+use App\Support\MesesCerrados;
 use App\Support\Precios;
 use App\Support\Recetas;
 use App\Support\Rubros;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +57,36 @@ class CompraController extends Controller
         return view('empresas.compras.index', [
             'compras' => $compras, 'totales' => $totales, 'desde' => $desde, 'hasta' => $hasta,
             'q' => $q, 'estado' => $estado, 'documentos' => Compras::DOCUMENTOS,
+            'mesesCerrados' => MesesCerrados::lista((string) Auth::user()->IdEmpresa),
         ]);
+    }
+
+    /** Cierra o reabre un mes (el mismo cierre del Libro Diario): cerrado, sus compras y gastos ya no se tocan */
+    public function mes(Request $request): RedirectResponse
+    {
+        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el Administrador cierra y reabre meses.');
+        $d = $request->validate(['mes' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'], 'accion' => 'required|in:cerrar,abrir'],
+            ['mes.regex' => 'Elige el mes.'], ['mes' => 'mes']);
+        $ruc = (string) Auth::user()->IdEmpresa;
+        $periodo = str_replace('-', '', $d['mes']);
+        $nombre = Contabilidad::nombrePeriodo($periodo);
+        if ($d['accion'] === 'cerrar') {
+            if ($periodo > now()->format('Ym')) {
+                return back()->with('error', 'No se cierra un mes que todavía no llega.');
+            }
+            MesesCerrados::cerrar($ruc, $periodo, Auth::id());
+            Bitacora::registrar('compra.mes_cerrar', "Cerró el mes {$nombre}: sus compras y gastos ya no se pueden cambiar", null,
+                ['referencia' => ['periodo', $periodo], 'empresa' => $ruc]);
+
+            return back()->with('success', "🔒 {$nombre} cerrado: sus compras y gastos ya no se registran, editan ni anulan.");
+        }
+        if (MesesCerrados::abrir($ruc, $periodo)) {
+            // Reabrir un mes declarado permite cambiarlo: siempre se revisa
+            Bitacora::registrar('compra.mes_abrir', "Reabrió el mes {$nombre} (estaba cerrado)", null,
+                ['referencia' => ['periodo', $periodo], 'empresa' => $ruc, 'alerta' => true]);
+        }
+
+        return back()->with('success', "🔓 {$nombre} abierto otra vez. Ciérralo cuando termines de corregir.");
     }
 
     /** Consulta en SUNAT si el comprobante del proveedor es válido (apiperu.dev) y guarda lo que respondió */

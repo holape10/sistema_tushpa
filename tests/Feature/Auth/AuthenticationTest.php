@@ -2,53 +2,51 @@
 
 namespace Tests\Feature\Auth;
 
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Tests\Flujos\FlujoTestCase;
 
-class AuthenticationTest extends TestCase
+/** Ingreso al sistema con usuario y contraseña (la base MySQL de pruebas, como los flujos) */
+class AuthenticationTest extends FlujoTestCase
 {
-    use RefreshDatabase;
-
-    public function test_login_screen_can_be_rendered(): void
+    protected function setUp(): void
     {
-        $response = $this->get('/login');
-
-        $response->assertStatus(200);
+        parent::setUp();
+        Auth::logout();
     }
 
-    public function test_users_can_authenticate_using_the_login_screen(): void
+    public function test_la_pantalla_de_ingreso_se_muestra(): void
     {
-        $user = User::factory()->create();
-
-        $response = $this->post('/login', [
-            'email' => $user->email,
-            'password' => 'password',
-        ]);
-
-        $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        $this->get('/login?escritorio=1')->assertOk()->assertSee('name="email"', false)->assertSee('name="password"', false);
     }
 
-    public function test_users_can_not_authenticate_with_invalid_password(): void
+    public function test_entra_con_su_usuario_y_contrasena_y_va_a_su_inicio(): void
     {
-        $user = User::factory()->create();
+        $this->post('/login', ['email' => $this->usuario->email, 'password' => 'clave-de-prueba'])->assertRedirect(route('inicio'));
 
-        $this->post('/login', [
-            'email' => $user->email,
-            'password' => 'wrong-password',
-        ]);
+        $this->assertAuthenticatedAs($this->usuario);
+    }
+
+    public function test_con_la_contrasena_equivocada_no_entra(): void
+    {
+        $this->post('/login', ['email' => $this->usuario->email, 'password' => 'otra-clave'])->assertSessionHasErrors('email');
 
         $this->assertGuest();
     }
 
-    public function test_users_can_logout(): void
+    public function test_un_usuario_desactivado_no_entra_aunque_sepa_su_contrasena(): void
     {
-        $user = User::factory()->create();
+        DB::table('users')->where('IdUsuario', $this->usuario->IdUsuario)->update(['estusu' => 0]);
 
-        $response = $this->actingAs($user)->post('/logout');
+        $this->post('/login', ['email' => $this->usuario->email, 'password' => 'clave-de-prueba'])->assertSessionHasErrors('email');
 
         $this->assertGuest();
-        $response->assertRedirect('/');
+    }
+
+    public function test_cerrar_sesion_lo_saca_del_sistema(): void
+    {
+        $this->actingAs($this->usuario)->post('/logout')->assertRedirect('/');
+
+        $this->assertGuest();
     }
 }

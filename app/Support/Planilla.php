@@ -1,9 +1,11 @@
 <?php
+
 namespace App\Support;
 
 use App\Support\Contabilidad\Contabilidad;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Planilla mensual de remuneraciones (Perú).
@@ -21,13 +23,15 @@ use Illuminate\Support\Facades\{Auth, DB};
 class Planilla
 {
     public const AFPS = ['HABITAT' => 1.47, 'INTEGRA' => 1.55, 'PRIMA' => 1.60, 'PROFUTURO' => 1.69];
+
     public const REGIMENES = ['GENERAL' => 'Régimen general', 'PEQUENA' => 'Pequeña empresa (REMYPE)', 'MICRO' => 'Microempresa (REMYPE)'];
+
     private const ESCALA_QUINTA = [[5, 8], [20, 14], [35, 17], [45, 20], [PHP_INT_MAX, 30]];
 
     public static function parametros(string $ruc, int $anio): object
     {
         $p = DB::table('planilla_parametros')->where('IdEmpresa', $ruc)->where('anio', $anio)->first();
-        if (!$p) {
+        if (! $p) {
             // Copia el año anterior (o los valores por defecto) para no empezar de cero
             $prev = DB::table('planilla_parametros')->where('IdEmpresa', $ruc)->where('anio', '<', $anio)->orderByDesc('anio')->first();
             $datos = $prev ? collect((array) $prev)->except(['anio', 'created_at', 'updated_at'])->all()
@@ -36,13 +40,14 @@ class Planilla
             $p = DB::table('planilla_parametros')->where('IdEmpresa', $ruc)->where('anio', $anio)->first();
         }
         $p->comisiones = json_decode($p->afp_comisiones ?: '{}', true) ?: self::AFPS;
+
         return $p;
     }
 
     /** Faltas y minutos de tardanza del mes según el módulo de Asistencia */
     public static function asistencia(int $empId, string $periodo): array
     {
-        $ini = Carbon::createFromFormat('Ym', $periodo)->startOfMonth();
+        $ini = Carbon::createFromFormat('!Ym', $periodo)->startOfMonth();
         $fin = $ini->copy()->endOfMonth();
         $hasta = $fin->lt(today()) ? $fin : today()->subDay();
         if ($hasta->lt($ini)) {
@@ -54,14 +59,15 @@ class Planilla
         $feriados = Asistencia::feriados($ini->toDateString(), $hasta->toDateString(), 0);
         $faltas = DB::table('asistencia_horarios as h')->join('asistencia_turnos as t', 't.id', '=', 'h.turno_id')
             ->where('h.emp_id', $empId)->where('t.tipo', 'TRABAJO')->whereBetween('h.fecha', [$ini->toDateString(), $hasta->toDateString()])
-            ->pluck('h.fecha')->filter(fn($f) => !isset($marcados[$f]) && !isset($feriados[$f]))->count();
+            ->pluck('h.fecha')->filter(fn ($f) => ! isset($marcados[$f]) && ! isset($feriados[$f]))->count();
+
         return ['faltas' => $faltas, 'tardanza' => (int) $marcados->sum()];
     }
 
     /** Calcula una fila de la planilla a partir de los datos editables (días, faltas, horas extra, bonos, adelantos…) */
     public static function calcular(array $f, object $t, object $p): array
     {
-        $r2 = fn($n) => round((float) $n, 2);
+        $r2 = fn ($n) => round((float) $n, 2);
         $sueldo = (float) $t->sueldo;
         $asig = $t->asignacion_familiar ? $r2($p->rmv * 0.10) : 0;
         $dias = max(0, min(30, (int) ($f['dias'] ?? 30)));
@@ -131,18 +137,18 @@ class Planilla
         return DB::transaction(function () use ($ruc, $periodo) {
             $pl = DB::table('planillas')->where('IdEmpresa', $ruc)->where('periodo', $periodo)->lockForUpdate()->first();
             if ($pl && $pl->estado !== 'BORRADOR') {
-                throw new \RuntimeException('La planilla de ' . Contabilidad::nombrePeriodo($periodo) . ' ya está cerrada.');
+                throw new \RuntimeException('La planilla de '.Contabilidad::nombrePeriodo($periodo).' ya está cerrada.');
             }
             $id = $pl->id ?? DB::table('planillas')->insertGetId(['IdEmpresa' => $ruc, 'periodo' => $periodo, 'estado' => 'BORRADOR',
                 'IdUsuario' => Auth::id(), 'created_at' => now(), 'updated_at' => now()]);
             $p = self::parametros($ruc, (int) substr($periodo, 0, 4));
-            $ini = Carbon::createFromFormat('Ym', $periodo)->startOfMonth();
+            $ini = Carbon::createFromFormat('!Ym', $periodo)->startOfMonth();
             $fin = $ini->copy()->endOfMonth();
 
             $trabajadores = DB::table('planilla_trabajadores as t')->join('empleado as e', 'e.emp_id', '=', 't.emp_id')
                 ->where('t.IdEmpresa', $ruc)->where('t.activo', 1)
-                ->where(fn($w) => $w->whereNull('t.fecha_ingreso')->orWhere('t.fecha_ingreso', '<=', $fin->toDateString()))
-                ->where(fn($w) => $w->whereNull('t.fecha_cese')->orWhere('t.fecha_cese', '>=', $ini->toDateString()))
+                ->where(fn ($w) => $w->whereNull('t.fecha_ingreso')->orWhere('t.fecha_ingreso', '<=', $fin->toDateString()))
+                ->where(fn ($w) => $w->whereNull('t.fecha_cese')->orWhere('t.fecha_cese', '>=', $ini->toDateString()))
                 ->select('t.*', 'e.emp_nom', 'e.emp_ape_pat', 'e.emp_ape_mat', 'e.emp_num_doc')->get();
             $existentes = DB::table('planilla_detalle')->where('planilla_id', $id)->pluck('emp_id')->flip();
 
@@ -158,11 +164,12 @@ class Planilla
                 $calc = self::calcular(['dias' => $dias, 'faltas' => $a['faltas'], 'tardanza_min' => $a['tardanza']], $t, $p);
                 DB::table('planilla_detalle')->insert($calc + [
                     'planilla_id' => $id, 'emp_id' => $t->emp_id, 'dni' => $t->emp_num_doc, 'cargo' => $t->cargo,
-                    'nombre' => trim(implode(' ', array_filter([$t->emp_ape_pat, $t->emp_ape_mat])) . ', ' . $t->emp_nom, ' ,'),
-                    'sistema_pension' => $t->sistema_pension === 'AFP' ? 'AFP ' . $t->afp : $t->sistema_pension,
+                    'nombre' => trim(implode(' ', array_filter([$t->emp_ape_pat, $t->emp_ape_mat])).', '.$t->emp_nom, ' ,'),
+                    'sistema_pension' => $t->sistema_pension === 'AFP' ? 'AFP '.$t->afp : $t->sistema_pension,
                 ]);
             }
             self::totales($id);
+
             return $id;
         });
     }
@@ -197,31 +204,31 @@ class Planilla
     {
         DB::transaction(function () use ($ruc, $id, $fechaPago) {
             $pl = DB::table('planillas')->where('id', $id)->where('IdEmpresa', $ruc)->lockForUpdate()->first();
-            if (!$pl || $pl->estado !== 'BORRADOR') {
+            if (! $pl || $pl->estado !== 'BORRADOR') {
                 throw new \RuntimeException('La planilla no existe o ya está cerrada.');
             }
             $s = DB::table('planilla_detalle')->where('planilla_id', $id)->selectRaw('SUM(total_ingresos - desc_faltas - desc_tardanza) remun,
                 SUM(essalud) essalud, SUM(onp) onp, SUM(afp_aporte + afp_prima + afp_comision) afp, SUM(renta_quinta) quinta,
                 SUM(adelantos) adelantos, SUM(otros_descuentos) otros, SUM(neto) neto, COUNT(*) n')->first();
-            if (!$s->n) {
+            if (! $s->n) {
                 throw new \RuntimeException('La planilla no tiene trabajadores.');
             }
 
             $asiento = null;
             if (DB::table('conta_plan')->where('IdEmpresa', $ruc)->exists()) {
                 $c = Contabilidad::config($ruc);
-                $fin = Carbon::createFromFormat('Ym', $pl->periodo)->endOfMonth()->toDateString();
+                $fin = Carbon::createFromFormat('!Ym', $pl->periodo)->endOfMonth()->toDateString();
                 $asiento = Contabilidad::crearAsiento($ruc, ['fecha' => $fin, 'subdiario' => '35', 'origen' => 'PLANILLA',
-                    'glosa' => 'PLANILLA DE REMUNERACIONES ' . mb_strtoupper(Contabilidad::nombrePeriodo($pl->periodo)), 'ref_tabla' => 'planillas', 'ref_id' => $id], [
-                    ['cuenta' => $c->cta_sueldos, 'debe' => (float) $s->remun],
-                    ['cuenta' => $c->cta_essalud_gasto, 'debe' => (float) $s->essalud],
-                    ['cuenta' => $c->cta_essalud_pagar, 'haber' => (float) $s->essalud],
-                    ['cuenta' => $c->cta_onp_pagar, 'haber' => (float) $s->onp],
-                    ['cuenta' => $c->cta_afp_pagar, 'haber' => (float) $s->afp],
-                    ['cuenta' => $c->cta_renta5_pagar, 'haber' => (float) $s->quinta],
-                    ['cuenta' => $c->cta_adelantos, 'haber' => (float) $s->adelantos + (float) $s->otros],
-                    ['cuenta' => $c->cta_remun_pagar, 'haber' => (float) $s->neto],
-                ]);
+                    'glosa' => 'PLANILLA DE REMUNERACIONES '.mb_strtoupper(Contabilidad::nombrePeriodo($pl->periodo)), 'ref_tabla' => 'planillas', 'ref_id' => $id], [
+                        ['cuenta' => $c->cta_sueldos, 'debe' => (float) $s->remun],
+                        ['cuenta' => $c->cta_essalud_gasto, 'debe' => (float) $s->essalud],
+                        ['cuenta' => $c->cta_essalud_pagar, 'haber' => (float) $s->essalud],
+                        ['cuenta' => $c->cta_onp_pagar, 'haber' => (float) $s->onp],
+                        ['cuenta' => $c->cta_afp_pagar, 'haber' => (float) $s->afp],
+                        ['cuenta' => $c->cta_renta5_pagar, 'haber' => (float) $s->quinta],
+                        ['cuenta' => $c->cta_adelantos, 'haber' => (float) $s->adelantos + (float) $s->otros],
+                        ['cuenta' => $c->cta_remun_pagar, 'haber' => (float) $s->neto],
+                    ]);
             }
             DB::table('planillas')->where('id', $id)->update(['estado' => 'CERRADA', 'fecha_pago' => $fechaPago, 'asiento_id' => $asiento, 'updated_at' => now()]);
         });
@@ -231,7 +238,7 @@ class Planilla
     {
         DB::transaction(function () use ($ruc, $id) {
             $pl = DB::table('planillas')->where('id', $id)->where('IdEmpresa', $ruc)->lockForUpdate()->first();
-            if (!$pl || $pl->estado === 'BORRADOR') {
+            if (! $pl || $pl->estado === 'BORRADOR') {
                 return;
             }
             if ($pl->asiento_id) {

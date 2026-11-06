@@ -5,7 +5,7 @@
     $tipos = ['01' => 'Factura', '02' => 'Rec. honorarios', '03' => 'Boleta', '07' => 'N. Crédito', '08' => 'N. Débito', '12' => 'Ticket', '14' => 'Serv. público'];
     $compras = true;
     $soloXml = $propuesta ? $sinPropuesta : $comprobantes;
-    $nombrePeriodo = \Carbon\Carbon::createFromFormat('Ym', $periodo)->locale('es')->translatedFormat('F Y');
+    $nombrePeriodo = \Carbon\Carbon::createFromFormat('!Ym', $periodo)->locale('es')->translatedFormat('F Y');
     $total = count($comprobantes);
     $faltan = $total - $conDetalle;
 @endphp

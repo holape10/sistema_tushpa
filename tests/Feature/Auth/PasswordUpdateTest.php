@@ -2,50 +2,25 @@
 
 namespace Tests\Feature\Auth;
 
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
-use Tests\TestCase;
+use Tests\Flujos\FlujoTestCase;
 
-class PasswordUpdateTest extends TestCase
+/** Cada usuario puede cambiar su propia contraseña sabiendo la actual */
+class PasswordUpdateTest extends FlujoTestCase
 {
-    use RefreshDatabase;
-
-    public function test_password_can_be_updated(): void
+    public function test_cambia_su_contrasena_con_la_actual(): void
     {
-        $user = User::factory()->create();
+        $this->from(route('inicio'))->put('/password', ['current_password' => 'clave-de-prueba', 'password' => 'clave-nueva-2026',
+            'password_confirmation' => 'clave-nueva-2026'])->assertSessionHasNoErrors()->assertRedirect(route('inicio'));
 
-        $response = $this
-            ->actingAs($user)
-            ->from('/profile')
-            ->put('/password', [
-                'current_password' => 'password',
-                'password' => 'new-password',
-                'password_confirmation' => 'new-password',
-            ]);
-
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect('/profile');
-
-        $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+        $this->assertTrue(Hash::check('clave-nueva-2026', $this->usuario->fresh()->password));
     }
 
-    public function test_correct_password_must_be_provided_to_update_password(): void
+    public function test_sin_la_contrasena_actual_correcta_no_la_cambia(): void
     {
-        $user = User::factory()->create();
+        $this->from(route('inicio'))->put('/password', ['current_password' => 'no-es-la-actual', 'password' => 'clave-nueva-2026',
+            'password_confirmation' => 'clave-nueva-2026'])->assertSessionHasErrorsIn('updatePassword', 'current_password');
 
-        $response = $this
-            ->actingAs($user)
-            ->from('/profile')
-            ->put('/password', [
-                'current_password' => 'wrong-password',
-                'password' => 'new-password',
-                'password_confirmation' => 'new-password',
-            ]);
-
-        $response
-            ->assertSessionHasErrorsIn('updatePassword', 'current_password')
-            ->assertRedirect('/profile');
+        $this->assertTrue(Hash::check('clave-de-prueba', $this->usuario->fresh()->password));
     }
 }

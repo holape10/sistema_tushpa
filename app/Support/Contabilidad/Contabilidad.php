@@ -63,7 +63,7 @@ class Contabilidad
 
     public static function nombrePeriodo(string $periodo): string
     {
-        return ucfirst(Carbon::createFromFormat('Ym', $periodo)->startOfMonth()->locale('es')->isoFormat('MMMM YYYY'));
+        return ucfirst(Carbon::createFromFormat('!Ym', $periodo)->startOfMonth()->locale('es')->isoFormat('MMMM YYYY'));
     }
 
     /** Cuentas imputables del plan (para validar y para los buscadores) */
@@ -135,7 +135,7 @@ class Contabilidad
 
     private static function rango(string $periodo): array
     {
-        $ini = Carbon::createFromFormat('Ym', $periodo)->startOfMonth();
+        $ini = Carbon::createFromFormat('!Ym', $periodo)->startOfMonth();
 
         return [$ini->toDateString(), $ini->copy()->endOfMonth()->toDateString()];
     }

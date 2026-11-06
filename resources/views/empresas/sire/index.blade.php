@@ -4,7 +4,7 @@
 @php
     $tipos = ['01' => 'Factura', '03' => 'Boleta', '07' => 'N. Crédito', '08' => 'N. Débito'];
     $persona = $libro === 'ventas' ? 'Cliente' : 'Proveedor';
-    $nombrePeriodo = fn($p) => \Carbon\Carbon::createFromFormat('Ym', $p)->locale('es')->translatedFormat('F Y');
+    $nombrePeriodo = fn($p) => \Carbon\Carbon::createFromFormat('!Ym', $p)->locale('es')->translatedFormat('F Y');
 @endphp
 
 @section('content')

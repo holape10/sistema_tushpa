@@ -2,43 +2,27 @@
 
 namespace Tests\Feature\Auth;
 
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use Tests\Flujos\FlujoTestCase;
 
-class PasswordConfirmationTest extends TestCase
+/** Volver a escribir la contraseña antes de algo delicado */
+class PasswordConfirmationTest extends FlujoTestCase
 {
-    use RefreshDatabase;
-
-    public function test_confirm_password_screen_can_be_rendered(): void
+    public function test_la_pantalla_para_confirmar_se_muestra(): void
     {
-        $user = User::factory()->create();
-
-        $response = $this->actingAs($user)->get('/confirm-password');
-
-        $response->assertStatus(200);
+        $this->get('/confirm-password')->assertOk();
     }
 
-    public function test_password_can_be_confirmed(): void
+    public function test_con_su_contrasena_queda_confirmada(): void
     {
-        $user = User::factory()->create();
+        $this->post('/confirm-password', ['password' => 'clave-de-prueba'])->assertRedirect()->assertSessionHasNoErrors();
 
-        $response = $this->actingAs($user)->post('/confirm-password', [
-            'password' => 'password',
-        ]);
-
-        $response->assertRedirect();
-        $response->assertSessionHasNoErrors();
+        $this->assertNotNull(session('auth.password_confirmed_at'));
     }
 
-    public function test_password_is_not_confirmed_with_invalid_password(): void
+    public function test_con_otra_contrasena_no_se_confirma(): void
     {
-        $user = User::factory()->create();
+        $this->post('/confirm-password', ['password' => 'otra-clave'])->assertSessionHasErrors('password');
 
-        $response = $this->actingAs($user)->post('/confirm-password', [
-            'password' => 'wrong-password',
-        ]);
-
-        $response->assertSessionHasErrors();
+        $this->assertNull(session('auth.password_confirmed_at'));
     }
 }

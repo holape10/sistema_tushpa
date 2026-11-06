@@ -2,30 +2,21 @@
 
 namespace Tests\Feature\Auth;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Tests\Flujos\FlujoTestCase;
 
-class RegistrationTest extends TestCase
+/** Nadie se registra solo: los usuarios los crea el administrador */
+class RegistrationTest extends FlujoTestCase
 {
-    use RefreshDatabase;
-
-    public function test_registration_screen_can_be_rendered(): void
+    public function test_no_hay_registro_publico_de_usuarios(): void
     {
-        $response = $this->get('/register');
+        Auth::logout();
 
-        $response->assertStatus(200);
-    }
+        $this->get('/register')->assertNotFound();
+        $this->post('/register', ['name' => 'Intruso', 'email' => 'intruso@prueba.test', 'password' => 'clave-intruso',
+            'password_confirmation' => 'clave-intruso'])->assertNotFound();
 
-    public function test_new_users_can_register(): void
-    {
-        $response = $this->post('/register', [
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
-        ]);
-
-        $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        $this->assertFalse(User::where('email', 'intruso@prueba.test')->exists());
     }
 }

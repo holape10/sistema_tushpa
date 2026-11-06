@@ -3,7 +3,7 @@
 
 @php
     $tipos = ['01' => 'Factura', '02' => 'Rec. honorarios', '03' => 'Boleta', '07' => 'N. Crédito', '08' => 'N. Débito', '12' => 'Ticket', '14' => 'Serv. público'];
-    $nombrePeriodo = \Carbon\Carbon::createFromFormat('Ym', $periodo)->locale('es')->translatedFormat('F Y');
+    $nombrePeriodo = \Carbon\Carbon::createFromFormat('!Ym', $periodo)->locale('es')->translatedFormat('F Y');
     $compras = $libro === 'compras';
     $tabla = $compras ? 'almaingr' : 'tienfact';
     $sinXml = $compras ? collect($comprobantes)->filter(fn ($c) => ! $c['lineas'])->count() : 0;

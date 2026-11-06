@@ -39,7 +39,11 @@ class Compras
                 if ($anterior->est_compra !== 'Registrado') {
                     throw new \RuntimeException('Una compra anulada no se puede editar.');
                 }
+                // Ni sacarla de un mes cerrado
+                MesesCerrados::validar((string) $user->IdEmpresa, [$anterior->com_fec, $anterior->com_fec_ing], 'Esta compra');
             }
+            // Ni meterla a un mes cerrado
+            MesesCerrados::validar((string) $user->IdEmpresa, [$d['fecEmi'] ?? null, $d['fecIng'] ?? null], 'La compra');
 
             // ---- Forma de pago ----
             $cre = DB::table('credito_dias')->where('cre_dia_id', $d['estadopago'])->where('id_empresa_negocio', $sucursal)->first();
@@ -166,6 +170,7 @@ class Compras
             if ($cab->est_compra !== 'Registrado') {
                 throw new \RuntimeException('La compra ya estaba anulada.');
             }
+            MesesCerrados::validar((string) $user->IdEmpresa, [$cab->com_fec, $cab->com_fec_ing], 'Esta compra');
 
             Cuentas::anularPorDocumento('pagar', $id);   // si ya tiene pagos, no se deja anular
             self::revertirStock($cab, 'ANULACIÓN DE COMPRA');

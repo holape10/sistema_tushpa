@@ -178,7 +178,7 @@ class ContabilidadController extends Controller
         $ruc = $this->ruc();
         $periodo = $this->periodo($request);
         $origenes = $tipo === 'ventas' ? ['VENTAS', 'COBRANZAS'] : ['COMPRAS', 'PAGOS'];
-        [$desde, $hasta] = [Carbon::createFromFormat('Ym', $periodo)->startOfMonth()->toDateString(), Carbon::createFromFormat('Ym', $periodo)->endOfMonth()->toDateString()];
+        [$desde, $hasta] = [Carbon::createFromFormat('!Ym', $periodo)->startOfMonth()->toDateString(), Carbon::createFromFormat('!Ym', $periodo)->endOfMonth()->toDateString()];
 
         $asientos = DB::table('conta_asientos')->where('IdEmpresa', $ruc)->where('periodo', $periodo)->whereIn('origen', $origenes)
             ->orderBy('fecha')->orderBy('subdiario')->orderBy('numero')->get();

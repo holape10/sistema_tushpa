@@ -6,6 +6,7 @@ use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\Excel;
 use App\Support\Gastos;
+use App\Support\MesesCerrados;
 use App\Support\Sunat\Sire;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -123,6 +124,9 @@ class GastoController extends Controller
     {
         $ruc = $this->ruc();
         $g = DB::table('gastos')->where('id', $id)->where('IdEmpresa', $ruc)->first();
+        if ($g && MesesCerrados::cerrado($ruc, $g->fecha)) {
+            return back()->with('error', 'Este gasto es de un mes CERRADO (ya declarado): no se anula. Si de verdad hay que corregirlo, el administrador debe reabrir el mes.');
+        }
         DB::table('gastos')->where('id', $id)->where('IdEmpresa', $ruc)->update(['estado' => 'Anulado', 'updated_at' => now()]);
         if ($g && $g->estado !== 'Anulado') {
             Bitacora::registrar('gasto.anular', 'Anuló el gasto '.trim($g->serie.'-'.$g->numero, '-').' de '.$g->prov_nombre.' por S/ '.number_format((float) $g->total, 2),

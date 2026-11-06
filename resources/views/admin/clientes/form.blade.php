@@ -221,7 +221,7 @@
                     <div class="mt-2 flex flex-wrap gap-2">
                         @foreach ($historialXml as $m)
                             <span class="rounded-lg bg-white px-3 py-1.5 text-xs ring-1 ring-amber-200">
-                                <b class="capitalize">{{ \Carbon\Carbon::createFromFormat('Ym', $m->mes)->locale('es')->translatedFormat('M Y') }}</b>:
+                                <b class="capitalize">{{ \Carbon\Carbon::createFromFormat('!Ym', $m->mes)->locale('es')->translatedFormat('M Y') }}</b>:
                                 {{ number_format($m->consultas) }} consultas · {{ number_format($m->traidos) }} traídos</span>
                         @endforeach
                     </div>

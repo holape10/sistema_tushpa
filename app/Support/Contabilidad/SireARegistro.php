@@ -21,7 +21,7 @@ class SireARegistro
         $cfg = Contabilidad::config($ruc);
         $imputables = Contabilidad::imputables($ruc);
         $venta = $libro === 'ventas';
-        $inicio = Carbon::createFromFormat('Ym', $periodo)->startOfMonth();
+        $inicio = Carbon::createFromFormat('!Ym', $periodo)->startOfMonth();
         $fin = $inicio->copy()->endOfMonth();
         $r = ['nuevos' => 0, 'repetidos' => 0, 'cuentaDefecto' => 0, 'errores' => []];
 
