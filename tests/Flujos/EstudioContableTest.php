@@ -6,10 +6,14 @@ use App\Models\Central\Cliente;
 use App\Models\Empresa;
 use App\Models\User;
 use App\Support\Estudio;
+use App\Support\EstudioImportar;
+use App\Support\Excel;
+use App\Support\ExcelLector;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\XmlJsonPe;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\Request as Peticion;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -197,6 +201,47 @@ class EstudioContableTest extends FlujoTestCase
         $this->post(route('estudio.guardar'), ['ruc' => '20600695771', 'razon_social' => 'NUBEFACT SA'])->assertSessionHasNoErrors()->assertSessionHas('success');
         $this->post(route('estudio.estado', self::EMPRESA_A))->assertSessionHas('error');
         $this->assertSame(2, Estudio::activas());
+    }
+
+    public function test_importa_las_empresas_del_excel_con_lo_del_sire_y_omite_las_que_ya_existen(): void
+    {
+        // El formato se descarga con sus columnas (las del SIRE incluidas)
+        $formato = $this->get(route('estudio.importar.formato'))->assertOk()->assertDownload('formato_empresas_estudio.xlsx');
+        $titulos = ExcelLector::filas($formato->getFile()->getPathname(), 'xlsx', EstudioImportar::HOJA)[0];
+        $this->assertSame(array_column(EstudioImportar::COLUMNAS, 0), $titulos);
+
+        $fila = fn (string $ruc, string $razon, array $mas = []) => array_values(array_merge(array_fill_keys(array_keys(EstudioImportar::COLUMNAS), ''),
+            ['ruc' => $ruc, 'razon_social' => $razon], $mas));
+        $excel = (new Excel)->hoja(EstudioImportar::HOJA, $titulos, [
+            $fila('20600695771', 'Nueva con todo SAC', ['sol_usuario' => 'solnueva', 'sol_clave' => 'CLAVE-SOL-N', 'client_id' => 'ID-N', 'client_secret' => 'SECRETO-N', 'cta_compras' => '601111']),
+            $fila(self::EMPRESA_A, 'YA EXISTE'),
+            $fila('20553510662', 'RUC INVENTADO'),
+            array_fill(0, count($titulos), ''),
+            $fila('10609005110', 'PERSONA NATURAL SIN SIRE'),
+        ])->guardar();
+
+        $this->post(route('estudio.importar'), ['archivo' => new UploadedFile($excel, 'empresas.xlsx', null, null, true)])
+            ->assertRedirect(route('estudio.index'))->assertSessionHas('success')
+            ->assertSessionHas('importacion', fn ($r) => array_values($r['nuevas']) === ['20600695771', '10609005110'] && array_values($r['omitidas']) === [self::EMPRESA_A]
+                && count($r['errores']) === 1 && array_values($r['sinSire']) === ['10609005110']);
+
+        $nueva = Empresa::find('20600695771');
+        $this->assertSame('NUEVA CON TODO SAC', $nueva->NomEmpresa);
+        $this->assertTrue(Sire::configurado($nueva), 'Con lo del SIRE del Excel ya puede traer su propuesta.');
+        $this->assertNotSame('CLAVE-SOL-N', DB::table('empresa')->where('IdEmpresa', '20600695771')->value('sol_clave'), 'Las claves se guardan cifradas.');
+        $this->assertSame('601111', DB::table('concar_config')->where('IdEmpresa', '20600695771')->value('cta_compras'));
+        $this->assertTrue(DB::table('estudio_empresas')->where('IdEmpresa', '10609005110')->where('activa', true)->exists());
+        $this->assertSame('LLAMA PE SA', DB::table('empresa')->where('IdEmpresa', self::EMPRESA_A)->value('NomEmpresa'), 'La que ya existía no se toca.');
+    }
+
+    public function test_con_el_api_y_la_clave_sol_principal_el_sire_esta_listo_sin_usuario_secundario(): void
+    {
+        // El usuario SOL del SIRE es opcional: sin él se entra con la Clave SOL principal (y así se ve en la lista)
+        $this->post(route('estudio.configurar', self::EMPRESA_A), ['client_id' => 'ID-API-A', 'client_secret' => 'SECRETO-API-A',
+            'sol_usuario' => 'solprina', 'sol_clave' => 'CLAVE-SOL-A'])->assertSessionHasNoErrors();
+
+        $this->get(route('estudio.index'))->assertOk()->assertSee('SIRE ✔')->assertSee('Faltan credenciales', false);
+        $this->assertTrue(Sire::configurado(Empresa::find(self::EMPRESA_A)));
     }
 
     public function test_cada_empresa_guarda_sus_credenciales_cifradas_y_sus_cuentas(): void

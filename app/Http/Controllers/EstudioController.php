@@ -6,6 +6,9 @@ use App\Models\Empresa;
 use App\Models\User;
 use App\Support\ConsultaPeru;
 use App\Support\Estudio;
+use App\Support\EstudioImportar;
+use App\Support\ExcelLector;
+use App\Support\Sunat\Sire;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -45,6 +48,9 @@ class EstudioController extends Controller
             'empresas' => $empresas, 'accesos' => $accesos, 'usuarios' => $usuarios, 'q' => $q,
             'activas' => Estudio::activas(), 'limite' => Estudio::limite(),
             'cuentas' => DB::table('concar_config')->whereIn('IdEmpresa', $empresas->pluck('IdEmpresa'))->get()->keyBy('IdEmpresa'),
+            // Igual que al conectarse: con el usuario SOL del SIRE o, si no se puso, con la Clave SOL principal
+            'sireListo' => Empresa::whereIn('IdEmpresa', $empresas->pluck('IdEmpresa'))->get()
+                ->mapWithKeys(fn (Empresa $empresa) => [$empresa->IdEmpresa => Sire::configurado($empresa)])->all(),
         ]);
     }
 
@@ -64,7 +70,7 @@ class EstudioController extends Controller
             'razon_social' => 'required|string|max:200',
             'nombre_comercial' => 'nullable|string|max:150',
             'direccion' => 'nullable|string|max:250',
-        ] + $this->reglasConfiguracion(), ['ruc.unique' => 'Esa empresa ya está registrada en el estudio.', 'regex' => 'Solo letras y números, sin espacios ni puntos.'],
+        ] + self::reglasConfiguracion(), ['ruc.unique' => 'Esa empresa ya está registrada en el estudio.', 'regex' => 'Solo letras y números, sin espacios ni puntos.'],
             ['ruc' => 'RUC', 'razon_social' => 'razón social'] + self::NOMBRES);
         Estudio::crearEmpresa(['ruc' => $d['ruc'], 'razon_social' => mb_strtoupper(trim($d['razon_social'])),
             'nombre_comercial' => ! empty($d['nombre_comercial']) ? mb_strtoupper(trim($d['nombre_comercial'])) : null, 'direccion' => $d['direccion'] ?? null]);
@@ -75,7 +81,7 @@ class EstudioController extends Controller
     }
 
     /** @return array<string, mixed> reglas de las credenciales y cuentas de una empresa (todas opcionales) */
-    private function reglasConfiguracion(): array
+    public static function reglasConfiguracion(): array
     {
         $cuenta = ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]+$/'];
 
@@ -87,27 +93,12 @@ class EstudioController extends Controller
         ];
     }
 
-    private const NOMBRES = ['client_id' => 'ID del API SIRE', 'sire_usuario' => 'usuario SOL del SIRE', 'sol_usuario' => 'usuario SOL principal'];
+    public const NOMBRES = ['client_id' => 'ID del API SIRE', 'sire_usuario' => 'usuario SOL del SIRE', 'sol_usuario' => 'usuario SOL principal'];
 
     /** Guarda las credenciales (las claves solo si se escriben) y las cuentas por defecto de una empresa */
     private function aplicarConfiguracion(string $ruc, array $d): void
     {
-        $empresa = Empresa::findOrFail($ruc);
-        $empresa->client_id = trim((string) ($d['client_id'] ?? '')) ?: null;
-        $empresa->sire_usuario = mb_strtoupper(trim((string) ($d['sire_usuario'] ?? ''))) ?: null;
-        $empresa->sol_usuario = mb_strtoupper(trim((string) ($d['sol_usuario'] ?? ''))) ?: null;
-        foreach (['client_secret', 'sire_clave', 'sol_clave'] as $secreto) {
-            if (! empty($d[$secreto])) {
-                $empresa->{$secreto} = $d[$secreto];
-            }
-        }
-        $empresa->save();
-        cache()->forget('sire_token_'.$ruc);
-
-        $cuentas = array_filter(array_intersect_key($d, array_flip(['cta_compras', 'cta_por_pagar', 'cta_por_cobrar', 'cta_ventas', 'cta_ventas_exo'])), fn ($v) => trim((string) $v) !== '');
-        if ($cuentas) {
-            DB::table('concar_config')->updateOrInsert(['IdEmpresa' => $ruc], $cuentas + ['updated_at' => now()]);
-        }
+        Estudio::configurar($ruc, $d);
     }
 
     /**
@@ -118,10 +109,46 @@ class EstudioController extends Controller
     {
         $this->administrar();
         abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->where('propia', false)->exists(), 404);
-        $d = $request->validate($this->reglasConfiguracion(), ['regex' => 'Solo letras y números, sin espacios ni puntos.'], self::NOMBRES);
+        $d = $request->validate(self::reglasConfiguracion(), ['regex' => 'Solo letras y números, sin espacios ni puntos.'], self::NOMBRES);
         $this->aplicarConfiguracion($ruc, $d);
 
         return back()->with('success', "Datos de la empresa {$ruc} guardados.");
+    }
+
+    /** El formato de Excel para importar las empresas (con lo que pide el SIRE) */
+    public function formato()
+    {
+        $this->administrar();
+
+        return response()->download(EstudioImportar::formato(), 'formato_empresas_estudio.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend();
+    }
+
+    /** Importa las empresas del Excel: las nuevas se crean con sus claves y cuentas; un RUC que ya existe se omite */
+    public function importar(Request $request): RedirectResponse
+    {
+        $this->administrar();
+        $request->validate(['archivo' => 'required|file|max:10240|extensions:xlsx,csv'],
+            ['archivo.extensions' => 'Sube el formato en Excel (.xlsx) o .csv.', 'archivo.required' => 'Elige el archivo del formato.']);
+        try {
+            $filas = ExcelLector::filas($request->file('archivo')->getRealPath(), $request->file('archivo')->getClientOriginalExtension(), EstudioImportar::HOJA);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+        set_time_limit(600);
+        $r = EstudioImportar::importar($filas);
+
+        $partes = [count($r['nuevas']).' empresa(s) creada(s)'];
+        if ($r['omitidas']) {
+            $partes[] = count($r['omitidas']).' ya existían y se omitieron';
+        }
+        if ($r['sinCupo']) {
+            $partes[] = "{$r['sinCupo']} no se crearon porque llegaste al límite de tu plan";
+        }
+
+        return redirect()->route('estudio.index')->with($r['nuevas'] ? 'success' : 'error', implode(' · ', $partes).'.')
+            ->with('importacion', $r);
     }
 
     /** Una empresa que el estudio ya no lleva: deja de verse en el selector (sus datos se conservan) */

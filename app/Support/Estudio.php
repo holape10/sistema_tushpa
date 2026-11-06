@@ -162,6 +162,27 @@ class Estudio
         });
     }
 
+    /** Guarda las credenciales (las claves solo si se escriben) y las cuentas por defecto de una empresa del estudio */
+    public static function configurar(string $ruc, array $d): void
+    {
+        $empresa = Empresa::findOrFail($ruc);
+        $empresa->client_id = trim((string) ($d['client_id'] ?? '')) ?: null;
+        $empresa->sire_usuario = mb_strtoupper(trim((string) ($d['sire_usuario'] ?? ''))) ?: null;
+        $empresa->sol_usuario = mb_strtoupper(trim((string) ($d['sol_usuario'] ?? ''))) ?: null;
+        foreach (['client_secret', 'sire_clave', 'sol_clave'] as $secreto) {
+            if (! empty($d[$secreto])) {
+                $empresa->{$secreto} = $d[$secreto];
+            }
+        }
+        $empresa->save();
+        cache()->forget('sire_token_'.$ruc);
+
+        $cuentas = array_filter(array_intersect_key($d, array_flip(['cta_compras', 'cta_por_pagar', 'cta_por_cobrar', 'cta_ventas', 'cta_ventas_exo'])), fn ($v) => trim((string) $v) !== '');
+        if ($cuentas) {
+            DB::table('concar_config')->updateOrInsert(['IdEmpresa' => $ruc], $cuentas + ['updated_at' => now()]);
+        }
+    }
+
     /** Quiénes (además del administrador) trabajan una empresa */
     public static function guardarAccesos(string $ruc, array $usuarios): void
     {

@@ -2,7 +2,7 @@
 @section('title', 'Empresas del estudio')
 
 @section('content')
-<div class="max-w-6xl mx-auto space-y-4" x-data="{ nueva: {{ $errors->any() ? 'true' : 'false' }} }">
+<div class="max-w-6xl mx-auto space-y-4" x-data="{ nueva: {{ $errors->any() && ! $errors->has('archivo') ? 'true' : 'false' }}, importar: {{ $errors->has('archivo') || session('importacion') ? 'true' : 'false' }} }">
 
     <section class="bg-gradient-to-r from-indigo-700 to-indigo-500 rounded-2xl p-5 text-white flex flex-wrap items-center gap-4">
         <div class="flex-1 min-w-[220px]">
@@ -16,9 +16,48 @@
         </div>
         <a href="{{ route('sire.bandeja') }}" class="h-11 px-5 inline-flex items-center rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold">📥 Bandeja SIRE</a>
         @if (! $limite || $activas < $limite)
-            <button type="button" @click="nueva = !nueva" class="h-11 px-5 rounded-xl bg-white text-indigo-700 font-bold hover:bg-indigo-50">+ Nueva empresa</button>
+            <button type="button" @click="nueva = !nueva; importar = false" class="h-11 px-5 rounded-xl bg-white text-indigo-700 font-bold hover:bg-indigo-50">+ Nueva empresa</button>
+            <button type="button" @click="importar = !importar; nueva = false" class="h-11 px-5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-bold ring-1 ring-white/40">⬆ Importar Excel</button>
         @else
             <span class="rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold">Llegaste al límite de tu plan</span>
+        @endif
+    </section>
+
+    {{-- Importar varias empresas de una vez desde el formato de Excel --}}
+    <section x-show="importar" x-cloak class="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+        <div class="flex flex-wrap items-start gap-4">
+            <div class="flex-1 min-w-[240px]">
+                <p class="font-bold text-slate-800">Importar empresas desde Excel</p>
+                <ol class="mt-1 text-sm text-slate-600 list-decimal ml-5 space-y-0.5">
+                    <li>Descarga el formato y llena una empresa por fila (en la hoja <b>Ejemplo</b> hay una de muestra).</li>
+                    <li>Para el SIRE pon el <b>usuario y clave SOL principal</b> y el <b>ID y CLAVE del API SUNAT</b>. Lo que falte lo completas luego con "Configurar".</li>
+                    <li>Súbelo aquí. Un RUC que ya está en el estudio se omite.</li>
+                </ol>
+                <p class="mt-2 text-xs text-amber-700">🔒 El archivo lleva claves: bórralo de tu computadora después de importarlo. En el sistema se guardan cifradas.</p>
+            </div>
+            <a href="{{ route('estudio.importar.formato') }}" class="h-10 px-4 inline-flex items-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold">⬇ Descargar formato</a>
+        </div>
+        <form method="POST" action="{{ route('estudio.importar') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2" x-data="{ subiendo: false }" @submit="subiendo = true">
+            @csrf
+            <input type="file" name="archivo" accept=".xlsx,.csv" required class="flex-1 min-w-[220px] text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700">
+            <button class="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:opacity-50" :disabled="subiendo"
+                    x-text="subiendo ? 'Importando…' : 'Importar empresas'"></button>
+        </form>
+        @error('archivo')<p class="text-sm text-rose-600">{{ $message }}</p>@enderror
+        @if ($imp = session('importacion'))
+            <div class="rounded-xl bg-slate-50 p-4 text-sm space-y-2">
+                <p><b class="text-emerald-700">✔ {{ count($imp['nuevas']) }} creada(s)</b> · <b class="text-slate-600">{{ count($imp['omitidas']) }} omitida(s) (ya existían)</b>
+                    · <b class="{{ $imp['errores'] ? 'text-rose-600' : 'text-slate-500' }}">{{ count($imp['errores']) }} con error</b></p>
+                @if ($imp['errores'])
+                    <ul class="text-rose-700 list-disc ml-5">@foreach ($imp['errores'] as $fila => $error)<li>Fila {{ $fila }}: {{ $error }}</li>@endforeach</ul>
+                @endif
+                @if ($imp['sinSire'])
+                    <p class="text-amber-700">⚠ {{ count($imp['sinSire']) }} empresa(s) se crearon sin todo lo que pide el SIRE ({{ implode(', ', $imp['sinSire']) }}): complétalo con "Configurar".</p>
+                @endif
+                @if ($imp['omitidas'])
+                    <p class="text-slate-500">Omitidas: {{ implode(', ', $imp['omitidas']) }}</p>
+                @endif
+            </div>
         @endif
     </section>
 
@@ -84,7 +123,7 @@
                                 @unless ($e->activa)<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">INACTIVA</span>@endunless</td>
                             <td class="px-4 py-3"><p class="font-semibold text-slate-800">{{ $e->NomEmpresa }}</p><p class="text-xs text-slate-400">{{ $e->DirEmpresa }}</p></td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                @if ($e->client_id && $e->sire_usuario)
+                                @if ($sireListo[$e->IdEmpresa] ?? false)
                                     <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">SIRE ✔</span>
                                 @else
                                     <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">Faltan credenciales</span>
