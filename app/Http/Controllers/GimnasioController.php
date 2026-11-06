@@ -97,7 +97,7 @@ class GimnasioController extends Controller
     public function importarSubir(Request $request)
     {
         $this->soloAdmin();
-        $request->validate(['excel' => 'required|file|max:20480|mimes:xlsx,csv,txt'], ['excel.mimes' => 'Sube el Excel (.xlsx) o un .csv.'], ['excel' => 'archivo']);
+        $request->validate(['excel' => 'required|file|max:20480|extensions:'.ExcelLector::EXTENSIONES], ['excel.extensions' => 'Sube el Excel (.xlsx, .xls, .ods) o un .csv.'], ['excel' => 'archivo']);
         $this->importarLimpiar();
         $f = $request->file('excel');
         $ruta = $f->storeAs('importar', Str::uuid().'.'.strtolower($f->getClientOriginalExtension() ?: 'xlsx'), 'local');

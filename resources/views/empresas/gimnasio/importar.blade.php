@@ -23,8 +23,8 @@
                     <p class="font-bold text-gray-800">1. Sube tu Excel tal como lo tienes</p>
                     <label class="block rounded-2xl border-2 border-dashed border-gray-300 hover:border-emerald-400 p-8 text-center cursor-pointer">
                         <i class="fas fa-cloud-arrow-up text-3xl text-emerald-500"></i>
-                        <span class="block mt-2 text-sm font-semibold text-gray-700" x-text="nombre || 'Toca para elegir el archivo (.xlsx)'"></span>
-                        <input type="file" name="excel" accept=".xlsx,.csv" required class="hidden" @change="nombre = $event.target.files[0]?.name || ''">
+                        <span class="block mt-2 text-sm font-semibold text-gray-700" x-text="nombre || 'Toca para elegir el archivo (Excel o .csv)'"></span>
+                        <input type="file" name="excel" accept="{{ \App\Support\ExcelLector::ACCEPT }}" required class="hidden" @change="nombre = $event.target.files[0]?.name || ''">
                     </label>
                     @error('excel')<p class="text-sm text-rose-600">{{ $message }}</p>@enderror
                     @if ($error)<p class="text-sm text-rose-600">{{ $error }}</p>@endif

@@ -48,8 +48,8 @@
                         <li>Llena una fila por producto: solo son obligatorios el <strong>nombre</strong> y el <strong>precio</strong>. La hoja <em>Cómo llenarlo</em> explica cada columna y la hoja <em>Ejemplo</em> muestra filas llenas.</li>
                         <li>Sube el archivo. Las filas con errores se omiten y se listan al terminar.</li>
                     </ol>
-                    <label class="block text-sm">Archivo (.xlsx o .csv)
-                        <input type="file" name="archivo" accept=".xlsx,.csv" required class="block w-full text-sm mt-1 border border-gray-300 rounded-lg p-2">
+                    <label class="block text-sm">Archivo (Excel .xlsx, .xls, .ods o .csv)
+                        <input type="file" name="archivo" accept="{{ \App\Support\ExcelLector::ACCEPT }}" required class="block w-full text-sm mt-1 border border-gray-300 rounded-lg p-2">
                     </label>
                     <label class="block text-sm">Almacén para el stock inicial
                         <select name="id_almacen" class="block w-full rounded-lg border-gray-300 text-sm">

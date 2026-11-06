@@ -640,9 +640,9 @@ class ProductoController extends Controller
         $user = Auth::user();
         abort_unless($user->esAdmin(), 403, 'Solo el Administrador importa productos.');
         $request->validate([
-            'archivo' => 'required|file|max:10240|mimes:xlsx,csv,txt',
+            'archivo' => 'required|file|max:10240|extensions:'.ExcelLector::EXTENSIONES,
             'id_almacen' => 'nullable|integer',
-        ], [], ['archivo' => 'Archivo Excel']);
+        ], ['archivo.extensions' => 'Sube el Excel (.xlsx, .xls, .ods) o un .csv.'], ['archivo' => 'Archivo Excel']);
 
         $sucursal = $user->id_empresa_negocio;
         $almacen = $request->id_almacen

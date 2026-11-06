@@ -17,6 +17,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Unit\CompraXmlTest;
 
 /** Estudio contable: las empresas de sus clientes en una misma base, sin que se cruce la información entre ellas */
@@ -232,6 +233,31 @@ class EstudioContableTest extends FlujoTestCase
         $this->assertSame('601111', DB::table('concar_config')->where('IdEmpresa', '20600695771')->value('cta_compras'));
         $this->assertTrue(DB::table('estudio_empresas')->where('IdEmpresa', '10609005110')->where('activa', true)->exists());
         $this->assertSame('LLAMA PE SA', DB::table('empresa')->where('IdEmpresa', self::EMPRESA_A)->value('NomEmpresa'), 'La que ya existía no se toca.');
+    }
+
+    /** @return array<string, array{string}> */
+    public static function otrosFormatos(): array
+    {
+        return ['Excel 97-2003' => ['libro.xls'], 'LibreOffice' => ['libro.ods']];
+    }
+
+    #[DataProvider('otrosFormatos')]
+    public function test_importa_las_empresas_desde_otros_formatos_de_excel(string $archivo): void
+    {
+        // El libro de prueba trae el RUC escrito como número y la hoja Empresas no es la primera
+        $copia = tempnam(sys_get_temp_dir(), 'imp');
+        copy(base_path('tests/fixtures/excel/'.$archivo), $copia);
+
+        $this->post(route('estudio.importar'), ['archivo' => new UploadedFile($copia, 'empresas.'.pathinfo($archivo, PATHINFO_EXTENSION), null, null, true)])
+            ->assertSessionHasNoErrors()->assertSessionHas('importacion', fn ($r) => array_values($r['nuevas']) === ['20600695771', '10609005110']);
+        $this->assertSame('COMPAÑÍA AMAZÓNICA DEMO S.A.C.', Empresa::find('20600695771')->NomEmpresa);
+        $this->assertSame('PERSONA NATURAL ÑANDÚ', Empresa::find('10609005110')->NomEmpresa);
+    }
+
+    public function test_el_importador_no_acepta_archivos_que_no_son_hojas_de_calculo(): void
+    {
+        $this->post(route('estudio.importar'), ['archivo' => UploadedFile::fake()->create('empresas.pdf', 10, 'application/pdf')])
+            ->assertSessionHasErrors('archivo');
     }
 
     public function test_con_el_api_y_la_clave_sol_principal_el_sire_esta_listo_sin_usuario_secundario(): void

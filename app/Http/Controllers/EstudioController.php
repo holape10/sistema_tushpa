@@ -129,8 +129,8 @@ class EstudioController extends Controller
     public function importar(Request $request): RedirectResponse
     {
         $this->administrar();
-        $request->validate(['archivo' => 'required|file|max:10240|extensions:xlsx,csv'],
-            ['archivo.extensions' => 'Sube el formato en Excel (.xlsx) o .csv.', 'archivo.required' => 'Elige el archivo del formato.']);
+        $request->validate(['archivo' => 'required|file|max:10240|extensions:'.ExcelLector::EXTENSIONES],
+            ['archivo.extensions' => 'Sube el formato en Excel (.xlsx, .xls, .ods) o .csv.', 'archivo.required' => 'Elige el archivo del formato.']);
         try {
             $filas = ExcelLector::filas($request->file('archivo')->getRealPath(), $request->file('archivo')->getClientOriginalExtension(), EstudioImportar::HOJA);
         } catch (\RuntimeException $e) {

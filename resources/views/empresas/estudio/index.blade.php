@@ -39,7 +39,7 @@
         </div>
         <form method="POST" action="{{ route('estudio.importar') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2" x-data="{ subiendo: false }" @submit="subiendo = true">
             @csrf
-            <input type="file" name="archivo" accept=".xlsx,.csv" required class="flex-1 min-w-[220px] text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700">
+            <input type="file" name="archivo" accept="{{ \App\Support\ExcelLector::ACCEPT }}" required class="flex-1 min-w-[220px] text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700">
             <button class="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:opacity-50" :disabled="subiendo"
                     x-text="subiendo ? 'Importando…' : 'Importar empresas'"></button>
         </form>

@@ -42,7 +42,7 @@
                 <a href="{{ route('inventarios.plantilla', ['almacen' => $idAlmacen]) }}" class="px-3 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700">⬇ Descargar plantilla Excel</a>
                 <label class="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm font-semibold cursor-pointer hover:bg-emerald-100">
                     ⬆ Cargar Excel
-                    <input type="file" accept=".xlsx,.csv" class="hidden" @change="cargarExcel($event)">
+                    <input type="file" accept="{{ \App\Support\ExcelLector::ACCEPT }}" class="hidden" @change="cargarExcel($event)">
                 </label>
                 <span class="text-xs text-gray-500" x-show="cargando">Leyendo archivo...</span>
                 <button type="button" @click="igualarStock()" class="px-3 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold hover:bg-gray-200"

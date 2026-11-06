@@ -239,7 +239,7 @@ class InventarioController extends Controller
     public function leerExcel(Request $request)
     {
         $this->autorizar();
-        $request->validate(['archivo' => 'required|file|max:10240|mimes:xlsx,csv,txt']);
+        $request->validate(['archivo' => 'required|file|max:10240|extensions:'.ExcelLector::EXTENSIONES], ['archivo.extensions' => 'Sube el Excel (.xlsx, .xls, .ods) o un .csv.']);
 
         try {
             $filas = ExcelLector::filas($request->file('archivo')->getRealPath(), $request->file('archivo')->getClientOriginalExtension());
