@@ -1,7 +1,7 @@
 {{--
     Comprobante de compra en PDF (Dompdf), armado con lo que dice su XML. Mismo diseño que el A4 de ventas (cabecera,
     recuadro azul con RUC y número, adquiriente, detalle, SON + QR y totales), con el proveedor como emisor.
-    Variables: $x (compras_xml), $lineas, $numero, $comprador (Empresa)
+    Variables: $x (compras_xml o ventas_xml), $lineas, $numero y, o $comprador (Empresa: es una compra), o $emisor y $receptor (una venta)
 --}}
 @php
     $tdodes = ['01' => 'FACTURA ELECTRÓNICA', '03' => 'BOLETA DE VENTA ELECTRÓNICA', '07' => 'NOTA DE CRÉDITO ELECTRÓNICA',
@@ -10,8 +10,12 @@
     $gravada = round($lineas->filter(fn ($l) => (float) $l->igv != 0)->sum('base'), 2);
     $noGravada = round($lineas->filter(fn ($l) => (float) $l->igv == 0)->sum('base'), 2);
     $cant = fn ($n) => rtrim(rtrim(number_format($n, 3), '0'), '.');
-    $qr = \App\Support\Sunat\CodigoQr::svg((object) ['IdEmpresa' => $x->ruc_emisor, 'tdocod' => $x->tipo, 'serdoc' => $x->serie, 'numdoc' => $x->numero,
-        'ccaigv' => $x->igv, 'ccaitv' => $x->total, 'ccafem' => $x->fecha, 'tdicod' => strlen((string) $x->IdEmpresa) === 11 ? '6' : '1', 'ccandi' => $x->IdEmpresa], 110);
+    // Compra: emite el proveedor y recibe la empresa. Venta: emite la empresa y recibe su cliente
+    $emisor ??= ['ruc' => (string) $x->ruc_emisor, 'nombre' => $x->razon_emisor ?: 'RUC '.$x->ruc_emisor, 'nota' => 'Proveedor · comprobante recibido'];
+    $receptor ??= ['doc' => (string) $x->IdEmpresa, 'nombre' => (string) ($comprador->NomEmpresa ?? ''), 'direccion' => (string) ($comprador->DirEmpresa ?? '')];
+    $tipoDocReceptor = strlen($receptor['doc']) === 11 ? 'RUC' : 'DOC.';
+    $qr = \App\Support\Sunat\CodigoQr::svg((object) ['IdEmpresa' => $emisor['ruc'], 'tdocod' => $x->tipo, 'serdoc' => $x->serie, 'numdoc' => $x->numero,
+        'ccaigv' => $x->igv, 'ccaitv' => $x->total, 'ccafem' => $x->fecha, 'tdicod' => strlen($receptor['doc']) === 11 ? '6' : '1', 'ccandi' => $receptor['doc']], 110);
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -53,12 +57,12 @@
     <table class="cab">
         <tr>
             <td style="width:64%">
-                <div class="empresa">{{ $x->razon_emisor ?: 'RUC '.$x->ruc_emisor }}</div>
-                <div class="info">Proveedor · comprobante recibido</div>
+                <div class="empresa">{{ $emisor['nombre'] }}</div>
+                <div class="info">{{ $emisor['nota'] }}</div>
             </td>
             <td style="width:36%">
                 <div class="numeracion">
-                    <div class="ruc">RUC {{ $x->ruc_emisor }}</div>
+                    <div class="ruc">RUC {{ $emisor['ruc'] }}</div>
                     <div class="tipo">{{ $tdodes }}</div>
                     <div class="num">{{ $numero }}</div>
                 </div>
@@ -67,9 +71,9 @@
     </table>
 
     <div class="cliente">
-        <span class="lbl">Razón Social:</span> {{ $comprador->NomEmpresa ?? '' }}<br>
-        <span class="lbl">RUC:</span> {{ $x->IdEmpresa }}<br>
-        <span class="lbl">Dirección:</span> {{ ($comprador->DirEmpresa ?? '') ?: '-' }}
+        <span class="lbl">Razón Social:</span> {{ $receptor['nombre'] ?: '-' }}<br>
+        <span class="lbl">{{ $tipoDocReceptor }}:</span> {{ $receptor['doc'] ?: '-' }}<br>
+        <span class="lbl">Dirección:</span> {{ $receptor['direccion'] ?: '-' }}
     </div>
 
     <div class="caja">
@@ -131,7 +135,7 @@
 
     <div class="pie">
         Documento generado por {{ config('marca.nombre') }} con los datos del XML que el proveedor envió a SUNAT. No reemplaza al comprobante original del emisor.<br>
-        Consúltalo en SUNAT: RUC {{ $x->ruc_emisor }} · {{ $numero }}
+        Consúltalo en SUNAT: RUC {{ $emisor['ruc'] }} · {{ $numero }}
     </div>
 </div>
 </body>

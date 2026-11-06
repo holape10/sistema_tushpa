@@ -76,6 +76,7 @@ class CompraXml
             'ruc_emisor' => (string) ($texto($emisor.'/'.$e('Party', 'PartyIdentification', 'ID')) ?? $texto($emisor.'/'.$e('CustomerAssignedAccountID'))),
             'razon_emisor' => $texto($emisor.'/'.$e('Party', 'PartyLegalEntity', 'RegistrationName')),
             'ruc_comprador' => $texto($comprador.'/'.$e('Party', 'PartyIdentification', 'ID')) ?? $texto($comprador.'/'.$e('CustomerAssignedAccountID')),
+            'razon_comprador' => $texto($comprador.'/'.$e('Party', 'PartyLegalEntity', 'RegistrationName')),
             'tipo' => $tipo,
             'serie' => strtoupper($m[1]),
             'numero' => ltrim($m[2], '0') ?: '0',

@@ -5,8 +5,8 @@
 
     /** Igual que SireDbf::revisarIgv: cada IGV va del 10 % al 18 % de su base (si no, está en otra casilla) */
     function igvAlertaDbf(m) {
-        if (SIRE_DBF.libro !== 'compras') return null;
-        const pares = [['base_dg', 'igv_dg', 'IGV 1', 'B.I. gravadas'], ['base_dgng', 'igv_dgng', 'IGV 2', 'B.I. grav. y no grav.'], ['base_dng', 'igv_dng', 'IGV 3', 'B.I. no gravadas']];
+        const pares = SIRE_DBF.libro === 'ventas' ? [['gravada', 'igv', 'IGV', 'Gravada']]
+            : [['base_dg', 'igv_dg', 'IGV 1', 'B.I. gravadas'], ['base_dgng', 'igv_dgng', 'IGV 2', 'B.I. grav. y no grav.'], ['base_dng', 'igv_dng', 'IGV 3', 'B.I. no gravadas']];
         const dos = n => (Number(n) || 0).toFixed(2);
         for (const [kb, ki, nIgv, nBase] of pares) {
             const base = Math.round((Number(m[kb]) || 0) * 100) / 100, igv = Math.round((Number(m[ki]) || 0) * 100) / 100;

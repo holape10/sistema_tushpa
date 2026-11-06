@@ -107,6 +107,7 @@ use App\Http\Controllers\SireBandejaController;
 use App\Http\Controllers\SireController;
 use App\Http\Controllers\SireDbfController;
 use App\Http\Controllers\SireDetalleController;
+use App\Http\Controllers\SireVentasDetalleController;
 use App\Http\Controllers\SocioController;
 use App\Http\Controllers\SocioPortalController;
 use App\Http\Controllers\SolicitudCartaController;
@@ -662,6 +663,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/sire/compras/detalle/excel', [SireDetalleController::class, 'excel'])->name('sire.detalle.excel');
     Route::get('/sire/compras/detalle/concar', [SireDetalleController::class, 'concar'])->name('sire.detalle.concar');
     Route::get('/sire/compras/detalle/{id}/pdf', [SireDetalleController::class, 'pdf'])->whereNumber('id')->name('sire.detalle.pdf');
+    Route::get('/sire/ventas/detalle', [SireVentasDetalleController::class, 'index'])->name('sire.ventas.detalle');
+    Route::post('/sire/ventas/detalle/xml', [SireVentasDetalleController::class, 'subir'])->name('sire.ventas.detalle.subir');
+    Route::get('/sire/ventas/detalle/{id}/pdf', [SireVentasDetalleController::class, 'pdf'])->whereNumber('id')->name('sire.ventas.pdf');
     Route::get('/sire/{libro}', [SireController::class, 'index'])->whereIn('libro', ['ventas', 'compras'])->name('sire.index');
     Route::post('/sire/{libro}/solicitar', [SireController::class, 'solicitar'])->whereIn('libro', ['ventas', 'compras'])->name('sire.solicitar');
     Route::get('/sire/{libro}/solicitud/{id}/estado', [SireController::class, 'estado'])->whereIn('libro', ['ventas', 'compras'])->whereNumber('id')->name('sire.estado');

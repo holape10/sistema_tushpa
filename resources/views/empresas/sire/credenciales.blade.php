@@ -41,9 +41,12 @@
                 </label>
                 <label class="block sm:col-span-2">
                     <span class="text-sm font-semibold text-slate-600">CLAVE <span class="font-normal text-slate-400">(client_secret)</span></span>
-                    <input type="password" name="client_secret" autocomplete="new-password"
-                           placeholder="{{ $empresa->client_secret ? '•••••••• guardada — déjalo vacío para no cambiarla' : 'Pega aquí la CLAVE' }}"
-                           class="mt-1 w-full rounded-xl border-slate-300 font-mono text-sm">
+                    <span class="relative mt-1 block" x-data="{ ver: false }">
+                        <input type="password" :type="ver ? 'text' : 'password'" name="client_secret" autocomplete="new-password"
+                               placeholder="{{ $empresa->client_secret ? '•••••••• guardada — déjalo vacío para no cambiarla' : 'Pega aquí la CLAVE' }}"
+                               class="w-full rounded-xl border-slate-300 font-mono text-sm pr-10">
+                        @include('partials.ojo_clave')
+                    </span>
                 </label>
                 <label class="block">
                     <span class="text-sm font-semibold text-slate-600">Usuario SOL</span>
@@ -53,8 +56,11 @@
                 </label>
                 <label class="block">
                     <span class="text-sm font-semibold text-slate-600">Clave SOL</span>
-                    <input type="password" name="sire_clave" autocomplete="new-password"
-                           placeholder="{{ $empresa->sire_clave ? '•••••••• guardada' : 'Vacío = la de facturación' }}" class="mt-1 w-full rounded-xl border-slate-300 text-sm">
+                    <span class="relative mt-1 block" x-data="{ ver: false }">
+                        <input type="password" :type="ver ? 'text' : 'password'" name="sire_clave" autocomplete="new-password"
+                               placeholder="{{ $empresa->sire_clave ? '•••••••• guardada' : 'Vacío = la de facturación' }}" class="w-full rounded-xl border-slate-300 text-sm pr-10">
+                        @include('partials.ojo_clave')
+                    </span>
                 </label>
             </fieldset>
             <div class="flex justify-end" @if ($bloqueadas) hidden @endif>

@@ -11,8 +11,8 @@
         $m['otros'] = round($m['otros'] + $m['isc'], 2);
         $m['isc'] = 0;
     }
-    $sinCuenta = collect($c['lineas'])->filter(fn ($l) => ! $l->cuenta)->count();
-    $xmlId = $c['lineas'][0]->compra_xml_id ?? null;
+    $sinCuenta = $compras ? collect($c['lineas'])->filter(fn ($l) => ! $l->cuenta)->count() : 0;
+    $xmlId = $c['xml_id'] ?? ($c['lineas'][0]->compra_xml_id ?? null);
     $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'],
         'montos' => $m, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'editado' => $c['editado'], 'redondeo' => $c['redondeo'],
         'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta];
@@ -29,11 +29,11 @@
         <span class="text-xs text-slate-400 whitespace-nowrap">{{ $tipos[$c['tipo']] ?? 'Tipo '.$c['tipo'] }} · {{ $c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '' }}@if ($c['moneda'] !== 'PEN') · {{ $c['moneda'] }} TC {{ $c['tc'] }}@endif</span>
         <span class="flex-1 min-w-[180px] text-sm text-slate-700">{{ $c['nombre'] }} <span class="text-xs text-slate-400">{{ $c['ruc'] }}</span>
             @if ($c['anulado'])<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">ANULADO</span>@endif</span>
-        @if ($compras)
+        @if ($compras || $c['lineas'])
             @if ($c['lineas'])
                 <span x-show="fila.sinCuenta" class="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700" x-text="fila.sinCuenta + ' línea(s) sin cuenta'"></span>
                 @if ($xmlId)
-                    <a href="{{ route('sire.detalle.pdf', $xmlId) }}" target="_blank" class="text-xs font-bold text-slate-600 hover:text-indigo-700">📄 PDF</a>
+                    <a href="{{ route($compras ? 'sire.detalle.pdf' : 'sire.ventas.pdf', $xmlId) }}" target="_blank" class="text-xs font-bold text-slate-600 hover:text-indigo-700">📄 PDF</a>
                 @endif
                 <button type="button" @click="detalle = !detalle" class="text-xs font-bold text-indigo-700 hover:underline" x-text="detalle ? 'Ocultar detalle' : 'Ver detalle ({{ count($c['lineas']) }})'"></button>
             @else
@@ -43,7 +43,7 @@
         <span x-show="guardando" class="text-[11px] text-slate-400">Guardando…</span>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-4 {{ $compras ? 'lg:grid-cols-[repeat(11,minmax(0,1fr))]' : 'lg:grid-cols-[repeat(8,minmax(0,1fr))]' }} gap-2 px-4 pb-3 text-xs">
+    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-[repeat(11,minmax(0,1fr))] gap-2 px-4 pb-3 text-xs">
         @if ($compras)
             @foreach (['base_dg' => ['B.I. gravadas', ''], 'igv_dg' => ['IGV 1', 'bg-indigo-50/60'], 'base_dgng' => ['B.I. grav. y no grav.', ''],
                 'igv_dgng' => ['IGV 2', 'bg-indigo-50/60'], 'base_dng' => ['B.I. no gravadas', ''], 'igv_dng' => ['IGV 3', 'bg-indigo-50/60'],
@@ -53,11 +53,13 @@
                            class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 px-2 text-right text-sm {{ $fondo }} {{ $k === 'total' ? 'font-bold' : '' }}"></label>
             @endforeach
         @else
-            @foreach (['gravada' => 'Gravada', 'igv' => 'IGV', 'exonerada' => 'Exonerada', 'inafecta' => 'Inafecta', 'total' => 'Total'] as $k => $texto)
-                <div class="font-semibold text-slate-500">{{ $texto }}
-                    <p class="mt-0.5 h-9 flex items-center justify-end rounded-lg bg-slate-50 px-2 text-sm text-slate-800 {{ $k === 'total' ? 'font-bold' : '' }}">{{ $soles($c['montos'][$k] ?? 0) }}</p></div>
+            {{-- Ventas: lo que va en tienfact (GRAVADA, IGV, EXONERADA, INAFECTA, EXPORTA, ISC, IBOLSAS, OTROS, TOTAL) --}}
+            @foreach (['gravada' => ['Gravada', ''], 'igv' => ['IGV', 'bg-indigo-50/60'], 'exonerada' => ['Exonerada', ''], 'inafecta' => ['Inafecta', ''],
+                'exporta' => ['Exportación', ''], 'isc' => ['ISC', ''], 'icbper' => ['ICBPER', ''], 'otros' => ['Otros', ''], 'total' => ['Total', '']] as $k => [$texto, $fondo])
+                <label class="font-semibold text-slate-500 whitespace-nowrap">{{ $texto }}
+                    <input type="number" step="0.01" x-model.number="fila.montos.{{ $k }}" @change="cambiarMontos()"
+                           class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 px-2 text-right text-sm {{ $fondo }} {{ $k === 'total' ? 'font-bold' : '' }}"></label>
             @endforeach
-            <div></div>
         @endif
         <label class="font-semibold text-slate-500">Cta. cargo
             <input type="text" maxlength="12" inputmode="numeric" x-model="fila.ctacargo" @change="guardar({ ctacargo: fila.ctacargo })"
@@ -74,13 +76,13 @@
         <button type="button" x-show="fila.editado" @click="restaurar()" class="font-semibold text-slate-500 hover:text-indigo-700 underline">Volver a los montos de SUNAT</button>
     </div>
 
-    @if ($compras && $c['lineas'])
+    @if ($c['lineas'])
         <div x-show="detalle" x-cloak class="border-t border-slate-100">
             <div class="overflow-x-auto">
                 <table class="w-full text-xs">
                     <thead class="bg-slate-50 text-slate-500 uppercase">
                         <tr><th class="text-left px-4 py-1.5">Lo que se compró</th><th class="text-right px-3 py-1.5">Cant.</th><th class="text-right px-3 py-1.5">V. unit.</th>
-                            <th class="text-right px-3 py-1.5">Base</th><th class="text-right px-3 py-1.5">IGV</th><th class="text-left px-3 py-1.5 w-36">Cuenta</th></tr>
+                            <th class="text-right px-3 py-1.5">Base</th><th class="text-right px-3 py-1.5">IGV</th>@if ($compras)<th class="text-left px-3 py-1.5 w-36">Cuenta</th>@endif</tr>
                     </thead>
                     <tbody>
                         @foreach ($c['lineas'] as $l)
@@ -90,17 +92,19 @@
                                 <td class="px-3 py-1.5 text-right">{{ $soles($l->precio) }}</td>
                                 <td class="px-3 py-1.5 text-right">{{ $soles($l->base) }}</td>
                                 <td class="px-3 py-1.5 text-right">{{ $soles($l->igv) }}</td>
+                                @if ($compras)
                                 <td class="px-3 py-1">
                                     <input type="text" inputmode="numeric" maxlength="12" value="{{ $l->cuenta }}" placeholder="{{ $cfg['cta_compras'] }}" data-vacia="{{ $l->cuenta ? '0' : '1' }}"
                                            @keydown.enter.prevent="cuentaLinea([{{ $l->id }}], $event.target)" @change="cuentaLinea([{{ $l->id }}], $event.target)"
                                            class="w-full h-8 rounded-lg border-slate-300 text-xs font-mono {{ $l->cuenta ? '' : 'bg-rose-50' }}">
                                 </td>
+                                @endif
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
-            @if (count($c['lineas']) > 1)
+            @if ($compras && count($c['lineas']) > 1)
                 <div class="flex flex-wrap items-center gap-2 px-4 py-2 bg-slate-50 text-xs">
                     <span class="text-slate-600">Todas las líneas a la cuenta</span>
                     <input type="text" inputmode="numeric" maxlength="12" placeholder="Ej. 6563" class="w-28 h-8 rounded-lg border-slate-300 text-xs font-mono"

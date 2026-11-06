@@ -7,6 +7,7 @@ use App\Support\Contabilidad\Dbf;
 use App\Support\Contabilidad\SireDbf;
 use App\Support\Sunat\CompraXml;
 use App\Support\Sunat\Sire;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\Unit\CompraXmlTest;
@@ -128,6 +129,38 @@ class SireDbfTest extends FlujoTestCase
         $this->assertSame([substr($ruc.'01F0', 0, 15), 5.0, '1', '01', 'F001', '000000008066', '20607721956', 'FACTURA', 'SANTA MARIA CAPITAL S.A.C.', 'SANTA MARI', 50.0, 50.0, 'PEN', '1212', '70001'],
             [$f['CODMOV'], $f['NUM_MES'], $f['ID'], $f['COD_DOC'], $f['SERIEDOC'], $f['NUM_DOC'], $f['RUC'], $f['DES_DOC'], $f['NOTA'], $f['NOMBRE'], $f['EXONERADA'], $f['TOTAL'], $f['MONEDA'], $f['CTACARGO'], $f['CTAABONO']]);
         $this->assertSame([100.0, 18.0, 118.0], [$filas[1]['GRAVADA'], $filas[1]['IGV'], $filas[1]['TOTAL']]);
+    }
+
+    public function test_ventas_con_detalle_editables_y_tienfact_como_lo_guarda_el_sistema_contable(): void
+    {
+        Storage::fake();
+        $ruc = $this->usuario->IdEmpresa;
+        $venta = fn (string $num, string $doc, string $cliente, string $exo, string $grav, string $igv, string $total) => "{$ruc}|WILCAT|202605|CAR|30/05/2026|30/05/2026|01|F001|{$num}||6|{$doc}|{$cliente}|0.00|{$grav}|0.00|{$igv}|0.00|{$exo}|0.00|0.00|0.00|0.00|0.00|0.00|{$total}|PEN|1.000|||||||1";
+        $this->propuesta(Sire::VENTAS, self::RVIE, [
+            $venta('8066', '20607721956', 'SANTA MARIA CAPITAL S.A.C.', '50.00', '0.00', '0.00', '50.00'),
+            $venta('8067', '20100070970', 'CLIENTE LIMA SAC', '0.00', '100.00', '18.00', '118.00'),
+        ]);
+
+        // El XML de una venta propia se guarda; el de una compra (lo emitió otro) no
+        $propia = str_replace(['20553510661', 'LLAMA PE SA'], [$ruc, 'MI EMPRESA'], CompraXmlTest::factura('20100070970', 'F001-00008067', 'SERVICIO DE INSTALACION'));
+        $this->from(route('sire.ventas.detalle', ['periodo' => '202605']))->post(route('sire.ventas.detalle.subir'), ['archivos' => [
+            UploadedFile::fake()->createWithContent('venta.xml', $propia), UploadedFile::fake()->createWithContent('compra.xml', CompraXmlTest::factura($ruc)),
+        ]])->assertSessionHas('success', fn ($m) => str_contains($m, '1 venta(s)') && str_contains($m, '1 no los emitió'));
+        $this->get(route('sire.ventas.detalle', ['periodo' => '202605']))->assertOk()
+            ->assertSee('SERVICIO DE INSTALACION')->assertSee('CLIENTE LIMA SAC')->assertSee('Descargar tienfact.dbf');
+        $this->get(route('sire.ventas.pdf', DB::table('ventas_xml')->value('id')))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+
+        // Los montos de una venta se editan; el IGV tiene que ir con su base gravada
+        $guardar = fn (array $montos) => $this->postJson(route('sire.dbf.guardar'), ['libro' => 'ventas', 'periodo' => '202605', 'clave' => '20100070970|01|F001|8067', 'montos' => $montos])->assertOk();
+        $this->assertNotNull($guardar(['exonerada' => 100, 'igv' => 18, 'total' => 118])->json('alerta'));
+        $this->assertNull($guardar(['gravada' => 100, 'igv' => 18, 'total' => 118])->json('alerta'));
+
+        // Como lo guarda el sistema contable: los montos en cero (no vacíos), ANULADA 0 y TIPO_10 vacío
+        [, $filas] = $this->dbf('ventas');
+        [$exonerada, $gravada] = $filas;
+        $this->assertSame([0.0, 0.0, 0.0, 0.0, 50.0, 0.0, 50.0, 0.0, ''],
+            [$exonerada['GRAVADA'], $exonerada['IGV'], $exonerada['TBRUTO'], $exonerada['TNETO'], $exonerada['EXONERADA'], $exonerada['IBOLSAS'], $exonerada['TOTAL'], $exonerada['ANULADA'], $exonerada['TIPO_10']]);
+        $this->assertSame([100.0, 18.0, 0.0, 118.0], [$gravada['GRAVADA'], $gravada['IGV'], $gravada['EXONERADA'], $gravada['TOTAL']]);
     }
 
     public function test_lo_revisado_pasa_al_registro_de_compras_y_ventas_con_su_asiento(): void

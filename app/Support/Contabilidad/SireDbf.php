@@ -5,6 +5,7 @@ namespace App\Support\Contabilidad;
 use App\Support\Concar;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
+use App\Support\VentasDetalle;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -153,12 +154,18 @@ class SireDbf
             ->whereIn('ruc', array_unique(array_column($comprobantes, 'ruc')) ?: ['-'])->where(fn ($q) => $q->whereNotNull('ctacargo')->orWhereNotNull('ctaabono'))
             ->orderBy('updated_at')->get()->keyBy('ruc');
         $lineas = $libro === 'compras' ? self::lineasXml($ruc, array_keys($comprobantes)) : [];
+        // Ventas: los XML que subió el contador, por tipo|serie|número (la empresa los emitió)
+        $ventasXml = $libro === 'ventas' ? VentasDetalle::lineas($ruc, array_map(fn ($c) => "{$c['tipo']}|{$c['serie']}|{$c['numero']}", $comprobantes)) : [];
 
         $lista = [];
         foreach ($comprobantes as $clave => $c) {
             $a = $ajustes[$clave] ?? null;
             $u = $ultimas[$c['ruc']] ?? null;
             $c['lineas'] = $lineas[$clave] ?? [];
+            $c['xml_id'] = isset($c['lineas'][0]) ? (int) $c['lineas'][0]->compra_xml_id : null;
+            if ($libro === 'ventas' && ($v = $ventasXml["{$c['tipo']}|{$c['serie']}|{$c['numero']}"] ?? null)) {
+                [$c['lineas'], $c['xml_id']] = [$v['lineas'], $v['xml_id']];
+            }
             $c['excluido'] = (bool) ($a->excluido ?? false);
             $c['editado'] = $a && $a->montos;
             $c['montos'] = $a && $a->montos ? array_map('floatval', json_decode($a->montos, true)) + array_fill_keys(array_keys($c['montos']), 0.0) : $c['montos'];
@@ -173,7 +180,7 @@ class SireDbf
             $c['cuentaPropia'] = (bool) ($a?->ctacargo || $a?->ctaabono);
             $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
             $c['diferencia'] = self::diferencia($libro, $c['montos']);
-            $c['alerta'] = $libro === 'compras' ? self::revisarIgv($c['montos']) : null;
+            $c['alerta'] = self::revisarIgv($c['montos'], $libro);
             $lista[] = $c;
         }
         usort($lista, fn ($x, $y) => [$x['fecha'], $x['tipo'], $x['serie'], (int) $x['numero']] <=> [$y['fecha'], $y['tipo'], $y['serie'], (int) $y['numero']]);
@@ -212,9 +219,11 @@ class SireDbf
         return round(($m['total'] ?? 0) - $partes, 2);
     }
 
-    /** Pares base → IGV de una compra (IGV 1, 2 y 3) con su nombre en pantalla */
+    /** Pares base → IGV de una compra (IGV 1, 2 y 3) y de una venta, con su nombre en pantalla */
     private const IGV_COMPRA = [['base_dg', 'igv_dg', 'IGV 1', 'B.I. gravadas'], ['base_dgng', 'igv_dgng', 'IGV 2', 'B.I. grav. y no grav.'],
         ['base_dng', 'igv_dng', 'IGV 3', 'B.I. no gravadas']];
+
+    private const IGV_VENTA = [['gravada', 'igv', 'IGV', 'Gravada']];
 
     /**
      * ¿Cada IGV está junto a su base? El IGV va del 10 % (restaurantes y hoteles MYPE) al 18 % de su base; si no, los
@@ -222,9 +231,9 @@ class SireDbf
      *
      * @return string|null el aviso para el contador, o null si está bien
      */
-    public static function revisarIgv(array $m): ?string
+    public static function revisarIgv(array $m, string $libro = 'compras'): ?string
     {
-        foreach (self::IGV_COMPRA as [$kBase, $kIgv, $nIgv, $nBase]) {
+        foreach ($libro === 'ventas' ? self::IGV_VENTA : self::IGV_COMPRA as [$kBase, $kIgv, $nIgv, $nBase]) {
             $base = round((float) ($m[$kBase] ?? 0), 2);
             $igv = round((float) ($m[$kIgv] ?? 0), 2);
             if ($base == 0 && $igv == 0) {
@@ -366,11 +375,11 @@ class SireDbf
                 'COD_DOC' => $c['tipo'], 'SERIEDOC' => $c['serie'], 'NUM_DOC' => $numero, 'RUC' => $c['ruc'], 'COD_OPERA' => '01',
                 'DES_DOC' => self::DESCRIPCION[$c['tipo']] ?? $c['tipo'], 'FECHA_DOC' => $c['fecha'], 'FECHA_SAL' => $c['fecha'],
                 'ALMA' => '01', 'FPAGO' => '01', 'FECVENCI' => $c['vence'] ?: $c['fecha'], 'NOTA' => $c['nombre'], 'NOMBRE' => $c['nombre'],
-                'TOTAL' => $m['total'], 'TC' => $c['tc'], 'MONEDA' => $c['moneda'], 'ANULADA' => $c['anulado'] ? 1 : null, 'TIPO_10' => $c['tipo'],
-                'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'],
-                'EXPORTA' => $m['exporta'] ?: null, 'GRAVADA' => $m['gravada'] ?: null, 'IGV' => $m['igv'] ?: null,
-                'EXONERADA' => $m['exonerada'] ?: null, 'INAFECTA' => $m['inafecta'] ?: null, 'ISC' => $m['isc'] ?: null,
-                'IBOLSAS' => $m['icbper'] ?: null, 'OTROS' => $m['otros'] ?: null,
+                'TOTAL' => $m['total'], 'TC' => $c['tc'], 'MONEDA' => $c['moneda'], 'ANULADA' => $c['anulado'] ? 1 : 0,
+                'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'], 'TBRUTO' => 0, 'TNETO' => 0,
+                'EXPORTA' => $m['exporta'], 'GRAVADA' => $m['gravada'], 'IGV' => $m['igv'],
+                'EXONERADA' => $m['exonerada'], 'INAFECTA' => $m['inafecta'], 'ISC' => $m['isc'],
+                'IBOLSAS' => $m['icbper'], 'OTROS' => $m['otros'] ?: null,
                 'FECHA_C' => $c['ref']['fecha'] ?? null, 'TIP_DOC_C' => $c['ref']['tipo'] ?? null, 'SER_DOC_C' => $c['ref']['serie'] ?? null,
                 'NUM_DOC_C' => isset($c['ref']) ? str_pad($c['ref']['numero'], 12, '0', STR_PAD_LEFT) : null,
             ];

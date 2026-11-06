@@ -15,10 +15,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('empresa', function (Blueprint $t) {
-            $t->text('claveSunat')->nullable()->default(null)->change();
-            $t->text('passcert')->nullable()->default(null)->change();
-        });
+        // Solo si aún no son de texto: cambiar una columna en MySQL confirma la transacción abierta (en las pruebas
+        // dejaba guardados los datos de prueba), y si ya está bien no hace falta tocar la tabla
+        $pendientes = array_values(array_filter(['claveSunat', 'passcert'], fn ($c) => Schema::getColumnType('empresa', $c) !== 'text'));
+        if ($pendientes) {
+            Schema::table('empresa', function (Blueprint $t) use ($pendientes) {
+                foreach ($pendientes as $columna) {
+                    $t->text($columna)->nullable()->default(null)->change();
+                }
+            });
+        }
         foreach (DB::table('empresa')->get(['IdEmpresa', 'claveSunat', 'passcert']) as $e) {
             $cambios = [];
             foreach (['claveSunat', 'passcert'] as $campo) {
