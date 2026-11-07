@@ -534,7 +534,7 @@
         const activo = document.activeElement;
         if (activo?.classList.contains('cart-obs')) { const id = activo.closest('.cart-item').dataset.id; actualizar(id, () => ({ observaciones: activo.value })); }
         cola.then(() => post(URL.enviar, {})).then((res) => {
-            if (res.success) { window.location.href = URL.mesas; return; }
+            if (res.success) { window.location.href = res.cobrar || URL.mesas; return; }
             aviso(res.message, false);
             restaurar();
         }).catch(() => { aviso('Error de conexión. Intenta de nuevo.', false); restaurar(); });

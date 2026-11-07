@@ -93,6 +93,39 @@ class EstudioContableTest extends FlujoTestCase
         $this->assertSame(self::EMPRESA_B, (string) $contador->fresh()->IdEmpresa);
     }
 
+    public function test_los_vencimientos_sunat_se_ordenan_por_fecha_y_se_marcan_al_declarar(): void
+    {
+        // 14 de noviembre: se declara octubre. RUC terminado en 0 vence el lunes 16 y en 1 el martes 17
+        $this->travelTo('2026-11-14 09:00');
+        $contador = $this->contador();
+        $this->post(route('estudio.accesos', self::EMPRESA_A), ['usuarios' => [$contador->IdUsuario]]);
+        $this->post(route('estudio.accesos', self::EMPRESA_B), ['usuarios' => [$contador->IdUsuario]]);
+
+        $this->actingAs($contador)->get(route('estudio.vencimientos'))->assertOk()
+            ->assertSeeInOrder(['Octubre 2026', 'Lunes 16 de noviembre', 'SUPERMERCADOS PERUANOS SA', 'Martes 17 de noviembre', 'LLAMA PE SA'])
+            ->assertDontSee('⭐ Buen contrib.')
+            ->assertViewHas('lista', fn ($l) => $l->pluck('dias', 'IdEmpresa')->all() === [self::EMPRESA_B => 2, self::EMPRESA_A => 3]);
+
+        $this->post(route('estudio.declarar'), ['ruc' => self::EMPRESA_B, 'periodo' => '202610', 'declarado' => 1])->assertSessionHas('success');
+        $this->get(route('estudio.elegir'))->assertOk()->assertSee('1 de 2 declaradas')
+            ->assertViewHas('vencimientos', fn ($v) => $v[self::EMPRESA_B]->declarado !== null && $v[self::EMPRESA_A]->declarado === null);
+        // Se puede desmarcar si fue un error; y nunca marcar una empresa ajena
+        $this->post(route('estudio.declarar'), ['ruc' => self::EMPRESA_B, 'periodo' => '202610', 'declarado' => 0]);
+        $this->assertFalse(DB::table('estudio_declaraciones')->where('IdEmpresa', self::EMPRESA_B)->exists());
+        $this->post(route('estudio.declarar'), ['ruc' => $this->estudio, 'periodo' => '202610', 'declarado' => 1])->assertForbidden();
+        $this->post(route('estudio.buen_contribuyente', self::EMPRESA_A))->assertForbidden();
+    }
+
+    public function test_un_buen_contribuyente_vence_despues_que_los_demas(): void
+    {
+        $this->travelTo('2026-11-14 09:00');
+        $this->post(route('estudio.buen_contribuyente', self::EMPRESA_A))->assertSessionHas('success');
+
+        $lista = Estudio::vencimientos($this->usuario, '202610')->keyBy('IdEmpresa');
+        $this->assertSame(['BC', '2026-11-24'], [$lista[self::EMPRESA_A]->grupo, $lista[self::EMPRESA_A]->vence->toDateString()]);
+        $this->get(route('estudio.vencimientos', ['periodo' => '209901']))->assertNotFound();
+    }
+
     public function test_con_una_sola_empresa_entra_directo(): void
     {
         $contador = $this->contador();

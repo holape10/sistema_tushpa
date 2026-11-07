@@ -7,6 +7,7 @@ use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
 use App\Models\User;
 use App\Support\Tenancy\Tenancy;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -97,7 +98,41 @@ class Estudio
             ->when(! $usuario->esAdmin(), fn ($q) => $q->where('ee.propia', false)
                 ->whereIn('ee.IdEmpresa', DB::table('estudio_accesos')->where('IdUsuario', $usuario->IdUsuario)->select('IdEmpresa')))
             ->orderByDesc('ee.propia')->orderBy('e.NomEmpresa')
-            ->get(['ee.IdEmpresa', 'e.NomEmpresa', 'ee.propia']);
+            ->get(['ee.IdEmpresa', 'e.NomEmpresa', 'ee.propia', 'ee.buen_contribuyente']);
+    }
+
+    /**
+     * Las empresas del usuario con su vencimiento SUNAT del periodo y si ya se declaró, de la que vence primero a la última.
+     *
+     * @return Collection<int, object{IdEmpresa: string, NomEmpresa: string, propia: int, buen_contribuyente: int, grupo: string, vence: CarbonImmutable, dias: int, declarado: ?object}>
+     */
+    public static function vencimientos(User $usuario, string $periodo): Collection
+    {
+        $declaradas = DB::table('estudio_declaraciones as d')->leftJoin('users as u', 'u.IdUsuario', '=', 'd.IdUsuario')
+            ->where('d.periodo', $periodo)->get(['d.IdEmpresa', 'd.created_at', 'u.apeusu'])->keyBy('IdEmpresa');
+        $hoy = CarbonImmutable::today();
+
+        return self::empresas($usuario)->map(function (object $e) use ($periodo, $declaradas, $hoy) {
+            $e->grupo = Vencimientos::grupo((string) $e->IdEmpresa, (bool) $e->buen_contribuyente);
+            $e->vence = Vencimientos::vence($periodo, $e->grupo);
+            $e->dias = (int) $hoy->diffInDays($e->vence, false);
+            $e->declarado = $declaradas->get($e->IdEmpresa);
+
+            return $e;
+        })->sortBy([fn ($a, $b) => $a->vence <=> $b->vence, fn ($a, $b) => strcmp($a->NomEmpresa, $b->NomEmpresa)])->values();
+    }
+
+    /** Marca (o desmarca) que una empresa ya declaró el periodo */
+    public static function declarar(User $usuario, string $ruc, string $periodo, bool $declarado): void
+    {
+        abort_unless(self::puede($usuario, $ruc), 403, 'No tienes acceso a esa empresa.');
+        if (! $declarado) {
+            DB::table('estudio_declaraciones')->where('IdEmpresa', $ruc)->where('periodo', $periodo)->delete();
+
+            return;
+        }
+        DB::table('estudio_declaraciones')->insertOrIgnore(['IdEmpresa' => $ruc, 'periodo' => $periodo, 'IdUsuario' => $usuario->IdUsuario,
+            'created_at' => now(), 'updated_at' => now()]);
     }
 
     public static function puede(User $usuario, string $ruc): bool

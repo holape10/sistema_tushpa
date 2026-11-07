@@ -272,13 +272,23 @@ class ComandasController extends Controller
         return response()->json(['success' => true, 'pedido' => $pedido, 'detalles' => $detalles, 'total' => $total, 'unidas' => $unidas]);
     }
 
+    /** Administrador y caja: su "para llevar" o delivery pasa directo a cobrarse */
+    public const ROLES_COBRAN_AL_TOQUE = [2, 4];
+
+    /** Un pedido de caja que no se cobró vuelve a la lista pasado este tiempo */
+    public const MINUTOS_SIN_COBRAR = 10;
+
     public function activosLlevarDelivery()
     {
         $id_empresa_negocio = Auth::user()->id_empresa_negocio;
 
+        // Los que hizo caja o el administrador se cobran al toque (no esperan en la lista); si alguno se quedó sin
+        // cobrar, aparece igual pasados unos minutos para que no se pierda
         $pedidos = Pedido::where('id_empresa_negocio', $id_empresa_negocio)
             ->whereIn('ped_tip', ['Llevar', 'Delivery'])
             ->where('ped_est', 'Aperturado')
+            ->where(fn ($q) => $q->whereNotIn('IdUsuario', DB::table('role_user')->whereIn('role_id', self::ROLES_COBRAN_AL_TOQUE)->select('user_IdUsuario'))
+                ->orWhere('fecha_hora', '<=', now()->subMinutes(self::MINUTOS_SIN_COBRAR)))
             ->orderBy('fecha_hora')
             ->get();
 
@@ -668,7 +678,7 @@ class ComandasController extends Controller
                     }
                     MesasUnidas::liberar($pedido->ped_id);
 
-                    return ['pedido_id' => $pedido->ped_id, 'anulado' => true, 'mesa' => (bool) $pedido->mes_id];
+                    return ['pedido_id' => $pedido->ped_id, 'anulado' => true, 'mesa' => (bool) $pedido->mes_id, 'nuevo' => false];
                 }
 
                 $pedido->update(['ped_tot' => $total, 'fecha_hora_modificacion' => now()]);
@@ -676,7 +686,7 @@ class ComandasController extends Controller
                     Mesa::where('mes_id', $mesa_id)->update(['mes_est' => 'Ocupado']);
                 }
 
-                return ['pedido_id' => $pedido->ped_id, 'anulado' => false];
+                return ['pedido_id' => $pedido->ped_id, 'anulado' => false, 'nuevo' => ! $pedidoId];
             });
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
@@ -720,6 +730,9 @@ class ComandasController extends Controller
                 ? 'Se eliminaron todos los ítems: el pedido quedó ANULADO'.($resultado['mesa'] ? ' y la mesa libre.' : '.')
                 : ($alCobrar ? 'Pedido guardado: la comanda se imprimirá al cobrar.' : 'Comanda enviada correctamente.'),
             'pedido_id' => $resultado['pedido_id'],
+            // Caja o administrador que arma un "para llevar" o delivery: se cobra de una vez (el del mozo va a la lista)
+            'cobrar' => $resultado['nuevo'] && $order_type !== 'salon' && $usuario->tieneRol(self::ROLES_COBRAN_AL_TOQUE)
+                ? route('cobros.cobrar', $resultado['pedido_id']) : null,
         ]);
     }
 }

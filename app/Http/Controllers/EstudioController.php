@@ -6,12 +6,15 @@ use App\Models\Empresa;
 use App\Models\User;
 use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
+use App\Support\Contabilidad\Contabilidad;
 use App\Support\Estudio;
 use App\Support\EstudioImportar;
 use App\Support\ExcelLector;
 use App\Support\Sunat\Sire;
+use App\Support\Vencimientos;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -187,7 +190,6 @@ class EstudioController extends Controller
         return back()->with('success', 'Accesos de la empresa '.$ruc.' guardados.');
     }
 
-    /** Pasa a trabajar en otra empresa (el selector de arriba) */
     /** Después de ingresar (y cuando se quiera): la lista de las empresas que le tocan al usuario para elegir una */
     public function elegir(): View
     {
@@ -197,7 +199,47 @@ class EstudioController extends Controller
         return view('empresas.estudio.elegir', [
             'empresas' => $empresas, 'actual' => (string) Auth::user()->IdEmpresa,
             'digitos' => $empresas->where('propia', false)->countBy(fn ($e) => substr((string) $e->IdEmpresa, -1)),
+            'periodo' => $periodo = Vencimientos::periodoPendiente(),
+            'vencimientos' => Estudio::vencimientos(Auth::user(), $periodo)->keyBy('IdEmpresa'),
         ]);
+    }
+
+    /** Vencimientos SUNAT del periodo: qué empresa vence cuándo y cuáles ya se declararon */
+    public function vencimientos(Request $request): View
+    {
+        abort_unless(Estudio::activo(), 404);
+        $periodo = (string) $request->query('periodo', Vencimientos::periodoPendiente());
+        $mes = preg_match('/^(20\d{2})(0[1-9]|1[0-2])$/', $periodo) ? Carbon::createFromFormat('!Ym', $periodo) : null;
+        abort_unless($mes && $mes->year >= 2023 && $mes->lte(now()->addYear()), 404);
+
+        return view('empresas.estudio.vencimientos', [
+            'periodo' => $periodo, 'mes' => $mes, 'lista' => Estudio::vencimientos(Auth::user(), $periodo),
+            'cronograma' => Vencimientos::cronograma($mes->year), 'pendiente' => Vencimientos::periodoPendiente(),
+        ]);
+    }
+
+    /** Marca que una empresa ya declaró el periodo (o lo desmarca si se marcó por error) */
+    public function declarar(Request $request): RedirectResponse
+    {
+        abort_unless(Estudio::activo(), 404);
+        $d = $request->validate(['ruc' => 'required|digits:11', 'periodo' => ['required', 'regex:/^20\d{2}(0[1-9]|1[0-2])$/'], 'declarado' => 'required|boolean']);
+        Estudio::declarar(Auth::user(), $d['ruc'], $d['periodo'], (bool) $d['declarado']);
+        $nombre = Contabilidad::nombrePeriodo($d['periodo']);
+        Bitacora::registrar('estudio.declaracion', ($d['declarado'] ? 'Marcó como declarado' : 'Quitó la marca de declarado de').
+            " el periodo {$nombre} de la empresa {$d['ruc']}", null, ['referencia' => ['empresa', $d['ruc']]]);
+
+        return back()->with('success', $d['declarado'] ? "Empresa {$d['ruc']}: {$nombre} declarado." : "Empresa {$d['ruc']}: se quitó la marca de {$nombre}.");
+    }
+
+    /** Los buenos contribuyentes vencen en su propia fecha (la última del cronograma) */
+    public function buenContribuyente(string $ruc): RedirectResponse
+    {
+        $this->administrar();
+        $fila = DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->first();
+        abort_unless($fila, 404);
+        DB::table('estudio_empresas')->where('id', $fila->id)->update(['buen_contribuyente' => ! $fila->buen_contribuyente, 'updated_at' => now()]);
+
+        return back()->with('success', "Empresa {$ruc}: ".($fila->buen_contribuyente ? 'ya no es' : 'ahora es').' buen contribuyente.');
     }
 
     public function cambiar(Request $request): RedirectResponse

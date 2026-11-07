@@ -23,6 +23,7 @@ use App\Support\Tenancy\Inventario;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Respaldos;
 use App\Support\Tenancy\Tenancy;
+use App\Support\Vencimientos;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -505,3 +506,29 @@ Artisan::command('procesos:limpiar', function () {
 })->purpose('Borra los archivos listos para descargar que ya pasaron sus 24 horas');
 
 Schedule::command('procesos:limpiar')->dailyAt('04:30');
+
+// Cronograma de vencimientos SUNAT: el del año y, desde octubre, el del siguiente (la SUNAT lo publica en diciembre)
+Artisan::command('sunat:cronograma {anio? : Año a descargar (por defecto el actual y, desde octubre, el siguiente)}', function () {
+    $anios = $this->argument('anio') ? [(int) $this->argument('anio')]
+        : array_filter([now()->year, now()->month >= 10 ? now()->year + 1 : null]);
+    $fallo = 0;
+    foreach ($anios as $anio) {
+        if (! $this->argument('anio') && Vencimientos::tieneOficial($anio)) {
+            $this->line("{$anio}: ya está el cronograma oficial.");
+
+            continue;
+        }
+        try {
+            $this->line(Vencimientos::descargar($anio)
+                ? "<info>{$anio}: cronograma oficial descargado de la SUNAT.</info>"
+                : "{$anio}: la SUNAT aún no lo publica; se usan las fechas calculadas.");
+        } catch (Throwable $e) {
+            $this->error("{$anio}: {$e->getMessage()}");
+            $fallo = 1;
+        }
+    }
+
+    return $fallo;
+})->purpose('Descarga el cronograma de vencimientos mensuales de la web de la SUNAT');
+
+Schedule::command('sunat:cronograma')->dailyAt('06:20')->withoutOverlapping(10);

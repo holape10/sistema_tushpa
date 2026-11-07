@@ -653,6 +653,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/estudio/empresas/{ruc}/accesos', [EstudioController::class, 'accesos'])->where('ruc', '\d{11}')->name('estudio.accesos');
     Route::post('/estudio/cambiar', [EstudioController::class, 'cambiar'])->name('estudio.cambiar');
     Route::get('/estudio/elegir', [EstudioController::class, 'elegir'])->name('estudio.elegir');
+    Route::get('/estudio/vencimientos', [EstudioController::class, 'vencimientos'])->name('estudio.vencimientos');
+    Route::post('/estudio/vencimientos/declarado', [EstudioController::class, 'declarar'])->name('estudio.declarar');
+    Route::post('/estudio/empresas/{ruc}/buen-contribuyente', [EstudioController::class, 'buenContribuyente'])->where('ruc', '\d{11}')->name('estudio.buen_contribuyente');
 
     // SIRE (SUNAT): credenciales, propuesta RVIE/RCE y cuadre con el sistema
     Route::get('/sire/credenciales', [SireController::class, 'credenciales'])->name('sire.credenciales');

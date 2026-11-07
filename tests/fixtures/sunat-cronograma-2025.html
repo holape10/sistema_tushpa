@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name = "viewport" content = "initial-scale = 1.0, user-scalable = no, width=device-width">
+<link rel="icon" href="/p/imagenes/icons/favicon.ico" type="image/x-icon" />
+<link rel="shortcut icon" href="/p/imagenes/icons/favicon.ico" type="image/x-icon" />
+<meta name="msapplication-TileImage" content="/p/imagenes/icons/favicon-144.png" />
+<meta name="msapplication-TileColor" content="#52B947"/>
+<meta name="application-name" content="name" />
+<meta name="msapplication-square70x70logo" content="/p/imagenes/icons/tile-tiny.png" />
+<meta name="msapplication-square150x150logo" content="/p/imagenes/icons/tile-square.png" />
+<meta name="msapplication-wide310x150logo" content="/p/imagenes/icons/tile-wide.png" />
+<meta name="msapplication-square310x310logo" content="/p/imagenes/icons/tile-large.png" />
+<title>Calendario de Vencimientos - Personas</title>
+<script type="text/javascript" src="/ruxitagentjs_ICA15789NPRTUVXfqrux_10347260902154543.js" data-dtconfig="rid=RID_1530622822|rpid=975219022|domain=sunat.gob.pe|reportUrl=/rb_bf25326slt|app=ea7c4b59f27d43eb|srtbv=4|owasp=1|featureHash=ICA15789NPRTUVXfqrux|rdnt=1|uxrgce=1|cuc=cz5j3vjx|mel=100000|expw=1|dpvc=1|lastModification=1793658609268|postfix=cz5j3vjx|tp=500,50,0|srbbv=3|agentUri=/ruxitagentjs_ICA15789NPRTUVXfqrux_10347260902154543.js" data-config='{"revision":1793658609268,"beaconUri":"/rb_bf25326slt","agentUri":"/ruxitagentjs_ICA15789NPRTUVXfqrux_10347260902154543.js","environmentId":"cz5j3vjx","modules":"ICA15789NPRTUVXfqrux"}' data-envconfig='{"tracestateKeyPrefix":"a08aaade-f2aefa55"}' data-appconfig='{"app":"ea7c4b59f27d43eb","disableUserTracking":true}'></script><link rel="shortcut icon" href="/sunat.ico" />
+<link rel="image_src" href="/img/logo_sunat.gif" />
+
+<script  type="text/javascript" src="/orientacion/cronogramas/js/indCronogramaPersonas.js"></script>
+<link href="/p/js/libs/bootstrap/3.3.2/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="/p/css/main.css" rel="stylesheet"/>
+<script src="/p/js/script/buscador.js"></script>
+<script src="/p/js/script/menuPersonas.js"></script>
+<script src="/p/js/script/menuEmpresas.js"></script>
+<script src="/p/js/script/menuAduanas.js"></script>
+<script src="/p/js/script/piePagina.js"></script>
+<script src="/p/js/script/pieRedSocial.js"></script>
+<script src="/p/js/script/botonSOL.js"></script>
+<link href="/css/global.css" rel="stylesheet" type="text/css" />
+<link href="/css/print.css" rel="stylesheet" type="text/css" media="print" />
+<link href="../css/cronoObliga.css" rel="stylesheet" type="text/css" />
+
+
+</head>
+
+<body class="pagInt">
+<div id="divCabecera" class="navbar navbar-default sinBorde" role="navigation">
+  <div id="navBarSuperior" class="navbar-header"> <a class="navbar-brand navLogo" id="logosunat" href="/index.html" target="_parent"> <img id="imgLogo" src="/p/imagenes/logoamplio.png" class="hidden-xs hidden-sm hidden-md"/> <img id="imgLogo" src="/p/imagenes/logo.png" class="hidden-lg"/> </a> </div>
+  <div class="container-fluid">
+    <div id="divNavPrinicipal" class="navbar">
+      <ul class="nav navbar-nav navbar-right">
+        <script type="text/javascript">bSOL();</script>
+      </ul>
+    </div>
+  </div>
+  <div class="container-fluid">
+    <div class="navbar-centro"> 
+      <script type="text/javascript">buscaSUNAT();</script>
+      <ul id="ulMenu" class="nav navbar-nav navbar-nav-centro">
+        <li class="dropdown liOpcionMenu liOpcionCentro"> <a href="/index.html" target="_parent" class="dropdown-toggle aOpcionMenu backPlomo3 colBlanco aOpcionMenuActivo" role="button" aria-haspopup="true"> &nbsp;&nbsp;&nbsp;Personas&nbsp;&nbsp;
+          <div class="divOpcionSeparador"></div>
+          </a>
+          <div class="dropdown-menu multi-column columns-4 divSubmenu"> 
+            <script type="text/javascript">menuPer();</script> 
+          </div>
+        </li>
+        <li class="dropdown liOpcionMenu liOpcionCentro"> <a href="/empresas.html" target="_parent" class="dropdown-toggle aOpcionMenu backPlomo3 colBlanco" role="button" aria-haspopup="true"> &nbsp;&nbsp;&nbsp;Empresas&nbsp;&nbsp;
+          <div class="divOpcionSeparador"></div>
+          </a>
+          <div class="dropdown-menu multi-column columns-4 divSubmenu"> 
+            <script type="text/javascript">menuEmpre();</script> 
+          </div>
+        </li>
+        <li class="dropdown liOpcionMenu"> <a href="/aduanas.html" target="_parent" class="dropdown-toggle aOpcionMenu backPlomo3 colBlanco" role="button" aria-haspopup="true"> &nbsp;&nbsp;&nbsp;Aduanas&nbsp;&nbsp;
+          <div class="divOpcionSeparador"></div>
+          </a>
+          <div class="dropdown-menu multi-column columns-4 divSubmenu"> 
+            <script type="text/javascript">menuAdu();</script> 
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+  <div id="divSeparador" class="backAzul1 hidden-xs"></div>
+</div>
+<div id="divCuerpo" class="container">
+  <div class="row">
+    <div class="col-sm-8 col-md-9">
+      <div id="divBreadcrumb">
+        <ol class="breadcrumb">
+          <li><i class="glyphicon glyphicon-home"></i><a href="/index.html" target="_parent">&nbsp;Inicio</a></li>
+          <li> <a href="/index.html">Personas</a></li>
+          <li> Cronogramas de Vencimientos</li>
+        </ol>
+      </div>
+      <div class="panel panel-default sinBorde">
+        <div class="panel-body text-justify"> <img class="img-responsive" src="/img/modulos/imgCalendarioPersonas.jpg" alt="Calendario Personas" title="Calendario Personas" width="745" height="128" />
+          <div id="ayudaUsuario"> <a href="#" class="imprimir" onclick="window.print()"></a> Tama&ntilde;o de Texto:<a href="#" class="fmas fontResize" id="aumentar"></a> <a href="#" class="fmenos fontResize" id="disminuir"></a> </div>
+          <p style="text-align: justify"><strong>CRONOGRAMA DE OBLIGACIONES MENSUALES - EJERCICIO 2025</strong></p>
+          <table border="0" cellspacing="0" cellpadding="0">
+            <tr>
+              <td rowspan="2" class="tdtext">PERÍODO TRIBUTARIO (*)</td>
+              <td colspan="7" class="tdtext">FECHA DE VENCIMIENTO SEGÚN EL ÚLTIMO DÍGITO DEL    RUC</td>
+            </tr>
+            <tr>
+              <td class="tdtext1">0</td>
+              <td class="tdtext1">1</td>
+              <td class="tdtext1">2 y 3</td>
+              <td class="tdtext1">4 y 5</td>
+              <td class="tdtext1">6 y 7</td>
+              <td class="tdtext1">8 y 9</td>
+              <td class="tdtext">BUENOS CONTRIBUYENTES y UESP</td>
+            </tr>
+            <tr>
+              <td>Ene-2025</td>
+              <td>17<br>
+                Feb</td>
+              <td>18<br>
+                Feb</td>
+              <td>19<br>
+                Feb</td>
+              <td>20<br>
+                Feb</td>
+              <td>21<br>
+                Feb</td>
+              <td>24<br>
+                Feb</td>
+              <td>25<br>
+                Feb</td>
+            </tr>
+            <tr>
+              <td>Feb-2025</td>
+              <td>17<br>
+                Mar</td>
+              <td>18<br>
+                Mar</td>
+              <td>19<br>
+                Mar</td>
+              <td>20<br>
+                Mar</td>
+              <td>21<br>
+                Mar</td>
+              <td>24<br>
+                Mar</td>
+              <td>25<br>
+                Mar</td>
+            </tr>
+            <tr>
+              <td>Mar-2025</td>
+              <td>15<br>
+                Abr</td>
+              <td>16<br>
+                Abr</td>
+              <td>21<br>
+                Abr</td>
+              <td>22<br>
+                Abr</td>
+              <td>23<br>
+                Abr</td>
+              <td>24<br>
+                Abr</td>
+              <td>25<br>
+                Abr</td>
+            </tr>
+            <tr>
+              <td>Abr-2025</td>
+              <td>16<br>
+                May</td>
+              <td>19<br>
+                May</td>
+              <td>20<br>
+                May</td>
+              <td>21<br>
+                May</td>
+              <td>22<br>
+                May</td>
+              <td>23<br>
+                May</td>
+              <td>26<br>
+                May</td>
+            </tr>
+            <tr>
+              <td>May-2025</td>
+              <td>16<br>
+                Jun</td>
+              <td>17<br>
+                Jun</td>
+              <td>18<br>
+                Jun</td>
+              <td>19<br>
+                Jun</td>
+              <td>20<br>
+                Jun</td>
+              <td>23<br>
+                Jun</td>
+              <td>24<br>
+                Jun</td>
+            </tr>
+            <tr>
+              <td>Jun-2025</td>
+              <td>15<br>
+                Jul</td>
+              <td>16<br>
+                Jul</td>
+              <td>17<br>
+                Jul</td>
+              <td>18<br>
+                Jul</td>
+              <td>21<br>
+                Jul</td>
+              <td>22<br>
+                Jul</td>
+              <td>24<br>
+                Jul</td>
+            </tr>
+            <tr>
+              <td>Jul-2025</td>
+              <td>18<br>
+                Ago</td>
+              <td>19<br>
+                Ago</td>
+              <td>20<br>
+                Ago</td>
+              <td>21<br>
+                Ago</td>
+              <td>22<br>
+                Ago</td>
+              <td>25<br>
+                Ago</td>
+              <td>26<br>
+                Ago</td>
+            </tr>
+            <tr>
+              <td>Ago-2025</td>
+              <td>15<br>
+                Set</td>
+              <td>16<br>
+                Set</td>
+              <td>17<br>
+                Set</td>
+              <td>18<br>
+                Set</td>
+              <td>19<br>
+                Set</td>
+              <td>22<br>
+                Set</td>
+              <td>23<br>
+                Set</td>
+            </tr>
+            <tr>
+              <td>Set-2025</td>
+              <td>16<br>
+                Oct</td>
+              <td>17<br>
+                Oct</td>
+              <td>20<br>
+                Oct</td>
+              <td>21<br>
+                Oct</td>
+              <td>22<br>
+                Oct</td>
+              <td>23<br>
+                Oct</td>
+              <td>24<br>
+                Oct</td>
+            </tr>
+            <tr>
+              <td>Oct-2025</td>
+              <td>17<br>
+                Nov</td>
+              <td>18<br>
+                Nov</td>
+              <td>19<br>
+                Nov</td>
+              <td>20<br>
+                Nov</td>
+              <td>21<br>
+                Nov</td>
+              <td>24<br>
+                Nov</td>
+              <td>25<br>
+                Nov</td>
+            </tr>
+            <tr>
+              <td>Nov-2025</td>
+              <td>17<br>
+                Dic</td>
+              <td>18<br>
+                Dic</td>
+              <td>19<br>
+                Dic</td>
+              <td>22<br>
+                Dic</td>
+              <td>23<br>
+                Dic</td>
+              <td>24<br>
+                Dic</td>
+              <td>26<br>
+                Dic</td>
+            </tr>
+            <tr>
+              <td>Dic-2025</td>
+              <td>16<br>
+                Ene 2026</td>
+              <td>19<br>
+                Ene 2026</td>
+              <td>20<br>
+                Ene 2026</td>
+              <td>21<br>
+                Ene 2026</td>
+              <td>22<br>
+                Ene 2026</td>
+              <td>23<br>
+                Ene 2026</td>
+              <td>26<br>
+                Ene 2026</td>
+            </tr>
+          </table>
+<p>&nbsp;</p>
+
+<table class="tablita" cellspacing="0" cellpadding="0">
+  <tr>
+    <td valign="top" class="cborde">   (*)</td>
+    <td valign="top" class="cborde">Incluye vencimientos para el pago del Impuesto a las Transacciones    Financieras</td>
+  </tr>
+  <tr>
+  <td valign="top" class="cborde">UESP:</td>
+  <td valign="top" class="cborde"><a href="UUEE-2025.xlsx" target="_blank">Unidades Ejecutoras del Sector  Público Nacional</a> - Informado por el Ministerio de Economía y Finanzas mediante el Oficio  N° 0211-2025-EF/52.06</td>
+</tr>
+
+  <tr>
+    <td valign="top" class="cborde">Base Legal: </td>
+    <td valign="top" class="cborde"><a href="https://www.sunat.gob.pe/legislacion/superin/2022/anexo1-281-2022.pdf" target="_blank">Anexo    I</a> – <a href="https://www.sunat.gob.pe/legislacion/superin/2022/281-2022.pdf" target="_blank">Resolución    de Superintendencia N°281-2022/SUNAT</a> publicada el 24.12.2022 que establece cronogramas para el cumplimiento de las    obligaciones tributarias mensuales y las fechas máximas de atraso de los    registros de ventas e ingresos y de compras llevados de forma electrónica.</td>
+  </tr>
+  <tr>
+    <td valign="top" class="cborde"><strong>Nota</strong>: </td>
+    <td valign="top" class="cborde">En cada casilla    se indica: en la parte superior el último dígito del número de RUC y en la    parte inferior el día calendario correspondiente al vencimiento.</td>
+  </tr>
+  <tr>
+    <td valign="top" class="cborde">&nbsp;</td>
+    <td valign="top" class="cborde">Sólo los dígitos    0 y 1 tienen un día por separado como fecha de vencimiento.&nbsp;Los demás    dígitos se agrupan a razón de dos dígitos en cada fecha de vencimiento, de la    siguiente manera: 2 y 3; 4 y 5; 6 y 7;&nbsp;8 y 9.</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+        </div>
+      </div>
+    </div>
+  <script type="text/javascript">indCronoPer();</script></div>
+</div>
+<div id="footerBarraLinks" class="backPlomo3">
+  <div class="container">
+    <div class="row">
+      <div class="col-sm-2 text-center divFooterBarraLink"> <a href="/institucional/quienessomos/index.html" target="_parent" class="aFooterBarraLink colBlanco negrita">Institucional</a> </div>
+      <div class="col-sm-2 text-center divFooterBarraLink"> <a href="/cuentassunat/index.html" target="_parent" class="aFooterBarraLink colBlanco negrita">SUNAT Rinde Cuentas</a> </div>
+      <div class="col-sm-2 text-center divFooterBarraLink"> <a href="/legislacion/general/index.html" target="_parent" class="aFooterBarraLink colBlanco negrita">Legislación</a> </div>
+      <div class="col-sm-2 text-center divFooterBarraLink"> <a href="/estadisticasestudios/index.html" target="_parent" class="aFooterBarraLink colBlanco negrita">Estadísticas y Estudios</a> </div>
+      <div class="col-sm-2 text-center divFooterBarraLink"> <a href="/indicestasas/index.html" target="_parent" class="aFooterBarraLink colBlanco negrita">Indices y Tasas</a></a> </div>
+      <div class="col-sm-2 text-center divFooterBarraLink"> <a href="/padronesnotificaciones/index.html" class="aFooterBarraLink colBlanco negrita">Padrones y Notificaciones</a> </div>
+    </div>
+  </div>
+</div>
+<div id="footerLinks"  class="backAzul1"> 
+  <script type="text/javascript">piePagina();</script></div>
+<footer id="footerPrincipal" class="colBlanco"> 
+  <script type="text/javascript">pieRedesSociales();</script> 
+</footer>
+<script src="/p/js/libs/jquery/1.11.2/jquery.min.js"></script> 
+<script src="/p/js/libs/bootstrap/3.3.2/js/bootstrap.min.js"></script> 
+<script src="/p/js/apps/main.js"></script>
+</body>
+</html>
+<script id="f5_cspm">(function(){var f5_cspm={f5_p:'OCDKGJOHOAANEJPHGDOGPPBJJGFEJMNODMMMPEJPNBPPFLFNMDHKOGDGAHFMAIGGJIJBKDFCAAGAOCDPLELANGODAABHCEFAMOHOBKBAELPKGEGOOPILIHKFGICGBJAG',setCharAt:function(str,index,chr){if(index>str.length-1)return str;return str.substr(0,index)+chr+str.substr(index+1);},get_byte:function(str,i){var s=(i/16)|0;i=(i&15);s=s*32;return((str.charCodeAt(i+16+s)-65)<<4)|(str.charCodeAt(i+s)-65);},set_byte:function(str,i,b){var s=(i/16)|0;i=(i&15);s=s*32;str=f5_cspm.setCharAt(str,(i+16+s),String.fromCharCode((b>>4)+65));str=f5_cspm.setCharAt(str,(i+s),String.fromCharCode((b&15)+65));return str;},set_latency:function(str,latency){latency=latency&0xffff;str=f5_cspm.set_byte(str,40,(latency>>8));str=f5_cspm.set_byte(str,41,(latency&0xff));str=f5_cspm.set_byte(str,35,2);return str;},wait_perf_data:function(){try{var wp=window.performance.timing;if(wp.loadEventEnd>0){var res=wp.loadEventEnd-wp.navigationStart;if(res<60001){var cookie_val=f5_cspm.set_latency(f5_cspm.f5_p,res);window.document.cookie='f5avr0508421157aaaaaaaaaaaaaaaa_cspm_='+encodeURIComponent(cookie_val)+';path=/;'+'';}
+return;}}
+catch(err){return;}
+setTimeout(f5_cspm.wait_perf_data,100);return;},go:function(){var chunk=window.document.cookie.split(/\s*;\s*/);for(var i=0;i<chunk.length;++i){var pair=chunk[i].split(/\s*=\s*/);if(pair[0]=='f5_cspm'&&pair[1]=='1234')
+{var d=new Date();d.setTime(d.getTime()-1000);window.document.cookie='f5_cspm=;expires='+d.toUTCString()+';path=/;'+';';setTimeout(f5_cspm.wait_perf_data,100);}}}}
+f5_cspm.go();}());</script>

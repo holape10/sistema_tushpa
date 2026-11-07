@@ -2,8 +2,24 @@
 @section('title', 'Elige la empresa')
 @section('content')
 @php
-    $lista = $empresas->map(fn ($e) => ['ruc' => (string) $e->IdEmpresa, 'nombre' => $e->NomEmpresa, 'propia' => (bool) $e->propia,
-        'digito' => substr((string) $e->IdEmpresa, -1), 'buscar' => mb_strtolower(\Illuminate\Support\Str::ascii($e->NomEmpresa)).' '.$e->IdEmpresa])->values();
+    // Cuándo vence la declaración del mes (y si ya se hizo), para ver de un vistazo cuál atender primero
+    $vence = function (?object $v): ?array {
+        if (! $v) {
+            return null;
+        }
+        $fecha = $v->vence->locale('es')->isoFormat('D MMM');
+
+        return match (true) {
+            (bool) $v->declarado => ['texto' => '✔ declarado', 'tono' => 'bg-emerald-50 text-emerald-700 ring-emerald-200'],
+            $v->dias < 0 => ['texto' => "venció el {$fecha}", 'tono' => 'bg-rose-100 text-rose-800 ring-rose-300'],
+            $v->dias === 0 => ['texto' => 'vence HOY', 'tono' => 'bg-rose-100 text-rose-800 ring-rose-300'],
+            $v->dias <= 3 => ['texto' => "vence {$fecha} · en {$v->dias} día(s)", 'tono' => 'bg-amber-50 text-amber-800 ring-amber-200'],
+            default => ['texto' => "vence {$fecha}", 'tono' => 'bg-gray-50 text-gray-500 ring-gray-200'],
+        };
+    };
+    $lista =$empresas->map(fn ($e) => ['ruc' => (string) $e->IdEmpresa, 'nombre' => $e->NomEmpresa, 'propia' => (bool) $e->propia,
+        'digito' => substr((string) $e->IdEmpresa, -1), 'buscar' => mb_strtolower(\Illuminate\Support\Str::ascii($e->NomEmpresa)).' '.$e->IdEmpresa,
+        'vence' => $vence($vencimientos->get($e->IdEmpresa))])->values();
 @endphp
 <div class="max-w-4xl mx-auto space-y-4" x-data="elegirEmpresa(@js($lista), @js($actual))">
     @if (session('error'))<div class="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ session('error') }}</div>@endif
@@ -13,6 +29,15 @@
             <h1 class="text-xl font-extrabold text-gray-800">🏛️ ¿Con qué empresa vas a trabajar?</h1>
             <p class="text-sm text-gray-500">Tienes {{ $empresas->count() }} empresa(s). Puedes cambiar de empresa cuando quieras desde la parte de arriba.</p>
         </div>
+        @php
+            $pendientes = $vencimientos->filter(fn ($v) => ! $v->declarado);
+            $urgentes = $pendientes->filter(fn ($v) => $v->dias <= 3)->count();
+        @endphp
+        <a href="{{ route('estudio.vencimientos') }}" class="flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm ring-1 {{ $urgentes ? 'bg-rose-50 ring-rose-200 text-rose-800' : 'bg-indigo-50 ring-indigo-100 text-indigo-800' }} hover:brightness-95">
+            <span>📅 <b>Vencimientos SUNAT de {{ \App\Support\Contabilidad\Contabilidad::nombrePeriodo($periodo) }}:</b>
+                {{ $vencimientos->count() - $pendientes->count() }} de {{ $vencimientos->count() }} declaradas{{ $urgentes ? " · {$urgentes} vencen en 3 días o menos (o ya vencieron)" : '' }}</span>
+            <span class="font-bold">Ver cronograma →</span>
+        </a>
         <input x-ref="buscar" x-model="texto" @keydown.enter.prevent="entrarPrimera()" autofocus type="search"
                placeholder="Busca por nombre o RUC…" class="w-full h-12 rounded-xl border-gray-300 text-base">
         <div class="flex flex-wrap items-center gap-2 text-sm">
@@ -40,6 +65,7 @@
                             <span class="font-sans text-xs" x-show="e.propia"> · tu estudio</span>
                             <span class="font-sans text-xs text-indigo-700" x-show="e.ruc === actual"> · la última que usaste</span></span>
                     </span>
+                    <span x-show="e.vence" class="hidden sm:inline-flex shrink-0 h-7 px-2.5 items-center rounded-full text-xs font-semibold ring-1" :class="e.vence?.tono" x-text="e.vence?.texto"></span>
                     <span class="shrink-0 h-9 px-4 inline-flex items-center rounded-xl bg-indigo-600 text-white text-sm font-bold">Entrar →</span>
                 </button>
             </form>
