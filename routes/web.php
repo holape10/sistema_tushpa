@@ -34,7 +34,9 @@ use App\Http\Controllers\ConsumoCajasController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContabilidadRegistroController;
 use App\Http\Controllers\ContactoController;
+use App\Http\Controllers\ConteoCiegoController;
 use App\Http\Controllers\ContratoController;
+use App\Http\Controllers\ControlInsumosController;
 use App\Http\Controllers\CourierController;
 use App\Http\Controllers\CourierCreditoController;
 use App\Http\Controllers\CourierManifiestoController;
@@ -704,6 +706,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/compras/meses', [CompraController::class, 'mes'])->name('compras.mes');
     Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])->whereNumber('id')->name('compras.recibir');
     // Órdenes de compra: pedido → aprobación del administrador → compra
+    // Inventario ciego (cuenta sin ver el stock) y control de insumos (recetas vs. lo que faltó)
+    Route::get('/conteo-ciego', [ConteoCiegoController::class, 'index'])->name('conteo_ciego.index');
+    Route::get('/conteo-ciego/nuevo', [ConteoCiegoController::class, 'create'])->name('conteo_ciego.create');
+    Route::post('/conteo-ciego', [ConteoCiegoController::class, 'store'])->name('conteo_ciego.store');
+    Route::get('/conteo-ciego/{id}', [ConteoCiegoController::class, 'show'])->whereNumber('id')->name('conteo_ciego.show');
+    Route::post('/conteo-ciego/{id}/aplicar', [ConteoCiegoController::class, 'aplicar'])->whereNumber('id')->name('conteo_ciego.aplicar');
+    Route::post('/conteo-ciego/{id}/descartar', [ConteoCiegoController::class, 'descartar'])->whereNumber('id')->name('conteo_ciego.descartar');
+    Route::get('/control-insumos', [ControlInsumosController::class, 'index'])->name('control_insumos.index');
     // Requerimientos del día: cocina o almacén pide lo que falta, el administrador lo compra y lo registra como compra
     Route::get('/requerimientos', [RequerimientoController::class, 'index'])->name('requerimientos.index');
     Route::get('/requerimientos/nuevo', [RequerimientoController::class, 'create'])->name('requerimientos.create');
@@ -712,6 +722,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/requerimientos/{id}/imprimir', [RequerimientoController::class, 'imprimir'])->whereNumber('id')->name('requerimientos.imprimir');
     Route::post('/requerimientos/{id}/marcar', [RequerimientoController::class, 'marcar'])->whereNumber('id')->name('requerimientos.marcar');
     Route::post('/requerimientos/{id}/anular', [RequerimientoController::class, 'anular'])->whereNumber('id')->name('requerimientos.anular');
+    Route::post('/requerimientos/{id}/despachar', [RequerimientoController::class, 'despachar'])->whereNumber('id')->name('requerimientos.despachar');
+    Route::post('/requerimientos/{id}/recibir', [RequerimientoController::class, 'recibir'])->whereNumber('id')->name('requerimientos.recibir');
+    Route::match(['get', 'post'], '/requerimientos/produccion', [RequerimientoController::class, 'produccion'])->name('requerimientos.produccion');
     Route::get('/ordenes-compra', [OrdenCompraController::class, 'index'])->name('ordenes_compra.index');
     Route::get('/ordenes-compra/nueva', [OrdenCompraController::class, 'create'])->name('ordenes_compra.create');
     Route::post('/ordenes-compra', [OrdenCompraController::class, 'store'])->name('ordenes_compra.store');

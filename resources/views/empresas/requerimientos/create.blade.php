@@ -21,8 +21,14 @@
                 <p class="text-sm text-gray-500">Lo que hay en tu almacén, lo que falta y lo que se acabaría en {{ \App\Support\Requerimientos::DIAS_PREVISION }} días según lo que se gastó la última semana.
                     La cantidad ya viene sugerida: cámbiala si hace falta.</p>
             </div>
-            <a href="{{ route('requerimientos.index') }}" class="text-sm font-semibold text-indigo-700 hover:underline">Ver mis requerimientos →</a>
+            <div class="flex flex-col items-end gap-1 text-sm font-semibold">
+                <a href="{{ route('requerimientos.produccion') }}" class="text-emerald-700 hover:underline">🍳 Planificar la producción del día →</a>
+                <a href="{{ route('requerimientos.index') }}" class="text-indigo-700 hover:underline">Ver mis requerimientos →</a>
+            </div>
         </div>
+        @if ($desdeProduccion)
+            <p class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm">🍳 Las cantidades vienen de la <b>producción del día</b> que planificaste: es lo que falta para preparar esos platos. Revisa y envía.</p>
+        @endif
         <div class="grid grid-cols-3 gap-3 text-center">
             <button type="button" @click="vista = 'faltan'" class="rounded-xl bg-rose-50 p-3 ring-1 ring-rose-100"><p class="text-2xl font-extrabold text-rose-700">{{ ($resumen['agotado'] ?? 0) }}</p><p class="text-xs text-rose-700">se acabaron</p></button>
             <button type="button" @click="vista = 'faltan'" class="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-100"><p class="text-2xl font-extrabold text-amber-700">{{ ($resumen['falta'] ?? 0) }}</p><p class="text-xs text-amber-700">llegaron a su mínimo</p></button>
@@ -32,7 +38,7 @@
 
     <form method="POST" action="{{ route('requerimientos.store') }}" class="space-y-4" @submit="if (!pedidos.length) { $event.preventDefault(); alert('Pon la cantidad de al menos un producto.'); }">
         @csrf
-        <div class="bg-white rounded-2xl shadow-sm p-4 grid sm:grid-cols-3 gap-3">
+        <div class="bg-white rounded-2xl shadow-sm p-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <label class="text-sm font-semibold text-gray-700">Almacén
                 <select name="id_almacen" class="mt-1 w-full h-11 rounded-xl border-gray-300" onchange="location.href = @js(route('requerimientos.create')) + '?almacen=' + this.value">
                     @foreach ($almacenes as $a)<option value="{{ $a->id_almacen }}" @selected($a->id_almacen === $almacen->id_almacen)>{{ $a->descripcion }}</option>@endforeach
@@ -43,6 +49,18 @@
             </label>
             <label class="text-sm font-semibold text-gray-700">Observaciones
                 <input name="observaciones" value="{{ old('observaciones') }}" maxlength="500" placeholder="Ej.: para el almuerzo del sábado" class="mt-1 w-full h-11 rounded-xl border-gray-300">
+            </label>
+            <label class="text-sm font-semibold text-gray-700">¿Quién lo consigue?
+                <select name="sucursal_origen" class="mt-1 w-full h-11 rounded-xl border-gray-300">
+                    <option value="">🛒 Se compra (mercado o proveedor)</option>
+                    @foreach ($sedes as $sede)
+                        <option value="{{ $sede->id_empresa_negocio }}" @selected((int) old('sucursal_origen') === (int) $sede->id_empresa_negocio)>🏬 Pedir a la sede {{ $sede->nombre_comercial }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <label class="sm:col-span-2 lg:col-span-4 flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 ring-1 ring-rose-100">
+                <input type="checkbox" name="urgente" value="1" @checked(old('urgente')) class="rounded border-rose-300 text-rose-600">
+                🚨 Es urgente (le llega marcado como URGENTE al celular del administrador)
             </label>
         </div>
 

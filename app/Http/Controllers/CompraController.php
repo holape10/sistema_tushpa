@@ -144,7 +144,8 @@ class CompraController extends Controller
             $desdeOrden = OrdenesCompra::paraFormulario($orden);
         } elseif ($requerimientoId = (int) $request->query('requerimiento')) {
             try {
-                $desdeOrden = Requerimientos::paraFormulario(Requerimientos::paraComprar(Auth::user(), $requerimientoId));
+                $comprobante = in_array($request->query('comprobante'), ['01', '03', '12', '00'], true) ? $request->query('comprobante') : '12';
+                $desdeOrden = Requerimientos::paraFormulario(Requerimientos::paraComprar(Auth::user(), $requerimientoId), $comprobante);
             } catch (\RuntimeException $e) {
                 return redirect()->route('requerimientos.index')->with('error', $e->getMessage());
             }

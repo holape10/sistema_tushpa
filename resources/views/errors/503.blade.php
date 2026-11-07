@@ -46,6 +46,15 @@
         <p class="nota">No cierres esta página: se recarga sola apenas termine.</p>
         <button type="button" onclick="location.reload()">Volver a intentar</button>
     </main>
-    <script>setTimeout(() => location.reload(), 20000);</script>
+    <script>
+        // Cada 4 s pregunta si el sistema ya volvió (sin recargar la página): apenas responde, entra de nuevo
+        (function vigilar() {
+            setTimeout(() => {
+                fetch(location.href, { method: 'HEAD', cache: 'no-store', credentials: 'same-origin' })
+                    .then((r) => { if (r.status !== 503) { location.reload(); } else { vigilar(); } })
+                    .catch(vigilar);
+            }, 4000);
+        })();
+    </script>
 </body>
 </html>

@@ -81,7 +81,7 @@ class RequerimientosTest extends FlujoTestCase
         $lineas = DB::table('requerimientos_detalle')->where('requerimiento_id', $rq->id)->pluck('id', 'IdProducto');
         $this->post(route('requerimientos.marcar', $rq->id), ['registrar' => 1, 'lineas' => [
             $lineas[$limon->IdProducto] => ['comprado' => 3.5, 'precio' => 4], $lineas[$culantro->IdProducto] => ['comprado' => 0, 'precio' => ''],
-        ]])->assertRedirect(route('compras.create', ['requerimiento' => $rq->id]));
+        ]])->assertRedirect(route('compras.create', ['requerimiento' => $rq->id, 'comprobante' => '12']));
         $this->get(route('compras.create', ['requerimiento' => $rq->id]))->assertOk()
             ->assertViewHas('desdeOrden', fn ($o) => array_map(fn ($i) => [$i['id'], $i['cantidad'], $i['costo']], $o['items']) === [[$limon->IdProducto, 3.5, 4.0]]);
 

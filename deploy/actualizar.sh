@@ -10,14 +10,19 @@ export COMPOSER_ALLOW_SUPERUSER=1
 PASO=$SECONDS
 tiempo() { echo "    ($(( SECONDS - PASO )) s)"; PASO=$SECONDS; }
 
+echo "==> Descargando la versión nueva (el sistema sigue funcionando)"
+git config --global --add safe.directory "${DIR}" || true
+git fetch origin "${RAMA}"
+tiempo
+
 echo "==> Modo mantenimiento"
-# Pantalla amable "Estamos actualizando el sistema" (resources/views/errors/503.blade.php), armada antes de tocar el código
-php artisan down --retry=15 --render="errors::503" || true
+# Pantalla amable "Estamos actualizando el sistema" (resources/views/errors/503.blade.php). Solo dura lo indispensable:
+# código, dependencias, base de datos, estilos y cachés. Lo demás se hace con el sistema ya funcionando.
+php artisan down --retry=10 --render="errors::503" || true
+INICIO_MANTENIMIENTO=$SECONDS
 trap 'php artisan up || true' EXIT
 
 echo "==> Código"
-git config --global --add safe.directory "${DIR}" || true
-git fetch origin "${RAMA}"
 git reset --hard "origin/${RAMA}"
 tiempo
 
@@ -35,11 +40,6 @@ if grep -qE '^TENANCY_DOMINIO=.+' .env; then
 fi
 tiempo
 
-# Claves de los avisos al celular del mozo (solo la primera vez; si ya existen no las toca)
-php artisan push:claves || true
-# QR de pago pesados → WebP liviano (pantalla de suspendido); los ya optimizados no se tocan
-php artisan cobros:optimizar-qr || true
-
 echo "==> Estilos"
 # Los paquetes solo se reinstalan si cambió package-lock.json (reinstalar todo cada vez demora minutos)
 HUELLA_NPM="$(sha1sum package-lock.json | cut -d' ' -f1)"
@@ -52,21 +52,39 @@ fi
 npm run build
 tiempo
 
-echo "==> Cachés y permisos"
+echo "==> Cachés"
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 tiempo
-chown -R apache:apache "${DIR}"
+# Lo que Apache escribe (logs, sesiones, caché, imágenes, estilos) tiene que ser suyo antes de abrir: los comandos de
+# arriba corren como root y pueden haber creado archivos
+chown -R apache:apache storage bootstrap/cache public/build public/imagenes
 chmod -R ug+rwX storage bootstrap/cache public/imagenes
-command -v restorecon >/dev/null && restorecon -R "${DIR}" || true
-echo "    permisos"; tiempo
+systemctl reload php-fpm httpd
+
+echo "==> Sistema funcionando de nuevo"
+php artisan up || true
+echo "    mantenimiento duró $(( SECONDS - INICIO_MANTENIMIENTO )) s"; tiempo
+
+# ---- De aquí en adelante el sistema ya atiende: el resto no apura ----
+echo "==> Permisos del resto (solo lo que cambió)"
+# Solo los archivos que aún no son de Apache (antes se recorría todo, node_modules incluido, con el sistema apagado)
+find "${DIR}" -path "${DIR}/node_modules" -prune -o ! -user apache -exec chown apache:apache {} +
+command -v restorecon >/dev/null && restorecon -R -e "${DIR}/node_modules" "${DIR}" || true
+tiempo
+
+# Claves de los avisos al celular del mozo (solo la primera vez; si ya existen no las toca)
+php artisan push:claves || true
+# QR de pago pesados → WebP liviano (pantalla de suspendido); los ya optimizados no se tocan
+php artisan cobros:optimizar-qr || true
 # No mostrar a internet las versiones exactas de Apache y PHP (si Apache no acepta el cambio, se quita)
 [ -f /etc/httpd/conf.d/00-tushpa-seguridad.conf ] || printf 'ServerTokens Prod\nServerSignature Off\n' > /etc/httpd/conf.d/00-tushpa-seguridad.conf
 apachectl configtest >/dev/null 2>&1 || rm -f /etc/httpd/conf.d/00-tushpa-seguridad.conf
 [ -d /etc/php.d ] && [ ! -f /etc/php.d/99-tushpa-seguridad.ini ] && echo 'expose_php = Off' > /etc/php.d/99-tushpa-seguridad.ini || true
-systemctl reload php-fpm httpd
+# Aplica esos dos ajustes si se acaban de crear (recarga suave: no corta a nadie)
+systemctl reload php-fpm httpd || true
 # Tiempo real (deploy/reverb-instalar.sh): arranca con el código nuevo
 systemctl is-enabled --quiet tushpa-reverb 2>/dev/null && systemctl restart tushpa-reverb || true
 # Trabajador de colas (deploy/colas-instalar.sh): termina la tarea que tiene en curso y vuelve con el código nuevo.

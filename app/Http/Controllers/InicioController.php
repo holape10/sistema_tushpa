@@ -127,8 +127,11 @@ class InicioController extends Controller
             'porAcabarse' => $user->esAdminOCaja() ? $this->porAcabarse((int) $user->id_empresa_negocio) : null,
             // Lo que pidió cocina o almacén, para salir a comprarlo
             'requerimientos' => Requerimientos::atiende($user) ? DB::table('requerimientos as r')->leftJoin('users as u', 'u.IdUsuario', '=', 'r.IdUsuario')
-                ->where('r.id_empresa_negocio', $user->id_empresa_negocio)->where('r.estado', 'PENDIENTE')->orderBy('r.fecha_para')->orderBy('r.id')
-                ->limit(6)->get(['r.id', 'r.numero', 'r.fecha_para', 'r.created_at', 'u.apeusu as pidio',
+                ->where(fn ($q) => $q->where(fn ($w) => $w->where('r.id_empresa_negocio', $user->id_empresa_negocio)->whereNull('r.sucursal_origen'))
+                    ->orWhere('r.sucursal_origen', $user->id_empresa_negocio))
+                ->where('r.estado', 'PENDIENTE')->orderByDesc('r.urgente')->orderBy('r.fecha_para')->orderBy('r.id')
+                ->leftJoin('empresa_negocios as sp', 'sp.id_empresa_negocio', '=', 'r.id_empresa_negocio')
+                ->limit(6)->get(['r.id', 'r.numero', 'r.fecha_para', 'r.created_at', 'r.urgente', 'r.sucursal_origen', 'sp.nombre_comercial as sede', 'u.apeusu as pidio',
                     DB::raw('(SELECT COUNT(*) FROM requerimientos_detalle d WHERE d.requerimiento_id = r.id) as lineas')]) : collect(),
         ]);
     }
