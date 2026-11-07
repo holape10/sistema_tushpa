@@ -106,6 +106,7 @@ use App\Http\Controllers\RecetaExportarController;
 use App\Http\Controllers\RentabilidadController;
 use App\Http\Controllers\RepartidorController;
 use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\RequerimientoController;
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\RespaldoEmpresaController;
 use App\Http\Controllers\SeguimientoController;
@@ -703,6 +704,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/compras/meses', [CompraController::class, 'mes'])->name('compras.mes');
     Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])->whereNumber('id')->name('compras.recibir');
     // Órdenes de compra: pedido → aprobación del administrador → compra
+    // Requerimientos del día: cocina o almacén pide lo que falta, el administrador lo compra y lo registra como compra
+    Route::get('/requerimientos', [RequerimientoController::class, 'index'])->name('requerimientos.index');
+    Route::get('/requerimientos/nuevo', [RequerimientoController::class, 'create'])->name('requerimientos.create');
+    Route::post('/requerimientos', [RequerimientoController::class, 'store'])->name('requerimientos.store');
+    Route::get('/requerimientos/{id}', [RequerimientoController::class, 'show'])->whereNumber('id')->name('requerimientos.show');
+    Route::get('/requerimientos/{id}/imprimir', [RequerimientoController::class, 'imprimir'])->whereNumber('id')->name('requerimientos.imprimir');
+    Route::post('/requerimientos/{id}/marcar', [RequerimientoController::class, 'marcar'])->whereNumber('id')->name('requerimientos.marcar');
+    Route::post('/requerimientos/{id}/anular', [RequerimientoController::class, 'anular'])->whereNumber('id')->name('requerimientos.anular');
     Route::get('/ordenes-compra', [OrdenCompraController::class, 'index'])->name('ordenes_compra.index');
     Route::get('/ordenes-compra/nueva', [OrdenCompraController::class, 'create'])->name('ordenes_compra.create');
     Route::post('/ordenes-compra', [OrdenCompraController::class, 'store'])->name('ordenes_compra.store');

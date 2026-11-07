@@ -35,6 +35,7 @@ document.addEventListener('alpine:init', () => {
             const o = !c && CFG.desdeOrden;
             if (o) {
                 this.doc.moneda = o.moneda || 'PEN';
+                if (o.tdocod) this.doc.tdocod = o.tdocod;
                 this.doc.tip_cam = o.tip_cam;
                 if (o.id_almacen) this.doc.id_almacen = o.id_almacen;
                 this.doc.observaciones = o.observaciones || '';
@@ -323,7 +324,8 @@ document.addEventListener('alpine:init', () => {
                 prov_tdicod: this.prov.tdicod, prov_num: this.prov.num.trim(), prov_nom: this.prov.nom.trim(), prov_dir: this.prov.dir.trim(),
                 actualizar_costo: this.actualizarCosto,
                 en_transito: !CFG.compra && this.enTransito,
-                orden_id: CFG.desdeOrden ? CFG.desdeOrden.id : null,
+                orden_id: CFG.desdeOrden && CFG.desdeOrden.tipo !== 'requerimiento' ? CFG.desdeOrden.id : null,
+                requerimiento_id: CFG.desdeOrden && CFG.desdeOrden.tipo === 'requerimiento' ? CFG.desdeOrden.id : null,
                 items: this.items.map(it => ({
                     id: it.id, presentacion: it.presentacion || null, tip_igv: it.tip_igv, cantidad: it.cantidad, costo: it.costo, flete: Number(it.flete) || 0,
                     lote: this.conLote ? it.lote : null, vencimiento: this.conLote ? (it.vencimiento || null) : null,

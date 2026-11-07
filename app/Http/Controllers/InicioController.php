@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Support\Kardex;
 use App\Support\Notas;
 use App\Support\Recetas;
+use App\Support\Requerimientos;
 use App\Support\Rubros;
 use App\View\Composers\MenuComposer;
 use Illuminate\Support\Collection;
@@ -124,6 +125,11 @@ class InicioController extends Controller
             'reportes' => $reportes,
             'resumen' => $user->esAdminOCaja() ? $this->resumenDeHoy((int) $user->id_empresa_negocio) : null,
             'porAcabarse' => $user->esAdminOCaja() ? $this->porAcabarse((int) $user->id_empresa_negocio) : null,
+            // Lo que pidió cocina o almacén, para salir a comprarlo
+            'requerimientos' => Requerimientos::atiende($user) ? DB::table('requerimientos as r')->leftJoin('users as u', 'u.IdUsuario', '=', 'r.IdUsuario')
+                ->where('r.id_empresa_negocio', $user->id_empresa_negocio)->where('r.estado', 'PENDIENTE')->orderBy('r.fecha_para')->orderBy('r.id')
+                ->limit(6)->get(['r.id', 'r.numero', 'r.fecha_para', 'r.created_at', 'u.apeusu as pidio',
+                    DB::raw('(SELECT COUNT(*) FROM requerimientos_detalle d WHERE d.requerimiento_id = r.id) as lineas')]) : collect(),
         ]);
     }
 

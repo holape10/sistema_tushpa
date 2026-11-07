@@ -14,6 +14,7 @@ use App\Support\MesesCerrados;
 use App\Support\OrdenesCompra;
 use App\Support\Precios;
 use App\Support\Recetas;
+use App\Support\Requerimientos;
 use App\Support\Rubros;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -141,6 +142,12 @@ class CompraController extends Controller
                 return redirect()->route('ordenes_compra.show', $orden->id)->with('error', 'Solo una orden aprobada se convierte en compra.');
             }
             $desdeOrden = OrdenesCompra::paraFormulario($orden);
+        } elseif ($requerimientoId = (int) $request->query('requerimiento')) {
+            try {
+                $desdeOrden = Requerimientos::paraFormulario(Requerimientos::paraComprar(Auth::user(), $requerimientoId));
+            } catch (\RuntimeException $e) {
+                return redirect()->route('requerimientos.index')->with('error', $e->getMessage());
+            }
         }
 
         return view('empresas.compras.form', $this->datosFormulario(null) + ['desdeOrden' => $desdeOrden]);
@@ -188,6 +195,7 @@ class CompraController extends Controller
             'actualizar_costo' => 'boolean',
             'en_transito' => 'boolean',
             'orden_id' => 'nullable|integer',
+            'requerimiento_id' => 'nullable|integer',
             'items' => 'required|array|min:1|max:300',
             'items.*.id' => 'required|integer',
             'items.*.tip_igv' => 'required|in:10,20,30',
@@ -228,7 +236,7 @@ class CompraController extends Controller
         } else {
             Bitacora::registrar('compra.registrar', "Registró la compra {$cab->com_doc_ser}-{$cab->com_doc_num} del proveedor {$cab->prov_num} por "
                 .($cab->mon_id === 'USD' ? 'US$ ' : 'S/ ').number_format((float) $cab->total_com, 2)
-                .(! empty($d['orden_id']) ? ' (de la orden de compra)' : '').(! empty($d['en_transito']) ? ' · mercadería en tránsito' : ''), null,
+                .(! empty($d['orden_id']) ? ' (de la orden de compra)' : '').(! empty($d['requerimiento_id']) ? ' (del requerimiento del día)' : '').(! empty($d['en_transito']) ? ' · mercadería en tránsito' : ''), null,
                 ['referencia' => ['compra', $comId]]);
         }
         session()->flash('success', ($id ? 'Se actualizó' : 'Se registró')." la compra {$cab->com_doc_ser}-{$cab->com_doc_num}.");

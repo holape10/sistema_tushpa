@@ -133,7 +133,7 @@ class Rubros
     ];
 
     /** Rol => opción que lo habilita: mozo, promotor y motorizado son de restaurante; doctor de clínica; entrenador de gimnasio */
-    private const ROLES = [8 => 'restaurante', 13 => 'restaurante', 12 => 'restaurante', 10 => 'doctores', 11 => 'entrenadores', 14 => 'cobradores'];
+    private const ROLES = [8 => 'restaurante', 13 => 'restaurante', 12 => 'restaurante', 16 => 'restaurante', 10 => 'doctores', 11 => 'entrenadores', 14 => 'cobradores'];
 
     /** ¿Este rol tiene sentido en el rubro de la empresa? (administrador y cajero, siempre) */
     public static function permiteRol(int $rol): bool

@@ -51,6 +51,25 @@
             @endif
         </div>
 
+        @if ($requerimientos->isNotEmpty())
+            <section class="mb-7 rounded-2xl bg-indigo-50 ring-1 ring-indigo-200 p-4 sm:p-5">
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                    <h2 class="font-black text-indigo-900">📝 Requerimientos por comprar ({{ $requerimientos->count() }})</h2>
+                    <span class="text-sm text-indigo-800">Lo que pidió cocina o almacén. Ábrelo en el mercado y marca lo que compras.</span>
+                    <a href="{{ route('requerimientos.index', ['estado' => 'PENDIENTE']) }}" class="ml-auto text-sm font-bold text-indigo-900 underline">Ver todos</a>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    @foreach ($requerimientos as $rq)
+                        <a href="{{ route('requerimientos.show', $rq->id) }}" class="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-indigo-200 hover:ring-indigo-400">
+                            <b class="font-mono text-indigo-700">{{ \App\Support\Requerimientos::codigo($rq) }}</b>
+                            <span class="text-gray-700">para el {{ \Carbon\Carbon::parse($rq->fecha_para)->locale('es')->isoFormat('ddd D') }} · {{ $rq->lineas }} producto(s)</span>
+                            <span class="text-xs text-gray-400">{{ $rq->pidio }}</span>
+                        </a>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         @if ($porAcabarse && $porAcabarse['total'])
             @php $num = fn ($n) => rtrim(rtrim(number_format($n, 3), '0'), '.') ?: '0'; @endphp
             <section class="mb-7 rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-4 sm:p-5">

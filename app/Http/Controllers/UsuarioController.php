@@ -41,6 +41,9 @@ class UsuarioController extends Controller
         13 => ['Inicio', 'Comandas', 'Ventas de Promotores'],
         10 => ['Inicio', 'Historias Clínicas', 'Agenda de Citas'],
         14 => ['Inicio', 'Cobranza del Día', 'Clientes de Préstamos'],
+        // Cocinero y almacenero: ven el stock y piden lo que falta (solo en su sucursal)
+        16 => ['Inicio', 'Pantalla Cocina', 'Requerimientos del día', 'Stock Productos', 'Mermas'],
+        17 => ['Inicio', 'Requerimientos del día', 'Stock Productos', 'Kardex', 'Ingresos Productos', 'Salidas Productos', 'Órdenes de compra'],
         4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Cajas cerradas (turnos)', 'Envío de Comprobantes', 'Resumen Diario',
             'Kardex', 'Stock Productos', 'Clientes'],
         // Contador: reporte de ventas SUNAT, envío a SUNAT y, si la empresa los tiene, contabilidad, planilla y SIRE

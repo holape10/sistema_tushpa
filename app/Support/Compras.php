@@ -49,6 +49,8 @@ class Compras
             $enTransito = $anterior ? (bool) ($anterior->en_transito ?? false) : ! empty($d['en_transito']);
             // Compra que viene de una orden aprobada (solo al registrarla)
             $orden = ! $anterior && ! empty($d['orden_id']) ? OrdenesCompra::paraComprar($user, (int) $d['orden_id']) : null;
+            // O de un requerimiento del día (lo que pidió cocina o almacén)
+            $requerimiento = ! $anterior && ! empty($d['requerimiento_id']) ? Requerimientos::paraComprar($user, (int) $d['requerimiento_id']) : null;
 
             // ---- Forma de pago ----
             $cre = DB::table('credito_dias')->where('cre_dia_id', $d['estadopago'])->where('id_empresa_negocio', $sucursal)->first();
@@ -126,7 +128,8 @@ class Compras
                 $comId = DB::table('compras_cabecera')->insertGetId($cabecera + [
                     'IdUsuario' => $user->IdUsuario, 'id_turno' => Turno::abiertoDe($user)?->id_turno,
                     'est_compra' => 'Registrado', 'created_at' => now(), 'en_transito' => $enTransito,
-                ] + ($orden ? ['orden_id' => $orden->id, 'orden_compra' => OrdenesCompra::codigo($orden)] : []));
+                ] + ($orden ? ['orden_id' => $orden->id, 'orden_compra' => OrdenesCompra::codigo($orden)] : [])
+                  + ($requerimiento ? ['requerimiento_id' => $requerimiento->id] : []));
             }
 
             // ---- Detalle; el ingreso al kardex y el costo del producto, solo si la mercadería ya llegó ----
@@ -143,6 +146,9 @@ class Compras
             Cuentas::sincronizarPorPagar($comId);
             if ($orden) {
                 OrdenesCompra::marcarComprada($orden, $comId);
+            }
+            if ($requerimiento) {
+                Requerimientos::marcarComprado($requerimiento, $comId, $user);
             }
 
             return $comId;
