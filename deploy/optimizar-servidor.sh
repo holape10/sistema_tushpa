@@ -44,6 +44,9 @@ table_open_cache = 8000
 table_definition_cache = 12000
 open_files_limit = 65535
 max_connections = $(( HIJOS * 2 + 50 ))
+# Historial de cambios (binary logs): de fábrica guarda 30 días y llena el disco (~1 GB por día con el padrón de RUC
+# de cada noche). Sin réplicas no hace falta tanto: 3 días. Al reiniciar, MySQL borra solo los que pasaron ese plazo.
+binlog_expire_logs_seconds = 259200
 # Consultas que demoran más de 1 segundo quedan anotadas para saber qué optimizar
 slow_query_log = 1
 slow_query_log_file = /var/log/mysql-lentas.log
@@ -57,7 +60,8 @@ systemctl daemon-reload
 # Revisa el archivo antes de reiniciar (si tiene algo que esta versión de MySQL no conoce, no se reinicia)
 mysqld --validate-config --user=mysql >/dev/null 2>&1 || volver_mysql
 systemctl restart mysqld || volver_mysql
-mysql -uroot -e "SELECT ROUND(@@innodb_buffer_pool_size/1024/1024) AS 'MB en memoria', @@max_connections AS conexiones" 2>/dev/null || true
+echo "    MySQL reiniciado con ${POOL_MB} MB en memoria. Espacio que ocupa ahora (los historiales viejos ya se borraron):"
+du -sh /var/lib/mysql 2>/dev/null || true
 
 verde "2/3 PHP-FPM (hasta ${HIJOS} pedidos atendidos a la vez)"
 POOL=/etc/php-fpm.d/www.conf
