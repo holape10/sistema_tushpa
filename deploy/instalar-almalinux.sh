@@ -226,6 +226,9 @@ if [ -n "${DOMINIO}" ]; then
         || echo "Aún no hay certificado para ${DOMINIO}: revisa que el DNS apunte a este VPS; se reintenta solo cada minuto."
 fi
 
+verde "Ajustando MySQL y PHP a la memoria del VPS"
+bash "${DIR}/deploy/optimizar-servidor.sh" || echo "No se pudo ajustar el servidor: córrelo luego con deploy/optimizar-servidor.sh"
+
 verde "¡Listo!"
 cat <<FIN
 
