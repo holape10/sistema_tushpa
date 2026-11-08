@@ -78,6 +78,8 @@ return [
     'telegram' => [
         'token' => env('TELEGRAM_BOT_TOKEN'),
         'chat_id' => env('TELEGRAM_CHAT_ID'),
+        // Bot de los recordatorios de citas a los doctores (gratis). Si no se crea uno propio, se usa el de arriba
+        'citas_token' => env('TELEGRAM_CITAS_BOT_TOKEN'),
     ],
 
     // Cobro en línea del servicio TUSHPA (tarjeta, Yape y billeteras con QR) a las empresas que le pagan al dueño del

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Schema;
  *  - unas horas antes de la cita (por defecto 2): al paciente y a su doctor, con las mismas plantillas de WhatsApp
  * Y de las citas de mañana (desde la hora elegida):
  *  - al paciente, por WhatsApp (plantilla aprobada por Meta en la API de WhatsApp Business)
- *  - al doctor tratante, su lista de citas por WhatsApp y/o correo
+ *  - al doctor tratante, su lista de citas por WhatsApp, Telegram (gratis) y/o correo
  * El WhatsApp sale con la cuenta de la clínica (Configuración → Recordatorios) o, si no tiene, con la del sistema
  * (WHATSAPP_TOKEN / WHATSAPP_PHONE_ID en el .env). Sin WhatsApp configurado, la pantalla de Recordatorios deja enviarlos
  * con un clic (wa.me). Cada envío queda registrado y no se repite.
@@ -108,6 +108,7 @@ class ClinicaRecordatorios
         return DB::table('citas as c')->leftJoin('users as u', 'u.IdUsuario', '=', 'c.doctor')->leftJoin('especialidad as e', 'e.esp_id', '=', 'c.esp_id')
             ->where('c.id_empresa_negocio', $suc)->where('c.fecha', $fecha)->whereIn('c.estado', ['PROGRAMADA', 'CONFIRMADA'])
             ->orderBy('c.hora')->get(['c.*', 'e.esp_des', 'u.telefono as doctor_telefono', 'u.correo as doctor_correo',
+                Schema::hasColumn('users', 'telegram_chat_id') ? 'u.telegram_chat_id as doctor_telegram' : DB::raw('NULL as doctor_telegram'),
                 DB::raw("COALESCE(NULLIF(TRIM(u.apeusu), ''), u.name) as doctor_nom")]);
     }
 
@@ -155,6 +156,8 @@ class ClinicaRecordatorios
         if (! Schema::hasTable('clinica_recordatorios') || ! Schema::hasTable('citas')) {
             return $res;
         }
+        // Los doctores que acaban de vincular su Telegram
+        TelegramCitas::sincronizar();
         $res = self::antes($ahora, $res);
         $fecha = $ahora->copy()->addDay()->toDateString();
         $sucursales = DB::table('citas')->where('fecha', $fecha)->whereIn('estado', ['PROGRAMADA', 'CONFIRMADA'])->distinct()->pluck('id_empresa_negocio');
@@ -191,6 +194,12 @@ class ClinicaRecordatorios
                         [$ok, $detalle] = self::whatsapp($cuenta, $numero, $cuenta['plantilla_doctor'],
                             [$nombre, self::fechaTexto($fecha), (string) $suyas->count(), self::listaDoctor($suyas)]);
                         self::anotar((int) $suc, 'DOCTOR', $fecha, null, (int) $doctor, 'WHATSAPP', $numero, $ok, $detalle);
+                        $res[$ok ? 'doctores' : 'errores']++;
+                    }
+                    if ($d->doctor_telegram && TelegramCitas::configurado() && ! self::hecho((int) $suc, 'DOCTOR', $fecha, null, (int) $doctor, 'TELEGRAM')) {
+                        [$ok, $detalle] = TelegramCitas::enviar((string) $d->doctor_telegram, '📅 '.self::textoDoctor($nombre, $suyas, $negocio)."\n\n"
+                            .$suyas->map(fn ($c) => '• '.self::horaTexto($c->hora).' — '.$c->paciente.($c->motivo ? ' · '.$c->motivo : '').($c->telefono ? ' · Tel. '.$c->telefono : ''))->implode("\n"));
+                        self::anotar((int) $suc, 'DOCTOR', $fecha, null, (int) $doctor, 'TELEGRAM', 'Telegram', $ok, $detalle);
                         $res[$ok ? 'doctores' : 'errores']++;
                     }
                     if (self::hayCorreo() && filter_var($d->doctor_correo, FILTER_VALIDATE_EMAIL) && ! self::hecho((int) $suc, 'DOCTOR', $fecha, null, (int) $doctor, 'CORREO')) {
@@ -256,6 +265,12 @@ class ClinicaRecordatorios
                     [$ok, $detalle] = self::whatsapp($cuenta, $celDoctor, $cuenta['plantilla_doctor'],
                         [$nombre, self::fechaTexto($hoy), '1', self::listaDoctor(collect([$c]))]);
                     self::anotar((int) $suc, 'DOC_ANTES', $hoy, $c->cit_id, (int) $c->doctor, 'WHATSAPP', $celDoctor, $ok, $detalle);
+                    $res[$ok ? 'doctores' : 'errores']++;
+                }
+                if ($c->doctor_telegram && TelegramCitas::configurado() && ! self::hecho((int) $suc, 'DOC_ANTES', $hoy, $c->cit_id, (int) $c->doctor, 'TELEGRAM')) {
+                    [$ok, $detalle] = TelegramCitas::enviar((string) $c->doctor_telegram, "⏰ {$nombre}, a las ".self::horaTexto($c->hora)." tienes cita en {$negocio}:\n"
+                        .'• '.$c->paciente.($c->motivo ? ' · '.$c->motivo : '').($c->telefono ? ' · Tel. '.$c->telefono : ''));
+                    self::anotar((int) $suc, 'DOC_ANTES', $hoy, $c->cit_id, (int) $c->doctor, 'TELEGRAM', 'Telegram', $ok, $detalle);
                     $res[$ok ? 'doctores' : 'errores']++;
                 }
                 if (self::hayCorreo() && filter_var($c->doctor_correo, FILTER_VALIDATE_EMAIL) && ! self::hecho((int) $suc, 'DOC_ANTES', $hoy, $c->cit_id, (int) $c->doctor, 'CORREO')) {

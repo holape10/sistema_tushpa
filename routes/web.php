@@ -303,6 +303,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/', 'guardar')->name('.guardar');
         Route::post('/probar', 'probar')->middleware('throttle:10,10')->name('.probar');
         Route::post('/manual', 'manual')->name('.manual');
+        Route::post('/telegram/verificar', 'telegramVerificar')->middleware('throttle:60,1')->name('.telegram.verificar');
+        Route::post('/telegram/{usuario}/enlace', 'telegramEnlace')->whereNumber('usuario')->name('.telegram.enlace');
+        Route::post('/telegram/{usuario}/quitar', 'telegramQuitar')->whereNumber('usuario')->name('.telegram.quitar');
+        Route::post('/telegram/{usuario}/probar', 'telegramProbar')->whereNumber('usuario')->middleware('throttle:10,1')->name('.telegram.probar');
     });
     Route::controller(AgendaController::class)->prefix('clinica')->name('clinica.')->group(function () {
         Route::get('/agenda', 'index')->name('agenda');

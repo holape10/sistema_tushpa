@@ -19,6 +19,7 @@ use App\Support\PanelDueno;
 use App\Support\Procesos;
 use App\Support\Promociones;
 use App\Support\Sunat\RescateEnvios;
+use App\Support\TelegramCitas;
 use App\Support\Tenancy\CertificadosClientes;
 use App\Support\Tenancy\DatosCobro;
 use App\Support\Tenancy\Inventario;
@@ -316,6 +317,8 @@ Artisan::command('sunat:rescatar {--ruc= : Solo esta empresa}', function () {
 Schedule::command('sunat:rescatar')->hourlyAt(20)->between('07:00', '22:00')->withoutOverlapping(50);
 
 Artisan::command('clinica:recordatorios {--ruc= : Solo esta empresa}', function () {
+    // Los doctores que tocaron Iniciar en el bot de Telegram (de cualquier empresa)
+    TelegramCitas::recibir();
     $bases = Tenancy::activa()
         ? Cliente::where('estado', 'ACTIVO')->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))->pluck('base_datos', 'ruc')
         : collect(['local' => null]);

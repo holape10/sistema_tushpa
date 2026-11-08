@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Support\Clinica;
 use App\Support\ClinicaFirmas;
 use App\Support\ClinicaRecordatorios;
+use App\Support\TelegramCitas;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -51,7 +52,8 @@ class ClinicaRecordatorioController extends Controller
                     'wa' => $wa($d->doctor_telefono, ClinicaRecordatorios::textoDoctor($d->doctor_nom ?: 'doctor(a)', $suyas, $negocio))];
             })->values(),
             'personal' => DB::table('users as u')->join('role_user as r', 'r.user_IdUsuario', '=', 'u.IdUsuario')->where('u.id_empresa_negocio', $suc)->where('u.estusu', 1)
-                ->whereIn('r.role_id', [2, 10])->select('u.IdUsuario', 'u.name', 'u.apeusu', 'u.telefono', 'u.correo')->distinct()->orderBy('u.apeusu')->get(),
+                ->whereIn('r.role_id', [2, 10])->select('u.IdUsuario', 'u.name', 'u.apeusu', 'u.telefono', 'u.correo', 'u.telegram_chat_id')->distinct()->orderBy('u.apeusu')->get(),
+            'telegram' => TelegramCitas::configurado(),
             'registro' => DB::table('clinica_recordatorios as r')->leftJoin('citas as c', 'c.cit_id', '=', 'r.cit_id')->leftJoin('users as u', 'u.IdUsuario', '=', 'r.doctor')
                 ->where('r.id_empresa_negocio', $suc)->orderByDesc('r.rec_id')->limit(40)
                 ->get(['r.*', 'c.paciente', DB::raw("COALESCE(NULLIF(TRIM(u.apeusu), ''), u.name) as doctor_nom")]),
@@ -106,6 +108,58 @@ class ClinicaRecordatorioController extends Controller
             ['Paciente de prueba', $negocio, ClinicaRecordatorios::fechaTexto(now()->addDay()->toDateString()), '10:00 am']);
 
         return response()->json(['ok' => $ok, 'mensaje' => $ok ? '✔ Mensaje de prueba enviado. Revisa ese WhatsApp.' : $detalle]);
+    }
+
+    /** Telegram del doctor: el enlace para vincularlo (lo abre él en su celular) */
+    public function telegramEnlace(int $usuario): JsonResponse
+    {
+        abort_unless(Auth::user()->esAdmin(), 403);
+        $this->delPersonal($usuario);
+        $enlace = TelegramCitas::enlace($usuario);
+
+        return response()->json($enlace ? ['ok' => true, 'enlace' => $enlace]
+            : ['ok' => false, 'mensaje' => 'Telegram no está configurado en el servidor (falta el token del bot).']);
+    }
+
+    /** ¿Ya tocó Iniciar? Lee el bot y devuelve quiénes quedaron vinculados */
+    public function telegramVerificar(): JsonResponse
+    {
+        abort_unless(Auth::user()->esAdmin(), 403);
+        TelegramCitas::recibir();
+        TelegramCitas::sincronizar();
+
+        return response()->json(['ok' => true, 'vinculados' => DB::table('users')->where('id_empresa_negocio', $this->suc())
+            ->whereNotNull('telegram_chat_id')->pluck('IdUsuario')->map(fn ($id) => (int) $id)->values()]);
+    }
+
+    public function telegramQuitar(int $usuario): JsonResponse
+    {
+        abort_unless(Auth::user()->esAdmin(), 403);
+        $this->delPersonal($usuario);
+        TelegramCitas::desvincular($usuario);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function telegramProbar(int $usuario): JsonResponse
+    {
+        abort_unless(Auth::user()->esAdmin(), 403);
+        $chat = $this->delPersonal($usuario)->telegram_chat_id;
+        if (! $chat) {
+            return response()->json(['ok' => false, 'mensaje' => 'Ese usuario aún no vincula su Telegram.']);
+        }
+        [$ok, $detalle] = TelegramCitas::enviar((string) $chat, '🦷 Prueba: así te llegarán tus citas de '
+            .DB::table('empresa_negocios')->where('id_empresa_negocio', $this->suc())->value('nombre_comercial').'.');
+
+        return response()->json(['ok' => $ok, 'mensaje' => $ok ? '✔ Mensaje de prueba enviado a su Telegram.' : $detalle]);
+    }
+
+    private function delPersonal(int $usuario): object
+    {
+        $u = DB::table('users')->where('IdUsuario', $usuario)->where('id_empresa_negocio', $this->suc())->first();
+        abort_unless($u, 404);
+
+        return $u;
     }
 
     /** Anota un recordatorio enviado a mano (botón de WhatsApp) para que no se repita */

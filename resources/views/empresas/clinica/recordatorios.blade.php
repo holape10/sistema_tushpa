@@ -107,14 +107,34 @@
                                 </select> antes · p. ej. cita a las 5 pm con 2 horas → mensaje a las 3 pm</label>
                         </div>
                         <h3 class="font-bold text-gray-700 pt-2">Celular y correo del personal</h3>
-                        <p class="text-xs text-gray-500">A este celular / correo le llega al doctor su lista de citas.</p>
+                        <p class="text-xs text-gray-500">A este celular / correo / Telegram le llega al doctor su lista de citas y el aviso antes de cada una.</p>
                         <template x-for="p in f.personal" :key="p.IdUsuario">
                             <div class="grid grid-cols-12 gap-2 items-center">
                                 <span class="col-span-12 sm:col-span-4 text-sm font-semibold truncate" x-text="p.nombre"></span>
                                 <input x-model="p.telefono" placeholder="Celular 9 dígitos" maxlength="20" class="{{ $in }} col-span-5 sm:col-span-3">
                                 <input x-model="p.correo" type="email" placeholder="correo@ejemplo.com" maxlength="120" class="{{ $in }} col-span-7 sm:col-span-5">
+                                @if ($telegram)
+                                    {{-- Telegram (gratis): el doctor abre el enlace y toca Iniciar; queda vinculado solo --}}
+                                    <div class="col-span-12 flex flex-wrap items-center gap-2 -mt-1 mb-1">
+                                        <template x-if="!p.telegram">
+                                            <button type="button" @click="vincularTelegram(p)" class="px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 text-xs font-bold hover:bg-sky-100">📲 Vincular Telegram (gratis)</button>
+                                        </template>
+                                        <template x-if="p.enlace && !p.telegram">
+                                            <span class="text-xs text-gray-600">Que el doctor abra este enlace en su celular y toque <b>Iniciar</b>:
+                                                <a :href="p.enlace" target="_blank" class="font-semibold text-sky-700 underline break-all" x-text="p.enlace"></a>
+                                                <button type="button" @click="copiar(p.enlace)" class="ml-1 underline">copiar</button>
+                                                <span class="text-sky-600" x-show="esperando">· esperando…</span></span>
+                                        </template>
+                                        <template x-if="p.telegram">
+                                            <span class="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700">✅ Telegram vinculado
+                                                <button type="button" @click="probarTelegram(p)" class="underline text-sky-700">probar</button>
+                                                <button type="button" @click="quitarTelegram(p)" class="underline text-gray-400">quitar</button></span>
+                                        </template>
+                                    </div>
+                                @endif
                             </div>
                         </template>
+                        @unless ($telegram)<p class="text-xs text-gray-500">Telegram (gratis) aún no está activado en el servidor.</p>@endunless
                         @unless ($hayCorreo)<p class="text-xs text-amber-700">El correo del servidor aún no está configurado: por ahora los avisos al doctor van solo por WhatsApp.</p>@endunless
                     </div>
                     <div class="space-y-3">
@@ -175,7 +195,8 @@
                     recordar_antes: @js($cfg->recordar_antes), horas_antes: @js($cfg->horas_antes),
                     wa_phone_id: @js($cfg->propia ? $cfg->wa_phone_id : ''), wa_token: '', wa_plantilla_paciente: @js($cfg->propia ? $cfg->wa_plantilla_paciente : ''),
                     wa_plantilla_doctor: @js($cfg->propia ? $cfg->wa_plantilla_doctor : ''), wa_idioma: @js($cfg->wa_idioma), quitar_token: false,
-                    personal: @js($personal->map(fn ($p) => ['IdUsuario' => $p->IdUsuario, 'nombre' => $p->apeusu ?: $p->name, 'telefono' => $p->telefono, 'correo' => $p->correo])->values()),
+                    personal: @js($personal->map(fn ($p) => ['IdUsuario' => $p->IdUsuario, 'nombre' => $p->apeusu ?: $p->name, 'telefono' => $p->telefono, 'correo' => $p->correo,
+                        'telegram' => (bool) ($p->telegram_chat_id ?? null), 'enlace' => null])->values()),
                 },
                 async post(url, data) {
                     this.ocupado = true;
@@ -191,6 +212,36 @@
                     if (r.ok) setTimeout(() => location.reload(), 800);
                 },
                 async probar() { const r = await this.post('{{ route('clinica.recordatorios.probar') }}', { celular: this.prueba }); tushpaAviso(r.mensaje || 'Error', r.ok ? 'ok' : 'error'); },
+                // ---------- Telegram de los doctores ----------
+                esperando: false,
+                async vincularTelegram(p) {
+                    const r = await this.post(@js(url('clinica/recordatorios/telegram')) + '/' + p.IdUsuario + '/enlace', {});
+                    if (!r.ok) { tushpaAviso(r.mensaje || 'Error', 'error'); return; }
+                    p.enlace = r.enlace;
+                    this.esperarTelegram();
+                },
+                // Mientras el doctor abre el enlace y toca Iniciar, se revisa cada 4 s (hasta 3 minutos)
+                async esperarTelegram(vueltas = 45) {
+                    if (this.esperando && vueltas === 45) return;
+                    this.esperando = true;
+                    const r = await fetch(@js(route('clinica.recordatorios.telegram.verificar')), { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': CSRF } })
+                        .then(x => x.json()).catch(() => ({ vinculados: [] }));
+                    let nuevos = 0;
+                    this.f.personal.forEach(p => { if (!p.telegram && (r.vinculados || []).includes(p.IdUsuario)) { p.telegram = true; nuevos++; } });
+                    if (nuevos) tushpaAviso('✅ Telegram vinculado', 'ok');
+                    if (this.f.personal.some(p => p.enlace && !p.telegram) && vueltas > 1) { setTimeout(() => this.esperarTelegram(vueltas - 1), 4000); return; }
+                    this.esperando = false;
+                },
+                async quitarTelegram(p) {
+                    if (!confirm('¿Dejar de enviarle las citas por Telegram?')) return;
+                    await this.post(@js(url('clinica/recordatorios/telegram')) + '/' + p.IdUsuario + '/quitar', {});
+                    p.telegram = false; p.enlace = null;
+                },
+                async probarTelegram(p) {
+                    const r = await this.post(@js(url('clinica/recordatorios/telegram')) + '/' + p.IdUsuario + '/probar', {});
+                    tushpaAviso(r.mensaje || 'Error', r.ok ? 'ok' : 'error');
+                },
+                copiar(t) { navigator.clipboard?.writeText(t).then(() => tushpaAviso('Enlace copiado: mándaselo al doctor', 'ok')); },
                 anotar(para, cit_id, doctor) { this.post('{{ route('clinica.recordatorios.manual') }}', { para, cit_id, doctor, fecha: @js($fecha) }); },
             };
         }
