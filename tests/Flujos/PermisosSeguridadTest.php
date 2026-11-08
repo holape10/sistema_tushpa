@@ -45,6 +45,26 @@ class PermisosSeguridadTest extends FlujoTestCase
         $this->actingAs($this->usuario)->get(route('productos.edit', $lomo->IdProducto))->assertOk();
     }
 
+    public function test_un_doble_envio_al_crear_usuario_no_revienta(): void
+    {
+        $datos = ['id_empresa_negocio' => $this->sucursal, 'tdicod' => '1', 'nombre_completo' => 'rojas vasquez elisa', 'estusu' => '1',
+            'asistencia' => '0', 'email' => 'ELISA'.$this->sucursal, 'role_id' => '4', 'password' => 'clave-inicial', 'password_confirmation' => 'clave-inicial'];
+        // El otro envío (doble clic) guarda el mismo usuario justo después de que este pasó la validación
+        User::creating(function (User $u) use ($datos) {
+            if ($u->email === $datos['email'] && ! User::where('email', $datos['email'])->exists()) {
+                $otro = $this->usuario->replicate();
+                $otro->email = $datos['email'];
+                $otro->saveQuietly();
+            }
+        });
+
+        $this->from(route('usuarios.create'))->post(route('usuarios.store'), $datos)
+            ->assertRedirect(route('usuarios.create'))->assertSessionHasErrors('email');
+        // El envío que chocó no deja nada a medias (ni un empleado sin usuario)
+        $this->assertSame(0, DB::table('empleado')->where('emp_nom', 'ROJAS VASQUEZ ELISA')->count());
+        $this->get(route('usuarios.create'))->assertOk()->assertSee('data-enviar', false);
+    }
+
     public function test_no_se_tocan_medios_de_pago_ni_pisos_de_otra_sucursal(): void
     {
         $otra = DB::table('empresa_negocios')->insertGetId(['IdEmpresa' => $this->usuario->IdEmpresa, 'nombre_comercial' => 'OTRA SUCURSAL', 'estado' => 'Activo']);

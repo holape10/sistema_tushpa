@@ -10,7 +10,9 @@
         $modSel = array_map('intval', old('modulos', $modulosAsignados));
     @endphp
 
+    {{-- Un solo envío: un doble clic (o el celular que reenvía) creaba el usuario dos veces --}}
     <form method="POST" action="{{ $usuario ? route('usuarios.update', $usuario->IdUsuario) : route('usuarios.store') }}" enctype="multipart/form-data"
+          onsubmit="if (this.dataset.enviando) { return false; } this.dataset.enviando = '1'; const b = this.querySelector('[data-enviar]'); b.disabled = true; b.textContent = 'Guardando…';"
           class="max-w-6xl space-y-5" x-data="formUsuario({{ $rolSel ?: 'null' }}, {{ $usuario ? 'true' : 'false' }})">
         @csrf
         @if ($usuario) @method('PUT') @endif
@@ -196,7 +198,7 @@
 
         <div class="flex justify-end gap-3">
             <a href="{{ route('usuarios.index') }}" class="px-6 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">✕ Cancelar</a>
-            <button class="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+            <button data-enviar class="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60">
                 {{ $usuario ? 'GUARDAR CAMBIOS' : 'REGISTRAR EMPLEADO' }}</button>
         </div>
     </form>

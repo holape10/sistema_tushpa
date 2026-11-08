@@ -13,6 +13,7 @@ use App\Support\Delivery;
 use App\Support\Estudio;
 use App\Support\Rubros;
 use App\Support\Tenancy\Tenancy;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -255,7 +256,27 @@ class UsuarioController extends Controller
         }
         $d = $this->validar($request);
 
-        $empleado = DB::transaction(function () use ($d) {
+        try {
+            $empleado = $this->crear($d);
+        } catch (UniqueConstraintViolationException) {
+            // Dos envíos casi a la vez (doble clic): el primero ya lo creó
+            return back()->withInput()->withErrors(['email' => 'El usuario de acceso "'.trim($d['email']).'" o su código móvil ya existe. '
+                .'Puede que se haya guardado con el primer clic: revisa la lista de usuarios.']);
+        }
+        $this->guardarFoto($request, $empleado);
+        $nuevo = (int) User::where('emp_id', $empleado->emp_id)->value('IdUsuario');
+        $this->sincronizarMotorizado($nuevo, (int) $d['role_id']);
+        Bitacora::registrar('usuario.crear', 'Creó el usuario '.$this->nombreCompleto($d).' ('.trim($d['email']).')',
+            Bitacora::diferencias(null, self::fotoUsuario($nuevo), self::ETIQUETAS_BITACORA),
+            ['referencia' => ['usuario', $nuevo], 'alerta' => (int) $d['role_id'] === 2]);
+
+        return redirect()->route('usuarios.index')->with('success', 'Usuario '.$this->nombreCompleto($d).' registrado.');
+    }
+
+    /** Crea el empleado, su usuario, su rol y su menú (todo o nada) */
+    private function crear(array $d): Empleado
+    {
+        return DB::transaction(function () use ($d) {
             $empleado = Empleado::create($this->datosEmpleado($d));
 
             $usuario = User::create([
@@ -279,14 +300,6 @@ class UsuarioController extends Controller
 
             return $empleado;
         });
-        $this->guardarFoto($request, $empleado);
-        $nuevo = (int) User::where('emp_id', $empleado->emp_id)->value('IdUsuario');
-        $this->sincronizarMotorizado($nuevo, (int) $d['role_id']);
-        Bitacora::registrar('usuario.crear', 'Creó el usuario '.$this->nombreCompleto($d).' ('.trim($d['email']).')',
-            Bitacora::diferencias(null, self::fotoUsuario($nuevo), self::ETIQUETAS_BITACORA),
-            ['referencia' => ['usuario', $nuevo], 'alerta' => (int) $d['role_id'] === 2]);
-
-        return redirect()->route('usuarios.index')->with('success', 'Usuario '.$this->nombreCompleto($d).' registrado.');
     }
 
     public function edit(User $usuario)
