@@ -333,8 +333,9 @@ Artisan::command('clinica:recordatorios {--ruc= : Solo esta empresa}', function 
     }
 })->purpose('Recuerda por WhatsApp/correo las citas de mañana a los pacientes y a sus doctores');
 
-// Cada 15 minutos de 7am a 9:45pm: cada clínica envía desde la hora que eligió (por defecto 6pm)
-Schedule::command('clinica:recordatorios')->everyFifteenMinutes()->between('07:00', '21:45')->withoutOverlapping(14);
+// Cada 15 minutos: el recordatorio horas antes de cada cita (de 5am a 10:45pm, también para las citas temprano) y,
+// desde la hora que eligió cada clínica (por defecto 6pm), el de las citas de mañana
+Schedule::command('clinica:recordatorios')->everyFifteenMinutes()->between('05:00', '22:45')->withoutOverlapping(14);
 
 Artisan::command('push:claves {--forzar : Cambiarlas aunque ya existan (los celulares tendrán que activar avisos de nuevo)}', function () {
     $env = base_path('.env');

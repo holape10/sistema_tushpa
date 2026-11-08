@@ -691,7 +691,8 @@
             if (!data.success) { document.getElementById('modal_mesa_detalle').textContent = 'Error al cargar.'; return; }
             const html = data.detalles.map((d) => `<div class="flex justify-between gap-2 border-b border-gray-100 py-1.5"><span>${parseFloat(d.ped_det_can)}× ${esc(d.descripcion)}</span><b>${soles(d.ped_det_can * d.ped_det_pre)}</b></div>`).join('');
             document.getElementById('modal_mesa_detalle').innerHTML = (html || '<p class="text-gray-400">Sin ítems</p>')
-                + `<div class="mt-2 text-right text-base font-black text-indigo-700">Total: ${soles(data.total)}</div>`;
+                + (data.cobrado > 0 ? `<div class="mt-2 text-right text-xs text-emerald-700">Ya cobrado en cuentas separadas: ${soles(data.cobrado)}</div>` : '')
+                + `<div class="mt-1 text-right text-base font-black text-indigo-700">${data.cobrado > 0 ? 'Falta cobrar' : 'Total'}: ${soles(data.total)}</div>`;
             document.getElementById('modal_mesa_titulo').textContent = `${mesaNombre} · ${soles(data.total)}`;
             pintarUnidas(pedidoId, data.unidas || []);
         });

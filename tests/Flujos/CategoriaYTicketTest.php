@@ -19,6 +19,21 @@ class CategoriaYTicketTest extends FlujoTestCase
         $this->assertSame('BEBIDAS FRIAS', DB::table('categorias')->where('cat_id', $id)->value('cat_nom'));
     }
 
+    public function test_el_ticket_sale_con_la_fecha_de_emision_elegida_no_con_la_de_hoy(): void
+    {
+        // El 8 se emite con fecha del 7 (lo que va a SUNAT): el ticket y el voucher también dicen 7
+        $this->travelTo('2026-11-08 10:15:00');
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('CAFE', 5, 5), 1]], '03', ['fecEmi' => '2026-11-07']), 'PV');
+        $this->assertSame('2026-11-07', DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->value('ccafem'));
+
+        foreach (['CLASICO', 'COMPACTO', 'MODERNO'] as $diseno) {
+            $ticket = Impresion::ticketComprobante($this->cabecera($id), (object) ['columnas' => 48, 'diseno' => $diseno, 'abrir_cajon' => 0]);
+            $this->assertMatchesRegularExpression('/07\/11\/(2026|26)|2026-11-07/', $ticket, "Ticket {$diseno}");
+            $this->assertDoesNotMatchRegularExpression('/08\/11\/(2026|26)|2026-11-08/', $ticket, "Ticket {$diseno}");
+        }
+        $this->get(route('cobros.voucher', $id))->assertOk()->assertSee('07-11-2026')->assertDontSee('08-11-2026');
+    }
+
     public function test_el_ticket_compacto_puede_salir_sin_el_nombre_del_titular(): void
     {
         DB::table('empresa')->where('IdEmpresa', $this->usuario->IdEmpresa)->update(['NomEmpresa' => 'JUAN PEREZ TITULAR', 'LogEmpresa' => null]);

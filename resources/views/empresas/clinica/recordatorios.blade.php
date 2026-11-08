@@ -99,6 +99,13 @@
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" x-model="f.recordar_paciente" class="rounded text-teal-600"> Recordar al <b>paciente</b> su cita del día siguiente</label>
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" x-model="f.recordar_doctor" class="rounded text-teal-600"> Enviar al <b>doctor</b> su lista de citas del día siguiente</label>
                         <label class="block text-xs font-semibold text-gray-500 max-w-[200px]">Hora de envío<input type="time" x-model="f.hora_envio" class="{{ $in }} mt-1"></label>
+                        <div class="rounded-xl bg-teal-50 p-3 space-y-2">
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" x-model="f.recordar_antes" class="rounded text-teal-600"> Además, recordar <b>antes de la cita</b> al paciente y a su doctor</label>
+                            <label class="flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-600" x-show="f.recordar_antes">
+                                <select x-model.number="f.horas_antes" class="{{ $in }} max-w-[110px]">
+                                    @foreach ([1, 2, 3, 4, 6] as $h)<option value="{{ $h }}">{{ $h }} hora{{ $h > 1 ? 's' : '' }}</option>@endforeach
+                                </select> antes · p. ej. cita a las 5 pm con 2 horas → mensaje a las 3 pm</label>
+                        </div>
                         <h3 class="font-bold text-gray-700 pt-2">Celular y correo del personal</h3>
                         <p class="text-xs text-gray-500">A este celular / correo le llega al doctor su lista de citas.</p>
                         <template x-for="p in f.personal" :key="p.IdUsuario">
@@ -165,6 +172,7 @@
                 ocupado: false, prueba: '', tieneToken: @js($cfg->propia),
                 f: {
                     recordar_paciente: @js($cfg->recordar_paciente), recordar_doctor: @js($cfg->recordar_doctor), hora_envio: @js(substr($cfg->hora_envio, 0, 5)),
+                    recordar_antes: @js($cfg->recordar_antes), horas_antes: @js($cfg->horas_antes),
                     wa_phone_id: @js($cfg->propia ? $cfg->wa_phone_id : ''), wa_token: '', wa_plantilla_paciente: @js($cfg->propia ? $cfg->wa_plantilla_paciente : ''),
                     wa_plantilla_doctor: @js($cfg->propia ? $cfg->wa_plantilla_doctor : ''), wa_idioma: @js($cfg->wa_idioma), quitar_token: false,
                     personal: @js($personal->map(fn ($p) => ['IdUsuario' => $p->IdUsuario, 'nombre' => $p->apeusu ?: $p->name, 'telefono' => $p->telefono, 'correo' => $p->correo])->values()),

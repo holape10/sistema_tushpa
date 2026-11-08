@@ -65,7 +65,7 @@
     </div>
 
     <table class="datos">
-        <tr><td>Fecha:</td><td>{{ \Carbon\Carbon::parse($cab->fecha_hora)->format('d-m-Y H:i:s') }}</td></tr>
+        <tr><td>Fecha:</td><td>{{ \App\Support\Impresion\Impresion::fechaEmision($cab)->format('d-m-Y H:i:s') }}</td></tr>
         <tr><td>Cliente:</td><td>{{ $cab->ccanom }}</td></tr>
         <tr><td>{{ $cab->tdicod === '6' ? 'RUC:' : 'DNI/RUC:' }}</td><td>{{ $cab->ccandi }}</td></tr>
         <tr><td>Dirección:</td><td>{{ $cab->direccion && $cab->direccion !== '--' ? $cab->direccion : '-' }}</td></tr>

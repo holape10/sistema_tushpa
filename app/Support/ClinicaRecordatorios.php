@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Recordatorios automáticos de las citas de mañana (corre solo cada 15 minutos; envía desde la hora elegida):
+ * Recordatorios automáticos (corre solo cada 15 minutos):
+ *  - unas horas antes de la cita (por defecto 2): al paciente y a su doctor, con las mismas plantillas de WhatsApp
+ * Y de las citas de mañana (desde la hora elegida):
  *  - al paciente, por WhatsApp (plantilla aprobada por Meta en la API de WhatsApp Business)
  *  - al doctor tratante, su lista de citas por WhatsApp y/o correo
  * El WhatsApp sale con la cuenta de la clínica (Configuración → Recordatorios) o, si no tiene, con la del sistema
@@ -30,6 +32,8 @@ class ClinicaRecordatorios
             'recordar_paciente' => (bool) ($c->recordar_paciente ?? true),
             'recordar_doctor' => (bool) ($c->recordar_doctor ?? true),
             'hora_envio' => $c->hora_envio ?? '18:00',
+            'recordar_antes' => (bool) ($c->recordar_antes ?? true),
+            'horas_antes' => max(1, min(12, (int) ($c->horas_antes ?? 2))),
             'wa_token' => self::descifrar($c->wa_token ?? null),
             'wa_phone_id' => $c->wa_phone_id ?? null,
             'wa_plantilla_paciente' => $c->wa_plantilla_paciente ?? null,
@@ -151,6 +155,7 @@ class ClinicaRecordatorios
         if (! Schema::hasTable('clinica_recordatorios') || ! Schema::hasTable('citas')) {
             return $res;
         }
+        $res = self::antes($ahora, $res);
         $fecha = $ahora->copy()->addDay()->toDateString();
         $sucursales = DB::table('citas')->where('fecha', $fecha)->whereIn('estado', ['PROGRAMADA', 'CONFIRMADA'])->distinct()->pluck('id_empresa_negocio');
         foreach ($sucursales as $suc) {
@@ -200,6 +205,70 @@ class ClinicaRecordatorios
                         self::anotar((int) $suc, 'DOCTOR', $fecha, null, (int) $doctor, 'CORREO', $d->doctor_correo, $ok, $detalle);
                         $res[$ok ? 'doctores' : 'errores']++;
                     }
+                }
+            }
+        }
+
+        return $res;
+    }
+
+    /**
+     * Unas horas antes de la cita (por defecto 2): al paciente y a su doctor. Sale una sola vez por cita; si la cita se
+     * agendó con menos tiempo, sale apenas se pueda (mientras la cita aún no empiece).
+     *
+     * @param  array{pacientes: int, doctores: int, errores: int}  $res
+     * @return array{pacientes: int, doctores: int, errores: int}
+     */
+    private static function antes(Carbon $ahora, array $res): array
+    {
+        $hoy = $ahora->toDateString();
+        $hora = $ahora->format('H:i:s');
+        $sucursales = DB::table('citas')->where('fecha', $hoy)->whereIn('estado', ['PROGRAMADA', 'CONFIRMADA'])
+            ->where('hora', '>', $hora)->distinct()->pluck('id_empresa_negocio');
+        foreach ($sucursales as $suc) {
+            $cfg = self::config((int) $suc);
+            if (! $cfg->recordar_antes) {
+                continue;
+            }
+            $limite = $ahora->copy()->addHours($cfg->horas_antes)->format('H:i:s');
+            $citas = self::citas((int) $suc, $hoy)->filter(fn ($c) => $c->hora > $hora && $c->hora <= $limite);
+            if ($citas->isEmpty()) {
+                continue;
+            }
+            $negocio = (string) DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('nombre_comercial');
+            $cuenta = self::cuenta($cfg);
+            foreach ($citas as $c) {
+                // Paciente: la misma plantilla de siempre (su cita, el día y la hora)
+                $numero = ClinicaFirmas::celular($c->telefono);
+                if ($cfg->recordar_paciente && $cuenta && $cuenta['plantilla_paciente'] && $numero && ! self::hecho((int) $suc, 'PAC_ANTES', $hoy, $c->cit_id, null, 'WHATSAPP')) {
+                    [$ok, $detalle] = self::whatsapp($cuenta, $numero, $cuenta['plantilla_paciente'],
+                        [$c->paciente, $negocio, self::fechaTexto($c->fecha), self::horaTexto($c->hora)]);
+                    self::anotar((int) $suc, 'PAC_ANTES', $hoy, $c->cit_id, null, 'WHATSAPP', $numero, $ok, $detalle);
+                    $res[$ok ? 'pacientes' : 'errores']++;
+                }
+                if (! $cfg->recordar_doctor || ! $c->doctor) {
+                    continue;
+                }
+                // Doctor: su próxima cita (la plantilla de su lista, con esta sola cita)
+                $nombre = $c->doctor_nom ?: 'doctor(a)';
+                $celDoctor = ClinicaFirmas::celular($c->doctor_telefono);
+                if ($cuenta && $cuenta['plantilla_doctor'] && $celDoctor && ! self::hecho((int) $suc, 'DOC_ANTES', $hoy, $c->cit_id, (int) $c->doctor, 'WHATSAPP')) {
+                    [$ok, $detalle] = self::whatsapp($cuenta, $celDoctor, $cuenta['plantilla_doctor'],
+                        [$nombre, self::fechaTexto($hoy), '1', self::listaDoctor(collect([$c]))]);
+                    self::anotar((int) $suc, 'DOC_ANTES', $hoy, $c->cit_id, (int) $c->doctor, 'WHATSAPP', $celDoctor, $ok, $detalle);
+                    $res[$ok ? 'doctores' : 'errores']++;
+                }
+                if (self::hayCorreo() && filter_var($c->doctor_correo, FILTER_VALIDATE_EMAIL) && ! self::hecho((int) $suc, 'DOC_ANTES', $hoy, $c->cit_id, (int) $c->doctor, 'CORREO')) {
+                    try {
+                        Mail::raw("Hola {$nombre}, en un momento tienes una cita en {$negocio}: ".self::horaTexto($c->hora).' — '.$c->paciente
+                            .($c->motivo ? ' · '.$c->motivo : '').($c->telefono ? ' · Tel. '.$c->telefono : '').'.',
+                            fn ($m) => $m->to($c->doctor_correo)->subject('Tu próxima cita a las '.self::horaTexto($c->hora).' · '.$negocio));
+                        [$ok, $detalle] = [true, 'correo enviado'];
+                    } catch (\Throwable $e) {
+                        [$ok, $detalle] = [false, 'Correo: '.$e->getMessage()];
+                    }
+                    self::anotar((int) $suc, 'DOC_ANTES', $hoy, $c->cit_id, (int) $c->doctor, 'CORREO', $c->doctor_correo, $ok, $detalle);
+                    $res[$ok ? 'doctores' : 'errores']++;
                 }
             }
         }

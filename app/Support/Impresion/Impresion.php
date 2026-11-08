@@ -33,6 +33,17 @@ class Impresion
 
     // ------------------------------------------------------------------ configuración
 
+    /**
+     * La fecha que va impresa: la de EMISIÓN del comprobante (la que eligió quien vendió, también si emitió con fecha
+     * de ayer) con la hora en que se registró. Es la misma que se manda a SUNAT.
+     */
+    public static function fechaEmision(object $cab): Carbon
+    {
+        $hora = Carbon::parse($cab->fecha_hora ?? now())->format('H:i:s');
+
+        return $cab->ccafem ? Carbon::parse(substr((string) $cab->ccafem, 0, 10).' '.$hora) : Carbon::parse($cab->fecha_hora ?? now());
+    }
+
     public static function impresora(?int $id, int $sucursal): ?object
     {
         if (! $id) {
@@ -281,7 +292,7 @@ class Impresion
         $p->linea('=')->negrita()->texto(mb_strtoupper((string) $tdodes))->tamano(1, 2)->texto($numero)->tamano()->negrita(false)->linea('=');
 
         $p->alinear('izq')
-            ->texto('Fecha : '.Carbon::parse($cab->fecha_hora)->format('d/m/Y H:i'))
+            ->texto('Fecha : '.self::fechaEmision($cab)->format('d/m/Y H:i'))
             ->parrafo('Cliente: '.$cab->ccanom)
             ->texto(($cab->tdicod === '6' ? 'RUC' : 'DOC').'   : '.$cab->ccandi);
         if ($cab->direccion && $cab->direccion !== '--') {
@@ -415,7 +426,7 @@ class Impresion
 
         // Fecha y condición en una línea; documento y nombre del cliente en otra
         $p->alinear('izq')
-            ->texto($juntos('Fecha: '.Carbon::parse($cab->fecha_hora)->format('d/m/y H:i'), 'Condición: '.$cab->estadopago))
+            ->texto($juntos('Fecha: '.self::fechaEmision($cab)->format('d/m/y H:i'), 'Condición: '.$cab->estadopago))
             ->parrafo(trim($cab->ccandi.' '.$cab->ccanom));
         if ($cab->direccion && $cab->direccion !== '--') {
             $p->parrafo('Dirección: '.$cab->direccion);
@@ -518,7 +529,7 @@ class Impresion
         // Cliente
         $dato = fn (string $etiqueta, string $valor) => $p->parrafo(mb_str_pad($etiqueta, 13).$valor);
         $p->alinear('izq');
-        $dato('Fecha:', Carbon::parse($cab->fecha_hora)->format('Y-m-d H:i:s'));
+        $dato('Fecha:', self::fechaEmision($cab)->format('Y-m-d H:i:s'));
         $dato('RUC/DNI:', (string) $cab->ccandi);
         $dato('Cliente:', (string) $cab->ccanom);
         $dato('Dirección:', (string) ($cab->direccion ?: '--'));

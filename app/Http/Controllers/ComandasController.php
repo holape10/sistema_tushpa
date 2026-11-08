@@ -264,12 +264,19 @@ class ComandasController extends Controller
         $pedido = Pedido::where('ped_id', $ped_id)
             ->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)
             ->firstOrFail();
-        $detalles = PedidoDetalle::where('ped_id', $ped_id)->where('estadoitem', '!=', 'Eliminado')->get();
+        // Solo lo que falta cobrar: lo ya cobrado en cuentas separadas no se muestra (igual que en la pantalla de cobro)
+        $todos = PedidoDetalle::where('ped_id', $ped_id)->where('estadoitem', '!=', 'Eliminado')->get();
+        $cobrado = round($todos->sum(fn ($d) => min((float) $d->item_facturado, (float) $d->ped_det_can) * $d->ped_det_pre), 2);
+        $detalles = $todos->map(function ($d) {
+            $d->ped_det_can = round((float) $d->ped_det_can - (float) $d->item_facturado, 3);
+
+            return $d;
+        })->filter(fn ($d) => $d->ped_det_can > 0.0001)->values();
         $total = $detalles->sum(fn ($d) => $d->ped_det_can * $d->ped_det_pre);
 
         $unidas = MesasUnidas::delPedido((int) $pedido->ped_id)->map(fn ($m) => ['mes_id' => $m->mes_id, 'nombre' => $m->etiqueta])->values();
 
-        return response()->json(['success' => true, 'pedido' => $pedido, 'detalles' => $detalles, 'total' => $total, 'unidas' => $unidas]);
+        return response()->json(['success' => true, 'pedido' => $pedido, 'detalles' => $detalles, 'total' => $total, 'cobrado' => $cobrado, 'unidas' => $unidas]);
     }
 
     /** Administrador y caja: su "para llevar" o delivery pasa directo a cobrarse */

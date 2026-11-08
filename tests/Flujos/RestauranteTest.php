@@ -81,6 +81,10 @@ class RestauranteTest extends FlujoTestCase
         $this->assertSame('Ocupado', DB::table('mesas')->where('mes_id', $this->mesa)->value('mes_est'));
         $this->assertSame('Aperturado', DB::table('pedidos')->where('ped_id', $pedId)->value('ped_est'));
 
+        // Al tocar la mesa se ve solo lo que falta cobrar (2 menús), no los 3
+        $mesa = $this->getJson(route('comandas.pedido_details', $pedId))->assertOk();
+        $this->assertSame([2.0, 24.0, 12.0], [(float) $mesa->json('detalles.0.ped_det_can'), (float) $mesa->json('total'), (float) $mesa->json('cobrado')]);
+
         $this->assertSame('success', $this->cobrar($pedId, 24)['estado']);
         $this->assertSame('Libre', DB::table('mesas')->where('mes_id', $this->mesa)->value('mes_est'));
         $this->assertEquals(36.00, (float) DB::table('cpe_cabecera')->where('ped_id', $pedId)->sum('ccaitv'));

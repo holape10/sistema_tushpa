@@ -63,12 +63,14 @@ class ClinicaRecordatorioController extends Controller
         abort_unless(Auth::user()->esAdmin(), 403, 'Solo el administrador configura los recordatorios.');
         $d = $request->validate([
             'recordar_paciente' => 'boolean', 'recordar_doctor' => 'boolean', 'hora_envio' => 'required|date_format:H:i',
+            'recordar_antes' => 'boolean', 'horas_antes' => 'nullable|integer|min:1|max:12',
             'wa_token' => 'nullable|string|max:1000', 'wa_phone_id' => 'nullable|regex:/^\d{5,30}$/', 'wa_plantilla_paciente' => 'nullable|regex:/^[a-z0-9_]{1,80}$/',
             'wa_plantilla_doctor' => 'nullable|regex:/^[a-z0-9_]{1,80}$/', 'wa_idioma' => 'nullable|string|max:10', 'quitar_token' => 'boolean',
             'personal' => 'array', 'personal.*.IdUsuario' => 'required|integer', 'personal.*.telefono' => 'nullable|string|max:20', 'personal.*.correo' => 'nullable|email|max:120',
         ], [], ['wa_phone_id' => 'ID del número', 'wa_plantilla_paciente' => 'plantilla del paciente', 'wa_plantilla_doctor' => 'plantilla del doctor', 'personal.*.correo' => 'correo']);
         $suc = $this->suc();
         $fila = ['recordar_paciente' => (int) ($d['recordar_paciente'] ?? 0), 'recordar_doctor' => (int) ($d['recordar_doctor'] ?? 0), 'hora_envio' => $d['hora_envio'],
+            'recordar_antes' => (int) ($d['recordar_antes'] ?? 0), 'horas_antes' => (int) ($d['horas_antes'] ?? 2),
             'wa_phone_id' => $d['wa_phone_id'] ?? null, 'wa_plantilla_paciente' => $d['wa_plantilla_paciente'] ?? null,
             'wa_plantilla_doctor' => $d['wa_plantilla_doctor'] ?? null, 'wa_idioma' => ($d['wa_idioma'] ?? '') ?: 'es', 'updated_at' => now()];
         // El token no se muestra nunca: solo se reemplaza si escriben uno nuevo
