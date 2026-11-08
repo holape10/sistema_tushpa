@@ -14,6 +14,18 @@ return [
     |
     */
 
+    // Asistente IA (Claude, de Anthropic): la clave se crea en platform.claude.com y va solo en el .env del servidor
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+        'modelo' => env('ASISTENTE_MODELO', 'claude-opus-5-5'),
+        // Solo si se usa un proxy (normalmente vacío: va directo a api.anthropic.com)
+        'base_url' => env('ANTHROPIC_BASE_URL'),
+        // Tope de gasto de TODO el sistema en el mes (en dólares): llegando a él, el asistente se pausa hasta el mes siguiente
+        'tope_mensual_usd' => (float) env('ASISTENTE_TOPE_USD', 20),
+        // Preguntas al mes por empresa, si en el panel no se le puso otro límite
+        'limite_empresa' => (int) env('ASISTENTE_LIMITE_EMPRESA', 100),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

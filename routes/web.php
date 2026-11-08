@@ -5,6 +5,7 @@ use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AlmacenController;
 use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\AsistenteController;
 use App\Http\Controllers\AutoservicioController;
 use App\Http\Controllers\AvisoCelularController;
 use App\Http\Controllers\BancoController;
@@ -706,6 +707,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/compras/meses', [CompraController::class, 'mes'])->name('compras.mes');
     Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])->whereNumber('id')->name('compras.recibir');
     // Órdenes de compra: pedido → aprobación del administrador → compra
+    // Asistente IA (Claude): el administrador le pregunta por su negocio
+    Route::get('/asistente', [AsistenteController::class, 'index'])->name('asistente.index');
+    Route::post('/asistente/preguntar', [AsistenteController::class, 'preguntar'])->middleware('throttle:15,1')->name('asistente.preguntar');
+    Route::post('/asistente/nueva', [AsistenteController::class, 'nueva'])->name('asistente.nueva');
     // Inventario ciego (cuenta sin ver el stock) y control de insumos (recetas vs. lo que faltó)
     Route::get('/conteo-ciego', [ConteoCiegoController::class, 'index'])->name('conteo_ciego.index');
     Route::get('/conteo-ciego/nuevo', [ConteoCiegoController::class, 'create'])->name('conteo_ciego.create');

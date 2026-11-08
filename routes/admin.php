@@ -5,6 +5,7 @@
 use App\Http\Controllers\Admin\AccesoController;
 use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\AnuncioController;
+use App\Http\Controllers\Admin\AsistenteController;
 use App\Http\Controllers\Admin\CertificadoController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\ComprobanteController;
@@ -113,6 +114,9 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     // Mis cuentas y QR de cobro (cada usuario, también el dueño, puede tener varios)
     // Monitor de errores del sistema (solo el dueño)
     Route::get('/errores', [ErrorController::class, 'index'])->name('errores.index');
+    // Asistente IA: gasto del mes y qué empresas lo tienen (solo el dueño)
+    Route::get('/asistente', [AsistenteController::class, 'index'])->name('asistente.index');
+    Route::post('/asistente/{cliente}', [AsistenteController::class, 'guardar'])->whereNumber('cliente')->name('asistente.guardar');
     Route::post('/errores/probar', [ErrorController::class, 'probar'])->middleware('throttle:5,1')->name('errores.probar');
     Route::post('/errores/resolver-todos', [ErrorController::class, 'resolverTodos'])->name('errores.resolver_todos');
     Route::post('/errores/{id}/resolver', [ErrorController::class, 'resolver'])->whereNumber('id')->name('errores.resolver');

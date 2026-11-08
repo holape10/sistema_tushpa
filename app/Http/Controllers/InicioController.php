@@ -21,6 +21,7 @@ class InicioController extends Controller
     /** Ícono (Font Awesome) y color de cada módulo, por su URL */
     private const ACCESOS = [
         '/dashboard' => ['fa-chart-line', '#f59e0b'],
+        '/asistente' => ['fa-wand-magic-sparkles', '#7c3aed'],
         '/punto-venta' => ['fa-cash-register', '#0891b2'],
         '/pv-movil' => ['fa-mobile-screen-button', '#6366f1'],
         '/comandas' => ['fa-utensils', '#16a34a'],
