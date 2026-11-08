@@ -80,6 +80,39 @@ class ControlAlmacenTest extends FlujoTestCase
         $this->assertSame('RECIBIDO', DB::table('requerimientos')->where('id', $rq->id)->value('estado'));
     }
 
+    public function test_el_almacen_envia_a_un_restaurante_y_le_crea_el_producto_que_no_tenia(): void
+    {
+        // Sede "almacén" (la de siempre) y un restaurante que no tiene ni el arroz ni su categoría
+        $restaurante = DB::table('empresa_negocios')->insertGetId(['IdEmpresa' => $this->usuario->IdEmpresa, 'nombre_comercial' => 'RESTAURANTE CENTRO', 'estado' => 'Activo']);
+        $almacenRest = DB::table('almacenes')->insertGetId(['descripcion' => 'ALMACEN CENTRO', 'predeterminado' => 1, 'id_empresa_negocio' => $restaurante, 'direccion' => '-', 'ubigeo' => '']);
+        $arroz = $this->insumo('ARROZ COSTEÑO 50KG', 40, codigo: 'ARR50');
+        $aceite = $this->insumo('ACEITE PRIMOR', 10);
+        $aceiteRest = $this->insumo('ACEITE PRIMOR', 1, $restaurante, $almacenRest);
+        $almacenero = $this->conRol(17, $this->sucursal, ['/requerimientos']);
+        $cocinaRest = $this->conRol(16, $restaurante, ['/requerimientos']);
+
+        $this->actingAs($almacenero)->get(route('requerimientos.enviar'))->assertOk()->assertSee('RESTAURANTE CENTRO');
+        // No deja enviar más de lo que hay
+        $this->post(route('requerimientos.enviar'), ['destino' => $restaurante, 'id_almacen_origen' => $this->almacen,
+            'items' => [['id' => $arroz->IdProducto, 'cantidad' => 99]]])->assertSessionHas('error');
+        $this->post(route('requerimientos.enviar'), ['destino' => $restaurante, 'id_almacen_origen' => $this->almacen, 'items' => [
+            ['id' => $arroz->IdProducto, 'cantidad' => 15], ['id' => $aceite->IdProducto, 'cantidad' => 4], ['id' => $aceite->IdProducto + 999999, 'cantidad' => 0]]])
+            ->assertSessionHas('success');
+
+        $copia = DB::table('productos')->where('id_empresa_negocio', $restaurante)->where('procod', 'ARR50')->first();
+        $this->assertNotNull($copia, 'Al restaurante se le creó el arroz que no tenía.');
+        $this->assertSame(['ARROZ COSTEÑO 50KG', 4, 10.0], [$copia->pronom, (int) $copia->promocion, (float) $copia->costo]);
+        $this->assertSame(1, DB::table('productos')->where('id_empresa_negocio', $restaurante)->where('pronom', 'ACEITE PRIMOR')->count(), 'El aceite ya existía: no se duplica.');
+        $this->assertSame([25.0, 6.0], [$this->stockEn($arroz, $this->almacen), $this->stockEn($aceite, $this->almacen)]);
+
+        // El restaurante lo ve por recibir y confirma: entra a su stock
+        $rq = DB::table('requerimientos')->where('id_empresa_negocio', $restaurante)->latest('id')->first();
+        $this->assertSame('EN CAMINO', $rq->estado);
+        $this->actingAs($cocinaRest)->post(route('requerimientos.recibir', $rq->id))->assertSessionHas('success');
+        $this->assertSame([15.0, 5.0], [(float) DB::table('producto_stock')->where('IdProducto', $copia->IdProducto)->where('id_almacen', $almacenRest)->value('stock'),
+            $this->stockEn($aceiteRest, $almacenRest)]);
+    }
+
     public function test_la_produccion_del_dia_calcula_los_insumos_de_las_recetas_y_pide_lo_que_falta(): void
     {
         $pescado = $this->insumo('PESCADO', 2);

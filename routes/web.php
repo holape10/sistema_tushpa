@@ -730,6 +730,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/requerimientos/{id}/despachar', [RequerimientoController::class, 'despachar'])->whereNumber('id')->name('requerimientos.despachar');
     Route::post('/requerimientos/{id}/recibir', [RequerimientoController::class, 'recibir'])->whereNumber('id')->name('requerimientos.recibir');
     Route::match(['get', 'post'], '/requerimientos/produccion', [RequerimientoController::class, 'produccion'])->name('requerimientos.produccion');
+    Route::match(['get', 'post'], '/requerimientos/enviar', [RequerimientoController::class, 'enviar'])->name('requerimientos.enviar');
     Route::get('/ordenes-compra', [OrdenCompraController::class, 'index'])->name('ordenes_compra.index');
     Route::get('/ordenes-compra/nueva', [OrdenCompraController::class, 'create'])->name('ordenes_compra.create');
     Route::post('/ordenes-compra', [OrdenCompraController::class, 'store'])->name('ordenes_compra.store');

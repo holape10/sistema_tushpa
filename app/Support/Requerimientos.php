@@ -398,4 +398,114 @@ class Requerimientos
                 'falta' => ceil($falta * 100) / 100, 'platos' => implode(', ', array_unique($necesario[$i->IdProducto]['platos']))];
         })->sortBy([fn ($a, $b) => ($b->falta > 0) <=> ($a->falta > 0), fn ($a, $b) => strcmp($a->nombre, $b->nombre)])->values();
     }
+
+    /**
+     * Envío directo de esta sede (p. ej. el almacén central) a otra, sin que la otra lo haya pedido: sale del almacén
+     * ahora, viaja en camino y la otra sede lo recibe. Lo que la otra sede no tiene en su catálogo se le crea copiado
+     * (código, nombre, unidad, tipo, costo y categoría) para que pueda entrar a su stock. Devuelve el id.
+     *
+     * @param  array<int, array{id: int, cantidad: mixed}>  $items  productos de ESTA sede
+     */
+    public static function enviarASede(User $user, int $destino, int $almacenOrigen, array $items, ?string $observaciones = null): int
+    {
+        if (! self::sedes($user)->contains('id_empresa_negocio', $destino)) {
+            throw new \RuntimeException('Esa sede no es de tu empresa.');
+        }
+        if (! DB::table('almacenes')->where('id_almacen', $almacenOrigen)->where('id_empresa_negocio', $user->id_empresa_negocio)->exists()) {
+            throw new \RuntimeException('Almacén no válido.');
+        }
+        $almacenDestino = Kardex::almacenPredeterminado($destino);
+        if (! $almacenDestino) {
+            throw new \RuntimeException('La sede de destino no tiene almacén: créale uno primero.');
+        }
+        $cantidades = collect($items)->mapWithKeys(fn ($i) => [(int) ($i['id'] ?? 0) => round((float) ($i['cantidad'] ?? 0), 3)])->filter(fn ($c) => $c > 0);
+        if ($cantidades->isEmpty()) {
+            throw new \RuntimeException('Pon la cantidad que envías de al menos un producto.');
+        }
+        $productos = Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->whereIn('promocion', Compras::TIPOS_CON_STOCK)
+            ->whereIn('IdProducto', $cantidades->keys())->get()->keyBy('IdProducto');
+        if ($productos->count() !== $cantidades->count()) {
+            throw new \RuntimeException('Hay productos que no son de esta sede o no manejan stock.');
+        }
+        $nombreDestino = DB::table('empresa_negocios')->where('id_empresa_negocio', $destino)->value('nombre_comercial');
+
+        $id = DB::transaction(function () use ($user, $destino, $almacenOrigen, $almacenDestino, $cantidades, $productos, $observaciones, $nombreDestino) {
+            $numero = (int) DB::table('requerimientos')->where('id_empresa_negocio', $destino)->lockForUpdate()->max('numero') + 1;
+            $id = DB::table('requerimientos')->insertGetId([
+                'numero' => $numero, 'id_empresa_negocio' => $destino, 'id_almacen' => $almacenDestino->id_almacen, 'fecha_para' => now()->toDateString(),
+                'sucursal_origen' => $user->id_empresa_negocio, 'id_almacen_origen' => $almacenOrigen, 'urgente' => false,
+                'IdUsuario' => $user->IdUsuario, 'estado' => 'EN CAMINO', 'despachado_por' => $user->IdUsuario, 'despachado_at' => now(),
+                'observaciones' => trim('Envío directo. '.($observaciones ?? '')) ?: null, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $r = DB::table('requerimientos')->find($id);
+            $enDestino = self::emparejarEn($destino, $productos);
+            foreach ($cantidades as $productoId => $cantidad) {
+                $origen = $productos[$productoId];
+                [$copia, $creado] = $enDestino[$productoId] ?? [self::copiarProducto($origen, $destino), true];
+                Kardex::registrar((int) $origen->IdProducto, $almacenOrigen, $cantidad, 'E', [
+                    'exigir_stock' => true, 'cod_tip_ope' => '11', 'costo' => (float) $origen->costo, 'numero' => self::codigo($r),
+                    'descripcion' => 'ENVÍO A SEDE '.mb_strtoupper((string) $nombreDestino).' '.self::codigo($r), 'fecha_mov' => now()->toDateString(),
+                    'id_empresa_negocio' => $user->id_empresa_negocio, 'id_almacen_origen' => $almacenOrigen, 'id_almacen_destino' => $almacenDestino->id_almacen,
+                ]);
+                DB::table('requerimientos_detalle')->insert([
+                    'requerimiento_id' => $id, 'IdProducto' => $copia, 'IdProducto_origen' => $origen->IdProducto, 'cantidad' => $cantidad, 'enviado' => $cantidad,
+                    'nota' => $creado ? 'Producto nuevo en tu sede: revisa su precio de venta y su categoría' : null,
+                ]);
+            }
+
+            return $id;
+        });
+        self::avisar($id);
+
+        return $id;
+    }
+
+    /**
+     * Los productos equivalentes en el catálogo de otra sede (por código; si no, por nombre).
+     *
+     * @return array<int, array{0: int, 1: bool}> IdProducto de origen => [IdProducto en la otra sede, false]
+     */
+    private static function emparejarEn(int $sede, Collection $productos): array
+    {
+        $catalogo = DB::table('productos')->where('id_empresa_negocio', $sede)->whereIn('promocion', Compras::TIPOS_CON_STOCK)->get(['IdProducto', 'procod', 'pronom']);
+        $porCodigo = $catalogo->filter(fn ($p) => trim((string) $p->procod) !== '')->keyBy(fn ($p) => mb_strtoupper(trim($p->procod)));
+        $porNombre = $catalogo->keyBy(fn ($p) => mb_strtoupper(trim($p->pronom)));
+        $pares = [];
+        foreach ($productos as $p) {
+            $codigo = mb_strtoupper(trim((string) $p->procod));
+            $par = ($codigo !== '' ? $porCodigo->get($codigo) : null) ?? $porNombre->get(mb_strtoupper(trim($p->pronom)));
+            if ($par) {
+                $pares[$p->IdProducto] = [(int) $par->IdProducto, false];
+            }
+        }
+
+        return $pares;
+    }
+
+    /** Crea en otra sede una copia del producto (con su categoría y subcategoría, que también se crean si no existen) */
+    private static function copiarProducto(Producto $origen, int $sede): int
+    {
+        $catOrigen = DB::table('categorias')->where('cat_id', $origen->cat_id)->first();
+        $nombreCat = $catOrigen->cat_nom ?? 'GENERAL';
+        $cat = DB::table('categorias')->where('id_empresa_negocio', $sede)->where('cat_nom', $nombreCat)->first();
+        $catId = $cat->cat_id ?? DB::table('categorias')->insertGetId([
+            'cat_nom' => $nombreCat, 'tip_pro_id' => $catOrigen->tip_pro_id ?? null, 'tipo' => $catOrigen->tipo ?? null, 'color' => $catOrigen->color ?? null,
+            'visible' => $catOrigen->visible ?? 1, 'IdEmpresa' => $origen->IdEmpresa, 'id_empresa_negocio' => $sede,
+        ]);
+        $subOrigen = $origen->subcat_id ? DB::table('subcategorias')->where('subcat_id', $origen->subcat_id)->value('subcat_nom') : null;
+        $subId = null;
+        if ($subOrigen) {
+            $subId = DB::table('subcategorias')->where('cat_id', $catId)->where('subcat_nom', $subOrigen)->value('subcat_id')
+                ?? DB::table('subcategorias')->insertGetId(['subcat_nom' => $subOrigen, 'cat_id' => $catId, 'id_empresa_negocio' => $sede, 'IdEmpresa' => $origen->IdEmpresa]);
+        }
+
+        return (int) Producto::create([
+            'procod' => $origen->procod, 'codigo_barra' => $origen->codigo_barra, 'pronom' => $origen->pronom, 'descripcion' => $origen->descripcion,
+            'umecod' => $origen->umecod ?: 'NIU', 'ume_equivalente' => $origen->ume_equivalente, 'factor_equivalente' => $origen->factor_equivalente,
+            'costo' => $origen->costo ?: 0, 'propun' => $origen->propun ?: 0, 'promocion' => $origen->promocion, 'cat_id' => $catId, 'subcat_id' => $subId,
+            'tip_pro_id' => $cat->tip_pro_id ?? ($catOrigen->tip_pro_id ?? null), 'stock_min' => 0, 'control_lote' => $origen->control_lote,
+            'unspsc' => $origen->unspsc, 'tipo_existencia' => $origen->tipo_existencia, 'proest' => 'Activo',
+            'IdEmpresa' => $origen->IdEmpresa, 'id_empresa_negocio' => $sede,
+        ])->IdProducto;
+    }
 }

@@ -15,6 +15,9 @@
             <h1 class="text-xl font-extrabold text-gray-800">📝 Requerimientos del día</h1>
             <p class="text-sm text-gray-500">Cocina o almacén pide lo que falta; {{ $atiende ? 'tú lo compras, marcas lo comprado y lo registras como compra' : 'el administrador lo compra' }}.</p>
         </div>
+        @if (\App\Support\Requerimientos::sedes(auth()->user())->isNotEmpty())
+            <a href="{{ route('requerimientos.enviar') }}" class="h-10 px-4 inline-flex items-center rounded-xl bg-sky-50 text-sky-800 ring-1 ring-sky-200 text-sm font-bold">🚚 Enviar a otra sede</a>
+        @endif
         <a href="{{ route('requerimientos.produccion') }}" class="h-10 px-4 inline-flex items-center rounded-xl bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 text-sm font-bold">🍳 Producción del día</a>
         <a href="{{ route('requerimientos.create') }}" class="h-10 px-5 inline-flex items-center rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Nuevo requerimiento</a>
     </div>

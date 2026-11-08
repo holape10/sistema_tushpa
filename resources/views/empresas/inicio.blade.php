@@ -63,6 +63,7 @@
                         <a href="{{ route('requerimientos.show', $rq->id) }}" class="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-indigo-200 hover:ring-indigo-400">
                             <b class="font-mono text-indigo-700">{{ \App\Support\Requerimientos::codigo($rq) }}</b>
                             @if ($rq->urgente)<span class="rounded-md bg-rose-600 px-1.5 text-xs font-black text-white">URGENTE</span>@endif
+                            @if ($rq->estado === 'EN CAMINO')<span class="rounded-md bg-sky-600 px-1.5 text-xs font-black text-white">🚚 POR RECIBIR</span>@endif
                             <span class="text-gray-700">para el {{ \Carbon\Carbon::parse($rq->fecha_para)->locale('es')->isoFormat('ddd D') }} · {{ $rq->lineas }} producto(s){{ $rq->sucursal_origen ? ' · lo pide la sede '.$rq->sede : '' }}</span>
                             <span class="text-xs text-gray-400">{{ $rq->pidio }}</span>
                         </a>

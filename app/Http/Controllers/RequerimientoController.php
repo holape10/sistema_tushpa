@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Almacen;
 use App\Models\Producto;
 use App\Support\Bitacora;
+use App\Support\Compras;
 use App\Support\Requerimientos;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -139,6 +140,45 @@ class RequerimientoController extends Controller
         return ! empty($d['registrar'])
             ? redirect()->route('compras.create', ['requerimiento' => $id, 'comprobante' => $d['comprobante'] ?? '12'])
             : back()->with('success', 'Guardado lo comprado. Cuando termines, regístralo como compra.');
+    }
+
+    /** Envío directo a otra sede (sin pedido): el almacén central repone a los restaurantes */
+    public function enviar(Request $request): View|RedirectResponse
+    {
+        $this->autorizar();
+        $user = Auth::user();
+        $sedes = Requerimientos::sedes($user);
+        abort_if($sedes->isEmpty(), 404, 'Tu empresa tiene una sola sede.');
+        $almacenes = Almacen::where('id_empresa_negocio', $user->id_empresa_negocio)->orderByDesc('predeterminado')->orderBy('descripcion')->get(['id_almacen', 'descripcion']);
+        abort_if($almacenes->isEmpty(), 404, 'Tu sede no tiene almacén.');
+
+        if ($request->isMethod('post')) {
+            $d = $request->validate(['destino' => 'required|integer', 'id_almacen_origen' => 'required|integer', 'observaciones' => 'nullable|string|max:400',
+                'items' => 'required|array|max:500', 'items.*.id' => 'required|integer', 'items.*.cantidad' => 'nullable|numeric|min:0|max:9999999'],
+                ['items.required' => 'Pon la cantidad que envías de al menos un producto.']);
+            try {
+                $id = Requerimientos::enviarASede($user, (int) $d['destino'], (int) $d['id_almacen_origen'], $d['items'], $d['observaciones'] ?? null);
+            } catch (\RuntimeException $e) {
+                return back()->withInput()->with('error', $e->getMessage());
+            }
+            $r = DB::table('requerimientos')->find($id);
+            $nuevos = DB::table('requerimientos_detalle')->where('requerimiento_id', $id)->whereNotNull('nota')->count();
+            Bitacora::registrar('almacen.envio_sede', 'Envió '.Requerimientos::codigo($r).' a la sede '.$sedes->firstWhere('id_empresa_negocio', $r->id_empresa_negocio)?->nombre_comercial
+                .($nuevos ? " ({$nuevos} producto(s) nuevos creados en su catálogo)" : ''), null, ['referencia' => ['requerimiento', $id]]);
+
+            return redirect()->route('requerimientos.show', $id)->with('success', '🚚 Enviado: ya salió de tu almacén. Entra al de la otra sede cuando lo reciban.'
+                .($nuevos ? " A esa sede se le crearon {$nuevos} producto(s) que no tenía." : ''));
+        }
+
+        $almacen = $almacenes->firstWhere('id_almacen', (int) $request->query('almacen')) ?? $almacenes->first();
+
+        return view('empresas.requerimientos.enviar', [
+            'sedes' => $sedes, 'almacenes' => $almacenes, 'almacen' => $almacen,
+            'productos' => DB::table('productos as p')->leftJoin('producto_stock as s', fn ($j) => $j->on('s.IdProducto', '=', 'p.IdProducto')->where('s.id_almacen', $almacen->id_almacen))
+                ->leftJoin('categorias as c', 'c.cat_id', '=', 'p.cat_id')
+                ->where('p.id_empresa_negocio', $user->id_empresa_negocio)->where('p.proest', 'Activo')->whereIn('p.promocion', Compras::TIPOS_CON_STOCK)
+                ->orderBy('c.cat_nom')->orderBy('p.pronom')->get(['p.IdProducto', 'p.pronom', 'p.umecod', 'c.cat_nom', DB::raw('COALESCE(s.stock, 0) as stock')]),
+        ]);
     }
 
     /** La sede central envía lo pedido por otra sede */
