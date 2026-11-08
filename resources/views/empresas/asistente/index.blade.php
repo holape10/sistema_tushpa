@@ -4,7 +4,7 @@
 @php
     $ejemplos = ['¿Cómo van mis ventas este mes comparado con el mes pasado?', '¿Qué productos me dejan más utilidad y cuáles casi nada?',
         '¿Qué insumos se están por acabar y cuánto debo comprar?', '¿Quiénes me deben y cuánto está vencido?',
-        '¿Hay algo raro en mi caja, descuentos o anulaciones de esta semana?', '¿Cómo están mis cuentas contables del mes?'];
+        '¿Hay algo raro en mi caja, descuentos o anulaciones de esta semana?', '¿Cómo envío productos del almacén a otra sede?'];
 @endphp
 <div class="max-w-3xl mx-auto flex flex-col" style="min-height: calc(100vh - 9rem)" x-data="asistente(@js($historial), @js($cupo))">
     <div class="bg-white rounded-2xl shadow-sm p-4 sm:p-5 flex flex-wrap items-center gap-3">

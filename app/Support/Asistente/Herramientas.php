@@ -86,6 +86,7 @@ class Herramientas
                     'prefijo' => ['type' => 'string', 'description' => 'Cuentas que empiezan con esto, p. ej. 70, 60, 42, 1041 (opcional).'],
                 ], 'required' => ['desde', 'hasta']],
             ],
+            Guias::definicion(),
         ];
     }
 
@@ -101,6 +102,7 @@ class Herramientas
                 'control_insumos' => self::controlInsumos($user, $input),
                 'cuentas_pendientes' => self::cuentas($user, $input),
                 'saldos_contables' => self::saldos($user, $input),
+                'ayuda_sistema' => Guias::buscar($input),
                 default => throw new \InvalidArgumentException("No existe la herramienta {$nombre}."),
             };
         } catch (\InvalidArgumentException $e) {

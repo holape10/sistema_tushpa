@@ -110,6 +110,20 @@ class AsistenteTest extends FlujoTestCase
         $this->assertCount(1, $this->llamadas, 'Bloqueado no se llama a la API (no cuesta nada).');
     }
 
+    public function test_explica_como_hacer_las_cosas_del_sistema(): void
+    {
+        $porTema = json_decode(Herramientas::ejecutar($this->usuario, 'ayuda_sistema', ['tema' => 'enviar_entre_sedes']), true);
+        $this->assertStringContainsString('Enviar a otra sede', $porTema['guias'][0]['pasos']);
+
+        // Con sus propias palabras también la encuentra
+        $buscando = json_decode(Herramientas::ejecutar($this->usuario, 'ayuda_sistema', ['buscar' => 'como paso productos del almacen al restaurante']), true);
+        $this->assertSame('Enviar productos o insumos del almacén a otra sede (sucursal)', $buscando['guias'][0]['titulo']);
+
+        $nada = json_decode(Herramientas::ejecutar($this->usuario, 'ayuda_sistema', ['buscar' => 'xyz qwerty']), true);
+        $this->assertArrayHasKey('aviso', $nada);
+        $this->assertContains('ayuda_sistema', array_column(Herramientas::definiciones(), 'name'));
+    }
+
     public function test_solo_el_administrador(): void
     {
         $cajero = $this->usuario->replicate();
