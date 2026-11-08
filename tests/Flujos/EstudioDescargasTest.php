@@ -100,6 +100,13 @@ class EstudioDescargasTest extends FlujoTestCase
         $this->get(route('estudio.elegir'))->assertOk()->assertSee('Descarga de Octubre 2026');
         $this->get(route('estudio.descargas'))->assertOk()->assertSee('LLAMA PE SA')->assertSee('sin credenciales');
         $this->assertFalse(EstudioDescargas::toca());
+
+        // Desde ahí entra a esa empresa directo a su DBF de compras del mes, para revisarlo y descargarlo
+        $this->get(route('estudio.descargas', ['periodo' => '202610']))->assertSee('DBF Compras');
+        $this->post(route('estudio.cambiar'), ['ruc' => self::CON_CLAVES, 'ir' => '/sire/dbf?libro=compras&periodo=202610'])
+            ->assertRedirect(url('/sire/dbf?libro=compras&periodo=202610'));
+        $this->assertSame(self::CON_CLAVES, (string) $this->usuario->fresh()->IdEmpresa);
+        $this->get('/sire/dbf?libro=compras&periodo=202610')->assertOk()->assertSee('134277');
     }
 
     public function test_reintentar_vuelve_a_pedir_lo_que_fallo_y_solo_el_administrador_programa(): void

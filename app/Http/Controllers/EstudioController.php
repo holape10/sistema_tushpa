@@ -219,6 +219,8 @@ class EstudioController extends Controller
             'resumen' => EstudioDescargas::resumen($periodo), 'esAdmin' => Auth::user()->esAdmin(),
             'periodos' => DB::table('estudio_descargas')->distinct()->orderByDesc('periodo')->limit(12)->pluck('periodo'),
             'siguiente' => EstudioDescargas::periodo(),
+            // A qué empresas puede entrar este usuario (para los accesos directos a su DBF)
+            'puede' => Estudio::empresas(Auth::user())->pluck('IdEmpresa')->map(fn ($r) => (string) $r)->all(),
         ]);
     }
 

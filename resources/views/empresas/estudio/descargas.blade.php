@@ -83,7 +83,20 @@
         <div class="divide-y divide-gray-100">
             @forelse ($empresas as $ruc => $filas)
                 <div class="px-4 sm:px-5 py-3 space-y-1.5">
-                    <p class="font-bold text-gray-800">{{ $filas->first()->NomEmpresa }} <span class="font-mono text-xs text-gray-400">{{ $ruc }}</span></p>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <p class="flex-1 min-w-48 font-bold text-gray-800">{{ $filas->first()->NomEmpresa }} <span class="font-mono text-xs text-gray-400">{{ $ruc }}</span></p>
+                        {{-- Entrar a esa empresa directo a su DBF del periodo (compras o ventas) para revisarlo y descargarlo --}}
+                        @if (in_array((string) $ruc, $puede, true))
+                            @foreach (['compras' => 'DBF Compras', 'ventas' => 'DBF Ventas'] as $libro => $texto)
+                                <form method="POST" action="{{ route('estudio.cambiar') }}">
+                                    @csrf
+                                    <input type="hidden" name="ruc" value="{{ $ruc }}">
+                                    <input type="hidden" name="ir" value="/sire/dbf?libro={{ $libro }}&periodo={{ $periodo }}">
+                                    <button class="h-8 px-3 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100">📄 {{ $texto }}</button>
+                                </form>
+                            @endforeach
+                        @endif
+                    </div>
                     <div class="flex flex-wrap gap-2">
                         @foreach ($filas->sortBy(fn ($f) => array_search($f->tarea, array_keys(EstudioDescargas::TAREAS))) as $f)
                             @php [$nombreEstado, $color] = EstudioDescargas::ESTADOS[$f->estado]; @endphp
