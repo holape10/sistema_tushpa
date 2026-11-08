@@ -20,7 +20,7 @@ class AsistenteController extends Controller
 
         return view('empresas.asistente.index', [
             'historial' => collect(session(self::SESION, []))->map(fn ($m) => ['role' => $m['role'],
-                'html' => $m['role'] === 'assistant' ? self::html($m['content']) : e($m['content'])])->all(),
+                'html' => $m['role'] === 'assistant' ? self::html($m['content']) : e($m['content']), 'graficos' => $m['graficos'] ?? []])->all(),
             'bloqueo' => Asistente::bloqueo(Auth::user()),
             'cupo' => Asistente::configurado() ? rescue(fn () => Asistente::cupo(), null, false) : null,
         ]);
@@ -38,10 +38,10 @@ class AsistenteController extends Controller
             return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
         }
         $historial[] = ['role' => 'user', 'content' => trim($d['pregunta'])];
-        $historial[] = ['role' => 'assistant', 'content' => $r['respuesta']];
+        $historial[] = ['role' => 'assistant', 'content' => $r['respuesta'], 'graficos' => $r['graficos']];
         session([self::SESION => array_slice($historial, -Asistente::HISTORIAL)]);
 
-        return response()->json(['ok' => true, 'html' => self::html($r['respuesta']), 'cupo' => Asistente::cupo()]);
+        return response()->json(['ok' => true, 'html' => self::html($r['respuesta']), 'graficos' => $r['graficos'], 'cupo' => Asistente::cupo()]);
     }
 
     public function nueva(): JsonResponse

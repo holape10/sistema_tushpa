@@ -124,6 +124,30 @@ class AsistenteTest extends FlujoTestCase
         $this->assertContains('ayuda_sistema', array_column(Herramientas::definiciones(), 'name'));
     }
 
+    public function test_si_pide_un_grafico_se_lo_muestra_con_los_datos(): void
+    {
+        $grafico = ['tipo' => 'barras', 'titulo' => 'Ventas por día', 'formato' => 'soles', 'etiquetas' => ['01/11', '02/11'],
+            'series' => [['nombre' => 'Ventas', 'valores' => [1200.5, 980]]]];
+        $this->fingir([
+            $this->respuesta('tool_use', [['type' => 'tool_use', 'id' => 'g1', 'name' => 'mostrar_grafico', 'input' => $grafico],
+                ['type' => 'tool_use', 'id' => 'g2', 'name' => 'mostrar_grafico', 'input' => ['etiquetas' => ['a', 'b'], 'series' => [['nombre' => 'X', 'valores' => [1]]]] + $grafico]]),
+            $this->respuesta('end_turn', [['type' => 'text', 'text' => 'El 1 de noviembre vendiste más.']]),
+            $this->respuesta('end_turn', [['type' => 'text', 'text' => 'Ok.']]),
+        ]);
+
+        $r = $this->postJson(route('asistente.preguntar'), ['pregunta' => 'Grafícame mis ventas por día'])->assertJson(['ok' => true]);
+
+        $this->assertSame([['tipo' => 'barras', 'titulo' => 'Ventas por día', 'formato' => 'soles', 'etiquetas' => ['01/11', '02/11'],
+            'series' => [['nombre' => 'Ventas', 'valores' => [1200.5, 980]]]]], $r->json('graficos'));
+        // El mal armado (2 etiquetas y 1 valor) no se dibuja: se le avisa al asistente para que lo corrija
+        $avisos = $this->llamadas[1]['messages'][2]['content'];
+        $this->assertSame([false, true], [$avisos[0]['isError'], $avisos[1]['isError']]);
+        // Quedan guardados para volver a verlos, pero no se le vuelven a mandar a la IA
+        $this->get(route('asistente.index'))->assertOk()->assertSee('Ventas por día')->assertSee('🎤');
+        $this->postJson(route('asistente.preguntar'), ['pregunta' => '¿Y ayer?']);
+        $this->assertSame(['role', 'content'], array_keys($this->llamadas[2]['messages'][1]));
+    }
+
     public function test_solo_el_administrador(): void
     {
         $cajero = $this->usuario->replicate();

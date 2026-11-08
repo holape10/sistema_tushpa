@@ -111,7 +111,7 @@ class Asistente
      * Responde una pregunta (con lo conversado antes). Devuelve la respuesta en texto (markdown simple).
      *
      * @param  list<array{role: string, content: string}>  $historial
-     * @return array{respuesta: string, costo: float, consultas: int}
+     * @return array{respuesta: string, costo: float, consultas: int, graficos: list<array<string, mixed>>}
      */
     public static function preguntar(User $user, array $historial, string $pregunta): array
     {
@@ -119,7 +119,10 @@ class Asistente
             throw new \RuntimeException($motivo);
         }
         $modelo = self::modelo();
-        $mensajes = [...array_slice($historial, -self::HISTORIAL), ['role' => 'user', 'content' => $pregunta]];
+        // De lo conversado solo va el texto (los gráficos ya mostrados no se vuelven a mandar)
+        $mensajes = [...array_map(fn ($m) => ['role' => $m['role'], 'content' => (string) $m['content']], array_slice($historial, -self::HISTORIAL)),
+            ['role' => 'user', 'content' => $pregunta]];
+        $graficos = [];
         $uso = ['entrada' => 0, 'salida' => 0, 'lectura' => 0, 'escritura' => 0];
         $consultas = 0;
         $respuesta = '';
@@ -130,7 +133,7 @@ class Asistente
                 // En la última vuelta ya no puede consultar más: tiene que responder con lo que tiene
                 $r = self::llamar([
                     'model' => $modelo, 'maxTokens' => 16000, 'system' => self::sistema($user),
-                    'outputConfig' => ['effort' => 'medium'], 'messages' => $mensajes, 'tools' => Herramientas::definiciones(),
+                    'outputConfig' => ['effort' => 'medium'], 'messages' => $mensajes, 'tools' => [...Herramientas::definiciones(), Graficos::definicion()],
                     'toolChoice' => $vuelta < self::VUELTAS ? null : ['type' => 'none'],
                 ]);
                 $uso['entrada'] += (int) ($r->usage->inputTokens ?? 0);
@@ -155,6 +158,16 @@ class Asistente
                 foreach ($r->content as $bloque) {
                     if ($bloque->type === 'tool_use') {
                         $consultas++;
+                        if ($bloque->name === 'mostrar_grafico') {
+                            // No consulta nada: deja el gráfico listo para dibujarlo debajo de la respuesta
+                            [$grafico, $aviso] = Graficos::validar((array) $bloque->input, count($graficos));
+                            if ($grafico) {
+                                $graficos[] = $grafico;
+                            }
+                            $resultados[] = ['type' => 'tool_result', 'toolUseID' => $bloque->id, 'content' => $aviso, 'isError' => $grafico === null];
+
+                            continue;
+                        }
                         $resultados[] = ['type' => 'tool_result', 'toolUseID' => $bloque->id,
                             'content' => Herramientas::ejecutar($user, (string) $bloque->name, (array) $bloque->input)];
                     }
@@ -177,7 +190,7 @@ class Asistente
             throw new \RuntimeException($error);
         }
 
-        return ['respuesta' => $respuesta, 'costo' => $costo, 'consultas' => $consultas];
+        return ['respuesta' => $respuesta, 'costo' => $costo, 'consultas' => $consultas, 'graficos' => $graficos];
     }
 
     /**
@@ -240,6 +253,10 @@ Cómo trabajas:
   usuarios…), usa la herramienta ayuda_sistema y explícalo en pasos numerados con los nombres de las opciones y botones
   tal como vienen en la guía. No inventes pantallas ni botones: si no hay guía para eso, dilo y sugiere escribir a soporte.
   Si la guía trae un tutorial con video, compártelo.
+- Gráficos: usa mostrar_grafico SOLO si el usuario pide un gráfico o ver algo de forma visual ("muéstrame", "grafícame",
+  "cómo van mis ventas día a día"). Primero consulta los datos y pasa al gráfico exactamente esos números (sin redondear de
+  más ni inventar). Barras para comparar, líneas para la evolución en el tiempo, torta para partes de un total (pocas
+  partes). Además del gráfico, da en texto la conclusión principal en una o dos frases.
 - Si la pregunta es ambigua (qué sede, qué periodo), asume lo razonable (la sede actual, el mes en curso) y dilo.
 - Los temas tributarios dependen de cada caso: da orientación general y recomienda confirmarlo con su contador.
 TXT],
