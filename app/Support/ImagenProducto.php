@@ -85,7 +85,7 @@ class ImagenProducto
     }
 
     /** Las fotos del celular vienen giradas en la marca EXIF: grados a girar para verlas derechas */
-    private static function orientacion(string $archivo): int
+    public static function orientacion(string $archivo): int
     {
         $exif = function_exists('exif_read_data') ? @exif_read_data($archivo) : false;
 

@@ -701,6 +701,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/compras', [CompraController::class, 'index'])->name('compras.index');
     Route::get('/compras/nueva', [CompraController::class, 'create'])->name('compras.create');
     Route::post('/compras', [CompraController::class, 'store'])->name('compras.store');
+    Route::post('/compras/leer', [CompraController::class, 'leer'])->middleware('throttle:20,1')->name('compras.leer');
     Route::get('/compras/{id}/editar', [CompraController::class, 'edit'])->whereNumber('id')->name('compras.edit');
     Route::put('/compras/{id}', [CompraController::class, 'update'])->whereNumber('id')->name('compras.update');
     Route::post('/compras/{id}/anular', [CompraController::class, 'anular'])->whereNumber('id')->name('compras.anular');

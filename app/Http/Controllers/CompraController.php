@@ -6,6 +6,7 @@ use App\Models\Almacen;
 use App\Models\Producto;
 use App\Models\UnidadMedida;
 use App\Support\Acciones;
+use App\Support\Asistente\LecturaComprobante;
 use App\Support\Bitacora;
 use App\Support\Compras;
 use App\Support\ConsultaPeru;
@@ -142,6 +143,9 @@ class CompraController extends Controller
                 return redirect()->route('ordenes_compra.show', $orden->id)->with('error', 'Solo una orden aprobada se convierte en compra.');
             }
             $desdeOrden = OrdenesCompra::paraFormulario($orden);
+        } elseif ($request->query('lectura') && session()->has('compra_lectura')) {
+            // Lo leído de la foto, el PDF o el XML del comprobante
+            $desdeOrden = session('compra_lectura');
         } elseif ($requerimientoId = (int) $request->query('requerimiento')) {
             try {
                 $comprobante = in_array($request->query('comprobante'), ['01', '03', '12', '00'], true) ? $request->query('comprobante') : '12';
@@ -152,6 +156,22 @@ class CompraController extends Controller
         }
 
         return view('empresas.compras.form', $this->datosFormulario(null) + ['desdeOrden' => $desdeOrden]);
+    }
+
+    /** Foto, PDF o XML del comprobante: se lee y se abre el formulario de compra ya lleno para revisarlo */
+    public function leer(Request $request)
+    {
+        $this->autorizar();
+        $request->validate(['archivo' => 'required|file|max:12288|extensions:'.LecturaComprobante::EXTENSIONES],
+            ['archivo.extensions' => 'Sube una foto (JPG, PNG), un PDF o el XML de la factura.', 'archivo.max' => 'El archivo pesa más de 12 MB.'], ['archivo' => 'comprobante']);
+        set_time_limit(120);
+        try {
+            $leido = LecturaComprobante::leer(Auth::user(), $request->file('archivo'));
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('compras.create', ['lectura' => 1])->with('compra_lectura', $leido);
     }
 
     public function edit($id)
@@ -197,6 +217,8 @@ class CompraController extends Controller
             'en_transito' => 'boolean',
             'orden_id' => 'nullable|integer',
             'requerimiento_id' => 'nullable|integer',
+            // Leído de un comprobante: qué producto eligió el usuario para cada línea que no se reconoció (se aprende)
+            'aprendidos' => 'nullable|array|max:100',
             'items' => 'required|array|min:1|max:300',
             'items.*.id' => 'required|integer',
             'items.*.tip_igv' => 'required|in:10,20,30',
@@ -230,6 +252,9 @@ class CompraController extends Controller
         }
 
         $cab = DB::table('compras_cabecera')->where('com_cab_id', $comId)->first(['com_doc_ser', 'com_doc_num', 'prov_num', 'total_com', 'mon_id']);
+        if (! empty($d['aprendidos'])) {
+            LecturaComprobante::aprender(Auth::user(), (string) $cab->prov_num, $d['aprendidos']);
+        }
         if ($id) {
             // Editar una compra cambia el stock y el costo: siempre se revisa
             Bitacora::siCambio('compra.editar', "Editó la compra {$cab->com_doc_ser}-{$cab->com_doc_num}", $fotoAntes, self::fotoCompra($comId),

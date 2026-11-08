@@ -36,6 +36,13 @@ document.addEventListener('alpine:init', () => {
             if (o) {
                 this.doc.moneda = o.moneda || 'PEN';
                 if (o.tdocod) this.doc.tdocod = o.tdocod;
+                // Leído de la foto, el PDF o el XML del comprobante: serie, número, fecha y las líneas que no se reconocieron
+                if (o.serie) this.doc.serie = o.serie;
+                if (o.numero) this.doc.numero = o.numero;
+                if (o.fecha) { this.doc.fecEmi = o.fecha; this.doc.fecIng = o.fecha; this.doc.fecVen = o.fecha; }
+                this.pendientes = (o.pendientes || []).map((x, i) => ({ ...x, key: 'p' + i }));
+                this.avisosLectura = o.avisos || [];
+                this.totalLeido = o.total_leido || 0;
                 this.doc.tip_cam = o.tip_cam;
                 if (o.id_almacen) this.doc.id_almacen = o.id_almacen;
                 this.doc.observaciones = o.observaciones || '';
@@ -184,6 +191,22 @@ document.addEventListener('alpine:init', () => {
             else this.$refs.buscador.focus();
         },
 
+        // ---------- Líneas del comprobante leído que no se reconocieron: se buscan o se crean ----------
+        pendientes: [], avisosLectura: [], totalLeido: 0, pendienteActivo: null, aprendidos: [],
+        buscarPendiente(i) {
+            this.pendienteActivo = i;
+            this.busqueda = this.pendientes[i].descripcion.split(/\s+/).slice(0, 3).join(' ');
+            this.buscar();
+            this.$refs.buscador.focus();
+        },
+        crearPendiente(i) {
+            this.pendienteActivo = i;
+            this.busqueda = this.pendientes[i].descripcion;
+            this.abrirNuevo();
+            if (this.nuevo) this.nuevo.costo = this.pendientes[i].costo;
+        },
+        quitarPendiente(i) { this.pendientes.splice(i, 1); this.pendienteActivo = null; },
+
         // ---------- Modal: producto nuevo (se crea aquí y pasa a la compra sin perder lo avanzado) ----------
         nuevo: null,
         abrirNuevo() {
@@ -221,7 +244,8 @@ document.addEventListener('alpine:init', () => {
         // ---------- Modal: cantidad y costo antes de pasar al detalle ----------
         pedir: null,
         abrirPedir(p, pres) {
-            this.pedir = { p, pres, cantidad: 1, costo: r4(p.costo * (pres?.factor ?? 1)),
+            const pend = this.pendienteActivo !== null ? this.pendientes[this.pendienteActivo] : null;
+            this.pedir = { p, pres, cantidad: pend ? pend.cantidad : 1, costo: pend ? r4(pend.costo) : r4(p.costo * (pres?.factor ?? 1)),
                            detalle: pres ? pres.nombre + ' x' + this.num(pres.factor) + ' ' + (p.unidad || '') : (p.unidad || 'Unidad') };
             this.busqueda = ''; this.resultados = []; this.resultadosAbiertos = false;
             this.enfocar('pedir-cantidad');
@@ -234,9 +258,16 @@ document.addEventListener('alpine:init', () => {
             const { p, pres } = this.pedir;
             this.pedir = null;
             this.agregar(p, pres, true, cantidad, costo);
+            // Era una línea del comprobante: queda resuelta y el sistema aprende qué producto es para la próxima vez
+            if (this.pendienteActivo !== null) {
+                this.aprendidos.push({ descripcion: this.pendientes[this.pendienteActivo].descripcion, id: p.id });
+                this.pendientes.splice(this.pendienteActivo, 1);
+                this.pendienteActivo = null;
+            }
         },
         cerrarPedir() {
             this.pedir = null;
+            this.pendienteActivo = null;
             this.$nextTick(() => this.$refs.buscador.focus());
         },
 
@@ -314,6 +345,7 @@ document.addEventListener('alpine:init', () => {
             if (this.guardando || this.soloLectura) return;
             const error = this.validar();
             if (error) { this.aviso(error, 'error'); return; }
+            if (this.pendientes.length && !confirm(`Quedan ${this.pendientes.length} línea(s) del comprobante sin pasar a la compra. ¿Guardar igual?`)) return;
             if (this.items.some(it => !(it.costo > 0)) && !confirm('Hay productos con costo 0 (por ejemplo, bonificaciones). ¿Guardar igual?')) return;
 
             const body = {
@@ -326,6 +358,7 @@ document.addEventListener('alpine:init', () => {
                 en_transito: !CFG.compra && this.enTransito,
                 orden_id: CFG.desdeOrden && CFG.desdeOrden.tipo !== 'requerimiento' ? CFG.desdeOrden.id : null,
                 requerimiento_id: CFG.desdeOrden && CFG.desdeOrden.tipo === 'requerimiento' ? CFG.desdeOrden.id : null,
+                aprendidos: this.aprendidos,
                 items: this.items.map(it => ({
                     id: it.id, presentacion: it.presentacion || null, tip_igv: it.tip_igv, cantidad: it.cantidad, costo: it.costo, flete: Number(it.flete) || 0,
                     lote: this.conLote ? it.lote : null, vencimiento: this.conLote ? (it.vencimiento || null) : null,

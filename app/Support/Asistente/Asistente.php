@@ -45,12 +45,13 @@ class Asistente
 
     public static function modelo(): string
     {
-        return (string) config('services.anthropic.modelo', 'claude-opus-5-5');
+        return (string) config('services.anthropic.modelo', 'claude-haiku-5-5');
     }
 
     /** Costo en dólares de lo usado */
     public static function costo(string $modelo, int $entrada, int $salida, int $cacheLectura, int $cacheEscritura): float
     {
+        // Un modelo que no está en la tabla se cobra como el más caro (mejor sobrestimar el gasto que pasarse del tope)
         [$pe, $ps, $pl, $pc] = self::PRECIOS[$modelo] ?? self::PRECIOS['claude-opus-5-5'];
 
         return round(($entrada * $pe + $salida * $ps + $cacheLectura * $pl + $cacheEscritura * $pc) / 1_000_000, 5);
@@ -79,6 +80,13 @@ class Asistente
         if (! $user->esAdmin()) {
             return 'Por ahora el asistente es solo para el administrador.';
         }
+
+        return self::bloqueoComun();
+    }
+
+    /** Lo que frena cualquier uso de la IA (preguntas o lectura de comprobantes): configuración, activación, cupo y tope */
+    public static function bloqueoComun(): ?string
+    {
         if (! self::configurado()) {
             return 'El asistente aún no está configurado en el servidor.';
         }
@@ -164,14 +172,7 @@ class Asistente
             $error = 'No se pudo conectar con el asistente. Revisa la conexión e intenta de nuevo.';
         }
 
-        $costo = self::costo($modelo, $uso['entrada'], $uso['salida'], $uso['lectura'], $uso['escritura']);
-        $cliente = Tenancy::cliente();
-        DB::connection('central')->table('asistente_uso')->insert([
-            'cliente_id' => $cliente?->id, 'base' => Tenancy::baseActual(), 'IdUsuario' => $user->IdUsuario, 'usuario' => mb_substr((string) $user->apeusu, 0, 120),
-            'pregunta' => mb_substr($pregunta, 0, 500), 'modelo' => $modelo, 'tokens_entrada' => $uso['entrada'], 'tokens_salida' => $uso['salida'],
-            'tokens_cache_lectura' => $uso['lectura'], 'tokens_cache_escritura' => $uso['escritura'], 'consultas' => $consultas,
-            'costo_usd' => $costo, 'error' => $error ? mb_substr($error, 0, 255) : null, 'created_at' => now(),
-        ]);
+        $costo = self::anotar($user, $pregunta, $modelo, $uso, $consultas, $error);
         if ($error) {
             throw new \RuntimeException($error);
         }
@@ -179,8 +180,26 @@ class Asistente
         return ['respuesta' => $respuesta, 'costo' => $costo, 'consultas' => $consultas];
     }
 
+    /**
+     * Anota un uso de la IA en la base central (para el panel y los límites). Devuelve el costo en dólares.
+     *
+     * @param  array{entrada: int, salida: int, lectura: int, escritura: int}  $uso
+     */
+    public static function anotar(User $user, string $que, string $modelo, array $uso, int $consultas = 0, ?string $error = null): float
+    {
+        $costo = self::costo($modelo, $uso['entrada'], $uso['salida'], $uso['lectura'], $uso['escritura']);
+        DB::connection('central')->table('asistente_uso')->insert([
+            'cliente_id' => Tenancy::cliente()?->id, 'base' => Tenancy::baseActual(), 'IdUsuario' => $user->IdUsuario, 'usuario' => mb_substr((string) $user->apeusu, 0, 120),
+            'pregunta' => mb_substr($que, 0, 500), 'modelo' => $modelo, 'tokens_entrada' => $uso['entrada'], 'tokens_salida' => $uso['salida'],
+            'tokens_cache_lectura' => $uso['lectura'], 'tokens_cache_escritura' => $uso['escritura'], 'consultas' => $consultas,
+            'costo_usd' => $costo, 'error' => $error ? mb_substr($error, 0, 255) : null, 'created_at' => now(),
+        ]);
+
+        return $costo;
+    }
+
     /** Llama a la API (o al reemplazo de las pruebas) */
-    private static function llamar(array $p): object
+    public static function llamar(array $p): object
     {
         if (self::$falso) {
             return (self::$falso)($p);
@@ -190,7 +209,7 @@ class Asistente
 
         return $cliente->messages->create(
             maxTokens: $p['maxTokens'], messages: $p['messages'], model: $p['model'],
-            outputConfig: $p['outputConfig'], system: $p['system'], toolChoice: $p['toolChoice'], tools: $p['tools'],
+            outputConfig: $p['outputConfig'], system: $p['system'], toolChoice: $p['toolChoice'] ?? null, tools: $p['tools'] ?? null,
         );
     }
 

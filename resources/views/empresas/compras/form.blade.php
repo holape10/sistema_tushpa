@@ -18,6 +18,45 @@
         </template>
     </div>
 
+    @if (session('error'))<div class="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ session('error') }}</div>@endif
+
+    {{-- Leer el comprobante: foto o PDF (con IA) o el XML de la factura (exacto y gratis); llena el formulario para revisarlo --}}
+    @unless ($compra)
+        <form method="POST" action="{{ route('compras.leer') }}" enctype="multipart/form-data" x-data="{ leyendo: false }" @submit="leyendo = true"
+              class="rounded-2xl bg-gradient-to-r from-violet-50 to-indigo-50 ring-1 ring-indigo-100 p-4 flex flex-wrap items-center gap-3">
+            @csrf
+            <div class="flex-1 min-w-56">
+                <p class="font-bold text-indigo-900">📷 ¿Tienes el comprobante? Deja que el sistema llene la compra</p>
+                <p class="text-xs text-indigo-800">Toma una foto o sube el PDF (lo lee la IA) o el XML de la factura electrónica (exacto y sin costo). Luego solo revisas y guardas.</p>
+            </div>
+            <label class="h-11 px-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold cursor-pointer" :class="leyendo && 'opacity-60 pointer-events-none'">
+                <span x-text="leyendo ? 'Leyendo… (unos segundos)' : '📷 Foto, PDF o XML'"></span>
+                <input type="file" name="archivo" accept="image/*,application/pdf,.pdf,.xml,.zip" class="hidden" @change="$el.form.requestSubmit()">
+            </label>
+        </form>
+    @endunless
+
+    <template x-if="avisosLectura.length || pendientes.length">
+        <div class="rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-4 space-y-2">
+            <template x-for="a in avisosLectura"><p class="text-sm text-amber-900">⚠️ <span x-text="a"></span></p></template>
+            <p x-show="totalLeido > 0" class="text-sm text-amber-900">Total del comprobante: <b x-text="'S/ ' + num2(totalLeido)"></b> · compara con el total de abajo antes de guardar.</p>
+            <template x-if="pendientes.length">
+                <div class="space-y-2">
+                    <p class="text-sm font-bold text-amber-900">Estas líneas no las reconocí en tus productos. Búscalo o créalo (la próxima vez de este proveedor se llenará solo):</p>
+                    <template x-for="(pd, i) in pendientes" :key="pd.key">
+                        <div class="flex flex-wrap items-center gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-amber-100">
+                            <span class="flex-1 min-w-48 text-sm"><b x-text="pd.descripcion"></b>
+                                <span class="text-xs text-slate-500" x-text="' · ' + num(pd.cantidad) + ' ' + (pd.unidad || '') + ' a S/ ' + num2(pd.costo) + ' c/u'"></span></span>
+                            <button type="button" @click="buscarPendiente(i)" class="h-8 px-3 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold">🔎 Buscar</button>
+                            <button type="button" @click="crearPendiente(i)" class="h-8 px-3 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold">+ Crear producto</button>
+                            <button type="button" @click="quitarPendiente(i)" class="h-8 px-2 rounded-lg text-slate-400 text-xs" title="No pasarla a la compra">✕</button>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+    </template>
+
     <div x-show="soloLectura" x-cloak class="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">
         Esta compra está <strong>anulada</strong>: su mercadería ya salió del stock. Solo se puede consultar.
     </div>
