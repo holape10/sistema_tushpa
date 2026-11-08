@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\AvanzarDescargasEstudio;
 use App\Jobs\ProbarCola;
 use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
@@ -11,6 +12,7 @@ use App\Support\ClinicaRecordatorios;
 use App\Support\Colas;
 use App\Support\DemoDatos;
 use App\Support\Estudio;
+use App\Support\EstudioDescargas;
 use App\Support\GeoIp;
 use App\Support\PadronRuc;
 use App\Support\PanelDueno;
@@ -532,3 +534,33 @@ Artisan::command('sunat:cronograma {anio? : Año a descargar (por defecto el act
 })->purpose('Descarga el cronograma de vencimientos mensuales de la web de la SUNAT');
 
 Schedule::command('sunat:cronograma')->dailyAt('06:20')->withoutOverlapping(10);
+
+// Estudio contable: descarga automática del SIRE y de los XML de compras (el día del mes que elige el estudio)
+Artisan::command('estudio:descargas {--ruc= : Solo este estudio}', function () {
+    $clientes = Tenancy::activa()
+        ? Cliente::where('estado', 'ACTIVO')->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))->get()
+        : collect([null]);
+    $mandados = 0;
+    foreach ($clientes as $cliente) {
+        $hayQueHacer = function () {
+            if (! Schema::hasTable('estudio_programacion') || ! Estudio::activo()) {
+                return false;
+            }
+
+            return EstudioDescargas::toca() || DB::table('estudio_descargas')->whereIn('estado', ['PENDIENTE', 'PROCESO'])->exists();
+        };
+        try {
+            $toca = $cliente ? Tenancy::en($cliente->base_datos, $hayQueHacer) : $hayQueHacer();
+            Estudio::olvidar();
+            if ($toca) {
+                Colas::despachar(new AvanzarDescargasEstudio($cliente?->base_datos ?? Tenancy::baseActual(), $cliente?->id));
+                $mandados++;
+            }
+        } catch (Throwable $e) {
+            $this->error(($cliente?->ruc ?? 'local').': '.$e->getMessage());
+        }
+    }
+    $this->info("{$mandados} estudio(s) con descargas en curso.");
+})->purpose('Avanza la descarga automática del SIRE y los XML de los estudios contables');
+
+Schedule::command('estudio:descargas')->everyTenMinutes()->withoutOverlapping(30);

@@ -9,7 +9,6 @@ use App\Support\Contabilidad\SireDbf;
 use App\Support\Excel;
 use App\Support\Sunat\CompraXml;
 use App\Support\Sunat\Sire;
-use App\Support\Sunat\SireCuadre;
 use App\Support\Sunat\XmlJsonPe;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -19,7 +18,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 /**
@@ -41,25 +39,9 @@ class SireDetalleController extends Controller
     }
 
     /** La propuesta de compras del periodo que ya se trajo de SUNAT (null si aún no se trajo) */
-    private function propuesta(string $ruc, string $periodo): ?array
-    {
-        $s = DB::table('sire_solicitudes')->where('IdEmpresa', $ruc)->where('libro', Sire::COMPRAS)->where('periodo', $periodo)
-            ->whereNotNull('archivo')->orderByDesc('id')->first();
-        if (! $s || ! Storage::exists($s->archivo)) {
-            return null;
-        }
-        try {
-            return SireCuadre::comprasPropuesta(Sire::leerZip(Storage::path($s->archivo)));
-        } catch (\RuntimeException) {
-            return null;
-        }
-    }
-
     private function datos(string $ruc, string $periodo): array
     {
-        $propuesta = $this->propuesta($ruc, $periodo);
-
-        return ['propuesta' => $propuesta !== null] + ComprasDetalle::delPeriodo($ruc, $periodo, $propuesta);
+        return ComprasDetalle::conPropuesta($ruc, $periodo);
     }
 
     public function index(Request $request): View

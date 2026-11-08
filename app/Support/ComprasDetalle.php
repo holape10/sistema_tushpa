@@ -2,7 +2,10 @@
 
 namespace App\Support;
 
+use App\Support\Sunat\Sire;
+use App\Support\Sunat\SireCuadre;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Detalle de las compras del SIRE: guarda lo que se compró en cada factura (de su XML), propone la cuenta contable de
@@ -110,6 +113,29 @@ class ComprasDetalle
      * @param  array<string, array>|null  $propuesta  de SireCuadre::comprasPropuesta
      * @return array{comprobantes: array<int, array>, sinPropuesta: array<int, array>, conDetalle: int, lineasSinCuenta: int}
      */
+    /** La propuesta del SIRE de compras ya descargada del periodo (null si aún no se descargó) */
+    public static function propuestaSire(string $idEmpresa, string $periodo): ?array
+    {
+        $s = DB::table('sire_solicitudes')->where('IdEmpresa', $idEmpresa)->where('libro', Sire::COMPRAS)->where('periodo', $periodo)
+            ->whereNotNull('archivo')->orderByDesc('id')->first();
+        if (! $s || ! Storage::exists($s->archivo)) {
+            return null;
+        }
+        try {
+            return SireCuadre::comprasPropuesta(Sire::leerZip(Storage::path($s->archivo)));
+        } catch (\RuntimeException) {
+            return null;
+        }
+    }
+
+    /** Los comprobantes de compra del periodo (de la propuesta del SIRE, si ya está) con su XML si ya se trajo */
+    public static function conPropuesta(string $idEmpresa, string $periodo): array
+    {
+        $propuesta = self::propuestaSire($idEmpresa, $periodo);
+
+        return ['propuesta' => $propuesta !== null] + self::delPeriodo($idEmpresa, $periodo, $propuesta);
+    }
+
     public static function delPeriodo(string $idEmpresa, string $periodo, ?array $propuesta): array
     {
         $ini = substr($periodo, 0, 4).'-'.substr($periodo, 4, 2).'-01';

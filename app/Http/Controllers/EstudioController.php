@@ -8,6 +8,7 @@ use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\Contabilidad\Contabilidad;
 use App\Support\Estudio;
+use App\Support\EstudioDescargas;
 use App\Support\EstudioImportar;
 use App\Support\ExcelLector;
 use App\Support\Sunat\Sire;
@@ -201,7 +202,49 @@ class EstudioController extends Controller
             'digitos' => $empresas->where('propia', false)->countBy(fn ($e) => substr((string) $e->IdEmpresa, -1)),
             'periodo' => $periodo = Vencimientos::periodoPendiente(),
             'vencimientos' => Estudio::vencimientos(Auth::user(), $periodo)->keyBy('IdEmpresa'),
+            // Cómo va la última descarga automática (SIRE y XML)
+            'descarga' => ($ultimo = DB::table('estudio_descargas')->max('periodo')) ? ['periodo' => $ultimo] + EstudioDescargas::resumen($ultimo) : null,
         ]);
+    }
+
+    /** Descarga automática: cómo va lo traído de cada empresa (todos lo ven) y la programación (solo el administrador) */
+    public function descargas(Request $request): View
+    {
+        abort_unless(Estudio::activo(), 404);
+        $ultimo = DB::table('estudio_descargas')->max('periodo') ?? EstudioDescargas::periodo();
+        $periodo = preg_match('/^20\d{2}(0[1-9]|1[0-2])$/', (string) $request->query('periodo')) ? (string) $request->query('periodo') : $ultimo;
+
+        return view('empresas.estudio.descargas', [
+            'periodo' => $periodo, 'config' => EstudioDescargas::config(), 'empresas' => EstudioDescargas::delPeriodo($periodo),
+            'resumen' => EstudioDescargas::resumen($periodo), 'esAdmin' => Auth::user()->esAdmin(),
+            'periodos' => DB::table('estudio_descargas')->distinct()->orderByDesc('periodo')->limit(12)->pluck('periodo'),
+            'siguiente' => EstudioDescargas::periodo(),
+        ]);
+    }
+
+    public function programacion(Request $request): RedirectResponse
+    {
+        $this->administrar();
+        $d = $request->validate(['activo' => 'required|boolean', 'dia' => 'required|integer|min:1|max:28', 'hora' => 'required|integer|min:0|max:23',
+            'sire_compras' => 'nullable|boolean', 'sire_ventas' => 'nullable|boolean', 'xml' => 'nullable|boolean']);
+        EstudioDescargas::guardarConfig(['activo' => (bool) $d['activo'], 'dia' => (int) $d['dia'], 'hora' => (int) $d['hora'],
+            'sire_compras' => $request->boolean('sire_compras'), 'sire_ventas' => $request->boolean('sire_ventas'), 'xml' => $request->boolean('xml')]);
+        Bitacora::registrar('config.estudio_descargas', $d['activo'] ? "Programó la descarga automática el día {$d['dia']} de cada mes a las {$d['hora']}:00" : 'Apagó la descarga automática');
+
+        return back()->with('success', $d['activo'] ? "Listo: cada día {$d['dia']} a las {$d['hora']}:00 se trae solo lo del mes anterior." : 'Descarga automática apagada.');
+    }
+
+    /** Traer ya un periodo (o reintentar lo que falló): se arma la lista y el trabajador de colas la avanza en los próximos minutos */
+    public function descargarAhora(Request $request): RedirectResponse
+    {
+        $this->administrar();
+        $d = $request->validate(['periodo' => ['required', 'regex:/^20\d{2}(0[1-9]|1[0-2])$/']]);
+        $n = EstudioDescargas::programar($d['periodo']);
+        Bitacora::registrar('config.estudio_descargas', 'Pidió descargar '.Contabilidad::nombrePeriodo($d['periodo'])." ({$n} tarea(s))");
+
+        return redirect()->route('estudio.descargas', ['periodo' => $d['periodo']])->with('success', $n
+            ? "{$n} tarea(s) en cola: se van trayendo en los próximos minutos (puedes cerrar esta pantalla)."
+            : 'No había nada que traer o volver a intentar en ese periodo.');
     }
 
     /** Vencimientos SUNAT del periodo: qué empresa vence cuándo y cuáles ya se declararon */

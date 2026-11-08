@@ -38,6 +38,13 @@
                 {{ $vencimientos->count() - $pendientes->count() }} de {{ $vencimientos->count() }} declaradas{{ $urgentes ? " · {$urgentes} vencen en 3 días o menos (o ya vencieron)" : '' }}</span>
             <span class="font-bold">Ver cronograma →</span>
         </a>
+        @if ($descarga)
+            <a href="{{ route('estudio.descargas', ['periodo' => $descarga['periodo']]) }}" class="flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm ring-1 {{ $descarga['errores'] ? 'bg-amber-50 ring-amber-200 text-amber-900' : 'bg-sky-50 ring-sky-100 text-sky-900' }} hover:brightness-95">
+                <span>📥 <b>Descarga de {{ \App\Support\Contabilidad\Contabilidad::nombrePeriodo($descarga['periodo']) }}:</b>
+                    {{ $descarga['pendientes'] ? $descarga['pendientes'].' en curso · ' : '' }}{{ $descarga['listas'] }} listas{{ $descarga['errores'] ? ' · '.$descarga['errores'].' con error' : '' }}{{ $descarga['omitidas'] ? ' · '.$descarga['omitidas'].' sin credenciales' : '' }}</span>
+                <span class="font-bold">Ver detalle →</span>
+            </a>
+        @endif
         <input x-ref="buscar" x-model="texto" @keydown.enter.prevent="entrarPrimera()" autofocus type="search"
                placeholder="Busca por nombre o RUC…" class="w-full h-12 rounded-xl border-gray-300 text-base">
         <div class="flex flex-wrap items-center gap-2 text-sm">

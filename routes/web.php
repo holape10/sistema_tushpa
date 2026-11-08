@@ -658,6 +658,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/estudio/cambiar', [EstudioController::class, 'cambiar'])->name('estudio.cambiar');
     Route::get('/estudio/elegir', [EstudioController::class, 'elegir'])->name('estudio.elegir');
     Route::get('/estudio/vencimientos', [EstudioController::class, 'vencimientos'])->name('estudio.vencimientos');
+    Route::get('/estudio/descargas', [EstudioController::class, 'descargas'])->name('estudio.descargas');
+    Route::post('/estudio/descargas/programacion', [EstudioController::class, 'programacion'])->name('estudio.descargas.programacion');
+    Route::post('/estudio/descargas/ahora', [EstudioController::class, 'descargarAhora'])->name('estudio.descargas.ahora');
     Route::post('/estudio/vencimientos/declarado', [EstudioController::class, 'declarar'])->name('estudio.declarar');
     Route::post('/estudio/empresas/{ruc}/buen-contribuyente', [EstudioController::class, 'buenContribuyente'])->where('ruc', '\d{11}')->name('estudio.buen_contribuyente');
 

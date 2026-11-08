@@ -31,6 +31,7 @@
             </div>
             <a href="{{ route('estudio.elegir') }}" class="mt-1 block rounded-xl border-t border-slate-100 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">📋 Ver todas mis empresas</a>
             <a href="{{ route('estudio.vencimientos') }}" class="mt-1 block rounded-xl border-t border-slate-100 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50">📅 Vencimientos SUNAT</a>
+            <a href="{{ route('estudio.descargas') }}" class="mt-1 block rounded-xl border-t border-slate-100 px-3 py-2 text-sm font-bold text-sky-700 hover:bg-sky-50">📥 Descarga automática (SIRE y XML)</a>
             @if (auth()->user()->esAdmin() || auth()->user()->tieneModulo('/sire/compras') || auth()->user()->tieneModulo('/sire/ventas'))
                 <a href="{{ route('sire.bandeja') }}" class="mt-1 block rounded-xl border-t border-slate-100 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50">📥 Bandeja SIRE (todas las empresas)</a>
             @endif
