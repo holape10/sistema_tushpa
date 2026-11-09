@@ -3,6 +3,7 @@
 // Panel multi-empresa (base central). Se carga desde bootstrap/app.php con dominio admin.{dominio} y prefijo TENANCY_ADMIN_RUTA.
 
 use App\Http\Controllers\Admin\AccesoController;
+use App\Http\Controllers\Admin\AgendaController;
 use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\AnuncioController;
 use App\Http\Controllers\Admin\AsistenteController;
@@ -35,6 +36,14 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
     Route::get('/tablero', [TableroController::class, 'index'])->name('tablero');
+    // Agenda: la de cada usuario y la general de su marca, con avisos por Telegram
+    Route::get('/agenda', [AgendaController::class, 'index'])->name('agenda.index');
+    Route::post('/agenda/telegram/enlace', [AgendaController::class, 'telegramEnlace'])->name('agenda.telegram.enlace');
+    Route::post('/agenda/telegram/verificar', [AgendaController::class, 'telegramVerificar'])->middleware('throttle:60,1')->name('agenda.telegram.verificar');
+    Route::post('/agenda/telegram/quitar', [AgendaController::class, 'telegramQuitar'])->name('agenda.telegram.quitar');
+    Route::post('/agenda/telegram/probar', [AgendaController::class, 'telegramProbar'])->middleware('throttle:10,1')->name('agenda.telegram.probar');
+    Route::post('/agenda/{id?}', [AgendaController::class, 'guardar'])->whereNumber('id')->name('agenda.guardar');
+    Route::post('/agenda/{id}/eliminar', [AgendaController::class, 'eliminar'])->whereNumber('id')->name('agenda.eliminar');
     Route::get('/clientes', [ClienteController::class, 'index'])->name('clientes.index');
     Route::get('/clientes/nuevo', [ClienteController::class, 'create'])->name('clientes.create');
     Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');

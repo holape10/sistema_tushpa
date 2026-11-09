@@ -6,6 +6,7 @@ use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
 use App\Models\Central\SuperadminCobro;
 use App\Models\User;
+use App\Support\AgendaPanel;
 use App\Support\Antiguo\CargadorSql;
 use App\Support\AvisosCelular;
 use App\Support\ClinicaRecordatorios;
@@ -595,3 +596,14 @@ Artisan::command('estudio:contar', function () {
 })->purpose('Anota en el panel cuántas empresas lleva cada estudio contable');
 
 Schedule::command('estudio:contar')->dailyAt('05:40')->withoutOverlapping(30);
+
+// Agenda del panel: avisa por Telegram antes de cada evento (y lee quién vinculó su Telegram)
+Artisan::command('agenda:avisos', function () {
+    TelegramCitas::recibir();
+    $n = AgendaPanel::avisar();
+    if ($n) {
+        $this->info("{$n} aviso(s) de agenda enviados.");
+    }
+})->purpose('Manda por Telegram los avisos de la agenda del panel');
+
+Schedule::command('agenda:avisos')->everyFiveMinutes()->withoutOverlapping(10);

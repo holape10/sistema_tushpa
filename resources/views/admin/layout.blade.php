@@ -33,6 +33,7 @@
                     ['Tablero', 'admin.tablero', 'admin.tablero', 0, 'M4 13h6V4H4v9zm0 7h6v-5H4v5zm10 0h6v-9h-6v9zm0-16v5h6V4h-6z'],
                     ['Clientes', 'admin.clientes.index', 'admin.clientes.*', 0, 'M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m6-4.13a4 4 0 11-8 0 4 4 0 018 0zm6 2a3 3 0 11-6 0 3 3 0 016 0z'],
                     ['Tickets', 'admin.tickets.index', 'admin.tickets.*', $ticketsNuevos, 'M8 10h8M8 14h5m-9 6l3-3h10a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14z'],
+                    ['Agenda', 'admin.agenda.index', 'admin.agenda.*', 0, 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'],
                 ],
                 'Ventas' => array_filter([
                     ['Planes', 'admin.planes.index', 'admin.planes.*', 0, 'M9 12l2 2 4-4M7 4h10a2 2 0 012 2v14l-7-3-7 3V6a2 2 0 012-2z'],

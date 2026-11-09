@@ -42,16 +42,23 @@ class TelegramCitas
         });
     }
 
-    /** El enlace para que el doctor se vincule (cada vez uno nuevo; el anterior deja de servir) */
-    public static function enlace(int $usuario): ?string
+    /** Base "de mentira" de los usuarios del panel TUSHPA (su agenda), para no confundirlos con los de una empresa */
+    public const PANEL = 'panel';
+
+    /**
+     * El enlace para que el doctor (o un usuario del panel, con $base = PANEL) se vincule. Cada vez uno nuevo; el
+     * anterior deja de servir.
+     */
+    public static function enlace(int $usuario, ?string $base = null): ?string
     {
         $bot = self::bot();
         if (! $bot) {
             return null;
         }
+        $base ??= Tenancy::baseActual();
         $codigo = Str::lower(Str::random(16));
-        DB::connection('central')->table('telegram_vinculos')->where('base', Tenancy::baseActual())->where('IdUsuario', $usuario)->whereNull('chat_id')->delete();
-        DB::connection('central')->table('telegram_vinculos')->insert(['codigo' => $codigo, 'base' => Tenancy::baseActual(), 'IdUsuario' => $usuario, 'created_at' => now()]);
+        DB::connection('central')->table('telegram_vinculos')->where('base', $base)->where('IdUsuario', $usuario)->whereNull('chat_id')->delete();
+        DB::connection('central')->table('telegram_vinculos')->insert(['codigo' => $codigo, 'base' => $base, 'IdUsuario' => $usuario, 'created_at' => now()]);
 
         return "https://t.me/{$bot}?start={$codigo}";
     }
@@ -91,7 +98,11 @@ class TelegramCitas
             $nombre = trim(($mensaje['from']['first_name'] ?? '').' '.($mensaje['from']['last_name'] ?? ''));
             DB::connection('central')->table('telegram_vinculos')->where('id', $fila->id)
                 ->update(['chat_id' => (string) $mensaje['chat']['id'], 'nombre' => mb_substr($nombre, 0, 120) ?: null, 'vinculado_at' => now()]);
-            self::enviar((string) $mensaje['chat']['id'], '✅ Listo'.($nombre ? ", {$nombre}" : '').'. Aquí te llegarán tus citas: la lista del día siguiente y un aviso antes de cada una.');
+            self::enviar((string) $mensaje['chat']['id'], '✅ Listo'.($nombre ? ", {$nombre}" : '').'. Desde ahora te llegarán aquí tus avisos: '
+                .($fila->base === self::PANEL ? 'los recordatorios de tu agenda.' : 'tus citas del día siguiente y un recordatorio antes de cada una.'));
+            if ($fila->base === self::PANEL) {
+                DB::connection('central')->table('superadmins')->where('id', $fila->IdUsuario)->update(['telegram_chat_id' => (string) $mensaje['chat']['id']]);
+            }
             $vinculados++;
         }
 
