@@ -40,11 +40,15 @@ class PuntoVentaController extends Controller
 
     private function pantalla(bool $farmacia, Request $request)
     {
-        $this->autorizar();
         $user = Auth::user();
+        // El vendedor entra sin caja: solo arma pedidos (proformas) que la caja cobra
+        $soloPedido = ! $user->puedeCobrar() && $user->esVendedor();
+        if (! $soloPedido) {
+            $this->autorizar();
+        }
 
-        $turno = Turno::abiertoDe($user);
-        if (! $turno) {
+        $turno = $soloPedido ? null : Turno::abiertoDe($user);
+        if (! $turno && ! $soloPedido) {
             return redirect()->route('turnos.index')->with('error', 'Debes aperturar tu turno antes de vender.');
         }
 
@@ -73,7 +77,7 @@ class PuntoVentaController extends Controller
 
         // Atención de la clínica por cobrar: entra con sus líneas y el paciente como cliente
         $clinica = null;
-        if ($request->filled('clinica')) {
+        if ($request->filled('clinica') && ! $soloPedido) {
             $clinica = Clinica::paraCaja($user, (int) $request->clinica);
             if (! $clinica) {
                 return redirect()->route('clinica.agenda')->with('error', 'Esa atención ya se cobró o no tiene nada por cobrar.');
@@ -82,14 +86,14 @@ class PuntoVentaController extends Controller
 
         // Venta abierta para corregirla (aún no enviada a SUNAT)
         $edicion = null;
-        if ($request->filled('editar')) {
+        if ($request->filled('editar') && ! $soloPedido) {
             $edicion = $this->ventaEditable((int) $request->editar);
             if (is_string($edicion)) {
                 return redirect()->route('ventas.index')->with('error', $edicion);
             }
         }
 
-        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica'));
+        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido'));
     }
 
     /** Editar una venta del Panel de Ventas: se abre en el Punto Venta con sus productos, cliente y pago */

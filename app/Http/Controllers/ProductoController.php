@@ -73,12 +73,20 @@ class ProductoController extends Controller
         'costo.gt' => 'Escribe el precio de compra del insumo (en la unidad que elegiste): sin él, el food cost de las recetas no es real.',
     ];
 
+    /** Precio 2 o 3: vacío o 0 = sin ese precio; los insumos y lo que no se vende no lo llevan */
+    private static function precioExtra($valor, int $tipo): ?float
+    {
+        return in_array($tipo, [4, 8], true) || ! is_numeric($valor) || (float) $valor <= 0 ? null : round((float) $valor, 2);
+    }
+
     private function reglas(bool $sinPrecioVenta, bool $esInsumo = false): array
     {
         return [
             'pronom' => 'required|string|max:150',
             'descripcion' => 'nullable|string|max:255',
             'propun' => $sinPrecioVenta ? 'nullable|numeric|min:0' : 'required|numeric|min:0.01',
+            'precio2' => 'nullable|numeric|min:0|max:999999',
+            'precio3' => 'nullable|numeric|min:0|max:999999',
             'costo' => $esInsumo ? 'required|numeric|gt:0' : 'nullable|numeric|min:0',
             'debe' => 'nullable|string|min:4|max:12|regex:/^[0-9A-Za-z]+$/',
             'haber' => 'nullable|string|min:4|max:12|regex:/^[0-9A-Za-z]+$/',
@@ -110,7 +118,7 @@ class ProductoController extends Controller
     }
 
     private const NOMBRES = [
-        'pronom' => 'Nombre del producto', 'unspsc' => 'Código de existencia (8 dígitos UNSPSC o 16 del CUBSO)', 'tipo_existencia' => 'Tipo de existencia', 'debe' => 'Cuenta Debe', 'haber' => 'Cuenta Haber', 'propun' => 'Precio de venta', 'promocion' => 'Tipo', 'codigo_barra' => 'Código de barras',
+        'pronom' => 'Nombre del producto', 'unspsc' => 'Código de existencia (8 dígitos UNSPSC o 16 del CUBSO)', 'tipo_existencia' => 'Tipo de existencia', 'debe' => 'Cuenta Debe', 'haber' => 'Cuenta Haber', 'propun' => 'Precio de venta', 'precio2' => 'Precio 2', 'precio3' => 'Precio 3', 'promocion' => 'Tipo', 'codigo_barra' => 'Código de barras',
         'ume_equivalente' => 'Unidad equivalente', 'factor_equivalente' => 'Factor de equivalencia', 'imagen' => 'Imagen', 'fotos_extra' => 'Más fotos', 'fotos_extra.*' => 'Foto',
         'presentaciones.*.umecod' => 'Unidad de la presentación', 'presentaciones.*.factor' => 'Factor de la presentación',
         'presentaciones.*.precio' => 'Precio de la presentación', 'presentaciones.*.codigo_barra' => 'Código de barras de la presentación',
@@ -295,6 +303,8 @@ class ProductoController extends Controller
                 'costo' => $request->costo ?: 0,
                 'propun' => in_array($tipo, [4, 8], true) ? ($request->propun ?: 0) : $request->propun,
                 'promocion' => $tipo,
+                'precio2' => self::precioExtra($request->precio2, $tipo),
+                'precio3' => self::precioExtra($request->precio3, $tipo),
                 'cat_id' => $request->cat_id,
                 'subcat_id' => $request->subcat_id,
                 'stock_min' => $request->stock_min ?: 0,
@@ -422,6 +432,7 @@ class ProductoController extends Controller
             }
             $producto->update($request->only(['pronom', 'umecod', 'costo', 'cat_id', 'subcat_id', 'stock_min', 'proest'])
                 + ['propun' => in_array($tipo, [4, 8], true) ? ($request->propun ?: 0) : $request->propun,
+                    'precio2' => self::precioExtra($request->precio2, $tipo), 'precio3' => self::precioExtra($request->precio3, $tipo),
                     'codigo_barra' => trim((string) $request->codigo_barra) ?: null,
                     'descripcion' => trim((string) $request->descripcion) ?: null,
                     'debe' => trim((string) $request->debe) ?: null, 'haber' => trim((string) $request->haber) ?: null,

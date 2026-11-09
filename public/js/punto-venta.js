@@ -274,7 +274,7 @@ document.addEventListener('alpine:init', () => {
         agregar(p, editar = true, pres, cantidad = 1, precioElegido = null) {
             if (this.edicion?.soloCabecera) { this.aviso('En esta venta los productos no cambian (es de mesa o tiene descuento o cortesía).', 'error'); return; }
             if (pres === undefined) {
-                if ((p.presentaciones || []).length) { this.abrirElegir(p, editar); return; }
+                if ((p.presentaciones || []).length || (p.precios || []).length) { this.abrirElegir(p, editar); return; }
                 pres = null;
             }
             // Elegido en la búsqueda: primero se pide cantidad y precio (como el sistema anterior); el lector de barras suma directo
@@ -353,7 +353,8 @@ document.addEventListener('alpine:init', () => {
         abrirPedir(p, pres) {
             const precio = pres ? pres.precio : p.precio;
             this.pedir = { p, pres, cantidad: 1, precio: redondear(precio),
-                           detalle: pres ? this.nombrePresentacion({ presentacion: pres.id, presentaciones: p.presentaciones, unidad: p.unidad }) : (p.unidad || 'Unidad') };
+                           detalle: pres?.alterno ? (p.unidad || 'Unidad') + ' · ' + pres.nombre
+                               : (pres ? this.nombrePresentacion({ presentacion: pres.id, presentaciones: p.presentaciones, unidad: p.unidad }) : (p.unidad || 'Unidad')) };
             this.busqueda = '';
             this.resultados = [];
             this.resultadosAbiertos = false;
@@ -376,7 +377,9 @@ document.addEventListener('alpine:init', () => {
 
         // ---------- Modal: elegir presentación ----------
         abrirElegir(p, editar) {
-            this.elegir = { p, editar, opciones: [null, ...(p.presentaciones || [])] };
+            // Precio 2 y 3: la misma unidad base a otro precio de lista
+            const alternos = (p.precios || []).map(x => ({ ...x, id: null, factor: 1, alterno: true }));
+            this.elegir = { p, editar, opciones: [null, ...(p.presentaciones || []), ...alternos] };
             this.elegirActivo = 0;
             this.busqueda = '';
             this.resultados = [];
@@ -573,6 +576,7 @@ document.addEventListener('alpine:init', () => {
 
         async registrar(imprimir) {
             if (this.procesando) return;
+            if (CFG.soloPedido) { this.aviso('Guarda el pedido con F8: la caja lo cobra desde Proformas.', 'error'); return; }
             const error = this.validar();
             if (error) { this.sonido(false); this.aviso(error, 'error'); return; }
 

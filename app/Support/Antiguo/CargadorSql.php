@@ -20,6 +20,9 @@ class CargadorSql
         // Historial
         'cpe_cabecera', 'cpe_detalle', 'venta_medio_pago', 'compras_cabecera', 'compras_detalle',
         'cuentas_cobrar', 'cuentas_cobrar_detalle', 'cuentas_pagar', 'cuentas_pagar_detalle',
+        'producto_empresa', 'guias_remision', 'guias_remision_detalle', 'motivo_traslado',
+        'turnos', 'turno_medio_pago', 'usuario_facturacion', 'gastos_cabecera', 'gastos_detalle', 'tipo_gastos', 'tipocambio',
+        'movimientos_productos', 'movimientos_cabecera', 'usuario_gastos',
     ];
 
     private const RUTINA = '/^CREATE\s+(?:OR\s+REPLACE\s+)?(?:DEFINER\s*=\s*\S+\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?(?:PROCEDURE|FUNCTION|TRIGGER|EVENT)\b/i';
@@ -48,7 +51,13 @@ class CargadorSql
         $delim = ';';
         $enRutina = false;
 
+        $primera = true;
         while (($linea = $gz ? gzgets($f) : fgets($f)) !== false) {
+            // Respaldos guardados en Windows (MySQL-Front, Navicat) empiezan con la marca BOM de UTF-8
+            if ($primera) {
+                $linea = preg_replace('/^\xEF\xBB\xBF/', '', $linea);
+                $primera = false;
+            }
             $limpia = rtrim($linea, "\r\n");
             $t = trim($limpia);
 
@@ -121,6 +130,18 @@ class CargadorSql
         return true;
     }
 
+    /**
+     * La base temporal no necesita llaves foráneas, y MySQL 8.4 rechaza las que el sistema antiguo apuntaba a columnas
+     * que no son únicas (compras_cabecera → almacenes): sin quitarlas, la tabla no se crea y se pierden las compras.
+     */
+    public static function sinLlavesForaneas(string $sql): string
+    {
+        $lineas = array_filter(explode("\n", $sql), fn ($l) => ! preg_match('/^\s*(CONSTRAINT\s+`?[^`\s]+`?\s+)?FOREIGN\s+KEY\b/i', $l));
+
+        // La línea anterior a las borradas puede quedar con una coma colgando antes del ")"
+        return preg_replace('/,(\s*\n\s*\))/', '$1', implode("\n", $lineas));
+    }
+
     private static function ejecutar(\PDO $pdo, string $sql, array &$res): void
     {
         if ($sql === '' || preg_match(self::RUTINA, $sql) || ! preg_match(self::TABLA, $sql, $m)
@@ -128,6 +149,9 @@ class CargadorSql
             $res['omitidas']++;
 
             return;
+        }
+        if (preg_match('/^CREATE\s+TABLE/i', $sql)) {
+            $sql = self::sinLlavesForaneas($sql);
         }
         try {
             $pdo->exec($sql);

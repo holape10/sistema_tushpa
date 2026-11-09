@@ -43,6 +43,15 @@ class CargadorSqlSeguroTest extends TestCase
         $this->assertTrue(CargadorSql::seguro($sql));
     }
 
+    public function test_la_tabla_se_crea_sin_las_llaves_foraneas_que_mysql_8_4_rechaza(): void
+    {
+        $sql = "CREATE TABLE `compras_cabecera` (\n  `com_cab_id` int NOT NULL,\n  `id_almacen` int DEFAULT NULL,\n  PRIMARY KEY (`com_cab_id`),\n"
+            ."  KEY `compras_sucursal` (`id_almacen`),\n  CONSTRAINT `compras_sucursal` FOREIGN KEY (`id_almacen`) REFERENCES `almacenes` (`id_almacen`)\n) ENGINE=InnoDB";
+
+        $this->assertSame("CREATE TABLE `compras_cabecera` (\n  `com_cab_id` int NOT NULL,\n  `id_almacen` int DEFAULT NULL,\n  PRIMARY KEY (`com_cab_id`),\n"
+            ."  KEY `compras_sucursal` (`id_almacen`)\n) ENGINE=InnoDB", CargadorSql::sinLlavesForaneas($sql));
+    }
+
     #[DataProvider('ataques')]
     public function test_un_respaldo_armado_para_atacar_no_se_ejecuta(string $sql): void
     {

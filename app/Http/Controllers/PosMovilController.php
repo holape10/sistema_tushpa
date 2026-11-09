@@ -24,6 +24,12 @@ class PosMovilController extends Controller
         abort_unless(Auth::user()->puedeCobrar(), 403, 'Solo Administrador o Caja pueden vender.');
     }
 
+    /** Buscar productos: también el vendedor, que arma pedidos en el punto de venta */
+    private function autorizarBusqueda(): void
+    {
+        abort_unless(Auth::user()->puedeCobrar() || Auth::user()->esVendedor(), 403, 'Solo Administrador, Caja o Vendedor pueden buscar productos.');
+    }
+
     public function index(Request $request)
     {
         $this->autorizar();
@@ -61,7 +67,7 @@ class PosMovilController extends Controller
      */
     public function productos(Request $request)
     {
-        $this->autorizar();
+        $this->autorizarBusqueda();
         $codigo = trim((string) $request->get('codigo'));
         $q = trim((string) $request->get('q'));
 

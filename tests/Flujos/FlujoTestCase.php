@@ -61,6 +61,9 @@ abstract class FlujoTestCase extends TestCase
             $this->markTestSkipped('La base de pruebas no tiene las tablas del sistema.');
         }
 
+        // Cada consulta ve lo ya creado (una base temporal recién cargada); con el aislamiento por defecto la transacción
+        // de la prueba seguiría viendo la lista de bases de antes
+        DB::statement('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
         DB::beginTransaction();
         Carbon::setTestNow(Carbon::parse('2026-10-30 12:00:00'));
         $this->negocioNuevo();

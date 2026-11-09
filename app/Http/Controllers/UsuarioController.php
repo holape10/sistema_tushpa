@@ -44,6 +44,8 @@ class UsuarioController extends Controller
         14 => ['Inicio', 'Cobranza del Día', 'Clientes de Préstamos'],
         // Cocinero y almacenero: ven el stock y piden lo que falta (solo en su sucursal)
         16 => ['Inicio', 'Pantalla Cocina', 'Requerimientos del día', 'Stock Productos', 'Mermas'],
+        // Vendedor: arma pedidos en el punto de venta (sin caja) y la caja los cobra desde Proformas
+        5 => ['Inicio', 'Punto Venta', 'Proformas', 'Clientes', 'Stock Productos'],
         17 => ['Inicio', 'Requerimientos del día', 'Inventario ciego', 'Stock Productos', 'Kardex', 'Ingresos Productos', 'Salidas Productos', 'Órdenes de compra'],
         4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Cajas cerradas (turnos)', 'Envío de Comprobantes', 'Resumen Diario',
             'Kardex', 'Stock Productos', 'Clientes'],

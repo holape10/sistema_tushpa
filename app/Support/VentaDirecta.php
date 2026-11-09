@@ -157,7 +157,10 @@ class VentaDirecta
                 $base = (float) ($vigentes[$l['IdProducto']] ?? 0);
                 $pres = ! empty($l['presentacion']) ? ($presentaciones[$l['presentacion']] ?? null) : null;
                 $lista = $pres ? ((float) $pres->precio > 0 ? (float) $pres->precio : round($base * (float) $pres->factor, 2)) : $base;
-                if ($lista > 0 && abs((float) $l['precio'] - $lista) >= 0.01) {
+                // El precio 2 o 3 del producto también es de lista (la caja lo elige)
+                $alternos = $pres ? [] : array_column(CatalogoVenta::preciosExtra($productos[$l['IdProducto']] ?? (object) []), 'precio');
+                $esAlterno = collect($alternos)->contains(fn ($a) => abs((float) $l['precio'] - $a) < 0.01);
+                if ($lista > 0 && ! $esAlterno && abs((float) $l['precio'] - $lista) >= 0.01) {
                     $distintos[] = [$l['descripcion'], number_format($lista, 2, '.', ''), number_format((float) $l['precio'], 2, '.', '')];
                 }
             }

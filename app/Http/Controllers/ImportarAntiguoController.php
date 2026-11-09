@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Importar datos del sistema antiguo (solo Administrador), en tres pasos:
  *  1. Origen: subir el respaldo .sql (se carga en una base temporal antiguo_{RUC}_{fecha}) o elegir una base ya cargada.
- *  2. Revisar: qué trae, de qué sucursal antigua, qué secciones importar y el ZIP de imágenes.
- *  3. Importar: reporte de lo creado, actualizado y omitido.
+ *  2. Revisar: qué trae, a qué sucursal nueva va cada sucursal antigua, qué secciones importar y el ZIP de imágenes.
+ *  3. Importar: todas las sucursales elegidas a la vez (catálogos y usuarios primero, luego el historial) y el reporte.
  * Con multi-empresa activo solo se ven las bases temporales de esta empresa (nunca las de otros clientes).
  */
 class ImportarAntiguoController extends Controller
@@ -112,11 +112,13 @@ class ImportarAntiguoController extends Controller
         Importador::conectar($bd);
         $imp = new Importador;
         $sucursales = $imp->sucursales();
-        $suc = (int) $request->get('sucursal', $sucursales[0]['id'] ?? 1);
+        $suc = (int) ($sucursales[0]['id'] ?? 1);
+        // Sucursales de esta empresa: la actual primero; cada sucursal antigua se propone para una nueva, en orden
+        $nuevas = $this->sucursalesNuevas();
 
         return view('empresas.importar.index', [
             'paso' => 2, 'bd' => $bd, 'resumen' => $imp->resumen(), 'sucursales' => $sucursales, 'suc' => $suc,
-            'almacenes' => $imp->almacenes($suc), 'temporal' => str_starts_with($bd, 'antiguo_'),
+            'nuevas' => $nuevas, 'temporal' => str_starts_with($bd, 'antiguo_'),
             'mismoRuc' => $imp->mismoRuc(Auth::user(), $suc),
         ]);
     }
@@ -126,9 +128,10 @@ class ImportarAntiguoController extends Controller
     {
         $this->autorizar();
         $datos = $request->validate([
-            'bd' => 'required|string', 'sucursal' => 'required|integer',
+            'bd' => 'required|string',
+            'mapa' => 'required|array', 'mapa.*' => 'nullable|integer',
             'secciones' => 'required|array|min:1', 'secciones.*' => 'in:'.implode(',', array_keys(Importador::SECCIONES)),
-            'dia0' => 'required|in:domingo,lunes', 'almacen' => 'nullable|integer',
+            'dia0' => 'required|in:domingo,lunes',
             'imagenes' => 'nullable|file|mimes:zip|max:1048576',
         ], ['secciones.required' => 'Elige al menos una sección para importar.'], ['imagenes' => 'ZIP de imágenes']);
         $bd = $this->baseValida($datos['bd']);
@@ -136,11 +139,31 @@ class ImportarAntiguoController extends Controller
         set_time_limit(0);
         $zip = $request->hasFile('imagenes') ? $request->file('imagenes')->getRealPath() : null;
         Importador::conectar($bd);
-        $resultado = (new Importador)->importar(Auth::user(), (int) $datos['sucursal'], [
-            'secciones' => $datos['secciones'], 'dia0' => $datos['dia0'], 'almacen' => $datos['almacen'] ?? null, 'imagenes' => $zip,
+        // Solo sucursales de esta empresa; "no importar" llega vacío. Dos sucursales antiguas no pueden ir a la misma nueva.
+        $nuevas = $this->sucursalesNuevas();
+        $mapa = array_filter(array_map('intval', $datos['mapa']));
+        if (! $mapa || array_diff($mapa, array_keys($nuevas)) || count($mapa) !== count(array_unique($mapa))) {
+            return back()->withErrors(['mapa' => 'Elige a qué sucursal va cada sucursal antigua (sin repetir ninguna).']);
+        }
+        $resultado = Importador::porSucursales(Auth::user(), $mapa, [
+            'secciones' => $datos['secciones'], 'dia0' => $datos['dia0'], 'imagenes' => $zip,
         ]);
+        $nombresAntiguas = collect((new Importador)->sucursales())->pluck('nombre', 'id');
 
-        return view('empresas.importar.index', ['paso' => 3, 'bd' => $bd, 'resultado' => $resultado, 'temporal' => str_starts_with($bd, 'antiguo_')]);
+        return view('empresas.importar.index', ['paso' => 3, 'bd' => $bd, 'resultado' => $resultado, 'nuevas' => $nuevas,
+            'nombresAntiguas' => $nombresAntiguas, 'temporal' => str_starts_with($bd, 'antiguo_')]);
+    }
+
+    /** @return array<int, string> id => nombre de las sucursales de la empresa (la del usuario primero) */
+    private function sucursalesNuevas(): array
+    {
+        $user = Auth::user();
+
+        return DB::table('empresa_negocios')->where('IdEmpresa', $user->IdEmpresa)
+            ->orderByRaw('id_empresa_negocio = ? DESC', [$user->id_empresa_negocio])->orderBy('id_empresa_negocio')
+            ->get(['id_empresa_negocio', 'nombre_comercial', 'tipo_negocio'])
+            ->mapWithKeys(fn ($s) => [(int) $s->id_empresa_negocio => trim((string) ($s->nombre_comercial ?: $s->tipo_negocio)) ?: 'Sucursal '.$s->id_empresa_negocio])
+            ->all();
     }
 
     /** Borra la base temporal cargada (solo las antiguo_*) */

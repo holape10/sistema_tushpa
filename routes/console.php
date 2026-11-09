@@ -8,6 +8,7 @@ use App\Models\Central\SuperadminCobro;
 use App\Models\User;
 use App\Support\AgendaPanel;
 use App\Support\Antiguo\CargadorSql;
+use App\Support\Antiguo\Importador;
 use App\Support\AvisosCelular;
 use App\Support\ClinicaRecordatorios;
 use App\Support\Colas;
@@ -31,6 +32,7 @@ use App\Support\Vencimientos;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
@@ -174,6 +176,75 @@ Artisan::command('antiguo:cargar {archivo : Ruta del respaldo .sql o .sql.gz del
 
     return 0;
 })->purpose('Carga un respaldo del sistema antiguo en una base temporal para importarlo');
+
+Artisan::command('antiguo:importar {bd : Base temporal cargada con antiguo:cargar} {--ruc= : RUC de la empresa (cliente) que recibe los datos}
+    {--mapa= : Sucursal antigua:sucursal nueva, separadas por coma (ej. 20:1,22:2)} {--usuario= : Usuario (login) administrador de la empresa}
+    {--secciones=* : Secciones a importar (por defecto todas)}', function () {
+    $bd = (string) $this->argument('bd');
+    $ruc = preg_replace('/\D/', '', (string) $this->option('ruc'));
+    if ($ruc === '' || ! preg_match('/^antiguo_'.$ruc.'_\d{8}_\d{6}$/', $bd)) {
+        $this->error('La base debe ser una antiguo_{RUC}_… cargada con antiguo:cargar para ese mismo RUC.');
+
+        return 1;
+    }
+    $cliente = Cliente::where('ruc', $ruc)->where('estado', '!=', 'ELIMINADO')->first();
+    if (! $cliente) {
+        $this->error("No hay un cliente con RUC {$ruc}.");
+
+        return 1;
+    }
+    $mapa = [];
+    foreach (array_filter(explode(',', (string) $this->option('mapa'))) as $par) {
+        if (! preg_match('/^\s*(\d+)\s*:\s*(\d+)\s*$/', $par, $m)) {
+            $this->error("--mapa mal escrito en \"{$par}\": usa sucursalAntigua:sucursalNueva, por ejemplo 20:1,22:2");
+
+            return 1;
+        }
+        $mapa[(int) $m[1]] = (int) $m[2];
+    }
+    $secciones = $this->option('secciones') ?: array_keys(Importador::SECCIONES);
+    $invalidas = array_diff($secciones, array_keys(Importador::SECCIONES));
+    if (! $mapa || $invalidas) {
+        $this->error(! $mapa ? 'Indica con --mapa qué sucursal antigua va a cuál sucursal nueva (ej. --mapa=20:1,22:2).'
+            : 'Secciones no válidas: '.implode(', ', $invalidas).'. Usa: '.implode(', ', array_keys(Importador::SECCIONES)));
+
+        return 1;
+    }
+
+    return Tenancy::en($cliente->base_datos, function () use ($bd, $secciones, $mapa) {
+        $admin = User::where('email', (string) $this->option('usuario'))->first();
+        if (! $admin || ! $admin->esAdmin()) {
+            $this->error('Indica con --usuario= el login de un administrador de la empresa.');
+
+            return 1;
+        }
+        $sucursales = DB::table('empresa_negocios')->where('IdEmpresa', $admin->IdEmpresa)->pluck('nombre_comercial', 'id_empresa_negocio');
+        foreach ($mapa as $nueva) {
+            if (! isset($sucursales[$nueva])) {
+                $this->error("La sucursal nueva {$nueva} no existe en la empresa {$admin->IdEmpresa}. Créala antes en Sucursales.");
+
+                return 1;
+            }
+        }
+        // El importador registra todo a nombre del administrador (inventario inicial, kardex…)
+        Auth::login($admin);
+        Importador::conectar($bd);
+        $inicio = microtime(true);
+        // Primero catálogos y usuarios de TODAS las sucursales; luego historial y stock (cada venta encuentra a su vendedor)
+        foreach (Importador::porSucursales($admin, $mapa, ['secciones' => $secciones, 'dia0' => 'domingo']) as $antigua => $r) {
+            $this->info("Sucursal antigua {$antigua} → {$sucursales[$r['nueva']]} ({$r['nueva']})");
+            foreach ($r['secciones'] as $seccion => $n) {
+                $this->line(sprintf('  %-12s %s', $seccion, collect($n)->map(fn ($v, $k) => "{$k}: {$v}")->implode(' · ')));
+            }
+            foreach ($r['avisos'] as $aviso) {
+                $this->warn('  • '.$aviso);
+            }
+        }
+        $this->info(sprintf('Listo en %.0f s.', microtime(true) - $inicio));
+
+        return 0;
+    });
+})->purpose('Importa las sucursales del sistema antiguo (base temporal) en las sucursales nuevas, sin límite de tiempo');
 
 // ---------------- Mantenimiento diario ----------------
 

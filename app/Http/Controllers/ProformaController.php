@@ -1,10 +1,13 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\{Empresa, EmpresaNegocio};
+use App\Models\Empresa;
+use App\Models\EmpresaNegocio;
 use App\Support\Proformas;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Proformas: se crean desde los puntos de venta (menos el cobro de mesas). Aquí se listan, imprimen y eliminan;
@@ -14,13 +17,15 @@ class ProformaController extends Controller
 {
     private function autorizar(): void
     {
-        abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja pueden manejar proformas.');
+        // El vendedor arma los pedidos; la caja los cobra
+        abort_unless(Auth::user()->esAdminOCaja() || Auth::user()->esVendedor(), 403, 'Solo Administrador, Caja o Vendedor pueden manejar proformas.');
     }
 
     private function proforma($id): object
     {
         $p = DB::table('proformas')->where('id_proforma', $id)->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->first();
         abort_unless($p, 404);
+
         return $p;
     }
 
@@ -48,12 +53,12 @@ class ProformaController extends Controller
             ->leftJoin('users as u', 'u.IdUsuario', '=', 'p.IdUsuario')
             ->leftJoin('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'p.IdCpe_cabecera')
             ->where('p.id_empresa_negocio', $user->id_empresa_negocio)
-            ->when(in_array($estado, ['PENDIENTE', 'FACTURADA'], true), fn($w) => $w->where('p.estado', $estado))
+            ->when(in_array($estado, ['PENDIENTE', 'FACTURADA'], true), fn ($w) => $w->where('p.estado', $estado))
             ->whereBetween('p.fecha', [$desde, $hasta])
             ->when($q !== '', function ($w) use ($q) {
                 $num = ltrim(preg_replace('/^.*-/', '', $q), '0');
-                $w->where(fn($x) => $x->where('p.clinom', 'like', "%{$q}%")->orWhere('p.clinum', $q)
-                    ->when(ctype_digit($num), fn($y) => $y->orWhere('p.numero', (int) $num)));
+                $w->where(fn ($x) => $x->where('p.clinom', 'like', "%{$q}%")->orWhere('p.clinum', $q)
+                    ->when(ctype_digit($num), fn ($y) => $y->orWhere('p.numero', (int) $num)));
             })
             ->orderByDesc('p.id_proforma')
             ->select('p.*', 'u.apeusu as usuario', 'c.serdoc', 'c.numdoc')
@@ -78,13 +83,15 @@ class ProformaController extends Controller
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json(['estado' => 'error', 'mensaje' => config('app.debug') ? $e->getMessage() : 'No se pudo guardar la proforma.']);
         }
 
         $p = $this->proforma($id);
+
         return response()->json([
             'estado' => 'success', 'id' => $id, 'numero' => Proformas::numero($p), 'total' => (float) $p->total,
-            'editada' => !empty($request->id), 'imprimir' => route('proformas.imprimir', $id),
+            'editada' => ! empty($request->id), 'imprimir' => route('proformas.imprimir', $id),
         ]);
     }
 
@@ -112,6 +119,7 @@ class ProformaController extends Controller
             DB::table('proforma_detalle')->where('id_proforma', $p->id_proforma)->delete();
             DB::table('proformas')->where('id_proforma', $p->id_proforma)->delete();
         });
-        return back()->with('success', 'Proforma ' . Proformas::numero($p) . ' eliminada.');
+
+        return back()->with('success', 'Proforma '.Proformas::numero($p).' eliminada.');
     }
 }

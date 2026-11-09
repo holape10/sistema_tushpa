@@ -274,7 +274,11 @@
             <section class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
                 <div class="flex items-center justify-between">
                     <h2 class="text-xs font-bold text-slate-500 uppercase">Comprobante</h2>
-                    <span class="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold">Turno N° {{ $turno->turno }}</span>
+                    @if ($turno)
+                        <span class="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold">Turno N° {{ $turno->turno }}</span>
+                    @else
+                        <span class="text-[11px] text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full font-semibold">🧾 Vendedor: solo pedidos (la caja los cobra)</span>
+                    @endif
                 </div>
                 <div class="grid gap-1.5 p-1 bg-slate-100 rounded-xl" :style="`grid-template-columns: repeat(${cfg.comprobantes.length}, minmax(0, 1fr))`">
                     <template x-for="c in cfg.comprobantes" :key="c.tdocod">
@@ -366,7 +370,8 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+                <div class="grid grid-cols-2 {{ $soloPedido ? '' : 'sm:grid-cols-4' }} gap-2 mt-4">
+                    @unless ($soloPedido)
                     <button type="button" @click="registrar(true)" :disabled="procesando"
                             class="h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
                         IMPRIMIR<span class="block text-[10px] font-semibold opacity-80">F9</span>
@@ -375,9 +380,10 @@
                             class="h-14 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
                         REGISTRAR<span class="block text-[10px] font-semibold opacity-80">F10</span>
                     </button>
+                    @endunless
                     <button type="button" @click="guardarProforma()" :disabled="procesando || edicion" title="Guardar como proforma (no emite comprobante)"
                             class="h-14 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
-                        <span x-text="proformaId ? 'GUARDAR PROF.' : 'PROFORMA'"></span><span class="block text-[10px] font-semibold opacity-80">F8</span>
+                        <span x-text="proformaId ? 'GUARDAR {{ $soloPedido ? 'PEDIDO' : 'PROF.' }}' : '{{ $soloPedido ? 'GUARDAR PEDIDO' : 'PROFORMA' }}'"></span><span class="block text-[10px] font-semibold opacity-80">F8</span>
                     </button>
                     <button type="button" @click="cancelar()" :disabled="procesando"
                             class="h-14 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
@@ -434,7 +440,7 @@
                         <span class="flex-1 min-w-0">
                             <span class="block text-lg font-bold leading-tight" x-text="op ? op.nombre : (elegir?.p.unidad || 'Unidad')"></span>
                             <span class="block text-xs opacity-75"
-                                  x-text="(op ? 'Trae ' + num(op.factor) + ' ' + (elegir?.p.unidad || '') : 'Unidad base')
+                                  x-text="(op && !op.alterno ? 'Trae ' + num(op.factor) + ' ' + (elegir?.p.unidad || '') : (op ? (elegir?.p.unidad || 'Unidad') + ' a otro precio' : 'Unidad base'))
                                           + (elegir?.p.stock !== null && elegir?.p.stock !== undefined ? ' · Stock ' + num((elegir.p.stock) / (op ? op.factor : 1)) : '')"></span>
                         </span>
                         <span class="text-xl font-extrabold whitespace-nowrap" x-text="soles(op ? op.precio : elegir?.p.precio)"></span>
@@ -498,6 +504,8 @@
         usuario: @json(auth()->user()->IdUsuario),
         // Solo el administrador cambia el precio de los productos (las líneas libres siempre se escriben)
         editarPrecio: @json(auth()->user()->esAdmin()),
+        // Vendedor sin caja: solo guarda pedidos (proformas) que la caja cobra
+        soloPedido: @json($soloPedido ?? false),
         csrf: @json(csrf_token()),
         comprobantes: @json($comprobantes),
         tdocodPred: @json($negocio->tdocod_pred ?? '13'),

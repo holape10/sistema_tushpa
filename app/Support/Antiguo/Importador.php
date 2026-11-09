@@ -31,6 +31,8 @@ use Illuminate\Support\Str;
  *  - las presentaciones eran filas de productos con tipo = 2, pro_rel = producto padre y factor; o la tabla presentaciones
  *  - umecod_cons / factor_cons de los insumos  →  unidad equivalente (1 KG = 1000 GR)
  *  - precios_dia_semana  →  precios dinámicos por día y hora
+ *  - producto_empresa (precio, precio2, precio3 por sucursal) → el precio de cada sucursal y su precio 2 y 3
+ *  - productos de una sola tabla para todas las sucursales → cada sucursal recibe los que tiene en producto_empresa o producto_stock
  */
 class Importador
 {
@@ -39,14 +41,15 @@ class Importador
     public const SECCIONES = [
         'categorias' => 'Categorías y subcategorías',
         'productos' => 'Productos, presentaciones, códigos de barras, precios dinámicos y combos',
-        'stock' => 'Stock actual (como inventario inicial)',
         'clientes' => 'Clientes',
         'proveedores' => 'Proveedores',
         'medios' => 'Medios de pago y formas de pago',
         'mesas' => 'Pisos y mesas',
         'usuarios' => 'Usuarios y empleados (con sus mismas contraseñas y rol)',
         // Al final: necesita clientes, productos, proveedores y medios de pago ya importados para enlazarlos
-        'historial' => 'Historial: ventas, notas de crédito, compras, cuentas por cobrar/pagar y guías de remisión (con estado SUNAT y correlativos)',
+        'historial' => 'Historial: ventas, notas de crédito, turnos de caja, proformas, compras, cuentas por cobrar/pagar, guías, gastos y kardex (con estado SUNAT y correlativos)',
+        // Después del historial: cuadra el stock con el que tenía el sistema antiguo (también en negativo)
+        'stock' => 'Stock actual (igual al del sistema antiguo, también en negativo)',
     ];
 
     private const TIPOS = [0 => 0, 1 => 0, 2 => 2, 3 => 6, 4 => 4, 6 => 6];
@@ -65,6 +68,12 @@ class Importador
     private array $mapaCat = [];
 
     private array $mapaSub = [];
+
+    /** Productos nuevos con kardex histórico importado en esta corrida (su stock se cuadra aunque ya tengan movimientos) */
+    private array $productosKardex = [];
+
+    /** Código de unidad antiguo que no es oficial de SUNAT => el oficial equivalente (por su nombre) */
+    private array $unidadesAntiguas = [];
 
     public static function conectar(string $bd): void
     {
@@ -109,6 +118,37 @@ class Importador
             : $q;
     }
 
+    /**
+     * Productos de la sucursal antigua: los suyos, los sin sucursal y, si el sistema antiguo tenía una sola lista de
+     * productos para todas, los que esa sucursal tiene en producto_empresa (precio) o producto_stock.
+     */
+    private function productosDeSucursal($q, int $suc)
+    {
+        if (! $this->col('productos', 'id_empresa_negocio')) {
+            return $q;
+        }
+        $ids = [];
+        foreach (['producto_empresa', 'producto_stock'] as $t) {
+            if ($this->hay($t) && $this->col($t, 'id_empresa_negocio')) {
+                $ids = array_merge($ids, $this->src($t)->where('id_empresa_negocio', $suc)->distinct()->pluck('IdProducto')->all());
+            }
+        }
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+
+        return $q->where(fn ($w) => $w->where('id_empresa_negocio', $suc)->orWhereNull('id_empresa_negocio')
+            ->when($ids, fn ($x) => $x->orWhereIn('IdProducto', $ids)));
+    }
+
+    /** Precio de venta, precio 2 y precio 3 de cada producto en esta sucursal (producto_empresa) */
+    private function preciosDeSucursal(int $suc): array
+    {
+        if (! $this->hay('producto_empresa') || ! $this->col('producto_empresa', 'id_empresa_negocio')) {
+            return [];
+        }
+
+        return $this->src('producto_empresa')->where('id_empresa_negocio', $suc)->get()->keyBy('IdProducto')->all();
+    }
+
     // ------------------------------------------------------------------ resumen
 
     public function resumen(): array
@@ -125,7 +165,11 @@ class Importador
             'Medios de pago' => $contar('medios_pagos'),
             'Mesas' => $contar('mesas'),
             'Ventas (comprobantes)' => $contar('cpe_cabecera', fn ($q) => $q->whereIn('tdocod', Historial::VENTAS)),
-            'Vales y proformas (no se importan)' => $contar('cpe_cabecera', fn ($q) => $q->whereNotIn('tdocod', Historial::VENTAS)),
+            'Proformas y notas de pedido' => $contar('cpe_cabecera', fn ($q) => $q->whereIn('tdocod', ['15', '16'])),
+            'Vales y otros (no se importan)' => $contar('cpe_cabecera', fn ($q) => $q->whereNotIn('tdocod', array_merge(Historial::VENTAS, ['15', '16']))),
+            'Turnos de caja' => $contar('turnos'),
+            'Gastos' => $contar('gastos_cabecera'),
+            'Kardex (movimientos)' => $contar('movimientos_productos'),
             'Compras' => $contar('compras_cabecera'),
             'Guías de remisión' => $contar('guias_remision'),
         ];
@@ -138,7 +182,7 @@ class Importador
         }
 
         return $this->src('empresa_negocios')->orderBy('id_empresa_negocio')->get()
-            ->map(fn ($s) => ['id' => (int) $s->id_empresa_negocio, 'nombre' => self::v($s, 'nombre_comercial') ?: 'Sucursal '.$s->id_empresa_negocio,
+            ->map(fn ($s) => ['id' => (int) $s->id_empresa_negocio, 'nombre' => self::v($s, 'nombre_comercial') ?: (self::v($s, 'tipo_negocio') ?: 'Sucursal '.$s->id_empresa_negocio),
                 'ruc' => self::v($s, 'IdEmpresa')])->all();
     }
 
@@ -157,6 +201,36 @@ class Importador
     /**
      * @param  array  $opc  secciones[], dia0 ('domingo'|'lunes'), almacen (id antiguo), imagenes (ruta a un .zip o null)
      */
+    /**
+     * Varias sucursales a la vez: primero catálogos y usuarios de TODAS, luego historial y stock de cada una. Así cada
+     * venta encuentra a su vendedor aunque el vendedor sea de otra sucursal. El administrador firma todo lo importado.
+     *
+     * @param  array<int, int>  $mapa  sucursal antigua => sucursal nueva
+     * @param  array  $opc  secciones[], dia0, imagenes
+     * @return array<int, array{nueva: int, secciones: array, avisos: array}> por sucursal antigua
+     */
+    public static function porSucursales(User $admin, array $mapa, array $opc): array
+    {
+        $secciones = $opc['secciones'] ?? array_keys(self::SECCIONES);
+        $historicas = ['historial', 'stock'];
+        $resultado = [];
+        foreach ([array_values(array_diff($secciones, $historicas)), array_values(array_intersect($secciones, $historicas))] as $fase) {
+            if (! $fase) {
+                continue;
+            }
+            foreach ($mapa as $antigua => $nueva) {
+                $usuario = clone $admin;
+                $usuario->id_empresa_negocio = (int) $nueva;
+                $r = (new self)->importar($usuario, (int) $antigua, ['secciones' => $fase] + $opc);
+                $resultado[$antigua] ??= ['nueva' => (int) $nueva, 'secciones' => [], 'avisos' => []];
+                $resultado[$antigua]['secciones'] += $r['secciones'];
+                $resultado[$antigua]['avisos'] = array_merge($resultado[$antigua]['avisos'], $r['avisos']);
+            }
+        }
+
+        return $resultado;
+    }
+
     public function importar(User $user, int $suc, array $opc): array
     {
         $secciones = $opc['secciones'] ?? [];
@@ -184,7 +258,7 @@ class Importador
                     'medios' => $this->medios($user, $suc, $rucAntiguo),
                     'mesas' => $this->mesas($user, $suc),
                     'usuarios' => $this->usuarios($user, $suc),
-                    'historial' => $this->historial($user, $suc),
+                    'historial' => $this->historial($user, $suc, $opc),
                 });
             } catch (\Throwable $e) {
                 report($e);
@@ -216,9 +290,24 @@ class Importador
             return;
         }
         $existentes = DB::table('unidad_medida')->pluck('umecod')->map(fn ($u) => strtoupper($u))->flip();
+        // Nombre de cada unidad oficial (Kilogramo, Centímetro…) para reconocer las que el sistema antiguo inventó
+        $porNombre = [];
+        foreach (Unidades::CATALOGO as $codigo => [$nombre]) {
+            $porNombre[self::sinTildes($nombre)] = $codigo;
+        }
         foreach ($this->src('unidad_medida')->get() as $u) {
             $cod = strtoupper(trim((string) self::v($u, 'umecod', '')));
             if (! preg_match('/^[A-Z0-9]{2,3}$/', $cod) || isset($existentes[$cod])) {
+                continue;
+            }
+            // Solo códigos oficiales del catálogo 03 de SUNAT; uno inventado (3H, CM, PLA…) se cambia por el oficial
+            // que tenga su mismo nombre, o queda como Unidad
+            if (! isset(Unidades::CATALOGO[$cod]) && ! in_array($cod, Unidades::VIGENTES_SUNAT, true)) {
+                $oficial = Unidades::ALIAS[$cod] ?? $porNombre[self::sinTildes((string) self::v($u, 'umenom', ''))] ?? null;
+                $this->unidadesAntiguas[$cod] = $oficial ?? 'NIU';
+                $this->aviso("Unidad {$cod} (".trim((string) self::v($u, 'umenom', '')).') no es oficial de SUNAT: sus productos quedan como '
+                    .($oficial ? Unidades::CATALOGO[$oficial][0] ?? $oficial : 'Unidad').'.');
+
                 continue;
             }
             $fila = ['umecod' => $cod, 'umenom' => mb_convert_case(mb_strtolower(trim((string) self::v($u, 'umenom', $cod))), MB_CASE_TITLE),
@@ -232,9 +321,18 @@ class Importador
         }
     }
 
+    private static function sinTildes(string $texto): string
+    {
+        return strtoupper(trim(strtr(mb_strtoupper($texto), ['Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ñ' => 'N'])));
+    }
+
     /** Unidad del producto antiguo (KG, UND, MTS… se reconocen); si no se entiende, Unidad y queda el aviso */
     private function unidad($escrita, string $producto): string
     {
+        $original = strtoupper(trim((string) $escrita));
+        if (isset($this->unidadesAntiguas[$original])) {
+            return $this->unidadesAntiguas[$original];
+        }
         $cod = Unidades::codigo($escrita);
         if ($cod === null && trim((string) $escrita) !== '') {
             $this->aviso("{$producto}: la unidad \"{$escrita}\" no se reconoce, quedó como Unidad.");
@@ -274,7 +372,14 @@ class Importador
         }
         $nuevaSuc = $user->id_empresa_negocio;
         $existentes = Categoria::where('id_empresa_negocio', $nuevaSuc)->get()->keyBy(fn ($c) => self::clave($c->cat_nom));
-        foreach ($this->deSucursal($this->src('categorias'), 'categorias', $suc)->get() as $c) {
+        $usadas = $this->hay('productos') && $this->col('productos', 'cat_id')
+            ? $this->productosDeSucursal($this->src('productos'), $suc)->whereNotNull('cat_id')->distinct()->pluck('cat_id')->all() : [];
+        $subUsadas = $this->hay('productos') && $this->col('productos', 'subcat_id')
+            ? $this->productosDeSucursal($this->src('productos'), $suc)->whereNotNull('subcat_id')->distinct()->pluck('subcat_id')->all() : [];
+        $deLaSucursal = fn ($q, string $tabla, string $id, array $ids) => $this->col($tabla, 'id_empresa_negocio')
+            ? $q->where(fn ($w) => $w->where('id_empresa_negocio', $suc)->orWhereNull('id_empresa_negocio')->when($ids, fn ($x) => $x->orWhereIn($id, $ids)))
+            : $q;
+        foreach ($deLaSucursal($this->src('categorias'), 'categorias', 'cat_id', $usadas)->get() as $c) {
             $nombre = mb_substr(self::clave($c->cat_nom), 0, 50);
             if ($nombre === '') {
                 continue;
@@ -299,7 +404,7 @@ class Importador
             return;
         }
         $subs = Subcategoria::where('id_empresa_negocio', $nuevaSuc)->get()->keyBy(fn ($s) => self::clave($s->subcat_nom).'|'.$s->cat_id);
-        foreach ($this->deSucursal($this->src('subcategorias'), 'subcategorias', $suc)->get() as $s) {
+        foreach ($deLaSucursal($this->src('subcategorias'), 'subcategorias', 'subcat_id', $subUsadas)->get() as $s) {
             $nombre = mb_substr(self::clave($s->subcat_nom), 0, 50);
             $cat = $this->mapaCat[self::v($s, 'cat_id')] ?? null;
             if ($nombre === '') {
@@ -362,7 +467,9 @@ class Importador
             ? $this->src('producto_codigo')->whereNotNull('cod_bar')->where('cod_bar', '!=', '')->orderBy('pro_cod_id')->get()->groupBy('IdProducto')
             : collect();
 
-        $filas = $this->deSucursal($this->src('productos'), 'productos', $suc)->orderBy('IdProducto')->get();
+        $filas = $this->productosDeSucursal($this->src('productos'), $suc)->orderBy('IdProducto')->get();
+        $preciosSuc = $this->preciosDeSucursal($suc);
+        $conPrecioExtra = Schema::hasColumn('productos', 'precio2');
         $principales = $filas->filter(fn ($p) => (int) self::v($p, 'tipo', 1) !== 2);
         $presentacionesFila = $filas->filter(fn ($p) => (int) self::v($p, 'tipo', 1) === 2);
 
@@ -380,9 +487,12 @@ class Importador
             $factorCons = (float) self::v($a, 'factor_cons', 0);
             $estado = self::clave(self::v($a, 'proest', 'Activo')) === 'INACTIVO' ? 'Inactivo' : 'Activo';
 
+            // Precio de esta sucursal (producto_empresa) o el general del producto
+            $deSuc = $preciosSuc[$a->IdProducto] ?? null;
+            $precio = $deSuc && (float) self::v($deSuc, 'precio', 0) > 0 ? (float) $deSuc->precio : (float) self::v($a, 'propun', 0);
             $datos = [
                 'pronom' => $nombre, 'umecod' => $ume, 'promocion' => $tipo,
-                'costo' => (float) self::v($a, 'costo', 0), 'propun' => (float) self::v($a, 'propun', 0),
+                'costo' => (float) self::v($a, 'costo', 0), 'propun' => $precio,
                 'cat_id' => $this->mapaCat[self::v($a, 'cat_id')] ?? ($prod->cat_id ?? null),
                 'subcat_id' => $this->mapaSub[self::v($a, 'subcat_id')] ?? ($prod->subcat_id ?? null),
                 'stock_min' => (float) self::v($a, 'stock_min', 0), 'proest' => $estado,
@@ -393,6 +503,14 @@ class Importador
                 'debe' => mb_substr(trim((string) self::v($a, 'debe', '')), 0, 12) ?: null,
                 'haber' => mb_substr(trim((string) self::v($a, 'haber', '')), 0, 12) ?: null,
             ];
+            if ($conPrecioExtra) {
+                // Precio 2 y 3: los de la sucursal o los del producto (propun1 / propun2 en el sistema antiguo)
+                foreach (['precio2' => 'propun1', 'precio3' => 'propun2'] as $nuevo => $general) {
+                    $valor = $deSuc ? (float) self::v($deSuc, $nuevo, 0) : 0;
+                    $valor = $valor > 0 ? $valor : ($deSuc ? 0 : (float) self::v($a, $general, 0));
+                    $datos[$nuevo] = $valor > 0 ? round($valor, 2) : null;
+                }
+            }
 
             if ($prod) {
                 $prod->update($datos);
@@ -623,12 +741,14 @@ class Importador
         $items = [];
         foreach ($stock as $idAntiguo => $cantidad) {
             $prod = $this->mapa[$idAntiguo] ?? null;
-            if (! $prod || ! in_array((int) $prod->promocion, [0, 4]) || (float) $cantidad <= 0) {
+            // También el stock negativo (lo vendido sin stock en el sistema antiguo); en cero no hay nada que cargar
+            if (! $prod || ! in_array((int) $prod->promocion, [0, 4]) || abs((float) $cantidad) < 0.0005) {
                 $this->sumar('stock', 'omitidos');
 
                 continue;
             }
-            if (DB::table('movimientos_productos')->where('IdProducto', $prod->IdProducto)->where('id_almacen', $almacen->id_almacen)->exists()) {
+            if (! isset($this->productosKardex[$prod->IdProducto])
+                && DB::table('movimientos_productos')->where('IdProducto', $prod->IdProducto)->where('id_almacen', $almacen->id_almacen)->exists()) {
                 $this->aviso("Stock de {$prod->pronom}: ya tiene movimientos en {$almacen->descripcion}; no se cambió (usa Inventarios).");
                 $this->sumar('stock', 'omitidos');
 
@@ -637,11 +757,22 @@ class Importador
             $items[$prod->IdProducto] = ['IdProducto' => $prod->IdProducto, 'cantidad' => round((float) $cantidad, 3), 'costo' => null];
         }
 
+        // Con kardex histórico: los que quedaron con saldo y el sistema antiguo dice 0 también se cuadran
+        foreach (array_keys($this->productosKardex) as $id) {
+            if (! isset($items[$id]) && abs((float) DB::table('producto_stock')->where('IdProducto', $id)->where('id_almacen', $almacen->id_almacen)->value('stock')) >= 0.0005) {
+                $items[$id] = ['IdProducto' => $id, 'cantidad' => 0.0, 'costo' => null];
+            }
+        }
+
         if ($items) {
             $productos = Producto::whereIn('IdProducto', array_keys($items))->get()->keyBy('IdProducto');
             InventarioController::procesar($almacen, now()->toDateString(), 'STOCK INICIAL - IMPORTACIÓN DEL SISTEMA ANTIGUO',
                 'ANTIGUO', array_values($items), $productos);
             $this->sumar('stock', 'creados', count($items));
+            $negativos = collect($items)->filter(fn ($i) => $i['cantidad'] < 0)->count();
+            if ($negativos) {
+                $this->aviso("{$negativos} productos quedaron con stock NEGATIVO, igual que en el sistema antiguo (se vendió más de lo que se registró como ingreso).");
+            }
         }
     }
 
@@ -653,7 +784,7 @@ class Importador
         }
         $porNombre = Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->get()
             ->keyBy(fn ($p) => self::clave($p->pronom).'|'.(int) $p->promocion);
-        foreach ($this->deSucursal($this->src('productos'), 'productos', $suc)->get() as $a) {
+        foreach ($this->productosDeSucursal($this->src('productos'), $suc)->get() as $a) {
             $tipo = self::TIPOS[(int) self::v($a, 'promocion', 0)] ?? 0;
             if ($p = $porNombre[self::clave($a->pronom).'|'.$tipo] ?? null) {
                 $this->mapa[$a->IdProducto] = $p;
@@ -662,19 +793,24 @@ class Importador
     }
 
     // ---------- Historial ----------
-    private function historial(User $user, int $suc): void
+    private function historial(User $user, int $suc, array $opc = []): void
     {
         $this->relacionarProductos($user, $suc);
-        $r = (new Historial($user,
+        $historial = new Historial($user,
             fn (string $t) => $this->src($t),
             fn (string $t) => $this->hay($t),
             fn ($q, string $t) => $this->deSucursal($q, $t, $suc),
             fn (string $t) => $this->aviso($t),
             $this->mapa,
-        ))->importar();
+            ['almacen' => (int) ($opc['almacen'] ?? 0) ?: ($this->almacenes($suc)[0]['id'] ?? null),
+                'negocio' => $this->hay('empresa_negocios') ? $this->src('empresa_negocios')->where('id_empresa_negocio', $suc)->first() : null],
+        );
+        $r = $historial->importar();
+        $this->productosKardex = $historial->productosKardex;
 
         $this->reporte['historial'] = ['creados' => $r['ventas'] + $r['compras'], 'actualizados' => 0, 'omitidos' => $r['repetidos'],
-            'ventas' => $r['ventas'], 'compras' => $r['compras'], 'cuentas' => $r['cuentas'], 'guias' => $r['guias']];
+            'ventas' => $r['ventas'], 'compras' => $r['compras'], 'cuentas' => $r['cuentas'], 'guias' => $r['guias'],
+            'turnos' => $r['turnos'], 'proformas' => $r['proformas'], 'gastos' => $r['gastos'], 'kardex' => $r['kardex']];
         $this->aviso("Historial: {$r['ventas']} comprobantes con {$r['detalle']} líneas y {$r['medios']} pagos; {$r['compras']} compras; {$r['cuentas']} cuentas por cobrar/pagar; {$r['guias']} guías de remisión"
             .($r['repetidos'] ? "; {$r['repetidos']} ya estaban (no se duplicaron)." : '.'));
     }
@@ -696,8 +832,14 @@ class Importador
         $roles = $this->hay('role_user') ? $this->src('role_user')->pluck('role_id', 'user_IdUsuario') : collect();
         $empleados = $this->hay('empleado') ? $this->src('empleado')->get()->keyBy('emp_id') : collect();
         $colsEmp = array_flip(Schema::getColumnListing('empleado'));
-        // Rol nuevo: administrador, caja o mozo; los demás (vendedor, contador...) entran como caja
-        $rolDe = fn ($r) => in_array((int) $r, [2, 4, 8], true) ? (int) $r : 4;
+        // Rol nuevo: administrador, caja, mozo o vendedor; el controlador logístico (7) es el almacenero; los demás, caja
+        $hayRol = DB::table('roles')->pluck('id')->map(fn ($id) => (int) $id)->flip();
+        $rolDe = fn ($r) => match (true) {
+            in_array((int) $r, [2, 4, 8], true) => (int) $r,
+            (int) $r === 5 && isset($hayRol[5]) => 5,
+            (int) $r === 7 && isset($hayRol[17]) => 17,
+            default => 4,
+        };
         $modulos = Modulo::orderBy('mod_id')->get();
         $presets = [2 => $modulos->pluck('mod_id')->all()];
         foreach (UsuarioController::PRESETS as $rol => $nombres) {

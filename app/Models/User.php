@@ -115,6 +115,12 @@ class User extends Authenticatable
         return false;
     }
 
+    /** Vendedor: arma pedidos (proformas) en el punto de venta sin abrir caja; la caja los cobra */
+    public function esVendedor(): bool
+    {
+        return $this->tieneRol([5]);
+    }
+
     public function esMozo(): bool
     {
         return $this->tieneRol([8]);
@@ -133,6 +139,7 @@ class User extends Authenticatable
             'motorizado' => 'repartidor.mio', // el motorizado entra a sus repartos
             'promotor' => 'comandas.seleccion', // el promotor toma pedidos como un mozo
             'cobrador' => 'prestamos.cobranza', // el cobrador de préstamos entra a su ruta del día
+            'vendedor' => 'pv.index', // el vendedor entra a armar pedidos
             'caja' => 'inicio', // accesos del menú del usuario
             default => 'inicio', // admin y cualquier otro caso
         };

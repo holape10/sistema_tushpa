@@ -21,7 +21,7 @@
             <section class="bg-white rounded-2xl shadow-sm p-5 sm:p-6" x-data="{ enviando: false, nombre: '' }">
                 <h2 class="font-bold text-gray-800 text-lg">Subir respaldo del sistema antiguo</h2>
                 <p class="text-sm text-gray-500 mt-1 mb-4">El archivo <strong>.sql</strong> (o .sql.gz) que exportas de la base antigua. Se carga en una base temporal
-                    y solo se leen productos, categorías, clientes, proveedores, stock, medios de pago y mesas; las ventas antiguas no se tocan.</p>
+                    y desde ahí eliges qué pasar: productos, clientes, usuarios, stock y el historial (ventas, turnos, compras, guías, kardex). El sistema antiguo no se toca.</p>
                 <form method="POST" action="{{ route('importar.cargar') }}" enctype="multipart/form-data" @submit="enviando = true" class="space-y-4">
                     @csrf
                     <label class="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 hover:border-indigo-400 bg-gray-50 p-8 cursor-pointer text-center">
@@ -92,26 +92,30 @@
             @csrf
             <input type="hidden" name="bd" value="{{ $bd }}">
 
+            {{-- Cada sucursal antigua a una sucursal de esta empresa: todas se importan juntas --}}
+            <section class="bg-white rounded-2xl shadow-sm p-5">
+                <h3 class="font-bold text-gray-800">¿A qué sucursal va cada una?</h3>
+                <p class="text-xs text-gray-500 mt-1 mb-3">Se importan todas a la vez: primero productos, clientes y usuarios de todas; luego el historial de cada una
+                    (así cada venta queda con su vendedor aunque sea de otra sucursal). Si falta una sucursal, créala antes en <a href="{{ route('sucursales.index') }}" class="text-indigo-600 font-semibold">Sucursales</a>.</p>
+                @error('mapa')<p class="mb-2 text-sm font-semibold text-rose-600">{{ $message }}</p>@enderror
+                @php $propuestas = array_keys($nuevas); @endphp
+                <div class="space-y-2">
+                    @foreach ($sucursales as $i => $s)
+                        <div class="grid sm:grid-cols-2 gap-2 items-center rounded-xl bg-gray-50 px-4 py-3">
+                            <p class="text-sm text-gray-700"><span class="text-xs text-gray-400">Sistema antiguo:</span>
+                                <strong>{{ $s['nombre'] }}</strong>{{ $s['ruc'] ? ' · RUC '.$s['ruc'] : '' }}</p>
+                            <select name="mapa[{{ $s['id'] }}]" class="h-11 rounded-xl border-gray-300 text-sm">
+                                <option value="">— No importar —</option>
+                                @foreach ($nuevas as $id => $nombre)
+                                    <option value="{{ $id }}" @selected(old('mapa.'.$s['id'], $propuestas[$i] ?? null) == $id)>→ {{ $nombre }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+
             <section class="bg-white rounded-2xl shadow-sm p-5 grid sm:grid-cols-2 gap-5">
-                <label class="block text-sm font-medium text-gray-700">Sucursal del sistema antiguo
-                    <select name="sucursal" onchange="location.href='{{ route('importar.revisar', ['bd' => $bd]) }}&sucursal=' + this.value"
-                            class="mt-1 w-full h-11 rounded-xl border-gray-300 text-sm">
-                        @foreach ($sucursales as $s)
-                            <option value="{{ $s['id'] }}" @selected($s['id'] === $suc)>{{ $s['nombre'] }}{{ $s['ruc'] ? ' · RUC ' . $s['ruc'] : '' }}</option>
-                        @endforeach
-                    </select>
-                    <span class="text-xs text-gray-400">Se importa a tu sucursal actual: <strong>{{ auth()->user()->id_empresa_negocio }}</strong>.</span>
-                </label>
-                <label class="block text-sm font-medium text-gray-700">Almacén antiguo para el stock
-                    <select name="almacen" class="mt-1 w-full h-11 rounded-xl border-gray-300 text-sm">
-                        @forelse ($almacenes as $a)
-                            <option value="{{ $a['id'] }}">{{ $a['nombre'] }}</option>
-                        @empty
-                            <option value="">Todos</option>
-                        @endforelse
-                    </select>
-                    <span class="text-xs text-gray-400">Entra al almacén predeterminado del sistema nuevo.</span>
-                </label>
                 <label class="block text-sm font-medium text-gray-700">En los precios por día, el día 0 era
                     <select name="dia0" class="mt-1 w-full h-11 rounded-xl border-gray-300 text-sm">
                         <option value="domingo">Domingo (0 = domingo … 6 = sábado)</option>
@@ -141,9 +145,9 @@
                 <ul class="mt-4 text-xs text-gray-500 space-y-1 list-disc list-inside">
                     <li>Productos: se reconocen por <strong>nombre y tipo</strong> y se actualizan; los nuevos se crean. El código antiguo se conserva si no está repetido. Tipos antiguos: 0 producto, 2 preparado, 3 combo, 4 insumo.</li>
                     <li>Presentaciones: las filas "tipo presentación" del sistema antiguo (six pack, caja, saco…) pasan como presentaciones de su producto principal.</li>
-                    <li>Stock: solo productos sin movimientos en el sistema nuevo; entra como inventario inicial (se ve en Almacén &gt; Inventarios).</li>
+                    <li>Stock: queda igual al del sistema antiguo, también en negativo (se ve en Almacén &gt; Inventarios). Solo en productos sin movimientos en el sistema nuevo.</li>
                     <li>Clientes y proveedores: solo se agregan los que faltan (por número de documento).</li>
-                    <li>Historial: ventas, notas, compras y cuentas por cobrar/pagar pasan tal cual (lo aceptado por SUNAT no se reenvía) y los correlativos siguen después del último número. No vuelve a descontar stock.</li>
+                    <li>Historial: ventas, notas, turnos de caja, proformas (y notas de pedido sin cobrar), compras, cuentas por cobrar/pagar, guías, gastos y kardex pasan tal cual (lo aceptado por SUNAT no se reenvía); cada sucursal sigue con sus series y correlativos. No vuelve a descontar stock.</li>
                 </ul>
             </section>
 
@@ -152,7 +156,7 @@
                     <button type="submit" form="eliminar-bd" class="px-4 h-12 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50">Eliminar base temporal</button>
                 @else <span></span> @endif
                 <button :disabled="enviando || !secciones.length" class="px-8 h-12 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-60"
-                        x-text="enviando ? 'Importando… no cierres esta ventana' : 'Importar ahora'"></button>
+                        x-text="enviando ? 'Importando… puede tardar unos minutos, no cierres esta ventana' : 'Importar ahora'"></button>
             </div>
         </form>
         @if ($temporal)
@@ -163,10 +167,12 @@
     @endif
 
     @if ($paso === 3)
-        <section class="bg-white rounded-2xl shadow-sm p-5 sm:p-6 mb-6">
-            <h2 class="font-bold text-gray-800 text-lg mb-4">Importación terminada</h2>
+        <h2 class="font-bold text-gray-800 text-lg mb-4">Importación terminada</h2>
+        @foreach ($resultado as $antigua => $porSucursal)
+        <section class="bg-white rounded-2xl shadow-sm p-5 sm:p-6 mb-4">
+            <h3 class="font-bold text-gray-700 mb-4">{{ $nombresAntiguas[$antigua] ?? 'Sucursal '.$antigua }} → {{ $nuevas[$porSucursal['nueva']] ?? $porSucursal['nueva'] }}</h3>
             <div class="grid sm:grid-cols-2 gap-3">
-                @foreach ($resultado['secciones'] as $clave => $r)
+                @foreach ($porSucursal['secciones'] as $clave => $r)
                     <div class="rounded-2xl border {{ !empty($r['error']) ? 'border-rose-200 bg-rose-50' : 'border-gray-200' }} p-4">
                         <p class="font-semibold text-gray-700 text-sm mb-2">{{ \App\Support\Antiguo\Importador::SECCIONES[$clave] }}</p>
                         @if (!empty($r['error']))
@@ -188,14 +194,15 @@
             </div>
         </section>
 
-        @if ($resultado['avisos'])
+        @if ($porSucursal['avisos'])
             <section class="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
-                <p class="font-semibold text-amber-800 mb-2">{{ count($resultado['avisos']) }} avisos</p>
+                <p class="font-semibold text-amber-800 mb-2">{{ count($porSucursal['avisos']) }} avisos</p>
                 <ul class="text-xs text-amber-800 list-disc list-inside space-y-0.5 max-h-72 overflow-y-auto">
-                    @foreach ($resultado['avisos'] as $a)<li>{{ $a }}</li>@endforeach
+                    @foreach ($porSucursal['avisos'] as $a)<li>{{ $a }}</li>@endforeach
                 </ul>
             </section>
         @endif
+        @endforeach
 
         <div class="flex flex-wrap justify-between gap-3">
             <a href="{{ route('importar.revisar', ['bd' => $bd]) }}" class="px-4 h-11 inline-flex items-center rounded-xl text-sm font-semibold text-indigo-600 hover:bg-indigo-50">← Importar otra sección</a>

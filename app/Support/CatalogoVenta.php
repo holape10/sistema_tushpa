@@ -76,7 +76,20 @@ class CatalogoVenta
             ->whereNotIn('productos.promocion', Producto::NO_VENDIBLES) // los insumos no se venden
             ->select(['productos.IdProducto', 'productos.procod', 'productos.codigo_barra', 'productos.pronom', 'productos.propun',
                 'productos.umecod', 'productos.promocion', 'productos.control_lote', 'productos.control_serie', 'productos.garantia_meses',
-                'productos.imagenproducto', 'producto_stock.stock']);
+                'productos.imagenproducto', 'productos.precio2', 'productos.precio3', 'producto_stock.stock']);
+    }
+
+    /** @return array<int, array{nombre: string, precio: float}> */
+    public static function preciosExtra(object $p): array
+    {
+        $precios = [];
+        foreach (['precio2' => 'Precio 2', 'precio3' => 'Precio 3'] as $campo => $nombre) {
+            if ((float) ($p->$campo ?? 0) > 0) {
+                $precios[] = ['nombre' => $nombre, 'precio' => round((float) $p->$campo, 2)];
+            }
+        }
+
+        return $precios;
     }
 
     private static function formatear(Collection $productos, ?int $almacenId, ?int $presentacionElegida = null, ?int $deProducto = null): array
@@ -110,6 +123,8 @@ class CatalogoVenta
                 'unidad' => $unidades[$p->umecod] ?? $p->umecod,
                 'imagen' => $p->imagenproducto ? asset($p->imagenproducto) : null,
                 'presentaciones' => $presentaciones[$p->IdProducto] ?? [],
+                // Precio 2 y 3 (por mayor, especial…): la caja elige con cuál cobrar la unidad base
+                'precios' => self::preciosExtra($p),
                 // Código de barras de una presentación: la caja la agrega ya elegida
                 'presentacion' => $deProducto === (int) $p->IdProducto ? $presentacionElegida : null,
                 // Preparados y combos no llevan stock propio
