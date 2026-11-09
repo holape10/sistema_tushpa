@@ -76,6 +76,14 @@ class Guias
             ."2. Cada usuario trabaja solo en su sede: no ve ni toca las otras.\n"
             ."3. Solo el administrador cambia de sede: en Mantenimiento › Sucursales toca \"Trabajar aquí\" en la sede que quiere ver.\n"
             .'4. En los reportes, el administrador puede ver una sede o todas juntas.'],
+        'panel_dueno' => ['Panel del dueño: ventas del turno o de una noche, por mozo, cajero y promotor',
+            'panel dueño turno noche jornada ventas mozo cajero promotor horas pico equipo alertas',
+            "1. Entra a Panel del dueño (en el menú).\n"
+            ."2. En la pestaña \"Ventas del turno\" eliges: Esta jornada, Jornada anterior, Hoy, Turnos de caja abiertos, o Varios días (semana, mes o un rango).\n"
+            ."3. En \"Noche del\" eliges una fecha: muestra desde ese día a mediodía hasta el día siguiente a mediodía (ideal para negocios de noche).\n"
+            ."4. En \"Turnos de esa noche\" puedes ver solo lo cobrado en un turno de caja.\n"
+            ."5. Ves el total, las ventas, el ticket promedio y la lista por mozo, por cajero y por promotor.\n"
+            .'Otras pestañas: Cómo va mi negocio, Horas pico, Mi equipo y Alertas. También puedes preguntármelo a mí: "¿cuánto vendí la noche del sábado por mozo?".'],
         'mermas' => ['Registrar mermas (lo que se bota o se malogra)',
             'merma mermas malogro vencido botar desperdicio',
             "1. Entra a Restaurante › Mermas.\n"

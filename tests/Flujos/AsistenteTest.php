@@ -148,6 +148,28 @@ class AsistenteTest extends FlujoTestCase
         $this->assertSame(['role', 'content'], array_keys($this->llamadas[2]['messages'][1]));
     }
 
+    public function test_las_ventas_de_una_noche_o_un_tramo_con_hora_cuadran_con_el_panel_del_dueno(): void
+    {
+        $plato = $this->producto('ALITAS', 10, 50);
+        foreach (['2026-11-07 21:00' => 3, '2026-11-08 09:00' => 2, '2026-11-08 13:00' => 5] as $momento => $cantidad) {
+            $this->travelTo($momento);
+            VentaDirecta::registrar($this->usuario, $this->venta([[$plato, $cantidad]], '13'), 'PV');
+        }
+        $this->travelTo('2026-11-09 10:00');
+        $horario = fn (array $input) => json_decode(Herramientas::ejecutar($this->usuario, 'ventas_por_horario', $input), true);
+
+        // La noche del 7 (del 7 a mediodía al 8 a mediodía): las de las 9 pm y las 9 am, no la del 8 a la 1 pm
+        $noche = $horario(['noche' => '2026-11-07']);
+        $this->assertSame([50, 2], [(int) $noche['total_vendido'], $noche['ventas']]);
+        $this->assertSame(50, (int) $noche['por_cajero'][0]['total']);
+        $this->assertSame('Del 07/11/2026 12:00 al 08/11/2026 11:59', $noche['tramo']);
+
+        // Un tramo con hora: del 7 a las 10 pm al 8 a las 10 am → solo la de las 9 am
+        $this->assertSame(20, (int) $horario(['desde' => '2026-11-07 22:00', 'hasta' => '2026-11-08 10:00'])['total_vendido']);
+        $this->assertArrayHasKey('error', $horario(['desde' => '2026-11-08 10:00', 'hasta' => '2026-11-07 22:00']));
+        $this->assertArrayHasKey('error', $horario([]));
+    }
+
     public function test_solo_el_administrador(): void
     {
         $cajero = $this->usuario->replicate();

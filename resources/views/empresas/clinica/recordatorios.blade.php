@@ -117,7 +117,7 @@
                                     {{-- Telegram (gratis): el doctor abre el enlace y toca Iniciar; queda vinculado solo --}}
                                     <div class="col-span-12 flex flex-wrap items-center gap-2 -mt-1 mb-1">
                                         <template x-if="!p.telegram">
-                                            <button type="button" @click="vincularTelegram(p)" class="px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 text-xs font-bold hover:bg-sky-100">📲 Vincular Telegram (gratis)</button>
+                                            <button type="button" @click="vincularTelegram(p)" class="px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 text-xs font-bold hover:bg-sky-100">📲 Vincular Telegram</button>
                                         </template>
                                         <template x-if="p.enlace && !p.telegram">
                                             <span class="text-xs text-gray-600">Que el doctor abra este enlace en su celular y toque <b>Iniciar</b>:

@@ -47,6 +47,20 @@ class Herramientas
                 ], 'required' => ['clave', 'desde', 'hasta']],
             ],
             [
+                'name' => 'ventas_por_horario',
+                'description' => 'Ventas entre dos momentos con HORA (no solo días completos), igual que el Panel del dueño › Ventas del turno: '
+                    .'el total, las ventas y el ticket promedio, y cuánto vendió cada MOZO (sus mesas), cuánto cobró cada CAJERO y cuánto trajo cada PROMOTOR. '
+                    .'Para "la noche del sábado 7" usa noche=2026-11-07 (va del 7 a las 12:00 al 8 a las 11:59, como el panel). '
+                    .'Para otro tramo (p. ej. "del 7 a las 8 pm al 8 a las 10 am") usa desde y hasta con hora. Mozos, cajeros y promotores son '
+                    .'formas distintas de ver las MISMAS ventas: no se suman entre sí.',
+                'inputSchema' => ['type' => 'object', 'properties' => [
+                    'noche' => ['type' => 'string', 'description' => 'Fecha de la noche AAAA-MM-DD (de ese día a mediodía al día siguiente a mediodía).'],
+                    'desde' => ['type' => 'string', 'description' => 'Inicio con hora: AAAA-MM-DD HH:MM (24 h), p. ej. 2026-11-07 20:00.'],
+                    'hasta' => ['type' => 'string', 'description' => 'Fin con hora: AAAA-MM-DD HH:MM (24 h), p. ej. 2026-11-08 10:00.'],
+                    'sucursal' => $sucursal,
+                ]],
+            ],
+            [
                 'name' => 'resumen_negocio',
                 'description' => 'Cómo va la sede ahora: ventas de hoy contra el mismo día de la semana pasada, el mes contra el mismo tramo del mes pasado, la proyección de cierre, la meta, el margen, los gastos fijos y el punto de equilibrio.',
                 'inputSchema' => ['type' => 'object', 'properties' => ['sucursal' => $sucursal]],
@@ -97,6 +111,7 @@ class Herramientas
             $datos = match ($nombre) {
                 'reporte' => self::reporte($user, $input),
                 'resumen_negocio' => PanelDueno::resumen(self::sede($user, $input)),
+                'ventas_por_horario' => self::porHorario($user, $input),
                 'alertas' => self::alertas($user, $input),
                 'stock' => self::stock($user, $input),
                 'control_insumos' => self::controlInsumos($user, $input),
@@ -157,6 +172,46 @@ class Herramientas
             'columnas' => collect($r['columnas'])->map(fn ($c) => $c[0])->all(),
             'filas_en_total' => count($r['filas']), 'filas' => array_slice($r['filas'], 0, self::FILAS),
             'totales' => $r['totales'] ?? null, 'nota' => $r['nota'] ?? null,
+        ];
+    }
+
+    /** Lo mismo que el Panel del dueño › Ventas del turno: una noche (mediodía a mediodía) o un tramo con hora */
+    private static function porHorario(User $user, array $input): array
+    {
+        $sede = self::sede($user, $input);
+        $leer = function (string $v, string $que) {
+            try {
+                return CarbonImmutable::createFromFormat('Y-m-d H:i', trim($v)) ?: throw new \InvalidArgumentException('');
+            } catch (\Throwable) {
+                throw new \InvalidArgumentException("La fecha y hora de \"{$que}\" no es válida: usa AAAA-MM-DD HH:MM (24 h).");
+            }
+        };
+        if (! empty($input['noche'])) {
+            try {
+                $desde = CarbonImmutable::createFromFormat('!Y-m-d', (string) $input['noche'])->setTime(Reportes::CORTE_JORNADA, 0);
+            } catch (\Throwable) {
+                throw new \InvalidArgumentException('La noche no es válida: usa AAAA-MM-DD.');
+            }
+            $hasta = $desde->addDay()->subSecond();
+        } elseif (! empty($input['desde']) && ! empty($input['hasta'])) {
+            [$desde, $hasta] = [$leer((string) $input['desde'], 'desde'), $leer((string) $input['hasta'], 'hasta')];
+        } else {
+            throw new \InvalidArgumentException('Pon "noche" (AAAA-MM-DD) o "desde" y "hasta" con hora.');
+        }
+        if ($hasta->lte($desde) || $desde->diffInDays($hasta) > 31) {
+            throw new \InvalidArgumentException('El tramo debe ir hacia adelante y durar como mucho 31 días.');
+        }
+        $hasta = $hasta->gt(now()) ? CarbonImmutable::now() : $hasta;
+        $r = PanelDueno::ventasDelTurno($sede, $desde->toMutable(), $hasta->toMutable());
+        $personas = fn ($lista) => $lista->take(30)->map(fn ($p) => ['nombre' => $p->nombre, 'total' => $p->total, 'ventas' => $p->tickets,
+            'ticket_promedio' => $p->promedio, 'porcentaje' => $p->participacion])->values()->all();
+
+        return [
+            'tramo' => 'Del '.$desde->format('d/m/Y H:i').' al '.$hasta->format('d/m/Y H:i'),
+            'total_vendido' => $r['total']->total, 'ventas' => $r['total']->tickets, 'ticket_promedio' => $r['total']->promedio,
+            'por_mozo' => $personas($r['mozos']), 'vendido_sin_mozo' => $r['sinMozo'],
+            'por_cajero' => $personas($r['cajeros']), 'por_promotor' => $personas($r['promotores']),
+            'nota' => 'Mozos, cajeros y promotores son vistas distintas de las mismas ventas (no se suman). Las notas de crédito ya restan.',
         ];
     }
 
