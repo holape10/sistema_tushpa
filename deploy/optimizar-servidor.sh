@@ -53,6 +53,20 @@ slow_query_log_file = /var/log/mysql-lentas.log
 long_query_time = 1
 CNF
 touch /var/log/mysql-lentas.log && chown mysql:mysql /var/log/mysql-lentas.log
+# Algunas instalaciones de MySQL no leen la carpeta /etc/my.cnf.d: si los ajustes no se ven, se le agrega al archivo principal
+lee_ajustes() { my_print_defaults mysqld 2>/dev/null | grep -q -- "--innodb_buffer_pool_size=${POOL_MB}M"; }
+if ! lee_ajustes && [ -f /etc/my.cnf ] && ! grep -q '^!includedir /etc/my.cnf.d' /etc/my.cnf; then
+    cp /etc/my.cnf "/etc/my.cnf.$(date +%Y%m%d%H%M).bak"
+    printf '
+# Sistema TUSHPA: leer también los ajustes de /etc/my.cnf.d
+!includedir /etc/my.cnf.d
+' >> /etc/my.cnf
+    echo "    Se agregó /etc/my.cnf.d a /etc/my.cnf (MySQL no leía esa carpeta)."
+fi
+if ! lee_ajustes; then
+    echo "    ⚠ MySQL no lee los ajustes (su archivo principal no es /etc/my.cnf). No se reinicia: avisa a soporte con:  my_print_defaults mysqld"
+    exit 1
+fi
 # systemd también limita los archivos abiertos de MySQL
 mkdir -p /etc/systemd/system/mysqld.service.d
 printf '[Service]\nLimitNOFILE=65535\n' > /etc/systemd/system/mysqld.service.d/tushpa.conf
@@ -60,8 +74,9 @@ systemctl daemon-reload
 # Revisa el archivo antes de reiniciar (si tiene algo que esta versión de MySQL no conoce, no se reinicia)
 mysqld --validate-config --user=mysql >/dev/null 2>&1 || volver_mysql
 systemctl restart mysqld || volver_mysql
-echo "    MySQL reiniciado con ${POOL_MB} MB en memoria. Espacio que ocupa ahora (los historiales viejos ya se borraron):"
-du -sh /var/lib/mysql 2>/dev/null || true
+echo "    ✔ MySQL reiniciado leyendo los ajustes: ${POOL_MB} MB en memoria y el historial de cambios guardado solo 3 días."
+echo "    Historiales que quedan: $(ls /var/lib/mysql/binlog.0* 2>/dev/null | wc -l) archivo(s), $(du -ch /var/lib/mysql/binlog.0* 2>/dev/null | tail -1 | cut -f1)"
+echo "    Espacio total de MySQL: $(du -sh /var/lib/mysql 2>/dev/null | cut -f1)" 
 
 verde "2/3 PHP-FPM (hasta ${HIJOS} pedidos atendidos a la vez)"
 POOL=/etc/php-fpm.d/www.conf
