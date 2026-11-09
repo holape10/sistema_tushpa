@@ -16,8 +16,14 @@
                 @endforeach
             </select>
         </form>
+        {{-- A otra sede (otra sucursal) no se transfiere aquí: se envía desde Requerimientos del día --}}
+        @if ($puedeEnviarASede)
+            <a href="{{ route('requerimientos.enviar') }}" class="inline-flex justify-center items-center px-4 py-2 rounded-xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700"
+               title="Mandar productos a otra sucursal de tu empresa">🚚 Enviar a otra sede</a>
+        @endif
         @if (auth()->user()->esAdminOCaja())
-            <a href="{{ route('transferencias.create') }}" class="inline-flex justify-center items-center px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">+ Nueva transferencia</a>
+            <a href="{{ route('transferencias.create') }}" class="inline-flex justify-center items-center px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+               title="Entre almacenes de esta misma sede">+ Nueva transferencia</a>
         @endif
     </div>
 

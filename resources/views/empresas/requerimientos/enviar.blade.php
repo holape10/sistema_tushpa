@@ -7,6 +7,7 @@
         'buscar' => mb_strtolower(\Illuminate\Support\Str::ascii($p->pronom.' '.($p->cat_nom ?? '')))])->values();
 @endphp
 <div class="max-w-3xl mx-auto space-y-4" x-data="envioSede(@js($lista))">
+    @if (session('success'))<div class="rounded-xl bg-sky-50 border border-sky-200 text-sky-800 px-4 py-3 text-sm">{{ session('success') }}</div>@endif
     @if (session('error'))<div class="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ session('error') }}</div>@endif
     @if ($errors->any())<div class="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ $errors->first() }}</div>@endif
 

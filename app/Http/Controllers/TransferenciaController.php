@@ -6,6 +6,7 @@ use App\Models\Almacen;
 use App\Models\Producto;
 use App\Support\Bitacora;
 use App\Support\Kardex;
+use App\Support\Requerimientos;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,14 @@ class TransferenciaController extends Controller
     private function autorizar(): void
     {
         abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja registran transferencias.');
+    }
+
+    /** ¿La empresa tiene otras sedes y el usuario puede enviarles productos? */
+    private function puedeEnviarASede(): bool
+    {
+        $user = Auth::user();
+
+        return ($user->esAdmin() || $user->tieneModulo('/requerimientos')) && Requerimientos::sedes($user)->isNotEmpty();
     }
 
     private function almacenes()
@@ -69,7 +78,7 @@ class TransferenciaController extends Controller
         $enTransito = DB::table('movimientos_cabecera')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->where('mov_tip', 'T')
             ->where('estado', self::EN_TRANSITO)->count();
 
-        return view('empresas.transferencias.index', compact('transferencias', 'almacenes', 'enTransito'));
+        return view('empresas.transferencias.index', compact('transferencias', 'almacenes', 'enTransito') + ['puedeEnviarASede' => $this->puedeEnviarASede()]);
     }
 
     public function create()
@@ -77,6 +86,12 @@ class TransferenciaController extends Controller
         $this->autorizar();
         $almacenes = $this->almacenes();
         if ($almacenes->count() < 2) {
+            // Con un solo almacén lo que se quiere es mandar a otra sede: eso es "Enviar a otra sede"
+            if ($this->puedeEnviarASede()) {
+                return redirect()->route('requerimientos.enviar')
+                    ->with('success', 'Aquí envías productos a otra sede (sucursal) de tu empresa. Las transferencias son solo entre almacenes de una misma sede.');
+            }
+
             return redirect()->route('almacenes.index')
                 ->withErrors(['almacen' => 'Para transferir necesitas al menos dos almacenes. Registra otro almacén primero.']);
         }

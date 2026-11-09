@@ -113,6 +113,18 @@ class ControlAlmacenTest extends FlujoTestCase
             $this->stockEn($aceiteRest, $almacenRest)]);
     }
 
+    public function test_desde_transferencias_se_llega_a_enviar_a_otra_sede(): void
+    {
+        // Con un solo almacén y otra sede en la empresa: "Nueva transferencia" lleva a "Enviar a otra sede"
+        $this->get(route('transferencias.index'))->assertOk()->assertDontSee('Enviar a otra sede');
+        $this->get(route('transferencias.create'))->assertRedirect(route('almacenes.index'));
+
+        DB::table('empresa_negocios')->insert(['IdEmpresa' => $this->usuario->IdEmpresa, 'nombre_comercial' => 'RESTAURANTE CENTRO', 'estado' => 'Activo']);
+        $this->get(route('transferencias.index'))->assertOk()->assertSee('Enviar a otra sede');
+        $this->get(route('transferencias.create'))->assertRedirect(route('requerimientos.enviar'));
+        $this->get(route('requerimientos.enviar'))->assertOk()->assertSee('Las transferencias son solo entre almacenes de una misma sede');
+    }
+
     public function test_la_produccion_del_dia_calcula_los_insumos_de_las_recetas_y_pide_lo_que_falta(): void
     {
         $pescado = $this->insumo('PESCADO', 2);
