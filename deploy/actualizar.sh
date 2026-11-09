@@ -75,6 +75,8 @@ find "${DIR}" -path "${DIR}/node_modules" -prune -o ! -user apache -exec chown a
 command -v restorecon >/dev/null && restorecon -R -e "${DIR}/node_modules" "${DIR}" || true
 tiempo
 
+# Cuántas empresas lleva cada estudio contable (para el panel)
+sudo -u apache php artisan estudio:contar || true
 # Claves de los avisos al celular del mozo (solo la primera vez; si ya existen no las toca)
 php artisan push:claves || true
 # QR de pago pesados → WebP liviano (pantalla de suspendido); los ya optimizados no se tocan

@@ -93,7 +93,10 @@
                             @if ($xmlMes = $consumoXml[$cl->id] ?? null)
                                 <p class="mt-0.5 text-[11px] font-semibold text-amber-700" title="Consultas a json.pe este mes">📄 {{ number_format($xmlMes->consultas) }} XML pedidos · {{ number_format($xmlMes->traidos) }} traídos</p>
                             @endif
-                            @if ($cl->max_empresas)
+                            @if ($cl->estudio_empresas !== null)
+                                {{-- Cuántas empresas lleva el estudio (se actualiza al registrar o desactivar una, y cada noche) --}}
+                                <p class="mt-0.5 text-[11px] font-semibold text-indigo-700">🏢 {{ number_format($cl->estudio_empresas) }} empresa(s) activa(s){{ $cl->max_empresas ? ' de '.$cl->max_empresas.' del plan' : '' }}{{ $cl->estudio_inactivas ? ' · '.$cl->estudio_inactivas.' desactivada(s)' : '' }}</p>
+                            @elseif ($cl->max_empresas)
                                 <p class="text-[11px] text-indigo-600">Estudio: hasta {{ $cl->max_empresas }} empresas</p>
                             @endif
                         </td>

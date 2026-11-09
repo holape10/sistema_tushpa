@@ -126,6 +126,27 @@ class EstudioContableTest extends FlujoTestCase
         $this->get(route('estudio.vencimientos', ['periodo' => '209901']))->assertNotFound();
     }
 
+    public function test_el_panel_sabe_cuantas_empresas_lleva_el_estudio(): void
+    {
+        // Base central de mentira en memoria, con este estudio como cliente
+        config(['database.connections.central' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']]);
+        DB::purge('central');
+        Schema::connection('central')->create('clientes', function (Blueprint $t) {
+            $t->id();
+            $t->unsignedInteger('estudio_empresas')->nullable();
+            $t->unsignedInteger('estudio_inactivas')->nullable();
+        });
+        DB::connection('central')->table('clientes')->insert(['id' => 7]);
+        app()->instance('tenancy.cliente', (new Cliente)->forceFill(['id' => 7, 'ruc' => $this->estudio]));
+        $panel = fn () => (array) DB::connection('central')->table('clientes')->where('id', 7)->first(['estudio_empresas', 'estudio_inactivas']);
+
+        $this->post(route('estudio.guardar'), ['ruc' => '20600695771', 'razon_social' => 'NUBEFACT SA'])->assertSessionHasNoErrors();
+        $this->assertSame(['estudio_empresas' => 3, 'estudio_inactivas' => 0], $panel());
+
+        $this->post(route('estudio.estado', self::EMPRESA_B))->assertSessionHas('success');
+        $this->assertSame(['estudio_empresas' => 2, 'estudio_inactivas' => 1], $panel());
+    }
+
     public function test_con_una_sola_empresa_entra_directo(): void
     {
         $contador = $this->contador();

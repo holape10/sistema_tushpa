@@ -62,6 +62,22 @@ class Estudio
         return self::limite() === null || self::activas() < self::limite();
     }
 
+    /**
+     * Anota en el panel TUSHPA cuántas empresas lleva este estudio (activas y desactivadas). Se llama cada vez que cambian
+     * y cada noche (estudio:contar). Sin multi-empresa no hace nada.
+     */
+    public static function anotarEnPanel(): void
+    {
+        $cliente = Tenancy::cliente();
+        if (! $cliente || ! self::activo()) {
+            return;
+        }
+        rescue(fn () => DB::connection('central')->table('clientes')->where('id', $cliente->id)->update([
+            'estudio_empresas' => self::activas(),
+            'estudio_inactivas' => DB::table('estudio_empresas')->where('propia', false)->where('activa', false)->count(),
+        ]), null, false);
+    }
+
     /** Para las pruebas y después de activar: vuelve a leer el estudio */
     public static function olvidar(): void
     {
@@ -195,6 +211,7 @@ class Estudio
                 'direccion' => $direccion, 'ubigeo' => ($d['ubigeo'] ?? null) ?: '']);
             DB::table('estudio_empresas')->insert(['IdEmpresa' => $d['ruc'], 'propia' => false, 'activa' => true, 'created_at' => now(), 'updated_at' => now()]);
         });
+        self::anotarEnPanel();
     }
 
     /** Guarda las credenciales (las claves solo si se escriben) y las cuentas por defecto de una empresa del estudio */

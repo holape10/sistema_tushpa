@@ -568,3 +568,30 @@ Artisan::command('estudio:descargas {--ruc= : Solo este estudio}', function () {
 })->purpose('Avanza la descarga automática del SIRE y los XML de los estudios contables');
 
 Schedule::command('estudio:descargas')->everyTenMinutes()->withoutOverlapping(30);
+
+// Cuántas empresas lleva cada estudio contable, para el panel (además se anota cada vez que cambian)
+Artisan::command('estudio:contar', function () {
+    if (! Tenancy::activa()) {
+        return;
+    }
+    $n = 0;
+    foreach (Cliente::where('estado', '!=', 'ELIMINADO')->get() as $cliente) {
+        try {
+            app()->instance('tenancy.cliente', $cliente);
+            Tenancy::en($cliente->base_datos, function () use (&$n) {
+                if (Schema::hasTable('estudio_empresas') && Estudio::activo()) {
+                    Estudio::anotarEnPanel();
+                    $n++;
+                }
+            });
+            Estudio::olvidar();
+        } catch (Throwable $e) {
+            $this->error("{$cliente->ruc}: {$e->getMessage()}");
+        } finally {
+            app()->forgetInstance('tenancy.cliente');
+        }
+    }
+    $this->info("{$n} estudio(s) contable(s) contados.");
+})->purpose('Anota en el panel cuántas empresas lleva cada estudio contable');
+
+Schedule::command('estudio:contar')->dailyAt('05:40')->withoutOverlapping(30);

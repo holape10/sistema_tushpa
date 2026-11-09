@@ -177,6 +177,7 @@ class EstudioController extends Controller
             return $this->sinCupo();
         }
         DB::table('estudio_empresas')->where('id', $fila->id)->update(['activa' => ! $fila->activa, 'updated_at' => now()]);
+        Estudio::anotarEnPanel();
 
         return back()->with('success', $fila->activa ? "Empresa {$ruc} desactivada: ya nadie la ve en el selector. Sus datos se conservan." : "Empresa {$ruc} activada de nuevo.");
     }
