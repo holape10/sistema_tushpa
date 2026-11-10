@@ -734,6 +734,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/requerimientos/{id}', [RequerimientoController::class, 'show'])->whereNumber('id')->name('requerimientos.show');
     Route::get('/requerimientos/{id}/imprimir', [RequerimientoController::class, 'imprimir'])->whereNumber('id')->name('requerimientos.imprimir');
     Route::post('/requerimientos/{id}/marcar', [RequerimientoController::class, 'marcar'])->whereNumber('id')->name('requerimientos.marcar');
+    Route::get('/requerimientos/{id}/editar', [RequerimientoController::class, 'editar'])->whereNumber('id')->name('requerimientos.editar');
+    Route::post('/requerimientos/{id}/actualizar', [RequerimientoController::class, 'actualizar'])->whereNumber('id')->name('requerimientos.actualizar');
+    // Pedidos por Telegram al administrador
+    Route::post('/requerimientos/telegram/verificar', [RequerimientoController::class, 'telegramVerificar'])->middleware('throttle:60,1')->name('requerimientos.telegram.verificar');
+    Route::post('/requerimientos/telegram/{usuario}/enlace', [RequerimientoController::class, 'telegramEnlace'])->whereNumber('usuario')->name('requerimientos.telegram.enlace');
+    Route::post('/requerimientos/telegram/{usuario}/recibir', [RequerimientoController::class, 'telegramRecibir'])->whereNumber('usuario')->name('requerimientos.telegram.recibir');
+    Route::post('/requerimientos/telegram/{usuario}/probar', [RequerimientoController::class, 'telegramProbar'])->whereNumber('usuario')->middleware('throttle:10,1')->name('requerimientos.telegram.probar');
+    Route::post('/requerimientos/telegram/{usuario}/quitar', [RequerimientoController::class, 'telegramQuitar'])->whereNumber('usuario')->name('requerimientos.telegram.quitar');
     Route::post('/requerimientos/{id}/anular', [RequerimientoController::class, 'anular'])->whereNumber('id')->name('requerimientos.anular');
     Route::post('/requerimientos/{id}/despachar', [RequerimientoController::class, 'despachar'])->whereNumber('id')->name('requerimientos.despachar');
     Route::post('/requerimientos/{id}/recibir', [RequerimientoController::class, 'recibir'])->whereNumber('id')->name('requerimientos.recibir');

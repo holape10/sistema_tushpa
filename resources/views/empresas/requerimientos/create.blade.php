@@ -1,23 +1,26 @@
 @extends('layouts.app')
-@section('title', 'Nuevo requerimiento')
+@section('title', isset($editar) ? 'Cambiar '.$codigo : 'Nuevo requerimiento')
 @section('content')
 @php
+    // Cambiar un pedido ya enviado: mismo formulario con lo pedido puesto
+    $editar = $editar ?? null;
     $lista = $productos->map(fn ($p) => [
         'id' => $p->id, 'nombre' => $p->nombre, 'unidad' => \App\Support\Recetas::nombreUnidad($p->unidad), 'categoria' => $p->categoria ?? 'Sin categoría',
         'insumo' => $p->tipo === 4, 'stock' => $p->stock, 'minimo' => $p->minimo, 'consumo' => $p->consumo_dia, 'dias' => $p->dias,
-        'estado' => $p->estado, 'cantidad' => $p->sugerido > 0 ? $p->sugerido : '', 'nota' => '',
+        'estado' => $p->estado, 'cantidad' => $p->sugerido > 0 ? $p->sugerido : '', 'nota' => $p->nota_pedido ?? '',
         'buscar' => mb_strtolower(\Illuminate\Support\Str::ascii($p->nombre.' '.($p->categoria ?? ''))),
     ])->values();
     $resumen = $productos->countBy('estado');
 @endphp
-<div class="max-w-5xl mx-auto space-y-4" x-data="requerimiento(@js($lista), @js(old('items') ? 'todo' : 'faltan'))">
+<div class="max-w-5xl mx-auto space-y-4" x-data="requerimiento(@js($lista), @js($editar ? 'pedidos' : (old('items') ? 'todo' : 'faltan')))">
     @if (session('error'))<div class="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ session('error') }}</div>@endif
     @if ($errors->any())<div class="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ $errors->first() }}</div>@endif
 
     <div class="bg-white rounded-2xl shadow-sm p-5 space-y-4">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-                <h1 class="text-xl font-extrabold text-gray-800">📝 Nuevo requerimiento</h1>
+                <h1 class="text-xl font-extrabold text-gray-800">{{ $editar ? '✏️ Cambiar el pedido '.$codigo : '📝 Nuevo requerimiento' }}</h1>
+                @if ($editar)<p class="text-sm font-semibold text-indigo-700">Cambia las cantidades, agrega o quita productos (pon 0 para quitarlo). Al guardar, el administrador recibe el pedido actualizado.</p>@endif
                 <p class="text-sm text-gray-500">Lo que hay en tu almacén, lo que falta y lo que se acabaría en {{ \App\Support\Requerimientos::DIAS_PREVISION }} días según lo que se gastó la última semana.
                     La cantidad ya viene sugerida: cámbiala si hace falta.</p>
             </div>
@@ -36,30 +39,30 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('requerimientos.store') }}" class="space-y-4" @submit="if (!pedidos.length) { $event.preventDefault(); alert('Pon la cantidad de al menos un producto.'); }">
+    <form method="POST" action="{{ $editar ? route('requerimientos.actualizar', $editar->id) : route('requerimientos.store') }}" class="space-y-4" @submit="if (!pedidos.length) { $event.preventDefault(); alert('Pon la cantidad de al menos un producto.'); }">
         @csrf
         <div class="bg-white rounded-2xl shadow-sm p-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <label class="text-sm font-semibold text-gray-700">Almacén
-                <select name="id_almacen" class="mt-1 w-full h-11 rounded-xl border-gray-300" onchange="location.href = @js(route('requerimientos.create')) + '?almacen=' + this.value">
+                <select name="id_almacen" class="mt-1 w-full h-11 rounded-xl border-gray-300" @disabled($editar) onchange="location.href = @js(route('requerimientos.create')) + '?almacen=' + this.value">
                     @foreach ($almacenes as $a)<option value="{{ $a->id_almacen }}" @selected($a->id_almacen === $almacen->id_almacen)>{{ $a->descripcion }}</option>@endforeach
                 </select>
             </label>
             <label class="text-sm font-semibold text-gray-700">Para el día
-                <input type="date" name="fecha_para" value="{{ old('fecha_para', now()->toDateString()) }}" min="{{ now()->toDateString() }}" class="mt-1 w-full h-11 rounded-xl border-gray-300">
+                <input type="date" name="fecha_para" value="{{ old('fecha_para', $editar->fecha_para ?? now()->toDateString()) }}" min="{{ $editar ? min(now()->toDateString(), $editar->fecha_para) : now()->toDateString() }}" class="mt-1 w-full h-11 rounded-xl border-gray-300">
             </label>
             <label class="text-sm font-semibold text-gray-700">Observaciones
-                <input name="observaciones" value="{{ old('observaciones') }}" maxlength="500" placeholder="Ej.: para el almuerzo del sábado" class="mt-1 w-full h-11 rounded-xl border-gray-300">
+                <input name="observaciones" value="{{ old('observaciones', $editar->observaciones ?? '') }}" maxlength="500" placeholder="Ej.: para el almuerzo del sábado" class="mt-1 w-full h-11 rounded-xl border-gray-300">
             </label>
             <label class="text-sm font-semibold text-gray-700">¿Quién lo consigue?
-                <select name="sucursal_origen" class="mt-1 w-full h-11 rounded-xl border-gray-300">
+                <select name="sucursal_origen" class="mt-1 w-full h-11 rounded-xl border-gray-300" @disabled($editar)>
                     <option value="">🛒 Se compra (mercado o proveedor)</option>
                     @foreach ($sedes as $sede)
-                        <option value="{{ $sede->id_empresa_negocio }}" @selected((int) old('sucursal_origen') === (int) $sede->id_empresa_negocio)>🏬 Pedir a la sede {{ $sede->nombre_comercial }}</option>
+                        <option value="{{ $sede->id_empresa_negocio }}" @selected((int) old('sucursal_origen', $editar->sucursal_origen ?? 0) === (int) $sede->id_empresa_negocio)>🏬 Pedir a la sede {{ $sede->nombre_comercial }}</option>
                     @endforeach
                 </select>
             </label>
             <label class="sm:col-span-2 lg:col-span-4 flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 ring-1 ring-rose-100">
-                <input type="checkbox" name="urgente" value="1" @checked(old('urgente')) class="rounded border-rose-300 text-rose-600">
+                <input type="checkbox" name="urgente" value="1" @checked(old('urgente', $editar->urgente ?? false)) class="rounded border-rose-300 text-rose-600">
                 🚨 Es urgente (le llega marcado como URGENTE al celular del administrador)
             </label>
         </div>
@@ -100,7 +103,8 @@
             </div>
         </template>
         <div class="sticky bottom-3 flex justify-end">
-            <button class="h-12 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg">Enviar requerimiento (<span x-text="pedidos.length"></span> productos)</button>
+            @if ($editar)<a href="{{ route('requerimientos.show', $editar->id) }}" class="h-12 px-5 mr-2 inline-flex items-center rounded-xl bg-white ring-1 ring-gray-300 font-bold shadow">Cancelar</a>@endif
+            <button class="h-12 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg">{{ $editar ? 'Guardar cambios' : 'Enviar requerimiento' }} (<span x-text="pedidos.length"></span> productos)</button>
         </div>
     </form>
 </div>

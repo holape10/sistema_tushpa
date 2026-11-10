@@ -32,6 +32,9 @@
                 @if ($r->estado === 'ANULADO')<p class="text-sm text-slate-500">Anulado por {{ $atendio }}: {{ $r->motivo_anulacion }}</p>@endif
             </div>
             <div class="flex flex-wrap gap-2">
+                @if ($editable ?? false)
+                    <a href="{{ route('requerimientos.editar', $r->id) }}" class="h-10 px-4 inline-flex items-center rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-bold">✏️ Cambiar pedido</a>
+                @endif
                 <a href="{{ route('requerimientos.imprimir', $r->id) }}" target="_blank" class="h-10 px-4 inline-flex items-center rounded-xl bg-gray-100 hover:bg-gray-200 text-sm font-bold">🖨 Imprimir</a>
                 @if ($pendiente)
                     <button type="button" @click="anular = !anular" class="h-10 px-4 rounded-xl bg-white ring-1 ring-rose-200 text-rose-700 text-sm font-bold hover:bg-rose-50">Anular</button>

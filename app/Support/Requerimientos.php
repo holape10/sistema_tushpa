@@ -7,6 +7,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Requerimientos del día (pedido de mercado): quien cocina o lleva el almacén ve el stock de su almacén, lo que ya falta
@@ -91,11 +92,27 @@ class Requerimientos
      *
      * @param  array{id_almacen: int, fecha_para: string, observaciones?: ?string, urgente?: bool, sucursal_origen?: ?int, items: array<int, array{id: int, cantidad: float, nota?: ?string}>}  $d
      */
-    public static function guardar(User $user, array $d): int
+    /**
+     * Crea el pedido, o con $id cambia uno PENDIENTE al que aún no se le marcó nada comprado ni enviado (cantidades,
+     * productos, notas, fecha, observaciones y urgente; la sede y el almacén no cambian).
+     */
+    public static function guardar(User $user, array $d, ?int $id = null): int
     {
         $sucursal = (int) $user->id_empresa_negocio;
+        $actual = null;
+        if ($id) {
+            $actual = DB::table('requerimientos')->where('id', $id)->where('id_empresa_negocio', $sucursal)->first();
+            if (! $actual || $actual->estado !== 'PENDIENTE') {
+                throw new \RuntimeException('Solo se puede cambiar un pedido pendiente.');
+            }
+            if (! self::editable($id)) {
+                throw new \RuntimeException('Ya se marcó lo comprado o lo enviado: el pedido ya no se puede cambiar.');
+            }
+            $d['sucursal_origen'] = $actual->sucursal_origen;
+            $d['id_almacen'] = $actual->id_almacen;
+        }
         $sede = ! empty($d['sucursal_origen']) ? (int) $d['sucursal_origen'] : null;
-        if ($sede && ! self::sedes($user)->contains('id_empresa_negocio', $sede)) {
+        if ($sede && ! $actual && ! self::sedes($user)->contains('id_empresa_negocio', $sede)) {
             throw new \RuntimeException('Esa sede no es de tu empresa.');
         }
         $items = array_values(array_filter($d['items'], fn ($i) => (float) ($i['cantidad'] ?? 0) > 0));
@@ -112,14 +129,20 @@ class Requerimientos
             throw new \RuntimeException('Hay productos que no son de esta sucursal o no manejan stock.');
         }
 
-        $id = DB::transaction(function () use ($user, $d, $items, $sucursal, $situacion, $sede) {
-            $numero = (int) DB::table('requerimientos')->where('id_empresa_negocio', $sucursal)->lockForUpdate()->max('numero') + 1;
-            $id = DB::table('requerimientos')->insertGetId([
-                'numero' => $numero, 'id_empresa_negocio' => $sucursal, 'id_almacen' => (int) $d['id_almacen'], 'fecha_para' => $d['fecha_para'],
-                'sucursal_origen' => $sede, 'urgente' => ! empty($d['urgente']),
-                'IdUsuario' => $user->IdUsuario, 'estado' => 'PENDIENTE', 'observaciones' => ($d['observaciones'] ?? null) ?: null,
-                'created_at' => now(), 'updated_at' => now(),
-            ]);
+        $id = DB::transaction(function () use ($user, $d, $items, $sucursal, $situacion, $sede, $id) {
+            if ($id) {
+                DB::table('requerimientos')->where('id', $id)->update(['fecha_para' => $d['fecha_para'], 'urgente' => ! empty($d['urgente']),
+                    'observaciones' => ($d['observaciones'] ?? null) ?: null, 'updated_at' => now()]);
+                DB::table('requerimientos_detalle')->where('requerimiento_id', $id)->delete();
+            } else {
+                $numero = (int) DB::table('requerimientos')->where('id_empresa_negocio', $sucursal)->lockForUpdate()->max('numero') + 1;
+                $id = DB::table('requerimientos')->insertGetId([
+                    'numero' => $numero, 'id_empresa_negocio' => $sucursal, 'id_almacen' => (int) $d['id_almacen'], 'fecha_para' => $d['fecha_para'],
+                    'sucursal_origen' => $sede, 'urgente' => ! empty($d['urgente']),
+                    'IdUsuario' => $user->IdUsuario, 'estado' => 'PENDIENTE', 'observaciones' => ($d['observaciones'] ?? null) ?: null,
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
             foreach ($items as $i) {
                 $s = $situacion->get((int) $i['id']);
                 DB::table('requerimientos_detalle')->insert([
@@ -131,23 +154,72 @@ class Requerimientos
 
             return $id;
         });
-        self::avisar($id);
+        self::avisar($id, (bool) $actual);
 
         return $id;
+    }
+
+    /**
+     * El pedido completo (productos y cantidades) al Telegram de los administradores de la empresa que lo activaron en
+     * Requerimientos → "Pedidos por Telegram". Si Telegram falla, el pedido igual queda guardado.
+     */
+    public static function alTelegram(object $r, bool $editado = false): int
+    {
+        if (! TelegramCitas::configurado() || ! Schema::hasColumn('users', 'telegram_pedidos')) {
+            return 0;
+        }
+        $destinos = self::receptoresTelegram((string) DB::table('empresa_negocios')->where('id_empresa_negocio', $r->id_empresa_negocio)->value('IdEmpresa'));
+        if ($destinos->isEmpty()) {
+            return 0;
+        }
+        $num = fn ($n) => rtrim(rtrim(number_format((float) $n, 3, '.', ''), '0'), '.') ?: '0';
+        $lineas = DB::table('requerimientos_detalle as d')->join('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
+            ->where('d.requerimiento_id', $r->id)->orderBy('p.pronom')->get(['p.pronom', 'p.umecod', 'd.cantidad', 'd.nota']);
+        $sede = fn ($id) => (string) DB::table('empresa_negocios')->where('id_empresa_negocio', $id)->value('nombre_comercial');
+        $texto = ($r->urgente ? '🚨 URGENTE · ' : '').($editado ? '✏️ Pedido CAMBIADO ' : '🛒 Nuevo pedido ').self::codigo($r)."\n"
+            .'🏪 '.$sede($r->id_empresa_negocio).($r->sucursal_origen ? ' → se le pide a '.$sede($r->sucursal_origen) : '')."\n"
+            .'📅 Para el '.CarbonImmutable::parse($r->fecha_para)->locale('es')->isoFormat('dddd D [de] MMMM')
+            .' · pidió '.trim((string) DB::table('users')->where('IdUsuario', $r->IdUsuario)->value('apeusu'))."\n\n"
+            .$lineas->map(fn ($l) => '• '.$l->pronom.': '.$num($l->cantidad).' '.Recetas::nombreUnidad($l->umecod ?: 'NIU').($l->nota ? " ({$l->nota})" : ''))->implode("\n")
+            .($r->observaciones ? "\n\n📌 {$r->observaciones}" : '')
+            ."\n\n".route('requerimientos.show', $r->id);
+        $enviados = 0;
+        foreach ($destinos as $chat) {
+            [$ok] = TelegramCitas::enviar((string) $chat, $texto);
+            $enviados += $ok ? 1 : 0;
+        }
+
+        return $enviados;
+    }
+
+    /** chat_id de los administradores activos de la empresa que reciben los pedidos */
+    public static function receptoresTelegram(string $ruc)
+    {
+        return DB::table('users as u')->join('role_user as r', 'r.user_IdUsuario', '=', 'u.IdUsuario')
+            ->where('r.role_id', 2)->where('u.IdEmpresa', $ruc)->where('u.estusu', 1)->where('u.telegram_pedidos', true)
+            ->whereNotNull('u.telegram_chat_id')->distinct()->pluck('u.telegram_chat_id');
+    }
+
+    /** ¿Se puede cambiar el pedido? Mientras nadie marcó lo comprado ni despachó nada */
+    public static function editable(int $id): bool
+    {
+        return ! DB::table('requerimientos_detalle')->where('requerimiento_id', $id)
+            ->where(fn ($q) => $q->whereNotNull('comprado')->orWhereNotNull('enviado'))->exists();
     }
 
     /**
      * Aviso al celular del administrador de la sede que lo atiende (la que pidió, o la central si se le pidió a ella).
      * Siempre sale; el urgente se marca como tal.
      */
-    private static function avisar(int $id): void
+    private static function avisar(int $id, bool $editado = false): void
     {
         $r = DB::table('requerimientos')->find($id);
+        self::alTelegram($r, $editado);
         $quien = DB::table('users')->where('IdUsuario', $r->IdUsuario)->value('apeusu');
         $deSede = $r->sucursal_origen ? ' de '.DB::table('empresa_negocios')->where('id_empresa_negocio', $r->id_empresa_negocio)->value('nombre_comercial') : '';
         $lineas = DB::table('requerimientos_detalle')->where('requerimiento_id', $id)->count();
         AvisosCelular::alDueno((int) ($r->sucursal_origen ?: $r->id_empresa_negocio),
-            ($r->urgente ? '🚨 URGENTE: ' : '📝 ').'Requerimiento '.self::codigo($r).$deSede,
+            ($r->urgente ? '🚨 URGENTE: ' : '📝 ').'Requerimiento '.self::codigo($r).$deSede.($editado ? ' (cambiado)' : ''),
             "{$quien} pide {$lineas} producto(s) para el ".date('d/m', strtotime($r->fecha_para)).($r->observaciones ? ": {$r->observaciones}" : '.'),
             route('requerimientos.show', $id));
     }

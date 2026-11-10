@@ -84,7 +84,7 @@ class TelegramCitas
             $mensaje = $u['message'] ?? null;
             if (! $mensaje || ! preg_match('#^/start\s+([a-z0-9]{16})$#i', trim((string) ($mensaje['text'] ?? '')), $m)) {
                 if ($mensaje && isset($mensaje['chat']['id'])) {
-                    self::enviar((string) $mensaje['chat']['id'], 'Hola 👋 Para recibir aquí tus citas, toca "Vincular Telegram" en el sistema de tu clínica.');
+                    self::enviar((string) $mensaje['chat']['id'], 'Hola 👋 Para recibir aquí tus avisos, toca "Vincular Telegram" en el sistema.');
                 }
 
                 continue;
@@ -99,7 +99,7 @@ class TelegramCitas
             DB::connection('central')->table('telegram_vinculos')->where('id', $fila->id)
                 ->update(['chat_id' => (string) $mensaje['chat']['id'], 'nombre' => mb_substr($nombre, 0, 120) ?: null, 'vinculado_at' => now()]);
             self::enviar((string) $mensaje['chat']['id'], '✅ Listo'.($nombre ? ", {$nombre}" : '').'. Desde ahora te llegarán aquí tus avisos: '
-                .($fila->base === self::PANEL ? 'los recordatorios de tu agenda.' : 'tus citas del día siguiente y un recordatorio antes de cada una.'));
+                .($fila->base === self::PANEL ? 'los recordatorios de tu agenda.' : 'tus citas, los pedidos de almacén y los demás avisos del sistema.'));
             if ($fila->base === self::PANEL) {
                 DB::connection('central')->table('superadmins')->where('id', $fila->IdUsuario)->update(['telegram_chat_id' => (string) $mensaje['chat']['id']]);
             }

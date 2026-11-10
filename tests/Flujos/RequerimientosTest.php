@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\Requerimientos;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 /** Requerimientos del día: cocina pide lo que falta, el administrador lo compra en el mercado y lo registra como compra */
 class RequerimientosTest extends FlujoTestCase
@@ -123,5 +124,69 @@ class RequerimientosTest extends FlujoTestCase
         DB::table('role_user')->insert(['role_id' => 8, 'user_IdUsuario' => $mozo->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
 
         $this->actingAs($mozo)->get(route('requerimientos.create'))->assertForbidden();
+    }
+
+    private function pedir(User $quien, array $items): int
+    {
+        return Requerimientos::guardar($quien, ['id_almacen' => $this->almacen, 'fecha_para' => now()->toDateString(),
+            'items' => array_map(fn ($i) => ['id' => $i[0]->IdProducto, 'cantidad' => $i[1]], $items)]);
+    }
+
+    public function test_quien_pidio_cambia_su_pedido_mientras_nadie_lo_compra(): void
+    {
+        $cocina = $this->cocinero();
+        [$aceite, $azucar, $arroz] = [$this->insumo('ACEITE', 2), $this->insumo('AZUCAR', 2), $this->insumo('ARROZ', 1)];
+        $id = $this->pedir($cocina, [[$aceite, 28], [$azucar, 5]]);
+
+        $this->actingAs($cocina)->get(route('requerimientos.editar', $id))->assertOk()->assertSee('Cambiar el pedido');
+        $this->actingAs($cocina)->post(route('requerimientos.actualizar', $id), ['fecha_para' => now()->toDateString(), 'observaciones' => 'para el sábado',
+            'items' => [['id' => $aceite->IdProducto, 'cantidad' => 20], ['id' => $azucar->IdProducto, 'cantidad' => 0], ['id' => $arroz->IdProducto, 'cantidad' => 10, 'nota' => 'costeño']]])
+            ->assertRedirect(route('requerimientos.show', $id));
+
+        $this->assertEquals([$aceite->IdProducto => 20.0, $arroz->IdProducto => 10.0],
+            DB::table('requerimientos_detalle')->where('requerimiento_id', $id)->pluck('cantidad', 'IdProducto')->map(fn ($c) => (float) $c)->all());
+        $this->assertSame('para el sábado', DB::table('requerimientos')->where('id', $id)->value('observaciones'));
+
+        // Ya se marcó lo comprado: el pedido queda como está
+        Requerimientos::marcar($this->usuario, $id, [DB::table('requerimientos_detalle')->where('requerimiento_id', $id)->value('id') => ['comprado' => 20, 'precio' => 8]]);
+        $this->actingAs($cocina)->get(route('requerimientos.editar', $id))->assertRedirect(route('requerimientos.show', $id));
+    }
+
+    public function test_otro_trabajador_no_cambia_un_pedido_ajeno(): void
+    {
+        $id = $this->pedir($this->cocinero(), [[$this->insumo('ACEITE', 2), 5]]);
+
+        $this->actingAs($this->cocinero())->get(route('requerimientos.editar', $id))->assertRedirect(route('requerimientos.show', $id))
+            ->assertSessionHas('error', 'Solo quien lo pidió o el administrador lo cambia.');
+    }
+
+    public function test_el_pedido_llega_al_telegram_del_administrador_que_lo_activo(): void
+    {
+        config(['services.telegram.citas_token' => 'token-bot']);
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true, 'result' => []])]);
+        DB::table('users')->where('IdUsuario', $this->usuario->IdUsuario)->update(['telegram_chat_id' => '555', 'telegram_pedidos' => true]);
+        $otroAdmin = $this->usuario->replicate();
+        $otroAdmin->email = 'admin2'.uniqid();
+        $otroAdmin->telegram_chat_id = '777';
+        $otroAdmin->save();
+        DB::table('role_user')->insert(['role_id' => 2, 'user_IdUsuario' => $otroAdmin->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
+
+        $id = $this->pedir($this->cocinero(), [[$this->insumo('ACEITE', 2), 28]]);
+
+        $enviados = Http::recorded(fn ($req) => str_contains($req->url(), 'sendMessage'));
+        $this->assertCount(1, $enviados, 'Solo al que activó "Recibir los pedidos".');
+        $this->assertSame('555', $enviados[0][0]['chat_id']);
+        $this->assertStringContainsString('ACEITE: 28', $enviados[0][0]['text']);
+        $this->assertStringContainsString(Requerimientos::codigo(DB::table('requerimientos')->find($id)), $enviados[0][0]['text']);
+    }
+
+    public function test_solo_un_administrador_configura_el_telegram_de_los_pedidos(): void
+    {
+        config(['services.telegram.citas_token' => 'token-bot']);
+        $this->actingAs($this->usuario)->get(route('requerimientos.index'))->assertOk()->assertSee('Pedidos por Telegram');
+        $this->actingAs($this->cocinero())->get(route('requerimientos.index'))->assertOk()->assertDontSee('Pedidos por Telegram');
+        $this->actingAs($this->cocinero())->postJson(route('requerimientos.telegram.recibir', $this->usuario->IdUsuario), ['recibir' => true])->assertForbidden();
+        $this->actingAs($this->usuario)->postJson(route('requerimientos.telegram.recibir', $this->usuario->IdUsuario), ['recibir' => true])->assertOk();
+        $this->assertTrue((bool) DB::table('users')->where('IdUsuario', $this->usuario->IdUsuario)->value('telegram_pedidos'));
     }
 }

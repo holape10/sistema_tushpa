@@ -7,8 +7,11 @@ use App\Models\Producto;
 use App\Support\Bitacora;
 use App\Support\Compras;
 use App\Support\Requerimientos;
+use App\Support\TelegramCitas;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -40,7 +43,77 @@ class RequerimientoController extends Controller
                 ->groupBy('estado')->selectRaw('estado, COUNT(*) as n')->pluck('n', 'estado'),
             'sucursal' => $sucursal,
             'atiende' => Requerimientos::atiende(Auth::user()),
+            // Pedidos por Telegram: los administradores de la empresa (solo un administrador lo configura)
+            'telegram' => Auth::user()->esAdmin() && TelegramCitas::configurado() ? $this->administradores() : null,
         ]);
+    }
+
+    /** @return Collection<int, object> administradores activos de la empresa con su Telegram */
+    private function administradores()
+    {
+        return DB::table('users as u')->join('role_user as r', 'r.user_IdUsuario', '=', 'u.IdUsuario')
+            ->where('r.role_id', 2)->where('u.IdEmpresa', Auth::user()->IdEmpresa)->where('u.estusu', 1)
+            ->orderBy('u.IdUsuario')->distinct()->get(['u.IdUsuario', 'u.apeusu', 'u.name', 'u.telegram_chat_id', 'u.telegram_pedidos']);
+    }
+
+    /** Un administrador de esta empresa (para configurar su Telegram) */
+    private function administrador(int $usuario): object
+    {
+        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el administrador configura los avisos por Telegram.');
+        $u = $this->administradores()->firstWhere('IdUsuario', $usuario);
+        abort_unless($u, 404);
+
+        return $u;
+    }
+
+    public function telegramEnlace(int $usuario): JsonResponse
+    {
+        $this->administrador($usuario);
+        $enlace = TelegramCitas::enlace($usuario);
+
+        return response()->json($enlace ? ['ok' => true, 'enlace' => $enlace]
+            : ['ok' => false, 'mensaje' => 'Telegram no está configurado en el servidor (falta el token del bot).']);
+    }
+
+    /** ¿Ya tocó Iniciar en el bot? Devuelve los administradores que quedaron vinculados */
+    public function telegramVerificar(): JsonResponse
+    {
+        abort_unless(Auth::user()->esAdmin(), 403);
+        TelegramCitas::recibir();
+        TelegramCitas::sincronizar();
+
+        return response()->json(['ok' => true, 'vinculados' => $this->administradores()->whereNotNull('telegram_chat_id')
+            ->pluck('IdUsuario')->map(fn ($id) => (int) $id)->values()]);
+    }
+
+    /** Recibir (o dejar de recibir) los pedidos en su Telegram */
+    public function telegramRecibir(Request $request, int $usuario): JsonResponse
+    {
+        $this->administrador($usuario);
+        DB::table('users')->where('IdUsuario', $usuario)->update(['telegram_pedidos' => $request->boolean('recibir')]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function telegramProbar(int $usuario): JsonResponse
+    {
+        $u = $this->administrador($usuario);
+        if (! $u->telegram_chat_id) {
+            return response()->json(['ok' => false, 'mensaje' => 'Ese administrador aún no vincula su Telegram.']);
+        }
+        [$ok, $detalle] = TelegramCitas::enviar((string) $u->telegram_chat_id, '🛒 Prueba: así te llegarán los pedidos de almacén de '
+            .DB::table('empresa_negocios')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->value('nombre_comercial').'.');
+
+        return response()->json(['ok' => $ok, 'mensaje' => $ok ? '✔ Mensaje de prueba enviado a su Telegram.' : $detalle]);
+    }
+
+    public function telegramQuitar(int $usuario): JsonResponse
+    {
+        $this->administrador($usuario);
+        TelegramCitas::desvincular($usuario);
+        DB::table('users')->where('IdUsuario', $usuario)->update(['telegram_pedidos' => false]);
+
+        return response()->json(['ok' => true]);
     }
 
     /** Lo que hay, lo que falta y lo que se acabaría: de ahí se arma el pedido */
@@ -95,6 +168,66 @@ class RequerimientoController extends Controller
                 : ' enviado: el administrador ya lo ve en su inicio y le llegó el aviso al celular.'));
     }
 
+    /** Cambiar un pedido que aún no se compra: quien lo pidió o quien lo atiende */
+    public function editar(int $id): View|RedirectResponse
+    {
+        $this->autorizar();
+        $r = $this->requerimiento($id);
+        if ($motivo = $this->noEditable($r)) {
+            return redirect()->route('requerimientos.show', $id)->with('error', $motivo);
+        }
+        $pedido = DB::table('requerimientos_detalle')->where('requerimiento_id', $id)->get()->keyBy('IdProducto');
+        $sucursal = (int) Auth::user()->id_empresa_negocio;
+        $almacen = Almacen::where('id_almacen', $r->id_almacen)->first(['id_almacen', 'descripcion']);
+
+        return view('empresas.requerimientos.create', [
+            'almacenes' => collect([$almacen]), 'almacen' => $almacen, 'sedes' => Requerimientos::sedes(Auth::user()),
+            'productos' => Requerimientos::sugerencias($sucursal, (int) $r->id_almacen)->map(function ($p) use ($pedido) {
+                $p->sugerido = (float) ($pedido[$p->id]->cantidad ?? 0);
+                $p->nota_pedido = (string) ($pedido[$p->id]->nota ?? '');
+
+                return $p;
+            }),
+            'desdeProduccion' => false, 'editar' => $r, 'codigo' => Requerimientos::codigo($r),
+        ]);
+    }
+
+    public function actualizar(Request $request, int $id): RedirectResponse
+    {
+        $this->autorizar();
+        $r = $this->requerimiento($id);
+        if ($motivo = $this->noEditable($r)) {
+            return redirect()->route('requerimientos.show', $id)->with('error', $motivo);
+        }
+        $d = $request->validate([
+            'fecha_para' => 'required|date', 'observaciones' => 'nullable|string|max:500', 'urgente' => 'nullable|boolean',
+            'items' => 'required|array|max:500', 'items.*.id' => 'required|integer',
+            'items.*.cantidad' => 'nullable|numeric|min:0|max:9999999', 'items.*.nota' => 'nullable|string|max:150',
+        ], ['items.required' => 'Pon la cantidad de al menos un producto.'], ['fecha_para' => 'fecha']);
+        try {
+            Requerimientos::guardar(Auth::user(), $d, $id);
+        } catch (\RuntimeException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+        Bitacora::registrar('compra.requerimiento', 'Cambió el requerimiento '.Requerimientos::codigo($r), null, ['referencia' => ['requerimiento', $id]]);
+
+        return redirect()->route('requerimientos.show', $id)->with('success', Requerimientos::codigo($r).' cambiado: el administrador recibió el pedido actualizado.');
+    }
+
+    /** Por qué no se puede cambiar el pedido (null = sí se puede) */
+    private function noEditable(object $r): ?string
+    {
+        $user = Auth::user();
+        if ($r->estado !== 'PENDIENTE' || (int) $r->id_empresa_negocio !== (int) $user->id_empresa_negocio) {
+            return 'Solo se cambia un pedido pendiente de tu sucursal.';
+        }
+        if ((int) $r->IdUsuario !== (int) $user->IdUsuario && ! Requerimientos::atiende($user)) {
+            return 'Solo quien lo pidió o el administrador lo cambia.';
+        }
+
+        return Requerimientos::editable((int) $r->id) ? null : 'Ya se marcó lo comprado o lo enviado: el pedido ya no se puede cambiar.';
+    }
+
     public function show(int $id): View
     {
         $this->autorizar();
@@ -105,6 +238,7 @@ class RequerimientoController extends Controller
         $datos = $this->datos($r);
 
         return view('empresas.requerimientos.show', $datos + [
+            'editable' => $this->noEditable($r) === null,
             'atiende' => Requerimientos::atiende($user) && (int) $r->id_empresa_negocio === (int) $user->id_empresa_negocio && ! $r->sucursal_origen,
             'despacha' => $despacha, 'almacenes' => $almacenes,
             'recibe' => $r->estado === 'EN CAMINO' && (int) $r->id_empresa_negocio === (int) $user->id_empresa_negocio,
