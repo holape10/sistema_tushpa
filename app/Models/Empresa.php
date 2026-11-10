@@ -24,7 +24,9 @@ class Empresa extends Model
     // Credenciales del API SIRE, la Clave SOL principal (estudio contable), la clave SOL de envío y la del certificado,
     // cifradas con APP_KEY (si cambias APP_KEY hay que volver a ingresarlas)
     protected $casts = ['client_secret' => 'encrypted', 'sire_clave' => 'encrypted', 'sol_clave' => 'encrypted',
-        'claveSunat' => Cifrado::class, 'passcert' => Cifrado::class];
+        'claveSunat' => Cifrado::class, 'passcert' => Cifrado::class,
+        // [{banco, moneda, numero, cci}]: salen en el comprobante A4
+        'cuentas_bancarias' => 'array'];
 
     public function sucursales()
     {

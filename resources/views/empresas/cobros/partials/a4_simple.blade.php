@@ -152,6 +152,8 @@
         </div>
     @endif
 
+    @include('empresas.cobros.partials.a4_cuentas', ['simple' => true])
+
     <div class="pie">
         @if ($electronico)<span style="font-weight:normal">Consulte su comprobante en {{ \App\Support\ConsultaCpe::direccion() }}</span><br>@endif
         "BIENES TRANSFERIDOS EN LA AMAZONÍA PARA SER CONSUMIDOS EN LA MISMA" - "SERVICIOS PRESTADOS EN LA AMAZONÍA"<br>

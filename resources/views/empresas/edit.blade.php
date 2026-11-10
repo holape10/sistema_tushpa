@@ -7,7 +7,7 @@
     @php
         $input = 'block w-full mt-1 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500';
         $secciones = ['datos' => ['Datos', 'fa-building'], 'logo' => ['Logo', 'fa-image'], 'sunat' => ['SUNAT', 'fa-file-code'],
-                      'sire' => ['SIRE / API', 'fa-book'], 'certificado' => ['Certificado', 'fa-key']]
+                      'bancos' => ['Cuentas bancarias', 'fa-building-columns'], 'sire' => ['SIRE / API', 'fa-book'], 'certificado' => ['Certificado', 'fa-key']]
             + ($contrato ? ['contrato' => ['Contrato', 'fa-file-signature']] : []);
         $sireListo = \App\Support\Sunat\Sire::configurado($empresa);
         $logo = $empresa->LogEmpresa && is_file(public_path($empresa->LogEmpresa)) ? $empresa->LogEmpresa : null;
@@ -94,6 +94,37 @@
                                     <input type="checkbox" name="quitar_logo" value="1" class="rounded text-red-600"> Quitar el logo</label>
                             @endif
                         </div>
+                    </div>
+                </section>
+
+                {{-- Cuentas bancarias del comprobante A4 --}}
+                <section id="bancos" class="bg-white rounded-2xl shadow-sm scroll-mt-4"
+                         x-data="{ cuentas: @js(old('cuentas', $empresa->cuentas_bancarias ?: [])) }">
+                    <header class="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
+                        <span class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fas fa-building-columns"></i></span>
+                        <div class="flex-1"><h3 class="font-bold text-gray-800">Cuentas bancarias</h3>
+                            <p class="text-xs text-gray-400">Salen al pie de las facturas y boletas en formato A4 (PDF), para que tus clientes te paguen. En los tickets no salen.</p></div>
+                    </header>
+                    <div class="p-5 space-y-3">
+                        {{-- Sin cuentas se manda vacío: así se pueden borrar todas --}}
+                        <input type="hidden" name="cuentas" value="" x-bind:disabled="cuentas.length > 0">
+                        <template x-for="(c, i) in cuentas" :key="i">
+                            <div class="grid grid-cols-2 sm:grid-cols-12 gap-2 items-end rounded-xl bg-gray-50 p-3">
+                                <label class="col-span-2 sm:col-span-3 text-xs font-medium text-gray-600">Banco
+                                    <input :name="`cuentas[${i}][banco]`" x-model="c.banco" maxlength="40" placeholder="BCP, INTERBANK, BBVA…" class="{{ $input }} uppercase"></label>
+                                <label class="sm:col-span-2 text-xs font-medium text-gray-600">Moneda
+                                    <select :name="`cuentas[${i}][moneda]`" x-model="c.moneda" class="{{ $input }}">
+                                        <option value="PEN">Soles</option><option value="USD">Dólares</option></select></label>
+                                <label class="sm:col-span-3 text-xs font-medium text-gray-600">N° de cuenta
+                                    <input :name="`cuentas[${i}][numero]`" x-model="c.numero" maxlength="30" class="{{ $input }} font-mono"></label>
+                                <label class="col-span-2 sm:col-span-3 text-xs font-medium text-gray-600">CCI
+                                    <input :name="`cuentas[${i}][cci]`" x-model="c.cci" maxlength="30" class="{{ $input }} font-mono"></label>
+                                <button type="button" @click="cuentas.splice(i, 1)" title="Quitar" class="col-span-2 sm:col-span-1 h-10 rounded-xl text-red-600 hover:bg-red-50"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </template>
+                        <p x-show="!cuentas.length" class="text-sm text-gray-400">Sin cuentas: el A4 no muestra este bloque.</p>
+                        <button type="button" x-show="cuentas.length < 6" @click="cuentas.push({ banco: '', moneda: 'PEN', numero: '', cci: '' })"
+                                class="px-4 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100"><i class="fas fa-plus mr-1"></i> Agregar cuenta</button>
                     </div>
                 </section>
 

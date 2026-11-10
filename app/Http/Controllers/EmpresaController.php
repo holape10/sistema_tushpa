@@ -111,7 +111,8 @@ class EmpresaController extends Controller
         'wsusuario' => 'Usuario SOL (envío a SUNAT)', 'claveSunat' => 'Clave SOL (envío a SUNAT)', 'produccion' => 'Envío a SUNAT en producción',
         'passcert' => 'Contraseña del certificado', 'certificado_archivo' => 'Certificado digital', 'fec_ini_cer' => 'Certificado vigente desde',
         'fec_fin_cer' => 'Certificado vigente hasta', 'icbper' => 'ICBPER', 'tip_env_fac_id' => 'Envío de facturas', 'tipo_envio' => 'Tipo de envío',
-        'client_id' => 'ID API SUNAT (SIRE)', 'client_secret' => 'Clave API SUNAT (SIRE)', 'sire_usuario' => 'Usuario SOL del SIRE', 'sire_clave' => 'Clave SOL del SIRE'];
+        'client_id' => 'ID API SUNAT (SIRE)', 'client_secret' => 'Clave API SUNAT (SIRE)', 'sire_usuario' => 'Usuario SOL del SIRE', 'sire_clave' => 'Clave SOL del SIRE',
+        'cuentas_bancarias' => 'Cuentas bancarias del A4'];
 
     public function update(Request $request, $id)
     {
@@ -126,7 +127,13 @@ class EmpresaController extends Controller
             'sire_client_secret' => 'nullable|string|max:255',
             'sire_usuario' => 'nullable|string|max:30',
             'sire_clave' => 'nullable|string|max:100',
+            'cuentas' => 'nullable|array|max:6',
+            'cuentas.*.banco' => 'nullable|string|max:40',
+            'cuentas.*.moneda' => 'nullable|in:PEN,USD',
+            'cuentas.*.numero' => 'nullable|string|max:30',
+            'cuentas.*.cci' => 'nullable|string|max:30',
         ], [], [
+            'cuentas.*.banco' => 'banco', 'cuentas.*.numero' => 'número de cuenta', 'cuentas.*.cci' => 'CCI',
             'nomEmpresa' => 'Razón Social',
             'dirEmpresa' => 'Dirección',
             'logologin' => 'Logo',
@@ -151,6 +158,14 @@ class EmpresaController extends Controller
         $empresa->icbper = $request->get('icbper');
         $empresa->tip_env_fac_id = $request->get('tip_env_fac');
         $empresa->tipo_envio = $request->get('envio');
+        // Cuentas bancarias del A4: solo las que tienen banco y número o CCI
+        if ($request->has('cuentas')) {
+            $cuentas = collect($request->input('cuentas', []))->map(fn ($c) => [
+                'banco' => mb_strtoupper(trim((string) ($c['banco'] ?? ''))), 'moneda' => ($c['moneda'] ?? 'PEN') === 'USD' ? 'USD' : 'PEN',
+                'numero' => trim((string) ($c['numero'] ?? '')), 'cci' => trim((string) ($c['cci'] ?? '')),
+            ])->filter(fn ($c) => $c['banco'] !== '' && ($c['numero'] !== '' || $c['cci'] !== ''))->values()->all();
+            $empresa->cuentas_bancarias = $cuentas ?: null;
+        }
 
         // 3. Logo de la empresa (lo usan las sucursales que no tienen logo propio)
         if ($request->hasFile('logologin')) {
