@@ -129,7 +129,9 @@
         @if ($cab->ccaqr)<div class="c" style="font-size:8.5px; word-break:break-all;">Hash: {{ $cab->ccaqr }}</div>@endif
         <div class="c nota">Consulta tu comprobante en:<br><b>{{ \App\Support\ConsultaCpe::direccion() }}</b></div>
     @endif
-    <div class="c nota b" style="margin-top:6px;">"BIENES Y/O SERVICIOS TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA"</div>
+    @if (\App\Support\Impresion\Impresion::leyendaAmazonia($cab))
+        <div class="c nota b" style="margin-top:6px;">"BIENES Y/O SERVICIOS TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA"</div>
+    @endif
 
     <table class="medios" style="margin-top:6px;">
         @foreach ($medios as $m)

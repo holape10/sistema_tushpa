@@ -266,6 +266,15 @@ class Impresion
      * Los bytes ESC/POS del ticket del comprobante con el diseño y el ancho de $imp (columnas, diseno, abrir_cajon).
      * Lo usan la cola del agente y la impresión directa desde Android con RawBT.
      */
+    /**
+     * La leyenda de la Amazonía ("BIENES TRANSFERIDOS EN LA AMAZONÍA…") solo va en las sucursales exoneradas de IGV
+     * (afectación 20). Una sucursal gravada (10) no la lleva.
+     */
+    public static function leyendaAmazonia(object $cab): bool
+    {
+        return (string) DB::table('empresa_negocios')->where('id_empresa_negocio', (int) ($cab->id_empresa_negocio ?? 0))->value('tip_igv_pred') === '20';
+    }
+
     public static function ticketComprobante(object $cab, object $imp, int $copias = 1): string
     {
         $idCpe = (int) $cab->IdCpe_cabecera;
@@ -369,8 +378,11 @@ class Impresion
             $p->texto('Representación impresa de la '.mb_strtolower((string) $tdodes))
                 ->texto('Consulta tu comprobante en:')->texto(ConsultaCpe::direccion());
         }
-        $p->alinear('centro')->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA')
-            ->texto('¡Gracias por su preferencia!');
+        $p->alinear('centro');
+        if (self::leyendaAmazonia($cab)) {
+            $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA');
+        }
+        $p->texto('¡Gracias por su preferencia!');
         self::firma($p);
         $p->avanzar(3)->cortar();
 
@@ -489,7 +501,10 @@ class Impresion
                 ->parrafo('Consulta tu comprobante en: '.ConsultaCpe::direccion(), $chico);
         }
 
-        $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico)->fuente();
+        if (self::leyendaAmazonia($cab)) {
+            $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico);
+        }
+        $p->fuente();
         self::firma($p);
 
         return $p->avanzar(3)->cortar();
@@ -591,7 +606,10 @@ class Impresion
             $p->parrafo('REPRESENTACION IMPRESA DE LA '.mb_strtoupper($tdodes), $chico)->fuente()->qr(CodigoQr::texto($cab))->avanzar()->fuente('b')
                 ->parrafo('Consulta tu comprobante en: '.ConsultaCpe::direccion(), $chico);
         }
-        $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico)->fuente();
+        if (self::leyendaAmazonia($cab)) {
+            $p->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $chico);
+        }
+        $p->fuente();
         self::firma($p);
         $p->avanzar(3)->cortar();
 

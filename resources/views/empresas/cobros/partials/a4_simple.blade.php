@@ -40,7 +40,7 @@
     .a4s .marco td { font-size: 8.5px; vertical-align: top; }
     .a4s .tt { padding: 2px 3px; white-space: nowrap; }
     .a4s .anulado { border: 1px solid #000; font-weight: bold; text-align: center; padding: 5px; margin-top: 8px; }
-    .a4s .leyenda { font-size: 7.5px; font-weight: bold; margin-top: 4px; line-height: 1.4; }
+    .a4s .leyenda { font-size: 7.5px; font-weight: bold; margin-top: 8px; line-height: 1.4; }
     .a4s .consulta { font-size: 7.5px; margin-top: 6px; }
 </style>
 
@@ -188,10 +188,13 @@
         </div>
     @endif
 
-    <div class="leyenda">
-        "BIENES TRANSFERIDOS EN LA AMAZONÍA PARA SER CONSUMIDOS EN LA MISMA."<br>
-        "SERVICIOS PRESTADOS EN LA AMAZONÍA"
-    </div>
+    {{-- Solo en sucursales exoneradas (afectación 20) --}}
+    @if (\App\Support\Impresion\Impresion::leyendaAmazonia($cab))
+        <div class="leyenda c">
+            "BIENES TRANSFERIDOS EN LA AMAZONÍA PARA SER CONSUMIDOS EN LA MISMA."<br>
+            "SERVICIOS PRESTADOS EN LA AMAZONÍA"
+        </div>
+    @endif
 
     @include('empresas.cobros.partials.a4_cuentas', ['simple' => true])
 

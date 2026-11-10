@@ -54,4 +54,19 @@ class CuentasBancariasA4Test extends FlujoTestCase
             ->assertSee('CANCELADO')->getContent();
         $this->assertSame(1, substr_count($html, 'AV. ALMIRANTE GRAU 1656'), 'La dirección ya está en las líneas extra: no se repite.');
     }
+
+    public function test_la_leyenda_de_la_amazonia_solo_sale_en_sucursales_exoneradas(): void
+    {
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('CEMENTO', 30, 10), 1]], '01'), 'PV');
+        $leyenda = 'TRANSFERIDOS EN LA AMAZON';
+
+        foreach (['MODERNO', 'SIMPLE'] as $diseno) {
+            DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['tip_igv_pred' => '10', 'diseno_a4' => $diseno]);
+            $this->get(route('cobros.voucher', ['id' => $id, 'formato' => 'A4']))->assertOk()->assertDontSee($leyenda);
+            DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['tip_igv_pred' => '20']);
+            $this->get(route('cobros.voucher', ['id' => $id, 'formato' => 'A4']))->assertOk()->assertSee($leyenda);
+        }
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['tip_igv_pred' => '10']);
+        $this->get(route('cobros.voucher', ['id' => $id, 'formato' => 'TICKET']))->assertOk()->assertDontSee($leyenda);
+    }
 }
