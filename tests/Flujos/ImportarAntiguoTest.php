@@ -4,6 +4,7 @@ namespace Tests\Flujos;
 
 use App\Models\Producto;
 use App\Support\Antiguo\Importador;
+use App\Support\MenusUsuarios;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -235,5 +236,46 @@ class ImportarAntiguoTest extends FlujoTestCase
     {
         $this->post(route('importar.ejecutar'), ['bd' => $this->base, 'mapa' => [20 => $this->sucursal, 22 => $this->sucursal],
             'secciones' => ['clientes'], 'dia0' => 'domingo'])->assertSessionHasErrors('mapa');
+    }
+
+    public function test_los_usuarios_importados_solo_reciben_el_menu_de_la_empresa(): void
+    {
+        // El panel le dio a la empresa solo estas opciones (el menú de su administrador principal)
+        $menu = DB::table('modulos')->whereIn('mod_nom', ['Inicio', 'Punto Venta', 'Proformas'])->pluck('mod_id')->all();
+        DB::table('modulos_usuario')->where('user_IdUsuario', $this->usuario->IdUsuario)->delete();
+        foreach ($menu as $m) {
+            DB::table('modulos_usuario')->insert(['user_IdUsuario' => $this->usuario->IdUsuario, 'mod_id' => $m]);
+        }
+
+        $this->importar();
+
+        $vendedora = DB::table('users')->where('email', 'reyna'.$this->usuario->IdEmpresa)->value('IdUsuario');
+        $suyos = DB::table('modulos_usuario as mu')->join('modulos as m', 'm.mod_id', '=', 'mu.mod_id')
+            ->where('mu.user_IdUsuario', $vendedora)->orderBy('m.mod_nom')->pluck('m.mod_nom')->all();
+        $this->assertSame(['Inicio', 'Proformas', 'Punto Venta'], $suyos, 'Lo de su rol (vendedor) que la empresa tiene; nada más.');
+    }
+
+    public function test_recortar_quita_solo_las_opciones_que_la_empresa_no_tiene(): void
+    {
+        $menu = DB::table('modulos')->whereIn('mod_nom', ['Inicio', 'Punto Venta'])->pluck('mod_id')->all();
+        $extra = DB::table('modulos')->where('mod_nom', 'Planillas y Boletas')->value('mod_id');
+        DB::table('modulos_usuario')->where('user_IdUsuario', $this->usuario->IdUsuario)->delete();
+        foreach ($menu as $m) {
+            DB::table('modulos_usuario')->insert(['user_IdUsuario' => $this->usuario->IdUsuario, 'mod_id' => $m]);
+        }
+        $otro = $this->usuario->replicate();
+        $otro->email = 'importado'.uniqid();
+        $otro->save();
+        DB::table('role_user')->insert(['role_id' => 2, 'user_IdUsuario' => $otro->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
+        foreach (array_merge($menu, [$extra]) as $m) {
+            DB::table('modulos_usuario')->insert(['user_IdUsuario' => $otro->IdUsuario, 'mod_id' => $m]);
+        }
+
+        $this->assertSame([['usuario' => $otro->email, 'quitar' => 1]], MenusUsuarios::recortar(false));
+        $this->assertSame(3, DB::table('modulos_usuario')->where('user_IdUsuario', $otro->IdUsuario)->count(), 'Sin aplicar no se toca nada.');
+
+        MenusUsuarios::recortar(true);
+        $this->assertEqualsCanonicalizing($menu, DB::table('modulos_usuario')->where('user_IdUsuario', $otro->IdUsuario)->pluck('mod_id')->map(fn ($m) => (int) $m)->all());
+        $this->assertSame(2, DB::table('modulos_usuario')->where('user_IdUsuario', $this->usuario->IdUsuario)->count(), 'El administrador principal no se toca.');
     }
 }

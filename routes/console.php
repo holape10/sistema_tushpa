@@ -16,6 +16,7 @@ use App\Support\DemoDatos;
 use App\Support\Estudio;
 use App\Support\EstudioDescargas;
 use App\Support\GeoIp;
+use App\Support\MenusUsuarios;
 use App\Support\PadronRuc;
 use App\Support\PanelDueno;
 use App\Support\Procesos;
@@ -245,6 +246,32 @@ Artisan::command('antiguo:importar {bd : Base temporal cargada con antiguo:carga
         return 0;
     });
 })->purpose('Importa las sucursales del sistema antiguo (base temporal) en las sucursales nuevas, sin límite de tiempo');
+
+Artisan::command('usuarios:recortar-menus {--ruc= : Solo esta empresa} {--aplicar : Quitar de verdad (sin esto solo muestra)}', function () {
+    // Cada usuario solo puede tener opciones del menú de su empresa (el de su administrador principal)
+    $clientes = Cliente::where('estado', '!=', 'ELIMINADO')->when($this->option('ruc'), fn ($q, $r) => $q->where('ruc', $r))->orderBy('ruc')->get();
+    $total = 0;
+    foreach ($clientes as $cliente) {
+        try {
+            $sobran = Tenancy::en($cliente->base_datos, fn () => MenusUsuarios::recortar((bool) $this->option('aplicar')));
+        } catch (Throwable $e) {
+            $this->warn("{$cliente->ruc}: ".$e->getMessage());
+
+            continue;
+        }
+        if ($sobran) {
+            $this->info("{$cliente->ruc} {$cliente->razon_social}");
+            foreach ($sobran as $s) {
+                $this->line("   {$s['usuario']}: {$s['quitar']} opciones de más");
+                $total++;
+            }
+        }
+    }
+    $this->info($total ? ($this->option('aplicar') ? "Listo: {$total} usuario(s) quedaron solo con el menú de su empresa."
+        : "{$total} usuario(s) tienen opciones de más. Vuelve a correrlo con --aplicar para quitarlas.") : 'Ningún usuario tiene opciones fuera del menú de su empresa.');
+
+    return 0;
+})->purpose('Quita a los usuarios las opciones del menú que su empresa no tiene (las que dejó la importación del sistema antiguo)');
 
 // ---------------- Mantenimiento diario ----------------
 

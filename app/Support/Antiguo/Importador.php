@@ -13,6 +13,7 @@ use App\Models\ProductoPresentacion;
 use App\Models\Subcategoria;
 use App\Models\User;
 use App\Support\Kardex;
+use App\Support\MenusUsuarios;
 use App\Support\Recetas;
 use App\Support\Unidades;
 use Illuminate\Support\Facades\DB;
@@ -840,11 +841,15 @@ class Importador
             (int) $r === 7 && isset($hayRol[17]) => 17,
             default => 4,
         };
-        $modulos = Modulo::orderBy('mod_id')->get();
+        // Solo el menú que tiene la empresa (el de su administrador principal, elegido en el panel): el administrador
+        // importado recibe ese menú y los demás, lo de su rol que esté en él. "Inicio" siempre.
+        $menuEmpresa = MenusUsuarios::deLaEmpresa();
+        $modulos = Modulo::orderBy('mod_id')->when($menuEmpresa, fn ($q) => $q->whereIn('mod_id', $menuEmpresa))->get();
         $presets = [2 => $modulos->pluck('mod_id')->all()];
         foreach (UsuarioController::PRESETS as $rol => $nombres) {
             $presets[$rol] = $modulos->whereIn('mod_nom', $nombres)->pluck('mod_id')->all();
         }
+        $inicio = Modulo::where('mod_url', '/inicio')->value('mod_id');
 
         foreach ($this->deSucursal($this->src('users'), 'users', $suc)->orderBy('IdUsuario')->get() as $a) {
             $email = mb_substr(trim((string) self::v($a, 'email', '')), 0, 100);
@@ -894,7 +899,7 @@ class Importador
                 'created_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('role_user')->insert(['role_id' => $rol, 'user_IdUsuario' => $nuevoId, 'id_empresa_negocio' => $nuevaSuc]);
-            foreach ($presets[$rol] ?? [] as $mod) {
+            foreach (array_unique(array_filter(array_merge($presets[$rol] ?? [], [$inicio]))) as $mod) {
                 DB::table('modulos_usuario')->insert(['user_IdUsuario' => $nuevoId, 'mod_id' => $mod, 'created_at' => now(), 'updated_at' => now()]);
             }
             if (! $valido) {
