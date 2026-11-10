@@ -298,7 +298,7 @@
                     </label>
                     <label>
                         <span class="text-xs font-semibold text-slate-500">F. Emisión</span>
-                        <input type="text" value="{{ now()->format('d/m/Y') }}" class="mt-1 w-full h-10 rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-500">
+                        <input type="date" x-model="fechaEmision" name="fecha_emision" class="mt-1 w-full h-10 rounded-xl border-slate-200 text-sm font-semibold focus:ring-2 focus:ring-indigo-300">
                     </label>
                     <label x-show="!esContado" x-cloak>
                         <span class="text-xs font-semibold text-slate-500">F. Vencim.</span>
