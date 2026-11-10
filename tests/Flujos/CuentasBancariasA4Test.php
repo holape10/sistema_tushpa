@@ -41,4 +41,17 @@ class CuentasBancariasA4Test extends FlujoTestCase
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['diseno_a4' => 'SIMPLE']);
         $this->get(route('cobros.voucher', ['id' => $id, 'formato' => 'A4']))->assertOk()->assertSee('00219100123456701255');
     }
+
+    public function test_el_a4_simple_lleva_el_giro_y_no_repite_la_direccion_ya_escrita(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['diseno_a4' => 'SIMPLE', 'direccion' => 'AV. ALMIRANTE GRAU 1656',
+            'cabecera_a4' => 'PRINCIPAL: AV. ALMIRANTE GRAU 1656 - SUCURSAL: CAL. LOS TRIUNFADORES', 'giro_a4' => 'VENTA DE ARENA BLANCA Y AMARILLA',
+            'telefono' => '917 872369 - 933 902802 - 991 409574 - 965 936588']);
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('ARENA', 500, 10), 1]], '01'), 'PV');
+
+        $html = $this->get(route('cobros.voucher', ['id' => $id, 'formato' => 'A4']))->assertOk()
+            ->assertSee('VENTA DE ARENA BLANCA Y AMARILLA')->assertSee('CELULAR: 917 872369 - 933 902802 - 991 409574 - 965 936588')
+            ->assertSee('CANCELADO')->getContent();
+        $this->assertSame(1, substr_count($html, 'AV. ALMIRANTE GRAU 1656'), 'La dirección ya está en las líneas extra: no se repite.');
+    }
 }

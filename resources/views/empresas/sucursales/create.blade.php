@@ -23,7 +23,7 @@
             <label class="font-medium text-gray-600">Código de establecimiento SUNAT <span class="font-normal text-gray-400">(anexo, ej. 0001)</span>
                 <input name="codigofiscal" value="{{ old('codigofiscal') }}" maxlength="4" inputmode="numeric" class="{{ $in }} font-mono"></label>
             <label class="font-medium text-gray-600">Teléfono
-                <input name="telefono" value="{{ old('telefono') }}" maxlength="30" class="{{ $in }}"></label>
+                <input name="telefono" value="{{ old('telefono') }}" maxlength="150" class="{{ $in }}"></label>
             <label class="font-medium text-gray-600">Correo
                 <input type="email" name="correo" value="{{ old('correo') }}" maxlength="255" class="{{ $in }}"></label>
         </section>

@@ -16,7 +16,7 @@ class LoginSucursalTest extends FlujoTestCase
         parent::setUp();
         Auth::logout();
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['nombre_comercial' => 'Principal Pomarosa']);
-        $this->agustinos = DB::table('empresa_negocios')->insertGetId(['IdEmpresa' => $this->usuario->IdEmpresa, 'tipo_negocio' => 'SUCURSAL',
+        $this->agustinos = DB::table('empresa_negocios')->insertGetId(['IdEmpresa' => $this->usuario->IdEmpresa, 'tipo_negocio' => 'Sucursal - '.$this->usuario->IdEmpresa,
             'nombre_comercial' => 'Sucursal Agustinos', 'direccion' => 'AGUSTINOS 1', 'estado' => 'Activo']);
     }
 
@@ -71,5 +71,13 @@ class LoginSucursalTest extends FlujoTestCase
         $this->get('/login?escritorio=1')->assertOk()->assertDontSee('name="sucursal"', false);
         $this->post(route('login'), ['email' => $this->usuario->email, 'password' => 'clave-de-prueba'])->assertSessionHasNoErrors();
         $this->assertAuthenticated();
+    }
+
+    public function test_la_descripcion_distingue_sucursales_con_el_mismo_nombre(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['nombre_comercial' => 'RUIZ SOUZA', 'tipo_negocio' => 'Serie 1']);
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->agustinos)->update(['nombre_comercial' => 'RUIZ SOUZA', 'tipo_negocio' => 'Serie 2']);
+
+        $this->get('/login?escritorio=1')->assertOk()->assertSee('RUIZ SOUZA · SERIE 1')->assertSee('RUIZ SOUZA · SERIE 2');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\View\Composers;
 
+use App\Models\EmpresaNegocio;
 use App\Support\Rubros;
 use App\Support\Sunat\SunatService;
 use Illuminate\Support\Facades\Auth;
@@ -26,8 +27,10 @@ class MenuComposer
             $view->with('usuario', $user);
             $view->with('notifSunat', $user->esAdminOCaja() ? self::pendientesSunat($user) : null);
             // Nombre de la sucursal en la cabecera, solo si la empresa tiene más de una
-            $sucursales = DB::table('empresa_negocios')->where('IdEmpresa', $user->IdEmpresa)->pluck('nombre_comercial', 'id_empresa_negocio');
-            $view->with('sucursalActual', $sucursales->count() > 1 ? ($sucursales[$user->id_empresa_negocio] ?? null) : null);
+            $sucursales = DB::table('empresa_negocios')->where('IdEmpresa', $user->IdEmpresa)->get(['id_empresa_negocio', 'nombre_comercial', 'tipo_negocio'])
+                ->keyBy('id_empresa_negocio');
+            $actual = $sucursales[$user->id_empresa_negocio] ?? null;
+            $view->with('sucursalActual', $sucursales->count() > 1 && $actual ? EmpresaNegocio::etiqueta($actual) : null);
         }
     }
 

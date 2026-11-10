@@ -74,12 +74,13 @@
                                 @foreach (['Activo', 'Inactivo'] as $e)<option @selected($campo('estado') == $e)>{{ $e }}</option>@endforeach
                             </select></label>
                         <label class="text-sm font-medium text-gray-600 sm:col-span-6">Descripción / tipo de negocio
-                            <input name="tipo_negocio" value="{{ $campo('tipo_negocio') }}" maxlength="255" class="{{ $input }}"></label>
-                        <label class="text-sm font-medium text-gray-600 sm:col-span-2">Teléfono
-                            <input name="telefono" value="{{ $campo('telefono') }}" maxlength="30" placeholder="Ej. 965 123 456" class="{{ $input }}"></label>
-                        <label class="text-sm font-medium text-gray-600 sm:col-span-2">Correo
+                            <input name="tipo_negocio" value="{{ $campo('tipo_negocio') }}" maxlength="255" placeholder="Ej. SERIE 1, LOCAL CENTRO" class="{{ $input }}">
+                            <span class="block text-xs font-normal text-gray-400 mt-1">Sale junto al nombre al elegir la sucursal (arriba y en el login), no en los comprobantes: úsala para distinguir sucursales con el mismo nombre.</span></label>
+                        <label class="text-sm font-medium text-gray-600 sm:col-span-6">Teléfonos / celulares
+                            <input name="telefono" value="{{ $campo('telefono') }}" maxlength="150" placeholder="Ej. 917 872369 - 933 902802 - 991 409574" class="{{ $input }}"></label>
+                        <label class="text-sm font-medium text-gray-600 sm:col-span-3">Correo
                             <input type="email" name="correo" value="{{ $campo('correo') }}" maxlength="255" placeholder="ventas@minegocio.com" class="{{ $input }}"></label>
-                        <label class="text-sm font-medium text-gray-600 sm:col-span-2">Web
+                        <label class="text-sm font-medium text-gray-600 sm:col-span-3">Web
                             <input name="web" value="{{ $campo('web') }}" maxlength="255" placeholder="www.minegocio.com" class="{{ $input }}"></label>
 
                         {{-- Logo propio de la sucursal; sin logo propio usa el de la empresa --}}
@@ -213,10 +214,15 @@
                                 @endforeach
                             </div>
                             <label class="block">
-                                <span class="text-sm text-gray-600">Líneas extra de la cabecera <span class="text-gray-400">(opcional)</span></span>
+                                <span class="text-sm text-gray-600">Direcciones o líneas extra de la cabecera <span class="text-gray-400">(opcional)</span></span>
                                 <textarea name="cabecera_a4" rows="3" maxlength="500" class="mt-1 w-full rounded-xl border-gray-300 text-sm"
-                                          placeholder="Ej.: DE: JUAN PÉREZ&#10;VENTA DE MADERA, CARPINTERÍA Y TRANSPORTE DE CARGA">{{ $campo('cabecera_a4') }}</textarea>
-                                <span class="text-xs text-gray-400">Salen debajo del nombre, una por línea, junto a la dirección y el teléfono de la sucursal.</span>
+                                          placeholder="Ej.: PRINCIPAL: AV. ALMIRANTE GRAU 1656 - SUCURSAL: CAL. LOS TRIUNFADORES MZA. C LOTE 20">{{ $campo('cabecera_a4') }}</textarea>
+                                <span class="text-xs text-gray-400">Salen debajo del nombre, una por línea. Si aquí ya escribes la dirección de esta sucursal, no se repite.</span>
+                            </label>
+                            <label class="block">
+                                <span class="text-sm text-gray-600">Giro o actividad del negocio <span class="text-gray-400">(opcional, sale en cursiva)</span></span>
+                                <textarea name="giro_a4" rows="2" maxlength="300" class="mt-1 w-full rounded-xl border-gray-300 text-sm"
+                                          placeholder="Ej.: VENTA DE ARENA BLANCA, AMARILLA Y TIERRA DE COMPACTO DE 18 M3.&#10;VENTA DE MATERIALES DE CONSTRUCCIÓN Y DERIVADOS.">{{ $campo('giro_a4') }}</textarea>
                             </label>
                         </div>
                         <p class="sm:col-span-2 text-xs text-gray-400"><i class="fas fa-circle-info mr-1"></i>Desde el Panel de ventas siempre puedes ver un comprobante en el otro formato. La impresión directa a la impresora térmica (agente) sigue en ticket.</p>

@@ -111,7 +111,7 @@ class SucursalController extends Controller
             'tipo_negocio' => 'nullable|string|max:255',
             'estado' => 'required|in:Activo,Inactivo',
             'direccion' => 'required|string|max:255',
-            'telefono' => 'nullable|string|max:30',
+            'telefono' => 'nullable|string|max:150',
             'correo' => 'nullable|email|max:255',
             'web' => 'nullable|string|max:255',
             'ubigeo' => 'required|digits:6',
@@ -124,6 +124,7 @@ class SucursalController extends Controller
             'formato_impresion' => 'required|in:TICKET,A4',
             'diseno_a4' => 'nullable|in:MODERNO,SIMPLE',
             'cabecera_a4' => 'nullable|string|max:500',
+            'giro_a4' => 'nullable|string|max:300',
             'control_stock' => 'required|in:'.implode(',', array_keys(ControlStock::NIVELES)),
             'comandas_solo_mesas' => 'nullable|boolean',
             'ip_mozos' => 'nullable|string|max:255',
@@ -212,6 +213,7 @@ class SucursalController extends Controller
         $datos['igv_restaurante'] = $request->boolean('igv_restaurante');
         $datos['diseno_a4'] = $datos['diseno_a4'] ?? 'MODERNO';
         $datos['cabecera_a4'] = trim((string) ($datos['cabecera_a4'] ?? '')) ?: null;
+        $datos['giro_a4'] = trim((string) ($datos['giro_a4'] ?? '')) ?: null;
         $datos['clinica_doctor_cobra'] = $request->boolean('clinica_doctor_cobra');
         $datos['tipo_cambio_usd'] = (float) ($datos['tipo_cambio_usd'] ?? 0) > 0 ? round((float) $datos['tipo_cambio_usd'], 3) : null;
 
@@ -265,7 +267,7 @@ class SucursalController extends Controller
         }
         $reglas = [
             'nombre_comercial' => 'required|string|max:255', 'direccion' => 'required|string|max:255',
-            'ubigeo' => 'required|digits:6', 'telefono' => 'nullable|string|max:30', 'correo' => 'nullable|email|max:255',
+            'ubigeo' => 'required|digits:6', 'telefono' => 'nullable|string|max:150', 'correo' => 'nullable|email|max:255',
             'codigofiscal' => 'nullable|digits:4', 'copiar_de' => 'nullable|integer',
         ];
         $nombres = ['nombre_comercial' => 'el nombre de la sucursal', 'direccion' => 'la dirección', 'ubigeo' => 'la ciudad o distrito',

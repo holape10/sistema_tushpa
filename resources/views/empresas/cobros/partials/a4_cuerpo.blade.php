@@ -84,11 +84,13 @@
                 @endif
                 <div class="info">
                     @if (!empty($negocio->cabecera_a4)){!! nl2br(e($negocio->cabecera_a4)) !!}<br>@endif
-                    {{ $negocio->direccion ?? '' }}<br>
+                    {{-- Si las líneas extra ya traen la dirección de la sucursal, no se repite --}}
+                    @unless (!empty($negocio->cabecera_a4) && !empty($negocio->direccion) && str_contains(mb_strtoupper($negocio->cabecera_a4), mb_strtoupper($negocio->direccion))){{ $negocio->direccion ?? '' }}<br>@endunless
                     @if (!empty($negocio->departamento)){{ $negocio->departamento }} - {{ $negocio->provincia }} - {{ $negocio->distrito }}<br>@endif
                     @if (!empty($negocio->telefono)){{ $negocio->telefono }}@endif
                     @if (!empty($negocio->correo)) &nbsp; {{ $negocio->correo }}@endif
                 </div>
+                @if (!empty($negocio->giro_a4))<div class="info" style="font-style:italic">{!! nl2br(e($negocio->giro_a4)) !!}</div>@endif
             </td>
             <td style="width:32%">
                 <div class="numeracion">

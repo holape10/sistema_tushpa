@@ -59,7 +59,7 @@ class AuthenticatedSessionController extends Controller
             return collect();
         }
         $sucursales = EmpresaNegocio::where('estado', 'Activo')->orderBy('id_empresa_negocio')->get(['id_empresa_negocio', 'nombre_comercial', 'tipo_negocio'])
-            ->mapWithKeys(fn ($s) => [(int) $s->id_empresa_negocio => mb_strtoupper(trim((string) ($s->nombre_comercial ?: $s->tipo_negocio)) ?: 'SUCURSAL '.$s->id_empresa_negocio)]);
+            ->mapWithKeys(fn ($s) => [(int) $s->id_empresa_negocio => EmpresaNegocio::etiqueta($s)]);
 
         return $sucursales->count() > 1 ? $sucursales : collect();
     }
