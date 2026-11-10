@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EmpresaNegocio;
 use App\Models\Turno;
+use App\Models\User;
 use App\Support\Bitacora;
 use App\Support\ControlStock;
 use App\Support\DemoDatos;
@@ -298,6 +299,16 @@ class SucursalController extends Controller
      * El administrador pasa a trabajar en otra sucursal (sus ventas, caja y reportes serán de esa sucursal).
      * Su turno de caja es de cada sucursal: el que tenga abierto queda abierto en la sucursal que deja y lo retoma al volver.
      */
+    /** El usuario pasa a trabajar en otra sucursal de su empresa (el administrador, al cambiar o al elegirla en el login) */
+    public static function moverUsuario(User $user, int $sucursal): void
+    {
+        DB::transaction(function () use ($user, $sucursal) {
+            DB::table('users')->where('IdUsuario', $user->IdUsuario)->update(['id_empresa_negocio' => $sucursal]);
+            DB::table('role_user')->where('user_IdUsuario', $user->IdUsuario)->update(['id_empresa_negocio' => $sucursal]);
+        });
+        $user->id_empresa_negocio = $sucursal;
+    }
+
     public function cambiar(Request $request)
     {
         $this->autorizar();
@@ -307,11 +318,7 @@ class SucursalController extends Controller
         }
         $destino = $this->sucursal((int) $request->input('id'));
         $turnoQueDeja = Turno::abiertoDe($user);
-        DB::transaction(function () use ($user, $destino) {
-            DB::table('users')->where('IdUsuario', $user->IdUsuario)->update(['id_empresa_negocio' => $destino->id_empresa_negocio]);
-            DB::table('role_user')->where('user_IdUsuario', $user->IdUsuario)->update(['id_empresa_negocio' => $destino->id_empresa_negocio]);
-        });
-        $user->id_empresa_negocio = $destino->id_empresa_negocio;
+        self::moverUsuario($user, (int) $destino->id_empresa_negocio);
         $turnoAqui = Turno::abiertoDe($user);
 
         $mensaje = "Ahora trabajas en la sucursal {$destino->nombre_comercial}."

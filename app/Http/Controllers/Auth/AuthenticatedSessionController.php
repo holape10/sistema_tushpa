@@ -3,15 +3,19 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\SucursalController;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\Empresa;
+use App\Models\EmpresaNegocio;
 use App\Support\DemoDatos;
 use App\Support\Estudio;
 use App\Support\Rubros;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
@@ -34,7 +38,60 @@ class AuthenticatedSessionController extends Controller
         }
 
         // Empresa sin tipo de negocio (la demo): primero se elige el rubro y al entrar se ve solo su menú
-        return view('auth.login', ['rubros' => Rubros::eligeEnLogin() ? collect(Rubros::RUBROS)->except('COMPLETO') : null]);
+        $rubros = Rubros::eligeEnLogin() ? collect(Rubros::RUBROS)->except('COMPLETO') : null;
+        $sucursales = $rubros ? collect() : self::sucursalesDelLogin();
+
+        return view('auth.login', ['rubros' => $rubros, 'sucursales' => $sucursales,
+            // La de la última vez en este equipo (si sigue activa) o la principal
+            'sucursalElegida' => (int) old('sucursal', $sucursales->has(LoginMovilController::sucursalRecordada($request))
+                ? LoginMovilController::sucursalRecordada($request) : $sucursales->keys()->first())]);
+    }
+
+    /**
+     * Sucursales activas para elegir dónde trabajar al entrar: solo si la empresa tiene más de una (el estudio contable y
+     * la demo eligen de otra forma). id => nombre.
+     *
+     * @return Collection<int, string>
+     */
+    public static function sucursalesDelLogin(): Collection
+    {
+        if (Estudio::activo() || Empresa::count() !== 1) {
+            return collect();
+        }
+        $sucursales = EmpresaNegocio::where('estado', 'Activo')->orderBy('id_empresa_negocio')->get(['id_empresa_negocio', 'nombre_comercial', 'tipo_negocio'])
+            ->mapWithKeys(fn ($s) => [(int) $s->id_empresa_negocio => mb_strtoupper(trim((string) ($s->nombre_comercial ?: $s->tipo_negocio)) ?: 'SUCURSAL '.$s->id_empresa_negocio)]);
+
+        return $sucursales->count() > 1 ? $sucursales : collect();
+    }
+
+    /**
+     * Con varias sucursales: cada usuario entra solo a la suya; el administrador puede entrar a cualquiera y queda
+     * trabajando en la que eligió (como al cambiar de sucursal).
+     */
+    private function entrarALaSucursal(LoginRequest $request): void
+    {
+        $sucursales = self::sucursalesDelLogin();
+        $elegida = (int) $request->input('sucursal');
+        if ($sucursales->isEmpty() || ! $elegida) {
+            return;
+        }
+        $user = $request->user();
+        if (! $sucursales->has($elegida)) {
+            Auth::guard('web')->logout();
+            throw ValidationException::withMessages(['email' => 'Elige una sucursal de la lista.']);
+        }
+        if ((int) $user->id_empresa_negocio === $elegida) {
+            return;
+        }
+        if ($user->esAdmin()) {
+            SucursalController::moverUsuario($user, $elegida);
+
+            return;
+        }
+        $suya = $sucursales[(int) $user->id_empresa_negocio] ?? null;
+        Auth::guard('web')->logout();
+        throw ValidationException::withMessages(['email' => "Tu usuario no es de {$sucursales[$elegida]}."
+            .($suya ? " Elige {$suya} para entrar." : ' Pide al administrador que te asigne esta sucursal.')]);
     }
 
     /**
@@ -43,6 +100,7 @@ class AuthenticatedSessionController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         $request->authenticate();
+        $this->entrarALaSucursal($request);
 
         $request->session()->regenerate();
 

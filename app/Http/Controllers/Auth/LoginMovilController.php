@@ -26,6 +26,12 @@ class LoginMovilController extends Controller
             (string) $request->userAgent());
     }
 
+    /** Sucursal en la que trabajó por última vez este equipo (0 si ninguna) */
+    public static function sucursalRecordada(Request $request): int
+    {
+        return (int) $request->cookie(self::COOKIE);
+    }
+
     public static function recordarSucursal(User $user): void
     {
         Cookie::queue(self::COOKIE, (string) $user->id_empresa_negocio, 60 * 24 * 365);

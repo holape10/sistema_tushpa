@@ -153,6 +153,24 @@
                             </div>
                         </div>
 
+                        {{-- Empresa con varias sucursales: se elige dónde trabajar (cada usuario entra a la suya) --}}
+                        @if (($sucursales ?? collect())->isNotEmpty())
+                            <div>
+                                <label for="sucursal" class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Sucursal</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-emerald-600 pointer-events-none">
+                                        <i class="fas fa-house text-sm"></i>
+                                    </span>
+                                    <select id="sucursal" name="sucursal" required
+                                        class="w-full pl-10 pr-8 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm font-semibold text-gray-700 transition">
+                                        @foreach ($sucursales as $id => $nombre)
+                                            <option value="{{ $id }}" @selected($id === $sucursalElegida)>{{ $nombre }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                        @endif
+
                         <label class="flex items-center gap-2 text-sm text-gray-500 select-none">
                             <input type="checkbox" name="remember" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                             Recordarme
