@@ -247,12 +247,15 @@ class RequerimientoController extends Controller
         ]);
     }
 
-    public function imprimir(int $id): View
+    public function imprimir(Request $request, int $id): View
     {
         $this->autorizar();
         $r = $this->requerimiento($id);
+        // Lo comprado en el mercado (ticket o A4): lo desmarcado (0) no se compró; lo que quedó vacío se compró como se pidió
+        $formato = in_array($request->query('compra'), ['ticket', 'a4'], true) ? $request->query('compra') : null;
 
-        return view('empresas.requerimientos.imprimir', $this->datos($r) + [
+        return view($formato ? 'empresas.requerimientos.imprimir_compra' : 'empresas.requerimientos.imprimir', $this->datos($r) + [
+            'formato' => $formato,
             'empresa' => DB::table('empresa')->where('IdEmpresa', Auth::user()->IdEmpresa)->first(['NomEmpresa']),
             'sucursal' => DB::table('empresa_negocios')->where('id_empresa_negocio', $r->id_empresa_negocio)->first(['nombre_comercial', 'direccion']),
         ]);
