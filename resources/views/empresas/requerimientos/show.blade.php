@@ -102,27 +102,27 @@
             @csrf
             <div class="bg-white rounded-2xl shadow-sm">
                 @if ($puedeComprar)
-                    <p class="px-4 sm:px-5 pt-4 text-sm text-gray-600">🛒 En el mercado: todo viene marcado ✔. <b>Quítale el check a lo que no compraste.</b>
-                        Pon cuánto compraste y a cuánto (precio por unidad, con IGV); lo que dejes vacío se registra tal como se pidió.</p>
+                    <p class="px-4 sm:px-5 pt-4 text-sm text-gray-600">🛒 En el mercado: <b>marca con ✔ lo que vas comprando</b> y pon cuánto y a cuánto (precio por unidad, con IGV;
+                        si lo dejas vacío va el último costo). Lo que quede sin marcar no se compró.</p>
                 @endif
                 <div class="divide-y divide-gray-100">
                     @foreach ($lineas->groupBy(fn ($l) => $l->cat_nom ?? 'Sin categoría') as $categoria => $grupo)
                         <p class="px-4 sm:px-5 pt-3 pb-1 text-xs font-bold uppercase text-gray-400">{{ $categoria }}</p>
                         @foreach ($grupo as $l)
-                            @php $noComprado = $l->comprado !== null && (float) $l->comprado <= 0; @endphp
-                            <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-5 py-3" x-data="{ ok: {{ $noComprado ? 'false' : 'true' }} }" :class="ok ? '' : 'bg-rose-50/60'">
+                            @php $comprado = $l->comprado !== null && (float) $l->comprado > 0; @endphp
+                            <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-5 py-3" x-data="{ ok: {{ $comprado ? 'true' : 'false' }} }" :class="ok ? 'bg-emerald-50/60' : ''">
                                 @if ($puedeComprar)
                                     <input type="checkbox" x-model="ok" class="w-6 h-6 rounded-md border-gray-300 text-emerald-600 focus:ring-emerald-500 shrink-0" title="¿Se compró?">
                                     <template x-if="!ok"><input type="hidden" name="lineas[{{ $l->id }}][comprado]" value="0"></template>
                                 @endif
-                                <div class="flex-1 min-w-40" :class="ok ? '' : 'opacity-60'">
-                                    <p class="font-bold text-gray-800"><span :class="ok ? '' : 'line-through'">{{ $l->pronom }}</span>: <span class="text-indigo-700">{{ $num($l->cantidad) }} {{ $unidad($l->umecod) }}</span>
-                                        @if ($puedeComprar)<span x-show="!ok" x-cloak class="ml-1 text-xs font-bold text-rose-600 no-underline">no se compró</span>@endif</p>
+                                <div class="flex-1 min-w-40">
+                                    <p class="font-bold text-gray-800">{{ $l->pronom }}: <span class="text-indigo-700">{{ $num($l->cantidad) }} {{ $unidad($l->umecod) }}</span>
+                                        @if ($puedeComprar)<span x-show="ok" x-cloak class="ml-1 text-xs font-bold text-emerald-700">✔ comprado</span>@endif</p>
                                     <p class="text-xs text-gray-500">Había {{ $num($l->stock) }}{{ (float) $l->minimo > 0 ? ' · mín. '.$num($l->minimo) : '' }}{{ (float) $l->consumo_dia > 0 ? ' · se gasta '.$num($l->consumo_dia).'/día' : '' }}{{ $l->nota ? ' · '.$l->nota : '' }}</p>
                                 </div>
                                 @if ($puedeComprar)
                                     <label class="text-xs text-gray-500" x-show="ok">Compré
-                                        <input type="number" step="0.001" min="0" name="lineas[{{ $l->id }}][comprado]" value="{{ $l->comprado !== null && ! $noComprado ? $num($l->comprado) : '' }}" placeholder="{{ $num($l->cantidad) }}" :disabled="!ok" class="block w-24 h-10 rounded-xl border-gray-300 text-right font-bold"></label>
+                                        <input type="number" step="0.001" min="0" name="lineas[{{ $l->id }}][comprado]" value="{{ $num($comprado ? $l->comprado : $l->cantidad) }}" :disabled="!ok" :required="ok" class="block w-24 h-10 rounded-xl border-gray-300 text-right font-bold"></label>
                                     <label class="text-xs text-gray-500" x-show="ok">Precio unit. S/
                                         <input type="number" step="0.01" min="0" name="lineas[{{ $l->id }}][precio]" value="{{ $l->precio !== null ? (float) $l->precio : '' }}" placeholder="{{ number_format((float) $l->costo_actual, 2, '.', '') }}" :disabled="!ok" class="block w-28 h-10 rounded-xl border-gray-300 text-right"></label>
                                 @elseif ($l->recibido !== null)

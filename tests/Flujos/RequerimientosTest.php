@@ -190,17 +190,17 @@ class RequerimientosTest extends FlujoTestCase
         $this->assertTrue((bool) DB::table('users')->where('IdUsuario', $this->usuario->IdUsuario)->value('telegram_pedidos'));
     }
 
-    public function test_lo_desmarcado_no_se_compro_y_se_imprime_solo_lo_comprado(): void
+    public function test_lo_que_no_se_marca_no_se_compro_y_se_imprime_solo_lo_comprado(): void
     {
         [$aceite, $azucar, $papel] = [$this->insumo('ACEITE', 10), $this->insumo('AZUCAR', 0), $this->insumo('PAPEL MORADO', 0)];
         $id = $this->pedir($this->cocinero(), [[$aceite, 2], [$azucar, 3], [$papel, 4]]);
         $lineas = DB::table('requerimientos_detalle')->where('requerimiento_id', $id)->pluck('id', 'IdProducto');
 
-        $this->get(route('requerimientos.show', $id))->assertOk()->assertSee('Quítale el check');
-        // El azúcar se desmarcó (llega solo comprado = 0); el papel quedó vacío: se compró lo pedido al último costo (S/ 5)
+        $this->get(route('requerimientos.show', $id))->assertOk()->assertSee('marca con ✔ lo que vas comprando');
+        // Se marcaron el aceite y el papel (sin precio: va el último costo, S/ 5); el azúcar quedó sin marcar (llega comprado = 0)
         $this->post(route('requerimientos.marcar', $id), ['lineas' => [
             $lineas[$aceite->IdProducto] => ['comprado' => 2, 'precio' => 7.5], $lineas[$azucar->IdProducto] => ['comprado' => 0],
-            $lineas[$papel->IdProducto] => ['comprado' => '', 'precio' => ''],
+            $lineas[$papel->IdProducto] => ['comprado' => 4, 'precio' => ''],
         ]])->assertSessionHas('success');
 
         foreach (['ticket', 'a4'] as $formato) {

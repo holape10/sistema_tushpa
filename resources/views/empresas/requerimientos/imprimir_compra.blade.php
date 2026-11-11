@@ -7,15 +7,17 @@
     @php
         $num = fn ($n) => rtrim(rtrim(number_format((float) $n, 3, '.', ''), '0'), '.') ?: '0';
         $unidad = fn ($u) => \App\Support\Recetas::nombreUnidad($u ?: 'NIU');
-        // Lo desmarcado (0) no se compró; lo que quedó vacío se compró tal como se pidió
-        $comprados = $lineas->reject(fn ($l) => $l->comprado !== null && (float) $l->comprado <= 0)->map(function ($l) {
+        // Lo marcado con ✔ se compró; lo sin marcar (0 o aún vacío) no. En los ya comprados de antes, vacío era "tal como se pidió"
+        $vacioEsComprado = $r->estado === 'COMPRADO';
+        $seCompro = fn ($l) => $l->comprado === null ? $vacioEsComprado : (float) $l->comprado > 0;
+        $comprados = $lineas->filter($seCompro)->map(function ($l) {
             $l->cant = (float) ($l->comprado ?? $l->cantidad);
             $l->pu = (float) ($l->precio ?? $l->costo_actual);
             $l->importe = round($l->cant * $l->pu, 2);
 
             return $l;
         });
-        $noComprados = $lineas->filter(fn ($l) => $l->comprado !== null && (float) $l->comprado <= 0);
+        $noComprados = $lineas->reject($seCompro);
         $total = $comprados->sum('importe');
         $ticket = $formato === 'ticket';
     @endphp
