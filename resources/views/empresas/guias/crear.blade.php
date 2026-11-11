@@ -124,7 +124,11 @@
 
         {{-- 5. Bienes --}}
         <div class="{{ $caja }}">
-            <h3 class="{{ $tit }} text-violet-700"><span class="w-6 h-6 rounded-full bg-violet-600 text-white flex items-center justify-center text-xs">5</span> Bienes que se trasladan</h3>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="{{ $tit }} text-violet-700"><span class="w-6 h-6 rounded-full bg-violet-600 text-white flex items-center justify-center text-xs">5</span> Bienes que se trasladan</h3>
+                {{-- Bien que no está en Productos: se escribe a mano (descripción, unidad y cantidad) --}}
+                <button type="button" @click="lineaLibre()" class="mb-4 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold">+ Línea libre</button>
+            </div>
             <div class="relative mb-3">
                 <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
                 <input x-model="busca" @input.debounce.300ms="buscarProducto()" @keydown.enter.prevent="agregarLibre()" placeholder="Buscar producto por nombre o código (Enter agrega una línea libre)" class="{{ $in }} pl-9">
@@ -143,7 +147,7 @@
                         <template x-for="(it, i) in items" :key="i">
                             <tr>
                                 <td class="px-2 py-1.5"><input x-model="it.codigo" maxlength="30" class="{{ $in }}"></td>
-                                <td class="px-2 py-1.5"><input x-model="it.descripcion" maxlength="250" class="{{ $in }} uppercase"></td>
+                                <td class="px-2 py-1.5"><input x-model="it.descripcion" :id="'guia-des-' + i" maxlength="250" :placeholder="it.IdProducto ? '' : 'Descripción (línea libre)'" class="{{ $in }} uppercase"></td>
                                 <td class="px-2 py-1.5"><select x-model="it.umecod" class="{{ $in }}">@foreach ($unidades as $u)<option value="{{ $u->umecod }}">{{ $u->umenom }}</option>@endforeach</select></td>
                                 <td class="px-2 py-1.5"><input type="number" step="0.001" min="0" x-model.number="it.cantidad" class="{{ $in }} text-right"></td>
                                 <td class="px-2"><button type="button" @click="items.splice(i, 1)" class="text-rose-500 hover:text-rose-700"><i class="fas fa-trash"></i></button></td>
@@ -151,7 +155,7 @@
                         </template>
                     </tbody>
                 </table>
-                <p x-show="!items.length" class="py-6 text-center text-gray-400 text-sm">Busca productos arriba o escribe una descripción y presiona Enter.</p>
+                <p x-show="!items.length" class="py-6 text-center text-gray-400 text-sm">Busca productos arriba, o toca <b>+ Línea libre</b> para escribir uno a mano.</p>
             </div>
             <label class="block text-sm mt-4">Observación <span class="text-gray-400">(opcional)</span>
                 <input x-model="g.observacion" maxlength="250" class="{{ $in }} mt-1"></label>
@@ -214,6 +218,12 @@
                     if (!Array.isArray(this.resultados)) this.resultados = [];
                 },
                 agregar(p) { this.items.push({ IdProducto: p.IdProducto, codigo: p.procod, descripcion: p.pronom, umecod: p.umecod || 'NIU', cantidad: 1 }); this.busca = ''; this.resultados = []; },
+                // Línea a mano, vacía: se escribe la descripción y se elige la unidad y la cantidad
+                lineaLibre() {
+                    this.items.push({ IdProducto: null, codigo: '', descripcion: '', umecod: 'NIU', cantidad: 1 });
+                    const i = this.items.length - 1;
+                    this.$nextTick(() => document.getElementById('guia-des-' + i)?.focus());
+                },
                 agregarLibre() {
                     if (this.resultados.length) return this.agregar(this.resultados[0]);
                     if (this.busca.trim().length < 2) return;
