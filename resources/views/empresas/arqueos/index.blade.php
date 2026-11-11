@@ -25,6 +25,33 @@
         </div>
     </div>
 
+    @if ($puedeDiario)
+        <form action="{{ route('arqueos.diario') }}" target="_blank" class="bg-white rounded-2xl shadow-sm p-5 flex flex-wrap items-end gap-3">
+            <div class="flex-1 min-w-56">
+                <h2 class="font-bold text-gray-700">🖨 Arqueo diario de caja</h2>
+                <p class="text-xs text-gray-500">Para imprimir: ventas con su medio de pago, crédito, cobranzas, pagos, gastos, otros ingresos y el resumen del efectivo del día.</p>
+            </div>
+            <label class="text-xs text-gray-500">Día <input type="date" name="fecha" value="{{ now()->toDateString() }}" class="block h-9 rounded-lg border-gray-300 text-sm"></label>
+            @if ($admin)
+                <label class="text-xs text-gray-500">Cajero
+                    <select name="usuario" class="block h-9 rounded-lg border-gray-300 text-sm">
+                        <option value="">Todos</option>
+                        @foreach ($cajeros as $id => $nombre)<option value="{{ $id }}">{{ $nombre }}</option>@endforeach
+                    </select></label>
+            @endif
+            <button class="h-9 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">Ver PDF</button>
+        </form>
+    @endif
+
+    @if ($totales && $totales->n)
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div class="bg-white rounded-2xl shadow-sm p-3"><p class="text-xs uppercase text-gray-500">Arqueos</p><p class="text-xl font-extrabold">{{ $totales->n }}</p></div>
+            <div class="bg-white rounded-2xl shadow-sm p-3"><p class="text-xs uppercase text-gray-500">Cuadraron</p><p class="text-xl font-extrabold text-emerald-600">{{ (int) $totales->cuadran }}</p></div>
+            <div class="bg-white rounded-2xl shadow-sm p-3"><p class="text-xs uppercase text-gray-500">Faltó en total</p><p class="text-xl font-extrabold text-rose-600">S/ {{ number_format($totales->falta, 2) }}</p></div>
+            <div class="bg-white rounded-2xl shadow-sm p-3"><p class="text-xs uppercase text-gray-500">Sobró en total</p><p class="text-xl font-extrabold text-amber-600">S/ {{ number_format($totales->sobra, 2) }}</p></div>
+        </div>
+    @endif
+
     <div class="bg-white rounded-2xl shadow-sm">
         <form class="px-5 pt-4 pb-2 flex flex-wrap items-end gap-3">
             <h2 class="flex-1 font-bold text-gray-700">Arqueos hechos</h2>
@@ -36,7 +63,7 @@
             <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr><th class="px-4 py-2 text-left">Fecha</th><th class="px-4 py-2 text-left">Caja (turno)</th><th class="px-4 py-2 text-left">Contó</th>
-                        <th class="px-4 py-2 text-right">Debía haber</th><th class="px-4 py-2 text-right">Contado</th><th class="px-4 py-2 text-right">Diferencia</th><th></th></tr>
+                        <th class="px-4 py-2 text-right">Vendido</th><th class="px-4 py-2 text-right">Debía haber</th><th class="px-4 py-2 text-right">Contado</th><th class="px-4 py-2 text-right">Diferencia</th><th></th></tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     @forelse ($arqueos as $a)
@@ -45,6 +72,8 @@
                             <td class="px-4 py-2 whitespace-nowrap">{{ \Carbon\Carbon::parse($a->created_at)->format('d/m/Y H:i') }}</td>
                             <td class="px-4 py-2">N° {{ $a->turno }} · {{ $a->nombre_cajero }}</td>
                             <td class="px-4 py-2">{{ $a->conto }}</td>
+                            @php $fotoA = json_decode((string) ($a->resumen ?? ''), true); @endphp
+                            <td class="px-4 py-2 text-right text-gray-600">{{ $oculto || ! $fotoA ? '—' : 'S/ '.number_format($fotoA['ventas_total'], 2) }}</td>
                             <td class="px-4 py-2 text-right">{{ $oculto ? '—' : 'S/ '.number_format($a->esperado, 2) }}</td>
                             <td class="px-4 py-2 text-right font-semibold">S/ {{ number_format($a->contado, 2) }}</td>
                             <td class="px-4 py-2 text-right font-bold {{ $oculto ? 'text-gray-400' : ((float) $a->diferencia < 0 ? 'text-rose-600' : ((float) $a->diferencia > 0 ? 'text-amber-600' : 'text-emerald-600')) }}">
@@ -52,7 +81,7 @@
                             <td class="px-4 py-2 text-right"><a href="{{ route('arqueos.show', $a->id) }}" class="text-indigo-600 font-semibold hover:underline">Ver</a></td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">Aún no hay arqueos en estas fechas.</td></tr>
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">Aún no hay arqueos en estas fechas.</td></tr>
                     @endforelse
                 </tbody>
             </table>

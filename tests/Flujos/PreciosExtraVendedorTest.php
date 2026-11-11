@@ -2,9 +2,11 @@
 
 namespace Tests\Flujos;
 
+use App\Models\Central\Cliente;
 use App\Models\Turno;
 use App\Models\User;
 use App\Support\CatalogoVenta;
+use App\Support\Rubros;
 use App\Support\VentaDirecta;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -55,7 +57,7 @@ class PreciosExtraVendedorTest extends FlujoTestCase
         $cemento = $this->producto('CEMENTO SOL', 32, 50);
         DB::table('productos')->where('IdProducto', $cemento->IdProducto)->update(['precio2' => 29]);
 
-        $this->assertSame([['nombre' => 'Precio 2', 'precio' => 29.0]],
+        $this->assertSame([['nombre' => 'Precio x Mayor', 'precio' => 29.0]],
             CatalogoVenta::porIds($this->usuario, [$cemento->IdProducto])[$cemento->IdProducto]['precios']);
     }
 
@@ -104,5 +106,15 @@ class PreciosExtraVendedorTest extends FlujoTestCase
         $this->excelProductos("Codigo,Nombre,Precio venta\nP1,CEMENTO SOL,32\nP2,CEMENTO SOL,35\n")->assertSessionHasNoErrors();
 
         $this->assertSame(1, DB::table('productos')->where('id_empresa_negocio', $this->sucursal)->where('pronom', 'CEMENTO SOL')->count());
+    }
+
+    public function test_en_comercio_no_se_crean_insumos_ni_preparados(): void
+    {
+        $cliente = new Cliente(['rubro' => 'GENERAL']);
+        $cliente->id = 999999;
+        app()->instance('tenancy.cliente', $cliente);
+
+        $this->assertSame([0, 6], Rubros::tiposProducto(), 'Comercio: producto y combo.');
+        $this->post(route('productos.store'), ['promocion' => 4, 'pronom' => 'HARINA', 'umecod' => 'KGM', 'costo' => 3])->assertSessionHasErrors('promocion');
     }
 }

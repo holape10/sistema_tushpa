@@ -4,6 +4,8 @@ namespace Tests\Flujos;
 
 use App\Models\Turno;
 use App\Models\User;
+use App\Support\ArqueoDiario;
+use App\Support\Cuentas;
 use App\Support\VentaDirecta;
 use Illuminate\Support\Facades\DB;
 
@@ -70,19 +72,28 @@ class CierreCiegoTest extends FlujoTestCase
         $this->get(route('turnos.show', $this->turno->id_turno))->assertOk();
     }
 
-    public function test_el_arqueo_cuenta_la_caja_sin_cerrar_el_turno_y_dice_cuanto_falta(): void
+    public function test_el_arqueo_cuenta_la_caja_sin_cerrar_el_turno_y_guarda_el_resumen_completo(): void
     {
         $plato = $this->producto('JUANE', 15, 10);
         VentaDirecta::registrar($this->usuario, $this->venta([[$plato, 2]], '13'), 'PV');   // S/ 30 en efectivo
+        DB::table('movimientoscaja')->insert(['tip_caj_id' => '003', 'mov_com' => 'COMPRA DE HIELO', 'importe' => 4, 'estado' => 'ACTIVO',
+            'mov_fecha' => now()->toDateString(), 'registro' => now(), 'id_turno' => $this->turno->id_turno, 'IdUsuario' => $this->usuario->IdUsuario,
+            'IdEmpresa' => $this->usuario->IdEmpresa, 'id_empresa_negocio' => $this->sucursal]);
 
-        $this->post(route('arqueos.store', $this->turno->id_turno), ['billetes' => ['cant_c_20_soles' => 1, 'cant_m_5_soles' => 1], 'observacion' => 'sorpresa'])
+        $this->get(route('arqueos.create', $this->turno->id_turno))->assertOk()->assertSee('Cómo está la caja ahora')->assertSee('COMPRA DE HIELO');
+        $this->post(route('arqueos.store', $this->turno->id_turno), ['billetes' => ['cant_c_20_soles' => 1, 'cant_m_1_sol' => 1], 'observacion' => 'sorpresa'])
             ->assertRedirect();
 
         $a = DB::table('arqueos_caja')->where('id_turno', $this->turno->id_turno)->first();
-        $this->assertEquals([30.0, 25.0, -5.0], [(float) $a->esperado, (float) $a->contado, (float) $a->diferencia]);
+        $this->assertEquals([26.0, 21.0, -5.0], [(float) $a->esperado, (float) $a->contado, (float) $a->diferencia], 'Debe haber 30 de ventas − 4 de egreso.');
         $this->assertSame('ABIERTO', $this->turno->fresh()->estado, 'El arqueo no cierra el turno.');
-        $this->get(route('arqueos.show', $a->id))->assertOk()->assertSee('FALTA')->assertSee('5.00');
-        $this->get(route('arqueos.index'))->assertOk()->assertSee('Falta S/ 5.00');
+        $foto = json_decode($a->resumen, true);
+        $this->assertSame([30.0, 4.0, 1], [(float) $foto['ventas_total'], (float) $foto['egresos'], $foto['operaciones']]);
+        $this->assertSame('COMPRA DE HIELO', $foto['movimientos'][0]['detalle']);
+
+        $this->get(route('arqueos.show', $a->id))->assertOk()->assertSee('Falta')->assertSee('5.00')->assertSee('Billete S/ 20')->assertSee('COMPRA DE HIELO')
+            ->assertSee('Total vendido');
+        $this->get(route('arqueos.index'))->assertOk()->assertSee('Falta S/ 5.00')->assertSee('Faltó en total');
     }
 
     public function test_un_turno_cerrado_ya_no_se_arquea(): void
@@ -90,5 +101,34 @@ class CierreCiegoTest extends FlujoTestCase
         $this->turno->update(['estado' => 'CERRADO']);
 
         $this->post(route('arqueos.store', $this->turno->id_turno), ['monto' => 10])->assertNotFound();
+    }
+
+    public function test_el_arqueo_diario_junta_ventas_credito_cobranzas_gastos_y_el_efectivo_del_dia(): void
+    {
+        $plato = $this->producto('JUANE', 15, 10);
+        VentaDirecta::registrar($this->usuario, $this->venta([[$plato, 2]], '03'), 'PV');
+        VentaDirecta::registrar($this->usuario, $this->venta([[$plato, 1, 10]], '13'), 'PV');
+        $alCredito = VentaDirecta::registrar($this->usuario, $this->venta([[$plato, 1, 500]], '01', ['estadopago' => $this->credito,
+            'fecVen' => now()->addDays(30)->toDateString(), 'id_med_pag' => [], 'mon_med_pag' => [], 'paga' => 0]), 'PV');
+        Cuentas::registrarPago($this->usuario, 'cobrar', (int) DB::table('cuentas_cobrar')->where('IdCpe_cabecera', $alCredito)->value('cue_cob_id'),
+            ['fecha' => now()->toDateString(), 'medios' => [['id' => $this->efectivo, 'monto' => 200]]]);
+        foreach ([['003', 'COMPRA DE HIELO', 4], ['008', 'DEVOLUCION DE PRESTAMO', 6]] as [$tipo, $detalle, $importe]) {
+            DB::table('movimientoscaja')->insert(['tip_caj_id' => $tipo, 'mov_com' => $detalle, 'importe' => $importe, 'estado' => 'ACTIVO',
+                'mov_fecha' => now()->toDateString(), 'registro' => now(), 'id_turno' => $this->turno->id_turno, 'IdUsuario' => $this->usuario->IdUsuario,
+                'IdEmpresa' => $this->usuario->IdEmpresa, 'id_empresa_negocio' => $this->sucursal]);
+        }
+
+        $d = ArqueoDiario::datos($this->sucursal, now()->toDateString());
+        $t = $d['totales'];
+        $fondo = (float) DB::table('turnos')->where('id_empresa_negocio', $this->sucursal)->whereDate('apertura', now()->toDateString())->sum('monto');
+
+        $this->assertEquals([540.0, 500.0, 200.0, 4.0, 6.0], [$t['ventas'], $t['credito'], $t['cobranzas'], $t['gastos'], $t['otros']]);
+        $this->assertEquals([30.0, 10.0, 0.0, 200.0], [$t['ingresos']['boletas'], $t['ingresos']['notas'], $t['ingresos']['facturas'], $t['ingresos']['cobranzas']]);
+        $this->assertEquals(round($fondo + 30 + 10 + 200 + 6 - 4, 2), $t['saldo'], 'Saldo = fondo + ventas y cobranzas en efectivo + otros ingresos - gastos.');
+        $this->assertCount(1, $d['credito']);
+
+        $this->get(route('arqueos.diario', ['fecha' => now()->toDateString()]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->ciego(true);
+        $this->actingAs($this->cajero)->get(route('arqueos.diario'))->assertForbidden();
     }
 }

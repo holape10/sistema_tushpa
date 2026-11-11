@@ -87,6 +87,10 @@
                             <div class="inline-flex flex-wrap justify-end gap-1.5">
                                 <a href="{{ route('proformas.imprimir', $p->id_proforma) }}" target="_blank"
                                    class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200">🖨 Imprimir</a>
+                                @if (auth()->user()->esAdminOCaja() && $p->estado !== 'ANULADA')
+                                    <a href="{{ route('guias.crear', ['proforma' => $p->id_proforma]) }}" title="Guía de remisión con el cliente y los productos de esta proforma"
+                                       class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100">🚚 Guía</a>
+                                @endif
                                 @if ($p->estado === 'PENDIENTE')
                                     <a href="{{ \App\Http\Controllers\ProformaController::urlCaja($p) }}"
                                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100">✏️ Editar</a>

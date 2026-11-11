@@ -37,7 +37,8 @@ class ArqueoCaja
         if ($contado === null) {
             throw new \RuntimeException('Cuenta el efectivo: los billetes y monedas, o escribe el total.');
         }
-        $esperado = TurnoController::resumen($turno)['efectivoEsperado'];
+        $r = TurnoController::resumen($turno);
+        $esperado = $r['efectivoEsperado'];
         $diferencia = round($contado - $esperado, 2);
 
         $id = DB::table('arqueos_caja')->insertGetId([
@@ -45,6 +46,7 @@ class ArqueoCaja
             'cajero' => $turno->IdUsuario, 'esperado' => $esperado, 'contado' => $contado, 'diferencia' => $diferencia,
             'billetes' => $cantidades ? json_encode($cantidades) : null,
             'observacion' => mb_substr(trim((string) $observacion), 0, 300) ?: null, 'created_at' => now(),
+            'resumen' => json_encode(self::foto($turno, $r)),
         ]);
 
         if ($diferencia <= -self::AVISAR_DESDE) {
@@ -54,6 +56,29 @@ class ArqueoCaja
         }
 
         return $id;
+    }
+
+    /**
+     * Cómo estaba la caja en el momento del arqueo: así se ve después aunque se siga vendiendo.
+     *
+     * @return array<string, mixed>
+     */
+    public static function foto(Turno $turno, array $r): array
+    {
+        $activos = $r['movimientos']->where('estado', 'ACTIVO');
+
+        return [
+            'fondo' => round((float) $turno->monto, 2), 'ventas_total' => (float) $r['ventasTotal'], 'ventas_credito' => (float) $r['ventasCredito'],
+            'ventas_efectivo' => (float) $r['ventasEfectivo'], 'ingresos' => (float) $r['ingresos'], 'egresos' => (float) $r['egresos'],
+            'dolares_usd' => (float) $r['dolaresUsd'], 'dolares_soles' => (float) $r['dolaresSoles'], 'esperado' => (float) $r['efectivoEsperado'],
+            'operaciones' => (int) $r['comprobantes']->sum('cantidad'),
+            'por_medio' => $r['ventasPorMedio']->map(fn ($m) => ['medio' => $m->nom_med_pag ?: 'SIN MEDIO', 'monto' => round((float) $m->monto, 2),
+                'operaciones' => (int) $m->operaciones])->values()->all(),
+            'por_comprobante' => $r['comprobantes']->map(fn ($c) => ['tipo' => $c->tdodes ?: $c->tdocod, 'cantidad' => (int) $c->cantidad,
+                'total' => round((float) $c->total, 2)])->values()->all(),
+            'movimientos' => $activos->map(fn ($m) => ['tipo' => $m->tipo, 'concepto' => $m->tip_caj_nom, 'detalle' => (string) $m->mov_com,
+                'importe' => round((float) $m->importe, 2), 'usuario' => $m->apeusu, 'hora' => $m->registro])->values()->all(),
+        ];
     }
 
     /** Turnos abiertos que este usuario puede arquear: el administrador, los de la sucursal; el cajero, el suyo */

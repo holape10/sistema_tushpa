@@ -4,11 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Turno;
 use App\Support\ArqueoCaja;
+use App\Support\ArqueoDiario;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 
 /** Arqueo de caja: contar el efectivo de un turno abierto en cualquier momento, sin cerrarlo, y su historial */
 class ArqueoCajaController extends Controller
@@ -35,8 +39,16 @@ class ArqueoCajaController extends Controller
         $desde = (string) $request->get('desde', now()->subDays(30)->toDateString());
         $hasta = (string) $request->get('hasta', now()->toDateString());
 
+        $base = DB::table('arqueos_caja as a')->where('a.id_empresa_negocio', $user->id_empresa_negocio)
+            ->when(! $user->esAdmin(), fn ($q) => $q->where(fn ($w) => $w->where('a.cajero', $user->IdUsuario)->orWhere('a.IdUsuario', $user->IdUsuario)))
+            ->whereDate('a.created_at', '>=', $desde)->whereDate('a.created_at', '<=', $hasta);
+
         return view('empresas.arqueos.index', [
             'abiertos' => ArqueoCaja::turnosAbiertos($user), 'desde' => $desde, 'hasta' => $hasta, 'admin' => $user->esAdmin(),
+            'puedeDiario' => $this->puedeDiario(), 'cajeros' => $user->esAdmin() ? DB::table('users')->where('id_empresa_negocio', $user->id_empresa_negocio)
+                ->orderBy('apeusu')->pluck('apeusu', 'IdUsuario') : collect(),
+            'totales' => $user->esAdmin() ? (clone $base)->selectRaw('COUNT(*) AS n, SUM(CASE WHEN diferencia < 0 THEN -diferencia ELSE 0 END) AS falta,
+                SUM(CASE WHEN diferencia > 0 THEN diferencia ELSE 0 END) AS sobra, SUM(CASE WHEN diferencia = 0 THEN 1 ELSE 0 END) AS cuadran')->first() : null,
             'arqueos' => DB::table('arqueos_caja as a')->join('turnos as t', 't.id_turno', '=', 'a.id_turno')
                 ->leftJoin('users as u', 'u.IdUsuario', '=', 'a.IdUsuario')->leftJoin('users as c', 'c.IdUsuario', '=', 'a.cajero')
                 ->where('a.id_empresa_negocio', $user->id_empresa_negocio)
@@ -54,7 +66,7 @@ class ArqueoCajaController extends Controller
         $ciego = $t->esCiegoPara(Auth::user());
 
         return view('empresas.arqueos.create', ['turno' => $t, 'denominaciones' => Turno::DENOMINACIONES, 'ciego' => $ciego,
-            'r' => $ciego ? null : TurnoController::resumen($t)]);
+            'foto' => $ciego ? null : ArqueoCaja::foto($t, TurnoController::resumen($t))]);
     }
 
     public function store(Request $request, int $turno): RedirectResponse
@@ -86,5 +98,47 @@ class ArqueoCajaController extends Controller
 
         return view('empresas.arqueos.show', ['a' => $a, 'ciego' => $ciego, 'denominaciones' => Turno::DENOMINACIONES,
             'negocio' => DB::table('empresa_negocios')->where('id_empresa_negocio', $a->id_empresa_negocio)->value('nombre_comercial')]);
+    }
+
+    /** Con cierre ciego el cajero no puede ver cuánto debía haber: el arqueo diario lo ve solo el administrador */
+    private function puedeDiario(): bool
+    {
+        $user = Auth::user();
+
+        return $user->esAdmin() || ! DB::table('empresa_negocios')->where('id_empresa_negocio', $user->id_empresa_negocio)->value('cierre_ciego');
+    }
+
+    /** Arqueo diario de caja en PDF (formato del sistema antiguo): el administrador, de toda la sucursal o de un cajero; el cajero, lo suyo */
+    public function diario(Request $request): Response
+    {
+        $this->autorizar();
+        abort_unless($this->puedeDiario(), 403, 'Con cierre ciego, el arqueo diario lo ve el administrador.');
+        $user = Auth::user();
+        $d = $request->validate(['fecha' => 'nullable|date', 'usuario' => 'nullable|integer']);
+        $fecha = $d['fecha'] ?? now()->toDateString();
+        $usuario = $user->esAdmin() ? (isset($d['usuario']) ? (int) $d['usuario'] : null) : (int) $user->IdUsuario;
+
+        $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $user->id_empresa_negocio)->first(['nombre_comercial', 'direccion', 'IdEmpresa']);
+        $empresa = DB::table('empresa')->where('IdEmpresa', $negocio->IdEmpresa)->first(['NomEmpresa', 'DirEmpresa']);
+        $varias = DB::table('empresa_negocios')->where('IdEmpresa', $negocio->IdEmpresa)->where('estado', 'Activo')->count() > 1;
+
+        $datos = ArqueoDiario::datos((int) $user->id_empresa_negocio, $fecha, $usuario);
+        $html = view('empresas.arqueos.diario_pdf', $datos + [
+            'empresa' => $empresa->NomEmpresa, 'direccion' => $negocio->direccion ?: $empresa->DirEmpresa, 'ruc' => $negocio->IdEmpresa,
+            'sucursal' => $varias ? $negocio->nombre_comercial : null,
+            'cajero' => $usuario ? DB::table('users')->where('IdUsuario', $usuario)->value('apeusu') : null,
+        ])->render();
+
+        $opciones = new Options;
+        $opciones->set('defaultFont', 'DejaVu Sans');
+        $opciones->set('isRemoteEnabled', false);
+        $pdf = new Dompdf($opciones);
+        $pdf->loadHtml($html, 'UTF-8');
+        // Con muchos medios de pago las columnas no entran a lo alto
+        $pdf->setPaper('A4', $datos['medios']->count() > 4 ? 'landscape' : 'portrait');
+        $pdf->render();
+
+        return response($pdf->output(), 200, ['Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="Arqueo_Diario_'.$fecha.'.pdf"']);
     }
 }

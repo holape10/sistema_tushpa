@@ -119,7 +119,7 @@ class ProductoController extends Controller
     }
 
     private const NOMBRES = [
-        'pronom' => 'Nombre del producto', 'unspsc' => 'Código de existencia (8 dígitos UNSPSC o 16 del CUBSO)', 'tipo_existencia' => 'Tipo de existencia', 'debe' => 'Cuenta Debe', 'haber' => 'Cuenta Haber', 'propun' => 'Precio de venta', 'precio2' => 'Precio 2', 'precio3' => 'Precio 3', 'promocion' => 'Tipo', 'codigo_barra' => 'Código de barras',
+        'pronom' => 'Nombre del producto', 'unspsc' => 'Código de existencia (8 dígitos UNSPSC o 16 del CUBSO)', 'tipo_existencia' => 'Tipo de existencia', 'debe' => 'Cuenta Debe', 'haber' => 'Cuenta Haber', 'propun' => 'Precio de venta', 'precio2' => 'Precio x Mayor', 'precio3' => 'Precio Especial', 'promocion' => 'Tipo', 'codigo_barra' => 'Código de barras',
         'ume_equivalente' => 'Unidad equivalente', 'factor_equivalente' => 'Factor de equivalencia', 'imagen' => 'Imagen', 'fotos_extra' => 'Más fotos', 'fotos_extra.*' => 'Foto',
         'presentaciones.*.umecod' => 'Unidad de la presentación', 'presentaciones.*.factor' => 'Factor de la presentación',
         'presentaciones.*.precio' => 'Precio de la presentación', 'presentaciones.*.codigo_barra' => 'Código de barras de la presentación',

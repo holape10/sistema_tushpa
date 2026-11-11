@@ -13,7 +13,8 @@
             <div>
                 <h1 class="text-2xl font-extrabold text-gray-800"><i class="fas fa-truck-fast text-indigo-600"></i> Guía de remisión electrónica</h1>
                 <p class="text-sm text-gray-500">Número que tendrá: <b>{{ $serie }}-{{ $siguiente }}</b>
-                    @if ($venta) · de la venta <b>{{ $guia['doc_numero'] ?: 'N° interno '.$venta }}</b> (cliente y productos ya cargados)@endif</p>
+                    @if ($venta) · de la venta <b>{{ $guia['doc_numero'] ?: 'N° interno '.$venta }}</b> (cliente y productos ya cargados)@endif
+                    @if ($proforma ?? null) · de la proforma <b>{{ $proforma }}</b> (cliente y productos ya cargados; revisa las cantidades)@endif</p>
             </div>
             <a href="{{ route('guias.index') }}" class="px-4 py-2 rounded-xl bg-white border text-sm font-semibold text-gray-600 hover:bg-gray-50"><i class="fas fa-list"></i> Ver guías</a>
         </div>

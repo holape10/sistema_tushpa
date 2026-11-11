@@ -5,7 +5,7 @@
 --}}
 @php
     $p = $producto ?? null;
-    $campo = 'w-full h-11 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500';
+    $campo = 'w-full h-9 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500';
     $tipos = [
         0 => ['🥤', 'Producto', 'Se vende tal cual (gaseosas, abarrotes, snacks).'],
         4 => ['🧅', 'Insumo', 'Materia prima para preparar otros productos. No se vende.'],
@@ -28,7 +28,7 @@
     @if ($p) @method('PUT') @endif
 
     {{-- Encabezado: tipo --}}
-    <div class="bg-white rounded-2xl shadow-sm p-4 sm:p-5 mb-6">
+    <div class="bg-white rounded-2xl shadow-sm p-3 mb-3">
         @if ($p)
             <div class="flex flex-wrap items-center gap-3">
                 <span class="text-3xl">{{ $tipos[(int) $p->promocion][0] ?? '🥤' }}</span>
@@ -48,17 +48,17 @@
                 </label>
             </div>
         @else
-            <p class="text-sm font-semibold text-gray-700 mb-3">¿Qué vas a registrar?</p>
+            <p class="text-sm font-semibold text-gray-700 mb-2">¿Qué vas a registrar?</p>
             <div class="grid grid-cols-2 {{ count($tipos) > 2 ? 'lg:grid-cols-4' : '' }} gap-3">
                 @foreach ($tipos as $valor => [$icono, $nombre, $ayuda])
                     <label class="relative cursor-pointer">
                         <input type="radio" name="promocion" value="{{ $valor }}" x-model="tipo" class="peer sr-only">
-                        <div class="h-full border-2 rounded-xl p-3 flex items-start gap-3 border-gray-200 transition
+                        <div class="h-full border-2 rounded-xl px-3 py-2 flex items-center gap-3 border-gray-200 transition
                                     peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300 hover:border-gray-300">
                             <span class="text-2xl leading-none">{{ $icono }}</span>
                             <span>
                                 <span class="block text-sm font-bold text-gray-800">{{ $nombre }}</span>
-                                <span class="hidden sm:block text-xs text-gray-500 leading-snug mt-0.5">{{ $ayuda }}</span>
+                                <span class="hidden lg:block text-[11px] text-gray-500 leading-snug">{{ $ayuda }}</span>
                             </span>
                         </div>
                     </label>
@@ -67,25 +67,24 @@
         @endif
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
 
         {{-- ================= Columna principal ================= --}}
-        <div class="lg:col-span-2 space-y-6 min-w-0">
+        <div class="lg:col-span-2 space-y-4 min-w-0">
 
             {{-- Información general --}}
             <section class="bg-white rounded-2xl shadow-sm">
-                <header class="px-5 py-4 border-b border-gray-100">
+                <header class="px-4 py-2.5 border-b border-gray-100">
                     <h3 class="font-bold text-gray-800">Información general</h3>
-                    <p class="text-xs text-gray-400">Nombre, códigos y clasificación.</p>
                 </header>
-                <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-3">
                     <div class="sm:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-0.5">Nombre *</label>
                         <input type="text" name="pronom" value="{{ old('pronom', $p->pronom ?? '') }}" required maxlength="150"
                                class="{{ $campo }} uppercase font-semibold">
                     </div>
                     <div class="sm:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Descripción <span class="text-xs font-normal text-gray-400">(opcional · sale en la carta digital, ej.: "Ron, menta, limón, soda")</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-0.5">Descripción <span class="text-xs font-normal text-gray-400">(opcional, sale en la carta)</span></label>
                         <input type="text" name="descripcion" value="{{ old('descripcion', $p->descripcion ?? '') }}" maxlength="255"
                                class="{{ $campo }}">
                     </div>
@@ -93,7 +92,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Código interno</label>
                         @if ($p)
-                            <input type="text" value="{{ $p->procod }}" disabled class="w-full h-11 rounded-xl border-gray-200 bg-gray-100 text-sm text-gray-500">
+                            <input type="text" value="{{ $p->procod }}" disabled class="w-full h-9 rounded-xl border-gray-200 bg-gray-100 text-sm text-gray-500">
                         @else
                             <input type="text" name="procod" value="{{ old('procod') }}" maxlength="20" placeholder="Se genera solo si lo dejas vacío" class="{{ $campo }}">
                         @endif
@@ -109,25 +108,22 @@
                                 <option value="{{ $u->umecod }}">{{ $u->umenom }} — {{ $sunat === strtoupper($u->umecod) ? 'SUNAT '.$sunat : 'a SUNAT va como NIU (unidad)' }}</option>
                             @endforeach
                         </select>
-                        <p class="text-xs text-gray-400 mt-1">Unidad predeterminada de venta y stock. En el ticket sale con su nombre; a SUNAT siempre va un código vigente.</p>
                     </div>
 
                     {{-- Para el Kardex SUNAT (formatos 12.1 y 13.1 del PLE): solo lo que maneja stock --}}
                     <div x-show="tipo == '0' || tipo == '4'" x-cloak>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Código de existencia <span class="font-normal text-gray-400">(Kardex SUNAT, opcional)</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-0.5" title="Código de existencia para el Kardex SUNAT (opcional)">Cód. existencia SUNAT</label>
                         <input type="text" name="unspsc" x-ref="codigoSunat" value="{{ old('unspsc', $p->unspsc ?? '') }}" maxlength="16" inputmode="numeric" pattern="\d{8}|\d{16}"
-                               list="codigos-sunat" placeholder="Escribe: agua, gasolina, lácteos…" class="{{ $campo }} font-mono">
+                               list="codigos-sunat" placeholder="Escribe: agua, lácteos…" title="Escribe qué es y elige el código, o pega el de 16 dígitos del buscador CUBSO de SUNAT" class="{{ $campo }} font-mono">
                         {{-- Primero lo que la empresa ya usa; luego el catálogo 25 de SUNAT --}}
                         <datalist id="codigos-sunat">
                             @foreach (($codigosSunat['usados'] ?? []) + ($codigosSunat['catalogo'] ?? []) as $codigo => $texto)<option value="{{ $codigo }}">{{ $texto }}</option>@endforeach
                         </datalist>
-                        <p class="text-xs text-gray-400 mt-1">Escribe qué es y elige el código, o pega el de 16 dígitos del <a href="{{ \App\Support\KardexSunat::BUSCADOR_CUBSO }}" target="_blank" class="text-indigo-600 underline">buscador oficial del CUBSO</a>.
-                            Si otro producto de la misma categoría ya lo tiene, se pone solo.</p>
                     </div>
                     <div x-show="tipo == '0' || tipo == '4'" x-cloak>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de existencia <span class="font-normal text-gray-400">(tabla 5 SUNAT)</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-0.5">Tipo de existencia</label>
                         <select name="tipo_existencia" class="{{ $campo }}">
-                            <option value="">Automático (producto = mercadería, insumo = materia prima)</option>
+                            <option value="">Automático</option>
                             @foreach (\App\Support\KardexSunat::TIPOS_EXISTENCIA as $cod => $nom)
                                 <option value="{{ $cod }}" @selected(old('tipo_existencia', $p->tipo_existencia ?? '') == $cod)>{{ $cod }} · {{ $nom }}</option>
                             @endforeach
@@ -146,8 +142,8 @@
                         </select>
                     </div>
 
-                    <div class="sm:col-span-2 sm:w-1/2 sm:pr-2.5">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Subcategoría</label>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-0.5">Subcategoría</label>
                         <select name="subcat_id" class="{{ $campo }}">
                             <option value="">— Sin subcategoría —</option>
                             @foreach ($subcategorias as $s)
@@ -165,11 +161,11 @@
             {{-- Contenido del combo. Al guardar solo se envían las cantidades usadas (ver @submit del formulario):
                  con miles de productos se pasaría el límite de PHP (max_input_vars) y se perdería el precio de venta --}}
             <section class="bg-white rounded-2xl shadow-sm" x-show="tipo == '6'" x-cloak>
-                <header class="px-5 py-4 border-b border-gray-100">
+                <header class="px-4 py-2.5 border-b border-gray-100">
                     <h3 class="font-bold text-gray-800">¿Qué incluye este combo?</h3>
                     <p class="text-xs text-gray-400">Escribe la cantidad de cada uno; deja en 0 los que no van.</p>
                 </header>
-                <div class="p-5" x-data="{ q: '', soloElegidos: false, norm(t) { return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); } }">
+                <div class="p-4" x-data="{ q: '', soloElegidos: false, norm(t) { return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); } }">
                     <div class="flex flex-wrap items-center gap-3 mb-3">
                         <input type="search" x-model="q" placeholder="🔍 Buscar producto o plato…" class="flex-1 min-w-48 h-10 rounded-xl border-gray-300 text-sm">
                         <label class="text-sm text-gray-600 flex items-center gap-1.5"><input type="checkbox" x-model="soloElegidos" class="rounded"> Ver solo los elegidos</label>
@@ -197,38 +193,12 @@
         </div>
 
         {{-- ================= Columna lateral ================= --}}
-        <aside class="space-y-6 lg:sticky lg:top-4 min-w-0">
-            @include('empresas.productos.partials.imagen')
-
-            {{-- Stock inicial: solo al crear un producto o insumo. Vacío = no pasa nada; con un número entra como inventario inicial --}}
-            @if (! $p)
-                <section x-show="tipo == '0' || tipo == '4'" x-cloak class="bg-white rounded-2xl shadow-sm">
-                    <header class="px-5 py-4 border-b border-gray-100">
-                        <h3 class="font-bold text-gray-800">📦 Stock inicial <span class="font-normal text-sm text-gray-400">(opcional)</span></h3>
-                    </header>
-                    <div class="p-5 space-y-3">
-                        <label class="block text-sm font-medium text-gray-700">¿Con cuánto empiezas?
-                            <span class="font-normal text-gray-400" x-text="'(en ' + nombreUnidad(umecod) + ')'"></span>
-                            <input type="number" step="0.001" min="0" name="stock_inicial" value="{{ old('stock_inicial') }}" placeholder="Ej. 24"
-                                   class="mt-1 block w-full h-11 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                        </label>
-                        @if (($almacenes ?? collect())->count() > 1)
-                            <label class="block text-sm font-medium text-gray-700">En el almacén
-                                <select name="almacen_inicial" class="mt-1 block w-full h-11 rounded-xl border-gray-300 text-sm">
-                                    @foreach ($almacenes as $a)<option value="{{ $a->id_almacen }}" @selected(old('almacen_inicial') == $a->id_almacen)>{{ $a->descripcion }}</option>@endforeach
-                                </select>
-                            </label>
-                        @endif
-                        <p class="text-xs text-gray-400">Si lo dejas vacío no pasa nada. Se registra en el kardex como inventario inicial. Después, el stock cambia con compras, ventas e inventarios.</p>
-                    </div>
-                </section>
-            @endif
-
+        <aside class="space-y-4 lg:sticky lg:top-4 min-w-0">
             <section class="bg-white rounded-2xl shadow-sm">
-                <header class="px-5 py-4 border-b border-gray-100">
+                <header class="px-4 py-2.5 border-b border-gray-100">
                     <h3 class="font-bold text-gray-800">Precio y costo</h3>
                 </header>
-                <div class="p-5 space-y-4">
+                <div class="p-4 space-y-3">
                     @include('empresas.productos.partials.precio')
 
                     <div>
@@ -239,7 +209,7 @@
                         <div class="flex">
                             <span class="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">S/</span>
                             <input type="number" step="0.01" min="0" name="costo" x-model="costo" :required="tipo == '4'"
-                                   class="flex-1 min-w-0 h-11 rounded-r-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                   class="flex-1 min-w-0 h-9 rounded-r-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
                         </div>
                         <p x-show="tipo == '4'" x-cloak class="mt-1 text-xs text-amber-700">Obligatorio: con este precio se calcula el costo y el food cost de las recetas que lo usan.</p>
                     </div>
@@ -296,13 +266,38 @@
                 </div>
             </section>
 
+            @include('empresas.productos.partials.imagen')
+
+            {{-- Stock inicial: solo al crear un producto o insumo. Vacío = no pasa nada; con un número entra como inventario inicial --}}
+            @if (! $p)
+                <section x-show="tipo == '0' || tipo == '4'" x-cloak class="bg-white rounded-2xl shadow-sm">
+                    <header class="px-4 py-2.5 border-b border-gray-100">
+                        <h3 class="font-bold text-gray-800">📦 Stock inicial <span class="font-normal text-sm text-gray-400">(opcional)</span></h3>
+                    </header>
+                    <div class="p-4 space-y-3">
+                        <label class="block text-sm font-medium text-gray-700">¿Con cuánto empiezas?
+                            <span class="font-normal text-gray-400" x-text="'(en ' + nombreUnidad(umecod) + ')'"></span>
+                            <input type="number" step="0.001" min="0" name="stock_inicial" value="{{ old('stock_inicial') }}" placeholder="Ej. 24"
+                                   class="mt-1 block w-full h-9 rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        </label>
+                        @if (($almacenes ?? collect())->count() > 1)
+                            <label class="block text-sm font-medium text-gray-700">En el almacén
+                                <select name="almacen_inicial" class="mt-1 block w-full h-9 rounded-xl border-gray-300 text-sm">
+                                    @foreach ($almacenes as $a)<option value="{{ $a->id_almacen }}" @selected(old('almacen_inicial') == $a->id_almacen)>{{ $a->descripcion }}</option>@endforeach
+                                </select>
+                            </label>
+                        @endif
+                        <p class="text-[11px] text-gray-400">Vacío = no pasa nada. Con un número entra al kardex como inventario inicial.</p>
+                    </div>
+                </section>
+            @endif
+
             {{-- Cuentas contables de este producto para el asiento de venta (CONCAR). Vacías = las generales de CONCAR --}}
             <section class="bg-white rounded-2xl shadow-sm">
-                <header class="px-5 py-4 border-b border-gray-100">
+                <header class="px-4 py-2.5 border-b border-gray-100">
                     <h3 class="font-bold text-gray-800">Contabilidad <span class="text-xs font-normal text-gray-400">(opcional)</span></h3>
-                    <p class="text-xs text-gray-500 mt-0.5">Cuentas para el asiento de venta en CONCAR. Si las dejas vacías se usan las de Contabilidad &gt; CONCAR.</p>
                 </header>
-                <div class="p-5 grid grid-cols-2 gap-3">
+                <div class="p-4 grid grid-cols-2 gap-3">
                     <label class="block text-sm font-medium text-gray-700">Debe <span class="text-xs text-gray-400">(12 / 14)</span>
                         <input name="debe" value="{{ old('debe', $p->debe ?? '') }}" maxlength="12" placeholder="121201"
                                class="{{ $campo }} font-mono mt-1"></label>
@@ -319,8 +314,8 @@
     {{-- Barra de acciones fija --}}
     <div class="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-gray-200" style="padding-bottom: env(safe-area-inset-bottom)">
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-end gap-3">
-            <a href="{{ route('productos.index') }}" class="px-5 h-11 inline-flex items-center rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">Cancelar</a>
-            <button class="px-6 h-11 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-sm">
+            <a href="{{ route('productos.index') }}" class="px-5 h-9 inline-flex items-center rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">Cancelar</a>
+            <button class="px-6 h-9 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-sm">
                 {{ $p ? 'Guardar cambios' : 'Guardar producto' }}
             </button>
         </div>

@@ -225,6 +225,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/contingencia/excel', [ContingenciaController::class, 'excel'])->name('contingencia.excel');
     Route::get('/arqueos/turno/{turno}', [ArqueoCajaController::class, 'create'])->whereNumber('turno')->name('arqueos.create');
     Route::post('/arqueos/turno/{turno}', [ArqueoCajaController::class, 'store'])->whereNumber('turno')->name('arqueos.store');
+    Route::get('/arqueos/diario', [ArqueoCajaController::class, 'diario'])->name('arqueos.diario');
     Route::get('/arqueos/{id}', [ArqueoCajaController::class, 'show'])->whereNumber('id')->name('arqueos.show');
     Route::get('/turnos/listado/excel', [TurnoExportarController::class, 'listadoExcel'])->name('turnos.listado.excel');
     Route::get('/turnos/listado/pdf', [TurnoExportarController::class, 'listadoPdf'])->name('turnos.listado.pdf');

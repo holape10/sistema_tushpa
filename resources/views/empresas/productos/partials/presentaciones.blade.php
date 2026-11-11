@@ -1,6 +1,6 @@
 {{-- Presentaciones: otras formas de vender el mismo producto (KG y SACO x 50) --}}
 <section class="bg-white rounded-2xl shadow-sm" x-show="tipo == '0'" x-cloak>
-    <div class="flex flex-wrap items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+    <div class="flex flex-wrap items-start justify-between gap-3 px-4 py-2.5 border-b border-gray-100">
         <div class="min-w-0 flex-1">
             <h3 class="font-bold text-gray-800">Presentaciones</h3>
             <p class="text-xs text-gray-400">
@@ -11,7 +11,7 @@
         <button type="button" @click="agregarPresentacion()" class="px-4 h-10 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 whitespace-nowrap">+ Presentación</button>
     </div>
 
-    <div class="p-5 space-y-3">
+    <div class="p-4 space-y-3">
         <template x-for="(pr, i) in presentaciones" :key="pr.key">
             <div class="rounded-xl border border-gray-200 p-3 grid grid-cols-2 sm:grid-cols-12 gap-2 items-end">
                 <input type="hidden" :name="`presentaciones[${i}][id]`" :value="pr.id ?? ''">

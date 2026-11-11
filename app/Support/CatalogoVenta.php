@@ -83,7 +83,7 @@ class CatalogoVenta
     public static function preciosExtra(object $p): array
     {
         $precios = [];
-        foreach (['precio2' => 'Precio 2', 'precio3' => 'Precio 3'] as $campo => $nombre) {
+        foreach (['precio2' => 'Precio x Mayor', 'precio3' => 'Precio Especial'] as $campo => $nombre) {
             if ((float) ($p->$campo ?? 0) > 0) {
                 $precios[] = ['nombre' => $nombre, 'precio' => round((float) $p->$campo, 2)];
             }

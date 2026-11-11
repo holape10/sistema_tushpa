@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\Buscar;
 use App\Support\ConsultaPeru;
+use App\Support\Proformas;
 use App\Support\Sunat\GuiaRemision;
 use App\Support\Ubigeo;
 use Dompdf\Dompdf;
@@ -60,7 +61,7 @@ class GuiaController extends Controller
         ]);
     }
 
-    /** Formulario: vacío o con los datos de una venta (?venta=ID) */
+    /** Formulario: vacío, con los datos de una venta (?venta=ID) o con los de una proforma (?proforma=ID) */
     public function crear(Request $request)
     {
         $this->autorizar();
@@ -81,6 +82,31 @@ class GuiaController extends Controller
             'doc_tdocod' => '', 'doc_numero' => '', 'IdCpe_cabecera' => null, 'observacion' => '',
         ];
         $items = [];
+        $proforma = null;
+
+        // Desde una proforma: su cliente y su detalle. Si ya se cobró, la guía va con la venta que se emitió.
+        if (! $request->get('venta') && ($proformaId = (int) $request->get('proforma'))) {
+            $proforma = DB::table('proformas')->where('id_proforma', $proformaId)->where('id_empresa_negocio', $suc->id_empresa_negocio)->first();
+            abort_unless($proforma, 404);
+            if ($proforma->IdCpe_cabecera) {
+                $request->merge(['venta' => $proforma->IdCpe_cabecera]);
+            } else {
+                $guia = array_merge($guia, [
+                    'dest_tdicod' => (string) $proforma->tdicod, 'dest_num' => (string) $proforma->clinum, 'dest_nom' => (string) $proforma->clinom,
+                    'llegada_direccion' => (string) ($proforma->clidir ?? ''),
+                    'observacion' => 'PROFORMA '.Proformas::numero($proforma),
+                ]);
+                if ($previa = DB::table('gre_cabecera')->where('dest_num', $proforma->clinum)->orderByDesc('gre_id')->first()) {
+                    $guia['llegada_ubigeo'] = $previa->llegada_ubigeo;
+                    $guia['llegada_direccion'] = $guia['llegada_direccion'] ?: $previa->llegada_direccion;
+                }
+                $items = DB::table('proforma_detalle as d')->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
+                    ->where('d.id_proforma', $proforma->id_proforma)->orderBy('d.id_proforma_detalle')
+                    ->get(['d.IdProducto', 'p.procod', 'd.descripcion', 'd.umecod', 'd.cantidad'])
+                    ->map(fn ($d) => ['IdProducto' => $d->IdProducto, 'codigo' => $d->procod, 'descripcion' => $d->descripcion,
+                        'umecod' => $d->umecod ?: 'NIU', 'cantidad' => (float) $d->cantidad])->values()->all();
+            }
+        }
 
         if ($ventaId = (int) $request->get('venta')) {
             $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $ventaId)->where('id_empresa_negocio', $suc->id_empresa_negocio)->first();
@@ -110,6 +136,7 @@ class GuiaController extends Controller
 
         return view('empresas.guias.crear', [
             'guia' => $guia, 'items' => $items, 'venta' => $ventaId ?: null,
+            'proforma' => $proforma && ! $ventaId ? Proformas::numero($proforma) : null,
             'serie' => $suc->SerGuia ?: 'T001', 'siguiente' => (int) $suc->NumGuia + 1,
             'motivos' => GuiaRemision::MOTIVOS, 'modalidades' => GuiaRemision::MODALIDADES,
             'unidades' => DB::table('unidad_medida')->where('umeest', 'Activo')->orderBy('umenom')->get(['umecod', 'umenom']),

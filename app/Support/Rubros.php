@@ -121,8 +121,8 @@ class Rubros
      * Lo que no está aquí lo usan todos. COMPLETO o sin rubro = todo.
      */
     private const FUNCIONES = [
-        'preparados' => ['RESTOBAR', 'HOTELERIA', 'CLUB', 'GENERAL'],
-        'insumos' => ['RESTOBAR', 'HOTELERIA', 'CLUB', 'GENERAL'],
+        'preparados' => ['RESTOBAR', 'HOTELERIA', 'CLUB'],
+        'insumos' => ['RESTOBAR', 'HOTELERIA', 'CLUB'],
         'combustible' => ['GRIFO'],
         'lotes' => ['FARMACIA', 'GENERAL', 'CLINICA'],
         'series' => ['GENERAL'],
