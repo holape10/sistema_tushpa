@@ -2,8 +2,11 @@
 
 namespace Tests\Flujos;
 
+use App\Models\Empresa;
+use App\Models\EmpresaNegocio;
 use App\Support\AnulacionVenta;
 use App\Support\Notas;
+use App\Support\Sunat\SunatService;
 use App\Support\VentaDirecta;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -142,5 +145,32 @@ class VentaTest extends FlujoTestCase
         $deuda = DB::table('cuentas_cobrar')->where('IdCpe_cabecera', $id)->first();
         $this->assertNotNull($deuda);
         $this->assertEquals(60.00, (float) $deuda->saldo);
+    }
+
+    public function test_la_linea_libre_se_vende_con_la_cantidad_y_la_unidad_que_elige_la_caja(): void
+    {
+        $datos = $this->venta([], '13');
+        $datos['items'] = [['id' => null, 'descripcion' => 'ARENA FINA', 'cantidad' => 5, 'precio' => 40, 'umecod' => 'MTQ'],
+            ['id' => null, 'descripcion' => 'FLETE', 'cantidad' => 1, 'precio' => 30, 'umecod' => 'XXX']];
+        $datos['mon_med_pag'] = [230];
+        $datos['paga'] = 230;
+
+        $id = VentaDirecta::registrar($this->usuario, $datos, 'PV');
+
+        $this->assertSame(['ARENA FINA' => 'MTQ', 'FLETE' => 'NIU'],
+            DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->orderBy('cdedes')->pluck('umecod', 'cdedes')->all(), 'Una unidad que no existe queda como Unidad.');
+        $this->assertEquals(5.0, (float) DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->where('cdedes', 'ARENA FINA')->value('cdecan'));
+    }
+
+    public function test_sunat_recibe_el_distrito_oficial_del_ubigeo_aunque_la_sucursal_lo_tenga_mal_escrito(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['ubigeo' => '160113',
+            'departamento' => 'LORETO', 'provincia' => 'MAYNAS', 'distrito' => 'SAN JUAN BAUTIZTA']);
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('ARENA', 40, 10), 1]]), 'PV');
+
+        $sunat = new SunatService(Empresa::findOrFail($this->usuario->IdEmpresa), EmpresaNegocio::findOrFail($this->sucursal));
+        $direccion = (new \ReflectionMethod($sunat, 'construirComprobante'))->invoke($sunat, $this->cabecera($id))->getCompany()->getAddress();
+
+        $this->assertSame(['LORETO', 'MAYNAS', 'SAN JUAN BAUTISTA'], [$direccion->getDepartamento(), $direccion->getProvincia(), $direccion->getDistrito()]);
     }
 }

@@ -47,10 +47,10 @@ class UsuarioController extends Controller
         // Vendedor: arma pedidos en el punto de venta (sin caja) y la caja los cobra desde Proformas
         5 => ['Inicio', 'Punto Venta', 'Proformas', 'Clientes', 'Stock Productos'],
         17 => ['Inicio', 'Requerimientos del día', 'Inventario ciego', 'Stock Productos', 'Kardex', 'Ingresos Productos', 'Salidas Productos', 'Órdenes de compra'],
-        4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Cajas cerradas (turnos)', 'Envío de Comprobantes', 'Resumen Diario',
+        4 => ['Inicio', 'Dashboard', 'Comandas', 'Caja', 'Listar Cajas', 'Cajas cerradas (turnos)', 'Arqueo de caja', 'Envío de Comprobantes', 'Resumen Diario',
             'Kardex', 'Stock Productos', 'Clientes'],
         // Contador: reporte de ventas SUNAT, envío a SUNAT y, si la empresa los tiene, contabilidad, planilla y SIRE
-        15 => ['Inicio', 'Reporte: SUNAT', 'Envío de Comprobantes', 'Resumen Diario',
+        15 => ['Inicio', 'Reporte: SUNAT', 'Envío de Comprobantes', 'Resumen Diario', 'Comprobantes de contingencia',
             'Plan Contable', 'Centralizar Ventas', 'Centralizar Compras', 'Libro Diario', 'Libro Mayor', 'Balance de Comprobación', 'Estados Financieros',
             'Registro de Ventas (contable)', 'Registro de Compras (contable)', 'CONCAR',
             'Trabajadores', 'Planillas y Boletas', 'Parámetros de Planilla',

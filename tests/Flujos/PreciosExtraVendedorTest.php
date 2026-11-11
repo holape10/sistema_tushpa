@@ -6,6 +6,7 @@ use App\Models\Turno;
 use App\Models\User;
 use App\Support\CatalogoVenta;
 use App\Support\VentaDirecta;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
 /** Precio 2 y 3 de los productos (la caja los elige sin permiso especial) y el rol Vendedor (arma pedidos, la caja cobra) */
@@ -79,5 +80,29 @@ class PreciosExtraVendedorTest extends FlujoTestCase
         $cajero = $this->usuarioConRol(4);
 
         $this->actingAs($cajero)->get(route('pv.index'))->assertRedirect(route('turnos.index'));
+    }
+
+    private function excelProductos(string $contenido)
+    {
+        $ruta = tempnam(sys_get_temp_dir(), 'prod').'.csv';
+        file_put_contents($ruta, $contenido);
+
+        return $this->post(route('productos.importar'), ['archivo' => new UploadedFile($ruta, 'productos.csv', 'text/csv', null, true)]);
+    }
+
+    public function test_el_excel_acepta_hasta_fin_de_mes_el_mismo_nombre_con_otro_codigo(): void
+    {
+        $this->excelProductos("Codigo,Nombre,Precio venta\nP1,CEMENTO SOL,32\nP2,CEMENTO SOL,35\n")->assertSessionHasNoErrors();
+
+        $this->assertSame(['P1' => 32.0, 'P2' => 35.0], DB::table('productos')->where('id_empresa_negocio', $this->sucursal)->where('pronom', 'CEMENTO SOL')
+            ->orderBy('procod')->pluck('propun', 'procod')->map(fn ($p) => (float) $p)->all());
+    }
+
+    public function test_desde_diciembre_el_excel_vuelve_a_actualizar_por_nombre(): void
+    {
+        $this->travelTo('2026-12-01 09:00');
+        $this->excelProductos("Codigo,Nombre,Precio venta\nP1,CEMENTO SOL,32\nP2,CEMENTO SOL,35\n")->assertSessionHasNoErrors();
+
+        $this->assertSame(1, DB::table('productos')->where('id_empresa_negocio', $this->sucursal)->where('pronom', 'CEMENTO SOL')->count());
     }
 }

@@ -39,7 +39,7 @@
                 <label class="text-sm">SUNAT
                     <select name="sunat" class="{{ $in }}">
                         <option value="">Todos</option>
-                        @foreach (['PENDIENTE', 'ACEPTADO', 'OBSERVADO', 'RECHAZADO', 'ERROR', 'EN RESUMEN'] as $e)
+                        @foreach (['PENDIENTE', 'ACEPTADO', 'OBSERVADO', 'RECHAZADO', 'ERROR', 'EN RESUMEN', 'CONTINGENCIA'] as $e)
                             <option @selected(request('sunat') === $e)>{{ $e }}</option>
                         @endforeach
                     </select></label>

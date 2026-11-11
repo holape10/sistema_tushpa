@@ -4,6 +4,7 @@ namespace Tests\Flujos;
 
 use App\Models\Turno;
 use App\Models\User;
+use App\Support\VentaDirecta;
 use Illuminate\Support\Facades\DB;
 
 /** Cierre de caja ciego: el cajero cuenta la caja sin ver cuánto debería haber; la diferencia se ve al cerrar */
@@ -67,5 +68,27 @@ class CierreCiegoTest extends FlujoTestCase
         $this->ciego(true);
         $this->actingAs($this->usuario)->get(route('turnos.index'))->assertOk()->assertSee('Efectivo esperado');
         $this->get(route('turnos.show', $this->turno->id_turno))->assertOk();
+    }
+
+    public function test_el_arqueo_cuenta_la_caja_sin_cerrar_el_turno_y_dice_cuanto_falta(): void
+    {
+        $plato = $this->producto('JUANE', 15, 10);
+        VentaDirecta::registrar($this->usuario, $this->venta([[$plato, 2]], '13'), 'PV');   // S/ 30 en efectivo
+
+        $this->post(route('arqueos.store', $this->turno->id_turno), ['billetes' => ['cant_c_20_soles' => 1, 'cant_m_5_soles' => 1], 'observacion' => 'sorpresa'])
+            ->assertRedirect();
+
+        $a = DB::table('arqueos_caja')->where('id_turno', $this->turno->id_turno)->first();
+        $this->assertEquals([30.0, 25.0, -5.0], [(float) $a->esperado, (float) $a->contado, (float) $a->diferencia]);
+        $this->assertSame('ABIERTO', $this->turno->fresh()->estado, 'El arqueo no cierra el turno.');
+        $this->get(route('arqueos.show', $a->id))->assertOk()->assertSee('FALTA')->assertSee('5.00');
+        $this->get(route('arqueos.index'))->assertOk()->assertSee('Falta S/ 5.00');
+    }
+
+    public function test_un_turno_cerrado_ya_no_se_arquea(): void
+    {
+        $this->turno->update(['estado' => 'CERRADO']);
+
+        $this->post(route('arqueos.store', $this->turno->id_turno), ['monto' => 10])->assertNotFound();
     }
 }

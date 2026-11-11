@@ -110,7 +110,11 @@ class Comprobante
         [$colSerie, $colNum] = self::SERIES[$tdocod];
 
         $sucursal = EmpresaNegocio::where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
-        if (! empty($datos['serie_offline'])) {
+        $contingencia = ! empty($datos['contingencia']);
+        if ($contingencia) {
+            // Comprobante en papel (contingencia): su serie numérica y su número ya están impresos; no usa el correlativo
+            [$serie, $numero] = Contingencia::validar($user, $tdocod, $datos['contingencia'], (string) ($datos['fecEmi'] ?? ''));
+        } elseif (! empty($datos['serie_offline'])) {
             // Venta hecha sin internet: ya salió impresa con el número de la serie propia de esa caja
             [$serie, $numero] = CajaSinInternet::validarNumero($user, $tdocod, (string) $datos['serie_offline']['serie'], (int) $datos['serie_offline']['numero']);
         } else {
@@ -138,7 +142,8 @@ class Comprobante
             'IdUsuario' => $user->IdUsuario,
             'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $user->id_empresa_negocio,
             'id_almacen' => $almacen?->id_almacen, 'id_turno' => $turno->id_turno, 'equipo' => $equipo,
-            'est_sunat' => $tdocod === '13' ? null : 'PENDIENTE',
+            // Contingencia: no se envía como electrónico; se declara a SUNAT aparte (ver Contingencia)
+            'est_sunat' => $tdocod === '13' ? null : ($contingencia ? Contingencia::ESTADO : 'PENDIENTE'),
         ]);
 
         // ---- Medios de pago (contado) o cuenta por cobrar (crédito); todo en cortesía = nada que cobrar ----

@@ -58,6 +58,8 @@ document.addEventListener('alpine:init', () => {
         tdocod: CFG.tdocodPred,
         estadopago: null,
         fechaEmision: CFG.hoy,
+        // Contingencia: se pasa al sistema una factura o boleta hecha en PAPEL (serie numérica, número y fecha impresos)
+        contingencia: { activa: false, serie: '0001', numero: '' },
         fecVen: '',
         medios: [],
         nuevoMedio: null,
@@ -405,7 +407,7 @@ document.addEventListener('alpine:init', () => {
 
         lineaLibre() {
             const it = { key: this._sigKey++, id: null, codigo: '', descripcion: '', cantidad: 1, precio: 0, precioBase: 0, stock: null, flash: false,
-                         presentaciones: [], presentacion: null, factor: 1 };
+                         presentaciones: [], presentacion: null, factor: 1, control_serie: false, umecod: 'NIU' };
             this.carrito.push(it);
             this.enfocar('des-' + it.key);
         },
@@ -561,6 +563,10 @@ document.addEventListener('alpine:init', () => {
             const sinSerie = this.carrito.find(it => it.control_serie && (!it.series.length || it.series.length !== it.cantidad));
             if (sinSerie) return `Elige o escanea la serie de cada unidad de ${sinSerie.descripcion}.`;
             if (this.carrito.some(it => !(it.cantidad > 0) || !(it.precio > 0))) return 'Revisa las cantidades y precios (deben ser mayores a 0).';
+            if (this.contingencia.activa) {
+                if (!['01', '03'].includes(this.tdocod)) return 'En contingencia solo se pasan facturas y boletas en papel.';
+                if (!/^\d{1,4}$/.test(String(this.contingencia.serie).trim()) || !(Number(this.contingencia.numero) > 0)) return 'Escribe la serie (números, ej. 0001) y el número impreso en el papel.';
+            }
             const num = this.cliente.num.trim();
             if (!num || !this.cliente.nom.trim()) return 'Completa el documento y el nombre del cliente.';
             if (this.tdocod === '01' && !(this.cliente.tdicod === '6' && /^(10|15|17|20)\d{9}$/.test(num))) return 'La factura necesita un RUC válido.';
@@ -599,6 +605,7 @@ document.addEventListener('alpine:init', () => {
                 estadopago: this.estadopago,
                 fecEmi: this.fechaEmision || CFG.hoy,
                 fecVen: this.esContado ? null : this.fecVen,
+                ...(this.contingencia.activa ? { contingencia: { serie: String(this.contingencia.serie).trim(), numero: Number(this.contingencia.numero) } } : {}),
                 tdicod: this.cliente.tdicod,
                 clinum: this.cliente.num.trim(),
                 clinom: this.cliente.nom.trim(),
@@ -664,6 +671,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         nuevaVenta() {
+            // Pasando varios papeles seguidos: el siguiente número ya queda puesto
+            if (this.contingencia.activa && Number(this.contingencia.numero) > 0) this.contingencia.numero = Number(this.contingencia.numero) + 1;
             this.carrito = [];
             this.observaciones = '';
             this.soltarProforma(false);
@@ -685,7 +694,9 @@ document.addEventListener('alpine:init', () => {
         // ---------- Proformas ----------
         itemsParaEnviar() {
             return this.carrito.map(it => ({ id: it.id, presentacion: it.presentacion || null, descripcion: it.descripcion.trim(),
-                cantidad: it.cantidad, precio: it.precio, lote: it.lote || null, ...(it.control_serie ? { series: it.series } : {}) }));
+                cantidad: it.cantidad, precio: it.precio, lote: it.lote || null, ...(it.control_serie ? { series: it.series } : {}),
+                // Línea libre: la unidad que eligió la caja (los productos usan la suya)
+                ...(it.id ? {} : { umecod: it.umecod || 'NIU' }) }));
         },
 
         cargarProforma(pf) {
@@ -693,7 +704,7 @@ document.addEventListener('alpine:init', () => {
                 if (!i.producto) {
                     // Línea libre, o producto que ya no se vende: queda como línea libre (no mueve stock)
                     return { key: this._sigKey++, id: null, codigo: '', descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio,
-                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1 };
+                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1, control_serie: false, umecod: i.umecod || 'NIU' };
                 }
                 const pres = i.presentacion ? (i.producto.presentaciones || []).find(x => x.id === i.presentacion) : null;
                 return this.nuevoItem(i.producto, pres, { descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio, precioBase: i.precio, lote: i.lote || '' });
@@ -711,7 +722,7 @@ document.addEventListener('alpine:init', () => {
             this.carrito = at.items.map(i => {
                 if (!i.producto) {
                     return { key: this._sigKey++, id: null, codigo: '', descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio,
-                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1 };
+                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1, control_serie: false, umecod: i.umecod || 'NIU' };
                 }
                 return this.nuevoItem(i.producto, null, { descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio, precioBase: i.precio });
             });
@@ -727,7 +738,7 @@ document.addEventListener('alpine:init', () => {
             this.carrito = v.items.map(i => {
                 if (!i.producto) {
                     return { key: this._sigKey++, id: null, codigo: '', descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio,
-                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1 };
+                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1, control_serie: false, umecod: i.umecod || 'NIU' };
                 }
                 const pres = i.presentacion ? (i.producto.presentaciones || []).find(x => x.id === i.presentacion) : null;
                 return this.nuevoItem(i.producto, pres, { descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio, precioBase: i.precio,

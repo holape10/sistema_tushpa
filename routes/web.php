@@ -3,6 +3,7 @@
 use App\Http\Controllers\ActivoFijoController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AlmacenController;
+use App\Http\Controllers\ArqueoCajaController;
 use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AsistenteController;
@@ -36,6 +37,7 @@ use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContabilidadRegistroController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\ConteoCiegoController;
+use App\Http\Controllers\ContingenciaController;
 use App\Http\Controllers\ContratoController;
 use App\Http\Controllers\ControlInsumosController;
 use App\Http\Controllers\CourierController;
@@ -216,6 +218,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/turnos/movimiento', [TurnoController::class, 'movimiento'])->name('turnos.movimiento');
     Route::post('/turnos/movimiento/{id}/anular', [TurnoController::class, 'anularMovimiento'])->name('turnos.anular_movimiento');
     Route::get('/turnos/listado', [TurnoController::class, 'listado'])->name('turnos.listado');
+    // Arqueo de caja: contar el efectivo de un turno abierto sin cerrarlo
+    Route::get('/arqueos', [ArqueoCajaController::class, 'index'])->name('arqueos.index');
+    // Comprobantes de contingencia (en papel) pasados al sistema
+    Route::get('/contingencia', [ContingenciaController::class, 'index'])->name('contingencia.index');
+    Route::get('/contingencia/excel', [ContingenciaController::class, 'excel'])->name('contingencia.excel');
+    Route::get('/arqueos/turno/{turno}', [ArqueoCajaController::class, 'create'])->whereNumber('turno')->name('arqueos.create');
+    Route::post('/arqueos/turno/{turno}', [ArqueoCajaController::class, 'store'])->whereNumber('turno')->name('arqueos.store');
+    Route::get('/arqueos/{id}', [ArqueoCajaController::class, 'show'])->whereNumber('id')->name('arqueos.show');
     Route::get('/turnos/listado/excel', [TurnoExportarController::class, 'listadoExcel'])->name('turnos.listado.excel');
     Route::get('/turnos/listado/pdf', [TurnoExportarController::class, 'listadoPdf'])->name('turnos.listado.pdf');
     Route::get('/turnos/{id}/excel', [TurnoExportarController::class, 'turnoExcel'])->whereNumber('id')->name('turnos.excel');

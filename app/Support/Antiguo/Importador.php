@@ -39,6 +39,17 @@ class Importador
 {
     public const CONEXION = 'antiguo';
 
+    /**
+     * Hasta esta fecha (migración de clientes) se aceptan productos con el MISMO nombre y distinto código: el producto
+     * se reconoce por su código. Después vuelve la regla de siempre (mismo nombre y tipo = mismo producto).
+     */
+    public const NOMBRES_REPETIDOS_HASTA = '2026-11-30';
+
+    public static function nombresRepetidos(): bool
+    {
+        return now()->toDateString() <= self::NOMBRES_REPETIDOS_HASTA;
+    }
+
     public const SECCIONES = [
         'categorias' => 'Categorías y subcategorías',
         'productos' => 'Productos, presentaciones, códigos de barras, precios dinámicos y combos',
@@ -481,7 +492,11 @@ class Importador
             }
             $tipo = self::TIPOS[(int) self::v($a, 'promocion', 0)] ?? 0;
             $codigo = mb_substr(trim((string) self::v($a, 'procod', '')), 0, 20);
-            $prod = $porNombre[$nombre.'|'.$tipo] ?? null;
+            // Migración (hasta fin de mes): el producto es el de su código; dos productos con el mismo nombre se quedan separados
+            $prod = self::nombresRepetidos() && $codigo !== ''
+                ? ($porCodigo[self::clave('A'.$a->IdProducto)] ?? (isset($porCodigo[self::clave($codigo)]) && self::clave($porCodigo[self::clave($codigo)]->pronom) === $nombre
+                    ? $porCodigo[self::clave($codigo)] : null))
+                : ($porNombre[$nombre.'|'.$tipo] ?? null);
 
             $ume = $this->unidad(self::v($a, 'umecod'), $nombre);
             $umeCons = Unidades::codigo(self::v($a, 'umecod_cons')) ?? '';
@@ -783,11 +798,17 @@ class Importador
         if ($this->mapa || ! $this->hay('productos')) {
             return;
         }
-        $porNombre = Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->get()
-            ->keyBy(fn ($p) => self::clave($p->pronom).'|'.(int) $p->promocion);
+        $todos = Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->get();
+        $porNombre = $todos->keyBy(fn ($p) => self::clave($p->pronom).'|'.(int) $p->promocion);
+        $porCodigo = $todos->keyBy(fn ($p) => self::clave($p->procod));
         foreach ($this->productosDeSucursal($this->src('productos'), $suc)->get() as $a) {
             $tipo = self::TIPOS[(int) self::v($a, 'promocion', 0)] ?? 0;
-            if ($p = $porNombre[self::clave($a->pronom).'|'.$tipo] ?? null) {
+            // Con nombres repetidos (migración) se reconoce por su código: el mismo, o A{IdProducto} si estaba ocupado
+            $codigo = self::clave(self::v($a, 'procod', ''));
+            $porSuCodigo = self::nombresRepetidos()
+                ? ($porCodigo[self::clave('A'.$a->IdProducto)] ?? (isset($porCodigo[$codigo]) && self::clave($porCodigo[$codigo]->pronom) === self::clave($a->pronom) ? $porCodigo[$codigo] : null))
+                : null;
+            if ($p = $porSuCodigo ?? $porNombre[self::clave($a->pronom).'|'.$tipo] ?? null) {
                 $this->mapa[$a->IdProducto] = $p;
             }
         }

@@ -278,4 +278,36 @@ class ImportarAntiguoTest extends FlujoTestCase
         $this->assertEqualsCanonicalizing($menu, DB::table('modulos_usuario')->where('user_IdUsuario', $otro->IdUsuario)->pluck('mod_id')->map(fn ($m) => (int) $m)->all());
         $this->assertSame(2, DB::table('modulos_usuario')->where('user_IdUsuario', $this->usuario->IdUsuario)->count(), 'El administrador principal no se toca.');
     }
+
+    public function test_hasta_fin_de_mes_entran_productos_con_el_mismo_nombre_y_distinto_codigo(): void
+    {
+        DB::connection(Importador::CONEXION)->table('productos')->insert(['IdProducto' => 3, 'procod' => '003', 'pronom' => 'CEMENTO SOL', 'umecod' => 'NIU',
+            'propun' => 35, 'propun1' => 0, 'costo' => 26, 'promocion' => 0, 'tipo' => 1, 'id_empresa_negocio' => 20]);
+
+        $this->importar();
+        $this->importar();
+
+        $this->assertSame(['001' => 32.0, '003' => 35.0], DB::table('productos')->where('id_empresa_negocio', $this->sucursal)->where('pronom', 'CEMENTO SOL')
+            ->orderBy('procod')->pluck('propun', 'procod')->map(fn ($p) => (float) $p)->all(), 'Dos productos (cada uno con su código), sin duplicarse al repetir.');
+    }
+
+    public function test_desde_el_mes_siguiente_el_mismo_nombre_vuelve_a_ser_el_mismo_producto(): void
+    {
+        DB::connection(Importador::CONEXION)->table('productos')->insert(['IdProducto' => 3, 'procod' => '003', 'pronom' => 'CEMENTO SOL', 'umecod' => 'NIU',
+            'propun' => 35, 'propun1' => 0, 'costo' => 26, 'promocion' => 0, 'tipo' => 1, 'id_empresa_negocio' => 20]);
+        $this->travelTo('2026-12-01 09:00');
+
+        $this->importar();
+
+        $this->assertSame(1, DB::table('productos')->where('id_empresa_negocio', $this->sucursal)->where('pronom', 'CEMENTO SOL')->count());
+    }
+
+    public function test_las_ventas_importadas_sin_costo_toman_el_costo_del_producto(): void
+    {
+        $this->importar();
+
+        $boleta = DB::table('cpe_cabecera')->where('serdoc', 'B002')->where('numdoc', 10)->value('IdCpe_cabecera');
+        $this->assertEquals(25.0, (float) DB::table('cpe_detalle')->where('IdCpe_cabecera', $boleta)->value('costo'),
+            'El sistema antiguo no guardó el costo: sin esto la venta salía con 100% de utilidad.');
+    }
 }

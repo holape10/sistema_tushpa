@@ -144,7 +144,7 @@
             return res.success;
         }
         const COLORES = {
-            'ACEPTADO': 'bg-green-100 text-green-700', 'OBSERVADO': 'bg-amber-100 text-amber-800',
+            'ACEPTADO': 'bg-green-100 text-green-700', 'OBSERVADO': 'bg-green-100 text-green-700',
             'RECHAZADO': 'bg-red-100 text-red-700', 'ERROR': 'bg-orange-100 text-orange-700', 'PENDIENTE': 'bg-gray-100 text-gray-700',
         };
 
@@ -164,7 +164,7 @@
             if (res.estado) {
                 fila.querySelector('.celda-estado').innerHTML =
                     `<span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold ${COLORES[res.estado] || COLORES.ERROR}"></span>`;
-                fila.querySelector('.celda-estado span').textContent = res.estado;
+                fila.querySelector('.celda-estado span').textContent = res.estado === 'OBSERVADO' ? 'ACEPTADO c/obs.' : res.estado;
             }
             fila.querySelector('.celda-msg').textContent = res.mensaje || '';
             if (res.success) {

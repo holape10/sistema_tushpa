@@ -122,7 +122,13 @@
                                                class="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-indigo-400 focus:ring-0 px-0 py-1 font-semibold uppercase text-slate-800">
                                         <span class="block text-[11px] text-slate-400 -mt-0.5">
                                             <span class="sm:hidden font-bold text-slate-700" x-text="soles(redondear(it.cantidad * it.precio)) + ' · '"></span>
-                                            <span x-text="it.id ? it.codigo : 'Línea libre · no mueve stock'"></span>
+                                            <span x-text="it.id ? it.codigo + (it.unidad ? ' · ' + it.unidad : '') : 'Línea libre · no mueve stock'"></span>
+                                            {{-- Línea libre: la caja elige la unidad (los productos llevan la suya y no se cambia) --}}
+                                            <template x-if="!it.id">
+                                                <select x-model="it.umecod" title="Unidad de medida" class="ml-1 h-6 py-0 pl-1.5 pr-6 rounded-md border-slate-200 text-[11px] font-semibold text-slate-600">
+                                                    <template x-for="u in cfg.unidades" :key="u.umecod"><option :value="u.umecod" :selected="u.umecod === it.umecod" x-text="u.umenom"></option></template>
+                                                </select>
+                                            </template>
                                             <span x-show="it.dinamico && !it.presentacion" class="text-emerald-600 font-semibold"> · ⚡ precio dinámico</span>
                                             <span x-show="it.stock !== null && it.cantidad * (it.factor || 1) > it.stock" class="text-rose-500" x-text="' · Stock disponible: ' + num(it.stock) + ' ' + (it.unidad || '')"></span>
                                         </span>
@@ -169,7 +175,7 @@
                                     </td>
                                     <td class="px-1 sm:px-2 py-1.5">
                                         <input type="number" step="any" min="0.01" x-model.number="it.cantidad" :id="'cant-' + it.key"
-                                               @keydown.enter.prevent="enfocar('pre-' + it.key)" @change="normalizar(it)" :readonly="it.control_serie"
+                                               @keydown.enter.prevent="enfocar('pre-' + it.key)" @change="normalizar(it)" :readonly="!!it.control_serie"
                                                :title="it.control_serie ? 'La cantidad es la cantidad de series elegidas' : ''"
                                                :class="it.control_serie ? 'bg-slate-100 cursor-not-allowed' : ''"
                                                class="w-full rounded-lg border-slate-200 text-center font-bold focus:ring-indigo-300 focus:border-indigo-400">
@@ -305,6 +311,22 @@
                         <input type="date" x-model="fecVen" :min="cfg.hoy" class="mt-1 w-full h-10 rounded-xl border-slate-200 text-sm">
                     </label>
                 </div>
+                {{-- Contingencia: pasar al sistema una factura o boleta que se hizo en papel (sin luz ni internet) --}}
+                @if ($turno)
+                    <div x-show="['01', '03'].includes(tdocod)" class="rounded-xl ring-1 px-3 py-2" :class="contingencia.activa ? 'ring-violet-300 bg-violet-50' : 'ring-slate-200'">
+                        <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+                            <input type="checkbox" x-model="contingencia.activa" class="rounded text-violet-600">
+                            📝 Comprobante en papel (contingencia)
+                        </label>
+                        <div x-show="contingencia.activa" x-cloak class="mt-2 grid grid-cols-2 gap-2">
+                            <label class="text-xs font-semibold text-slate-500">Serie impresa
+                                <input x-model="contingencia.serie" maxlength="4" inputmode="numeric" placeholder="0001" class="mt-1 w-full h-9 rounded-lg border-slate-200 text-sm font-bold"></label>
+                            <label class="text-xs font-semibold text-slate-500">N° impreso
+                                <input type="number" min="1" x-model="contingencia.numero" class="mt-1 w-full h-9 rounded-lg border-slate-200 text-sm font-bold"></label>
+                            <p class="col-span-2 text-[11px] text-violet-700">Pon la fecha del papel en F. Emisión. No se envía como electrónico: queda en <b>Contingencia</b> para declararlo a SUNAT.</p>
+                        </div>
+                    </div>
+                @endif
             </section>
 
             <section class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
@@ -512,6 +534,8 @@
         estadopagos: @json($estadopagos),
         medios: @json($mediospagos),
         documentos: @json($documentos),
+        // Unidades para las líneas libres
+        unidades: @json(\Illuminate\Support\Facades\DB::table('unidad_medida')->orderByRaw("umecod = 'NIU' DESC")->orderBy('umenom')->get(['umecod', 'umenom'])),
         hoy: @json(now()->format('Y-m-d')),
         farmacia: @json($farmacia),
         diasAlerta: @json($diasAlerta),

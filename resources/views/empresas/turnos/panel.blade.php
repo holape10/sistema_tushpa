@@ -14,6 +14,7 @@
             @unless ($ciego)
                 <a href="{{ route('turnos.show', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-300">Ver reporte</a>
             @endunless
+            <a href="{{ route('arqueos.create', $turno->id_turno) }}" title="Contar el efectivo ahora, sin cerrar el turno" class="px-4 py-2 rounded-xl bg-indigo-100 text-indigo-700 text-sm font-semibold hover:bg-indigo-200">🧮 Arqueo</a>
             <a href="{{ route('turnos.productos', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 text-sm font-semibold hover:bg-sky-200">Productos</a>
             <a href="{{ route('turnos.categorias', $turno->id_turno) }}" target="_blank" class="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 text-sm font-semibold hover:bg-sky-200">Categorías</a>
         </div>

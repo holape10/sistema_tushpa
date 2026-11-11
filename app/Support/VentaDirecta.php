@@ -19,6 +19,10 @@ class VentaDirecta
         'tdocod' => 'required|in:01,03,13',
         'estadopago' => 'required|integer',
         'fecEmi' => 'required|date',
+        // Comprobante de contingencia (en papel, serie numérica) que se pasa al sistema después
+        'contingencia' => 'nullable|array',
+        'contingencia.serie' => 'required_with:contingencia|string|max:4',
+        'contingencia.numero' => 'required_with:contingencia|integer|min:1|max:99999999',
         'tdicod' => 'required|string|size:1',
         'clinum' => 'required|string|max:15',
         'clinom' => 'required|string|max:120',
@@ -39,6 +43,7 @@ class VentaDirecta
         'items.*.series' => 'nullable|array|max:500',
         'items.*.series.*' => 'string|max:80',
         'items.*.presentacion' => 'nullable|integer',
+        'items.*.umecod' => 'nullable|string|max:3',
         'proforma_id' => 'nullable|integer',
         // Atención de la clínica que se cobra desde el Punto Venta (pedido 'Clinica')
         'pedido_id' => 'nullable|integer',
@@ -201,6 +206,7 @@ class VentaDirecta
 
         $lineas = [];
         foreach ($items as $i) {
+            $umeLibre = null;
             $descripcion = mb_strtoupper(trim((string) ($i['descripcion'] ?? '')));
 
             if (! empty($i['id'])) {
@@ -226,6 +232,9 @@ class VentaDirecta
                     throw new \RuntimeException('Escribe la descripción de las líneas agregadas a mano.');
                 }
                 $idProducto = null;
+                // La unidad que eligió la caja (si no existe, Unidad)
+                $umeLibre = strtoupper(trim((string) ($i['umecod'] ?? '')));
+                $umeLibre = $umeLibre !== '' && DB::table('unidad_medida')->where('umecod', $umeLibre)->exists() ? $umeLibre : 'NIU';
             }
             $pres = $idProducto && ! empty($i['presentacion']) ? $presentaciones[$i['presentacion']] : null;
 
@@ -241,10 +250,10 @@ class VentaDirecta
 
             // Cortesía (restaurante): la línea va gratis, aparte de la que se cobra del mismo producto
             $cortesia = ! empty($i['cortesia']);
-            $clave = ($idProducto ?? 'libre').'|'.($pres->id_presentacion ?? '').'|'.$descripcion.'|'.number_format($precio, 2, '.', '').'|'.$lote
+            $clave = ($idProducto ?? 'libre-'.($umeLibre ?? 'NIU')).'|'.($pres->id_presentacion ?? '').'|'.$descripcion.'|'.number_format($precio, 2, '.', '').'|'.$lote
                 .($importe !== null ? '|importe'.count($lineas) : '').($cortesia ? '|cortesia' : '');
             $lineas[$clave] ??= ['IdProducto' => $idProducto, 'descripcion' => $descripcion, 'cantidad' => 0, 'precio' => $precio, 'lote' => $lote,
-                'presentacion' => $pres?->id_presentacion, 'factor' => $pres ? (float) $pres->factor : 1, 'umecod' => $pres?->umecod]
+                'presentacion' => $pres?->id_presentacion, 'factor' => $pres ? (float) $pres->factor : 1, 'umecod' => $pres?->umecod ?? ($idProducto ? null : ($umeLibre ?? 'NIU'))]
                 + ($cortesia ? ['cortesia' => true, 'motivo' => $i['motivo_cortesia'] ?? null] : []);
             $lineas[$clave]['cantidad'] = round($lineas[$clave]['cantidad'] + (float) $i['cantidad'], 3);
             // Electrodomésticos: las series elegidas de cada unidad (si el mismo producto va en dos líneas, se juntan)

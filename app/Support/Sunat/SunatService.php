@@ -7,6 +7,7 @@ use App\Models\EmpresaNegocio;
 use App\Support\AnulacionVenta;
 use App\Support\Bitacora;
 use App\Support\Comprobante;
+use App\Support\Ubigeo;
 use App\Support\Unidades;
 use DateTime;
 use DateTimeZone;
@@ -144,11 +145,14 @@ class SunatService
     {
         $this->completarUbicacion();
         $n = $this->negocio;
+        // Los nombres oficiales del ubigeo (catálogo INEI): una letra mal escrita en el distrito de la sucursal hacía que
+        // SUNAT observara cada comprobante
+        $oficial = Ubigeo::partes($n->ubigeo);
         $address = (new Address)
             ->setUbigueo($n->ubigeo ?: '150101')
-            ->setDepartamento($n->departamento ?: '-')
-            ->setProvincia($n->provincia ?: '-')
-            ->setDistrito($n->distrito ?: '-')
+            ->setDepartamento($oficial['departamento'] ?? ($n->departamento ?: '-'))
+            ->setProvincia($oficial['provincia'] ?? ($n->provincia ?: '-'))
+            ->setDistrito($oficial['distrito'] ?? ($n->distrito ?: '-'))
             ->setUrbanizacion('-')
             ->setDireccion($n->direccion ?: $this->empresa->DirEmpresa)
             ->setCodLocal(str_pad(preg_replace('/\D/', '', (string) $n->codigofiscal) ?: '0', 4, '0', STR_PAD_LEFT));

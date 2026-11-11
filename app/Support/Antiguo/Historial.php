@@ -316,10 +316,16 @@ class Historial
                 if (($this->hay)('cpe_detalle')) {
                     foreach (($this->src)('cpe_detalle')->whereIn('IdCpe_cabecera', array_keys($nuevos))->orderBy('IdCpe_detalle')->get() as $d) {
                         $prod = $this->productoDe($d->IdProducto ?? null, $d->IdProducto_rel ?? null);
+                        // Costo por unidad vendida: el del sistema antiguo; si no lo guardó (casi siempre 0), el costo actual del
+                        // producto. Sin esto esas ventas salían con 100% de utilidad en la rentabilidad.
+                        $costo = (float) ($d->costo ?? 0);
+                        if ($costo <= 0 && $prod && (float) $prod->costo > 0) {
+                            $costo = round((float) $prod->costo * max(1, (float) ($d->cpe_det_factor ?? 1)), 2);
+                        }
                         $filas[] = $this->copiar('cpe_detalle', $d, [
                             'IdCpe_cabecera' => $nuevos[$d->IdCpe_cabecera],
                             'IdProducto' => $prod?->IdProducto, 'IdProducto_rel' => $prod?->IdProducto,
-                            'id_almacen_pro' => $almacen,
+                            'id_almacen_pro' => $almacen, 'costo' => $costo > 0 ? $costo : null,
                         ], ['IdCpe_detalle', 'IdCpe_detalle_ref']);
                         $conDetalle[$d->IdCpe_cabecera] = true;
                     }
