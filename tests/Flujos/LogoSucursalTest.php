@@ -108,4 +108,23 @@ class LogoSucursalTest extends FlujoTestCase
 
         $a4()->assertSee('font-size:24px; letter-spacing:1px; margin-top:8px">CANCELADO', false)->assertDontSee('____de___', false);
     }
+
+    public function test_el_redondeo_automatico_se_elige_por_sucursal_y_hacia_abajo_se_acepta(): void
+    {
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['redondeo_linea' => 'ABAJO']))->assertSessionHasNoErrors();
+        $this->assertSame('ABAJO', DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('redondeo_linea'));
+        $this->get(route('pv.index'))->assertOk()->assertSee('redondeo: "ABAJO"', false);
+
+        // 2.99 × 9 = 26.91 → hacia abajo 26.90; 2.81 × 9.85 = 27.68 → 27.60 (9 céntimos menos)
+        $p = $this->producto('ARROZ A GRANEL', 9.85, 50);
+        $datos = $this->venta([], '13');
+        $datos['items'] = [['id' => $p->IdProducto, 'cantidad' => 2.81, 'precio' => 9.85, 'importe' => 27.60]];
+        $datos['mon_med_pag'] = [27.60];
+        $datos['paga'] = 27.60;
+        $id = (int) $this->postJson(route('pv.registrar'), $datos)->assertJson(['estado' => 'success'])->json('id');
+        $this->assertEquals(27.60, (float) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->value('ccaitv'));
+
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['redondeo_linea' => '']))->assertSessionHasNoErrors();
+        $this->assertNull(DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('redondeo_linea'));
+    }
 }

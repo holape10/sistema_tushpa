@@ -258,8 +258,9 @@ class VentaDirecta
             $lote = $idProducto ? (trim((string) ($i['lote'] ?? '')) ?: null) : null;
             // Venta por importe (PV Grifo: S/ 20 de combustible): el total de la línea es el importe y la cantidad lleva 3 decimales
             $importe = isset($i['importe']) && $i['importe'] !== null && $i['importe'] !== '' ? round((float) $i['importe'], 2) : null;
-            // Tolerancia: lo que mueve redondear la cantidad a 3 decimales (precios altos) o 5 céntimos
-            if ($importe !== null && abs($importe - round((float) $i['cantidad'], 3) * $precio) > max(0.05, $precio * 0.0005 + 0.001) + 0.0001) {
+            // Tolerancia: lo que mueve redondear la cantidad a 3 decimales (precios altos) o redondear el total a 10 céntimos
+            // (al más cercano mueve hasta 5 céntimos; hacia abajo, hasta 9)
+            if ($importe !== null && abs($importe - round((float) $i['cantidad'], 3) * $precio) > max(0.0999, $precio * 0.0005 + 0.001) + 0.0001) {
                 throw new \RuntimeException("El importe de {$descripcion} no corresponde a la cantidad por el precio.");
             }
 

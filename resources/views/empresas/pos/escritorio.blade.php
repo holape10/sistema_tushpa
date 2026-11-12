@@ -190,9 +190,9 @@
                                     <td class="hidden sm:table-cell px-1 sm:px-2 py-1.5 text-right whitespace-nowrap">
                                         <input type="number" step="0.01" min="0" :value="totalDe(it).toFixed(2)" title="Escribe el total para redondear (hasta 5 céntimos)"
                                                @change="cambiarTotal(it, $event.target.value); $event.target.value = totalDe(it).toFixed(2)" @keydown.enter.prevent="$event.target.blur()"
-                                               :class="it.importe != null ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-transparent hover:border-slate-200'"
+                                               :class="Math.abs(totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005 ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-transparent hover:border-slate-200'"
                                                class="w-24 rounded-lg text-right font-bold text-slate-800 focus:ring-indigo-300 focus:border-indigo-400">
-                                        <span x-show="it.importe != null" x-cloak class="block text-[10px] font-semibold text-emerald-700">redondeado</span>
+                                        <span x-show="Math.abs(totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005" x-cloak class="block text-[10px] font-semibold text-emerald-700">redondeado</span>
                                     </td>
                                     <td class="pr-1 sm:pr-2">
                                         <button type="button" @click="quitar(i)" class="p-1.5 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50" aria-label="Quitar línea">
@@ -563,6 +563,8 @@
         csrf: @json(csrf_token()),
         comprobantes: @json($comprobantes),
         tdocodPred: @json($negocio->tdocod_pred ?? '13'),
+        // Redondeo automático del total de cada línea a 10 céntimos: '' (no), CERCANO o ABAJO
+        redondeo: @json((string) ($negocio->redondeo_linea ?? '')),
         estadopagos: @json($estadopagos),
         medios: @json($mediospagos),
         documentos: @json($documentos),

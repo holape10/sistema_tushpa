@@ -273,6 +273,19 @@
                                 @endforeach
                             </div>
                         </div>
+                        {{-- Redondeo automático del total de cada línea en el Punto de venta (cantidades con decimales: 2.35 kg × S/ 11) --}}
+                        <div class="rounded-xl border-2 border-gray-200 px-4 py-3 space-y-2">
+                            <p class="font-bold text-gray-800">🪙 Redondear el total de cada línea a 10 céntimos (Punto de venta)</p>
+                            <p class="text-xs text-gray-500">Para cantidades con decimales (2.35 kg × S/ 11 = 25.85). La cantidad y el precio no cambian; solo el total de la línea.</p>
+                            <div class="grid sm:grid-cols-3 gap-2 text-sm">
+                                @foreach (['' => ['Sin redondeo', 'Como siempre: 25.85.'], 'CERCANO' => ['Al más cercano', '25.85 → 25.90 · 25.84 → 25.80.'], 'ABAJO' => ['Hacia abajo', '25.85 → 25.80. A favor del cliente (INDECOPI).']] as $v => [$t, $d])
+                                    <label class="flex items-start gap-2 rounded-xl ring-1 ring-gray-200 px-3 py-2 cursor-pointer has-[:checked]:ring-indigo-400 has-[:checked]:bg-indigo-50">
+                                        <input type="radio" name="redondeo_linea" value="{{ $v }}" @checked((string) $campo('redondeo_linea') === $v) class="mt-0.5 text-indigo-600">
+                                        <span><b>{{ $t }}</b><span class="block text-xs text-gray-500">{{ $d }}</span></span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
                         {{-- Cierre de caja ciego: el cajero cuenta sin ver lo esperado (antirrobo) --}}
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer hover:border-gray-300">
                             <input type="checkbox" name="cierre_ciego" value="1" @checked($campo('cierre_ciego')) class="mt-0.5 rounded text-indigo-600">

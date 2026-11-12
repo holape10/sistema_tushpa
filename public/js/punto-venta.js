@@ -145,7 +145,13 @@ document.addEventListener('alpine:init', () => {
         // ---------- Totales ----------
         get base() { return redondear(this.carrito.reduce((s, it) => s + this.totalDe(it), 0)); },
         // Total de la línea: cantidad × precio, o el que escribió la caja para redondear (hasta 5 céntimos: 25.85 → 25.90)
-        totalDe(it) { return it.importe != null ? it.importe : redondear(it.cantidad * it.precio); },
+        totalDe(it) { return it.importe != null ? it.importe : this.redondeoAuto(redondear(it.cantidad * it.precio)); },
+        // La sucursal redondea sola el total de la línea a 10 céntimos (al más cercano o hacia abajo); como mucho 5 céntimos
+        redondeoAuto(total) {
+            if (CFG.redondeo === 'CERCANO') return redondear(Math.round(redondear(total * 10)) / 10);
+            if (CFG.redondeo === 'ABAJO') return redondear(Math.floor(redondear(total * 10)) / 10);
+            return total;
+        },
         cambiarTotal(it, valor) {
             const v = redondear(Number(valor) || 0);
             const calculado = redondear(it.cantidad * it.precio);
@@ -764,7 +770,8 @@ document.addEventListener('alpine:init', () => {
         itemsParaEnviar() {
             return this.carrito.map(it => ({ id: it.id, presentacion: it.presentacion || null, descripcion: it.descripcion.trim(),
                 cantidad: it.cantidad, precio: it.precio, lote: it.lote || null, ...(it.control_serie ? { series: it.series } : {}),
-                ...(it.importe != null ? { importe: it.importe } : {}),
+                // Total redondeado (a mano o el automático de la sucursal): va como importe de la línea
+                ...(Math.abs(this.totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005 ? { importe: this.totalDe(it) } : {}),
                 // Línea libre: la unidad que eligió la caja (los productos usan la suya)
                 ...(it.id ? {} : { umecod: it.umecod || 'NIU' }) }));
         },
