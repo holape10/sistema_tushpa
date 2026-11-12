@@ -183,10 +183,10 @@ class Rubros
         return $rubro === null || ! isset(self::FUNCIONES[$funcion]) || in_array($rubro, self::FUNCIONES[$funcion], true);
     }
 
-    /** @return array<int, int> Tipos de producto (promocion) que se pueden crear: 0 Producto, 4 Insumo, 2 Preparado, 6 Combo */
+    /** @return array<int, int> Tipos de producto (promocion) que se pueden crear: 0 Producto, 4 Insumo, 2 Preparado, 6 Combo, 9 Servicio */
     public static function tiposProducto(): array
     {
-        return array_values(array_filter([0, 4, 2, 6], fn ($t) => match ($t) {
+        return array_values(array_filter([0, 4, 2, 6, 9], fn ($t) => match ($t) {
             4 => self::permite('insumos'),
             2 => self::permite('preparados'),
             default => true,

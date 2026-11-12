@@ -11,6 +11,7 @@
         4 => ['🧅', 'Insumo', 'Materia prima para preparar otros productos. No se vende.'],
         2 => ['🍽️', 'Preparado', 'El plato final que se vende (ej. Ceviche Mixto).'],
         6 => ['🎁', 'Combo', 'Varios productos o preparados a un solo precio.'],
+        9 => ['🛠️', 'Servicio', 'Mano de obra, transporte, alquiler… Se factura, pero no lleva stock.'],
     ];
     // Solo los tipos y opciones que tienen sentido en el rubro del negocio (al editar se respeta lo que ya tiene el producto)
     $tipos = array_filter($tipos, fn ($t) => in_array($t, \App\Support\Rubros::tiposProducto(), true) || ($p && (int) $p->promocion === $t), ARRAY_FILTER_USE_KEY);
@@ -49,7 +50,7 @@
             </div>
         @else
             <p class="text-sm font-semibold text-gray-700 mb-2">¿Qué vas a registrar?</p>
-            <div class="grid grid-cols-2 {{ count($tipos) > 2 ? 'lg:grid-cols-4' : '' }} gap-3">
+            <div class="grid grid-cols-2 {{ count($tipos) > 4 ? 'lg:grid-cols-5' : (count($tipos) > 2 ? 'lg:grid-cols-4' : '') }} gap-3">
                 @foreach ($tipos as $valor => [$icono, $nombre, $ayuda])
                     <label class="relative cursor-pointer">
                         <input type="radio" name="promocion" value="{{ $valor }}" x-model="tipo" class="peer sr-only">

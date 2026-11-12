@@ -17,6 +17,9 @@ class Producto extends Model
     /** Entrada del menú (SOPA, TEQUEÑOS...): no se vende sola, el mozo la elige en un plato que "lleva entrada" */
     public const OPCION = 8;
 
+    /** Servicio (mano de obra, transporte, alquiler…): se vende y factura como un producto, pero no lleva stock ni kardex */
+    public const SERVICIO = 9;
+
     /** Tipos que no aparecen en las pantallas de venta: insumos y opciones */
     public const NO_VENDIBLES = [4, self::OPCION];
 
@@ -73,6 +76,7 @@ class Producto extends Model
             2 => 'Preparado',
             6 => 'Combo',
             self::OPCION => 'Entrada',
+            self::SERVICIO => 'Servicio',
             default => 'Producto',
         };
     }

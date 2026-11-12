@@ -87,6 +87,9 @@ class Importador
     /** Código de unidad antiguo que no es oficial de SUNAT => el oficial equivalente (por su nombre) */
     private array $unidadesAntiguas = [];
 
+    /** Productos del sistema antiguo que entraron como Servicio */
+    private int $servicios = 0;
+
     public static function conectar(string $bd): void
     {
         // Una sola sentencia por vez: un respaldo no puede colar "...; DROP DATABASE otra" en la misma línea
@@ -491,12 +494,17 @@ class Importador
                 continue;
             }
             $tipo = self::TIPOS[(int) self::v($a, 'promocion', 0)] ?? 0;
+            // Un servicio (por su nombre o su unidad ZZ) entra como Servicio: así no queda con stock negativo
+            if ($tipo === 0 && self::esServicio($a)) {
+                $tipo = Producto::SERVICIO;
+                $this->servicios++;
+            }
             $codigo = mb_substr(trim((string) self::v($a, 'procod', '')), 0, 20);
             // Migración (hasta fin de mes): el producto es el de su código; dos productos con el mismo nombre se quedan separados
             $prod = self::nombresRepetidos() && $codigo !== ''
                 ? ($porCodigo[self::clave('A'.$a->IdProducto)] ?? (isset($porCodigo[self::clave($codigo)]) && self::clave($porCodigo[self::clave($codigo)]->pronom) === $nombre
                     ? $porCodigo[self::clave($codigo)] : null))
-                : ($porNombre[$nombre.'|'.$tipo] ?? null);
+                : ($porNombre[$nombre.'|'.$tipo] ?? ($tipo === Producto::SERVICIO ? ($porNombre[$nombre.'|0'] ?? null) : null));
 
             $ume = $this->unidad(self::v($a, 'umecod'), $nombre);
             $umeCons = Unidades::codigo(self::v($a, 'umecod_cons')) ?? '';
@@ -574,6 +582,16 @@ class Importador
         $this->preciosDinamicos($suc, $opc['dia0'] ?? 'domingo');
         $this->combos();
         $this->recetas($suc);
+        if ($this->servicios) {
+            $this->aviso("{$this->servicios} producto(s) entraron como SERVICIO (su nombre empieza con \"servicio\" o su unidad es ZZ): se facturan igual, pero no llevan stock.");
+        }
+    }
+
+    /** ¿Es un servicio? Por su nombre ("SERVICIO DE…") o por la unidad SUNAT de servicios (ZZ) */
+    private static function esServicio(object $a): bool
+    {
+        return str_starts_with(self::clave((string) self::v($a, 'pronom', '')), 'SERVICIO')
+            || mb_strtoupper(trim((string) self::v($a, 'umecod', ''))) === 'ZZ';
     }
 
     /** Presentaciones antiguas: filas tipo = 2 de productos (pro_rel + factor) y la tabla presentaciones */

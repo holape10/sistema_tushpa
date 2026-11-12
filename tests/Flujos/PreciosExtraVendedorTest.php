@@ -114,7 +114,7 @@ class PreciosExtraVendedorTest extends FlujoTestCase
         $cliente->id = 999999;
         app()->instance('tenancy.cliente', $cliente);
 
-        $this->assertSame([0, 6], Rubros::tiposProducto(), 'Comercio: producto y combo.');
+        $this->assertSame([0, 6, 9], Rubros::tiposProducto(), 'Comercio: producto, combo y servicio.');
         $this->post(route('productos.store'), ['promocion' => 4, 'pronom' => 'HARINA', 'umecod' => 'KGM', 'costo' => 3])->assertSessionHasErrors('promocion');
     }
 }

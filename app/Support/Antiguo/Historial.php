@@ -1134,6 +1134,10 @@ class Historial
 
                         continue;
                     }
+                    // Los servicios no llevan kardex (en el antiguo salían del stock y quedaban en negativo)
+                    if ((int) $prod->promocion === Producto::SERVICIO) {
+                        continue;
+                    }
                     $filas[] = $this->copiar('movimientos_productos', $m, [
                         'IdProducto' => $prod->IdProducto, 'IdProducto_rel' => $prod->IdProducto, 'id_almacen' => $almacen->id_almacen,
                         'id_empresa_negocio' => $suc,

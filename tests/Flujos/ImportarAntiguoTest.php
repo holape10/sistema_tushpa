@@ -333,4 +333,23 @@ class ImportarAntiguoTest extends FlujoTestCase
         $this->assertSame(['PENDIENTE', 'ANULADO', 'ANULADO'], [$estado('F002', 20), $estado('F002', 21), $estado('B002', 11)]);
         $this->assertTrue(collect($avisos)->contains(fn ($x) => str_contains($x, 'RECHAZADOS por SUNAT')));
     }
+
+    public function test_los_servicios_entran_como_servicio_sin_stock_ni_kardex(): void
+    {
+        $a = DB::connection(Importador::CONEXION);
+        $a->table('productos')->insert(['IdProducto' => 5, 'procod' => '005', 'pronom' => 'SERVICIO DE LIJA DE CHASIS', 'umecod' => 'NIU', 'propun' => 250,
+            'propun1' => 0, 'costo' => 0, 'promocion' => 0, 'tipo' => 1, 'id_empresa_negocio' => 99]);
+        $a->table('producto_empresa')->insert(['IdProducto' => 5, 'id_empresa_negocio' => 20, 'precio' => 250, 'precio2' => 0, 'precio3' => 0]);
+        $a->table('producto_stock')->insert(['IdProducto' => 5, 'id_empresa_negocio' => 20, 'id_almacen' => 20, 'stock' => -181930]);
+        $a->table('movimientos_productos')->insert(['mov_pro_id' => 9, 'IdProducto' => 5, 'cantidad' => 3, 'stock' => -181930, 'mov_tip' => 'E', 'tdocod' => '01',
+            'IdCpe_cabecera' => 1003, 'id_almacen' => 20, 'id_empresa_negocio' => 20, 'fecha_mov' => '2026-10-01']);
+
+        $avisos = $this->importar()['avisos'];
+
+        $servicio = $this->importado('SERVICIO DE LIJA DE CHASIS');
+        $this->assertSame(Producto::SERVICIO, (int) $servicio->promocion);
+        $this->assertFalse(DB::table('producto_stock')->where('IdProducto', $servicio->IdProducto)->where('stock', '<>', 0)->exists(), 'Sin stock negativo.');
+        $this->assertSame(0, DB::table('movimientos_productos')->where('IdProducto', $servicio->IdProducto)->count(), 'Sin kardex.');
+        $this->assertTrue(collect($avisos)->contains(fn ($x) => str_contains($x, 'entraron como SERVICIO')));
+    }
 }

@@ -16,6 +16,7 @@
                 @if (\App\Support\Rubros::permite('insumos'))<option value="4" @selected($tipo == '4')>Insumos</option>@endif
                 @if (\App\Support\Rubros::permite('preparados'))<option value="2" @selected($tipo == '2')>Preparados</option>@endif
                 <option value="6" @selected($tipo == '6')>Combos</option>
+                <option value="9" @selected($tipo == '9')>Servicios</option>
             </select>
         </form>
 

@@ -526,7 +526,7 @@ class ProductoController extends Controller
         $stock = (float) DB::table('producto_stock')->where('IdProducto', $producto->IdProducto)->sum('stock');
         $aviso = ' Ahora es '.($nombres[$nuevo] ?? 'otro tipo').' (antes '.($nombres[$anterior] ?? '').').';
         if (in_array($anterior, [0, 4], true) && ! in_array($nuevo, [0, 4], true) && abs($stock) > 0.0001) {
-            $aviso .= ' Tenía stock '.rtrim(rtrim(number_format($stock, 3), '0'), '.').': los platos y combos no usan stock propio, revisa el almacén.';
+            $aviso .= ' Tenía stock '.rtrim(rtrim(number_format($stock, 3), '0'), '.').': los platos, combos y servicios no usan stock propio, revisa el almacén.';
         }
 
         return $aviso;
@@ -551,7 +551,7 @@ class ProductoController extends Controller
     // Excel: plantilla, exportación e importación de productos
     // ------------------------------------------------------------------
 
-    private const TIPOS = [0 => 'Producto', 4 => 'Insumo', 2 => 'Preparado', 6 => 'Combo', 8 => 'Opción'];
+    private const TIPOS = [0 => 'Producto', 4 => 'Insumo', 2 => 'Preparado', 6 => 'Combo', 8 => 'Opción', 9 => 'Servicio'];
 
     /**
      * Columnas del Excel de productos, en el orden en que se llenan: primero lo obligatorio. El título lleva una
@@ -726,7 +726,7 @@ class ProductoController extends Controller
             return back()->withErrors(['archivo' => 'El Excel no tiene productos.']);
         }
 
-        $tipos = ['producto' => 0, 'insumo' => 4, 'preparado' => 2, 'opcion' => 8];
+        $tipos = ['producto' => 0, 'insumo' => 4, 'preparado' => 2, 'opcion' => 8, 'servicio' => 9];
         $unidades = UnidadMedida::get(['umecod', 'umenom']);
         $porCodUme = $unidades->keyBy(fn ($u) => mb_strtoupper($u->umecod));
         $porNomUme = $unidades->keyBy(fn ($u) => mb_strtoupper($u->umenom));
@@ -791,7 +791,7 @@ class ProductoController extends Controller
                 }
                 $tipo = $tipoTxt !== '' ? $tipos[$tipoTxt] : ($producto ? (int) $producto->promocion : 0);
                 $precioFinal = $precio ?? ($producto ? (float) $producto->propun : 0);
-                if (in_array($tipo, [0, 2]) && $precioFinal <= 0) {
+                if (in_array($tipo, [0, 2, 9]) && $precioFinal <= 0) {
                     $errores[] = "Fila {$n} ({$nombre}): el precio de venta debe ser mayor a 0.";
 
                     continue;
