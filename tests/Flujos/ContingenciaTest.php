@@ -56,6 +56,7 @@ class ContingenciaTest extends FlujoTestCase
         DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update(['est_sunat' => Contingencia::ESTADO]);
 
         $this->get(route('contingencia.index', ['mes' => '2026-10']))->assertOk()->assertSee('Enviar pendientes a SUNAT (1)');
+        $this->get(route('sunat.envios', ['desde' => '2026-10-01', 'hasta' => '2026-10-31']))->assertOk()->assertSee('0003-00000040')->assertSee('btn-enviar', false);
         $this->postJson(route('ventas.anular', $id), ['motivo' => 'ERROR AL PASAR EL PAPEL'])->assertJson(['success' => true]);
     }
 

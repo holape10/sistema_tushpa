@@ -28,7 +28,7 @@
         </label>
         <label class="text-sm">Estado
             <select name="estado" class="block rounded-lg border-gray-300 text-sm">
-                <option value="pendientes" @selected($estado === 'pendientes')>Por enviar (pendientes, con error o rechazados)</option>
+                <option value="pendientes" @selected($estado === 'pendientes')>Por enviar (pendientes, con error, rechazados o contingencia)</option>
                 <option value="todos" @selected($estado === 'todos')>Todos</option>
                 @foreach (['PENDIENTE', 'ACEPTADO', 'OBSERVADO', 'RECHAZADO', 'ERROR', 'EN RESUMEN'] as $e)
                     <option value="{{ $e }}" @selected($estado === $e)>{{ $e }}</option>
@@ -72,7 +72,7 @@
             <tbody class="divide-y divide-gray-100">
                 @forelse ($comprobantes as $c)
                     @php
-                        $reenviable = ! $c->ccabaj && in_array($c->est_sunat, \App\Support\Sunat\SunatService::ESTADOS_REENVIABLES, true);
+                        $reenviable = ! $c->ccabaj && in_array($c->est_sunat, \App\Support\Contingencia::porEnviar(), true);
                         $vencido = $reenviable && \App\Support\Sunat\CambioFecha::vencido($c);
                     @endphp
                     <tr class="hover:bg-gray-50 align-top" data-id="{{ $c->IdCpe_cabecera }}">

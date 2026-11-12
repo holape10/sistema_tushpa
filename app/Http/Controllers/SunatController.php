@@ -49,7 +49,8 @@ class SunatController extends Controller
         $comprobantes = (clone $base)
             ->leftJoin('tipo_documento as t', 't.tdocod', '=', 'c.tdocod')
             ->when($tipo, fn ($q) => $q->where('c.tdocod', $tipo))
-            ->when($estado === 'pendientes', fn ($q) => $q->whereIn('c.est_sunat', SunatService::ESTADOS_REENVIABLES)->whereNull('c.ccabaj'))
+            // Por enviar: también la contingencia (papel, serie 0001) registrada antes de que se enviara sola
+            ->when($estado === 'pendientes', fn ($q) => $q->whereIn('c.est_sunat', Contingencia::porEnviar())->whereNull('c.ccabaj'))
             ->when($estado && $estado !== 'pendientes' && $estado !== 'todos', fn ($q) => $q->where('c.est_sunat', $estado))
             ->orderByDesc('c.ccafem')->orderByDesc('c.IdCpe_cabecera')
             ->select('c.IdCpe_cabecera', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccafem', 'c.ccandi', 'c.ccanom', 'c.ccaitv',
