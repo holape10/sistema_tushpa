@@ -33,10 +33,8 @@ class ResumenTrabadoTest extends FlujoTestCase
         Http::fake(['apiperu.test/*' => fn ($r) => Http::response(['success' => true, 'data' => [
             'comprobante_estado_descripcion' => $r['numero_documento'] === $numTiene ? 'ACEPTADO' : 'NO EXISTE', 'comprobante_estado_codigo' => '1']])]);
 
-        $reciente = $this->resumenTrabado([], now()->subMinutes(30)->toDateTimeString());
-        $this->post(route('sunat.resumen_liberar', $reciente))->assertSessionHasErrors('resumen');
-
-        $res = $this->resumenTrabado([$tiene, $noTiene], now()->subDays(2)->toDateTimeString());
+        // Sin espera: se libera aunque se haya enviado hace un momento
+        $res = $this->resumenTrabado([$tiene, $noTiene], now()->subMinutes(5)->toDateTimeString());
         $this->get(route('sunat.resumenes'))->assertOk()->assertSee('Revisar y liberar');
         $this->post(route('sunat.resumen_liberar', $res))->assertSessionHas('success');
 

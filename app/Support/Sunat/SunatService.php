@@ -729,11 +729,8 @@ class SunatService
         }
     }
 
-    /** Horas que puede quedar un resumen "en proceso" antes de poder liberarlo (SUNAT suele responder en minutos) */
-    public const HORAS_PARA_LIBERAR = 2;
-
     /**
-     * Resumen trabado en SUNAT (el ticket responde "98 en proceso" por horas o días): se consulta el ticket una última vez y,
+     * Resumen trabado en SUNAT (el ticket responde "98 en proceso"): se puede liberar en cualquier momento. Se consulta el ticket una última vez y,
      * si sigue igual, se pregunta a SUNAT por cada boleta (consulta de validez). La que SUNAT tiene queda ACEPTADA; la que
      * no tiene se libera (PENDIENTE, sin resumen) para mandarla en un resumen nuevo o de forma individual.
      *
@@ -747,9 +744,6 @@ class SunatService
         }
         if (! in_array($res->est_sunat, ['ENVIADO', 'EN PROCESO', 'GENERADO'], true)) {
             throw new RuntimeException("El resumen {$res->nom_arch} ya está {$res->est_sunat}: no hace falta liberarlo.");
-        }
-        if (now()->diffInHours($res->fecha_hora, true) < self::HORAS_PARA_LIBERAR) {
-            throw new RuntimeException('Espera al menos '.self::HORAS_PARA_LIBERAR.' horas desde el envío: SUNAT todavía puede responder el ticket.');
         }
         // Una última consulta del ticket: si ya respondió, no hay nada que liberar
         if ($res->res_ticket) {

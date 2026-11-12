@@ -101,8 +101,7 @@
                             </td>
                             <td class="px-3 py-2 text-right whitespace-nowrap space-x-2">
                                 {{-- Trabado: SUNAT no responde el ticket por horas. Se revisa boleta por boleta y se liberan las que no tiene --}}
-                                @if (in_array($r->est_sunat, ['ENVIADO', 'EN PROCESO', 'GENERADO'], true) && ! ($r->es_baja ?? 0)
-                                    && now()->diffInHours($r->fecha_hora, true) >= \App\Support\Sunat\SunatService::HORAS_PARA_LIBERAR)
+                                @if (in_array($r->est_sunat, ['ENVIADO', 'EN PROCESO', 'GENERADO'], true) && ! ($r->es_baja ?? 0))
                                     <form method="POST" action="{{ route('sunat.resumen_liberar', $r->res_id) }}" class="inline"
                                           onsubmit="if (!confirm('SUNAT no responde este ticket. ¿Revisar boleta por boleta? Las que SUNAT ya tiene quedan ACEPTADAS y las que no, se liberan para enviarlas de nuevo.')) return false; this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Revisando…';">
                                         @csrf<button class="px-3 py-1 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600">Revisar y liberar</button>
