@@ -27,6 +27,8 @@
             productos: @json($productos),
             comprobantes: @json($comprobantes),
             tdocodPred: @json($negocio->tdocod_pred ?? '13'),
+            // Redondeo automático del total de cada línea a 10 céntimos: '' (no), CERCANO o ABAJO
+            redondeo: @json((string) ($negocio->redondeo_linea ?? '')),
             contado: @json($contado),
             medios: @json($medios),
             nombreDesde: @json(config('pv.nombre_obligatorio_desde')),
@@ -146,10 +148,11 @@
                             </div>
                             <div class="flex items-center bg-slate-100 rounded-xl shrink-0">
                                 <button type="button" @click="cambiar(i, -1)" class="w-10 h-11 text-2xl font-bold text-rose-600 active:bg-slate-200 rounded-l-xl" aria-label="Menos">−</button>
-                                <span class="w-7 text-center font-extrabold" x-text="it.cant"></span>
+                                <button type="button" @click="editarCantidad(i)" class="min-w-[2.5rem] px-1 h-11 text-center font-extrabold underline decoration-dotted decoration-slate-300 underline-offset-4"
+                                        title="Toca para escribir la cantidad (ej. 1.5)" x-text="num3(it.cant)"></button>
                                 <button type="button" @click="cambiar(i, 1)" class="w-10 h-11 text-2xl font-bold text-indigo-600 active:bg-slate-200 rounded-r-xl" aria-label="Más">+</button>
                             </div>
-                            <span class="w-16 text-right font-extrabold pt-2 shrink-0" x-text="num(it.precio * it.cant)"></span>
+                            <span class="w-16 text-right font-extrabold pt-2 shrink-0" x-text="num(totalDe(it))"></span>
                         </div>
                         <input x-show="it.verNota || it.nota" x-cloak :id="'nota-' + it.key" x-model="it.nota" maxlength="60" placeholder="Nota: sin cebolla, para llevar…"
                                class="mt-1.5 w-full h-9 rounded-lg border-amber-200 bg-amber-50 text-xs uppercase select-text">
@@ -265,11 +268,12 @@
     </div>
 </div>
 
-{{-- Teclado numérico para cambiar el precio --}}
+{{-- Teclado numérico para cambiar el precio o escribir la cantidad --}}
 <div x-show="teclado" x-cloak class="fixed inset-0 z-[60] bg-slate-900/60 flex items-center justify-center p-4" @click.self="teclado = null">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-xs p-4" x-show="teclado">
         <p class="text-sm text-slate-500 text-center" x-text="teclado?.nombre"></p>
-        <p class="text-4xl font-black text-center my-3" x-text="'S/ ' + (teclado?.valor || '0')"></p>
+        <p class="text-xs font-bold uppercase text-center text-indigo-600" x-text="teclado?.tipo === 'cantidad' ? 'Cantidad' : 'Precio'"></p>
+        <p class="text-4xl font-black text-center my-3" x-text="(teclado?.tipo === 'cantidad' ? '' : 'S/ ') + (teclado?.valor || '0')"></p>
         <div class="grid grid-cols-3 gap-2">
             <template x-for="k in ['7','8','9','4','5','6','1','2','3','.','0','⌫']" :key="k">
                 <button type="button" @click="teclaNum(k)" class="h-14 rounded-xl bg-slate-100 text-2xl font-bold active:bg-slate-200" x-text="k"></button>
@@ -277,7 +281,7 @@
         </div>
         <div class="grid grid-cols-2 gap-2 mt-2">
             <button type="button" @click="teclado = null" class="h-12 rounded-xl bg-slate-200 font-bold">Cancelar</button>
-            <button type="button" @click="guardarPrecio()" class="h-12 rounded-xl bg-indigo-600 text-white font-bold">Aceptar</button>
+            <button type="button" @click="guardarTeclado()" class="h-12 rounded-xl bg-indigo-600 text-white font-bold">Aceptar</button>
         </div>
     </div>
 </div>

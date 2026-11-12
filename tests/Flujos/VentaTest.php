@@ -253,6 +253,17 @@ class VentaTest extends FlujoTestCase
         $this->postJson(route('pv.registrar'), $datos)->assertJsonMissing(['estado' => 'success']);
     }
 
+    public function test_el_pv_tactil_vende_cantidades_con_decimales(): void
+    {
+        $albaca = $this->producto('ALBACA', 10, 50);
+        $datos = $this->venta([[$albaca, 1.35]], '13');
+
+        $id = (int) $this->postJson(route('pv.tactil.registrar'), $datos)->assertJson(['estado' => 'success'])->json('id');
+
+        $this->assertEquals([1.35, 13.50], [(float) DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->value('cdecan'),
+            (float) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->value('ccaitv')]);
+    }
+
     public function test_sunat_recibe_el_distrito_oficial_del_ubigeo_aunque_la_sucursal_lo_tenga_mal_escrito(): void
     {
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['ubigeo' => '160113',

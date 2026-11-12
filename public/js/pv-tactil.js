@@ -4,6 +4,7 @@ document.addEventListener('alpine:init', () => {
     const NOMBRES = { '01': 'Factura', '03': 'Boleta', '13': 'N. Venta' };
     const CLAVE = 'pv_tactil_' + CFG.usuario;
     const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+    const r3 = n => Math.round((Number(n) || 0) * 1000) / 1000;
     const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     const colores = Object.fromEntries(CFG.categorias.map(c => [c.cat_id, c.color || '#64748b']));
     // Índice de búsqueda precalculado: filtrar es solo comparar textos ya normalizados
@@ -62,8 +63,16 @@ document.addEventListener('alpine:init', () => {
             return this.catalogo.filter(p => (this.cat === null || palabras.length || p.cat === this.cat)
                 && palabras.every(w => p._q.includes(w)));
         },
-        get total() { return r2(this.carrito.reduce((s, it) => s + r2(it.precio * it.cant), 0)); },
-        get unidades() { return this.carrito.reduce((s, it) => s + it.cant, 0); },
+        get total() { return r2(this.carrito.reduce((s, it) => s + this.totalDe(it), 0)); },
+        get unidades() { return r3(this.carrito.reduce((s, it) => s + it.cant, 0)); },
+        // Total de la línea; si la sucursal redondea a 10 céntimos (al más cercano o hacia abajo), ya redondeado
+        totalDe(it) {
+            const t = r2(it.precio * it.cant);
+            if (CFG.redondeo === 'CERCANO') return r2(Math.round(r2(t * 10)) / 10);
+            if (CFG.redondeo === 'ABAJO') return r2(Math.floor(r2(t * 10)) / 10);
+            return t;
+        },
+        num3(n) { return String(r3(n)); },
         get medioActual() { return CFG.medios.find(m => m.id === this.medio); },
         get comision() { return r2(this.total * (this.medioActual?.comision || 0) / 100); },
         get totalCobrar() { return r2(this.total + this.comision); },
@@ -103,7 +112,7 @@ document.addEventListener('alpine:init', () => {
             let it = this.carrito.find(x => x.id === p.id && (x.presentacion || null) === presId && !x.desc50
                 && x.precio === x.precioBase && x.precioBase === precio && !x.nota);
             if (it) {
-                it.cant++;
+                it.cant = r3(it.cant + 1);
             } else {
                 this.carrito.push({ key: this._key++, id: p.id, nombre: p.nombre + (pres ? ' (' + pres.nombre + ')' : ''), precio, precioBase: precio,
                     presentacion: presId, cant: 1, desc50: false, nota: '', verNota: false, flash: false });
@@ -114,7 +123,7 @@ document.addEventListener('alpine:init', () => {
             this.sonido(true);
         },
         cambiar(i, d) {
-            this.carrito[i].cant += d;
+            this.carrito[i].cant = r3(this.carrito[i].cant + d);
             if (this.carrito[i].cant <= 0) this.carrito.splice(i, 1);
         },
         toggle50(i) {
@@ -124,14 +133,26 @@ document.addEventListener('alpine:init', () => {
         },
         editarPrecio(i) {
             if (this.carrito[i].desc50) { this.aviso('Quita el -50% antes de cambiar el precio.', 'error'); return; }
-            this.teclado = { i, nombre: this.carrito[i].nombre, valor: String(this.carrito[i].precio) };
+            this.teclado = { i, tipo: 'precio', nombre: this.carrito[i].nombre, valor: String(this.carrito[i].precio) };
+        },
+        // Cantidad con decimales (1.5 kg, 1.35 kg): se escribe con el teclado, hasta 3 decimales
+        editarCantidad(i) {
+            this.teclado = { i, tipo: 'cantidad', nombre: this.carrito[i].nombre, valor: '0' };
         },
         teclaNum(k) {
             let v = this.teclado.valor === '0' ? '' : this.teclado.valor;
+            const decimales = this.teclado.tipo === 'cantidad' ? 3 : 2;
             if (k === '⌫') v = v.slice(0, -1);
             else if (k === '.') { if (!v.includes('.')) v = (v || '0') + '.'; }
-            else if (!/\.\d{2}$/.test(v)) v += k;
+            else if (!new RegExp('\\.\\d{' + decimales + '}$').test(v)) v += k;
             this.teclado.valor = v || '0';
+        },
+        guardarTeclado() {
+            if (this.teclado.tipo !== 'cantidad') return this.guardarPrecio();
+            const v = r3(parseFloat(this.teclado.valor));
+            if (!(v > 0)) { this.aviso('La cantidad debe ser mayor a 0.', 'error'); return; }
+            this.carrito[this.teclado.i].cant = v;
+            this.teclado = null;
         },
         guardarPrecio() {
             const v = r2(parseFloat(this.teclado.valor));
@@ -246,6 +267,8 @@ document.addEventListener('alpine:init', () => {
 
         itemsParaEnviar() {
             return this.carrito.map(it => ({ id: it.id, presentacion: it.presentacion || null, cantidad: it.cant, precio: it.precio,
+                // Total redondeado por la sucursal: va como importe de la línea (la cantidad y el precio no cambian)
+                ...(Math.abs(this.totalDe(it) - r2(it.precio * it.cant)) >= 0.005 ? { importe: this.totalDe(it) } : {}),
                 descripcion: (it.nombre + (it.nota.trim() ? ' - ' + it.nota.trim() : '')).slice(0, 150) }));
         },
 
