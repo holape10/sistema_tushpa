@@ -124,7 +124,7 @@
                 <tr>
                     <td class="c">{{ $i + 1 }}</td>
                     <td class="c">{{ $cant($d->cdecan) }}</td>
-                    <td>{!! nl2br(e(($d->descripcion_impresa ?? null) ?: $d->cdedes)) !!}@if ($linea->cortesia)<br><strong>CORTESÍA (operación gratuita)</strong>@endif @if (!empty($d->lotes))<br>Lote: {{ $d->lotes }}@endif @if (!empty($d->series))<br>S/N: {{ $d->series }}@endif</td>
+                    <td>{!! nl2br(e(($d->descripcion_impresa ?? null) ?: $d->cdedes)) !!}@if ($linea->cortesia)<br><strong>{{ \App\Support\Descuentos::esBonificacion($d) ? 'BONIFICACIÓN' : 'CORTESÍA (operación gratuita)' }}</strong>@endif @if (!empty($d->lotes))<br>Lote: {{ $d->lotes }}@endif @if (!empty($d->series))<br>S/N: {{ $d->series }}@endif</td>
                     <td class="c">{{ $d->umecod }}</td>
                     <td class="r">{{ number_format($linea->precio, 2) }}</td>
                     <td class="r">{{ number_format((float) ($d->cdeigv ?? 0), 2) }}</td>

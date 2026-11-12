@@ -352,4 +352,25 @@ class ImportarAntiguoTest extends FlujoTestCase
         $this->assertSame(0, DB::table('movimientos_productos')->where('IdProducto', $servicio->IdProducto)->count(), 'Sin kardex.');
         $this->assertTrue(collect($avisos)->contains(fn ($x) => str_contains($x, 'entraron como SERVICIO')));
     }
+
+    public function test_las_bonificaciones_del_sistema_antiguo_entran_como_bonificacion_y_quedan_activadas(): void
+    {
+        $a = DB::connection(Importador::CONEXION);
+        $a->table('cpe_cabecera')->insert(['IdCpe_cabecera' => 1010, 'tdocod' => '03', 'serdoc' => 'B002', 'numdoc' => 12, 'ccafem' => '2026-10-01',
+            'fecha_hora' => '2026-10-01 12:00:00', 'tdicod' => '1', 'ccandi' => '00000000', 'ccanom' => 'VARIOS', 'ccaitv' => 64, 'ccatexo' => 64,
+            'moncod' => 'PEN', 'estadopago' => 'CONTADO', 'ccacodsun' => '0', 'enviado' => 1, 'facturado' => 0, 'IdUsuario' => 71, 'IdUsuario_ven' => 71, 'id_empresa_negocio' => 20]);
+        // El sistema antiguo guardaba la bonificación con precio 0.001 (queda en 0.00) y la línea en S/ 0
+        $a->table('cpe_detalle')->insert([
+            ['IdCpe_detalle' => 10, 'IdCpe_cabecera' => 1010, 'IdProducto' => 1, 'cdedes' => 'CEMENTO SOL', 'cdecan' => 2, 'cdepuni' => 32, 'umecod' => '3H'],
+            ['IdCpe_detalle' => 11, 'IdCpe_cabecera' => 1010, 'IdProducto' => 2, 'cdedes' => 'TRIPLAY', 'cdecan' => 1, 'cdepuni' => 0.001, 'umecod' => 'PLA'],
+        ]);
+
+        $this->importar();
+
+        $boleta = DB::table('cpe_cabecera')->where('serdoc', 'B002')->where('numdoc', 12)->value('IdCpe_cabecera');
+        $lineas = DB::table('cpe_detalle')->where('IdCpe_cabecera', $boleta)->orderBy('IdCpe_detalle')->get();
+        $this->assertSame([[0, null], [1, 'BONIFICACIÓN']], $lineas->map(fn ($l) => [(int) $l->cortesia, $l->cortesia_motivo])->all());
+        $this->assertSame(1, (int) DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('permite_bonificaciones'),
+            'Daba bonificaciones: sigue pudiendo darlas en el Punto de venta.');
+    }
 }

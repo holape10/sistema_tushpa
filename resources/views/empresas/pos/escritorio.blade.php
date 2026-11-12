@@ -109,6 +109,7 @@
                                 <th class="px-1 sm:px-2 py-2 w-16 sm:w-24">Cant.</th>
                                 <th class="px-1 sm:px-2 py-2 w-20 sm:w-28">P. Unit.</th>
                                 <th class="hidden sm:table-cell text-right px-4 py-2 w-28">Total</th>
+                                <th x-show="cfg.bonificaciones" class="px-1 py-2 w-12 text-center" title="Bonificación: va gratis">Bonif.</th>
                                 <th class="w-8 sm:w-10"></th>
                             </tr>
                         </thead>
@@ -188,11 +189,16 @@
                                     </td>
                                     {{-- Total: se puede escribir para redondear hasta 5 céntimos (2.35 × 11 = 25.85 → 25.90); la cantidad y el precio no cambian --}}
                                     <td class="hidden sm:table-cell px-1 sm:px-2 py-1.5 text-right whitespace-nowrap">
-                                        <input type="number" step="0.01" min="0" :value="totalDe(it).toFixed(2)" title="Escribe el total para redondear (hasta 5 céntimos)"
+                                        <span x-show="it.bonif" class="inline-block px-2 py-1 rounded-lg bg-rose-50 text-xs font-extrabold text-rose-600">🎁 BONIFICACIÓN</span>
+                                        <input x-show="!it.bonif" type="number" step="0.01" min="0" :value="totalDe(it).toFixed(2)" title="Escribe el total para redondear (hasta 5 céntimos)"
                                                @change="cambiarTotal(it, $event.target.value); $event.target.value = totalDe(it).toFixed(2)" @keydown.enter.prevent="$event.target.blur()"
-                                               :class="Math.abs(totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005 ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-transparent hover:border-slate-200'"
+                                               :class="!it.bonif && Math.abs(totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005 ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-transparent hover:border-slate-200'"
                                                class="w-24 rounded-lg text-right font-bold text-slate-800 focus:ring-indigo-300 focus:border-indigo-400">
-                                        <span x-show="Math.abs(totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005" x-cloak class="block text-[10px] font-semibold text-emerald-700">redondeado</span>
+                                        <span x-show="!it.bonif && Math.abs(totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005" x-cloak class="block text-[10px] font-semibold text-emerald-700">redondeado</span>
+                                    </td>
+                                    <td x-show="cfg.bonificaciones" class="px-1 py-1.5 text-center">
+                                        <input type="checkbox" x-model="it.bonif" :disabled="!it.id" :title="it.id ? 'Bonificación: va gratis' : 'Solo los productos se bonifican'"
+                                               class="h-5 w-5 rounded border-slate-300 text-rose-600 focus:ring-rose-300">
                                     </td>
                                     <td class="pr-1 sm:pr-2">
                                         <button type="button" @click="quitar(i)" class="p-1.5 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50" aria-label="Quitar línea">
@@ -565,6 +571,8 @@
         tdocodPred: @json($negocio->tdocod_pred ?? '13'),
         // Redondeo automático del total de cada línea a 10 céntimos: '' (no), CERCANO o ABAJO
         redondeo: @json((string) ($negocio->redondeo_linea ?? '')),
+        // Columna "Bonif.": la línea marcada va gratis (operación gratuita ante SUNAT)
+        bonificaciones: @json((bool) ($negocio->permite_bonificaciones ?? false)),
         estadopagos: @json($estadopagos),
         medios: @json($mediospagos),
         documentos: @json($documentos),

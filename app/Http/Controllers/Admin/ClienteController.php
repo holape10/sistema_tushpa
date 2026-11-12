@@ -144,7 +144,8 @@ class ClienteController extends Controller
     {
         $d = $request->validate($this->reglas() + [
             // 99999999999 = empresa de demostración (para que prueben el sistema)
-            'ruc' => ['required', 'regex:/^((10|15|17|20)\d{9}|99999999999)$/', Rule::unique('central.clientes', 'ruc')->where(fn ($q) => $q->where('estado', '!=', 'ELIMINADO'))],
+            // Un RUC que ya tiene sistema puede tener otro aparte (otra sede): bd_{RUC}_2, con su propio subdominio
+            'ruc' => ['required', 'regex:/^((10|15|17|20)\d{9}|99999999999)$/'],
             'direccion' => 'required|string|max:255',
             'ubigeo' => 'nullable|digits:6',
             'usuario' => 'nullable|string|max:60',
@@ -153,7 +154,6 @@ class ClienteController extends Controller
             'modulos' => 'nullable|array', 'modulos.*' => 'string|max:100',
         ], [
             'ruc.regex' => 'El RUC debe tener 11 dígitos y empezar con 10, 15, 17 o 20 (o 99999999999 para una demo).',
-            'ruc.unique' => 'Ya existe un cliente con ese RUC.',
         ] + $this->mensajes(), $this->nombres());
         if ($error = $this->errorSubdominio($d['subdominio'] ?? null)) {
             return back()->withInput()->withErrors(['subdominio' => $error]);
@@ -164,6 +164,15 @@ class ClienteController extends Controller
         $d['plan'] = isset($d['plan_id']) ? Plan::find($d['plan_id'])?->nombre : null;
         // La empresa de un revendedor con marca entra por su dominio y su base lleva su prefijo (bd_ws_…)
         $d['marca_id'] = $this->marcaId();
+        // Ese RUC ya tiene sistema: se crea otro aparte (otra sede), solo si es de la misma marca
+        $otro = Cliente::where('ruc', $d['ruc'])->where('estado', '!=', 'ELIMINADO')->first();
+        if ($otro && (int) ($otro->marca_id ?? 0) !== (int) ($d['marca_id'] ?? 0)) {
+            return back()->withInput()->withErrors(['ruc' => 'Ese RUC ya tiene sistema en otro panel.']);
+        }
+        if ($otro && empty($d['subdominio'])) {
+            return back()->withInput()->withErrors(['subdominio' => "El RUC ya tiene sistema ({$otro->host()}). Para crearle otro aparte (otra sede) ponle un subdominio propio, ej. ".mb_strtolower(preg_replace('/[^a-z0-9]/i', '', (string) ($otro->nombre_comercial ?: 'empresa'))).'2.']);
+        }
+        $d['otra_sede'] = (bool) $otro;
 
         // Si no se escriben, el usuario y la contraseña son el RUC (igual que el registro inicial /config)
         $d['usuario'] = ($d['usuario'] ?? null) ?: $d['ruc'];
@@ -564,9 +573,11 @@ class ClienteController extends Controller
 
     public function consultarRuc(string $ruc)
     {
+        // Si ese RUC ya tiene sistema, se avisa: al guardar se le crea otro aparte (otra sede, con su propio subdominio)
+        $sistemas = Cliente::where('ruc', $ruc)->where('estado', '!=', 'ELIMINADO')->orderBy('id')->get()->map(fn ($c) => $c->host())->all();
         // Padrón de SUNAT propio y, de respaldo, apiperu.dev; si ninguno responde, se llena a mano
         if ($d = ConsultaPeru::ruc($ruc)) {
-            return response()->json(['nom' => $d['nombre'], 'dir' => $d['direccion'], 'ubigeo' => $d['ubigeo']]);
+            return response()->json(['nom' => $d['nombre'], 'dir' => $d['direccion'], 'ubigeo' => $d['ubigeo'], 'sistemas' => $sistemas]);
         }
 
         return response()->json(['error' => 'No se encontró el RUC. Ingresa los datos manualmente.'], 404);

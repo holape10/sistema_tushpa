@@ -124,7 +124,7 @@ class IdentificarEmpresa
         if ($cuenta !== '') {
             $cliente = null;
             if (preg_match('/^\d{11}$/', $cuenta)) {
-                $cliente = Cliente::where('ruc', $cuenta)->where('marca_id', $marca['id'])->where('estado', '!=', 'ELIMINADO')->first();
+                $cliente = Cliente::where('ruc', $cuenta)->where('marca_id', $marca['id'])->where('estado', '!=', 'ELIMINADO')->orderBy('id')->first();
             } elseif (preg_match('/^[a-z0-9][a-z0-9-]{0,39}$/', $cuenta)) {
                 $cliente = Cliente::where('subdominio', $cuenta)->where('marca_id', $marca['id'])->where('estado', '!=', 'ELIMINADO')->first();
             }
@@ -146,7 +146,7 @@ class IdentificarEmpresa
     {
         abort_unless(preg_match('/^[a-z0-9][a-z0-9-]{0,39}$/', $subdominio), 404);
         $cliente = preg_match('/^\d{11}$/', $subdominio)
-            ? Cliente::where('ruc', $subdominio)->first()
+            ? Cliente::where('ruc', $subdominio)->orderByRaw("estado = 'ELIMINADO'")->orderBy('id')->first()
             : Cliente::where('subdominio', $subdominio)->first();
         // Solo en el dominio de su marca (si la columna aún no existe mientras se actualiza, todas son de TUSHPA)
         abort_unless($cliente && (int) ($cliente->marca_id ?? 0) === (int) ($marcaId ?? 0), 404);

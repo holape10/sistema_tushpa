@@ -10,6 +10,7 @@ use App\Support\Comprobante;
 use App\Support\ConsultaPeru;
 use App\Support\Contingencia;
 use App\Support\CuotasCredito;
+use App\Support\Tenancy\Tenancy;
 use App\Support\Ubigeo;
 use App\Support\Unidades;
 use DateTime;
@@ -510,7 +511,8 @@ class SunatService
             $resId = DB::transaction(function () use ($hoy, $fecha, $lote) {
                 $ultimo = DB::table('resumenes')->where('IdEmpresa', $this->empresa->IdEmpresa)
                     ->where('res_fec_gen', $hoy)->lockForUpdate()->max('res_cor');
-                $cor = (int) $ultimo + 1;
+                // Otro sistema del mismo RUC (bd_{RUC}_2) numera desde 101: así nunca repiten el nombre del resumen en SUNAT
+                $cor = max((int) $ultimo, Tenancy::desfaseResumenes()) + 1;
 
                 return DB::table('resumenes')->insertGetId([
                     'res_fec_com' => $fecha, 'res_fec_gen' => $hoy, 'res_tip' => 'RC', 'tip_res_com' => '03',
@@ -636,8 +638,8 @@ class SunatService
         $motivo = mb_strtoupper(mb_substr(trim($motivo), 0, 70));
 
         $resId = DB::transaction(function () use ($hoy, $cab, $tipo) {
-            $cor = (int) DB::table('resumenes')->where('IdEmpresa', $this->empresa->IdEmpresa)
-                ->where('res_fec_gen', $hoy)->lockForUpdate()->max('res_cor') + 1;
+            $cor = max((int) DB::table('resumenes')->where('IdEmpresa', $this->empresa->IdEmpresa)
+                ->where('res_fec_gen', $hoy)->lockForUpdate()->max('res_cor'), Tenancy::desfaseResumenes()) + 1;
 
             return DB::table('resumenes')->insertGetId([
                 'res_fec_com' => $cab->ccafem, 'res_fec_gen' => $hoy, 'res_tip' => $tipo, 'tip_res_com' => $cab->tdocod,

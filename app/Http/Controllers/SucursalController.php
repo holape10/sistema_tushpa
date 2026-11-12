@@ -93,7 +93,7 @@ class SucursalController extends Controller
         'NumNCB' => 'Último N° de nota de crédito (boleta)', 'SerNDF' => 'Serie de notas de débito (factura)', 'NumNDF' => 'Último N° de nota de débito (factura)',
         'SerNDB' => 'Serie de notas de débito (boleta)', 'NumNDB' => 'Último N° de nota de débito (boleta)', 'SerGuia' => 'Serie de guías', 'NumGuia' => 'Último N° de guía',
         'SerProforma' => 'Serie de proformas', 'NumProforma' => 'Último N° de proforma', 'tip_igv_pred' => 'IGV por defecto', 'tdocod_pred' => 'Comprobante por defecto',
-        'control_stock' => 'Control de stock', 'permite_descuentos' => 'Permite descuentos', 'permite_cortesias' => 'Permite cortesías',
+        'control_stock' => 'Control de stock', 'permite_descuentos' => 'Permite descuentos', 'permite_cortesias' => 'Permite cortesías', 'permite_bonificaciones' => 'Permite bonificaciones',
         'descuento_max_cajero' => 'Descuento máximo del cajero', 'exigir_operacion' => 'Exigir N° de operación', 'formato_impresion' => 'Formato de impresión'];
 
     public function update(Request $request, $id)
@@ -130,6 +130,7 @@ class SucursalController extends Controller
             'ip_mozos' => 'nullable|string|max:255',
             'permite_descuentos' => 'nullable|boolean',
             'permite_cortesias' => 'nullable|boolean',
+            'permite_bonificaciones' => 'nullable|boolean',
             'descuento_max_cajero' => 'nullable|numeric|min:0|max:100',
             'permite_propina' => 'nullable|boolean',
             'foto_marco_estilo' => 'nullable|in:DEGRADADO,BANDA,BORDE',
@@ -199,6 +200,7 @@ class SucursalController extends Controller
         $datos['ip_mozos'] = $ips->implode(',') ?: null;
         $datos['permite_descuentos'] = $request->boolean('permite_descuentos');
         $datos['permite_cortesias'] = $request->boolean('permite_cortesias');
+        $datos['permite_bonificaciones'] = $request->boolean('permite_bonificaciones');
         $datos['descuento_max_cajero'] = (float) ($datos['descuento_max_cajero'] ?? 10);
         $datos['permite_propina'] = $request->boolean('permite_propina');
         $datos['foto_redes'] = $request->boolean('foto_redes');

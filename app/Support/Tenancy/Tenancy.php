@@ -43,16 +43,42 @@ class Tenancy
         return config('database.connections.central.database');
     }
 
-    /** @param  string|null  $prefijo  el de la marca (bd_ws_); null = el de TUSHPA (TENANCY_PREFIJO_BD) */
-    public static function nombreBase(string $ruc, ?string $prefijo = null): string
+    /**
+     * @param  string|null  $prefijo  el de la marca (bd_ws_); null = el de TUSHPA (TENANCY_PREFIJO_BD)
+     * @param  int  $sede  1 = el primer sistema del RUC (bd_{RUC}); 2, 3… = otro sistema del mismo RUC (bd_{RUC}_2)
+     */
+    public static function nombreBase(string $ruc, ?string $prefijo = null, int $sede = 1): string
     {
-        $nombre = ($prefijo ?? config('tenancy.prefijo_bd')).$ruc;
+        $nombre = ($prefijo ?? config('tenancy.prefijo_bd')).$ruc.($sede > 1 ? '_'.$sede : '');
         // Solo letras, números y guion bajo: el nombre va dentro de CREATE/DROP DATABASE
         if (! preg_match('/^\d{11}$/', $ruc) || ! preg_match('/^[a-z0-9_]{1,64}$/i', $nombre)) {
             throw new \InvalidArgumentException('Nombre de base de datos no válido.');
         }
 
         return $nombre;
+    }
+
+    /** Qué sistema del RUC es una base: bd_{RUC} = 1, bd_{RUC}_2 = 2… */
+    public static function sedeDeBase(string $base): int
+    {
+        return preg_match('/\d{11}_(\d{1,2})$/', $base, $m) ? (int) $m[1] : 1;
+    }
+
+    /** ¿La base registrada es la de ese cliente? (bd_{RUC} o bd_{RUC}_N, con el prefijo de su marca) */
+    public static function esBaseDe(Cliente $cliente): bool
+    {
+        $base = (string) $cliente->base_datos;
+
+        return $base === self::nombreBase($cliente->ruc, $cliente->prefijoBd(), self::sedeDeBase($base));
+    }
+
+    /**
+     * Correlativo inicial de los resúmenes y bajas del día: varios sistemas del mismo RUC mandan a SUNAT con el mismo RUC,
+     * así que cada uno usa su propio rango (el 1.º desde 1, el 2.º desde 101, el 3.º desde 201…) y nunca repiten nombre.
+     */
+    public static function desfaseResumenes(): int
+    {
+        return (self::sedeDeBase(self::baseActual()) - 1) * 100;
     }
 
     /**

@@ -18,10 +18,19 @@ class Descuentos
 {
     public const MOTIVO_CORTESIA = 'CORTESÍA DE LA CASA';
 
+    /** Motivo de la línea bonificada del Punto de venta (también la marca para imprimir BONIFICACIÓN) */
+    public const MOTIVO_BONIFICACION = 'BONIFICACIÓN';
+
+    /** ¿La línea gratis es una bonificación (y no una cortesía)? */
+    public static function esBonificacion(?object $detalle): bool
+    {
+        return $detalle !== null && ! empty($detalle->cortesia) && ($detalle->cortesia_motivo ?? null) === self::MOTIVO_BONIFICACION;
+    }
+
     /**
      * Lo que el cobro del restaurante permite en la sucursal: descuentos, cortesías, cupones, propina y pago en dólares.
      *
-     * @return object{descuentos: bool, cortesias: bool, max: float, cupones: bool, propina: bool, tipoCambio: ?float}
+     * @return object{descuentos: bool, cortesias: bool, bonificaciones: bool, max: float, cupones: bool, propina: bool, tipoCambio: ?float}
      */
     public static function config(int $sucursal): object
     {
@@ -30,6 +39,7 @@ class Descuentos
         return (object) [
             'descuentos' => (bool) ($n->permite_descuentos ?? false),
             'cortesias' => (bool) ($n->permite_cortesias ?? false),
+            'bonificaciones' => (bool) ($n->permite_bonificaciones ?? false),
             'max' => (float) ($n->descuento_max_cajero ?? 10),
             'cupones' => Cupones::hayActivos($sucursal),
             'propina' => (bool) ($n->permite_propina ?? false),
@@ -61,12 +71,22 @@ class Descuentos
         }
         $config = self::config((int) $user->id_empresa_negocio);
 
-        if ($cortesias->isNotEmpty() && ! $config->cortesias) {
+        // Bonificación (Punto de venta) y cortesía (restaurante) van gratis igual, pero cada una con su propio permiso
+        $bonificadas = $cortesias->filter(fn ($l) => ! empty($l['bonificacion']));
+        if ($bonificadas->isNotEmpty() && ! $config->bonificaciones) {
+            throw new \RuntimeException('Esta sucursal no tiene activadas las bonificaciones.');
+        }
+        if ($cortesias->count() > $bonificadas->count() && ! $config->cortesias) {
             throw new \RuntimeException('Esta sucursal no tiene activadas las cortesías.');
         }
         foreach ($lineas as &$l) {
             if (! empty($l['cortesia'])) {
-                $l['motivo'] = mb_strtoupper(mb_substr(trim((string) ($l['motivo'] ?? '')), 0, 80)) ?: self::MOTIVO_CORTESIA;
+                $l['motivo'] = ! empty($l['bonificacion']) ? self::MOTIVO_BONIFICACION
+                    : (mb_strtoupper(mb_substr(trim((string) ($l['motivo'] ?? '')), 0, 80)) ?: self::MOTIVO_CORTESIA);
+                // Una cortesía no puede hacerse pasar por bonificación (se imprimiría distinto)
+                if (empty($l['bonificacion']) && $l['motivo'] === self::MOTIVO_BONIFICACION) {
+                    $l['motivo'] = self::MOTIVO_CORTESIA;
+                }
             }
         }
         unset($l);

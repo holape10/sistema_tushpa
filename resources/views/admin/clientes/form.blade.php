@@ -324,6 +324,11 @@
                     this.$refs.direccion.value = d.dir || '';
                     this.$refs.ubigeo.value = d.ubigeo || '';
                     this.msg = '✔ Datos de SUNAT cargados';
+                    // Ese RUC ya tiene sistema: se creará otro aparte (bd_RUC_2…) y necesita su propio subdominio
+                    if ((d.sistemas || []).length) {
+                        this.msg = `⚠ Este RUC ya tiene sistema (${d.sistemas.join(', ')}). Se creará OTRO aparte para otra sede (base ${this.ruc}_${d.sistemas.length + 1}): ponle un subdominio propio.`;
+                        this.msgOk = false;
+                    }
                 } catch (e) { this.msg = 'No se pudo consultar. Llena los datos a mano.'; this.msgOk = false; }
                 finally { this.buscando = false; }
             },

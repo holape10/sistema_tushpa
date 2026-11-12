@@ -19,8 +19,8 @@ class Eliminador
         if ($cliente->activo()) {
             throw new \RuntimeException('Primero suspende la empresa: solo se eliminan empresas suspendidas.');
         }
-        $base = Tenancy::nombreBase($cliente->ruc, $cliente->prefijoBd());
-        if ($base !== $cliente->base_datos) {
+        $base = (string) $cliente->base_datos;
+        if (! Tenancy::esBaseDe($cliente)) {
             throw new \RuntimeException('La base registrada no coincide con el RUC; revísala a mano.');
         }
 
@@ -45,7 +45,7 @@ class Eliminador
             throw new \RuntimeException('Primero suspende la empresa: solo se eliminan empresas suspendidas.');
         }
         $base = (string) $cliente->base_datos;
-        if (Tenancy::nombreBase($cliente->ruc, $cliente->prefijoBd()) !== $base) {
+        if (! Tenancy::esBaseDe($cliente)) {
             throw new \RuntimeException('La base registrada no coincide con el RUC; revísala a mano.');
         }
         $central = DB::connection('central');

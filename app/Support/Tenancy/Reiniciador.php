@@ -69,7 +69,7 @@ class Reiniciador
      */
     public static function reiniciar(Cliente $cliente): array
     {
-        if (Tenancy::nombreBase($cliente->ruc, $cliente->prefijoBd()) !== $cliente->base_datos) {
+        if (! Tenancy::esBaseDe($cliente)) {
             throw new \RuntimeException('La base registrada no coincide con el RUC; revísala a mano.');
         }
         $respaldo = Respaldos::crear($cliente->base_datos, 'antes-de-reiniciar');

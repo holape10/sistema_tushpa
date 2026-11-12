@@ -273,6 +273,13 @@
                                 @endforeach
                             </div>
                         </div>
+                        {{-- Bonificaciones en el Punto de venta: la línea marcada va gratis (operación gratuita ante SUNAT) --}}
+                        <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
+                            <input type="checkbox" name="permite_bonificaciones" value="1" @checked($campo('permite_bonificaciones')) class="mt-0.5 rounded text-indigo-600">
+                            <span><span class="font-bold text-gray-800">🎁 Bonificaciones en el Punto de venta</span>
+                                <span class="block text-xs text-gray-500">Sale la columna "Bonif." en cada producto: marcado, va gratis (ej. lleva 20 y le regalas 2). Se imprime BONIFICACIÓN,
+                                    descuenta el stock y ante SUNAT va como operación gratuita con su precio de referencia.</span></span>
+                        </label>
                         {{-- Redondeo automático del total de cada línea en el Punto de venta (cantidades con decimales: 2.35 kg × S/ 11) --}}
                         <div class="rounded-xl border-2 border-gray-200 px-4 py-3 space-y-2">
                             <p class="font-bold text-gray-800">🪙 Redondear el total de cada línea a 10 céntimos (Punto de venta)</p>

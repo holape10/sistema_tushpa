@@ -57,6 +57,8 @@ class VentaDirecta
         'paga' => 'nullable|numeric|min:0',
         // Descuento a la cuenta y cortesías (restaurante; la sucursal debe tenerlos activados: ver Descuentos)
         'items.*.cortesia' => 'nullable|boolean',
+        // Bonificación del Punto de venta: la línea va gratis (si la sucursal la tiene activada)
+        'items.*.bonificacion' => 'nullable|boolean',
         'items.*.motivo_cortesia' => 'nullable|string|max:80',
         'descuento_tipo' => 'nullable|in:S,P',
         'descuento_valor' => 'nullable|numeric|min:0|max:999999',
@@ -245,7 +247,11 @@ class VentaDirecta
 
             $precio = round((float) $i['precio'], 2);
             // Línea libre en S/ 0: es texto (se imprime con el ítem de al lado, no va a SUNAT); un producto sí lleva precio
-            if ($precio <= 0 && empty($i['cortesia'])) {
+            $bonificacion = ! empty($i['bonificacion']);
+            if ($bonificacion && $precio <= 0) {
+                throw new \RuntimeException("La bonificación de {$descripcion} necesita su precio (es el valor de referencia para SUNAT).");
+            }
+            if ($precio <= 0 && empty($i['cortesia']) && ! $bonificacion) {
                 if ($idProducto) {
                     throw new \RuntimeException("Pon el precio de {$descripcion}: debe ser mayor a 0.");
                 }
@@ -265,12 +271,12 @@ class VentaDirecta
             }
 
             // Cortesía (restaurante): la línea va gratis, aparte de la que se cobra del mismo producto
-            $cortesia = ! empty($i['cortesia']);
+            $cortesia = ! empty($i['cortesia']) || $bonificacion;
             $clave = ($idProducto ?? 'libre-'.($umeLibre ?? 'NIU')).'|'.($pres->id_presentacion ?? '').'|'.$descripcion.'|'.number_format($precio, 2, '.', '').'|'.$lote
                 .($importe !== null ? '|importe'.count($lineas) : '').($cortesia ? '|cortesia' : '');
             $lineas[$clave] ??= ['IdProducto' => $idProducto, 'descripcion' => $descripcion, 'cantidad' => 0, 'precio' => $precio, 'lote' => $lote,
                 'presentacion' => $pres?->id_presentacion, 'factor' => $pres ? (float) $pres->factor : 1, 'umecod' => $pres?->umecod ?? ($idProducto ? null : ($umeLibre ?? 'NIU'))]
-                + ($cortesia ? ['cortesia' => true, 'motivo' => $i['motivo_cortesia'] ?? null] : []);
+                + ($cortesia ? ['cortesia' => true, 'motivo' => $i['motivo_cortesia'] ?? null] + ($bonificacion ? ['bonificacion' => true] : []) : []);
             $lineas[$clave]['cantidad'] = round($lineas[$clave]['cantidad'] + (float) $i['cantidad'], 3);
             // Electrodomésticos: las series elegidas de cada unidad (si el mismo producto va en dos líneas, se juntan)
             if ($idProducto && ! empty($i['series'])) {

@@ -6,6 +6,7 @@ use App\Http\Controllers\SucursalController;
 use App\Models\Producto;
 use App\Models\User;
 use App\Support\Cuentas;
+use App\Support\Descuentos;
 use App\Support\Kardex;
 use App\Support\Unidades;
 use Illuminate\Support\Facades\DB;
@@ -330,6 +331,7 @@ class Historial
                 // Detalle de los comprobantes nuevos
                 $filas = [];
                 $conDetalle = [];
+                $bonificaciones = 0;
                 if (($this->hay)('cpe_detalle')) {
                     foreach (($this->src)('cpe_detalle')->whereIn('IdCpe_cabecera', array_keys($nuevos))->orderBy('IdCpe_detalle')->get() as $d) {
                         $prod = $this->productoDe($d->IdProducto ?? null, $d->IdProducto_rel ?? null);
@@ -339,16 +341,24 @@ class Historial
                         if ($costo <= 0 && $prod && (float) $prod->costo > 0) {
                             $costo = round((float) $prod->costo * max(1, (float) ($d->cpe_det_factor ?? 1)), 2);
                         }
+                        // Bonificación del sistema antiguo: el producto va con precio 0.001 (o 0) y la línea en S/ 0
+                        $bonificada = (float) $d->cdecan > 0 && (float) ($d->cdevve ?? 0) <= 0.01 && (float) ($d->cdepuni ?? 0) <= 0.001 + 1e-9 && $prod;
                         $filas[] = $this->copiar('cpe_detalle', $d, [
                             'IdCpe_cabecera' => $nuevos[$d->IdCpe_cabecera],
                             'IdProducto' => $prod?->IdProducto, 'IdProducto_rel' => $prod?->IdProducto,
                             'id_almacen_pro' => $almacen, 'costo' => $costo > 0 ? $costo : null,
-                        ], ['IdCpe_detalle', 'IdCpe_detalle_ref']);
+                        ] + ($bonificada ? ['cortesia' => 1, 'cortesia_motivo' => Descuentos::MOTIVO_BONIFICACION, 'cdevve' => 0, 'cdepve' => 0, 'cdeigv' => 0] : []),
+                            ['IdCpe_detalle', 'IdCpe_detalle_ref']);
+                        $bonificaciones += $bonificada ? 1 : 0;
                         $conDetalle[$d->IdCpe_cabecera] = true;
                     }
                 }
                 $this->insertar('cpe_detalle', $filas);
                 $this->resumen['detalle'] += count($filas);
+                // Daba bonificaciones: se le activan en el Punto de venta para que siga igual
+                if ($bonificaciones && Schema::hasColumn('empresa_negocios', 'permite_bonificaciones')) {
+                    DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->update(['permite_bonificaciones' => 1]);
+                }
                 $sinDetalle += count(array_diff_key($nuevos, $conDetalle));
 
                 // Medios de pago
