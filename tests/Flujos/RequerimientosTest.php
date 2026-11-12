@@ -208,4 +208,15 @@ class RequerimientosTest extends FlujoTestCase
                 ->assertSeeInOrder(['ACEITE', 'PAPEL MORADO', '35.00', 'No se compró', 'AZUCAR'], false);
         }
     }
+
+    public function test_el_logo_de_la_empresa_sale_en_los_reportes_impresos(): void
+    {
+        $id = $this->pedir($this->cocinero(), [[$this->insumo('ACEITE', 1), 2]]);
+        $this->get(route('requerimientos.imprimir', $id))->assertOk()->assertDontSee('data:image/', false);
+
+        DB::table('empresa')->where('IdEmpresa', $this->usuario->IdEmpresa)->update(['LogEmpresa' => 'imagenes/96.png']);
+
+        $this->get(route('requerimientos.imprimir', $id))->assertOk()->assertSee('src="data:image/png;base64,', false);
+        $this->get(route('requerimientos.imprimir', [$id, 'compra' => 'a4']))->assertOk()->assertSee('src="data:image/png;base64,', false);
+    }
 }

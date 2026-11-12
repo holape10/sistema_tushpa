@@ -38,7 +38,8 @@ class VentaDirecta
         'items.*.descripcion' => 'nullable|string|max:150',
         'items.*.cantidad' => 'required|numeric|min:0.001|max:99999',
         'items.*.importe' => 'nullable|numeric|min:0.01|max:999999',
-        'items.*.precio' => 'required|numeric|min:0.01|max:999999',
+        // En S/ 0 solo las líneas libres de texto (el detalle de un servicio en varias líneas): ver lineas()
+        'items.*.precio' => 'required|numeric|min:0|max:999999',
         'items.*.lote' => 'nullable|string|max:50',
         'items.*.series' => 'nullable|array|max:500',
         'items.*.series.*' => 'string|max:80',
@@ -109,7 +110,7 @@ class VentaDirecta
                 $datos['id_med_pag'] = $datos['mon_med_pag'] = [];
                 $datos['paga'] = 0;
             }
-            $lineas = self::lineas($user, collect($datos['items']));
+            $lineas = self::juntarTextos(self::lineas($user, collect($datos['items'])));
             // Cobrar a otro precio que el de lista: solo con permiso (la proforma y la atención de la clínica ya traen su precio)
             $distintos = self::preciosDistintos($lineas);
             if ($distintos && ! $proformaId && ! $pedidoClinica && ! $user->puede('cambiar_precio')) {
@@ -239,6 +240,16 @@ class VentaDirecta
             $pres = $idProducto && ! empty($i['presentacion']) ? $presentaciones[$i['presentacion']] : null;
 
             $precio = round((float) $i['precio'], 2);
+            // Línea libre en S/ 0: es texto (se imprime con el ítem de al lado, no va a SUNAT); un producto sí lleva precio
+            if ($precio <= 0 && empty($i['cortesia'])) {
+                if ($idProducto) {
+                    throw new \RuntimeException("Pon el precio de {$descripcion}: debe ser mayor a 0.");
+                }
+                $lineas['texto|'.count($lineas)] = ['IdProducto' => null, 'descripcion' => $descripcion, 'cantidad' => (float) $i['cantidad'], 'precio' => 0.0,
+                    'texto' => true, 'lote' => null, 'presentacion' => null, 'factor' => 1, 'umecod' => $umeLibre ?? 'NIU'];
+
+                continue;
+            }
             // Lote elegido en el PV Farmacia (vacío = el sistema elige el que vence antes)
             $lote = $idProducto ? (trim((string) ($i['lote'] ?? '')) ?: null) : null;
             // Venta por importe (PV Grifo: S/ 20 de combustible): el total de la línea es el importe y la cantidad lleva 3 decimales
@@ -265,7 +276,47 @@ class VentaDirecta
             }
         }
 
+        if (! collect($lineas)->contains(fn ($l) => empty($l['texto']))) {
+            throw new \RuntimeException('Las líneas en S/ 0 son solo texto: agrega al menos una con precio.');
+        }
+
         return array_values($lineas);
+    }
+
+    /**
+     * Las líneas de texto (líneas libres en S/ 0) se juntan con el ítem que las sigue (o, si van al final, con el anterior):
+     * se imprimen con él en descripcion_impresa y a SUNAT va solo el ítem.
+     *
+     * @param  array<int, array<string, mixed>>  $lineas
+     * @return array<int, array<string, mixed>>
+     */
+    public static function juntarTextos(array $lineas): array
+    {
+        if (! collect($lineas)->contains(fn ($l) => ! empty($l['texto']))) {
+            return $lineas;
+        }
+        $items = [];
+        $antes = [];
+        foreach ($lineas as $l) {
+            if (! empty($l['texto'])) {
+                $antes[] = $l['descripcion'];
+
+                continue;
+            }
+            $l['impreso'] = [...$antes, $l['descripcion']];
+            $antes = [];
+            $items[] = $l;
+        }
+        if ($antes && $items) {
+            $items[count($items) - 1]['impreso'] = [...$items[count($items) - 1]['impreso'], ...$antes];
+        }
+
+        return array_map(function ($l) {
+            $l['descripcion_impresa'] = count($l['impreso']) > 1 ? implode("\n", $l['impreso']) : null;
+            unset($l['impreso']);
+
+            return $l;
+        }, $items);
     }
 
     /**

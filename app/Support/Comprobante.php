@@ -87,6 +87,8 @@ class Comprobante
         if (! $lineas) {
             throw new \RuntimeException('No hay productos para cobrar.');
         }
+        // Líneas de texto (S/ 0): se imprimen con su ítem y no van a SUNAT
+        $lineas = VentaDirecta::juntarTextos($lineas);
 
         $cre = self::credito($user, $datos['estadopago']);
         $esContado = $cre->cre_dia_tip === 'CONTADO';
@@ -235,6 +237,7 @@ class Comprobante
         if ($lineas !== null && ! $lineas) {
             throw new \RuntimeException('La venta debe tener al menos un producto.');
         }
+        $lineas = $lineas === null ? null : VentaDirecta::juntarTextos($lineas);
         $cabId = (int) $cab->IdCpe_cabecera;
 
         $cre = self::credito($user, $datos['estadopago']);
@@ -518,7 +521,7 @@ class Comprobante
             $detId = DB::table('cpe_detalle')->insertGetId([
                 'IdCpe_cabecera' => $cabId, 'IdProducto' => $it['IdProducto'], 'IdProducto_rel' => $it['IdProducto'],
                 'procod' => $prod->procod ?? '', 'umecod' => ($it['umecod'] ?? null) ?: ($prod->umecod ?? 'NIU'),
-                'cdecan' => $cant, 'cdedes' => $it['descripcion'],
+                'cdecan' => $cant, 'cdedes' => $it['descripcion'], 'descripcion_impresa' => $it['descripcion_impresa'] ?? null,
                 'cdevun' => $cortesia ? 0 : $valorUni, 'cdepuni' => $cortesia ? 0 : $precio, 'cdepve' => $subtotal,
                 'cdeigv' => round($totalLinea - $subtotal, 2), 'cdevve' => $totalLinea,
                 'tigcod' => $cortesia ? Descuentos::afectacionGratuita((string) $sucursal->tip_igv_pred) : $sucursal->tip_igv_pred,

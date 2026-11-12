@@ -550,7 +550,7 @@
                 {{-- Punto de venta: el mismo diseño de la pantalla del sistema (comercios) --}}
                 <div x-show="vista === 'pv'" class="flex-1 overflow-y-auto px-3 pb-3 pt-2">
                     <template x-if="cobro && !cobro.modal">
-                        <div class="grid lg:grid-cols-12 gap-4 items-start max-w-[1600px] mx-auto">
+                        <div class="grid lg:grid-cols-12 gap-4 items-start max-w-[100rem] mx-auto">
                             {{-- Izquierda: búsqueda, detalle y medios de pago --}}
                             <div class="lg:col-span-7 space-y-4 min-w-0">
                                 <div class="relative" @click.outside="pvAbierto = false">
@@ -740,7 +740,7 @@
                 {{-- PV Restaurante: como la pantalla del sistema (datos del comprobante arriba; productos y cobro abajo) --}}
                 <div x-show="vista === 'venta'" class="flex-1 overflow-y-auto px-3 pb-3 pt-2">
                     <template x-if="cobro && !cobro.modal">
-                        <div class="space-y-4 max-w-[1600px] mx-auto">
+                        <div class="space-y-4 max-w-[100rem] mx-auto">
                             <section class="bg-white rounded-xl shadow-sm overflow-hidden">
                                 <div class="flex items-center gap-2 px-4 py-3 bg-slate-700 text-white text-sm font-bold uppercase">
                                     <span class="flex-1">Datos del comprobante

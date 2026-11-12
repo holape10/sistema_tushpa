@@ -95,7 +95,7 @@
             @foreach ($detalle as $d)
                 @php $linea = \App\Support\Descuentos::linea($d); @endphp
                 <tr>
-                    <td>{{ $d->cdedes }}@if ($linea->cortesia)<br><b>🎁 CORTESÍA</b>@endif @if (!empty($d->lotes))<br><small>Lote: {{ $d->lotes }}</small>@endif @if (!empty($d->series))<br><small>S/N: {{ $d->series }}</small>@endif</td>
+                    <td>{!! nl2br(e(($d->descripcion_impresa ?? null) ?: $d->cdedes)) !!}@if ($linea->cortesia)<br><b>🎁 CORTESÍA</b>@endif @if (!empty($d->lotes))<br><small>Lote: {{ $d->lotes }}</small>@endif @if (!empty($d->series))<br><small>S/N: {{ $d->series }}</small>@endif</td>
                     <td class="um">{{ mb_strtoupper($unidades[$d->umecod] ?? $d->umecod) }}</td>
                     <td class="r">{{ number_format($d->cdecan, 2) }}</td>
                     <td class="r">{{ number_format($linea->precio, 2) }}</td>

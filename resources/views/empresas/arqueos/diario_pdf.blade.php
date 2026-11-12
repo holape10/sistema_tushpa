@@ -32,6 +32,9 @@
 </head>
 <body>
     <table class="cab"><tr>
+        @if ($logoReporte = \App\Support\Impresion\Impresion::logoReporte())
+            <td style="width:1%; padding-right:10px"><img src="{{ $logoReporte }}" alt="" style="max-height:50px; max-width:150px"></td>
+        @endif
         <td>
             <div class="empresa">{{ $empresa }}</div>
             @if ($direccion)<div>{{ $direccion }}</div>@endif

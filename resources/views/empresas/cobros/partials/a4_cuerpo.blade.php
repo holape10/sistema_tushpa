@@ -154,7 +154,7 @@
                 @php $linea = \App\Support\Descuentos::linea($d); @endphp
                 <tr class="{{ $i % 2 ? 'par' : '' }}">
                     <td class="c">{{ $cant($d->cdecan) }}</td>
-                    <td>{{ $d->cdedes }}@if ($linea->cortesia)<br><b style="color:#c2410c">CORTESÍA (operación gratuita)</b>@endif @if (!empty($d->lotes))<br><span style="color:#0f766e">Lote: {{ $d->lotes }}</span>@endif @if (!empty($d->series))<br><span style="color:#0369a1">S/N: {{ $d->series }}</span>@endif</td>
+                    <td>{!! nl2br(e(($d->descripcion_impresa ?? null) ?: $d->cdedes)) !!}@if ($linea->cortesia)<br><b style="color:#c2410c">CORTESÍA (operación gratuita)</b>@endif @if (!empty($d->lotes))<br><span style="color:#0f766e">Lote: {{ $d->lotes }}</span>@endif @if (!empty($d->series))<br><span style="color:#0369a1">S/N: {{ $d->series }}</span>@endif</td>
                     <td class="c">{{ $d->umecod }}</td>
                     <td class="r">{{ number_format($linea->precio, 2) }}</td>
                     <td class="r">{{ number_format($linea->total, 2) }}</td>

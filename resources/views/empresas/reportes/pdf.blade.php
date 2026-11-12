@@ -24,6 +24,7 @@
 </head>
 <body>
     <div class="cab">
+        @include('empresas.partials.logo_reporte')
         <h1>{{ mb_strtoupper($titulo) }}</h1>
         <p><strong>{{ $empresa->NomEmpresa ?? '' }}</strong> · RUC {{ $empresa->IdEmpresa ?? '' }} · {{ $sucursal }}</p>
         <p>Del {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }} al {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }} · {{ count($filas) }} registro(s)</p>

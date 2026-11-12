@@ -18,6 +18,7 @@
     </style>
 </head>
 <body>
+    @include('empresas.partials.logo_reporte')
     <h1>Listado de cajas / turnos · {{ $negocio }}</h1>
     <p class="sub">Del {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }} al {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }} · {{ $turnos->count() }} turnos</p>
     <table>

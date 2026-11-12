@@ -2,7 +2,7 @@
 @section('title', $compra ? 'Compra ' . $compra['serie'] . '-' . $compra['numero'] : 'Nueva compra')
 
 @section('content')
-<div x-data="compraForm" x-init="iniciar()" @keydown.window="teclaGlobal($event)" class="max-w-[1600px] mx-auto space-y-4">
+<div x-data="compraForm" x-init="iniciar()" @keydown.window="teclaGlobal($event)" class="max-w-[100rem] mx-auto space-y-4">
 
     <div class="flex flex-wrap items-center gap-3">
         <a href="{{ route('compras.index') }}" class="text-sm text-slate-500 hover:text-indigo-700">← Compras</a>

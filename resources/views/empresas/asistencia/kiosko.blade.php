@@ -15,7 +15,7 @@
     {{-- Encabezado: reloj, lector y resumen --}}
     <header class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-violet-800 text-white relative isolate overflow-hidden">
         <x-kene-adorno patron="laberinto" />
-        <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-5 grid lg:grid-cols-3 gap-5 items-center">
+        <div class="max-w-[100rem] mx-auto px-4 sm:px-6 py-5 grid lg:grid-cols-3 gap-5 items-center">
             <div class="flex items-center gap-4">
                 <a href="{{ route('dashboard') }}" title="Volver al sistema" class="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"><i class="fas fa-arrow-left"></i></a>
                 <div>
@@ -36,7 +36,7 @@
                 </form>
             </div>
         </div>
-        <div class="max-w-[1600px] mx-auto px-4 sm:px-6 pb-4 flex flex-wrap gap-2">
+        <div class="max-w-[100rem] mx-auto px-4 sm:px-6 pb-4 flex flex-wrap gap-2">
             <template x-for="r in resumen" :key="r.estado">
                 <button type="button" @click="filtro = filtro === r.estado ? '' : r.estado"
                         :class="filtro === r.estado ? 'bg-white text-indigo-900' : 'bg-white/10 hover:bg-white/20'"
@@ -53,7 +53,7 @@
     </header>
 
     {{-- Tarjetas --}}
-    <main class="max-w-[1600px] mx-auto px-4 sm:px-6 py-5">
+    <main class="max-w-[100rem] mx-auto px-4 sm:px-6 py-5">
         <p class="text-center text-sm text-slate-500 mb-4"><i class="fas fa-mobile-screen-button"></i> ¿No tienes tu DNI? Toca tu nombre y escanea el código QR con tu celular.</p>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
             <template x-for="t in visibles" :key="t.id">

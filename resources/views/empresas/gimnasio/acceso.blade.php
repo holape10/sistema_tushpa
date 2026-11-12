@@ -14,7 +14,7 @@
 <body class="bg-neutral-950 text-white min-h-screen" x-data="acceso()" x-init="iniciar()" @click="enfocar($event)">
 
     <header class="border-b border-white/10">
-        <div class="max-w-[1500px] mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center gap-4">
+        <div class="max-w-[93.75rem] mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center gap-4">
             <a href="{{ route('gimnasio.index') }}" title="Volver" class="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"><i class="fas fa-arrow-left"></i></a>
             <div>
                 <p class="text-xs uppercase tracking-[.3em] text-orange-400 font-bold">Control de ingreso</p>
@@ -27,7 +27,7 @@
         </div>
     </header>
 
-    <main class="max-w-[1500px] mx-auto px-4 sm:px-6 py-6 grid lg:grid-cols-[1fr_340px] gap-6">
+    <main class="max-w-[93.75rem] mx-auto px-4 sm:px-6 py-6 grid lg:grid-cols-[1fr_340px] gap-6">
         <section class="space-y-5">
             {{-- Lector: DNI, QR del carnet o huella (los lectores escriben como teclado y terminan con Enter) --}}
             <form @submit.prevent="marcar()" class="flex gap-3">

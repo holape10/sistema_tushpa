@@ -23,6 +23,7 @@
     </style>
 </head>
 <body>
+    @include('empresas.partials.logo_reporte')
     <h1>Turno de caja N° {{ $turno->turno }} · {{ $negocio }}</h1>
     <p class="sub">{{ $turno->usuario->apeusu ?? '' }} · {{ $turno->apertura?->format('d/m/Y H:i') }} – {{ $turno->cierre?->format('d/m/Y H:i') ?? 'ABIERTO' }} · Estado: {{ $turno->estado }}</p>
 

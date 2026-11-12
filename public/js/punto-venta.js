@@ -405,6 +405,11 @@ document.addEventListener('alpine:init', () => {
             return pr ? pr.nombre + ' x' + this.num(pr.factor) + ' ' + (it.unidad || '') : (it.unidad || 'Unidad');
         },
 
+        // Línea libre en S/ 0: es texto (ej. el detalle de un servicio en varias líneas); se imprime con el ítem de al lado y no va a SUNAT
+        esTexto(it) {
+            return !it.id && !(Number(it.precio) > 0);
+        },
+
         lineaLibre() {
             const it = { key: this._sigKey++, id: null, codigo: '', descripcion: '', cantidad: 1, precio: 0, precioBase: 0, stock: null, flash: false,
                          presentaciones: [], presentacion: null, factor: 1, control_serie: false, umecod: 'NIU' };
@@ -562,7 +567,8 @@ document.addEventListener('alpine:init', () => {
             if (this.carrito.some(it => !it.descripcion.trim())) return 'Escribe la descripción de todas las líneas.';
             const sinSerie = this.carrito.find(it => it.control_serie && (!it.series.length || it.series.length !== it.cantidad));
             if (sinSerie) return `Elige o escanea la serie de cada unidad de ${sinSerie.descripcion}.`;
-            if (this.carrito.some(it => !(it.cantidad > 0) || !(it.precio > 0))) return 'Revisa las cantidades y precios (deben ser mayores a 0).';
+            if (this.carrito.some(it => !(it.cantidad > 0) || (!(it.precio > 0) && !this.esTexto(it)))) return 'Revisa las cantidades y precios (deben ser mayores a 0).';
+            if (this.carrito.every(it => this.esTexto(it))) return 'Las líneas libres en S/ 0 son solo texto: agrega al menos una con precio.';
             if (this.contingencia.activa) {
                 if (!['01', '03'].includes(this.tdocod)) return 'En contingencia solo se pasan facturas y boletas en papel.';
                 if (!/^\d{1,4}$/.test(String(this.contingencia.serie).trim()) || !(Number(this.contingencia.numero) > 0)) return 'Escribe la serie (números, ej. 0001) y el número impreso en el papel.';
@@ -770,7 +776,8 @@ document.addEventListener('alpine:init', () => {
             if (this.procesando) return;
             if (!this.carrito.length) { this.aviso('Agrega productos a la proforma.', 'error'); return; }
             if (this.carrito.some(it => !it.descripcion.trim())) { this.aviso('Escribe la descripción de todas las líneas.', 'error'); return; }
-            if (this.carrito.some(it => !(it.cantidad > 0) || !(it.precio > 0))) { this.aviso('Revisa las cantidades y precios (deben ser mayores a 0).', 'error'); return; }
+            if (this.carrito.some(it => !(it.cantidad > 0) || (!(it.precio > 0) && !this.esTexto(it)))) { this.aviso('Revisa las cantidades y precios (deben ser mayores a 0).', 'error'); return; }
+            if (this.carrito.every(it => this.esTexto(it))) { this.aviso('Las líneas libres en S/ 0 son solo texto: agrega al menos una con precio.', 'error'); return; }
             if (!this.cliente.num.trim() || !this.cliente.nom.trim()) { this.aviso('Completa el documento y el nombre del cliente.', 'error'); return; }
 
             this.procesando = true;

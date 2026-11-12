@@ -74,3 +74,17 @@
     -webkit-mask-image: linear-gradient(to left, black 0%, transparent 85%);
     mask-image: linear-gradient(to left, black 0%, transparent 85%);
 }
+
+/*
+ * Pantallas grandes (monitores de 24"–27" en 2K/4K a 100%): todo se veía chico. Tailwind mide en rem, así que
+ * subiendo la letra base crece todo junto (textos, botones, espacios y anchos), sin tocar celulares ni laptops.
+ */
+@media (min-width: 1800px) {
+    html { font-size: 17px; }
+}
+@media (min-width: 2200px) {
+    html { font-size: 18.5px; }
+}
+@media (min-width: 2500px) {
+    html { font-size: 20px; }
+}

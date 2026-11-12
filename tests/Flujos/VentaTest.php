@@ -162,6 +162,42 @@ class VentaTest extends FlujoTestCase
         $this->assertEquals(5.0, (float) DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->where('cdedes', 'ARENA FINA')->value('cdecan'));
     }
 
+    public function test_las_lineas_libres_en_cero_se_imprimen_con_su_servicio_y_no_van_a_sunat(): void
+    {
+        $datos = $this->venta([], '01');
+        $datos['items'] = [['id' => null, 'descripcion' => 'POR EL SERVICIO DE LIMPIEZA DE LA OFICINA', 'cantidad' => 1, 'precio' => 0],
+            ['id' => null, 'descripcion' => 'CORRESPONDIENTE AL PERIODO DE SETIEMBRE', 'cantidad' => 1, 'precio' => 2039.32],
+            ['id' => null, 'descripcion' => 'SEGUN CONTRATO 045', 'cantidad' => 1, 'precio' => 0]];
+        $datos['mon_med_pag'] = [2039.32];
+        $datos['paga'] = 2039.32;
+
+        $r = $this->postJson(route('pv.registrar'), $datos)->assertOk()->assertJson(['estado' => 'success']);
+        $id = (int) $r->json('id');
+
+        $detalle = DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->get();
+        $this->assertCount(1, $detalle, 'Las líneas en S/ 0 no son ítems.');
+        $this->assertSame("POR EL SERVICIO DE LIMPIEZA DE LA OFICINA\nCORRESPONDIENTE AL PERIODO DE SETIEMBRE\nSEGUN CONTRATO 045", $detalle[0]->descripcion_impresa);
+        $this->assertEquals(2039.32, (float) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->value('ccaitv'));
+
+        $sunat = new SunatService(Empresa::findOrFail($this->usuario->IdEmpresa), EmpresaNegocio::findOrFail($this->sucursal));
+        $detalles = (new \ReflectionMethod($sunat, 'construirComprobante'))->invoke($sunat, $this->cabecera($id))->getDetails();
+        $this->assertCount(1, $detalles);
+        $this->assertSame('CORRESPONDIENTE AL PERIODO DE SETIEMBRE', $detalles[0]->getDescripcion());
+
+        $this->get(route('cobros.voucher', $id))->assertOk()->assertSeeInOrder(['POR EL SERVICIO DE LIMPIEZA', 'CORRESPONDIENTE AL PERIODO', 'SEGUN CONTRATO 045']);
+    }
+
+    public function test_solo_texto_o_un_producto_en_cero_no_se_vende(): void
+    {
+        $datos = $this->venta([], '13');
+        $datos['items'] = [['id' => null, 'descripcion' => 'SOLO UNA NOTA', 'cantidad' => 1, 'precio' => 0]];
+        $this->postJson(route('pv.registrar'), $datos)->assertJsonMissing(['estado' => 'success']);
+
+        $datos = $this->venta([[$this->producto('ARENA', 40, 10), 1, 0]], '13');
+        $this->postJson(route('pv.registrar'), $datos)->assertJsonMissing(['estado' => 'success']);
+        $this->assertSame(0, DB::table('cpe_cabecera')->where('id_empresa_negocio', $this->sucursal)->count());
+    }
+
     public function test_sunat_recibe_el_distrito_oficial_del_ubigeo_aunque_la_sucursal_lo_tenga_mal_escrito(): void
     {
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['ubigeo' => '160113',

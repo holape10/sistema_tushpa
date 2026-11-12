@@ -25,6 +25,28 @@ use Illuminate\Support\Facades\Schema;
  */
 class Impresion
 {
+    /**
+     * Logo de la empresa (Empresas → Editar) para los reportes, como data URI: Dompdf lo dibuja sin leer archivos ni
+     * internet, y sirve igual en el navegador. Si la empresa no tiene, el de la sucursal.
+     */
+    public static function logoReporte(?int $sucursal = null): ?string
+    {
+        $sucursal ??= (int) Auth::user()?->id_empresa_negocio;
+        $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->first(['IdEmpresa', 'logo_suc']);
+        if (! $negocio) {
+            return null;
+        }
+        $empresa = DB::table('empresa')->where('IdEmpresa', $negocio->IdEmpresa)->value('LogEmpresa');
+        foreach ([$empresa, $negocio->logo_suc] as $archivo) {
+            $ruta = $archivo ? public_path($archivo) : null;
+            if ($ruta && is_file($ruta) && ($tipo = @mime_content_type($ruta)) && str_starts_with($tipo, 'image/')) {
+                return 'data:'.$tipo.';base64,'.base64_encode((string) file_get_contents($ruta));
+            }
+        }
+
+        return null;
+    }
+
     /** Ventas directas (Punto Venta, PV Farmacia, PV móvil, táctil y grifo): su comprobante no muestra vendedor ni cajero */
     private const VENTA_DIRECTA = ['PV', 'FARMACIA', 'POS', 'TACTIL', 'GRIFO'];
 
@@ -278,7 +300,9 @@ class Impresion
     public static function ticketComprobante(object $cab, object $imp, int $copias = 1): string
     {
         $idCpe = (int) $cab->IdCpe_cabecera;
-        $detalle = DB::table('cpe_detalle')->where('IdCpe_cabecera', $idCpe)->get();
+        // Con líneas de texto (servicio en varias líneas) se imprime todo; a SUNAT fue solo cdedes
+        $detalle = DB::table('cpe_detalle')->where('IdCpe_cabecera', $idCpe)->get()
+            ->each(fn ($d) => $d->cdedes = ($d->descripcion_impresa ?? null) ?: $d->cdedes);
         $medios = DB::table('venta_medio_pago as v')->leftJoin('medios_pagos as m', 'm.id_med_pag', '=', 'v.id_med_pag')
             ->where('v.IdCpe_cabecera', $idCpe)->get(['m.nom_med_pag', 'v.monto']);
         $tdodes = DB::table('tipo_documento')->where('tdocod', $cab->tdocod)->value('tdodes');

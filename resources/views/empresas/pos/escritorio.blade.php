@@ -2,7 +2,7 @@
 @section('title', $farmacia ? 'PV Farmacia' : 'Punto Venta')
 
 @section('content')
-<div x-data="puntoVenta" x-init="iniciar()" @keydown.window="teclaGlobal($event)" class="max-w-[1600px] mx-auto">
+<div x-data="puntoVenta" x-init="iniciar()" @keydown.window="teclaGlobal($event)" class="max-w-[100rem] mx-auto">
 
     @if ($farmacia)
         <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
@@ -122,7 +122,7 @@
                                                class="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-indigo-400 focus:ring-0 px-0 py-1 font-semibold uppercase text-slate-800">
                                         <span class="block text-[11px] text-slate-400 -mt-0.5">
                                             <span class="sm:hidden font-bold text-slate-700" x-text="soles(redondear(it.cantidad * it.precio)) + ' · '"></span>
-                                            <span x-text="it.id ? it.codigo + (it.unidad ? ' · ' + it.unidad : '') : 'Línea libre · no mueve stock'"></span>
+                                            <span x-text="it.id ? it.codigo + (it.unidad ? ' · ' + it.unidad : '') : (esTexto(it) ? '📝 Texto (S/ 0): se imprime, no va a SUNAT' : 'Línea libre · no mueve stock')"></span>
                                             {{-- Línea libre: la caja elige la unidad (los productos llevan la suya y no se cambia) --}}
                                             <template x-if="!it.id">
                                                 <select x-model="it.umecod" title="Unidad de medida" class="ml-1 h-6 py-0 pl-1.5 pr-6 rounded-md border-slate-200 text-[11px] font-semibold text-slate-600">

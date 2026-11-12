@@ -31,6 +31,7 @@
 </head>
 <body>
     <div class="cabecera">
+        @include('empresas.partials.logo_reporte')
         <h1>{{ $fichas->count() === 1 ? 'Receta' : 'Recetas' }} · {{ $negocio }}</h1>
         <p>{{ $fichas->count() }} {{ $fichas->count() === 1 ? 'plato' : 'platos' }} · precios de compra al {{ now()->format('d/m/Y H:i') }}</p>
     </div>
