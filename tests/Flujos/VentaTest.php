@@ -233,6 +233,26 @@ class VentaTest extends FlujoTestCase
         $this->assertSame([[1, 900.0]], DB::table('cpe_cuotas')->where('IdCpe_cabecera', $id)->get()->map(fn ($c) => [(int) $c->numero, (float) $c->monto])->all());
     }
 
+    public function test_el_total_de_la_linea_se_redondea_hasta_5_centimos(): void
+    {
+        $arroz = $this->producto('ARROZ A GRANEL', 11, 50);
+        $datos = $this->venta([], '03');
+        $datos['items'] = [['id' => $arroz->IdProducto, 'cantidad' => 2.35, 'precio' => 11, 'importe' => 25.90]];
+        $datos['mon_med_pag'] = [25.90];
+        $datos['paga'] = 25.90;
+
+        $id = (int) $this->postJson(route('pv.registrar'), $datos)->assertJson(['estado' => 'success'])->json('id');
+
+        $this->assertEquals(25.90, (float) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->value('ccaitv'));
+        $linea = DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->first();
+        $this->assertEquals([2.35, 11.0, 25.90], [(float) $linea->cdecan, (float) $linea->cdepuni, (float) $linea->cdevve], 'La cantidad y el precio quedan como se escribieron.');
+
+        $datos['items'][0]['importe'] = 26.00; // 15 céntimos: ya no es redondeo
+        $datos['mon_med_pag'] = [26.00];
+        $datos['paga'] = 26.00;
+        $this->postJson(route('pv.registrar'), $datos)->assertJsonMissing(['estado' => 'success']);
+    }
+
     public function test_sunat_recibe_el_distrito_oficial_del_ubigeo_aunque_la_sucursal_lo_tenga_mal_escrito(): void
     {
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['ubigeo' => '160113',

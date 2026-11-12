@@ -143,7 +143,16 @@ document.addEventListener('alpine:init', () => {
         },
 
         // ---------- Totales ----------
-        get base() { return redondear(this.carrito.reduce((s, it) => s + redondear(it.cantidad * it.precio), 0)); },
+        get base() { return redondear(this.carrito.reduce((s, it) => s + this.totalDe(it), 0)); },
+        // Total de la línea: cantidad × precio, o el que escribió la caja para redondear (hasta 5 céntimos: 25.85 → 25.90)
+        totalDe(it) { return it.importe != null ? it.importe : redondear(it.cantidad * it.precio); },
+        cambiarTotal(it, valor) {
+            const v = redondear(Number(valor) || 0);
+            const calculado = redondear(it.cantidad * it.precio);
+            if (Math.abs(v - calculado) < 0.005) { it.importe = null; return; }
+            if (Math.abs(v - calculado) <= 0.0501) { it.importe = v; return; }
+            this.aviso(`El total solo se redondea hasta 5 céntimos (${this.soles(calculado)} → ${this.soles(redondear(calculado - 0.05))} o ${this.soles(redondear(calculado + 0.05))}). Para otro monto cambia la cantidad o el precio.`, 'error');
+        },
         get esContado() {
             const e = CFG.estadopagos.find(x => x.cre_dia_id == this.estadopago);
             return !e || e.cre_dia_tip === 'CONTADO';
@@ -298,6 +307,7 @@ document.addEventListener('alpine:init', () => {
             }
             if (it) {
                 it.cantidad = redondear(it.cantidad + cantidad);
+                it.importe = null;
             } else {
                 it = this.nuevoItem(p, pres, confirmado ? { cantidad: redondear(cantidad), precio: redondear(precio) } : {});
                 this.carrito.push(it);
@@ -342,11 +352,13 @@ document.addEventListener('alpine:init', () => {
             if (!it.seriesDisponibles.includes(serie)) { this.sonido(false); this.aviso(`La serie ${serie} no está disponible para ${it.descripcion} (no se registró su ingreso o ya se vendió)`, 'error'); return; }
             it.series.push(serie);
             it.cantidad = it.series.length;
+            it.importe = null;
             this.sonido(true);
         },
         quitarSerie(it, serie) {
             it.series = it.series.filter(s => s !== serie);
             it.cantidad = it.series.length;
+            it.importe = null;
         },
         seriesLibres(it) {
             return it.seriesDisponibles.filter(s => !this.carrito.some(x => x.id === it.id && (x.series || []).includes(s)));
@@ -423,6 +435,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         normalizar(it) {
+            it.importe = null; // cambió la cantidad o el precio: el redondeo del total se vuelve a hacer si hace falta
             if (it.control_serie) it.cantidad = it.series.length;
             else if (!(Number(it.cantidad) > 0)) it.cantidad = 1;
             if (!(Number(it.precio) >= 0)) it.precio = it.precioBase;
@@ -751,6 +764,7 @@ document.addEventListener('alpine:init', () => {
         itemsParaEnviar() {
             return this.carrito.map(it => ({ id: it.id, presentacion: it.presentacion || null, descripcion: it.descripcion.trim(),
                 cantidad: it.cantidad, precio: it.precio, lote: it.lote || null, ...(it.control_serie ? { series: it.series } : {}),
+                ...(it.importe != null ? { importe: it.importe } : {}),
                 // Línea libre: la unidad que eligió la caja (los productos usan la suya)
                 ...(it.id ? {} : { umecod: it.umecod || 'NIU' }) }));
         },
@@ -760,10 +774,12 @@ document.addEventListener('alpine:init', () => {
                 if (!i.producto) {
                     // Línea libre, o producto que ya no se vende: queda como línea libre (no mueve stock)
                     return { key: this._sigKey++, id: null, codigo: '', descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio,
-                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1, control_serie: false, umecod: i.umecod || 'NIU' };
+                             precioBase: i.precio, stock: null, flash: false, presentaciones: [], presentacion: null, factor: 1, control_serie: false, umecod: i.umecod || 'NIU',
+                             importe: i.importe ?? null };
                 }
                 const pres = i.presentacion ? (i.producto.presentaciones || []).find(x => x.id === i.presentacion) : null;
-                return this.nuevoItem(i.producto, pres, { descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio, precioBase: i.precio, lote: i.lote || '' });
+                return { ...this.nuevoItem(i.producto, pres, { descripcion: i.descripcion, cantidad: i.cantidad, precio: i.precio, precioBase: i.precio, lote: i.lote || '' }),
+                    importe: i.importe ?? null };
             });
             if (pf.items.some(i => i.no_disponible)) this.aviso('Algún producto de la proforma ya no está activo: quedó como línea libre.', 'error');
             this.observaciones = pf.observaciones || '';

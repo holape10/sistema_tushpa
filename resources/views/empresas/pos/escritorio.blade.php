@@ -121,7 +121,7 @@
                                                :placeholder="it.id ? '' : 'Descripción (línea libre)'"
                                                class="w-full bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-indigo-400 focus:ring-0 px-0 py-1 font-semibold uppercase text-slate-800">
                                         <span class="block text-[11px] text-slate-400 -mt-0.5">
-                                            <span class="sm:hidden font-bold text-slate-700" x-text="soles(redondear(it.cantidad * it.precio)) + ' · '"></span>
+                                            <span class="sm:hidden font-bold text-slate-700" x-text="soles(totalDe(it)) + ' · '"></span>
                                             <span x-text="it.id ? it.codigo + (it.unidad ? ' · ' + it.unidad : '') : (esTexto(it) ? '📝 Texto (S/ 0): se imprime, no va a SUNAT' : 'Línea libre · no mueve stock')"></span>
                                             {{-- Línea libre: la caja elige la unidad (los productos llevan la suya y no se cambia) --}}
                                             <template x-if="!it.id">
@@ -186,7 +186,14 @@
                                                :class="!cfg.editarPrecio && it.id ? 'border-slate-200 bg-slate-50 text-slate-700 cursor-not-allowed' : 'border-dashed border-amber-300 bg-amber-50 text-amber-900'"
                                                class="w-full rounded-lg text-right font-semibold focus:ring-amber-200 focus:border-amber-400">
                                     </td>
-                                    <td class="hidden sm:table-cell text-right px-4 py-1.5 font-bold text-slate-800 whitespace-nowrap" x-text="soles(redondear(it.cantidad * it.precio))"></td>
+                                    {{-- Total: se puede escribir para redondear hasta 5 céntimos (2.35 × 11 = 25.85 → 25.90); la cantidad y el precio no cambian --}}
+                                    <td class="hidden sm:table-cell px-1 sm:px-2 py-1.5 text-right whitespace-nowrap">
+                                        <input type="number" step="0.01" min="0" :value="totalDe(it).toFixed(2)" title="Escribe el total para redondear (hasta 5 céntimos)"
+                                               @change="cambiarTotal(it, $event.target.value); $event.target.value = totalDe(it).toFixed(2)" @keydown.enter.prevent="$event.target.blur()"
+                                               :class="it.importe != null ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-transparent hover:border-slate-200'"
+                                               class="w-24 rounded-lg text-right font-bold text-slate-800 focus:ring-indigo-300 focus:border-indigo-400">
+                                        <span x-show="it.importe != null" x-cloak class="block text-[10px] font-semibold text-emerald-700">redondeado</span>
+                                    </td>
                                     <td class="pr-1 sm:pr-2">
                                         <button type="button" @click="quitar(i)" class="p-1.5 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50" aria-label="Quitar línea">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
