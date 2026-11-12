@@ -112,6 +112,12 @@ class ComprasDetalleTest extends FlujoTestCase
 
         $this->get(route('sire.detalle.excel', ['periodo' => '202607']))->assertOk()->assertDownload('COMPRAS_DETALLE_'.$ruc.'_202607.xlsx');
         $this->get(route('sire.detalle.concar', ['periodo' => '202607']))->assertOk()->assertDownload('CONCAR_COMPRAS_DETALLE_'.$ruc.'_202607.xlsx');
+        // El subdiario de compras se cambia junto al botón y queda guardado para la empresa (11 → 14)
+        $this->assertSame('11', $concar['filas'][0][1]);
+        $this->get(route('sire.detalle', ['periodo' => '202607']))->assertSee('name="subdiario" value="11"', false);
+        $this->get(route('sire.detalle.concar', ['periodo' => '202607', 'subdiario' => '14']))->assertOk();
+        $this->assertSame('14', Concar::comprasConDetalle($ruc, '202607', $periodo['comprobantes'])['filas'][0][1]);
+        $this->get(route('sire.detalle', ['periodo' => '202607']))->assertSee('name="subdiario" value="14"', false);
     }
 
     public function test_trae_de_sunat_por_json_pe_los_xml_que_faltan(): void

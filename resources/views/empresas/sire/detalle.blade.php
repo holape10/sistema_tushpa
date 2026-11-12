@@ -55,8 +55,12 @@
             <a href="{{ route('sire.detalle.excel', ['periodo' => $periodo]) }}" class="h-10 px-4 inline-flex items-center rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-bold">Excel con detalle</a>
             <form method="GET" action="{{ route('sire.detalle.concar') }}" class="flex">
                 <input type="hidden" name="periodo" value="{{ $periodo }}">
+                {{-- Subdiario de compras de CONCAR (el de la empresa: se guarda al exportar si se cambia) --}}
+                <label class="flex items-center h-10 px-2 rounded-l-xl border border-r-0 border-slate-300 bg-slate-50 text-xs font-semibold text-slate-500" title="Subdiario de compras en CONCAR (se guarda para la próxima)">Subdiario
+                    <input name="subdiario" value="{{ $cfg['subdiario_compras'] }}" maxlength="4" pattern="[0-9A-Za-z]+" required
+                           class="ml-1 w-12 h-8 rounded-lg border-slate-300 text-sm font-mono text-center"></label>
                 <input type="number" name="desde" min="1" max="9999" placeholder="Desde 1" title="Número del primer asiento"
-                       class="w-24 h-10 rounded-l-xl border-slate-300 text-sm">
+                       class="w-24 h-10 border-slate-300 text-sm">
                 <button class="h-10 px-4 rounded-r-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold">CONCAR con detalle</button>
             </form>
         </div>

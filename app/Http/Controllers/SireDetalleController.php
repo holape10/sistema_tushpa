@@ -188,7 +188,12 @@ class SireDetalleController extends Controller
     {
         $ruc = $this->autorizar();
         $periodo = $this->periodo($request);
-        $desde = (int) ($request->validate(['desde' => 'nullable|integer|min:1|max:9999'])['desde'] ?? 1) ?: 1;
+        $v = $request->validate(['desde' => 'nullable|integer|min:1|max:9999', 'subdiario' => 'nullable|string|max:4|regex:/^[0-9A-Za-z]+$/']);
+        $desde = (int) ($v['desde'] ?? 1) ?: 1;
+        // El subdiario de compras se cambia aquí mismo y queda guardado en la configuración CONCAR de la empresa
+        if (! empty($v['subdiario']) && $v['subdiario'] !== Concar::config($ruc)['subdiario_compras']) {
+            DB::table('concar_config')->updateOrInsert(['IdEmpresa' => $ruc], ['subdiario_compras' => $v['subdiario'], 'updated_at' => now()]);
+        }
         $d = $this->datos($ruc, $periodo);
         $datos = Concar::comprasConDetalle($ruc, $periodo, $d['comprobantes'], $desde);
         if (! $datos['filas']) {
