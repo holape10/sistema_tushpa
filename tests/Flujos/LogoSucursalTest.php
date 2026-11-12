@@ -95,4 +95,17 @@ class LogoSucursalTest extends FlujoTestCase
         $id = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('TACACHO', 12, 10), 1]], '03'), 'PV');
         $this->assertSame(['B002', 1], [($c = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first())->serdoc, (int) $c->numdoc]);
     }
+
+    public function test_el_cancelado_grande_del_a4_simple_solo_si_la_sucursal_lo_activa(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['diseno_a4' => 'SIMPLE']);
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('PASAJE FLUVIAL', 200, 10), 1]], '01'), 'PV');
+        $a4 = fn () => $this->get(route('cobros.voucher', [$id, 'formato' => 'a4']))->assertOk();
+
+        $a4()->assertSee('font-size:10px; margin-top:6px">CANCELADO', false)->assertSee('____de___', false);
+
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['diseno_a4' => 'SIMPLE', 'a4_cancelado_grande' => 1]))->assertSessionHasNoErrors();
+
+        $a4()->assertSee('font-size:24px; letter-spacing:1px; margin-top:8px">CANCELADO', false)->assertDontSee('____de___', false);
+    }
 }

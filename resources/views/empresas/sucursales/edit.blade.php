@@ -215,6 +215,11 @@
                                     </label>
                                 @endforeach
                             </div>
+                            <label x-show="diseno === 'SIMPLE'" x-cloak class="flex items-start gap-3 rounded-xl bg-gray-50 px-4 py-3 cursor-pointer">
+                                <input type="checkbox" name="a4_cancelado_grande" value="1" @checked($campo('a4_cancelado_grande')) class="mt-0.5 rounded text-indigo-600">
+                                <span><span class="text-sm font-semibold text-gray-700">"CANCELADO" grande al medio en las ventas al contado</span>
+                                    <span class="block text-xs text-gray-500">Sin las líneas de fecha y firma (ya está pagado). Las ventas al crédito siguen con fecha y firma.</span></span>
+                            </label>
                             <label class="block">
                                 <span class="text-sm text-gray-600">Direcciones o líneas extra de la cabecera <span class="text-gray-400">(opcional)</span></span>
                                 <textarea name="cabecera_a4" rows="3" maxlength="500" class="mt-1 w-full rounded-xl border-gray-300 text-sm"

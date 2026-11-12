@@ -12,7 +12,11 @@
         html, body { height: 100%; overscroll-behavior: none; }
         * { -webkit-tap-highlight-color: transparent; }
         button, [role=button] { touch-action: manipulation; user-select: none; }
-        .scroll-fino { scrollbar-width: thin; scrollbar-color: #c7d2fe transparent; }
+        /* Barra para desplazar bien visible (con mouse se arrastra; en pantalla táctil, con el dedo) */
+        .scroll-fino { scrollbar-width: thin; scrollbar-color: #94a3b8 transparent; }
+        .scroll-fino::-webkit-scrollbar { width: 8px; height: 8px; }
+        .scroll-fino::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 8px; }
+        .scroll-fino::-webkit-scrollbar-track { background: transparent; }
     </style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script>
@@ -122,7 +126,7 @@
             </div>
         </div>
 
-        <div class="flex-1 min-h-0 overflow-y-auto scroll-fino px-3 py-2">
+        <div class="flex-1 min-h-[11rem] overflow-y-auto scroll-fino px-3 py-2">
             <div x-show="!carrito.length" class="h-full min-h-[160px] flex flex-col items-center justify-center text-slate-300">
                 <svg class="w-14 h-14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                 <p class="mt-2 font-semibold">Toca un producto para agregarlo</p>
@@ -136,8 +140,6 @@
                                 <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
                                     <button type="button" @click="editarPrecio(i)" class="h-8 px-2.5 rounded-lg text-sm font-bold"
                                             :class="it.desc50 ? 'bg-orange-50 text-orange-700' : 'bg-indigo-50 text-indigo-700'" x-text="soles(it.precio)"></button>
-                                    <button type="button" @click="toggle50(i)" class="h-8 px-2.5 rounded-lg text-xs font-bold border"
-                                            :class="it.desc50 ? 'bg-orange-500 border-orange-500 text-white' : 'border-orange-300 text-orange-600'">-50%</button>
                                     <button type="button" @click="it.verNota = !it.verNota; $nextTick(() => document.getElementById('nota-' + it.key)?.focus())"
                                             class="h-8 px-2.5 rounded-lg text-xs font-semibold border border-slate-200 text-slate-500" x-text="it.nota ? '✎ nota' : '+ nota'"></button>
                                 </div>
@@ -156,13 +158,8 @@
             </ul>
         </div>
 
-        {{-- Cobro --}}
-        <div class="border-t border-slate-100 bg-slate-50 rounded-b-2xl px-4 pt-3 pb-4 space-y-2.5" style="padding-bottom: max(1rem, env(safe-area-inset-bottom))">
-            <div class="flex items-end justify-between">
-                <span class="text-xs font-bold text-slate-500 uppercase">Total a pagar</span>
-                <span class="text-3xl font-black" x-text="soles(total)"></span>
-            </div>
-
+        {{-- Cobro: los datos se desplazan si no entran (con su barra); el total y los botones quedan fijos abajo, siempre a la vista --}}
+        <div class="shrink min-h-0 max-h-[55%] overflow-y-auto scroll-fino border-t border-slate-100 bg-slate-50 px-4 pt-3 pb-2 space-y-2.5">
             <div class="grid gap-1 p-1 bg-slate-200/70 rounded-xl" :style="`grid-template-columns: repeat(${cfg.comprobantes.length}, minmax(0,1fr))`">
                 <template x-for="c in cfg.comprobantes" :key="c.tdocod">
                     <button type="button" @click="tdocod = c.tdocod" :class="tdocod === c.tdocod ? 'bg-white shadow text-indigo-700' : 'text-slate-500'"
@@ -222,6 +219,12 @@
                       x-text="(paga >= totalCobrar ? 'Vuelto ' : 'Falta ') + soles(Math.abs(paga - totalCobrar))"></span>
             </div>
 
+        </div>
+        <div class="shrink-0 border-t border-slate-200 bg-slate-50 rounded-b-2xl px-4 pt-2.5 pb-4 space-y-2" style="padding-bottom: max(1rem, env(safe-area-inset-bottom))">
+            <div class="flex items-end justify-between">
+                <span class="text-xs font-bold text-slate-500 uppercase">Total a pagar</span>
+                <span class="text-3xl font-black" x-text="soles(total)"></span>
+            </div>
             <button type="button" @click="guardarProforma()" :disabled="procesando || !carrito.length"
                     class="w-full h-10 rounded-xl bg-violet-50 text-violet-700 text-sm font-bold active:scale-[.98] disabled:opacity-40">
                 PROFORMA (cotizar e imprimir)

@@ -594,6 +594,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/sunat/resumenes', [SunatController::class, 'resumenes'])->name('sunat.resumenes');
     Route::post('/sunat/resumenes', [SunatController::class, 'resumenEnviar'])->name('sunat.resumen_enviar');
     Route::post('/sunat/resumenes/{id}/consultar', [SunatController::class, 'resumenConsultar'])->whereNumber('id')->name('sunat.resumen_consultar');
+    Route::post('/sunat/resumenes/{id}/liberar', [SunatController::class, 'resumenLiberar'])->whereNumber('id')->middleware('throttle:10,1')->name('sunat.resumen_liberar');
     Route::get('/sunat/consulta-cpe', [SunatController::class, 'consultaCpe'])->name('sunat.consulta_cpe');
     Route::post('/sunat/consulta-cpe', [SunatController::class, 'consultaCpeConsultar'])->middleware('throttle:30,1')->name('sunat.consulta_cpe.consultar');
     Route::get('/sunat/resumenes/{id}/{tipo}', [SunatController::class, 'resumenDescargar'])->whereNumber('id')->name('sunat.resumen_descargar');

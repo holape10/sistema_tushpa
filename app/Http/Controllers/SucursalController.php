@@ -212,6 +212,7 @@ class SucursalController extends Controller
         $datos['imagenes_venta'] = $request->boolean('imagenes_venta');
         $datos['igv_restaurante'] = $request->boolean('igv_restaurante');
         $datos['diseno_a4'] = $datos['diseno_a4'] ?? 'MODERNO';
+        $datos['a4_cancelado_grande'] = $request->boolean('a4_cancelado_grande');
         $datos['cabecera_a4'] = trim((string) ($datos['cabecera_a4'] ?? '')) ?: null;
         $datos['giro_a4'] = trim((string) ($datos['giro_a4'] ?? '')) ?: null;
         $datos['clinica_doctor_cobra'] = $request->boolean('clinica_doctor_cobra');

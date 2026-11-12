@@ -75,8 +75,11 @@
                                     @if ($g->est_sunat === 'ACEPTADO')
                                         <a href="{{ route('guias.archivo', [$g->gre_id, 'cdr']) }}" title="CDR" class="px-2 py-1 rounded-lg bg-amber-50 text-amber-700"><i class="fas fa-file-zipper"></i></a>
                                     @endif
+                                    {{-- Copiar: la rechazada se vuelve a emitir con otro número; cualquier otra sirve de modelo para una guía parecida --}}
                                     @if ($g->est_sunat === 'RECHAZADO')
                                         <a href="{{ route('guias.crear', ['copiar' => $g->gre_id]) }}" title="Emitir otra guía igual, con nuevo número" class="px-2.5 py-1 rounded-lg bg-amber-500 text-white text-xs font-bold">Copiar en guía nueva</a>
+                                    @else
+                                        <a href="{{ route('guias.crear', ['copiar' => $g->gre_id]) }}" title="Nueva guía con los mismos datos y productos (luego cambias lo que haga falta)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"><i class="fas fa-copy"></i> Copiar</a>
                                     @endif
                                     @if (in_array($g->est_sunat, ['PENDIENTE', 'RECHAZADO', 'ERROR']))
                                         <button type="button" @click="eliminar({{ $g->gre_id }})" title="Eliminar" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-600"><i class="fas fa-trash"></i></button>

@@ -118,7 +118,13 @@ class GuiaController extends Controller
                 }
             }
             $guia['vehiculo_m1l'] = (bool) $origen->vehiculo_m1l;
-            $guia['observacion'] = trim(($origen->observacion ? $origen->observacion.' · ' : '').'REEMPLAZA A '.$origen->serie.'-'.$origen->numero);
+            if ($origen->est_sunat === 'RECHAZADO') {
+                // La misma guía, con otro número: sigue amarrada a su venta y dice a cuál reemplaza
+                $guia['observacion'] = trim(($origen->observacion ? $origen->observacion.' · ' : '').'REEMPLAZA A '.$origen->serie.'-'.$origen->numero);
+            } else {
+                // Una guía de modelo para otro envío: el comprobante de aquella no es el de esta
+                $guia = array_merge($guia, ['doc_tdocod' => '', 'doc_numero' => '', 'IdCpe_cabecera' => null]);
+            }
             $items = DB::table('gre_detalle')->where('gre_id', $copiaId)->orderBy('det_id')->get()
                 ->map(fn ($d) => ['IdProducto' => $d->IdProducto, 'codigo' => $d->codigo, 'descripcion' => $d->descripcion,
                     'umecod' => $d->umecod ?: 'NIU', 'cantidad' => (float) $d->cantidad])->values()->all();

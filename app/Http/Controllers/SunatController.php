@@ -219,6 +219,19 @@ class SunatController extends Controller
         }
     }
 
+    /** Resumen trabado en SUNAT: se revisa cada boleta; las que SUNAT tiene quedan aceptadas y las demás se liberan para reenviarlas */
+    public function resumenLiberar($id)
+    {
+        $this->autorizar();
+        try {
+            $r = $this->sunat()->liberarResumen((int) $id);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['resumen' => $e->getMessage()]);
+        }
+
+        return back()->with('success', $r['mensaje'].($r['liberadas'] ? ' Ya puedes enviarlas en un resumen nuevo (arriba) o de forma individual.' : ''));
+    }
+
     public function resumenDescargar($id, $tipo)
     {
         $this->autorizar();

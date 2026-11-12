@@ -161,10 +161,18 @@
                             @if ($qr)<div style="margin-top:5px"><img src="data:image/svg+xml;base64,{{ base64_encode($qr) }}" style="width:78px; height:78px"></div>@endif
                         </td>
                         <td rowspan="{{ $n }}" style="width:40%" class="c">
-                            @if ($contado)<div style="font-size:10px; margin-top:6px">CANCELADO</div>@endif
+                            {{-- Al contado: CANCELADO. Si la sucursal lo activó (a4_cancelado_grande), grande al medio y sin fecha ni firma --}}
+                            @php $canceladoGrande = $contado && ! empty($negocio->a4_cancelado_grande); @endphp
+                            @if ($canceladoGrande)
+                                <div style="font-size:24px; letter-spacing:1px; margin-top:8px">CANCELADO</div>
+                            @elseif ($contado)
+                                <div style="font-size:10px; margin-top:6px">CANCELADO</div>
+                            @endif
                             @if ($qrPago && !$esNota)<div style="margin-top:4px"><img src="{{ $qrPago }}" style="max-width:140px; max-height:80px"></div>@endif
-                            <div style="margin-top:12px">{{ $lugar ?: '' }}____de_________________del 20___</div>
-                            <div style="margin-top:18px">______________________________</div>
+                            @unless ($canceladoGrande)
+                                <div style="margin-top:12px">{{ $lugar ?: '' }}____de_________________del 20___</div>
+                                <div style="margin-top:18px">______________________________</div>
+                            @endunless
                             <div style="margin-top:10px">REPRESENTACIÓN IMPRESA DE LA {{ $tdodes }}</div>
                         </td>
                     @endif

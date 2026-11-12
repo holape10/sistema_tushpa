@@ -79,4 +79,15 @@ class GuiaLineaLibreTest extends FlujoTestCase
             ->assertSee('HONDA SELVA DEL PERU SA')->assertSee('CARRETERA IQUITOS NAUTA KM 5.5')->assertSee('TRANSPORTES SAC')
             ->assertSee('KIT CAJA DE EMBALAJE METALICO WAVE110S')->assertSee('REEMPLAZA A T001-'.$numero);
     }
+
+    public function test_cualquier_guia_sirve_de_modelo_para_otra(): void
+    {
+        $id = $this->guia('02');
+        DB::table('gre_cabecera')->where('gre_id', $id)->update(['est_sunat' => 'ACEPTADO', 'doc_tdocod' => '01', 'doc_numero' => 'F001-5752', 'observacion' => 'ENTREGA EN ALMACEN 2']);
+
+        $this->get(route('guias.index'))->assertOk()->assertSee(route('guias.crear', ['copiar' => $id]), false);
+        $this->get(route('guias.crear', ['copiar' => $id]))->assertOk()
+            ->assertSee('HONDA SELVA DEL PERU SA')->assertSee('KIT CAJA DE EMBALAJE METALICO WAVE110S')->assertSee('ABC123')->assertSee('ENTREGA EN ALMACEN 2')
+            ->assertDontSee('F001-5752')->assertDontSee('REEMPLAZA A');
+    }
 }

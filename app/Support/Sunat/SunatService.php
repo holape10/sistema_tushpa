@@ -7,6 +7,7 @@ use App\Models\EmpresaNegocio;
 use App\Support\AnulacionVenta;
 use App\Support\Bitacora;
 use App\Support\Comprobante;
+use App\Support\ConsultaPeru;
 use App\Support\CuotasCredito;
 use App\Support\Ubigeo;
 use App\Support\Unidades;
@@ -726,6 +727,76 @@ class SunatService
                 'referencia' => ['venta', $cab->IdCpe_cabecera],
             ]);
         }
+    }
+
+    /** Horas que puede quedar un resumen "en proceso" antes de poder liberarlo (SUNAT suele responder en minutos) */
+    public const HORAS_PARA_LIBERAR = 2;
+
+    /**
+     * Resumen trabado en SUNAT (el ticket responde "98 en proceso" por horas o días): se consulta el ticket una última vez y,
+     * si sigue igual, se pregunta a SUNAT por cada boleta (consulta de validez). La que SUNAT tiene queda ACEPTADA; la que
+     * no tiene se libera (PENDIENTE, sin resumen) para mandarla en un resumen nuevo o de forma individual.
+     *
+     * @return array{aceptadas: int, liberadas: int, sin_respuesta: int, mensaje: string}
+     */
+    public function liberarResumen(int $resId): array
+    {
+        $res = DB::table('resumenes')->where('res_id', $resId)->where('id_empresa_negocio', $this->negocio->id_empresa_negocio)->first();
+        if (! $res || ($res->es_baja ?? 0)) {
+            throw new RuntimeException('Resumen no encontrado.');
+        }
+        if (! in_array($res->est_sunat, ['ENVIADO', 'EN PROCESO', 'GENERADO'], true)) {
+            throw new RuntimeException("El resumen {$res->nom_arch} ya está {$res->est_sunat}: no hace falta liberarlo.");
+        }
+        if (now()->diffInHours($res->fecha_hora, true) < self::HORAS_PARA_LIBERAR) {
+            throw new RuntimeException('Espera al menos '.self::HORAS_PARA_LIBERAR.' horas desde el envío: SUNAT todavía puede responder el ticket.');
+        }
+        // Una última consulta del ticket: si ya respondió, no hay nada que liberar
+        if ($res->res_ticket) {
+            try {
+                $t = $this->consultarTicket($resId);
+                if (in_array($t['estado'], ['ACEPTADO', 'RECHAZADO'], true)) {
+                    return ['aceptadas' => 0, 'liberadas' => 0, 'sin_respuesta' => 0, 'mensaje' => "SUNAT ya respondió el ticket: {$t['estado']}. {$t['mensaje']}"];
+                }
+            } catch (\Throwable) {
+                // Sin respuesta del ticket: se sigue con la consulta de cada boleta
+            }
+        }
+
+        $hora = now()->format('d/m/Y H:i');
+        $cuenta = ['aceptadas' => 0, 'liberadas' => 0, 'sin_respuesta' => 0];
+        foreach (DB::table('cpe_cabecera')->where('res_id', $resId)->whereNull('ccabaj')->get() as $c) {
+            $v = ConsultaPeru::estadoCpe((string) $c->IdEmpresa, $c->tdocod, $c->serdoc, (string) (int) $c->numdoc, (string) $c->ccafem, (float) $c->ccaitv);
+            if (! $v) {
+                $cuenta['sin_respuesta']++;
+
+                continue;
+            }
+            if (str_starts_with($v['estado'], 'ACEPTADO')) {
+                DB::table('cpe_cabecera')->where('IdCpe_cabecera', $c->IdCpe_cabecera)->update([
+                    'est_sunat' => 'ACEPTADO', 'enviado' => 1, 'ccadessun' => "Consultado en SUNAT el {$hora}: ACEPTADO (resumen {$res->nom_arch} sin respuesta del ticket).",
+                ]);
+                $cuenta['aceptadas']++;
+            } elseif (str_starts_with($v['estado'], 'ANULADO')) {
+                DB::table('cpe_cabecera')->where('IdCpe_cabecera', $c->IdCpe_cabecera)->update([
+                    'est_sunat' => 'ANULADO', 'ccadessun' => "Consultado en SUNAT el {$hora}: ANULADO.",
+                ]);
+                $cuenta['aceptadas']++;
+            } else {
+                DB::table('cpe_cabecera')->where('IdCpe_cabecera', $c->IdCpe_cabecera)->update([
+                    'est_sunat' => 'PENDIENTE', 'res_id' => null, 'enviado' => 0,
+                    'ccadessun' => mb_substr("Liberado del resumen {$res->nom_arch} (SUNAT no respondió el ticket y no la tiene): envíala de nuevo.", 0, 500),
+                ]);
+                $cuenta['liberadas']++;
+            }
+        }
+        $mensaje = "Revisado el {$hora}: {$cuenta['aceptadas']} ya estaban en SUNAT, {$cuenta['liberadas']} liberadas para enviar de nuevo"
+            .($cuenta['sin_respuesta'] ? ", {$cuenta['sin_respuesta']} sin respuesta de la consulta (vuelve a intentar)" : '').'.';
+        DB::table('resumenes')->where('res_id', $resId)->update([
+            'est_sunat' => $cuenta['sin_respuesta'] ? $res->est_sunat : 'LIBERADO', 'res_est' => mb_substr($mensaje, 0, 250),
+        ]);
+
+        return $cuenta + ['mensaje' => $mensaje];
     }
 
     /** Consulta el ticket del resumen y actualiza el estado de las boletas que incluye */
