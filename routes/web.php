@@ -182,6 +182,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/autoservicio/pedido', [AutoservicioController::class, 'pedir'])->middleware('throttle:30,1')->name('autoservicio.pedir');
     Route::get('/encuestas', [EncuestaController::class, 'index'])->name('encuestas.index');
     Route::post('/encuestas/activar', [EncuestaController::class, 'activar'])->name('encuestas.activar');
+    Route::post('/encuestas/qr-ticket', [EncuestaController::class, 'qrTicket'])->name('encuestas.qr_ticket');
+    Route::get('/encuestas/mesa/{pedido}', [EncuestaController::class, 'qrPedido'])->whereNumber('pedido')->name('encuestas.qr_pedido');
+    Route::post('/encuestas/telegram/{usuario}/recibir', [EncuestaController::class, 'telegramRecibir'])->whereNumber('usuario')->name('encuestas.telegram.recibir');
+    Route::post('/encuestas/telegram/{usuario}/probar', [EncuestaController::class, 'telegramProbar'])->whereNumber('usuario')->middleware('throttle:10,1')->name('encuestas.telegram.probar');
     Route::get('/metas-mozos', [MetaMozoController::class, 'index'])->name('metas_mozo.index');
     Route::post('/metas-mozos', [MetaMozoController::class, 'guardar'])->name('metas_mozo.guardar');
     Route::get('/cupones', [CuponController::class, 'index'])->name('cupones.index');
@@ -1053,8 +1057,8 @@ Route::get('/carta/{sucursal}/solicitud/{token}', [CartaController::class, 'esta
     ->middleware('throttle:60,1,carta-solicitud')->name('carta.solicitud');
 
 // Encuesta de satisfacción: el cliente la abre con el QR de su ticket (sin sesión)
-Route::get('/encuesta/{codigo}', [EncuestaController::class, 'ver'])->where('codigo', '\d+-[a-f0-9]{10}')->middleware('throttle:60,1,encuesta')->name('encuesta.ver');
-Route::post('/encuesta/{codigo}', [EncuestaController::class, 'responder'])->where('codigo', '\d+-[a-f0-9]{10}')->middleware('throttle:10,1,encuesta-responder')->name('encuesta.responder');
+Route::get('/encuesta/{codigo}', [EncuestaController::class, 'ver'])->where('codigo', 'P?\d+-[a-f0-9]{10}')->middleware('throttle:60,1,encuesta')->name('encuesta.ver');
+Route::post('/encuesta/{codigo}', [EncuestaController::class, 'responder'])->where('codigo', 'P?\d+-[a-f0-9]{10}')->middleware('throttle:10,1,encuesta-responder')->name('encuesta.responder');
 
 // Tienda virtual pública de la empresa: {subdominio}/tiendavirtual (sin sesión del sistema)
 Route::prefix('tiendavirtual')->name('tienda.')->controller(TiendaController::class)->group(function () {

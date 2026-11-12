@@ -332,6 +332,7 @@
                             <div x-show="consumo.items.length" class="bg-white rounded-2xl ring-1 ring-slate-200 p-4 flex justify-between text-lg font-black text-slate-900"><span>Total</span><span x-text="soles(consumo.total)"></span></div>
                             <p class="text-xs text-slate-500 text-center">Solo para ver. Si algo no está bien, llama al mozo.</p>
                             <button type="button" @click="enviarMesa('CUENTA'); consumo = null" :disabled="enviando || !consumo.items.length" class="w-full h-12 rounded-2xl bg-acento text-white font-black disabled:opacity-40">🧾 Pedir la cuenta</button>
+                            <a x-show="consumo.encuesta" :href="consumo.encuesta" class="flex items-center justify-center w-full h-12 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-white font-black">⭐ Califícanos (10 segundos)</a>
                         </div>
                     </template>
                 </div>

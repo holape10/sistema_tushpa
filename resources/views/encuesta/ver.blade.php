@@ -43,6 +43,7 @@
         @else
             <form method="POST" action="{{ route('encuesta.responder', $codigo) }}" class="space-y-4"
                   x-data="{ r: { comida: @js((int) old('comida')), atencion: @js((int) old('atencion')), rapidez: @js((int) old('rapidez')) } }">
+                @if ($origen)<input type="hidden" name="origen" value="{{ $origen }}">@endif
                 @csrf
                 @foreach (\App\Support\Encuestas::PREGUNTAS as $campo => $pregunta)
                     <div class="bg-white rounded-3xl shadow-sm p-5">

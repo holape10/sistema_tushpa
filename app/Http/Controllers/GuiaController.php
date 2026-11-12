@@ -108,6 +108,22 @@ class GuiaController extends Controller
             }
         }
 
+        // Copiar una guía (casi siempre una rechazada: su número ya no sirve en SUNAT) a una nueva, con todo ya escrito
+        if ($copiaId = (int) $request->get('copiar')) {
+            $origen = DB::table('gre_cabecera')->where('gre_id', $copiaId)->where('id_empresa_negocio', $suc->id_empresa_negocio)->first();
+            abort_unless($origen, 404);
+            foreach (array_keys($guia) as $campo) {
+                if (property_exists($origen, $campo) && $campo !== 'fecha_traslado') {
+                    $guia[$campo] = $origen->{$campo} ?? $guia[$campo];
+                }
+            }
+            $guia['vehiculo_m1l'] = (bool) $origen->vehiculo_m1l;
+            $guia['observacion'] = trim(($origen->observacion ? $origen->observacion.' · ' : '').'REEMPLAZA A '.$origen->serie.'-'.$origen->numero);
+            $items = DB::table('gre_detalle')->where('gre_id', $copiaId)->orderBy('det_id')->get()
+                ->map(fn ($d) => ['IdProducto' => $d->IdProducto, 'codigo' => $d->codigo, 'descripcion' => $d->descripcion,
+                    'umecod' => $d->umecod ?: 'NIU', 'cantidad' => (float) $d->cantidad])->values()->all();
+        }
+
         if ($ventaId = (int) $request->get('venta')) {
             $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $ventaId)->where('id_empresa_negocio', $suc->id_empresa_negocio)->first();
             abort_unless($cab, 404);

@@ -243,6 +243,11 @@ class GuiaRemision
             }
             $x->endElement();
             $x->endElement();
+            // Fecha de entrega de los bienes al transportista (RS 108-2026, desde el 01/06/2026: errores 3617-3619).
+            // Va después del transportista y no puede ser anterior a la emisión
+            $x->startElement('cac:LoadingTransportEvent');
+            $cbc('OccurrenceDate', max(Carbon::parse($g->fecha_traslado)->toDateString(), Carbon::parse($g->fecha_emision)->toDateString()));
+            $x->endElement();
         } elseif (! $g->vehiculo_m1l) {
             $x->startElement('cac:DriverPerson');
             $cbc('ID', (string) $g->cond_num, $docIdentidad((string) ($g->cond_tdicod ?: '1')));

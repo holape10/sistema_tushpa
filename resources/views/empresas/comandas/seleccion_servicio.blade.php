@@ -37,6 +37,8 @@
     @php
         $hayPedidosSueltos = $permisos['llevar'] || $permisos['delivery'] || $puedeCobrar;
         $btnModal = 'h-12 w-full rounded-2xl text-sm font-black text-white shadow-sm active:scale-[.98]';
+        // Encuesta de satisfacción activa: el mozo muestra el QR de la mesa antes de cobrar
+        $encuestaMesa = \App\Support\Encuestas::activa((int) auth()->user()->id_empresa_negocio);
     @endphp
 
     <div class="space-y-4">
@@ -155,6 +157,9 @@
                 @endif
                 <button type="button" id="btn_modal_cambiar" class="{{ $btnModal }} bg-amber-500">⇄ Pasar a otra mesa</button>
                 <button type="button" id="btn_modal_unir" class="{{ $btnModal }} bg-cyan-600">🔗 Juntar mesas</button>
+                @if ($encuestaMesa)
+                    <button type="button" id="btn_modal_encuesta" class="{{ $btnModal }} col-span-2 bg-gradient-to-r from-amber-400 to-orange-500">⭐ ENCUESTA · QR para el cliente</button>
+                @endif
                 @if ($fotoRedes)
                     <button type="button" onclick="cerrarModal('modal_mesa'); window.dispatchEvent(new CustomEvent('foto-redes'))"
                             class="{{ $btnModal }} col-span-2 bg-pink-600">📸 Foto para redes</button>
@@ -164,6 +169,17 @@
     </div>
     @if ($fotoRedes)
         @include('empresas.comandas.partials.foto_redes')
+    @endif
+    @if ($encuestaMesa)
+        <div id="modal_encuesta" class="modal-t fixed inset-0 z-[60] hidden items-center justify-center bg-black/70 p-4" onclick="if (event.target === this) cerrarModal('modal_encuesta')">
+            <div class="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+                <p class="text-xl font-black text-gray-800">⭐ ¿Qué tal te atendimos?</p>
+                <p class="mt-1 text-sm text-gray-500">Escanea con tu celular y califícanos: toma 10 segundos.</p>
+                <div id="encuesta_qr" class="mx-auto mt-4 w-64 max-w-full [&_svg]:h-auto [&_svg]:w-full"></div>
+                <p id="encuesta_msg" class="mt-3 hidden rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-700"></p>
+                <button type="button" onclick="cerrarModal('modal_encuesta')" class="mt-4 h-11 w-full rounded-2xl bg-gray-100 font-bold text-gray-700">Cerrar</button>
+            </div>
+        </div>
     @endif
 
     {{-- Reservas de hoy --}}
@@ -677,6 +693,17 @@
             document.getElementById('btn_modal_separadas').onclick = () => window.location.href = URL_COBRAR + pedidoId + '/separadas';
         }
         document.getElementById('btn_modal_precuenta').onclick = () => imprimirPrecuenta(pedidoId);
+        const btnEncuesta = document.getElementById('btn_modal_encuesta');
+        if (btnEncuesta) {
+            btnEncuesta.onclick = () => fetch(@json(url('encuestas/mesa')) + '/' + pedidoId, { headers: { Accept: 'application/json' } })
+                .then((r) => r.json()).then((d) => {
+                    document.getElementById('encuesta_qr').innerHTML = d.ok ? d.svg : '';
+                    const msg = document.getElementById('encuesta_msg');
+                    msg.textContent = d.ok ? '' : d.mensaje;
+                    msg.classList.toggle('hidden', d.ok);
+                    abrirModal('modal_encuesta');
+                }).catch(() => toast('No se pudo mostrar la encuesta. Revisa la conexión.'));
+        }
         document.getElementById('modal_mesa_listo').classList.toggle('hidden', !(Number(mesa.dataset.listos) > 0));
         document.getElementById('modal_mesa_listo_texto').textContent = (mesa.dataset.listosTexto || '').split(' · ').join(', ');
         document.getElementById('btn_modal_entregado').onclick = () => postJson(@json(url('cocina/entregado')) + '/' + pedidoId, {}).then(() => {

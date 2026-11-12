@@ -347,7 +347,9 @@ class CartaMesa
                 'nombre' => (string) $l->descripcion.(($t = OpcionesPlato::texto($l->opciones)) !== '' ? ' ('.$t.')' : ''),
                 'total' => round((float) $l->ped_det_can * (float) $l->ped_det_pre, 2)])->all() : [];
 
-        return ['items' => $items, 'total' => round(array_sum(array_column($items, 'total')), 2)];
+        return ['items' => $items, 'total' => round(array_sum(array_column($items, 'total')), 2),
+            // Encuesta activa y sin responder: el cliente califica desde aquí mismo
+            'encuesta' => $pedido && $items && ($url = Encuestas::paraPedido((int) $pedido)) ? $url.'?desde=carta' : null];
     }
 
     public static function estado(int $suc, string $token): ?array
