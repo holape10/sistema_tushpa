@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\AnulacionVenta;
 use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
+use App\Support\EliminarPrueba;
 use App\Support\Impresion\ComprobantePdf;
 use App\Support\Sunat\CambioFecha;
 use App\Support\Sunat\SunatService;
@@ -26,13 +27,13 @@ use Illuminate\View\View;
  * Comprobantes SUNAT de una empresa desde el panel (sin entrar a su base de datos): ver los pendientes y rechazados,
  * consultarlos o enviarlos a SUNAT, corregir la fecha de los vencidos, marcarlos como aceptados, descartarlos o anularlos.
  * Cada acción va de uno en uno (la pantalla manda varios a la vez y muestra el resultado en cada fila).
- * No se borran: el número ya se usó y debe quedar el rastro.
+ * No se borran, salvo las pruebas (de impresión) que SUNAT no tiene: el último de su serie, y el correlativo regresa.
  */
 class ComprobanteController extends Controller
 {
-    public const FILTROS = ['pendientes' => 'Pendientes de SUNAT', 'rechazados' => 'Rechazados', 'todos' => 'Todos'];
+    public const FILTROS = ['pendientes' => 'Pendientes de SUNAT', 'rechazados' => 'Rechazados', 'todos' => 'Todos', 'pruebas' => '🗑 Borrar pruebas'];
 
-    private const ACCIONES = ['consultar', 'enviar', 'fecha', 'aceptado', 'descartar', 'anular'];
+    private const ACCIONES = ['consultar', 'enviar', 'fecha', 'aceptado', 'descartar', 'anular', 'eliminar'];
 
     private function autorizar(Cliente $cliente): void
     {
@@ -55,12 +56,14 @@ class ComprobanteController extends Controller
 
         [$lista, $conteo, $anios] = Tenancy::en($cliente->base_datos, function () use ($filtro, $q, $anio, $request, $pendiente, $rechazado) {
             $base = fn () => DB::table('cpe_cabecera')->whereIn('tdocod', SunatService::TIPOS_ELECTRONICOS)->whereNull('ccabaj');
-            $lista = $base()
+            // Borrar pruebas: los últimos emitidos de todo tipo (también notas de venta y anulados), del más reciente al más antiguo
+            $ultimos = $filtro === 'pruebas';
+            $lista = ($ultimos ? DB::table('cpe_cabecera')->whereIn('tdocod', ['01', '03', '07', '08', '13']) : $base())
                 ->when($filtro === 'pendientes', fn ($w) => $w->where($pendiente))
                 ->when($filtro === 'rechazados', $rechazado)
                 ->when($anio, fn ($w) => $w->whereYear('ccafem', $anio))
                 ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->whereRaw("CONCAT(serdoc, '-', numdoc) LIKE ?", ["%{$q}%"])->orWhere('ccanom', 'like', "%{$q}%")->orWhere('ccandi', $q)))
-                ->orderBy('ccafem')->orderBy('IdCpe_cabecera')
+                ->when($ultimos, fn ($w) => $w->orderByDesc('IdCpe_cabecera'), fn ($w) => $w->orderBy('ccafem')->orderBy('IdCpe_cabecera'))
                 ->paginate(100, ['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem', 'ccanom', 'ccandi', 'ccaitv', 'est_sunat', 'ccadessun', 'ccasunrescod', 'ccabaj'], 'pagina', (int) $request->get('pagina', 1))
                 ->withQueryString();
             $conteo = [
@@ -100,6 +103,21 @@ class ComprobanteController extends Controller
             $admin = User::join('role_user as ru', 'ru.user_IdUsuario', '=', 'users.IdUsuario')->where('ru.role_id', 2)->orderBy('users.IdUsuario')->first(['users.*']);
             if ($admin) {
                 Auth::guard('web')->setUser($admin);
+            }
+            // Prueba de impresión: se borra del todo y el correlativo regresa (la fila desaparece de la lista)
+            if ($d['accion'] === 'eliminar') {
+                try {
+                    $numero = EliminarPrueba::ejecutar($id, $admin?->IdUsuario);
+                } catch (\Throwable $e) {
+                    return ['ok' => false, 'estado' => $cab->est_sunat ?: 'PENDIENTE', 'mensaje' => 'No se borra: '.mb_substr($e->getMessage(), 0, 300),
+                        'fecha' => Carbon::parse($cab->ccafem)->format('d/m/Y'), 'anulado' => (bool) $cab->ccabaj, 'vencido' => false];
+                }
+                Bitacora::registrar('venta.soporte', "Soporte borró la prueba {$numero} (el correlativo regresó)", null, [
+                    'usuario' => null, 'nombre' => mb_substr('Soporte: '.$quien, 0, 120), 'sucursal' => (int) $cab->id_empresa_negocio, 'empresa' => $cab->IdEmpresa,
+                    'alerta' => true, 'datos' => ['total' => (float) $cab->ccaitv, 'cliente' => $cab->ccanom],
+                ]);
+
+                return ['ok' => true, 'eliminado' => true, 'mensaje' => "Borrado {$numero}: el próximo comprobante vuelve a usar ese número."];
             }
             try {
                 $this->aplicar($d['accion'], $cab, $motivo, $quien, $admin);

@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Bitacora;
+use App\Support\CostosFaltantes;
 use App\Support\Excel;
 use App\Support\Reportes;
 use App\Support\SucursalesVisibles;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +64,8 @@ class ReporteController extends Controller
         }
 
         return view('empresas.reportes.ver', $r + [
+            // Rentabilidad: ventas sin costo (importadas del sistema antiguo) que el administrador puede completar
+            'faltantes' => $clave === 'rentabilidad' && $user->esAdmin() ? CostosFaltantes::contar($ids) : null,
             'clave' => $clave, 'filtros' => collect($filtros)->except('sucursales')->all(), 'permiteTodas' => $user->esAdmin() && $clave !== 'consumo-insumos', 'sucursales' => $sucursales, 'otros' => collect(Reportes::CATALOGO)->where(1, $r['grupo']),
             'categorias' => DB::table('categorias')->whereIn('id_empresa_negocio', $ids)->orderBy('cat_nom')->get(['cat_id', 'cat_nom']),
             'tipos' => ['sunat' => 'Solo SUNAT (sin notas de venta)', '01' => 'Factura', '03' => 'Boleta', '13' => 'Nota de venta', '07' => 'Nota de crédito', '08' => 'Nota de débito'],
@@ -124,5 +129,17 @@ class ReporteController extends Controller
         $pdf->render();
 
         return response($pdf->output(), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => "attachment; filename=\"$archivo.pdf\""]);
+    }
+
+    /** Rentabilidad: las ventas sin costo toman el costo actual de su producto (solo el administrador) */
+    public function completarCostos(Request $request): RedirectResponse
+    {
+        $user = Auth::user();
+        abort_unless($user->esAdmin(), 403, 'Solo el administrador completa los costos.');
+        $ids = SucursalesVisibles::ids($user, SucursalesVisibles::elegida($request, $user, true));
+        $n = CostosFaltantes::completar($ids);
+        Bitacora::registrar('reportes.costos', "Completó el costo de {$n} línea(s) de venta sin costo con el costo actual de cada producto");
+
+        return back()->with('success', "Listo: {$n} línea(s) de venta ya tienen costo (el actual de cada producto). La rentabilidad ya es real.");
     }
 }

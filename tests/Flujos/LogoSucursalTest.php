@@ -5,6 +5,7 @@ namespace Tests\Flujos;
 use App\Http\Controllers\ComandasController;
 use App\Http\Controllers\SucursalController;
 use App\Support\LogoNegocio;
+use App\Support\VentaDirecta;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -78,5 +79,20 @@ class LogoSucursalTest extends FlujoTestCase
         $this->get(route('empresas.edit', $this->usuario->IdEmpresa))->assertOk()->assertSee('Logo de la empresa')
             ->assertDontSee('IMP. PEDIDOS')->assertDontSee('Correo de Envío');
         $this->get(route('sucursales.edit', $this->sucursal))->assertOk()->assertSee('Logo de esta sucursal')->assertSee('Notas de crédito y de débito');
+    }
+
+    public function test_cambiar_a_una_serie_nueva_empieza_en_1_aunque_la_anterior_vaya_mas_adelante(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['BseEmpresa' => 'B001', 'BnuEmpresa' => 54326]);
+        DB::table('cpe_cabecera')->where('id_empresa_negocio', $this->sucursal)->delete();
+        VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('JUANE', 15, 10), 1]], '03'), 'PV');
+
+        $this->get(route('sucursales.edit', $this->sucursal))->assertOk()->assertSee('Serie nueva: pon 0');
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BseEmpresa' => 'B001', 'BnuEmpresa' => 0]))
+            ->assertSessionHasErrors('BnuEmpresa');
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BseEmpresa' => 'B002', 'BnuEmpresa' => 0]))->assertSessionHasNoErrors();
+
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('TACACHO', 12, 10), 1]], '03'), 'PV');
+        $this->assertSame(['B002', 1], [($c = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first())->serdoc, (int) $c->numdoc]);
     }
 }

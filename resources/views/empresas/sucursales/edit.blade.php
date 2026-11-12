@@ -141,7 +141,8 @@
                                     @foreach ($g['claves'] as $clave)
                                         @php $c = $series[$clave]; $color = $colores[$clave]; @endphp
                                         <div class="rounded-2xl border border-gray-200 p-4 hover:border-indigo-300 hover:shadow-sm transition"
-                                             x-data="{ serie: @js($campo($c['serie'])), num: {{ (int) $campo($c['numero']) }} }">
+                                             x-data="{ serie: @js($campo($c['serie'])), num: {{ (int) $campo($c['numero']) }}, original: @js((string) $sucursal->{$c['serie']}), emitido: {{ (int) $ultimos[$clave] }},
+                                                       get nueva() { return (this.serie || '').toUpperCase() !== (this.original || '').toUpperCase() } }">
                                             <div class="flex items-center justify-between mb-3">
                                                 <span class="font-semibold text-gray-700 text-sm">{{ $nombresCortos[$clave] }}</span>
                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold {{ $color['badge'] }}">{{ $c['tdocod'] ?? $clave }}</span>
@@ -150,12 +151,13 @@
                                                 <label class="col-span-2 text-xs text-gray-500">Serie
                                                     <input name="{{ $c['serie'] }}" x-model="serie" required maxlength="4" class="{{ $input }} uppercase font-mono font-bold text-center"></label>
                                                 <label class="col-span-3 text-xs text-gray-500">Último usado
-                                                    <input type="number" name="{{ $c['numero'] }}" x-model.number="num" min="{{ $ultimos[$clave] }}" required class="{{ $input }} font-mono text-right"></label>
+                                                    <input type="number" name="{{ $c['numero'] }}" x-model.number="num" :min="nueva ? 0 : emitido" min="0" required class="{{ $input }} font-mono text-right"></label>
                                             </div>
                                             <div class="mt-3 rounded-xl bg-gray-50 px-3 py-2">
                                                 <p class="text-[10px] uppercase text-gray-400">Próximo</p>
                                                 <p class="font-mono font-extrabold {{ $color['texto'] }}" x-text="(serie || '').toUpperCase() + '-' + String((parseInt(num) || 0) + 1).padStart(8, '0')"></p>
-                                                <p class="text-[10px] text-gray-400">Emitido en el sistema: {{ $ultimos[$clave] ?: 'ninguno' }}</p>
+                                                <p x-show="!nueva" class="text-[10px] text-gray-400">Emitido en el sistema: {{ $ultimos[$clave] ?: 'ninguno' }}</p>
+                                                <p x-show="nueva" x-cloak class="text-[10px] text-indigo-600 font-semibold">Serie nueva: pon 0 en "Último usado" para empezar en el 1.</p>
                                             </div>
                                         </div>
                                     @endforeach

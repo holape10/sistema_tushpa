@@ -60,6 +60,16 @@
         <div class="bg-white rounded-2xl shadow-sm p-4 mb-4"><canvas id="grafico" height="70"></canvas></div>
     @endif
     @if (!empty($nota))<div class="mb-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-2"><i class="fas fa-circle-info"></i> {{ $nota }}</div>@endif
+    @if (!empty($faltantes['lineas']))
+        <form method="POST" action="{{ route('reportes.completar_costos', ['sucursal' => $filtros['sucursal'] ?? null]) }}"
+              onsubmit="return confirm('¿Completar el costo de {{ number_format($faltantes['lineas']) }} línea(s) de venta con el costo ACTUAL de cada producto? Es lo más cercano que hay (el sistema antiguo no guardó el costo).')"
+              class="mb-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm px-4 py-3 flex flex-wrap items-center gap-3">
+            @csrf
+            <p class="flex-1 min-w-64"><b>{{ number_format($faltantes['lineas']) }} línea(s) de venta no tienen costo</b> (S/ {{ number_format($faltantes['ventas'], 2) }} vendidos, en todas las fechas;
+                casi siempre las importadas del sistema antiguo, que no guardaba el costo). Por eso la utilidad sale más alta de lo real.</p>
+            <button class="h-9 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold">Completar con el costo actual</button>
+        </form>
+    @endif
 
     {{-- Tabla --}}
     <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">

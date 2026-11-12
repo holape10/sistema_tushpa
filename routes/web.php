@@ -1133,6 +1133,7 @@ Route::middleware('auth')->group(function () {
 
     // Reportes de ventas y compras (pantalla, Excel y PDF)
     Route::get('/reportes', [ReporteController::class, 'index'])->name('reportes.index');
+    Route::post('/reportes/rentabilidad/completar-costos', [ReporteController::class, 'completarCostos'])->name('reportes.completar_costos');
     Route::get('/reportes/{clave}', [ReporteController::class, 'ver'])->name('reportes.ver');
 
     // Resumen tributario

@@ -32,7 +32,7 @@
     <div class="acciones"><button onclick="window.print()">🖨 Imprimir o guardar como PDF</button></div>
     <div class="cab">
         <div>
-            @include('empresas.partials.logo_reporte', ['sucursal' => $r->id_empresa_negocio])
+            @include('empresas.partials.logo_reporte', ['logoSucursal' => $r->id_empresa_negocio])
             <h1>{{ $empresa->NomEmpresa ?? '' }}</h1>
             <p>{{ $sucursal->nombre_comercial ?? '' }} · {{ $sucursal->direccion ?? '' }}</p>
             <p>Almacén: {{ $almacen }}</p>

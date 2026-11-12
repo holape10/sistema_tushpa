@@ -41,7 +41,8 @@
                 'resumen' => ['🧾 Enviar por resumen diario', 'bg-violet-50 text-violet-700'],
                 'fecha' => ['📅 Corregir fecha (vencidos)', 'bg-amber-50 text-amber-800'],
                 'aceptado' => ['✔ Marcar aceptado', 'bg-emerald-50 text-emerald-700'], 'descartar' => ['🚫 Descartar (rechazado)', 'bg-slate-100 text-slate-700'],
-                'anular' => ['✖ Anular en el sistema', 'bg-rose-50 text-rose-700']] as $valor => [$texto, $clase])
+                'anular' => ['✖ Anular en el sistema', 'bg-rose-50 text-rose-700'], 'eliminar' => ['🗑 Borrar prueba (el correlativo regresa)', 'bg-red-600 text-white']] as $valor => [$texto, $clase])
+                @continue($valor === 'eliminar' && $filtro !== 'pruebas')
                 <button type="button" @click="ejecutar('{{ $valor }}')" :disabled="trabajando" @if ($valor === 'fecha') x-show="hayVencidos" @endif
                         class="px-3 py-1.5 rounded-lg font-semibold disabled:opacity-50 {{ $clase }}">{{ $texto }}</button>
             @endforeach
@@ -83,7 +84,7 @@
         function comprobantesPanel() {
             const URL_BASE = @js(route('admin.clientes.comprobantes.accion', [$cliente->id, 0])).replace(/0$/, '');
             const COLOR = @js($color);
-            const NOMBRE = { consultar: 'Consultando', enviar: 'Enviando', fecha: 'Corrigiendo fecha', aceptado: 'Marcando', descartar: 'Descartando', anular: 'Anulando' };
+            const NOMBRE = { consultar: 'Consultando', enviar: 'Enviando', fecha: 'Corrigiendo fecha', aceptado: 'Marcando', descartar: 'Descartando', anular: 'Anulando', eliminar: 'Borrando' };
             return {
                 sel: [], motivo: '', trabajando: false, progreso: '',
                 get hayVencidos() { return !!document.querySelector('tr[data-vencido="1"]'); },
@@ -103,6 +104,12 @@
                 pintar(id, r) {
                     const fila = document.querySelector(`tr[data-fila="${id}"]`);
                     if (!fila) return false;
+                    // Prueba borrada: ya no existe
+                    if (r.ok && r.eliminado) {
+                        this.sel = this.sel.filter(x => x !== String(id));
+                        fila.remove();
+                        return true;
+                    }
                     const etiqueta = fila.querySelector('.js-estado');
                     if (r.estado) {
                         etiqueta.className = 'js-estado px-2 py-0.5 rounded-lg text-xs font-bold ' + (COLOR[r.estado] || 'bg-slate-100 text-slate-600');
@@ -160,9 +167,12 @@
                     if (accion === 'resumen') return this.resumenDiario();
                     let ids = [...this.sel];
                     if (accion === 'fecha') ids = ids.filter(id => document.querySelector(`tr[data-fila="${id}"]`)?.dataset.vencido === '1');
+                    // Las pruebas se borran desde la última (solo se borra el último número de cada serie)
+                    if (accion === 'eliminar') ids.sort((a, b) => Number(b) - Number(a));
                     if (!ids.length) { alert(accion === 'fecha' ? 'Marca comprobantes que estén fuera de plazo.' : 'Marca al menos un comprobante.'); return; }
                     const avisos = {
                         anular: '¿Anular en el sistema? El stock vuelve al almacén y se anulan sus cobros.',
+                        eliminar: `¿BORRAR ${ids.length} comprobante(s) de prueba? Desaparecen del sistema (vuelve el stock) y el correlativo regresa. No se puede deshacer.`,
                         descartar: '¿Descartar? Solo deja de salir en pendientes; no mueve stock.',
                         fecha: `¿Corregir la fecha de ${ids.length} comprobante(s) fuera de plazo? Pasan al último día que SUNAT todavía acepta. Envíalos hoy mismo.`,
                         aceptado: `¿Marcar ${ids.length} comprobante(s) como aceptados? Hazlo solo si ya los viste aceptados en la web de SUNAT.`,
