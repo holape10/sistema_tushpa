@@ -30,4 +30,22 @@ class CuentasImportadasTest extends FlujoTestCase
         ]);
         $this->get(route('cuentas.index', 'cobrar'))->assertOk()->assertSee('>Cobrar</button>', false);
     }
+
+    public function test_el_administrador_da_por_cobradas_las_del_sistema_antiguo_hasta_una_fecha(): void
+    {
+        $vieja = $this->alCredito(500);
+        $nueva = $this->alCredito(300);
+        DB::table('cpe_cabecera')->whereIn('IdCpe_cabecera', [$vieja, $nueva])->update(['ped_tip' => 'ANTIGUO']);
+        DB::table('cpe_cabecera')->where('IdCpe_cabecera', $vieja)->update(['ccafem' => '2025-03-10']);
+        $cajas = DB::table('movimientoscaja')->count();
+
+        $this->get(route('cuentas.index', 'cobrar'))->assertOk()->assertSee('2 cuenta(s) del sistema antiguo siguen pendientes');
+        $this->post(route('cuentas.saldar_importadas', 'cobrar'), ['hasta' => '2025-12-31'])->assertSessionHas('success');
+
+        $cuenta = DB::table('cuentas_cobrar')->where('IdCpe_cabecera', $vieja)->first();
+        $this->assertSame(['PAGADO', 0.0, 500.0], [$cuenta->estado_cob, (float) $cuenta->saldo, (float) $cuenta->abono]);
+        $this->assertSame(1, DB::table('cuentas_cobrar_detalle')->where('cue_cob_id', $cuenta->cue_cob_id)->count(), 'Queda el cobro en su historial.');
+        $this->assertSame('PENDIENTE', DB::table('cuentas_cobrar')->where('IdCpe_cabecera', $nueva)->value('estado_cob'), 'La de después de la fecha sigue pendiente.');
+        $this->assertSame($cajas, DB::table('movimientoscaja')->count(), 'No toca la caja.');
+    }
 }

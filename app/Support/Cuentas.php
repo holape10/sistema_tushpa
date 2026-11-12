@@ -282,4 +282,52 @@ class Cuentas
 
         return $abono > 0 ? 'PARCIAL' : 'PENDIENTE';
     }
+
+    /**
+     * Cuentas por cobrar del sistema antiguo que siguen pendientes (allá casi nunca se registraban los cobros).
+     *
+     * @return array{cuentas: int, saldo: float}
+     */
+    public static function importadasPendientes(int $sucursal, ?string $hasta = null): array
+    {
+        $r = self::importadas($sucursal, $hasta)->selectRaw('COUNT(*) AS n, COALESCE(SUM(cc.saldo), 0) AS saldo')->first();
+
+        return ['cuentas' => (int) $r->n, 'saldo' => round((float) $r->saldo, 2)];
+    }
+
+    /**
+     * Las da por cobradas (emitidas hasta esa fecha): cada una queda PAGADA con un cobro "saldado al importar" en la fecha
+     * de su vencimiento, sin medio de pago ni caja (ese dinero entró en el sistema antiguo, no en una caja de aquí).
+     *
+     * @return int cuentas saldadas
+     */
+    public static function saldarImportadas(User $user, string $hasta, string $nota): int
+    {
+        return DB::transaction(function () use ($user, $hasta, $nota) {
+            $cuentas = self::importadas((int) $user->id_empresa_negocio, $hasta)->lockForUpdate()
+                ->get(['cc.cue_cob_id', 'cc.saldo', 'cc.abono', 'cc.fec_ven', 'c.ccafem']);
+            foreach ($cuentas->chunk(500) as $lote) {
+                $pagos = $lote->map(fn ($c) => [
+                    'cue_cob_id' => $c->cue_cob_id, 'fec_dep' => $c->fec_ven ?: $c->ccafem, 'abono' => round((float) $c->saldo, 2), 'saldo_detalle' => 0,
+                    'comentario' => mb_substr($nota, 0, 250), 'est_cue_cob_det' => 'REGISTRADO', 'IdUsuario' => $user->IdUsuario, 'fec_reg' => now(),
+                ])->all();
+                DB::table('cuentas_cobrar_detalle')->insert($pagos);
+                DB::table('cuentas_cobrar')->whereIn('cue_cob_id', $lote->pluck('cue_cob_id'))->update([
+                    'abono' => DB::raw('total'), 'saldo' => 0, 'estado_cob' => 'PAGADO', 'fec_pago' => DB::raw('COALESCE(fec_ven, fec_pago)'), 'updated_at' => now(),
+                ]);
+            }
+            DB::table('cuentas_cobrar_detalle')->whereNull('numero_recibo')->whereIn('cue_cob_id', $cuentas->pluck('cue_cob_id'))
+                ->update(['numero_recibo' => DB::raw("CONCAT('RC-', LPAD(cue_cob_det_id, 6, '0'))")]);
+
+            return $cuentas->count();
+        });
+    }
+
+    /** Cuentas por cobrar abiertas de comprobantes importados del sistema antiguo */
+    private static function importadas(int $sucursal, ?string $hasta)
+    {
+        return DB::table('cuentas_cobrar as cc')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'cc.IdCpe_cabecera')
+            ->where('cc.id_empresa_negocio', $sucursal)->where('c.ped_tip', 'ANTIGUO')->whereIn('cc.estado_cob', ['PENDIENTE', 'PARCIAL'])
+            ->when($hasta, fn ($q) => $q->where('c.ccafem', '<=', $hasta));
+    }
 }

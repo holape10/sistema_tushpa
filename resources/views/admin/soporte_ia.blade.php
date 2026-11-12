@@ -11,16 +11,30 @@
         <div class="mb-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 text-sm">{{ $bloqueo }}</div>
     @endif
 
-    <form method="GET" class="bg-white rounded-2xl shadow-sm p-4 mb-4 flex flex-wrap items-end gap-3">
-        <label class="flex-1 min-w-64 text-sm text-slate-600">Empresa
-            <select name="cliente" onchange="this.form.submit()" class="mt-1 block w-full rounded-xl border-slate-300 text-sm">
-                <option value="">Elige la empresa…</option>
-                @foreach ($clientes as $c)
-                    <option value="{{ $c->id }}" @selected($cliente?->id === $c->id)>{{ $c->razon_social }} · {{ $c->ruc }}</option>
-                @endforeach
-            </select>
-        </label>
-    </form>
+    {{-- Empresa: se escribe parte de la razón social o del RUC y se elige de la lista (con muchas empresas, buscar es más rápido) --}}
+    <div class="bg-white rounded-2xl shadow-sm p-4 mb-4" x-data="{
+            texto: @js($cliente ? $cliente->razon_social.' · '.$cliente->ruc : ''), abierto: false, marcado: 0,
+            todas: @js($clientes->map(fn ($c) => ['id' => $c->id, 'nombre' => $c->razon_social.' · '.$c->ruc])->values()),
+            get lista() {
+                const q = this.texto.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const partes = q.split(/\s+/).filter(Boolean);
+                return this.todas.filter(c => { const n = c.nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); return partes.every(p => n.includes(p)); }).slice(0, 30);
+            },
+            elegir(c) { if (c) { window.location = @js(route('admin.soporte_ia.index')) + '?cliente=' + c.id; } },
+        }">
+        <label class="block text-sm text-slate-600">Empresa
+            <input type="search" x-model="texto" @focus="abierto = true; $el.select()" @input="abierto = true; marcado = 0" @click.outside="abierto = false"
+                   @keydown.arrow-down.prevent="marcado = Math.min(marcado + 1, lista.length - 1)" @keydown.arrow-up.prevent="marcado = Math.max(marcado - 1, 0)"
+                   @keydown.enter.prevent="elegir(lista[marcado])" @keydown.escape="abierto = false" autocomplete="off"
+                   placeholder="Escribe la razón social o el RUC…" class="mt-1 block w-full rounded-xl border-slate-300 text-sm"></label>
+        <div x-show="abierto && texto.trim() !== ''" x-cloak class="mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+            <template x-for="(c, i) in lista" :key="c.id">
+                <button type="button" @click="elegir(c)" @mouseenter="marcado = i" class="block w-full text-left px-3 py-2 text-sm"
+                        :class="i === marcado ? 'bg-indigo-600 text-white' : 'hover:bg-slate-50'" x-text="c.nombre"></button>
+            </template>
+            <p x-show="!lista.length" class="px-3 py-2 text-sm text-slate-400">Ninguna empresa coincide.</p>
+        </div>
+    </div>
 
     @if ($cliente)
         <div class="bg-white rounded-2xl shadow-sm" x-data="soporteIa(@js($historial))">

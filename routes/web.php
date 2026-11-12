@@ -642,6 +642,7 @@ Route::middleware('auth')->group(function () {
     Route::prefix('/cuentas/{tipo}')->whereIn('tipo', ['cobrar', 'pagar'])->group(function () {
         Route::get('/', [CuentaController::class, 'index'])->name('cuentas.index');
         Route::get('/reporte', [CuentaController::class, 'reporte'])->name('cuentas.reporte');
+        Route::post('/saldar-importadas', [CuentaController::class, 'saldarImportadas'])->name('cuentas.saldar_importadas');
         Route::get('/{id}/pagos', [CuentaController::class, 'pagos'])->whereNumber('id')->name('cuentas.pagos');
         Route::post('/{id}/pagar', [CuentaController::class, 'pagar'])->whereNumber('id')->name('cuentas.pagar');
         Route::post('/pago/{detId}/anular', [CuentaController::class, 'anularPago'])->whereNumber('detId')->name('cuentas.anular_pago');

@@ -9,6 +9,7 @@ use App\Support\Acciones;
 use App\Support\Bitacora;
 use App\Support\Cuentas;
 use App\Support\Excel;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -65,7 +66,21 @@ class CuentaController extends Controller
         return view('empresas.cuentas.index', [
             'tipo' => $tipo, 'tx' => self::TITULOS[$tipo], 'cuentas' => $cuentas, 'kpi' => $kpi, 'estado' => $estado, 'q' => $q,
             'medios' => $medios, 'tiposDoc' => self::TIPOS_DOC, 'hoy' => $hoy,
+            // Cobros que el sistema antiguo nunca registró: el administrador los puede dar por cobrados de una vez
+            'importadas' => $tipo === 'cobrar' && Auth::user()->esAdmin() ? Cuentas::importadasPendientes((int) $suc) : null,
         ]);
+    }
+
+    /** Da por cobradas las cuentas del sistema antiguo emitidas hasta una fecha (solo el administrador) */
+    public function saldarImportadas(Request $request, string $tipo)
+    {
+        abort_unless($tipo === 'cobrar' && Auth::user()->esAdmin(), 403, 'Solo el administrador.');
+        $d = $request->validate(['hasta' => 'required|date|before_or_equal:today'], [], ['hasta' => 'fecha']);
+        $n = Cuentas::saldarImportadas(Auth::user(), $d['hasta'], 'SALDADO AL IMPORTAR: COBRADO EN EL SISTEMA ANTIGUO');
+        Bitacora::registrar('cuentas.saldar_importadas', "Dio por cobradas {$n} cuenta(s) del sistema antiguo emitidas hasta el "
+            .Carbon::parse($d['hasta'])->format('d/m/Y'), null, ['alerta' => true]);
+
+        return back()->with('success', "Listo: {$n} cuenta(s) del sistema antiguo quedaron como cobradas (sin movimiento de caja).");
     }
 
     /** Pagos de una cuenta (para el modal de historial) */

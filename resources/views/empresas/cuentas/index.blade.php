@@ -33,6 +33,21 @@
         </div>
     </div>
 
+    {{-- Cobros que el sistema antiguo nunca registró (solo el administrador) --}}
+    @if (!empty($importadas['cuentas']))
+        <form method="POST" action="{{ route('cuentas.saldar_importadas', 'cobrar') }}"
+              onsubmit="return confirm('¿Dar por COBRADAS las cuentas del sistema antiguo emitidas hasta el ' + this.hasta.value.split('-').reverse().join('/') + '? No mueve la caja. Hazlo solo si el cliente confirma que ya se cobraron.')"
+              class="rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-3 flex flex-wrap items-end gap-3">
+            @csrf
+            <p class="flex-1 min-w-72"><b>{{ number_format($importadas['cuentas']) }} cuenta(s) del sistema antiguo siguen pendientes (S/ {{ number_format($importadas['saldo'], 2) }}).</b>
+                Allá casi nunca se registraban los cobros. Si ya se cobraron, dalas por cobradas hasta una fecha: quedan PAGADAS con la nota
+                "saldado al importar", sin tocar la caja. Las posteriores siguen pendientes.</p>
+            <label class="text-xs font-semibold">Emitidas hasta
+                <input type="date" name="hasta" value="{{ now()->subMonths(2)->endOfMonth()->toDateString() }}" max="{{ $hoy }}" class="block h-9 rounded-lg border-amber-300 text-sm"></label>
+            <button class="h-9 px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold">Dar por cobradas</button>
+        </form>
+    @endif
+
     {{-- Filtros --}}
     <form method="GET" class="flex flex-wrap items-end gap-2">
         <div class="flex gap-1 p-1 bg-slate-200/60 rounded-xl text-sm font-semibold">

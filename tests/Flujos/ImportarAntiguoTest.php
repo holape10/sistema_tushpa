@@ -310,4 +310,27 @@ class ImportarAntiguoTest extends FlujoTestCase
         $this->assertEquals(25.0, (float) DB::table('cpe_detalle')->where('IdCpe_cabecera', $boleta)->value('costo'),
             'El sistema antiguo no guardó el costo: sin esto la venta salía con 100% de utilidad.');
     }
+
+    public function test_lo_rechazado_por_sunat_entra_descartado_y_las_cuentas_con_su_estado_real(): void
+    {
+        $a = DB::connection(Importador::CONEXION);
+        $a->table('cpe_cabecera')->insert(['IdCpe_cabecera' => 1009, 'tdocod' => '01', 'serdoc' => 'F002', 'numdoc' => 21, 'ccafem' => '2026-10-01',
+            'fecha_hora' => '2026-10-01 11:00:00', 'tdicod' => '6', 'ccandi' => '20100070970', 'ccanom' => 'CLIENTE SAC', 'ccaitv' => 50, 'ccatexo' => 50,
+            'moncod' => 'PEN', 'estadopago' => 'CREDITO', 'ccacodsun' => '1032', 'enviado' => 0, 'facturado' => 0, 'IdUsuario' => 71, 'IdUsuario_ven' => 71, 'id_empresa_negocio' => 20]);
+        $a->statement('CREATE TABLE cuentas_cobrar (cue_cob_id INT, IdCpe_cabecera INT, total DECIMAL(12,2), abono DECIMAL(12,2), saldo DECIMAL(12,2), estado_cob VARCHAR(20), fec_ven DATE)');
+        $a->table('cuentas_cobrar')->insert([
+            ['cue_cob_id' => 1, 'IdCpe_cabecera' => 1003, 'total' => 30, 'abono' => 0, 'saldo' => 30, 'estado_cob' => 'pendiente', 'fec_ven' => '2026-11-01'],
+            ['cue_cob_id' => 2, 'IdCpe_cabecera' => 1009, 'total' => 50, 'abono' => 0, 'saldo' => 50, 'estado_cob' => 'pendiente', 'fec_ven' => '2026-11-01'],
+            ['cue_cob_id' => 3, 'IdCpe_cabecera' => 1008, 'total' => 32, 'abono' => 0, 'saldo' => 32, 'estado_cob' => 'ELIMINADO', 'fec_ven' => '2026-11-01'],
+        ]);
+
+        $avisos = $this->importar()['avisos'];
+
+        $rechazada = DB::table('cpe_cabecera')->where('serdoc', 'F002')->where('numdoc', 21)->first();
+        $this->assertSame(['RECHAZADO', 'DESCARTADO'], [$rechazada->est_sunat, $rechazada->ccabaj], 'No cuenta como venta.');
+        $estado = fn (string $serie, int $num) => DB::table('cuentas_cobrar as k')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'k.IdCpe_cabecera')
+            ->where('c.serdoc', $serie)->where('c.numdoc', $num)->value('k.estado_cob');
+        $this->assertSame(['PENDIENTE', 'ANULADO', 'ANULADO'], [$estado('F002', 20), $estado('F002', 21), $estado('B002', 11)]);
+        $this->assertTrue(collect($avisos)->contains(fn ($x) => str_contains($x, 'RECHAZADOS por SUNAT')));
+    }
 }

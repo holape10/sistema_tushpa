@@ -73,6 +73,15 @@ class Historial
     /** Comprobantes electrónicos que el sistema antiguo nunca envió a SUNAT (fecha del más antiguo) */
     private array $sinEnviar = ['n' => 0, 'desde' => null];
 
+    /** IdUsuario del sistema antiguo que existen en su tabla users */
+    private array $usuariosAntiguos = [];
+
+    /** Ventas de un vendedor que el sistema antiguo ya no tiene */
+    private int $sinUsuarioBorrado = 0;
+
+    /** Comprobantes rechazados por SUNAT que entraron descartados */
+    private int $rechazados = 0;
+
     /** Comprobantes ya contados como no enviados */
     private array $contados = [];
 
@@ -297,6 +306,13 @@ class Historial
                         'cre_dia_id' => isset($c->cre_dia_id) ? ($creditos[$c->cre_dia_id] ?? null) : null,
                     ], ['IdCpe_cabecera', 'id_turno', 'IdUsuario_ven', 'IdUsuarioCob', 'mozo', 'ped_id', 'pis_id', 'mes_id', 'IdCpe_cabecera_ref', 'res_id', 'cuen_ban_id']);
                     $datos['est_sunat'] = $this->estadoSunat($c);
+                    // Rechazado por SUNAT: para SUNAT no existe (casi siempre se volvió a emitir con otro número). Entra
+                    // descartado, como lo hace el panel: no cuenta como venta ni como deuda y no sale en pendientes
+                    if ($datos['est_sunat'] === 'RECHAZADO' && empty($datos['ccabaj'])) {
+                        $datos['ccabaj'] = 'DESCARTADO';
+                        $datos['motivo_baja'] = 'RECHAZADO POR SUNAT (SISTEMA ANTIGUO)';
+                        $this->rechazados++;
+                    }
                     $id = DB::table('cpe_cabecera')->insertGetId(array_filter($datos, fn ($v) => $v !== null));
                     $this->mapaCpe[$c->IdCpe_cabecera] = $id;
                     $existentes[$clave] = $id;
@@ -373,6 +389,9 @@ class Historial
                 $this->mapaCpe[$perdedor] = $this->mapaCpe[$ganador];
             }
         }
+        if ($this->sinUsuarioBorrado) {
+            $this->aviso("{$this->sinUsuarioBorrado} ventas son de un usuario que ya no existe en el sistema antiguo (lo borraron): quedaron sin vendedor.");
+        }
         if ($this->sinUsuario) {
             $this->aviso("{$this->sinUsuario} ventas son de usuarios que aún no existen aquí (de otra sucursal): quedaron sin vendedor. "
                 .'Importa primero los usuarios de todas las sucursales y luego el historial (el comando antiguo:importar --mapa lo hace solo).');
@@ -387,6 +406,10 @@ class Historial
         if ($this->sinEnviar['n']) {
             $this->aviso("{$this->sinEnviar['n']} comprobantes electrónicos nunca se enviaron a SUNAT en el sistema antiguo (desde el {$this->sinEnviar['desde']}): "
                 .'quedaron PENDIENTES en la campanita. Revisa con el cliente si deben enviarse.');
+        }
+        if ($this->rechazados) {
+            $this->aviso("{$this->rechazados} comprobantes estaban RECHAZADOS por SUNAT: se importaron descartados (no cuentan como venta ni como deuda; "
+                .'casi siempre se volvieron a emitir con otro número).');
         }
         if ($sinDetalle) {
             $this->aviso("{$sinDetalle} comprobantes no tenían detalle en el sistema antiguo: se importaron con su total, cliente y estado, sin líneas de productos.");
@@ -745,11 +768,13 @@ class Historial
                 ? DB::table('cpe_cabecera')->where('IdCpe_cabecera', $nuevoDoc)->value('clicod')
                 : DB::table('compras_cabecera')->where('com_cab_id', $nuevoDoc)->value('prov_id');
             // El estado se saca de los montos: el antiguo lo guardaba como texto ("pendiente", "cancelado" = pagada)
-            $estado = str_starts_with(mb_strtoupper(trim((string) $cta->estado_cob)), 'ANUL') ? 'ANULADO'
+            // ("eliminado" = anulada); la deuda de un comprobante descartado (rechazado por SUNAT) tampoco existe
+            $descartado = $tipo === 'cobrar' && str_starts_with((string) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $nuevoDoc)->value('ccabaj'), 'DESCARTADO');
+            $estado = $descartado || preg_match('/^(ANUL|ELIMIN)/', mb_strtoupper(trim((string) $cta->estado_cob))) ? 'ANULADO'
                 : Cuentas::estado((float) $cta->abono, (float) $cta->saldo);
             $id = DB::table($tabla)->insertGetId($this->copiar($tabla, $cta, [
                 $fk => $nuevoDoc, 'clicod' => $clicod, 'id_empresa_negocio' => $suc, 'IdEmpresa' => $this->user->IdEmpresa, 'estado_cob' => $estado,
-            ], [$pk]));
+            ] + ($estado === 'ANULADO' ? ['saldo' => 0] : []), [$pk]));
             $this->resumen['cuentas']++;
 
             if (($this->hay)($detalle)) {
@@ -777,7 +802,10 @@ class Historial
             return null;
         }
         $id = $this->usuario($c->IdUsuario_ven);
-        $this->sinUsuario += $id ? 0 : 1;
+        if (! $id) {
+            // Usuario que ya no existe en el sistema antiguo (lo borraron) o que es de otra sucursal aún no importada
+            isset($this->usuariosAntiguos[(int) $c->IdUsuario_ven]) ? $this->sinUsuario++ : $this->sinUsuarioBorrado++;
+        }
 
         return $id;
     }
@@ -789,6 +817,7 @@ class Historial
         }
         $nuevos = DB::table('users')->pluck('IdUsuario', 'email')->mapWithKeys(fn ($id, $email) => [mb_strtolower(trim((string) $email)) => (int) $id]);
         foreach (($this->src)('users')->get(['IdUsuario', 'email']) as $u) {
+            $this->usuariosAntiguos[(int) $u->IdUsuario] = true;
             if ($id = $nuevos[mb_strtolower(trim((string) $u->email))] ?? null) {
                 $this->mapaUsuario[(int) $u->IdUsuario] = $id;
             }
