@@ -227,6 +227,7 @@ Route::middleware('auth')->group(function () {
     // Comprobantes de contingencia (en papel) pasados al sistema
     Route::get('/contingencia', [ContingenciaController::class, 'index'])->name('contingencia.index');
     Route::get('/contingencia/excel', [ContingenciaController::class, 'excel'])->name('contingencia.excel');
+    Route::post('/contingencia/enviar', [ContingenciaController::class, 'enviar'])->middleware('throttle:10,1')->name('contingencia.enviar');
     Route::get('/arqueos/turno/{turno}', [ArqueoCajaController::class, 'create'])->whereNumber('turno')->name('arqueos.create');
     Route::post('/arqueos/turno/{turno}', [ArqueoCajaController::class, 'store'])->whereNumber('turno')->name('arqueos.store');
     Route::get('/arqueos/diario', [ArqueoCajaController::class, 'diario'])->name('arqueos.diario');

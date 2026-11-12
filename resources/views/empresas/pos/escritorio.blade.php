@@ -355,7 +355,7 @@
                                 <input x-model="contingencia.serie" maxlength="4" inputmode="numeric" placeholder="0001" class="mt-1 w-full h-9 rounded-lg border-slate-200 text-sm font-bold"></label>
                             <label class="text-xs font-semibold text-slate-500">N° impreso
                                 <input type="number" min="1" x-model="contingencia.numero" class="mt-1 w-full h-9 rounded-lg border-slate-200 text-sm font-bold"></label>
-                            <p class="col-span-2 text-[11px] text-violet-700">Pon la fecha del papel en F. Emisión. No se envía como electrónico: queda en <b>Contingencia</b> para declararlo a SUNAT.</p>
+                            <p class="col-span-2 text-[11px] text-violet-700">Pon la fecha del papel en F. Emisión. Se envía a SUNAT como electrónico con esa misma serie y número (si pasó el plazo, SUNAT lo acepta con observaciones).</p>
                         </div>
                     </div>
                 @endif

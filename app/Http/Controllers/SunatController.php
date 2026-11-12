@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\ConsultaPeru;
+use App\Support\Contingencia;
 use App\Support\Sunat\CambioFecha;
 use App\Support\Sunat\SunatService;
 use App\View\Composers\MenuComposer;
@@ -168,6 +169,7 @@ class SunatController extends Controller
             ->where(fn ($q) => $q->where('tdocod', '03')->orWhere(fn ($q2) => $q2->whereIn('tdocod', ['07', '08'])->where('serdoc', 'like', 'B%')))
             ->whereIn('est_sunat', SunatService::ESTADOS_REENVIABLES)
             ->whereNull('ccabaj')
+            ->where('serdoc', 'not regexp', Contingencia::PATRON_SQL)
             ->groupBy('ccafem')->orderBy('ccafem')
             ->select('ccafem', DB::raw('COUNT(*) as cantidad'), DB::raw('SUM(ccaitv) as total'))
             ->get();

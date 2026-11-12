@@ -3,18 +3,34 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Support\Sunat\SunatService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Comprobantes de contingencia: cuando no se puede emitir electrónicamente (sin luz ni internet, por ejemplo en la
  * ribera), el negocio entrega boletas o facturas en PAPEL con serie numérica (0001, 0002…). Después se pasan al sistema
- * con esa misma serie, número y fecha: mueven stock, caja y reportes, pero NO se envían como electrónicos (ya existen
- * en papel). Se declaran a SUNAT en SOL ("comprobantes emitidos en contingencia"); la lista mensual sale de aquí.
+ * con esa misma serie, número y fecha y se envían a SUNAT como XML, uno por uno (sendBill), igual que en el sistema
+ * anterior: SUNAT los acepta (si pasó el plazo, con observaciones). Nunca van en el resumen diario ni se les cambia la
+ * fecha. Los registrados antes de este cambio quedaron en estado CONTINGENCIA y también se pueden enviar.
  */
 class Contingencia
 {
     public const ESTADO = 'CONTINGENCIA';
+
+    /** Serie de contingencia: solo números (0001); las electrónicas empiezan con letra (B001, F001) */
+    public const PATRON_SQL = '^[0-9]+$';
+
+    public static function esSerie(?string $serie): bool
+    {
+        return $serie !== null && $serie !== '' && ctype_digit($serie);
+    }
+
+    /** Estados en que todavía se pueden enviar a SUNAT (los antiguos quedaron en CONTINGENCIA) */
+    public static function porEnviar(): array
+    {
+        return array_merge(SunatService::ESTADOS_REENVIABLES, [self::ESTADO]);
+    }
 
     /** Solo facturas y boletas */
     public const TIPOS = ['01', '03'];
@@ -65,9 +81,11 @@ class Contingencia
     {
         $inicio = Carbon::parse($mes.'-01');
 
-        return DB::table('cpe_cabecera')->where('id_empresa_negocio', $sucursal)->where('est_sunat', self::ESTADO)
+        return DB::table('cpe_cabecera')->where('id_empresa_negocio', $sucursal)->whereIn('tdocod', self::TIPOS)
+            ->where('serdoc', 'regexp', self::PATRON_SQL)
             ->whereBetween('ccafem', [$inicio->toDateString(), $inicio->copy()->endOfMonth()->toDateString()])
             ->orderBy('ccafem')->orderBy('tdocod')->orderBy('serdoc')->orderBy('numdoc')
-            ->get(['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem', 'tdicod', 'ccandi', 'ccanom', 'ccatvg', 'ccatexo', 'ccatinaf', 'ccaigv', 'ccaitv', 'ccabaj', 'moncod']);
+            ->get(['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem', 'tdicod', 'ccandi', 'ccanom', 'ccatvg', 'ccatexo', 'ccatinaf', 'ccaigv', 'ccaitv', 'ccabaj', 'moncod',
+                'est_sunat', 'ccadessun']);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Support\Sunat;
 
 use App\Models\User;
+use App\Support\Contingencia;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -32,6 +33,11 @@ class CambioFecha
     /** ¿Ya se le pasó el plazo para enviarlo a SUNAT? */
     public static function vencido(object $cab, ?Carbon $hoy = null): bool
     {
+        // Contingencia (papel): su fecha es la impresa; se envía tarde y SUNAT la acepta con observaciones
+        if (Contingencia::esSerie($cab->serdoc ?? null)) {
+            return false;
+        }
+
         return Carbon::parse($cab->ccafem)->startOfDay()->lt(self::fechaValida($cab, $hoy));
     }
 

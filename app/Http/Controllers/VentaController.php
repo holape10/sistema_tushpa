@@ -227,8 +227,9 @@ class VentaController extends Controller
         }
 
         // Factura o boleta ya informada a SUNAT: se anula con Comunicación de Baja (la venta se anula cuando SUNAT la acepta).
-        // La de contingencia (en papel) no se envió como electrónica: se anula aquí mismo.
-        if ($cab->tdocod !== '13' && $cab->est_sunat !== Contingencia::ESTADO) {
+        // La de contingencia (en papel) que SUNAT todavía no tiene se anula aquí mismo.
+        $papelSinEnviar = Contingencia::esSerie($cab->serdoc) && in_array($cab->est_sunat ?: 'PENDIENTE', Contingencia::porEnviar(), true);
+        if ($cab->tdocod !== '13' && ! $papelSinEnviar) {
             try {
                 $r = SunatService::paraUsuario(Auth::user())->comunicarBaja((int) $cab->IdCpe_cabecera, trim($request->motivo));
                 if ($r['ok']) {

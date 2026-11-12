@@ -8,6 +8,7 @@ use App\Support\AnulacionVenta;
 use App\Support\Bitacora;
 use App\Support\Comprobante;
 use App\Support\ConsultaPeru;
+use App\Support\Contingencia;
 use App\Support\CuotasCredito;
 use App\Support\Ubigeo;
 use App\Support\Unidades;
@@ -334,8 +335,9 @@ class SunatService
         if (! in_array($cab->tdocod, self::TIPOS_ELECTRONICOS, true)) {
             throw new RuntimeException('La nota de venta es un documento interno y no se envía a SUNAT.');
         }
-        // Sin estado o escrito distinto (vacío, minúsculas, con espacios) cuenta como pendiente
-        if (! in_array(mb_strtoupper(trim((string) $cab->est_sunat)) ?: 'PENDIENTE', self::ESTADOS_REENVIABLES, true)) {
+        // Sin estado o escrito distinto (vacío, minúsculas, con espacios) cuenta como pendiente; la contingencia antigua también
+        $reenviables = Contingencia::esSerie($cab->serdoc) ? Contingencia::porEnviar() : self::ESTADOS_REENVIABLES;
+        if (! in_array(mb_strtoupper(trim((string) $cab->est_sunat)) ?: 'PENDIENTE', $reenviables, true)) {
             throw new RuntimeException("El comprobante {$cab->serdoc}-{$cab->numdoc} ya está {$cab->est_sunat}.");
         }
         if ($cab->ccabaj) {
@@ -483,6 +485,8 @@ class SunatService
             })
             ->whereIn('est_sunat', self::ESTADOS_REENVIABLES)
             ->whereNull('ccabaj')
+            // La boleta de contingencia (papel, serie 0001) va sola como XML, no en el resumen
+            ->where('serdoc', 'not regexp', Contingencia::PATRON_SQL)
             ->orderBy('tdocod')->orderBy('serdoc')->orderBy('numdoc')
             ->get();
     }

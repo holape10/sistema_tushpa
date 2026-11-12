@@ -3,6 +3,7 @@
 namespace Tests\Flujos;
 
 use App\Support\Contingencia;
+use App\Support\Sunat\CambioFecha;
 use App\Support\Sunat\SunatService;
 use App\Support\VentaDirecta;
 use Illuminate\Support\Facades\DB;
@@ -15,15 +16,16 @@ class ContingenciaTest extends FlujoTestCase
         return $this->venta([[$this->producto('ARENA '.uniqid(), 40, 10), 2]], $tdocod, ['fecEmi' => $fecha, 'contingencia' => ['serie' => $serie, 'numero' => $numero]]);
     }
 
-    public function test_el_papel_entra_con_su_serie_numero_y_fecha_sin_tocar_el_correlativo_ni_ir_a_sunat(): void
+    public function test_el_papel_entra_con_su_serie_numero_y_fecha_y_queda_para_enviarse_solo_a_sunat(): void
     {
         $id = VentaDirecta::registrar($this->usuario, $this->papel('1', 125, '2026-10-25'), 'PV');
         $cab = $this->cabecera($id);
 
-        $this->assertSame(['0001', 125, '2026-10-25', Contingencia::ESTADO], [$cab->serdoc, (int) $cab->numdoc, $cab->ccafem, $cab->est_sunat]);
+        $this->assertSame(['0001', 125, '2026-10-25', 'PENDIENTE'], [$cab->serdoc, (int) $cab->numdoc, $cab->ccafem, $cab->est_sunat], 'Se envía como XML, igual que el sistema anterior.');
         $this->assertSame(0, (int) DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('BnuEmpresa'), 'El correlativo electrónico no se mueve.');
         $this->assertEquals(80.0, (float) DB::table('venta_medio_pago')->where('IdCpe_cabecera', $id)->sum('monto'), 'Entra a la caja como cualquier venta.');
-        $this->assertCount(0, SunatService::paraUsuario($this->usuario)->pendientesResumen('2026-10-25'), 'No va en el resumen diario.');
+        $this->assertCount(0, SunatService::paraUsuario($this->usuario)->pendientesResumen('2026-10-25'), 'No va en el resumen diario: va sola como XML.');
+        $this->assertFalse(CambioFecha::vencido($cab, now()->setDate(2026, 11, 20)), 'La fecha del papel nunca se cambia, aunque pase el plazo.');
     }
 
     public function test_no_se_repite_ni_acepta_series_de_letras_ni_fechas_fuera_de_plazo(): void
@@ -48,11 +50,20 @@ class ContingenciaTest extends FlujoTestCase
         $this->assertNotNull($this->cabecera($id)->ccabaj);
     }
 
+    public function test_los_antiguos_en_estado_contingencia_tambien_se_pueden_enviar(): void
+    {
+        $id = VentaDirecta::registrar($this->usuario, $this->papel('0003', 40, '2026-10-21'), 'PV');
+        DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update(['est_sunat' => Contingencia::ESTADO]);
+
+        $this->get(route('contingencia.index', ['mes' => '2026-10']))->assertOk()->assertSee('Enviar pendientes a SUNAT (1)');
+        $this->postJson(route('ventas.anular', $id), ['motivo' => 'ERROR AL PASAR EL PAPEL'])->assertJson(['success' => true]);
+    }
+
     public function test_la_lista_del_mes_y_su_excel(): void
     {
         VentaDirecta::registrar($this->usuario, $this->papel('0002', 15, '2026-10-20', '01'), 'PV');
 
-        $this->get(route('contingencia.index', ['mes' => '2026-10']))->assertOk()->assertSee('0002-00000015');
+        $this->get(route('contingencia.index', ['mes' => '2026-10']))->assertOk()->assertSee('0002-00000015')->assertSee('Enviar pendientes a SUNAT (1)');
         $this->get(route('contingencia.excel', ['mes' => '2026-10']))->assertOk()->assertDownload('contingencia_202610.xlsx');
     }
 }
