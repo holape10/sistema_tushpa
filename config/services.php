@@ -21,6 +21,8 @@ return [
         'modelo' => env('ASISTENTE_MODELO', 'claude-haiku-5-5'),
         // Asistente de soporte del panel (diagnósticos con SQL de solo lectura): conviene uno más capaz
         'modelo_soporte' => env('ASISTENTE_MODELO_SOPORTE', 'claude-sonnet-5-5'),
+        // Contar productos en una foto (inventario): necesita buena vista
+        'modelo_conteo' => env('ASISTENTE_MODELO_CONTEO', 'claude-sonnet-5-5'),
         // Solo si se usa un proxy (normalmente vacío: va directo a api.anthropic.com)
         'base_url' => env('ANTHROPIC_BASE_URL'),
         // Tope de gasto de TODO el sistema en el mes (en dólares): llegando a él, el asistente se pausa hasta el mes siguiente

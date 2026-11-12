@@ -63,7 +63,8 @@
                 <label class="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" x-model="soloContados" class="rounded border-gray-300"> Solo contados</label>
                 <label class="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" x-model="soloDiferencias" class="rounded border-gray-300"> Solo con diferencia</label>
             </div>
-            <p class="px-4 text-xs text-gray-400">Deja vacío el conteo de los productos que no contaste: no se modifican. Si contaste 0, escribe 0.</p>
+            <p class="px-4 text-xs text-gray-400">Deja vacío el conteo de los productos que no contaste: no se modifican. Si contaste 0, escribe 0.
+                Con <b>📷</b> la IA cuenta el producto, las cajas o la ruma en una foto (según sus presentaciones) y tú confirmas.</p>
 
             <div class="overflow-x-auto max-h-[60vh] overflow-y-auto mt-2">
                 <table class="w-full text-sm">
@@ -85,7 +86,7 @@
                                 <td class="px-3 py-1.5"><span class="font-medium text-gray-700" x-text="p.nom"></span>
                                     <span class="block text-xs text-gray-400" x-text="p.tipo + (p.cat ? ' · ' + p.cat : '') + ' · ' + p.abr + (p.factor ? ' (1 ' + p.abr1 + ' = ' + num(p.factor) + ' ' + p.abrEq + ')' : '')"></span></td>
                                 <td class="px-3 py-1.5 text-right whitespace-nowrap" x-text="mostrar(p, p.stock)"></td>
-                                <td class="px-3 py-1.5">
+                                <td class="px-3 py-1.5"><div class="flex items-center gap-1"><div class="flex-1">
                                     {{-- Con unidad equivalente: botellas + onzas (se guarda como 4 + 2/25 = 4.08 botellas) --}}
                                     <template x-if="p.factor">
                                         <div class="flex items-center gap-1">
@@ -102,7 +103,9 @@
                                         <input type="number" step="any" min="0" class="w-full rounded-lg border-gray-300 text-sm text-right"
                                                :value="conteo[p.id]?.cantidad ?? ''" @input="fijar(p, 'cantidad', $event.target.value)">
                                     </template>
-                                </td>
+                                    </div>
+                                    <button type="button" @click="conFoto(p)" title="Contar con foto (IA)" class="shrink-0 h-9 w-9 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100">📷</button>
+                                </div></td>
                                 <td class="px-3 py-1.5 text-right font-semibold whitespace-nowrap"
                                     :class="diferencia(p) > 0 ? 'text-green-600' : (diferencia(p) < 0 ? 'text-red-600' : 'text-gray-400')"
                                     x-text="contado(p) ? (diferencia(p) > 0 ? '+' : '') + mostrar(p, diferencia(p)) : ''"></td>
@@ -137,6 +140,8 @@
         </div>
     </form>
 
+    @include('empresas.partials.contar_foto')
+
     <script>
         function inventario(productos) {
             return {
@@ -165,6 +170,12 @@
                     if (!p.factor || cantidad === '' || cantidad == null) return { cantidad: String(cantidad) };
                     const c = parseFloat(cantidad), ent = Math.floor(c + 1e-9);
                     return { cantidad: String(c), ent: String(ent), frac: String(Math.round((c - ent) * p.factor * 100) / 100) };
+                },
+                // La IA cuenta en la foto (cajas, rumas…) y la persona confirma: queda como el conteo del producto
+                async conFoto(p) {
+                    const cantidad = await window.contarConFoto(p.id, p.nom);
+                    if (cantidad === null) return;
+                    this.conteo = { ...this.conteo, [p.id]: { costo: null, ...(this.conteo[p.id] || {}), ...this.partir(p, cantidad) } };
                 },
                 fijar(p, campo, valor) {
                     const actual = this.conteo[p.id] || { cantidad: '', costo: null };

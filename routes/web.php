@@ -37,6 +37,7 @@ use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\ContabilidadRegistroController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\ConteoCiegoController;
+use App\Http\Controllers\ConteoFotoController;
 use App\Http\Controllers\ContingenciaController;
 use App\Http\Controllers\ContratoController;
 use App\Http\Controllers\ControlInsumosController;
@@ -740,6 +741,8 @@ Route::middleware('auth')->group(function () {
     // Inventario ciego (cuenta sin ver el stock) y control de insumos (recetas vs. lo que faltó)
     Route::get('/conteo-ciego', [ConteoCiegoController::class, 'index'])->name('conteo_ciego.index');
     Route::get('/conteo-ciego/nuevo', [ConteoCiegoController::class, 'create'])->name('conteo_ciego.create');
+    // Contar un producto con una foto (también en el inventario del administrador)
+    Route::post('/inventario/contar-foto', [ConteoFotoController::class, 'contar'])->middleware('throttle:20,1')->name('inventario.contar_foto');
     Route::post('/conteo-ciego', [ConteoCiegoController::class, 'store'])->name('conteo_ciego.store');
     Route::get('/conteo-ciego/{id}', [ConteoCiegoController::class, 'show'])->whereNumber('id')->name('conteo_ciego.show');
     Route::post('/conteo-ciego/{id}/aplicar', [ConteoCiegoController::class, 'aplicar'])->whereNumber('id')->name('conteo_ciego.aplicar');

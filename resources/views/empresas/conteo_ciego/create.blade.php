@@ -12,7 +12,8 @@
     <div class="bg-white rounded-2xl shadow-sm p-5 space-y-2">
         <h1 class="text-xl font-extrabold text-gray-800">🙈 Inventario ciego</h1>
         <p class="text-sm text-gray-500">Cuenta lo que hay físicamente y escríbelo. No verás cuánto dice el sistema: así el conteo es honesto.
-            Lo que no cuentes queda igual. El administrador revisa las diferencias.</p>
+            Lo que no cuentes queda igual. El administrador revisa las diferencias.
+            Con <b>📷</b> la IA cuenta el producto, las cajas o la ruma en una foto y tú confirmas la cantidad.</p>
     </div>
 
     <form method="POST" action="{{ route('conteo_ciego.store') }}" class="space-y-4" @submit="if (!contados.length) { $event.preventDefault(); alert('Pon lo que contaste de al menos un producto.'); }">
@@ -34,6 +35,7 @@
                 <template x-for="p in visibles" :key="p.id">
                     <label class="flex items-center gap-3 px-4 py-2.5" :class="p.contado !== '' ? 'bg-emerald-50/50' : ''">
                         <span class="flex-1"><span class="block font-semibold text-gray-800" x-text="p.nombre"></span><span class="text-xs text-gray-400" x-text="p.categoria"></span></span>
+                        <button type="button" @click.prevent="conFoto(p)" title="Contar con foto (IA)" class="shrink-0 h-11 w-11 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100">📷</button>
                         <input type="number" step="0.001" min="0" x-model="p.contado" :name="p.contado !== '' ? `contados[${p.id}]` : null" placeholder="—"
                                class="w-28 h-11 rounded-xl border-gray-300 text-right font-bold">
                         <span class="w-16 text-xs text-gray-500" x-text="p.unidad"></span>
@@ -45,6 +47,7 @@
             <button class="h-12 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg">Enviar conteo (<span x-text="contados.length"></span>)</button>
         </div>
     </form>
+    @include('empresas.partials.contar_foto')
 </div>
 @endsection
 
@@ -53,6 +56,10 @@
     document.addEventListener('alpine:init', () => {
         Alpine.data('conteoCiego', (productos) => ({
             productos, texto: '',
+            async conFoto(p) {
+                const cantidad = await window.contarConFoto(p.id, p.nombre);
+                if (cantidad !== null) p.contado = cantidad;
+            },
             get contados() { return this.productos.filter(p => p.contado !== '' && p.contado !== null); },
             get visibles() {
                 const t = this.texto.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
