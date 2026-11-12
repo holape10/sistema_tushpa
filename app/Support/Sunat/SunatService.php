@@ -7,6 +7,7 @@ use App\Models\EmpresaNegocio;
 use App\Support\AnulacionVenta;
 use App\Support\Bitacora;
 use App\Support\Comprobante;
+use App\Support\CuotasCredito;
 use App\Support\Ubigeo;
 use App\Support\Unidades;
 use DateTime;
@@ -246,8 +247,8 @@ class SunatService
             $doc->setTipoOperacion($cab->topcod ?: '0101');
             if ($cab->estadopago === 'CREDITO' && $cab->ccafve) {
                 $doc->setFormaPago(new FormaPagoCredito((float) $cab->ccaitv))
-                    ->setCuotas([(new Cuota)->setMonto((float) $cab->ccaitv)
-                        ->setFechaPago(new DateTime($cab->ccafve, new DateTimeZone('America/Lima')))])
+                    ->setCuotas(CuotasCredito::de($cab)->map(fn ($c) => (new Cuota)->setMonto($c->monto)
+                        ->setFechaPago(new DateTime($c->fecha, new DateTimeZone('America/Lima'))))->all())
                     ->setFecVencimiento(new DateTime($cab->ccafve, new DateTimeZone('America/Lima')));
             } else {
                 $doc->setFormaPago(new FormaPagoContado);

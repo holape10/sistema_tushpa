@@ -78,6 +78,9 @@
                 : \Illuminate\Support\Facades\DB::table('tipo_nota_debito')->where('ndcod', $cab->tipnot)->value('nddes') }}</td></tr>
         @else
             <tr><td>M. Pago:</td><td>{{ $cab->estadopago }}@if ($cab->estadopago === 'CREDITO') · vence {{ \Carbon\Carbon::parse($cab->ccafve)->format('d-m-Y') }}@endif</td></tr>
+            @foreach (\App\Support\CuotasCredito::de($cab) as $cuota)
+                <tr><td>Cuota {{ $cuota->numero }}:</td><td>{{ \Carbon\Carbon::parse($cuota->fecha)->format('d-m-Y') }} · {{ ($cab->moncod ?? 'PEN') === 'USD' ? 'US$' : 'S/' }} {{ number_format($cuota->monto, 2) }}</td></tr>
+            @endforeach
         @endif
         @foreach ($atencion as [$etiqueta, $nombreAtencion])<tr><td>{{ $etiqueta }}:</td><td>{{ $nombreAtencion }}</td></tr>@endforeach
         @if (!empty($cab->placa))<tr><td>Placa:</td><td class="b">{{ $cab->placa }}</td></tr>@endif

@@ -272,6 +272,31 @@
                     <strong x-text="diferencia > 0 ? 'Falta por pagar:' : 'Excede el total por:'"></strong> <span x-text="soles(Math.abs(diferencia))"></span>
                 </p>
             </section>
+
+            {{-- Crédito: en una sola cuota (al vencimiento) o en varias, con su fecha y monto (van a SUNAT y salen impresas) --}}
+            <section x-show="!esContado" x-cloak class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+                <div class="flex flex-wrap items-center gap-2">
+                    <p class="flex-1 text-xs font-bold text-slate-500 uppercase">Cuotas del crédito</p>
+                    <label class="text-xs text-slate-500">Dividir en
+                        <input type="number" min="2" max="36" x-model.number="nCuotas" class="w-16 h-9 rounded-lg border-slate-200 text-sm text-center"></label>
+                    <label class="text-xs text-slate-500">cada
+                        <input type="number" min="1" max="365" x-model.number="diasCuota" class="w-16 h-9 rounded-lg border-slate-200 text-sm text-center"> días</label>
+                    <button type="button" @click="dividirCuotas()" class="h-9 px-3 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-bold">Dividir</button>
+                    <button type="button" @click="agregarCuota()" class="h-9 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-sm font-bold">+ Cuota</button>
+                </div>
+                <p x-show="!cuotas.length" class="text-sm text-slate-500">Una sola cuota de <b x-text="soles(total)"></b> que vence el <b x-text="fecVen ? fecVen.split('-').reverse().join('/') : '—'"></b>.
+                    Para pagar en partes, usa <b>Dividir</b> o <b>+ Cuota</b>.</p>
+                <template x-for="(c, i) in cuotas" :key="i">
+                    <div class="grid grid-cols-[2rem_1fr_1fr_2rem] items-center gap-2">
+                        <span class="text-sm font-bold text-slate-500 text-center" x-text="i + 1"></span>
+                        <input type="date" x-model="c.fecha" @change="sincronizarVencimiento()" :min="fechaEmision || cfg.hoy" class="h-10 rounded-xl border-slate-200 text-sm">
+                        <input type="number" step="0.01" min="0.01" x-model.number="c.monto" class="h-10 rounded-xl border-slate-200 text-sm text-right font-semibold">
+                        <button type="button" @click="quitarCuota(i)" class="text-slate-400 hover:text-rose-600 text-lg" title="Quitar">×</button>
+                    </div>
+                </template>
+                <p x-show="cuotas.length" class="text-sm text-right" :class="Math.abs(sumaCuotas - total) > 0.009 ? 'text-rose-600 font-bold' : 'text-emerald-700 font-semibold'"
+                   x-text="'Suman ' + soles(sumaCuotas) + ' de ' + soles(total) + (Math.abs(sumaCuotas - total) > 0.009 ? ' (deben ser iguales)' : ' ✔')"></p>
+            </section>
         </div>
 
         {{-- ================= DERECHA: comprobante, cliente y totales ================= --}}

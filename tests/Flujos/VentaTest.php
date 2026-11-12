@@ -10,6 +10,7 @@ use App\Support\Sunat\SunatService;
 use App\Support\VentaDirecta;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 
 /** Vender, cobrar, el stock, la numeración, el IGV y anular: lo que nunca debe romperse */
 class VentaTest extends FlujoTestCase
@@ -196,6 +197,40 @@ class VentaTest extends FlujoTestCase
         $datos = $this->venta([[$this->producto('ARENA', 40, 10), 1, 0]], '13');
         $this->postJson(route('pv.registrar'), $datos)->assertJsonMissing(['estado' => 'success']);
         $this->assertSame(0, DB::table('cpe_cabecera')->where('id_empresa_negocio', $this->sucursal)->count());
+    }
+
+    /** Factura al crédito por S/ 900 (3 x S/ 300) */
+    private function alCreditoEnCuotas(array $cuotas): TestResponse
+    {
+        return $this->postJson(route('pv.registrar'), $this->venta([[$this->producto('MOCHILA', 300, 10), 3]], '01', ['estadopago' => $this->credito,
+            'fecVen' => now()->addDays(30)->toDateString(), 'cuotas' => $cuotas, 'id_med_pag' => [], 'mon_med_pag' => [], 'paga' => 0]));
+    }
+
+    public function test_el_credito_en_varias_cuotas_va_a_sunat_y_sale_impreso(): void
+    {
+        $fechas = [now()->addDays(30)->toDateString(), now()->addDays(60)->toDateString(), now()->addDays(90)->toDateString()];
+        $id = (int) $this->alCreditoEnCuotas(array_map(fn ($f) => ['fecha' => $f, 'monto' => 300], $fechas))->assertJson(['estado' => 'success'])->json('id');
+
+        $this->assertSame($fechas, DB::table('cpe_cuotas')->where('IdCpe_cabecera', $id)->orderBy('numero')->pluck('fecha')->map(fn ($f) => (string) $f)->all());
+        $this->assertSame($fechas[2], (string) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->value('ccafve'), 'Vence con la última cuota.');
+        $this->assertSame($fechas[2], (string) DB::table('cuentas_cobrar')->where('IdCpe_cabecera', $id)->value('fec_ven'));
+
+        $sunat = new SunatService(Empresa::findOrFail($this->usuario->IdEmpresa), EmpresaNegocio::findOrFail($this->sucursal));
+        $factura = (new \ReflectionMethod($sunat, 'construirComprobante'))->invoke($sunat, $this->cabecera($id));
+        $this->assertSame([300.0, 300.0, 300.0], array_map(fn ($c) => (float) $c->getMonto(), $factura->getCuotas()));
+        $this->assertSame($fechas[1], $factura->getCuotas()[1]->getFechaPago()->format('Y-m-d'));
+
+        $this->get(route('cobros.voucher', [$id, 'formato' => 'a4']))->assertOk()->assertSeeInOrder(['CUOTAS', $fechas[0], $fechas[1], $fechas[2]]);
+        $this->get(route('cobros.voucher', $id))->assertOk()->assertSee('Cuota 3:');
+    }
+
+    public function test_las_cuotas_deben_sumar_el_total_y_sin_cuotas_es_una_sola(): void
+    {
+        $this->alCreditoEnCuotas([['fecha' => now()->addDays(30)->toDateString(), 'monto' => 300], ['fecha' => now()->addDays(60)->toDateString(), 'monto' => 300]])
+            ->assertJsonMissing(['estado' => 'success']);
+
+        $id = (int) $this->alCreditoEnCuotas([])->assertJson(['estado' => 'success'])->json('id');
+        $this->assertSame([[1, 900.0]], DB::table('cpe_cuotas')->where('IdCpe_cabecera', $id)->get()->map(fn ($c) => [(int) $c->numero, (float) $c->monto])->all());
     }
 
     public function test_sunat_recibe_el_distrito_oficial_del_ubigeo_aunque_la_sucursal_lo_tenga_mal_escrito(): void

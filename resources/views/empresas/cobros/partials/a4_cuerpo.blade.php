@@ -166,6 +166,7 @@
     @php $atencionA4 = \App\Support\Impresion\Impresion::atencion($cab); @endphp
     @if ($atencionA4)<p style="margin:6px 0 0">@foreach ($atencionA4 as [$etiqueta, $nombreAtencion])<span class="lbl">{{ $etiqueta }}:</span> {{ $nombreAtencion }}@if (! $loop->last) &nbsp;·&nbsp; @endif @endforeach</p>@endif
     @if ($cab->ccaobs)<p style="margin:6px 0 0"><span class="lbl">Observación:</span> {{ $cab->ccaobs }}</p>@endif
+    @include('empresas.cobros.partials.a4_cuotas', ['simple' => false])
 
     {{-- SON + QR | QR de pago | totales (una sola tabla con rowspan: Dompdf corta las tablas anidadas) --}}
     @php

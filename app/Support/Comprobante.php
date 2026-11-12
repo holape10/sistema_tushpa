@@ -134,6 +134,9 @@ class Comprobante
 
         $fecEmi = $datos['fecEmi'];
         $fecVen = self::vencimiento($datos, $fecEmi, $esContado);
+        // Crédito: sus cuotas (una sola por el total si no se escribieron); vence con la última
+        $cuotas = $esContado ? [] : CuotasCredito::normalizar($datos['cuotas'] ?? null, $total, $fecEmi, $fecVen);
+        $fecVen = $cuotas ? end($cuotas)['fecha'] : $fecVen;
         // Varias cajas/barras: sale del almacén de la PC donde se cobra, y queda anotado en qué caja se cobró
         $almacen = Kardex::almacenDeVenta((int) $user->id_empresa_negocio);
         $equipo = Impresion::equipo((int) $user->id_empresa_negocio)?->pc;
@@ -157,6 +160,7 @@ class Comprobante
                 (array) ($datos['id_med_pag'] ?? []), (array) ($datos['mon_med_pag'] ?? []), (array) ($datos['op_med_pag'] ?? []),
                 (array) ($datos['usd_med_pag'] ?? []));
         } elseif (! $esContado) {
+            CuotasCredito::guardar($cabId, $cuotas);
             Cuentas::abrirPorCobrar($cabId);
             self::adelanto($user, $cabId, $total, $datos);
         }
@@ -287,6 +291,12 @@ class Comprobante
         $total = $totales['ccaitv'];
 
         $fecVen = self::vencimiento($datos, $cab->ccafem, $esContado);
+        $cuotas = $esContado ? [] : CuotasCredito::normalizar($datos['cuotas'] ?? null, $total, (string) $cab->ccafem, $fecVen);
+        $fecVen = $cuotas ? end($cuotas)['fecha'] : $fecVen;
+        DB::table('cpe_cuotas')->where('IdCpe_cabecera', $cabId)->delete();
+        if ($cuotas) {
+            CuotasCredito::guardar($cabId, $cuotas);
+        }
         DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->update(self::cabecera($datos, $cliente, $cre, $totales, $gravado, $factorIgv) + [
             'tdocod' => $tdocod, 'serdoc' => $serie, 'numdoc' => $numero, 'ccafve' => $fecVen,
             // Vuelve a quedar por enviar (si SUNAT lo rechazó o falló el envío, se manda corregido)

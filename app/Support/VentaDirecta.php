@@ -70,6 +70,10 @@ class VentaDirecta
         'usd_med_pag.*' => 'nullable|boolean',
         // Pago por partes: al crédito, con lo que paga hoy como primer abono
         'fecVen' => 'nullable|date',
+        // Crédito en cuotas: fecha y monto de cada una (sin cuotas, una sola por el total al vencimiento)
+        'cuotas' => 'nullable|array|max:'.CuotasCredito::MAXIMO,
+        'cuotas.*.fecha' => 'nullable|date',
+        'cuotas.*.monto' => 'nullable|numeric|min:0|max:9999999',
         'partes' => 'nullable|boolean',
         'a_cuenta' => 'nullable|numeric|min:0|max:999999',
         'a_cuenta_medio' => 'nullable|integer',

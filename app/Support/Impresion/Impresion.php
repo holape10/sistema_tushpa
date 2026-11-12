@@ -4,6 +4,7 @@ namespace App\Support\Impresion;
 
 use App\Models\Mesa;
 use App\Support\ConsultaCpe;
+use App\Support\CuotasCredito;
 use App\Support\Delivery;
 use App\Support\Descuentos;
 use App\Support\Encuestas;
@@ -25,6 +26,20 @@ use Illuminate\Support\Facades\Schema;
  */
 class Impresion
 {
+    /** Venta al crédito: cada cuota con su fecha y monto (como pide SUNAT en la representación impresa) */
+    private static function cuotasTicket(Escpos $p, object $cab): void
+    {
+        $cuotas = CuotasCredito::de($cab);
+        if ($cuotas->isEmpty()) {
+            return;
+        }
+        $mon = ($cab->moncod ?? 'PEN') === 'USD' ? 'US$' : 'S/';
+        $p->texto('CUOTAS:');
+        foreach ($cuotas as $c) {
+            $p->dosColumnas('  '.$c->numero.') '.Carbon::parse($c->fecha)->format('d/m/Y'), $mon.' '.number_format($c->monto, 2));
+        }
+    }
+
     /**
      * Logo de la empresa (Empresas → Editar) para los reportes, como data URI: Dompdf lo dibuja sin leer archivos ni
      * internet, y sirve igual en el navegador. Si la empresa no tiene, el de la sucursal.
@@ -338,6 +353,7 @@ class Impresion
             $p->parrafo(mb_str_pad(mb_substr($etiqueta, 0, 6), 6).': '.$nombre);
         }
         $p->texto('Pago  : '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''));
+        self::cuotasTicket($p, $cab);
         if (trim((string) $cab->ccaobs) !== '') {
             $p->parrafo('Obs.  : '.trim($cab->ccaobs));
         }
@@ -475,6 +491,7 @@ class Impresion
         }
         if ($cab->estadopago === 'CREDITO' && $cab->ccafve) {
             $p->texto('Vence: '.Carbon::parse($cab->ccafve)->format('d/m/Y'));
+            self::cuotasTicket($p, $cab);
         }
         if (trim((string) $cab->ccaobs) !== '') {
             $p->parrafo('Obs.: '.trim($cab->ccaobs));
@@ -579,6 +596,7 @@ class Impresion
             $dato($etiqueta.':', $nombre);
         }
         $p->texto('Condición de Pago:   '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''));
+        self::cuotasTicket($p, $cab);
         if (trim((string) $cab->ccaobs) !== '') {
             $dato('Observación:', trim($cab->ccaobs));
         }

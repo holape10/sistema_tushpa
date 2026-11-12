@@ -61,6 +61,10 @@ document.addEventListener('alpine:init', () => {
         // Contingencia: se pasa al sistema una factura o boleta hecha en PAPEL (serie numérica, número y fecha impresos)
         contingencia: { activa: false, serie: '0001', numero: '' },
         fecVen: '',
+        // Crédito en cuotas: vacío = una sola por el total al vencimiento
+        cuotas: [],
+        nCuotas: 2,
+        diasCuota: 30,
         medios: [],
         nuevoMedio: null,
         nuevoMonto: null,
@@ -155,6 +159,7 @@ document.addEventListener('alpine:init', () => {
         get sumaMedios() { return this.esContado ? redondear(this.medios.reduce((s, m) => s + this.montoDe(m), 0)) : 0; },
         get comisionTotal() { return this.esContado ? redondear(this.medios.reduce((s, m) => s + this.comisionDe(m), 0)) : 0; },
         get total() { return redondear(this.base + this.comisionTotal); },
+        get sumaCuotas() { return redondear(this.cuotas.reduce((s, c) => s + (Number(c.monto) || 0), 0)); },
         get diferencia() { return redondear(this.base - this.sumaMedios); },
 
         // ---------- Formato ----------
@@ -440,6 +445,41 @@ document.addEventListener('alpine:init', () => {
             this.paga = null;
             this.nuevoMonto = null;
             this.fecVen = '';
+            this.cuotas = [];
+        },
+
+        // ---------- Cuotas del crédito ----------
+        sumarDias(fecha, dias) {
+            const f = new Date((fecha || CFG.hoy) + 'T00:00:00');
+            f.setDate(f.getDate() + dias);
+            return f.toISOString().slice(0, 10);
+        },
+        dividirCuotas() {
+            const n = Math.min(36, Math.max(2, parseInt(this.nCuotas) || 2));
+            const dias = Math.max(1, parseInt(this.diasCuota) || 30);
+            const parte = Math.floor(this.total / n * 100) / 100;
+            this.cuotas = Array.from({ length: n }, (_, i) => ({
+                fecha: this.sumarDias(this.fechaEmision || CFG.hoy, dias * (i + 1)),
+                // La última se lleva los céntimos que sobran, para que sumen exacto el total
+                monto: i < n - 1 ? parte : redondear(this.total - parte * (n - 1)),
+            }));
+            this.sincronizarVencimiento();
+        },
+        agregarCuota() {
+            if (!this.cuotas.length) this.cuotas.push({ fecha: this.fecVen || this.sumarDias(this.fechaEmision, 30), monto: this.total });
+            const ultima = this.cuotas[this.cuotas.length - 1];
+            const falta = redondear(this.total - this.sumaCuotas);
+            this.cuotas.push({ fecha: this.sumarDias(ultima.fecha, Math.max(1, parseInt(this.diasCuota) || 30)), monto: falta > 0 ? falta : 0 });
+            this.sincronizarVencimiento();
+        },
+        quitarCuota(i) {
+            this.cuotas.splice(i, 1);
+            this.sincronizarVencimiento();
+        },
+        // El comprobante vence con la última cuota
+        sincronizarVencimiento() {
+            const fechas = this.cuotas.map(c => c.fecha).filter(Boolean).sort();
+            if (fechas.length) this.fecVen = fechas[fechas.length - 1];
         },
 
         cambioEstadoPago() {
@@ -580,6 +620,15 @@ document.addEventListener('alpine:init', () => {
             if (!this.esContado) {
                 if (num === PORTADOR.num) return 'Para vender a crédito debes identificar al cliente.';
                 if (!this.fecVen || this.fecVen <= CFG.hoy) return 'La fecha de vencimiento debe ser posterior a hoy.';
+                if (this.cuotas.length) {
+                    let anterior = this.fechaEmision || CFG.hoy;
+                    for (const [i, c] of this.cuotas.entries()) {
+                        if (!c.fecha || !(Number(c.monto) > 0)) return `Cuota ${i + 1}: pon su fecha y un monto mayor a 0.`;
+                        if (c.fecha <= anterior) return `Cuota ${i + 1}: su fecha debe ser posterior a la emisión y a la cuota anterior.`;
+                        anterior = c.fecha;
+                    }
+                    if (Math.abs(this.sumaCuotas - this.total) > 0.009) return `Las cuotas suman ${this.soles(this.sumaCuotas)} y el total es ${this.soles(this.total)}: deben ser iguales.`;
+                }
             } else {
                 if (!this.medios.some(m => this.montoDe(m) > 0)) return 'Agrega un medio de pago.';
                 if (Math.abs(this.diferencia) > 0.01) return 'Los medios de pago no cuadran con el total (' + (this.diferencia > 0 ? 'faltan ' : 'sobran ') + this.soles(Math.abs(this.diferencia)) + ').';
@@ -611,6 +660,7 @@ document.addEventListener('alpine:init', () => {
                 estadopago: this.estadopago,
                 fecEmi: this.fechaEmision || CFG.hoy,
                 fecVen: this.esContado ? null : this.fecVen,
+                ...(!this.esContado && this.cuotas.length ? { cuotas: this.cuotas.map(c => ({ fecha: c.fecha, monto: Number(c.monto) })) } : {}),
                 ...(this.contingencia.activa ? { contingencia: { serie: String(this.contingencia.serie).trim(), numero: Number(this.contingencia.numero) } } : {}),
                 tdicod: this.cliente.tdicod,
                 clinum: this.cliente.num.trim(),

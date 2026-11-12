@@ -19,7 +19,7 @@ class EliminarPrueba
 
     /** Tablas con datos propios de la venta: se borran con ella */
     private const SE_BORRAN = ['cpe_detalle', 'venta_medio_pago', 'movimientos_productos', 'cpe_promociones', 'fid_movimientos',
-        'porciones_movimientos', 'propinas', 'encuestas', 'ventas_offline'];
+        'porciones_movimientos', 'propinas', 'encuestas', 'ventas_offline', 'cpe_cuotas'];
 
     /** Registros de otros módulos que solo apuntan a la venta (ya revertidos al anularla): quedan, sin la venta */
     private const SE_SUELTAN = ['col_pagos', 'cou_envios', 'est_abonados', 'est_tickets', 'gym_membresias', 'producto_series', 'socio_pagos'];

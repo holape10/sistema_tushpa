@@ -137,6 +137,7 @@
     @php $atencionA4 = \App\Support\Impresion\Impresion::atencion($cab); @endphp
     @if ($atencionA4)<p style="margin:5px 0 0">@foreach ($atencionA4 as [$etiqueta, $nombreAtencion])<strong>{{ $etiqueta }}:</strong> {{ $nombreAtencion }}@if (! $loop->last) &nbsp;·&nbsp; @endif @endforeach</p>@endif
     @if ($cab->ccaobs)<p style="margin:5px 0 0"><strong>Observación:</strong> {{ $cab->ccaobs }}</p>@endif
+    @include('empresas.cobros.partials.a4_cuotas', ['simple' => true])
 
     {{-- Recuadro: SON + QR | CANCELADO, firma y representación impresa | totales (una tabla con rowspan: Dompdf corta las anidadas) --}}
     @php
