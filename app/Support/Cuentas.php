@@ -1,7 +1,10 @@
 <?php
+
 namespace App\Support;
 
-use App\Models\{MedioPago, Turno, User};
+use App\Models\MedioPago;
+use App\Models\Turno;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -51,22 +54,23 @@ class Cuentas
         $credito = $c->est_compra === 'Registrado' && (float) $c->tot_cre > 0;
         $pagado = $cuenta ? (float) $cuenta->abono : 0;
 
-        if (!$credito) {
+        if (! $credito) {
             if ($pagado > 0) {
-                throw new \RuntimeException('Esta compra tiene pagos registrados (S/ ' . number_format($pagado, 2)
-                    . '). Anula primero esos pagos en Cuentas por Pagar.');
+                throw new \RuntimeException('Esta compra tiene pagos registrados (S/ '.number_format($pagado, 2)
+                    .'). Anula primero esos pagos en Cuentas por Pagar.');
             }
             if ($cuenta) {
                 DB::table('cuentas_pagar')->where('cue_pag_id', $cuenta->cue_pag_id)
                     ->update(['estado_cob' => 'ANULADO', 'saldo' => 0, 'updated_at' => now()]);
             }
             DB::table('compras_cabecera')->where('com_cab_id', $comId)->update(['saldofactura' => 0]);
+
             return;
         }
 
         $total = round((float) $c->total_com, 2);
         if ($pagado > $total + 0.001) {
-            throw new \RuntimeException('Ya se pagaron S/ ' . number_format($pagado, 2) . ' de esta compra; el nuevo total no puede ser menor.');
+            throw new \RuntimeException('Ya se pagaron S/ '.number_format($pagado, 2).' de esta compra; el nuevo total no puede ser menor.');
         }
         $saldo = round($total - $pagado, 2);
         $datos = [
@@ -85,11 +89,11 @@ class Cuentas
     {
         $t = self::T[$tipo];
         $cuenta = DB::table($t['tabla'])->where($t['doc'], $docId)->lockForUpdate()->first();
-        if (!$cuenta) {
+        if (! $cuenta) {
             return;
         }
         if ((float) $cuenta->abono > 0) {
-            throw new \RuntimeException('Tiene pagos registrados (S/ ' . number_format($cuenta->abono, 2) . '). Anula primero esos pagos.');
+            throw new \RuntimeException('Tiene pagos registrados (S/ '.number_format($cuenta->abono, 2).'). Anula primero esos pagos.');
         }
         DB::table($t['tabla'])->where($t['pk'], $cuenta->{$t['pk']})->update(['estado_cob' => 'ANULADO', 'saldo' => 0, 'updated_at' => now()]);
     }
@@ -97,43 +101,44 @@ class Cuentas
     // ---------------- Pagos ----------------
 
     /**
-     * @param array $d fecha, medios [[id, monto], ...], num_oper, comentario, desde_caja (solo pagar)
+     * @param  array  $d  fecha, medios [[id, monto], ...], num_oper, comentario, desde_caja (solo pagar)
      * @return int id del pago (detalle)
      */
     public static function registrarPago(User $user, string $tipo, int $cuentaId, array $d): int
     {
         $t = self::T[$tipo];
+
         return DB::transaction(function () use ($user, $tipo, $t, $cuentaId, $d) {
             $cuenta = DB::table($t['tabla'])->where($t['pk'], $cuentaId)
                 ->where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
-            if (!$cuenta) {
+            if (! $cuenta) {
                 throw new \RuntimeException('La cuenta no existe.');
             }
             if (in_array($cuenta->estado_cob, ['PAGADO', 'ANULADO'], true)) {
-                throw new \RuntimeException('Esta cuenta ya está ' . strtolower($cuenta->estado_cob) . '.');
+                throw new \RuntimeException('Esta cuenta ya está '.strtolower($cuenta->estado_cob).'.');
             }
 
             // Medios de pago: válidos, positivos y sin repetir
             $validos = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)->get()->keyBy('id_med_pag');
-            $medios = collect($d['medios'])->map(fn($m) => ['id' => (int) $m['id'], 'monto' => round((float) $m['monto'], 2)])
-                ->filter(fn($m) => $m['monto'] > 0)->values();
+            $medios = collect($d['medios'])->map(fn ($m) => ['id' => (int) $m['id'], 'monto' => round((float) $m['monto'], 2)])
+                ->filter(fn ($m) => $m['monto'] > 0)->values();
             if ($medios->isEmpty()) {
                 throw new \RuntimeException('Ingresa el monto del pago.');
             }
-            if ($medios->contains(fn($m) => !isset($validos[$m['id']])) || $medios->pluck('id')->duplicates()->isNotEmpty()) {
+            if ($medios->contains(fn ($m) => ! isset($validos[$m['id']])) || $medios->pluck('id')->duplicates()->isNotEmpty()) {
                 throw new \RuntimeException('Revisa los medios de pago.');
             }
             $monto = round($medios->sum('monto'), 2);
             if ($monto > (float) $cuenta->saldo + 0.001) {
-                throw new \RuntimeException('El pago (S/ ' . number_format($monto, 2) . ') es mayor al saldo pendiente (S/ ' . number_format($cuenta->saldo, 2) . ').');
+                throw new \RuntimeException('El pago (S/ '.number_format($monto, 2).') es mayor al saldo pendiente (S/ '.number_format($cuenta->saldo, 2).').');
             }
 
             // Efectivo: los cobros siempre entran a la caja; los pagos a proveedores solo si se marcó "desde caja"
-            $efectivo = round($medios->filter(fn($m) => strtoupper((string) $validos[$m['id']]->nom_med_pag) === 'EFECTIVO')->sum('monto'), 2);
-            $usaCaja = $efectivo > 0 && ($tipo === 'cobrar' || !empty($d['desde_caja']));
+            $efectivo = round($medios->filter(fn ($m) => strtoupper((string) $validos[$m['id']]->nom_med_pag) === 'EFECTIVO')->sum('monto'), 2);
+            $usaCaja = $efectivo > 0 && ($tipo === 'cobrar' || ! empty($d['desde_caja']));
             $turno = Turno::abiertoDe($user);
-            if ($usaCaja && !$turno) {
-                throw new \RuntimeException('Para ' . ($tipo === 'cobrar' ? 'cobrar' : 'pagar con') . ' efectivo de caja debes tener tu turno abierto.');
+            if ($usaCaja && ! $turno) {
+                throw new \RuntimeException('Para '.($tipo === 'cobrar' ? 'cobrar' : 'pagar con').' efectivo de caja debes tener tu turno abierto.');
             }
 
             $saldo = round((float) $cuenta->saldo - $monto, 2);
@@ -144,7 +149,7 @@ class Cuentas
             if ($usaCaja) {
                 $movCaja = DB::table('movimientoscaja')->insertGetId([
                     'tip_caj_id' => $t['caja'], 'importe' => $efectivo, 'estado' => 'ACTIVO',
-                    'mov_com' => ($tipo === 'cobrar' ? 'Cobro ' : 'Pago ') . $doc['numero'] . ' - ' . $doc['nombre'],
+                    'mov_com' => ($tipo === 'cobrar' ? 'Cobro ' : 'Pago ').$doc['numero'].' - '.$doc['nombre'],
                     'mov_num_doc' => $doc['numero'], 'mov_fecha' => now()->toDateString(), 'registro' => now()->format('Y-m-d H:i:s'),
                     'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $user->id_empresa_negocio,
                     'id_turno' => $turno->id_turno, 'IdUsuario' => $user->IdUsuario,
@@ -158,7 +163,7 @@ class Cuentas
                 'IdUsuario' => $user->IdUsuario, 'fec_reg' => now(),
             ]);
             DB::table($t['det'])->where($t['detPk'], $detId)
-                ->update(['numero_recibo' => $t['recibo'] . '-' . str_pad((string) $detId, 6, '0', STR_PAD_LEFT)]);
+                ->update(['numero_recibo' => $t['recibo'].'-'.str_pad((string) $detId, 6, '0', STR_PAD_LEFT)]);
             foreach ($medios as $m) {
                 DB::table($t['med'])->insert([$t['detPk'] => $detId, 'med_pag_id' => $m['id'], 'monto' => $m['monto'],
                     'id_empresa_negocio' => $user->id_empresa_negocio]);
@@ -184,7 +189,7 @@ class Cuentas
             $det = DB::table($t['det'])->where($t['detPk'], $detId)->lockForUpdate()->first();
             $cuenta = $det ? DB::table($t['tabla'])->where($t['pk'], $det->{$t['pk']})
                 ->where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first() : null;
-            if (!$det || !$cuenta) {
+            if (! $det || ! $cuenta) {
                 throw new \RuntimeException('El pago no existe.');
             }
             if ($det->{$t['estDet']} !== 'REGISTRADO') {
@@ -194,7 +199,7 @@ class Cuentas
             if ($det->mov_caj_id) {
                 $mov = DB::table('movimientoscaja')->where('mov_caj_id', $det->mov_caj_id)->first();
                 $turnoAbierto = $mov && DB::table('turnos')->where('id_turno', $mov->id_turno)->where('estado', 'ABIERTO')->exists();
-                if (!$turnoAbierto) {
+                if (! $turnoAbierto) {
                     throw new \RuntimeException('Este pago movió efectivo de un turno que ya se cerró; no se puede anular.');
                 }
                 DB::table('movimientoscaja')->where('mov_caj_id', $det->mov_caj_id)->update(['estado' => 'ANULADO']);
@@ -227,6 +232,7 @@ class Cuentas
                     'd.IdCpe_cabecera as doc_id', 'd.tdocod', 'd.serdoc as serie', 'd.numdoc as numero', 'd.ccafem as fecha',
                     'd.ccandi as doc_persona', 'd.ccanom as persona', 'd.moncod as moneda');
         }
+
         return DB::table('cuentas_pagar as cp')
             ->join('compras_cabecera as d', 'd.com_cab_id', '=', 'cp.com_cab_id')
             ->leftJoin('proveedor as p', 'p.prov_id', '=', 'd.prov_id')
@@ -240,14 +246,16 @@ class Cuentas
     public static function pagos(string $tipo, int $cuentaId)
     {
         $t = self::T[$tipo];
-        $pagos = DB::table($t['det'] . ' as p')->leftJoin('users as u', 'u.IdUsuario', '=', 'p.IdUsuario')
-            ->where('p.' . $t['pk'], $cuentaId)->orderBy('p.' . $t['detPk'])
-            ->select('p.*', 'p.' . $t['detPk'] . ' as id', 'p.' . $t['estDet'] . ' as estado', 'u.apeusu as usuario')->get();
-        $medios = DB::table($t['med'] . ' as m')->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'm.med_pag_id')
-            ->whereIn('m.' . $t['detPk'], $pagos->pluck('id'))
-            ->select('m.' . $t['detPk'] . ' as pago', 'mp.nom_med_pag', 'm.monto')->get()->groupBy('pago');
+        $pagos = DB::table($t['det'].' as p')->leftJoin('users as u', 'u.IdUsuario', '=', 'p.IdUsuario')
+            ->where('p.'.$t['pk'], $cuentaId)->orderBy('p.'.$t['detPk'])
+            ->select('p.*', 'p.'.$t['detPk'].' as id', 'p.'.$t['estDet'].' as estado', 'u.apeusu as usuario')->get();
+        $medios = DB::table($t['med'].' as m')->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'm.med_pag_id')
+            ->whereIn('m.'.$t['detPk'], $pagos->pluck('id'))
+            ->select('m.'.$t['detPk'].' as pago', 'mp.nom_med_pag', 'm.monto')->get()->groupBy('pago');
+
         return $pagos->map(function ($p) use ($medios) {
             $p->medios = $medios[$p->id] ?? collect();
+
             return $p;
         });
     }
@@ -256,16 +264,22 @@ class Cuentas
     {
         if ($tipo === 'cobrar') {
             $d = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $docId)->first(['serdoc', 'numdoc', 'ccanom']);
-            return ['numero' => $d->serdoc . '-' . $d->numdoc, 'nombre' => $d->ccanom];
+
+            return ['numero' => $d->serdoc.'-'.$d->numdoc, 'nombre' => $d->ccanom];
         }
         $d = DB::table('compras_cabecera as c')->leftJoin('proveedor as p', 'p.prov_id', '=', 'c.prov_id')
             ->where('c.com_cab_id', $docId)->first(['c.com_doc_ser', 'c.com_doc_num', 'p.prov_raz']);
-        return ['numero' => $d->com_doc_ser . '-' . $d->com_doc_num, 'nombre' => $d->prov_raz];
+
+        return ['numero' => $d->com_doc_ser.'-'.$d->com_doc_num, 'nombre' => $d->prov_raz];
     }
 
-    private static function estado(float $abono, float $saldo): string
+    /** Estado según lo abonado y el saldo (también lo usa la importación del sistema antiguo, que lo traía como texto libre) */
+    public static function estado(float $abono, float $saldo): string
     {
-        if ($saldo <= 0.001) return 'PAGADO';
+        if ($saldo <= 0.001) {
+            return 'PAGADO';
+        }
+
         return $abono > 0 ? 'PARCIAL' : 'PENDIENTE';
     }
 }

@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\PromocionController;
 use App\Http\Controllers\Admin\ProspectoController;
 use App\Http\Controllers\Admin\RespaldoController;
+use App\Http\Controllers\Admin\SoporteIaController;
 use App\Http\Controllers\Admin\TableroController;
 use App\Http\Controllers\Admin\TicketController;
 use App\Http\Controllers\Admin\TutorialController;
@@ -125,6 +126,10 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/errores', [ErrorController::class, 'index'])->name('errores.index');
     // Asistente IA: gasto del mes y qué empresas lo tienen (solo el dueño)
     Route::get('/asistente', [AsistenteController::class, 'index'])->name('asistente.index');
+    // Soporte con IA: preguntas sobre la base de una empresa (solo lectura)
+    Route::get('/soporte-ia', [SoporteIaController::class, 'index'])->name('soporte_ia.index');
+    Route::post('/soporte-ia/{cliente}', [SoporteIaController::class, 'preguntar'])->whereNumber('cliente')->middleware('throttle:20,1')->name('soporte_ia.preguntar');
+    Route::post('/soporte-ia/{cliente}/nueva', [SoporteIaController::class, 'nueva'])->whereNumber('cliente')->name('soporte_ia.nueva');
     Route::post('/asistente/{cliente}', [AsistenteController::class, 'guardar'])->whereNumber('cliente')->name('asistente.guardar');
     Route::post('/errores/probar', [ErrorController::class, 'probar'])->middleware('throttle:5,1')->name('errores.probar');
     Route::post('/errores/resolver-todos', [ErrorController::class, 'resolverTodos'])->name('errores.resolver_todos');

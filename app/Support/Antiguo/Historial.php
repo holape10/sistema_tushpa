@@ -5,6 +5,7 @@ namespace App\Support\Antiguo;
 use App\Http\Controllers\SucursalController;
 use App\Models\Producto;
 use App\Models\User;
+use App\Support\Cuentas;
 use App\Support\Kardex;
 use App\Support\Unidades;
 use Illuminate\Support\Facades\DB;
@@ -743,8 +744,11 @@ class Historial
             $clicod = $tipo === 'cobrar'
                 ? DB::table('cpe_cabecera')->where('IdCpe_cabecera', $nuevoDoc)->value('clicod')
                 : DB::table('compras_cabecera')->where('com_cab_id', $nuevoDoc)->value('prov_id');
+            // El estado se saca de los montos: el antiguo lo guardaba como texto ("pendiente", "cancelado" = pagada)
+            $estado = str_starts_with(mb_strtoupper(trim((string) $cta->estado_cob)), 'ANUL') ? 'ANULADO'
+                : Cuentas::estado((float) $cta->abono, (float) $cta->saldo);
             $id = DB::table($tabla)->insertGetId($this->copiar($tabla, $cta, [
-                $fk => $nuevoDoc, 'clicod' => $clicod, 'id_empresa_negocio' => $suc, 'IdEmpresa' => $this->user->IdEmpresa,
+                $fk => $nuevoDoc, 'clicod' => $clicod, 'id_empresa_negocio' => $suc, 'IdEmpresa' => $this->user->IdEmpresa, 'estado_cob' => $estado,
             ], [$pk]));
             $this->resumen['cuentas']++;
 
