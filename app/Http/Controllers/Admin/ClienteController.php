@@ -11,6 +11,7 @@ use App\Support\ConsultaPeru;
 use App\Support\Estudio;
 use App\Support\LogosClientes;
 use App\Support\Rubros;
+use App\Support\Sunat\SunatService;
 use App\Support\Tenancy\ConsumoXml;
 use App\Support\Tenancy\Eliminador;
 use App\Support\Tenancy\Provisionador;
@@ -67,16 +68,19 @@ class ClienteController extends Controller
             try {
                 return Tenancy::en($cliente->base_datos, function () {
                     if (! Schema::hasTable('cpe_cabecera')) {
-                        return ['tipos' => [], 'total' => 0, 'mes' => 0];
+                        return ['tipos' => [], 'total' => 0, 'mes' => 0, 'pendientes' => 0];
                     }
                     $tipos = DB::table('cpe_cabecera')->whereNull('ccabaj')->groupBy('tdocod')->orderBy('tdocod')
                         ->selectRaw('tdocod, COUNT(*) n')->pluck('n', 'tdocod')->map(fn ($n) => (int) $n)->all();
                     $mes = DB::table('cpe_cabecera')->whereNull('ccabaj')->where('ccafem', '>=', now()->startOfMonth()->toDateString())->count();
+                    // Lo de la campanita de la empresa (sin respuesta de SUNAT), contado como en su pantalla de comprobantes pendientes
+                    $pendientes = DB::table('cpe_cabecera')->whereIn('tdocod', SunatService::TIPOS_ELECTRONICOS)->whereNull('ccabaj')
+                        ->where(fn ($x) => $x->whereNull('est_sunat')->orWhereRaw("UPPER(TRIM(est_sunat)) NOT REGEXP '^(ACEPTAD|OBSERVAD|ANULAD|RECHAZAD)'"))->count();
 
-                    return ['tipos' => $tipos, 'total' => array_sum($tipos), 'mes' => $mes];
+                    return ['tipos' => $tipos, 'total' => array_sum($tipos), 'mes' => $mes, 'pendientes' => $pendientes];
                 });
             } catch (\Throwable $e) {
-                return ['tipos' => [], 'total' => 0, 'mes' => 0];
+                return ['tipos' => [], 'total' => 0, 'mes' => 0, 'pendientes' => 0];
             }
         });
     }

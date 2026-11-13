@@ -15,7 +15,7 @@
         el('total_comp').value = fmt(TOTAL);
         if (DSCTO || CUPONES) {
             const pct = BRUTO > 0 ? d / BRUTO * 100 : 0;
-            if (DSCTO) el('dscto_clave_box').style.display = (!cupon && !ES_ADMIN && pct > MAX_CAJERO + 0.001) ? 'block' : 'none';
+            if (DSCTO) el('dscto_clave_box').style.display = (!cupon && !ES_ADMIN && (MAX_EN_SOLES ? d > MAX_CAJERO + 0.001 : pct > MAX_CAJERO + 0.001)) ? 'block' : 'none';
             el('dscto_info').textContent = d > 0 ? (cupon ? `Cupón ${cupon.codigo}: ` : 'Descuento: ') + `-S/ ${fmt(d)} (${pct.toFixed(1)}%)` + (d >= BRUTO ? ' · es mayor que la cuenta' : '') : '';
         }
         const partes = PROMOS_APLICADAS.map(p => `🎉 ${p.nombre}${p.veces > 1 ? ' ×' + p.veces : ''}: −S/ ${fmt(p.ahorro)}`);

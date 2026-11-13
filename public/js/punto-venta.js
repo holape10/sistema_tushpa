@@ -69,6 +69,8 @@ document.addEventListener('alpine:init', () => {
         nuevoMedio: null,
         nuevoMonto: null,
         paga: null,
+        // Descuento a la venta (si la sucursal lo permite): en soles o en %; más del máximo del cajero pide la clave del administrador
+        descuento: { tipo: 'S', valor: '', motivo: '', clave: '' },
 
         // Cliente
         cliente: { ...PORTADOR },
@@ -143,7 +145,23 @@ document.addEventListener('alpine:init', () => {
         },
 
         // ---------- Totales ----------
-        get base() { return redondear(this.carrito.reduce((s, it) => s + this.totalDe(it), 0)); },
+        // Suma de las líneas (antes del descuento)
+        get bruto() { return redondear(this.carrito.reduce((s, it) => s + this.totalDe(it), 0)); },
+        // Descuento a la venta, calculado igual que en el servidor (Descuentos::aplicar)
+        get montoDescuento() {
+            if (!CFG.descuentos || this.edicion) return 0;
+            const v = redondear(Number(this.descuento.valor) || 0);
+            if (v <= 0) return 0;
+            return this.descuento.tipo === 'P' ? redondear(this.bruto * v / 100) : v;
+        },
+        get porcentajeDescuento() { return this.bruto > 0 ? this.montoDescuento / this.bruto * 100 : 0; },
+        // Más del máximo del cajero (y no es administrador): pide la clave de un administrador
+        get pideClaveDescuento() {
+            if (CFG.esAdmin) return false;
+            return CFG.descuentoMaxTipo === 'S' ? this.montoDescuento > CFG.descuentoMax + 0.001 : this.porcentajeDescuento > CFG.descuentoMax + 0.001;
+        },
+        // Lo que se cobra: la suma de las líneas menos el descuento
+        get base() { return redondear(Math.max(0, this.bruto - this.montoDescuento)); },
         // Total de la línea: cantidad × precio, o el que escribió la caja para redondear (hasta 5 céntimos: 25.85 → 25.90)
         totalDe(it) {
             if (it.bonif) return 0; // Bonificación: va gratis
@@ -465,6 +483,7 @@ document.addEventListener('alpine:init', () => {
             const pred = CFG.medios.find(m => m.predeterminado) || CFG.medios[0];
             this.medios = pred ? [{ ...pred, monto: 0, auto: true }] : [];
             this.paga = null;
+            this.descuento = { tipo: 'S', valor: '', motivo: '', clave: '' };
             this.nuevoMonto = null;
             this.fecVen = '';
             this.cuotas = [];
@@ -631,6 +650,11 @@ document.addEventListener('alpine:init', () => {
             if (sinSerie) return `Elige o escanea la serie de cada unidad de ${sinSerie.descripcion}.`;
             if (this.carrito.some(it => !(it.cantidad > 0) || (!(it.precio > 0) && !this.esTexto(it)))) return 'Revisa las cantidades y precios (deben ser mayores a 0).';
             if (this.carrito.every(it => this.esTexto(it))) return 'Las líneas libres en S/ 0 son solo texto: agrega al menos una con precio.';
+            if (this.montoDescuento > 0) {
+                if (this.descuento.tipo === 'P' && Number(this.descuento.valor) >= 100) return 'El descuento no puede ser del 100%.';
+                if (this.montoDescuento >= this.bruto) return 'El descuento no puede ser igual o mayor que el total de la venta.';
+                if (this.pideClaveDescuento && !String(this.descuento.clave).trim()) return `El descuento pasa el máximo de ${CFG.descuentoMaxTipo === 'S' ? 'S/ ' + CFG.descuentoMax : CFG.descuentoMax + '%'}: pide la clave del administrador.`;
+            }
             if (this.contingencia.activa) {
                 if (!['01', '03'].includes(this.tdocod)) return 'En contingencia solo se pasan facturas y boletas en papel.';
                 if (!/^\d{1,4}$/.test(String(this.contingencia.serie).trim()) || !(Number(this.contingencia.numero) > 0)) return 'Escribe la serie (números, ej. 0001) y el número impreso en el papel.';
@@ -694,6 +718,9 @@ document.addEventListener('alpine:init', () => {
                 id_med_pag: medios.map(m => m.id),
                 mon_med_pag: medios.map(m => this.montoDe(m)),
                 op_med_pag: medios.map(m => String(m.operacion || '').trim()),
+                // Descuento a la venta: el servidor revisa el permiso, el máximo y la clave, y lo reparte entre las líneas
+                ...(this.montoDescuento > 0 ? { descuento_tipo: this.descuento.tipo, descuento_valor: Number(this.descuento.valor),
+                    descuento_motivo: String(this.descuento.motivo).trim(), clave_admin: String(this.descuento.clave).trim() } : {}),
             };
 
             // La misma clave en cada reintento: si la venta ya se registró y no llegó la respuesta, no se duplica

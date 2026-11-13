@@ -41,6 +41,8 @@ class Descuentos
             'cortesias' => (bool) ($n->permite_cortesias ?? false),
             'bonificaciones' => (bool) ($n->permite_bonificaciones ?? false),
             'max' => (float) ($n->descuento_max_cajero ?? 10),
+            // El máximo de la caja en % (P) o en soles (S)
+            'maxTipo' => ($n->descuento_max_tipo ?? 'P') === 'S' ? 'S' : 'P',
             'cupones' => Cupones::hayActivos($sucursal),
             'propina' => (bool) ($n->permite_propina ?? false),
             'tipoCambio' => (float) ($n->tipo_cambio_usd ?? 0) > 0 ? (float) $n->tipo_cambio_usd : null,
@@ -121,8 +123,9 @@ class Descuentos
 
         // Más del máximo del cajero: solo el administrador, o con la clave de un administrador (un cupón ya viene autorizado)
         $autoriza = $user->esAdmin() ? (int) $user->IdUsuario : null;
-        if (! $autoriza && ! $cupon && $porcentaje > $config->max + 0.001) {
-            $autoriza = self::claveAdministrador($user, (string) ($datos['clave_admin'] ?? ''), $porcentaje, $config->max);
+        $pasa = $config->maxTipo === 'S' ? $monto > $config->max + 0.001 : $porcentaje > $config->max + 0.001;
+        if (! $autoriza && ! $cupon && $pasa) {
+            $autoriza = self::claveAdministrador($user, (string) ($datos['clave_admin'] ?? ''), $porcentaje, $config->max, $monto, $config->maxTipo);
         }
 
         // Reparto proporcional al total de cada línea; el redondeo lo absorbe la línea más grande
@@ -161,9 +164,12 @@ class Descuentos
     }
 
     /** Clave de un administrador de la empresa (5 intentos por minuto). Devuelve quién autorizó */
-    private static function claveAdministrador(User $user, string $clave, float $porcentaje, float $max): int
+    private static function claveAdministrador(User $user, string $clave, float $porcentaje, float $max, float $monto = 0, string $maxTipo = 'P'): int
     {
-        $pedido = 'El descuento es de '.number_format($porcentaje, 1).'% y el máximo para caja es '.rtrim(rtrim(number_format($max, 2), '0'), '.').'%';
+        $tope = rtrim(rtrim(number_format($max, 2), '0'), '.');
+        $pedido = $maxTipo === 'S'
+            ? 'El descuento es de S/ '.number_format($monto, 2).' y el máximo para caja es S/ '.number_format($max, 2)
+            : 'El descuento es de '.number_format($porcentaje, 1).'% y el máximo para caja es '.$tope.'%';
         if ($clave === '') {
             throw new \RuntimeException($pedido.': escribe la clave de un administrador para autorizarlo.');
         }

@@ -56,6 +56,7 @@
     const CORTESIAS = {{ $descuentos->cortesias ? 'true' : 'false' }};
     const ES_ADMIN = {{ auth()->user()->esAdmin() ? 'true' : 'false' }};
     const MAX_CAJERO = {{ (float) $descuentos->max }};
+    const MAX_EN_SOLES = @json($descuentos->maxTipo === 'S');
     // Cupones, propina (aparte del comprobante) y pago en dólares (con el tipo de cambio de la sucursal)
     const CUPONES = {{ $descuentos->cupones ? 'true' : 'false' }};
     const PROPINA = {{ $descuentos->propina ? 'true' : 'false' }};

@@ -156,6 +156,11 @@
                                     @foreach ($cp['tipos'] as $t => $n)<span class="mr-1.5" title="{{ ['01' => 'Facturas', '03' => 'Boletas', '07' => 'Notas de crédito', '08' => 'Notas de débito', '13' => 'Notas de venta'][$t] ?? 'Tipo ' . $t }}">{{ $t }}: {{ number_format($n) }}</span>@endforeach
                                 </p>
                             @else <span class="text-slate-400">—</span> @endif
+                            {{-- Lo de su campanita: comprobantes sin respuesta de SUNAT; un clic y se revisan aquí mismo --}}
+                            @if (($cp['pendientes'] ?? 0) > 0)
+                                <a href="{{ route('admin.clientes.comprobantes', [$cl->id, 'filtro' => 'pendientes']) }}" title="Comprobantes sin respuesta de SUNAT (su campanita)"
+                                   class="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-rose-700">🔔 {{ number_format($cp['pendientes']) }} por enviar</a>
+                            @endif
                             @if ($usuarios->isNotEmpty() && $cl->creado_por)<p class="text-[11px] text-slate-400 mt-0.5">De: {{ $usuarios[$cl->creado_por] ?? '—' }}</p>@endif
                         </td>
                         <td class="px-4 py-3 text-right celda-acciones">

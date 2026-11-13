@@ -410,6 +410,27 @@
             </section>
 
             <section class="bg-white rounded-2xl shadow-sm p-4">
+                {{-- Descuento a la venta (si la sucursal lo permite) --}}
+                <template x-if="cfg.descuentos && !edicion">
+                    <div class="mb-3 rounded-xl ring-1 px-3 py-2" :class="montoDescuento > 0 ? 'ring-amber-300 bg-amber-50' : 'ring-slate-200'">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-sm font-bold text-slate-700">🏷️ Descuento</span>
+                            <select x-model="descuento.tipo" class="h-9 rounded-lg border-slate-200 text-sm font-bold" aria-label="Tipo de descuento">
+                                <option value="S">S/</option><option value="P">%</option>
+                            </select>
+                            <input type="number" step="0.01" min="0" x-model="descuento.valor" placeholder="0.00" aria-label="Descuento"
+                                   class="w-24 h-9 rounded-lg border-slate-200 text-right font-bold">
+                            <input type="text" x-model="descuento.motivo" maxlength="80" placeholder="Motivo (opcional)" aria-label="Motivo del descuento"
+                                   class="flex-1 min-w-[8rem] h-9 rounded-lg border-slate-200 text-sm">
+                        </div>
+                        <p x-show="montoDescuento > 0" class="mt-1 text-xs font-semibold text-amber-800"
+                           x-text="'Venta ' + soles(bruto) + ' − descuento ' + soles(montoDescuento) + ' (' + porcentajeDescuento.toFixed(1) + '%) = ' + soles(base)"></p>
+                        <label x-show="montoDescuento > 0 && pideClaveDescuento" class="mt-1 flex items-center gap-2 text-xs text-rose-700 font-semibold">
+                            Pasa el máximo de <span x-text="cfg.descuentoMaxTipo === 'S' ? soles(cfg.descuentoMax) : cfg.descuentoMax + '%'"></span>: clave del administrador
+                            <input type="password" x-model="descuento.clave" autocomplete="off" class="h-8 w-40 rounded-lg border-rose-200 text-sm">
+                        </label>
+                    </div>
+                </template>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div>
                         <p class="text-xs font-semibold text-slate-500">Total</p>
@@ -573,6 +594,11 @@
         redondeo: @json((string) ($negocio->redondeo_linea ?? '')),
         // Columna "Bonif.": la línea marcada va gratis (operación gratuita ante SUNAT)
         bonificaciones: @json((bool) ($negocio->permite_bonificaciones ?? false)),
+        // Descuento a la venta (Sucursales › Descuentos): hasta el máximo del cajero; más, con la clave del administrador
+        descuentos: @json((bool) ($negocio->permite_descuentos ?? false)),
+        descuentoMax: @json((float) ($negocio->descuento_max_cajero ?? 10)),
+        descuentoMaxTipo: @json(($negocio->descuento_max_tipo ?? 'P') === 'S' ? 'S' : 'P'),
+        esAdmin: @json(auth()->user()->esAdmin()),
         estadopagos: @json($estadopagos),
         medios: @json($mediospagos),
         documentos: @json($documentos),

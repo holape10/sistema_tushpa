@@ -273,6 +273,30 @@
                                 @endforeach
                             </div>
                         </div>
+                        {{-- Descuentos a la venta: Punto de venta (comercios) y cobro del restaurante --}}
+                        <div class="rounded-xl border-2 border-gray-200 px-4 py-3 space-y-2">
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input type="checkbox" name="permite_descuentos" value="1" @checked($campo('permite_descuentos')) class="mt-0.5 rounded text-indigo-600">
+                                <span><span class="font-bold text-gray-800">🏷️ Permitir descuentos a la venta</span>
+                                    <span class="block text-xs text-gray-500">En el Punto de venta (y al cobrar en el restaurante), en soles o en %. La caja puede hasta el máximo de abajo; más que eso,
+                                        el administrador o con su clave. Cada descuento queda en la bitácora y en el reporte "Descuentos y Cortesías".</span></span>
+                            </label>
+                            <label class="flex items-center gap-3 pl-7 text-sm text-gray-700">Máximo para caja sin clave del administrador
+                                <span class="flex items-center gap-1"><input type="number" name="descuento_max_cajero" min="0" step="0.5"
+                                    value="{{ old('descuento_max_cajero', rtrim(rtrim(number_format((float) ($sucursal->descuento_max_cajero ?? 10), 2, '.', ''), '0'), '.')) }}"
+                                    class="w-20 h-9 rounded-lg border-gray-300 text-sm text-center">
+                                    <select name="descuento_max_tipo" class="h-9 rounded-lg border-gray-300 text-sm font-bold" aria-label="Máximo en % o en soles">
+                                        <option value="P" @selected(old('descuento_max_tipo', $sucursal->descuento_max_tipo ?? 'P') !== 'S')>%</option>
+                                        <option value="S" @selected(old('descuento_max_tipo', $sucursal->descuento_max_tipo ?? 'P') === 'S')>S/ (soles)</option>
+                                    </select></span>
+                            </label>
+                        </div>
+                        {{-- Código interno de cada producto en el ticket --}}
+                        <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
+                            <input type="checkbox" name="ticket_codigo" value="1" @checked($campo('ticket_codigo')) class="mt-0.5 rounded text-indigo-600">
+                            <span><span class="font-bold text-gray-800">🔖 Mostrar el código interno en el ticket</span>
+                                <span class="block text-xs text-gray-500">Debajo de cada producto sale su código (ej. CAR-45W). Apagado, el ticket sale como siempre.</span></span>
+                        </label>
                         {{-- Bonificaciones en el Punto de venta: la línea marcada va gratis (operación gratuita ante SUNAT) --}}
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
                             <input type="checkbox" name="permite_bonificaciones" value="1" @checked($campo('permite_bonificaciones')) class="mt-0.5 rounded text-indigo-600">
@@ -389,16 +413,6 @@
                         <div class="rounded-xl border-2 border-gray-200 px-4 py-3 space-y-3">
                             <p class="font-bold text-gray-800">🏷️ Descuentos y cortesías al cobrar <span class="font-normal text-xs text-gray-500">(cobrar mesa y PV Restaurante)</span></p>
                             <label class="flex items-start gap-3 cursor-pointer">
-                                <input type="checkbox" name="permite_descuentos" value="1" @checked($campo('permite_descuentos')) class="mt-0.5 rounded text-indigo-600">
-                                <span><span class="font-semibold text-gray-800">Permitir descuentos a la cuenta</span>
-                                    <span class="block text-xs text-gray-500">En soles o en %. El cajero puede hasta el máximo de abajo; más que eso, el administrador o con su clave.</span></span>
-                            </label>
-                            <label class="flex items-center gap-3 pl-7 text-sm text-gray-700">Máximo para caja sin clave del administrador
-                                <span class="flex items-center gap-1"><input type="number" name="descuento_max_cajero" min="0" max="100" step="0.5"
-                                    value="{{ old('descuento_max_cajero', rtrim(rtrim(number_format((float) ($sucursal->descuento_max_cajero ?? 10), 2, '.', ''), '0'), '.')) }}"
-                                    class="w-20 h-9 rounded-lg border-gray-300 text-sm text-center"> %</span>
-                            </label>
-                            <label class="flex items-start gap-3 cursor-pointer">
                                 <input type="checkbox" name="permite_cortesias" value="1" @checked($campo('permite_cortesias')) class="mt-0.5 rounded text-indigo-600">
                                 <span><span class="font-semibold text-gray-800">Permitir cortesías 🎁</span>
                                     <span class="block text-xs text-gray-500">El producto va gratis con su motivo. Ante SUNAT es una operación gratuita y sí descuenta el stock. Todo sale en el reporte "Descuentos y Cortesías".</span></span>
@@ -417,14 +431,13 @@
                         </div>
                         @else
                             {{-- Opciones de restaurante: este negocio no las usa, se guardan como están --}}
-                            @foreach (['comandas_solo_mesas', 'permite_descuentos', 'permite_cortesias', 'permite_propina', 'foto_redes'] as $opcion)
+                            @foreach (['comandas_solo_mesas', 'permite_cortesias', 'permite_propina', 'foto_redes'] as $opcion)
                                 @if ($campo($opcion))<input type="hidden" name="{{ $opcion }}" value="1">@endif
                             @endforeach
                             @foreach (['foto_marco_estilo', 'foto_marco_color', 'foto_texto', 'vista_mesas'] as $opcion)
                                 <input type="hidden" name="{{ $opcion }}" value="{{ $sucursal->$opcion }}">
                             @endforeach
                             <input type="hidden" name="tipo_cambio_usd" value="{{ $sucursal->tipo_cambio_usd }}">
-                            <input type="hidden" name="descuento_max_cajero" value="{{ (float) ($sucursal->descuento_max_cajero ?? 10) }}">
                             <input type="hidden" name="ip_mozos" value="{{ $sucursal->ip_mozos }}">
                         @endif
                         {{-- Clínicas: el doctor cobra sus atenciones (con su propio turno de caja) o las deja a recepción --}}
