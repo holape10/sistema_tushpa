@@ -176,15 +176,16 @@
                         <label class="text-sm font-medium text-gray-600">CLAVE <span class="text-gray-400 font-normal">(client_secret)</span>
                             <span class="relative block"><input type="password" name="sire_client_secret" id="sire_client_secret" autocomplete="new-password"
                                 placeholder="{{ $empresa->client_secret ? '•••••••• guardada (vacío = no cambiar)' : 'Pega la CLAVE de SUNAT' }}" class="{{ $input }} font-mono pr-9">{!! $ojo('sire_client_secret') !!}</span></label>
-                        <label class="text-sm font-medium text-gray-600">Usuario SOL para el SIRE
+                        <label class="text-sm font-medium text-gray-600">Usuario SOL para el SIRE y las guías
                             <input name="sire_usuario" value="{{ old('sire_usuario', $empresa->sire_usuario) }}" maxlength="30" autocomplete="off"
                                    placeholder="Vacío = {{ $empresa->wsusuario ?: 'el de facturación' }}" class="{{ $input }} uppercase"></label>
-                        <label class="text-sm font-medium text-gray-600">Clave SOL para el SIRE
+                        <label class="text-sm font-medium text-gray-600">Clave SOL para el SIRE y las guías
                             <span class="relative block"><input type="password" name="sire_clave" id="sire_clave" autocomplete="new-password"
                                 placeholder="{{ $empresa->sire_clave ? '•••••••• guardada (vacío = no cambiar)' : 'Vacío = la de facturación' }}" class="{{ $input }} pr-9">{!! $ojo('sire_clave') !!}</span></label>
                         <p class="sm:col-span-2 text-xs text-gray-500 bg-gray-50 rounded-xl px-4 py-3 leading-relaxed">
                             <i class="fas fa-circle-info mr-1 text-emerald-600"></i>En SUNAT SOL: <strong>Empresas → Credenciales de API SUNAT → Gestión Credenciales de API SUNAT</strong>;
-                            copia el <strong>ID</strong> y la <strong>CLAVE</strong> y marca los permisos del SIRE. Al guardar se prueba la conexión. La CLAVE y la clave SOL se guardan cifradas.
+                            copia el <strong>ID</strong> y la <strong>CLAVE</strong> y marca los permisos del SIRE y de guías. Al guardar se prueba la conexión. La CLAVE y la clave SOL se guardan cifradas.
+                            <strong>Si envías por OSE</strong>, las guías usan este usuario y clave SOL (el de facturación es el del OSE).
                             @if ($sireListo)<a href="{{ route('sire.index', 'ventas') }}" class="ml-1 font-semibold text-emerald-700 hover:underline">Ir al SIRE Ventas →</a>@endif
                         </p>
                     </div>

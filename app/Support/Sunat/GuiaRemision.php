@@ -252,7 +252,7 @@ class GuiaRemision
             $x->startElement('cac:DriverPerson');
             $cbc('ID', (string) $g->cond_num, $docIdentidad((string) ($g->cond_tdicod ?: '1')));
             $cbc('FirstName', (string) $g->cond_nombres);
-            $cbc('FamilyName', (string) $g->cond_apellidos);
+            $cbc('FamilyName', trim((string) $g->cond_apellidos) ?: '-');
             $cbc('JobTitle', 'Principal');
             $x->startElement('cac:IdentityDocumentReference');
             $cbc('ID', (string) $g->cond_licencia);
@@ -330,19 +330,48 @@ class GuiaRemision
             return $t;
         }
         $e = $this->empresa;
+        [$usuario, $clave] = $this->credencialesSol();
         $r = Http::asForm()->timeout(30)->post(sprintf(self::URL_TOKEN, $e->client_id), [
             'grant_type' => 'password', 'scope' => 'https://api-cpe.sunat.gob.pe',
             'client_id' => $e->client_id, 'client_secret' => $e->client_secret,
-            'username' => $e->IdEmpresa.$e->wsusuario, 'password' => $e->claveSunat,
+            'username' => $e->IdEmpresa.$usuario, 'password' => $clave,
         ]);
         $token = $r->json('access_token');
         if (! $r->successful() || ! $token) {
             throw new RuntimeException('SUNAT no dio acceso: '.($r->json('error_description') ?: $r->json('error') ?: 'HTTP '.$r->status())
-                .'. Revisa el client_id, client_secret y el usuario/clave SOL de la empresa.');
+                .'. Revisa el client_id, client_secret y el usuario/clave SOL '.($this->esOse() ? 'del SIRE (Mantenimiento > Empresas > Editar > Credenciales de API SUNAT)' : 'de la empresa').'.');
         }
         Cache::put($llave, $token, max(60, ((int) $r->json('expires_in', 3600)) - 120));
 
         return $token;
+    }
+
+    /** La empresa envía sus comprobantes por OSE (Nubefact): su usuario/clave de facturación son los del OSE, no los de SOL */
+    private function esOse(): bool
+    {
+        return (int) ($this->empresa->tip_env_fac_id ?? 0) === 2;
+    }
+
+    /**
+     * Usuario y clave SOL para el API de guías. Directo a SUNAT: los de facturación (como siempre). Con OSE, los de
+     * facturación son de Nubefact y SUNAT no los acepta: se usan los SOL del SIRE (o la Clave SOL principal).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function credencialesSol(): array
+    {
+        $e = $this->empresa;
+        if (! $this->esOse()) {
+            return [(string) $e->wsusuario, (string) $e->claveSunat];
+        }
+        if ($e->sire_usuario && $e->sire_clave) {
+            return [(string) $e->sire_usuario, (string) $e->sire_clave];
+        }
+        if ($e->sol_usuario && $e->sol_clave) {
+            return [(string) $e->sol_usuario, (string) $e->sol_clave];
+        }
+        throw new RuntimeException('La empresa envía por OSE: su usuario y clave de facturación son los del OSE (Nubefact) y SUNAT no los acepta para las guías. '
+            .'Pon el usuario y la clave SOL en Mantenimiento > Empresas > Editar > Credenciales de API SUNAT ("Usuario SOL para el SIRE y las guías").');
     }
 
     private function validarConfiguracion(): void
@@ -355,7 +384,8 @@ class GuiaRemision
         if (! $e->client_id || ! $e->client_secret) {
             throw new RuntimeException('Faltan las credenciales API de SUNAT (client_id y client_secret) en Mantenimiento > Empresas > Editar.');
         }
-        if (! $e->wsusuario || ! $e->claveSunat) {
+        [$usuario, $clave] = $this->credencialesSol();
+        if (! $usuario || ! $clave) {
             throw new RuntimeException('Configura el usuario y la clave SOL de la empresa.');
         }
     }

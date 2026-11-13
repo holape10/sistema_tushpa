@@ -114,8 +114,8 @@
                 <div x-show="!g.vehiculo_m1l" class="grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
                     <label>Doc.<select x-model="g.cond_tdicod" class="{{ $in }} mt-1"><option value="1">DNI</option><option value="4">Carné ext.</option><option value="7">Pasaporte</option></select></label>
                     <label>N° documento<input x-model="g.cond_num" @change="buscarConductor()" maxlength="15" class="{{ $in }} mt-1"></label>
-                    <label>Nombres<input x-model="g.cond_nombres" maxlength="100" class="{{ $in }} mt-1 uppercase"></label>
-                    <label>Apellidos<input x-model="g.cond_apellidos" maxlength="100" class="{{ $in }} mt-1 uppercase"></label>
+                    {{-- Un solo campo; al guardar se separa en nombres y apellidos (los dos últimos nombres = apellidos) como pide SUNAT --}}
+                    <label class="lg:col-span-2">Nombre completo<input x-model="g.cond_completo" maxlength="200" placeholder="NOMBRES Y APELLIDOS" class="{{ $in }} mt-1 uppercase"></label>
                     <label>Licencia<input x-model="g.cond_licencia" maxlength="10" placeholder="Q12345678" class="{{ $in }} mt-1 uppercase"></label>
                     <label>Placa<input x-model="g.placa" maxlength="8" placeholder="ABC123" class="{{ $in }} mt-1 uppercase"></label>
                 </div>
@@ -189,6 +189,16 @@
             const ALMACENES = @js($almacenes->keyBy('id_almacen'));
             return {
                 g: @js($guia), items: @js($items), faltan: [], busca: '', resultados: [], sel: 0, buscando: false, ocupado: false, resultado: { ok: true, mensaje: '' },
+                init() {
+                    // El conductor se escribe en un solo campo; se guarda separado: los dos últimos nombres son los apellidos
+                    this.g.cond_completo = [this.g.cond_nombres, this.g.cond_apellidos].filter(Boolean).join(' ');
+                    this.$watch('g.cond_completo', v => {
+                        const p = String(v || '').trim().toUpperCase().split(/\s+/).filter(Boolean);
+                        const corte = p.length >= 3 ? p.length - 2 : (p.length === 2 ? 1 : p.length);
+                        this.g.cond_nombres = p.slice(0, corte).join(' ');
+                        this.g.cond_apellidos = p.slice(corte).join(' ');
+                    });
+                },
                 async json(url) { return fetch(url, { headers: { 'Accept': 'application/json' } }).then(r => r.json()).catch(() => ({})); },
                 async buscarDestinatario() {
                     const doc = (this.g.dest_num || '').trim();
@@ -209,8 +219,10 @@
                 async buscarConductor() {
                     if (!/^\d{8}$/.test(this.g.cond_num)) return;
                     const d = await this.json(@json(url('guias/documento')) + '/' + this.g.cond_num);
-                    if (d.conductor) { Object.assign(this.g, { cond_nombres: d.conductor.nombres, cond_apellidos: d.conductor.apellidos, cond_licencia: d.conductor.licencia }); }
-                    else if (d.nom && !this.g.cond_nombres) { this.g.cond_nombres = d.nom; }
+                    if (d.conductor) {
+                        Object.assign(this.g, { cond_licencia: d.conductor.licencia });
+                        this.g.cond_completo = [d.conductor.nombres, d.conductor.apellidos].filter(Boolean).join(' ');
+                    } else if (d.nom && !this.g.cond_completo) { this.g.cond_completo = d.nom; }
                 },
                 usarAlmacen(id) {
                     const a = ALMACENES[id];

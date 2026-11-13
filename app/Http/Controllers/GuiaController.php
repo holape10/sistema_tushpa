@@ -231,7 +231,8 @@ class GuiaController extends Controller
             'cond_tdicod' => [$privadoConConductor ? 'required' : 'nullable', 'in:1,4,7'],
             'cond_num' => [$privadoConConductor ? 'required' : 'nullable', 'string', 'max:15'],
             'cond_nombres' => [$privadoConConductor ? 'required' : 'nullable', 'string', 'max:100'],
-            'cond_apellidos' => [$privadoConConductor ? 'required' : 'nullable', 'string', 'max:100'],
+            // El nombre completo se escribe en un solo campo: con un solo nombre, el apellido queda vacío
+            'cond_apellidos' => ['nullable', 'string', 'max:100'],
             'cond_licencia' => [$privadoConConductor ? 'required' : 'nullable', 'string', 'min:9', 'max:10'],
             'placa' => [$privadoConConductor ? 'required' : 'nullable', 'string', 'min:6', 'max:8'],
             'doc_tdocod' => 'nullable|in:01,03,09,12', 'doc_numero' => 'nullable|required_with:doc_tdocod|string|max:15',
@@ -253,7 +254,7 @@ class GuiaController extends Controller
             'partida_ubigeo' => 'la ciudad o distrito de partida', 'partida_direccion' => 'la dirección de partida',
             'llegada_ubigeo' => 'la ciudad o distrito de llegada', 'llegada_direccion' => 'la dirección de llegada',
             'transp_ruc' => 'el RUC del transportista', 'transp_nom' => 'la razón social del transportista',
-            'cond_num' => 'el DNI del conductor', 'cond_nombres' => 'los nombres del conductor', 'cond_apellidos' => 'los apellidos del conductor',
+            'cond_num' => 'el DNI del conductor', 'cond_nombres' => 'el nombre completo del conductor', 'cond_apellidos' => 'los apellidos del conductor',
             'cond_licencia' => 'la licencia de conducir', 'placa' => 'la placa del vehículo', 'items.*.descripcion' => 'descripción', 'items.*.cantidad' => 'cantidad',
         ]);
 
