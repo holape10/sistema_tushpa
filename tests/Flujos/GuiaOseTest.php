@@ -64,4 +64,17 @@ class GuiaOseTest extends FlujoTestCase
     {
         $this->get(route('guias.crear'))->assertOk()->assertSee('Nombre completo')->assertDontSee('>Apellidos<', false);
     }
+
+    public function test_la_lista_tiene_el_boton_para_descargar_el_pdf_de_la_guia(): void
+    {
+        $id = GuiaRemision::registrar($this->usuario, ['fecha_traslado' => now()->toDateString(), 'motivo' => '01', 'modalidad' => '02', 'peso' => 10,
+            'dest_tdicod' => '6', 'dest_num' => '20493508645', 'dest_nom' => 'HONDA SELVA DEL PERU SA', 'partida_ubigeo' => '160101', 'partida_direccion' => 'JR PRUEBA 1',
+            'llegada_ubigeo' => '160101', 'llegada_direccion' => 'CARRETERA IQUITOS NAUTA KM 5.5',
+            'cond_tdicod' => '1', 'cond_num' => '70073488', 'cond_nombres' => 'HELGA', 'cond_apellidos' => 'PEZO', 'cond_licencia' => 'Q123456', 'placa' => '95518L'],
+            [['descripcion' => 'DOCUMENTOS', 'umecod' => 'NIU', 'cantidad' => 1]]);
+
+        $this->get(route('guias.index'))->assertOk()->assertSee(route('guias.pdf', [$id, 'descargar' => 1]), false);
+        $r = $this->get(route('guias.pdf', [$id, 'descargar' => 1]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('attachment;', $r->headers->get('Content-Disposition'));
+    }
 }

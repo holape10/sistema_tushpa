@@ -69,6 +69,7 @@
                                         <button type="button" @click="accion({{ $g->gre_id }}, 'consultar', $event)" class="px-2.5 py-1 rounded-lg bg-sky-600 text-white text-xs font-bold">Consultar</button>
                                     @endif
                                     <a href="{{ route('guias.imprimir', $g->gre_id) }}" target="_blank" title="Imprimir" class="px-2 py-1 rounded-lg bg-gray-100 text-gray-700"><i class="fas fa-print"></i></a>
+                                    <a href="{{ route('guias.pdf', [$g->gre_id, 'descargar' => 1]) }}" title="Descargar PDF" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-700"><i class="fas fa-file-pdf"></i></a>
                                     @if ($g->est_sunat !== 'PENDIENTE')
                                         <a href="{{ route('guias.archivo', [$g->gre_id, 'xml']) }}" title="XML" class="px-2 py-1 rounded-lg bg-sky-50 text-sky-700"><i class="fas fa-file-code"></i></a>
                                     @endif

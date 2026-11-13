@@ -332,7 +332,7 @@ class GuiaController extends Controller
         return view('empresas.guias.imprimir', $this->datosImpresion($this->guia($id)));
     }
 
-    public function pdf(int $id)
+    public function pdf(Request $request, int $id)
     {
         $this->autorizar();
         $g = $this->guia($id);
@@ -346,7 +346,10 @@ class GuiaController extends Controller
         $pdf->render();
         $nombre = 'GUIA '.$g->serie.'-'.str_pad($g->numero, 8, '0', STR_PAD_LEFT).'.pdf';
 
-        return response($pdf->output(), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="'.$nombre.'"']);
+        // ?descargar=1 (botón de la lista): se baja directo; sin él se abre en el navegador
+        $modo = $request->boolean('descargar') ? 'attachment' : 'inline';
+
+        return response($pdf->output(), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => $modo.'; filename="'.$nombre.'"']);
     }
 
     /** Lo abre el QR de la guía impresa (sin sesión): datos del traslado y estado en SUNAT */
