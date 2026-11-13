@@ -171,7 +171,10 @@ class SireDbf
             $c['montos'] = $a && $a->montos ? array_map('floatval', json_decode($a->montos, true)) + array_fill_keys(array_keys($c['montos']), 0.0) : $c['montos'];
             if ($libro === 'compras') {
                 $cuentaXml = collect($c['lineas'])->pluck('cuenta')->filter()->unique();
-                $c['ctacargo'] = $a->ctacargo ?? $u->ctacargo ?? ($cuentaXml->count() === 1 ? $cuentaXml->first() : null) ?? $cfg['cta_compras'];
+                $elegida = $a->ctacargo ?? $u->ctacargo ?? ($cuentaXml->count() === 1 ? $cuentaXml->first() : null);
+                $c['ctacargo'] = $elegida ?? $cfg['cta_compras'];
+                // Nadie le puso Cta. cargo (ni a ese proveedor): va a la de compras por defecto
+                $c['sinCtaCargo'] = $elegida === null;
                 $c['ctaabono'] = $a->ctaabono ?? $u->ctaabono ?? $cfg['cta_por_pagar'];
                 // Centro de costo (94, 95, 97…): el del comprobante o el último de ese proveedor
                 $c['ccosto'] = $a->ccosto ?? $u->ccosto ?? null;
@@ -324,6 +327,7 @@ class SireDbf
         return [
             'registros' => count($llevar), 'excluidos' => count($fuera),
             'descuadrados' => count(array_filter($llevar, fn ($c) => self::conError($c))),
+            'sin_cta_cargo' => count(array_filter($llevar, fn ($c) => $c['sinCtaCargo'] ?? false)),
             'no_llevan' => $montos($fuera),
         ] + $montos($llevar);
     }

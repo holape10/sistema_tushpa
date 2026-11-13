@@ -11,9 +11,9 @@
         $m['otros'] = round($m['otros'] + $m['isc'], 2);
         $m['isc'] = 0;
     }
-    // Con Cta. cargo elegida en el comprobante, sus líneas sin cuenta propia van a esa
+    // Lo que se descarga es la cuenta de la cabecera: las líneas sin cuenta propia van a la Cta. cargo del comprobante
     $ctaLinea = $compras ? (string) $c['ctacargo'] : (string) $cfg['cta_compras'];
-    $sinCuenta = $compras && $ctaLinea === (string) $cfg['cta_compras'] ? collect($c['lineas'])->filter(fn ($l) => ! $l->cuenta)->count() : 0;
+    $sinCuenta = $compras && ($c['sinCtaCargo'] ?? false) ? 1 : 0;
     $xmlId = $c['xml_id'] ?? ($c['lineas'][0]->compra_xml_id ?? null);
     $centros = $compras ? \App\Support\Contabilidad\CuentasCompras::centros((string) auth()->user()->IdEmpresa) : [];
     $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ccosto' => $c['ccosto'] ?? '',
@@ -36,7 +36,7 @@
             @if ($c['anulado'])<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">ANULADO</span>@endif</span>
         @if ($compras || $c['lineas'])
             @if ($c['lineas'])
-                <span x-show="fila.sinCuenta" class="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700" x-text="fila.sinCuenta + ' línea(s) sin cuenta'"></span>
+                <span x-show="fila.sinCuenta" class="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700" x-text="'Sin Cta. cargo'"></span>
                 @if ($xmlId)
                     <a href="{{ route($compras ? 'sire.detalle.pdf' : 'sire.ventas.pdf', $xmlId) }}" target="_blank" class="text-xs font-bold text-slate-600 hover:text-indigo-700">📄 PDF</a>
                 @endif
@@ -67,7 +67,7 @@
             @endforeach
         @endif
         <label class="font-semibold text-slate-500">Cta. cargo
-            <input type="text" maxlength="12" list="plan_cuentas" x-model="fila.ctacargo" @change="guardar({ ctacargo: fila.ctacargo })"
+            <input type="text" maxlength="12" list="plan_cuentas" x-model="fila.ctacargo" @change="if (fila.ctacargo.trim()) fila.sinCuenta = 0; guardar({ ctacargo: fila.ctacargo })"
                    class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
         <label class="font-semibold text-slate-500">Cta. abono
             <input type="text" maxlength="12" list="plan_cuentas" x-model="fila.ctaabono" @change="guardar({ ctaabono: fila.ctaabono })"
@@ -108,7 +108,7 @@
                                 <td class="px-3 py-1.5 text-right">{{ $soles($l->igv) }}</td>
                                 @if ($compras)
                                 <td class="px-3 py-1" x-data="{ cta: @js((string) ($l->cuenta ?: $ctaLinea)), cc: @js((string) ($l->centro_costo ?? '')) }">
-                                    <input type="text" list="plan_cuentas" maxlength="12" value="{{ $l->cuenta }}" placeholder="{{ $ctaLinea }}" data-vacia="{{ $l->cuenta || ! $sinCuenta ? '0' : '1' }}"
+                                    <input type="text" list="plan_cuentas" maxlength="12" value="{{ $l->cuenta }}" placeholder="{{ $ctaLinea }}" data-vacia="0"
                                            @input="cta = $event.target.value || @js($ctaLinea)"
                                            @keydown.enter.prevent="cuentaLinea([{{ $l->id }}], $event.target)" @change="cuentaLinea([{{ $l->id }}], $event.target)"
                                            class="w-full h-8 rounded-lg border-slate-300 text-xs font-mono {{ $l->cuenta ? '' : 'bg-rose-50' }}">

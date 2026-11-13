@@ -88,9 +88,9 @@
             <p class="text-2xl font-extrabold {{ $faltan ? 'text-amber-600' : 'text-emerald-600' }}">{{ $faltan }}</p>
         </button>
         <button type="button" @click="filtro = 'sincuenta'" class="text-left bg-white rounded-2xl shadow-sm p-4 ring-2" :class="filtro === 'sincuenta' ? 'ring-rose-500' : 'ring-transparent'">
-            <p class="text-xs font-semibold text-slate-500">Líneas sin cuenta</p>
-            <p class="text-2xl font-extrabold {{ $lineasSinCuenta ? 'text-rose-600' : 'text-emerald-600' }}">{{ $lineasSinCuenta }}</p>
-            <p class="text-[11px] text-slate-400">Sin cuenta propia va a la Cta. cargo de su comprobante (o a la {{ $cfg['cta_compras'] }})</p>
+            <p class="text-xs font-semibold text-slate-500">Sin Cta. cargo</p>
+            <p class="text-2xl font-extrabold" :class="totales.sin_cta_cargo ? 'text-rose-600' : 'text-emerald-600'" x-text="totales.sin_cta_cargo">{{ $totales['sin_cta_cargo'] }}</p>
+            <p class="text-[11px] text-slate-400">Comprobantes que nadie ha revisado: van a la {{ $cfg['cta_compras'] }}</p>
         </button>
     </div>
 
@@ -133,7 +133,7 @@
         @include('empresas.sire.partials.dbf_cuentas_todos')
 
         <div class="flex flex-wrap items-center gap-2 text-sm">
-            @foreach (['todos' => 'Todos', 'descuadre' => 'No cuadran / IGV mal', 'excluidos' => 'No se llevan', 'sinxml' => 'Sin detalle (XML)', 'sincuenta' => 'Líneas sin cuenta'] as $valor => $texto)
+            @foreach (['todos' => 'Todos', 'descuadre' => 'No cuadran / IGV mal', 'excluidos' => 'No se llevan', 'sinxml' => 'Sin detalle (XML)', 'sincuenta' => 'Sin Cta. cargo'] as $valor => $texto)
                 <button type="button" @click="filtro = '{{ $valor }}'" class="px-3 h-8 rounded-full font-semibold"
                         :class="filtro === '{{ $valor }}' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'">{{ $texto }}</button>
             @endforeach
@@ -159,7 +159,7 @@
     @forelse ($soloXml as $c)
         @php $sinCuenta = collect($c['lineas'])->whereNull('cuenta')->count(); @endphp
         <section class="bg-white rounded-2xl shadow-sm overflow-hidden" x-data="{ abierto: false }"
-                 x-show="filtro === 'todos' || (filtro === 'sinxml' && {{ $c['xml'] ? 'false' : 'true' }}) || (filtro === 'sincuenta' && {{ $sinCuenta ? 'true' : 'false' }})">
+                 x-show="filtro === 'todos' || (filtro === 'sinxml' && {{ $c['xml'] ? 'false' : 'true' }}) || (filtro === 'sincuenta' && false)">
             <button type="button" @click="abierto = !abierto" class="w-full flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left">
                 <span class="font-bold whitespace-nowrap">{{ $c['serie'] }}-{{ $c['numero'] }}</span>
                 <span class="text-xs text-slate-400">{{ $tipos[$c['tipo']] ?? 'Tipo '.$c['tipo'] }} · {{ $c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '' }}</span>

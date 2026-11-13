@@ -137,14 +137,14 @@ class ComprasDetalleTest extends FlujoTestCase
         $ruc = $this->usuario->IdEmpresa;
         $this->subir(['F001-134277.xml' => CompraXmlTest::factura($ruc)]);
         $this->propuesta();
-        $this->assertSame(2, $this->get(route('sire.detalle', ['periodo' => '202607']))->viewData('lineasSinCuenta'));
+        $this->assertSame(2, $this->get(route('sire.detalle', ['periodo' => '202607']))->viewData('totales')['sin_cta_cargo'], 'Los 2 comprobantes sin Cta. cargo.');
 
         // El contador pone la Cta. cargo (y su centro de costo) al comprobante, no a cada línea
         $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202607', 'clave' => '20553510661|01|F001|134277',
             'ctacargo' => '6365', 'ccosto' => '94'])->assertOk();
 
         $r = $this->get(route('sire.detalle', ['periodo' => '202607']))->assertOk();
-        $this->assertSame(0, $r->viewData('lineasSinCuenta'), 'Ya no cuentan como sin cuenta.');
+        $this->assertSame(1, $r->viewData('totales')['sin_cta_cargo'], 'Solo cuenta la cabecera: queda el otro comprobante.');
         $concar = Concar::comprasConDetalle($ruc, '202607', $r->viewData('comprobantes'));
         $this->assertSame([['6365', '94', 150.0]], collect($concar['filas'])->filter(fn ($f) => $f[18] === 'F001-00134277' && $f[10] !== '401111' && $f[10] !== '421201')
             ->map(fn ($f) => [$f[10], $f[12], $f[14]])->values()->all(), 'Van a la Cta. cargo del comprobante con su centro, no a la 601111.');
