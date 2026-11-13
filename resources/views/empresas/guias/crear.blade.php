@@ -132,10 +132,13 @@
             </div>
             <div class="relative mb-3">
                 <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                <input x-model="busca" @input.debounce.300ms="buscarProducto()" @keydown.enter.prevent="agregarLibre()" placeholder="Buscar producto por nombre o código (Enter agrega una línea libre)" class="{{ $in }} pl-9">
-                <div x-show="resultados.length" @click.outside="resultados = []" class="absolute z-20 mt-1 w-full bg-white rounded-xl shadow-xl border max-h-72 overflow-y-auto">
-                    <template x-for="p in resultados" :key="p.IdProducto">
-                        <button type="button" @click="agregar(p)" class="w-full text-left px-3 py-2 hover:bg-violet-50 text-sm">
+                {{-- Con el teclado, como en el Punto de venta: ↑ ↓ para moverse, Enter agrega el marcado, Esc cierra la lista --}}
+                <input x-model="busca" x-ref="buscaGuia" @input.debounce.300ms="buscarProducto()" @keydown.enter.prevent="agregarLibre()"
+                       @keydown.arrow-down.prevent="moverSel(1)" @keydown.arrow-up.prevent="moverSel(-1)" @keydown.escape="resultados = []"
+                       placeholder="Buscar producto por nombre o código (↑ ↓ para elegir, Enter agrega)" class="{{ $in }} pl-9">
+                <div x-show="resultados.length" @click.outside="resultados = []" x-ref="listaGuia" class="absolute z-20 mt-1 w-full bg-white rounded-xl shadow-xl border max-h-72 overflow-y-auto">
+                    <template x-for="(p, idx) in resultados" :key="p.IdProducto">
+                        <button type="button" @click="agregar(p)" @mouseenter="sel = idx" :class="idx === sel ? 'bg-violet-100' : ''" class="w-full text-left px-3 py-2 hover:bg-violet-50 text-sm">
                             <span class="font-semibold" x-text="p.pronom"></span> <span class="text-xs text-gray-400" x-text="p.procod + ' · ' + p.umecod"></span>
                         </button>
                     </template>
@@ -185,7 +188,7 @@
             const CSRF = @json(csrf_token());
             const ALMACENES = @js($almacenes->keyBy('id_almacen'));
             return {
-                g: @js($guia), items: @js($items), faltan: [], busca: '', resultados: [], buscando: false, ocupado: false, resultado: { ok: true, mensaje: '' },
+                g: @js($guia), items: @js($items), faltan: [], busca: '', resultados: [], sel: 0, buscando: false, ocupado: false, resultado: { ok: true, mensaje: '' },
                 async json(url) { return fetch(url, { headers: { 'Accept': 'application/json' } }).then(r => r.json()).catch(() => ({})); },
                 async buscarDestinatario() {
                     const doc = (this.g.dest_num || '').trim();
@@ -217,8 +220,19 @@
                     if (this.busca.trim().length < 2) { this.resultados = []; return; }
                     this.resultados = await this.json(@json(route('guias.productos')) + '?q=' + encodeURIComponent(this.busca.trim()));
                     if (!Array.isArray(this.resultados)) this.resultados = [];
+                    this.sel = 0;
                 },
-                agregar(p) { this.items.push({ IdProducto: p.IdProducto, codigo: p.procod, descripcion: p.pronom, umecod: p.umecod || 'NIU', cantidad: 1 }); this.busca = ''; this.resultados = []; },
+                agregar(p) {
+                    this.items.push({ IdProducto: p.IdProducto, codigo: p.procod, descripcion: p.pronom, umecod: p.umecod || 'NIU', cantidad: 1 });
+                    this.busca = ''; this.resultados = []; this.sel = 0;
+                    this.$nextTick(() => this.$refs.buscaGuia?.focus());   // sigue con el teclado: buscar el siguiente
+                },
+                // ↑ ↓ en la lista de productos (se queda a la vista al bajar)
+                moverSel(paso) {
+                    if (!this.resultados.length) return;
+                    this.sel = (this.sel + paso + this.resultados.length) % this.resultados.length;
+                    this.$nextTick(() => this.$refs.listaGuia?.children[this.sel + 1]?.scrollIntoView({ block: 'nearest' }));
+                },
                 // Línea a mano, vacía: se escribe la descripción y se elige la unidad y la cantidad
                 lineaLibre() {
                     this.items.push({ IdProducto: null, codigo: '', descripcion: '', umecod: 'NIU', cantidad: 1 });
@@ -226,7 +240,7 @@
                     this.$nextTick(() => document.getElementById('guia-des-' + i)?.focus());
                 },
                 agregarLibre() {
-                    if (this.resultados.length) return this.agregar(this.resultados[0]);
+                    if (this.resultados.length) return this.agregar(this.resultados[this.sel] || this.resultados[0]);
                     if (this.busca.trim().length < 2) return;
                     this.items.push({ IdProducto: null, codigo: '', descripcion: this.busca.trim().toUpperCase(), umecod: 'NIU', cantidad: 1 }); this.busca = '';
                 },

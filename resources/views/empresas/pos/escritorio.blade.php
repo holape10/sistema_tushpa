@@ -190,11 +190,20 @@
                                     {{-- Total: se puede escribir para redondear hasta 5 céntimos (2.35 × 11 = 25.85 → 25.90); la cantidad y el precio no cambian --}}
                                     <td class="hidden sm:table-cell px-1 sm:px-2 py-1.5 text-right whitespace-nowrap">
                                         <span x-show="it.bonif" class="inline-block px-2 py-1 rounded-lg bg-rose-50 text-xs font-extrabold text-rose-600">🎁 BONIFICACIÓN</span>
-                                        <input x-show="!it.bonif" type="number" step="0.01" min="0" :value="totalDe(it).toFixed(2)" title="Escribe el total para redondear (hasta 5 céntimos)"
-                                               @change="cambiarTotal(it, $event.target.value); $event.target.value = totalDe(it).toFixed(2)" @keydown.enter.prevent="$event.target.blur()"
-                                               :class="!it.bonif && Math.abs(totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005 ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-transparent hover:border-slate-200'"
+                                        <input x-show="!it.bonif" type="number" step="0.01" min="0" :value="totalLineaDe(it).toFixed(2)" title="Escribe el total para redondear (hasta 5 céntimos)"
+                                               @change="cambiarTotal(it, $event.target.value); $event.target.value = totalLineaDe(it).toFixed(2)" @keydown.enter.prevent="$event.target.blur()"
+                                               :class="!it.bonif && Math.abs(totalLineaDe(it) - redondear(it.cantidad * it.precio)) >= 0.005 ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-transparent hover:border-slate-200'"
                                                class="w-24 rounded-lg text-right font-bold text-slate-800 focus:ring-indigo-300 focus:border-indigo-400">
-                                        <span x-show="!it.bonif && Math.abs(totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005" x-cloak class="block text-[10px] font-semibold text-emerald-700">redondeado</span>
+                                        <span x-show="!it.bonif && Math.abs(totalLineaDe(it) - redondear(it.cantidad * it.precio)) >= 0.005" x-cloak class="block text-[10px] font-semibold text-emerald-700">redondeado</span>
+                                        {{-- Descuento por producto (en soles), si la sucursal permite descuentos --}}
+                                        <template x-if="cfg.descuentos && !edicion && !it.bonif">
+                                            <label class="mt-1 flex items-center justify-end gap-1 text-[11px] font-semibold" :class="descuentoDe(it) > 0 ? 'text-amber-700' : 'text-slate-400'">
+                                                Dscto. S/
+                                                <input type="number" step="0.01" min="0" x-model="it.dscto" placeholder="0.00" title="Descuento a este producto (en soles)"
+                                                       class="w-16 h-7 rounded-md border-slate-200 text-right text-xs font-bold" :class="descuentoDe(it) > 0 ? 'border-amber-300 bg-amber-50' : ''">
+                                            </label>
+                                        </template>
+                                        <span x-show="descuentoDe(it) > 0" x-cloak class="block text-[11px] font-bold text-amber-800" x-text="'= ' + soles(totalDe(it))"></span>
                                     </td>
                                     <td x-show="cfg.bonificaciones" class="px-1 py-1.5 text-center">
                                         <input type="checkbox" x-model="it.bonif" :disabled="!it.id" :title="it.id ? 'Bonificación: va gratis' : 'Solo los productos se bonifican'"
@@ -412,7 +421,7 @@
             <section class="bg-white rounded-2xl shadow-sm p-4">
                 {{-- Descuento a la venta (si la sucursal lo permite) --}}
                 <template x-if="cfg.descuentos && !edicion">
-                    <div class="mb-3 rounded-xl ring-1 px-3 py-2" :class="montoDescuento > 0 ? 'ring-amber-300 bg-amber-50' : 'ring-slate-200'">
+                    <div class="mb-3 rounded-xl ring-1 px-3 py-2" :class="montoDescuento > 0 || descuentoProductos > 0 ? 'ring-amber-300 bg-amber-50' : 'ring-slate-200'">
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="text-sm font-bold text-slate-700">🏷️ Descuento</span>
                             <select x-model="descuento.tipo" class="h-9 rounded-lg border-slate-200 text-sm font-bold" aria-label="Tipo de descuento">
@@ -425,8 +434,9 @@
                         </div>
                         <p x-show="montoDescuento > 0" class="mt-1 text-xs font-semibold text-amber-800"
                            x-text="'Venta ' + soles(bruto) + ' − descuento ' + soles(montoDescuento) + ' (' + porcentajeDescuento.toFixed(1) + '%) = ' + soles(base)"></p>
-                        <label x-show="montoDescuento > 0 && pideClaveDescuento" class="mt-1 flex items-center gap-2 text-xs text-rose-700 font-semibold">
-                            Pasa el máximo de <span x-text="cfg.descuentoMaxTipo === 'S' ? soles(cfg.descuentoMax) : cfg.descuentoMax + '%'"></span>: clave del administrador
+                        <p x-show="descuentoProductos > 0" class="mt-1 text-xs font-semibold text-amber-800" x-text="'Descuento por productos: ' + soles(descuentoProductos)"></p>
+                        <label x-show="pideClaveDescuento" class="mt-1 flex items-center gap-2 text-xs text-rose-700 font-semibold">
+                            <span x-text="textoClaveDescuento"></span>: clave del administrador
                             <input type="password" x-model="descuento.clave" autocomplete="off" class="h-8 w-40 rounded-lg border-rose-200 text-sm">
                         </label>
                     </div>
@@ -598,6 +608,9 @@
         descuentos: @json((bool) ($negocio->permite_descuentos ?? false)),
         descuentoMax: @json((float) ($negocio->descuento_max_cajero ?? 10)),
         descuentoMaxTipo: @json(($negocio->descuento_max_tipo ?? 'P') === 'S' ? 'S' : 'P'),
+        // Descuento por producto: el máximo por línea sin la clave del administrador
+        descuentoItemMax: @json((float) ($negocio->descuento_item_max ?? 0)),
+        descuentoItemTipo: @json(($negocio->descuento_item_tipo ?? 'S') === 'P' ? 'P' : 'S'),
         esAdmin: @json(auth()->user()->esAdmin()),
         estadopagos: @json($estadopagos),
         medios: @json($mediospagos),

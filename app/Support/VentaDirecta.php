@@ -59,6 +59,8 @@ class VentaDirecta
         'items.*.cortesia' => 'nullable|boolean',
         // Bonificación del Punto de venta: la línea va gratis (si la sucursal la tiene activada)
         'items.*.bonificacion' => 'nullable|boolean',
+        // Descuento por producto, en soles (Punto de venta)
+        'items.*.descuento' => 'nullable|numeric|min:0|max:999999',
         'items.*.motivo_cortesia' => 'nullable|string|max:80',
         'descuento_tipo' => 'nullable|in:S,P',
         'descuento_valor' => 'nullable|numeric|min:0|max:999999',
@@ -272,11 +274,13 @@ class VentaDirecta
 
             // Cortesía (restaurante): la línea va gratis, aparte de la que se cobra del mismo producto
             $cortesia = ! empty($i['cortesia']) || $bonificacion;
+            $descuentoItem = $cortesia ? 0.0 : round((float) ($i['descuento'] ?? 0), 2);
             $clave = ($idProducto ?? 'libre-'.($umeLibre ?? 'NIU')).'|'.($pres->id_presentacion ?? '').'|'.$descripcion.'|'.number_format($precio, 2, '.', '').'|'.$lote
-                .($importe !== null ? '|importe'.count($lineas) : '').($cortesia ? '|cortesia' : '');
+                .($importe !== null ? '|importe'.count($lineas) : '').($cortesia ? '|cortesia' : '').($descuentoItem > 0 ? '|dscto'.count($lineas) : '');
             $lineas[$clave] ??= ['IdProducto' => $idProducto, 'descripcion' => $descripcion, 'cantidad' => 0, 'precio' => $precio, 'lote' => $lote,
                 'presentacion' => $pres?->id_presentacion, 'factor' => $pres ? (float) $pres->factor : 1, 'umecod' => $pres?->umecod ?? ($idProducto ? null : ($umeLibre ?? 'NIU'))]
-                + ($cortesia ? ['cortesia' => true, 'motivo' => $i['motivo_cortesia'] ?? null] + ($bonificacion ? ['bonificacion' => true] : []) : []);
+                + ($cortesia ? ['cortesia' => true, 'motivo' => $i['motivo_cortesia'] ?? null] + ($bonificacion ? ['bonificacion' => true] : []) : [])
+                + ($descuentoItem > 0 ? ['descuento_item' => $descuentoItem] : []);
             $lineas[$clave]['cantidad'] = round($lineas[$clave]['cantidad'] + (float) $i['cantidad'], 3);
             // Electrodomésticos: las series elegidas de cada unidad (si el mismo producto va en dos líneas, se juntan)
             if ($idProducto && ! empty($i['series'])) {

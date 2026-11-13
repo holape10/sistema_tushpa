@@ -158,14 +158,38 @@ document.addEventListener('alpine:init', () => {
         // Más del máximo del cajero (y no es administrador): pide la clave de un administrador
         get pideClaveDescuento() {
             if (CFG.esAdmin) return false;
+            if (this.productoPasaMaximo) return true;
+            if (this.montoDescuento <= 0) return false;
             return CFG.descuentoMaxTipo === 'S' ? this.montoDescuento > CFG.descuentoMax + 0.001 : this.porcentajeDescuento > CFG.descuentoMax + 0.001;
         },
         // Lo que se cobra: la suma de las líneas menos el descuento
         get base() { return redondear(Math.max(0, this.bruto - this.montoDescuento)); },
         // Total de la línea: cantidad × precio, o el que escribió la caja para redondear (hasta 5 céntimos: 25.85 → 25.90)
-        totalDe(it) {
+        // Total de la línea antes de su descuento (cantidad × precio, o el redondeado)
+        totalLineaDe(it) {
             if (it.bonif) return 0; // Bonificación: va gratis
             return it.importe != null ? it.importe : this.redondeoAuto(redondear(it.cantidad * it.precio));
+        },
+        // Descuento a este producto (en soles), si la sucursal permite descuentos
+        descuentoDe(it) {
+            if (!CFG.descuentos || this.edicion || it.bonif) return 0;
+            return redondear(Math.max(0, Number(it.dscto) || 0));
+        },
+        totalDe(it) { return redondear(Math.max(0, this.totalLineaDe(it) - this.descuentoDe(it))); },
+        get descuentoProductos() { return redondear(this.carrito.reduce((s, it) => s + this.descuentoDe(it), 0)); },
+        // Producto con más descuento que el máximo por producto
+        get productoPasaMaximo() {
+            return this.carrito.find(it => {
+                const d = this.descuentoDe(it), t = this.totalLineaDe(it);
+                if (d <= 0 || t <= 0) return false;
+                return (CFG.descuentoItemTipo === 'P' ? d / t * 100 : d) > CFG.descuentoItemMax + 0.001;
+            }) || null;
+        },
+        get textoClaveDescuento() {
+            const max = (tipo, n) => tipo === 'S' ? this.soles(n) : n + '%';
+            const p = this.productoPasaMaximo;
+            return p ? `${p.descripcion} pasa el máximo por producto (${max(CFG.descuentoItemTipo, CFG.descuentoItemMax)})`
+                : `Pasa el máximo de ${max(CFG.descuentoMaxTipo, CFG.descuentoMax)}`;
         },
         // La sucursal redondea sola el total de la línea a 10 céntimos (al más cercano o hacia abajo); como mucho 5 céntimos
         redondeoAuto(total) {
@@ -650,11 +674,13 @@ document.addEventListener('alpine:init', () => {
             if (sinSerie) return `Elige o escanea la serie de cada unidad de ${sinSerie.descripcion}.`;
             if (this.carrito.some(it => !(it.cantidad > 0) || (!(it.precio > 0) && !this.esTexto(it)))) return 'Revisa las cantidades y precios (deben ser mayores a 0).';
             if (this.carrito.every(it => this.esTexto(it))) return 'Las líneas libres en S/ 0 son solo texto: agrega al menos una con precio.';
+            const caro = this.carrito.find(it => this.descuentoDe(it) > 0 && this.descuentoDe(it) >= this.totalLineaDe(it));
+            if (caro) return `El descuento de ${caro.descripcion} no puede ser igual o mayor que su total.`;
             if (this.montoDescuento > 0) {
                 if (this.descuento.tipo === 'P' && Number(this.descuento.valor) >= 100) return 'El descuento no puede ser del 100%.';
                 if (this.montoDescuento >= this.bruto) return 'El descuento no puede ser igual o mayor que el total de la venta.';
-                if (this.pideClaveDescuento && !String(this.descuento.clave).trim()) return `El descuento pasa el máximo de ${CFG.descuentoMaxTipo === 'S' ? 'S/ ' + CFG.descuentoMax : CFG.descuentoMax + '%'}: pide la clave del administrador.`;
             }
+            if (this.pideClaveDescuento && !String(this.descuento.clave).trim()) return this.textoClaveDescuento + ': pide la clave del administrador.';
             if (this.contingencia.activa) {
                 if (!['01', '03'].includes(this.tdocod)) return 'En contingencia solo se pasan facturas y boletas en papel.';
                 if (!/^\d{1,4}$/.test(String(this.contingencia.serie).trim()) || !(Number(this.contingencia.numero) > 0)) return 'Escribe la serie (números, ej. 0001) y el número impreso en el papel.';
@@ -719,8 +745,8 @@ document.addEventListener('alpine:init', () => {
                 mon_med_pag: medios.map(m => this.montoDe(m)),
                 op_med_pag: medios.map(m => String(m.operacion || '').trim()),
                 // Descuento a la venta: el servidor revisa el permiso, el máximo y la clave, y lo reparte entre las líneas
-                ...(this.montoDescuento > 0 ? { descuento_tipo: this.descuento.tipo, descuento_valor: Number(this.descuento.valor),
-                    descuento_motivo: String(this.descuento.motivo).trim(), clave_admin: String(this.descuento.clave).trim() } : {}),
+                ...(this.montoDescuento > 0 ? { descuento_tipo: this.descuento.tipo, descuento_valor: Number(this.descuento.valor) } : {}),
+                ...(this.montoDescuento > 0 || this.descuentoProductos > 0 ? { descuento_motivo: String(this.descuento.motivo).trim(), clave_admin: String(this.descuento.clave).trim() } : {}),
             };
 
             // La misma clave en cada reintento: si la venta ya se registró y no llegó la respuesta, no se duplica
@@ -803,7 +829,9 @@ document.addEventListener('alpine:init', () => {
                 // Bonificación: va gratis (el precio queda como valor de referencia)
                 ...(it.bonif && it.id ? { bonificacion: true } : {}),
                 // Total redondeado (a mano o el automático de la sucursal): va como importe de la línea
-                ...(!it.bonif && Math.abs(this.totalDe(it) - redondear(it.cantidad * it.precio)) >= 0.005 ? { importe: this.totalDe(it) } : {}),
+                ...(!it.bonif && Math.abs(this.totalLineaDe(it) - redondear(it.cantidad * it.precio)) >= 0.005 ? { importe: this.totalLineaDe(it) } : {}),
+                // Descuento a este producto (en soles): el servidor revisa el máximo y lo descuenta de la línea
+                ...(this.descuentoDe(it) > 0 ? { descuento: this.descuentoDe(it) } : {}),
                 // Línea libre: la unidad que eligió la caja (los productos usan la suya)
                 ...(it.id ? {} : { umecod: it.umecod || 'NIU' }) }));
         },

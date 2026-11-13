@@ -43,6 +43,9 @@ class Descuentos
             'max' => (float) ($n->descuento_max_cajero ?? 10),
             // El máximo de la caja en % (P) o en soles (S)
             'maxTipo' => ($n->descuento_max_tipo ?? 'P') === 'S' ? 'S' : 'P',
+            // Descuento por producto: lo máximo por línea sin la clave del administrador
+            'itemMax' => (float) ($n->descuento_item_max ?? 0),
+            'itemTipo' => ($n->descuento_item_tipo ?? 'S') === 'P' ? 'P' : 'S',
             'cupones' => Cupones::hayActivos($sucursal),
             'propina' => (bool) ($n->permite_propina ?? false),
             'tipoCambio' => (float) ($n->tipo_cambio_usd ?? 0) > 0 ? (float) $n->tipo_cambio_usd : null,
@@ -63,6 +66,66 @@ class Descuentos
      * @return array{0: array, 1: array<string, mixed>} [líneas, columnas para cpe_cabecera]
      */
     public static function aplicar(User $user, array $lineas, array $datos): array
+    {
+        // Primero el descuento de cada producto; luego, el de la venta se reparte sobre lo que quedó
+        [$lineas, $porProducto, $autorizaProducto] = self::porProducto($user, $lineas, $datos);
+        [$lineas, $extra] = self::aCuenta($user, $lineas, $datos);
+        if ($porProducto > 0) {
+            // En la cabecera va el descuento total (por producto + a la venta): así lo suman el ticket y el reporte
+            $extra = ['descuento' => round((float) ($extra['descuento'] ?? 0) + $porProducto, 2)]
+                + $extra + ['descuento_tipo' => 'S', 'descuento_valor' => $porProducto,
+                    'descuento_motivo' => mb_strtoupper(mb_substr(trim((string) ($datos['descuento_motivo'] ?? '')), 0, 80)) ?: 'DESCUENTO POR PRODUCTO'];
+            $extra['IdUsuario_descuento'] = $extra['IdUsuario_descuento'] ?? $autorizaProducto;
+        }
+
+        return [$lineas, $extra];
+    }
+
+    /**
+     * Descuento por producto (Punto de venta): cada línea con 'descuento_item' (en soles) baja su total. Más del máximo de
+     * la sucursal por producto pide la clave de un administrador (una vez para toda la venta).
+     *
+     * @return array{0: array, 1: float, 2: ?int} [líneas, total descontado, quién autorizó]
+     */
+    private static function porProducto(User $user, array $lineas, array $datos): array
+    {
+        $conDescuento = array_filter($lineas, fn ($l) => (float) ($l['descuento_item'] ?? 0) > 0);
+        if (! $conDescuento) {
+            return [$lineas, 0.0, null];
+        }
+        $config = self::config((int) $user->id_empresa_negocio);
+        if (! $config->descuentos) {
+            throw new \RuntimeException('Esta sucursal no tiene activados los descuentos.');
+        }
+        $total = 0.0;
+        $pasa = null;
+        foreach ($conDescuento as $k => $l) {
+            $d = round((float) $l['descuento_item'], 2);
+            if (! empty($l['cortesia'])) {
+                throw new \RuntimeException("{$l['descripcion']} va gratis (cortesía o bonificación): no lleva descuento.");
+            }
+            $linea = isset($l['importe']) ? round((float) $l['importe'], 2) : round($l['cantidad'] * $l['precio'], 2);
+            if ($d >= $linea) {
+                throw new \RuntimeException("El descuento de {$l['descripcion']} (S/ ".number_format($d, 2).') no puede ser igual o mayor que su total (S/ '.number_format($linea, 2).').');
+            }
+            $porcentaje = $d / $linea * 100;
+            if (($config->itemTipo === 'S' ? $d : $porcentaje) > $config->itemMax + 0.001 && ! $pasa) {
+                $pasa = [$porcentaje, $d];
+            }
+            unset($l['descuento_item']);
+            $lineas[$k] = self::descontar($l, $d, $linea);
+            $total += $d;
+        }
+        $autoriza = $user->esAdmin() ? (int) $user->IdUsuario : null;
+        if ($pasa && ! $autoriza) {
+            $autoriza = self::claveAdministrador($user, (string) ($datos['clave_admin'] ?? ''), $pasa[0], $config->itemMax, $pasa[1], $config->itemTipo, 'por producto');
+        }
+
+        return [$lineas, round($total, 2), $autoriza];
+    }
+
+    /** Descuento a toda la venta (o cupón) y cortesías */
+    private static function aCuenta(User $user, array $lineas, array $datos): array
     {
         $cortesias = collect($lineas)->filter(fn ($l) => ! empty($l['cortesia']));
         $tipo = in_array($datos['descuento_tipo'] ?? null, ['S', 'P'], true) ? $datos['descuento_tipo'] : null;
@@ -164,12 +227,13 @@ class Descuentos
     }
 
     /** Clave de un administrador de la empresa (5 intentos por minuto). Devuelve quién autorizó */
-    private static function claveAdministrador(User $user, string $clave, float $porcentaje, float $max, float $monto = 0, string $maxTipo = 'P'): int
+    private static function claveAdministrador(User $user, string $clave, float $porcentaje, float $max, float $monto = 0, string $maxTipo = 'P', string $de = ''): int
     {
         $tope = rtrim(rtrim(number_format($max, 2), '0'), '.');
+        $que = $de !== '' ? ' '.$de : '';
         $pedido = $maxTipo === 'S'
-            ? 'El descuento es de S/ '.number_format($monto, 2).' y el máximo para caja es S/ '.number_format($max, 2)
-            : 'El descuento es de '.number_format($porcentaje, 1).'% y el máximo para caja es '.$tope.'%';
+            ? 'El descuento'.$que.' es de S/ '.number_format($monto, 2).' y el máximo para caja es S/ '.number_format($max, 2)
+            : 'El descuento'.$que.' es de '.number_format($porcentaje, 1).'% y el máximo para caja es '.$tope.'%';
         if ($clave === '') {
             throw new \RuntimeException($pedido.': escribe la clave de un administrador para autorizarlo.');
         }

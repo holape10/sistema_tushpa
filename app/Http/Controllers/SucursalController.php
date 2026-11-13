@@ -133,6 +133,8 @@ class SucursalController extends Controller
             'permite_bonificaciones' => 'nullable|boolean',
             'descuento_max_cajero' => 'nullable|numeric|min:0|max:99999',
             'descuento_max_tipo' => 'nullable|in:P,S',
+            'descuento_item_max' => 'nullable|numeric|min:0|max:99999',
+            'descuento_item_tipo' => 'nullable|in:P,S',
             'permite_propina' => 'nullable|boolean',
             'foto_marco_estilo' => 'nullable|in:DEGRADADO,BANDA,BORDE',
             'foto_marco_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
@@ -206,6 +208,8 @@ class SucursalController extends Controller
         // En % no pasa de 100
         $datos['descuento_max_cajero'] = $datos['descuento_max_tipo'] === 'P' ? min(100, (float) ($datos['descuento_max_cajero'] ?? 10)) : (float) ($datos['descuento_max_cajero'] ?? 5);
         $datos['ticket_codigo'] = $request->boolean('ticket_codigo');
+        $datos['descuento_item_tipo'] = $request->input('descuento_item_tipo') === 'P' ? 'P' : 'S';
+        $datos['descuento_item_max'] = $datos['descuento_item_tipo'] === 'P' ? min(100, (float) ($datos['descuento_item_max'] ?? 0)) : (float) ($datos['descuento_item_max'] ?? 0);
         $datos['permite_propina'] = $request->boolean('permite_propina');
         $datos['foto_redes'] = $request->boolean('foto_redes');
         $datos['cierre_ciego'] = $request->boolean('cierre_ciego');

@@ -290,6 +290,16 @@
                                         <option value="S" @selected(old('descuento_max_tipo', $sucursal->descuento_max_tipo ?? 'P') === 'S')>S/ (soles)</option>
                                     </select></span>
                             </label>
+                            <label class="flex flex-wrap items-center gap-3 pl-7 text-sm text-gray-700">Máximo por producto sin clave del administrador
+                                <span class="flex items-center gap-1"><input type="number" name="descuento_item_max" min="0" step="0.5"
+                                    value="{{ old('descuento_item_max', rtrim(rtrim(number_format((float) ($sucursal->descuento_item_max ?? 0), 2, '.', ''), '0'), '.')) }}"
+                                    class="w-20 h-9 rounded-lg border-gray-300 text-sm text-center">
+                                    <select name="descuento_item_tipo" class="h-9 rounded-lg border-gray-300 text-sm font-bold" aria-label="Máximo por producto en soles o en %">
+                                        <option value="S" @selected(old('descuento_item_tipo', $sucursal->descuento_item_tipo ?? 'S') !== 'P')>S/ (soles)</option>
+                                        <option value="P" @selected(old('descuento_item_tipo', $sucursal->descuento_item_tipo ?? 'S') === 'P')>%</option>
+                                    </select></span>
+                                <span class="block w-full text-xs text-gray-500">En el Punto de venta cada producto tiene su casilla "Dscto." (en soles). 0 = la caja siempre necesita la clave.</span>
+                            </label>
                         </div>
                         {{-- Código interno de cada producto en el ticket --}}
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">

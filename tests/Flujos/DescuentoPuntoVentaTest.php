@@ -87,4 +87,43 @@ class DescuentoPuntoVentaTest extends FlujoTestCase
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['ticket_codigo' => 1]);
         $this->get(route('cobros.voucher', $id))->assertOk()->assertSee('Cód: '.$codigo);
     }
+
+    /** Dos productos de S/ 100 y S/ 50; el primero con descuento propio */
+    private function conDescuentoAProducto(float $descuento, float $paga, array $extra = []): array
+    {
+        $datos = $this->venta([[$this->producto('TALADRO '.uniqid(), 100, 5), 1], [$this->producto('BROCA '.uniqid(), 50, 5), 1]]);
+        $datos['items'][0]['descuento'] = $descuento;
+
+        return $extra + ['mon_med_pag' => [$paga], 'paga' => $paga] + $datos;
+    }
+
+    public function test_el_descuento_por_producto_baja_solo_esa_linea_hasta_el_maximo_por_producto(): void
+    {
+        $this->permitir();
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['descuento_item_max' => 5, 'descuento_item_tipo' => 'S']);
+        $this->actingAs($this->cajero());
+
+        $id = (int) $this->postJson(route('pv.registrar'), $this->conDescuentoAProducto(5, 145))->assertJson(['estado' => 'success'])->json('id');
+
+        $this->assertEquals(145.0, (float) $this->cabecera($id)->ccaitv);
+        $this->assertEquals(5.0, (float) $this->cabecera($id)->descuento, 'Queda en el reporte de descuentos.');
+        $lineas = DB::table('cpe_detalle')->where('IdCpe_cabecera', $id)->orderBy('IdCpe_detalle')->get();
+        $this->assertSame([[95.0, 100.0, 5.0], [50.0, null, 0.0]], $lineas->map(fn ($l) => [(float) $l->cdevve, $l->precio_lista !== null ? (float) $l->precio_lista : null, (float) $l->descuento])->all());
+
+        // S/ 6 pasa el máximo de S/ 5 por producto: pide la clave; con la clave pasa
+        $this->postJson(route('pv.registrar'), $this->conDescuentoAProducto(6, 144))->assertJsonPath('mensaje', fn ($m) => str_contains($m, 'por producto'));
+        $this->postJson(route('pv.registrar'), $this->conDescuentoAProducto(6, 144, ['clave_admin' => 'clave-de-prueba']))->assertJson(['estado' => 'success']);
+    }
+
+    public function test_el_descuento_por_producto_y_el_de_la_venta_se_suman(): void
+    {
+        $this->permitir();
+
+        // Admin: S/ 10 al taladro y luego 10% a la venta (S/ 140 → S/ 126)
+        $id = (int) $this->postJson(route('pv.registrar'), $this->conDescuentoAProducto(10, 126, ['descuento_tipo' => 'P', 'descuento_valor' => 10]))
+            ->assertJson(['estado' => 'success'])->json('id');
+
+        $this->assertEquals(126.0, (float) $this->cabecera($id)->ccaitv);
+        $this->assertEquals(24.0, (float) $this->cabecera($id)->descuento);
+    }
 }
