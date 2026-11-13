@@ -688,8 +688,9 @@ class Historial
             ->get(['com_cab_id', 'prov_id', 'tdocod', 'com_doc_ser', 'com_doc_num', 'com_fec', 'total_com'])
             ->mapWithKeys(fn ($c) => [self::claveCompra($c, $c->prov_id) => $c->com_cab_id])->all();
 
+        $sinProveedor = [];
         ($this->filtro)(($this->src)('compras_cabecera'), 'compras_cabecera')->orderBy('com_cab_id')
-            ->chunk(self::LOTE, function ($lote) use ($user, $suc, $almacen, $proveedores, $provAntiguos, $creditos, &$existentes) {
+            ->chunk(self::LOTE, function ($lote) use ($user, $suc, $almacen, $proveedores, $provAntiguos, $creditos, &$existentes, &$sinProveedor) {
                 $nuevos = [];
                 foreach ($lote as $c) {
                     $ruc = $c->prov_num ?? ($provAntiguos[$c->prov_id ?? 0] ?? null);
@@ -702,7 +703,7 @@ class Historial
                         continue;
                     }
                     if (! $prov) {
-                        $this->aviso("Compra {$c->com_doc_ser}-{$c->com_doc_num}: el proveedor {$ruc} no existe en el sistema nuevo (importa también \"Proveedores\").");
+                        $sinProveedor[] = trim("{$c->com_doc_ser}-{$c->com_doc_num}", '-') ?: 'sin número';
                     }
                     $id = DB::table('compras_cabecera')->insertGetId($this->copiar('compras_cabecera', $c, [
                         'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $suc, 'IdUsuario' => $user->IdUsuario,
@@ -730,6 +731,11 @@ class Historial
                 }
                 $this->insertar('compras_detalle', $filas);
             });
+        // Un solo aviso (antes uno por compra: cientos tapaban los avisos importantes)
+        if ($sinProveedor) {
+            $this->aviso(count($sinProveedor).' compras quedaron sin proveedor (en el sistema antiguo no lo tenían o no se importó "Proveedores"): '
+                .implode(', ', array_slice($sinProveedor, 0, 15)).(count($sinProveedor) > 15 ? '…' : '').'.');
+        }
     }
 
     /** Proveedor + documento; sin serie ni número (compras internas antiguas) también cuentan la fecha y el total para no confundirlas */
@@ -756,7 +762,9 @@ class Historial
             return;
         }
         $suc = $this->user->id_empresa_negocio;
-        $ya = DB::table($tabla)->whereIn($fk, array_values($mapa))->pluck($fk)->flip();
+        // De a pedazos: con más de 65 mil ventas (136 mil en una empresa) un solo IN pasaba el límite de MySQL y fallaba todo el historial
+        $ya = collect(array_chunk(array_values($mapa), 5000))
+            ->flatMap(fn ($parte) => DB::table($tabla)->whereIn($fk, $parte)->pluck($fk))->flip();
 
         // Deudas sobre documentos que no se importan (ej. proformas al crédito): se listan para registrarlas a mano
         if ($tipo === 'cobrar' && ($this->hay)('cpe_cabecera')) {
@@ -769,7 +777,8 @@ class Historial
             }
         }
 
-        foreach (($this->src)($tabla)->whereIn($fk, array_keys($mapa))->get() as $cta) {
+        $cuentasAntiguas = collect(array_chunk(array_keys($mapa), 5000))->flatMap(fn ($parte) => ($this->src)($tabla)->whereIn($fk, $parte)->get());
+        foreach ($cuentasAntiguas as $cta) {
             $nuevoDoc = $mapa[$cta->$fk];
             if (isset($ya[$nuevoDoc])) {
                 continue;

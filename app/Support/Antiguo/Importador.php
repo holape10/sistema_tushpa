@@ -277,7 +277,8 @@ class Importador
                 });
             } catch (\Throwable $e) {
                 report($e);
-                $this->aviso(self::SECCIONES[$s].': no se importó por un error — '.mb_substr($e->getMessage(), 0, 250));
+                // Primero y siempre (aunque ya haya muchos avisos): es lo que hay que ver
+                array_unshift($this->avisos, '⚠ '.self::SECCIONES[$s].': no se importó por un error — '.mb_substr($e->getMessage(), 0, 250));
                 $this->reporte[$s] = ['creados' => 0, 'actualizados' => 0, 'omitidos' => 0, 'error' => true];
             }
         }
