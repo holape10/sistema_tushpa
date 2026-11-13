@@ -143,9 +143,14 @@ class ComprasDetalleTest extends FlujoTestCase
             && $p->hasHeader('Authorization', 'Bearer token-de-prueba'));
         $this->assertSame(2, DB::table('compras_xml_lineas')->count(), 'Llegó la factura con sus líneas.');
 
-        // La que SUNAT no tiene no se vuelve a pedir (cada consulta cuesta)
-        $this->postJson(route('sire.detalle.traer', ['periodo' => '202607']))->assertJson(['ok' => true, 'traidos' => 0, 'quedan' => 0]);
+        // La que SUNAT no tiene no se vuelve a pedir (cada consulta cuesta), pero se dice cuántas y por qué
+        $this->postJson(route('sire.detalle.traer', ['periodo' => '202607']))->assertJson(['ok' => true, 'traidos' => 0, 'quedan' => 0, 'saltados' => 1])
+            ->assertJsonPath('motivos.0', 'Comprobante no encontrado (1)');
         Http::assertSentCount(2);
+
+        // Reintentar (a propósito): se vuelve a pedir
+        $this->postJson(route('sire.detalle.traer', ['periodo' => '202607', 'reintentar' => 1]))->assertJson(['ok' => true, 'traidos' => 0])->assertJsonCount(1, 'errores');
+        Http::assertSentCount(3);
     }
 
     public function test_si_la_clave_sol_esta_mal_se_detiene_al_primer_intento(): void

@@ -120,10 +120,28 @@ class SireDetalleController extends Controller
         }
         set_time_limit(240);
         $claveFallidos = "compras-xml-fallidos:{$ruc}:{$periodo}";
+        // "Reintentar": se vuelven a pedir los que fallaron hoy (gasta créditos otra vez)
+        if ($request->boolean('reintentar')) {
+            Cache::forget($claveFallidos);
+        }
         $fallidos = Cache::get($claveFallidos, []);
-        $pendientes = collect($this->datos($ruc, $periodo)['comprobantes'])
-            ->filter(fn ($c) => ! $c['xml'] && in_array($c['tipo'], XmlJsonPe::TIPOS, true) && ! isset($fallidos["{$c['ruc']}|{$c['tipo']}|{$c['serie']}|{$c['numero']}"]))
-            ->values();
+        $faltantes = collect($this->datos($ruc, $periodo)['comprobantes'])->filter(fn ($c) => ! $c['xml']);
+        $sinXml = $faltantes->filter(fn ($c) => in_array($c['tipo'], XmlJsonPe::TIPOS, true));
+        // Tickets, recibos de servicios y otros: SUNAT no tiene su XML (solo facturas, boletas y notas)
+        if ($sinXml->isEmpty() && $faltantes->isNotEmpty()) {
+            $tipos = $faltantes->countBy('tipo')->map(fn ($n, $t) => "tipo {$t}: {$n}")->implode(', ');
+
+            return response()->json(['ok' => false, 'traidos' => 0, 'pendientes' => 0, 'quedan' => 0,
+                'mensaje' => "Los {$faltantes->count()} que faltan no son facturas, boletas ni notas ({$tipos}): SUNAT no tiene su XML. Si tienes el XML, súbelo con \"Subir XML\"."]);
+        }
+        $pendientes = $sinXml->filter(fn ($c) => ! isset($fallidos["{$c['ruc']}|{$c['tipo']}|{$c['serie']}|{$c['numero']}"]))->values();
+        // Los que ya fallaron hoy no se vuelven a pedir solos: se avisa cuántos y por qué (antes no se veía nada)
+        if ($pendientes->isEmpty() && $sinXml->isNotEmpty()) {
+            $motivos = collect($fallidos)->map(fn ($m) => is_string($m) ? $m : 'SUNAT no lo entregó')->countBy()->sortDesc();
+
+            return response()->json(['ok' => true, 'traidos' => 0, 'errores' => [], 'pendientes' => 0, 'quedan' => 0,
+                'saltados' => $sinXml->count(), 'motivos' => $motivos->take(3)->map(fn ($n, $m) => "{$m} ({$n})")->values()]);
+        }
 
         $traidos = 0;
         $errores = [];
@@ -139,7 +157,8 @@ class SireDetalleController extends Controller
             if ($r['detener']) {
                 return response()->json(['ok' => false, 'traidos' => $traidos, 'mensaje' => $r['error']]);
             }
-            $fallidos["{$c['ruc']}|{$c['tipo']}|{$c['serie']}|{$c['numero']}"] = true;
+            // Se guarda el motivo: si fallan todos por lo mismo, la pantalla lo muestra
+            $fallidos["{$c['ruc']}|{$c['tipo']}|{$c['serie']}|{$c['numero']}"] = mb_substr((string) $r['error'], 0, 200);
             $errores[] = "{$c['serie']}-{$c['numero']}: {$r['error']}";
         }
         Cache::put($claveFallidos, $fallidos, now()->addHours(12));

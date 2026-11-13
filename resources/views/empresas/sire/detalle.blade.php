@@ -108,6 +108,9 @@
                     class="h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold disabled:opacity-50">
                 <span x-text="trayendo ? 'Trayendo…' : '⬇ Traer XML de SUNAT'"></span>
             </button>
+            {{-- Los que fallaron hoy se apartan 12 horas para no gastar créditos; aquí se vuelven a pedir a propósito --}}
+            <button type="button" x-show="saltados" x-cloak @click="if (confirm(`¿Volver a pedir los ${saltados} XML? Cada consulta usa créditos de json.pe.`)) traer(true)"
+                    class="h-10 px-4 rounded-xl bg-white ring-1 ring-amber-400 text-amber-700 text-sm font-bold hover:bg-amber-50">↻ Reintentar</button>
         </section>
     @endif
 
@@ -230,22 +233,33 @@
         return {
             subiendo: false,
             trayendo: false,
+            saltados: 0,
             progreso: '',
             total: 0,
             hechos: 0,
             /** Pide los XML de a dos hasta que no quede ninguno, mostrando el avance; al final recarga para mostrarlos */
-            async traer() {
+            async traer(reintentar = false) {
                 this.trayendo = true;
                 this.total = 0;
                 this.hechos = 0;
+                this.saltados = 0;
                 this.progreso = 'Conectando con SUNAT…';
                 let traidos = 0, sinXml = 0;
+                const motivos = new Set();
                 try {
                     while (true) {
-                        const r = await fetch(@json(route('sire.detalle.traer', ['periodo' => $periodo])), {
+                        const r = await fetch(@json(route('sire.detalle.traer', ['periodo' => $periodo])) + (reintentar ? '&reintentar=1' : ''), {
                             method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
                         });
+                        reintentar = false;
                         const d = await r.json();
+                        // Todos los que faltan ya fallaron hoy: se dice por qué y se ofrece reintentar
+                        if (d.saltados) {
+                            this.saltados = d.saltados;
+                            this.progreso = `Los ${d.saltados} que faltan ya se pidieron hoy y SUNAT no los entregó: ` + (d.motivos || []).join(' · ');
+                            break;
+                        }
+                        (d.errores || []).forEach(e => motivos.add(e.replace(/^[^:]+:\s*/, '')));
                         if (!this.total) this.total = d.pendientes || 0;
                         traidos += d.traidos || 0;
                         sinXml += (d.errores || []).length;
@@ -254,7 +268,7 @@
                             tushpaAviso(d.mensaje || 'No se pudo traer los XML.', false);
                             break;
                         }
-                        this.progreso = `${traidos} XML traídos` + (sinXml ? ` · ${sinXml} que SUNAT no entregó` : '');
+                        this.progreso = `${traidos} XML traídos` + (sinXml ? ` · ${sinXml} que SUNAT no entregó (${[...motivos].slice(0, 2).join(' · ')})` : '');
                         if (!d.quedan) break;
                     }
                 } catch (e) {
