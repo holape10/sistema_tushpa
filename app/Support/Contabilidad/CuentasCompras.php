@@ -17,9 +17,15 @@ class CuentasCompras
     /** Si la empresa no tiene centros de costo propios: los destinos del PCGE */
     public const CENTROS_PCGE = ['94' => 'GASTOS DE ADMINISTRACIÓN', '95' => 'GASTOS DE VENTAS', '97' => 'GASTOS FINANCIEROS'];
 
+    /** Apagado por ahora (CENTRO_COSTO_COMPRAS=true en el .env lo enciende): sin el campo en su sistema no dejaba avanzar */
+    public static function activo(): bool
+    {
+        return (bool) config('services.contabilidad.centro_costo', false);
+    }
+
     public static function requiereCentro(?string $cuenta): bool
     {
-        return in_array(substr(trim((string) $cuenta), 0, 2), self::CON_CENTRO, true);
+        return self::activo() && in_array(substr(trim((string) $cuenta), 0, 2), self::CON_CENTRO, true);
     }
 
     /** @return array<string, string> código => nombre */

@@ -18,6 +18,13 @@ use Tests\Unit\CompraXmlTest;
 /** El contador sube los XML de las compras, pone la cuenta a cada línea (el sistema aprende) y saca el CONCAR con detalle */
 class ComprasDetalleTest extends FlujoTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // El centro de costo está apagado por defecto: estas pruebas lo revisan encendido
+        config(['services.contabilidad.centro_costo' => true]);
+    }
+
     private function zip(array $archivos): UploadedFile
     {
         $ruta = tempnam(sys_get_temp_dir(), 'zip');

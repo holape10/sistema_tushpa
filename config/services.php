@@ -52,6 +52,11 @@ return [
     ],
 
     // XML de las facturas de compra (con la Clave SOL principal del cliente): https://json.pe (token de su panel)
+    // Centro de costo obligatorio en las compras con cuentas de gasto 62–68 (apagado hasta definir el campo con el cliente)
+    'contabilidad' => [
+        'centro_costo' => (bool) env('CENTRO_COSTO_COMPRAS', false),
+    ],
+
     'jsonpe' => [
         'token' => env('JSONPE_TOKEN'),
         'url' => env('JSONPE_URL', 'https://api.json.pe/api'),
