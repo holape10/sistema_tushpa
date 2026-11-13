@@ -90,7 +90,7 @@
         <button type="button" @click="filtro = 'sincuenta'" class="text-left bg-white rounded-2xl shadow-sm p-4 ring-2" :class="filtro === 'sincuenta' ? 'ring-rose-500' : 'ring-transparent'">
             <p class="text-xs font-semibold text-slate-500">Líneas sin cuenta</p>
             <p class="text-2xl font-extrabold {{ $lineasSinCuenta ? 'text-rose-600' : 'text-emerald-600' }}">{{ $lineasSinCuenta }}</p>
-            <p class="text-[11px] text-slate-400">Sin cuenta va a la {{ $cfg['cta_compras'] }}</p>
+            <p class="text-[11px] text-slate-400">Sin cuenta propia va a la Cta. cargo de su comprobante (o a la {{ $cfg['cta_compras'] }})</p>
         </button>
     </div>
 

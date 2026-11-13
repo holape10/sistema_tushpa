@@ -40,9 +40,12 @@ class SireDetalleController extends Controller
     }
 
     /** La propuesta de compras del periodo que ya se trajo de SUNAT (null si aún no se trajo) */
-    private function datos(string $ruc, string $periodo): array
+    private function datos(string $ruc, string $periodo, ?array $dbf = null): array
     {
-        return ComprasDetalle::conPropuesta($ruc, $periodo);
+        $dbf ??= SireDbf::delPeriodo($ruc, 'compras', $periodo)['comprobantes'];
+
+        // Las líneas sin cuenta propia van con la Cta. cargo de su comprobante
+        return ComprasDetalle::heredarDelComprobante(ComprasDetalle::conPropuesta($ruc, $periodo), $dbf, Concar::config($ruc)['cta_compras']);
     }
 
     public function index(Request $request): View
@@ -54,7 +57,7 @@ class SireDetalleController extends Controller
         $dbf = SireDbf::delPeriodo($ruc, 'compras', $periodo)['comprobantes'];
 
         return view('empresas.sire.detalle', ['periodo' => $periodo, 'cfg' => Concar::config($ruc), 'faltaJsonPe' => XmlJsonPe::falta(),
-            'libro' => 'compras', 'dbf' => $dbf, 'totales' => SireDbf::totales('compras', $dbf)] + $this->datos($ruc, $periodo));
+            'libro' => 'compras', 'dbf' => $dbf, 'totales' => SireDbf::totales('compras', $dbf)] + $this->datos($ruc, $periodo, $dbf));
     }
 
     /**

@@ -132,6 +132,25 @@ class ComprasDetalleTest extends FlujoTestCase
         $this->get(route('sire.detalle', ['periodo' => '202607']))->assertSee('name="subdiario" value="14"', false);
     }
 
+    public function test_las_lineas_sin_cuenta_propia_van_a_la_cta_cargo_de_su_comprobante(): void
+    {
+        $ruc = $this->usuario->IdEmpresa;
+        $this->subir(['F001-134277.xml' => CompraXmlTest::factura($ruc)]);
+        $this->propuesta();
+        $this->assertSame(2, $this->get(route('sire.detalle', ['periodo' => '202607']))->viewData('lineasSinCuenta'));
+
+        // El contador pone la Cta. cargo (y su centro de costo) al comprobante, no a cada línea
+        $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202607', 'clave' => '20553510661|01|F001|134277',
+            'ctacargo' => '6365', 'ccosto' => '94'])->assertOk();
+
+        $r = $this->get(route('sire.detalle', ['periodo' => '202607']))->assertOk();
+        $this->assertSame(0, $r->viewData('lineasSinCuenta'), 'Ya no cuentan como sin cuenta.');
+        $concar = Concar::comprasConDetalle($ruc, '202607', $r->viewData('comprobantes'));
+        $this->assertSame([['6365', '94', 150.0]], collect($concar['filas'])->filter(fn ($f) => $f[18] === 'F001-00134277' && $f[10] !== '401111' && $f[10] !== '421201')
+            ->map(fn ($f) => [$f[10], $f[12], $f[14]])->values()->all(), 'Van a la Cta. cargo del comprobante con su centro, no a la 601111.');
+        $this->get(route('sire.detalle.concar', ['periodo' => '202607']))->assertOk()->assertDownload();
+    }
+
     public function test_trae_de_sunat_por_json_pe_los_xml_que_faltan(): void
     {
         $ruc = $this->usuario->IdEmpresa;

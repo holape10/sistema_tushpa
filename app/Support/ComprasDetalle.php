@@ -169,4 +169,33 @@ class ComprasDetalle
             'lineasSinCuenta' => $todas->filter(fn ($l) => ! $l->cuenta)->count(),
         ];
     }
+
+    /**
+     * Las líneas del XML sin cuenta propia toman la Cta. cargo de su comprobante (la que se puso en el .dbf o la que
+     * aprendió de ese proveedor) y su centro de costo; si el comprobante tampoco tiene, siguen sin cuenta.
+     *
+     * @param  array{comprobantes: array<int, array>, lineasSinCuenta: int}  $datos  de delPeriodo
+     * @param  array<int, array>  $dbf  de SireDbf::delPeriodo (con clave, ctacargo y ccosto)
+     */
+    public static function heredarDelComprobante(array $datos, array $dbf, string $ctaDefecto): array
+    {
+        $porClave = collect($dbf)->keyBy('clave');
+        foreach ($datos['comprobantes'] as $i => $c) {
+            $d = $porClave["{$c['ruc']}|{$c['tipo']}|{$c['serie']}|{$c['numero']}"] ?? null;
+            if (! $d) {
+                continue;
+            }
+            $cuenta = ($d['ctacargo'] ?? null) !== $ctaDefecto ? ($d['ctacargo'] ?? null) : null;
+            $datos['comprobantes'][$i]['lineas'] = array_map(function ($l) use ($cuenta, $d) {
+                $l = clone $l;
+                $l->cuenta = $l->cuenta ?: $cuenta;
+                $l->centro_costo = ($l->centro_costo ?? null) ?: ($d['ccosto'] ?? null) ?: null;
+
+                return $l;
+            }, $c['lineas']);
+        }
+        $datos['lineasSinCuenta'] = collect($datos['comprobantes'])->pluck('lineas')->flatten(1)->filter(fn ($l) => ! $l->cuenta)->count();
+
+        return $datos;
+    }
 }

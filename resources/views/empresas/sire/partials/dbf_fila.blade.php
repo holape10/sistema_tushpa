@@ -11,7 +11,9 @@
         $m['otros'] = round($m['otros'] + $m['isc'], 2);
         $m['isc'] = 0;
     }
-    $sinCuenta = $compras ? collect($c['lineas'])->filter(fn ($l) => ! $l->cuenta)->count() : 0;
+    // Con Cta. cargo elegida en el comprobante, sus líneas sin cuenta propia van a esa
+    $ctaLinea = $compras ? (string) $c['ctacargo'] : (string) $cfg['cta_compras'];
+    $sinCuenta = $compras && $ctaLinea === (string) $cfg['cta_compras'] ? collect($c['lineas'])->filter(fn ($l) => ! $l->cuenta)->count() : 0;
     $xmlId = $c['xml_id'] ?? ($c['lineas'][0]->compra_xml_id ?? null);
     $centros = $compras ? \App\Support\Contabilidad\CuentasCompras::centros((string) auth()->user()->IdEmpresa) : [];
     $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ccosto' => $c['ccosto'] ?? '',
@@ -105,9 +107,9 @@
                                 <td class="px-3 py-1.5 text-right">{{ $soles($l->base) }}</td>
                                 <td class="px-3 py-1.5 text-right">{{ $soles($l->igv) }}</td>
                                 @if ($compras)
-                                <td class="px-3 py-1" x-data="{ cta: @js((string) ($l->cuenta ?: $cfg['cta_compras'])), cc: @js((string) ($l->centro_costo ?? '')) }">
-                                    <input type="text" list="plan_cuentas" maxlength="12" value="{{ $l->cuenta }}" placeholder="{{ $cfg['cta_compras'] }}" data-vacia="{{ $l->cuenta ? '0' : '1' }}"
-                                           @input="cta = $event.target.value || @js((string) $cfg['cta_compras'])"
+                                <td class="px-3 py-1" x-data="{ cta: @js((string) ($l->cuenta ?: $ctaLinea)), cc: @js((string) ($l->centro_costo ?? '')) }">
+                                    <input type="text" list="plan_cuentas" maxlength="12" value="{{ $l->cuenta }}" placeholder="{{ $ctaLinea }}" data-vacia="{{ $l->cuenta || ! $sinCuenta ? '0' : '1' }}"
+                                           @input="cta = $event.target.value || @js($ctaLinea)"
                                            @keydown.enter.prevent="cuentaLinea([{{ $l->id }}], $event.target)" @change="cuentaLinea([{{ $l->id }}], $event.target)"
                                            class="w-full h-8 rounded-lg border-slate-300 text-xs font-mono {{ $l->cuenta ? '' : 'bg-rose-50' }}">
                                     {{-- Cuenta de gasto 62–68: su centro de costo (obligatorio para CONCAR) --}}
