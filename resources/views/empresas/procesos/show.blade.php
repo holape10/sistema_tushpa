@@ -9,7 +9,7 @@
         <template x-if="estado === 'EN COLA' || estado === 'EN PROCESO'">
             <div class="space-y-3">
                 <div class="mx-auto h-12 w-12 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin"></div>
-                <p class="font-semibold text-gray-700" x-text="estado === 'EN COLA' ? 'En espera de turno…' : @js($proceso->tipo === 'importar' ? 'Importando… (con mucho historial puede tardar varios minutos)' : 'Preparando…')"></p>
+                <p class="font-semibold text-gray-700" x-text="estado === 'EN COLA' ? 'En espera de turno…' : @js(['importar' => 'Importando… (con mucho historial puede tardar varios minutos)', 'importar_carga' => 'Cargando el respaldo… (uno grande tarda unos minutos)'][$proceso->tipo] ?? 'Preparando…')"></p>
                 <p class="text-sm text-gray-500">Puedes seguir trabajando en otra pestaña o volver más tarde: esta pantalla se actualiza sola.</p>
             </div>
         </template>
@@ -19,6 +19,8 @@
                 <p class="font-semibold text-emerald-700" x-text="mensaje || 'Listo.'"></p>
                 @if ($proceso->tipo === 'importar')
                     <a href="{{ route('importar.resultado', $proceso->id) }}" class="inline-flex items-center h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold">Ver el resultado</a>
+                @elseif ($proceso->tipo === 'importar_carga')
+                    <a href="{{ route('importar.cargado', $proceso->id) }}" class="inline-flex items-center h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold">Seguir: elegir qué importar →</a>
                 @else
                     <p class="text-sm text-gray-500">La descarga empieza sola. Si no empezó, tócalo aquí:</p>
                     <a href="{{ route('procesos.descargar', $proceso->id) }}" class="inline-flex items-center h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold">⬇ Descargar</a>
@@ -46,6 +48,9 @@
             descargarSolo() {
                 @if ($proceso->tipo === 'importar')
                     window.location.href = @json(route('importar.resultado', $proceso->id));
+                    return;
+                @elseif ($proceso->tipo === 'importar_carga')
+                    window.location.href = @json(route('importar.cargado', $proceso->id));
                     return;
                 @endif
                 const clave = 'proceso-descargado-{{ $proceso->id }}';

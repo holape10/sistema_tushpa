@@ -57,6 +57,11 @@ class SunatService
 
     private const MAX_POR_RESUMEN = 500;
 
+    /** OSE Nubefact (empresa con "Tipo de envío: OSE"): el mismo XML y las mismas operaciones SOAP que SUNAT */
+    public const OSE_PRODUCCION = 'https://ose.nubefact.com/ol-ti-itcpe/billService';
+
+    public const OSE_BETA = 'https://ose-demo.nubefact.com/ol-ti-itcpe/billService';
+
     /** Días que SUNAT da para comunicar la baja de una factura o boleta */
     public const PLAZO_BAJA_DIAS = 7;
 
@@ -78,14 +83,30 @@ class SunatService
 
     // ------------------------------------------------------------------ configuración
 
+    /** ¿Envía por OSE (Nubefact) en vez de directo a SUNAT? (en las empresas antiguas se guardó como '02' o '2') */
+    public function esOse(): bool
+    {
+        return (int) ($this->empresa->tip_env_fac_id ?? 0) === 2;
+    }
+
+    /** A dónde se mandan facturas, boletas, notas, resúmenes y bajas */
+    public function endpoint(): string
+    {
+        if ($this->esOse()) {
+            return $this->esProduccion() ? self::OSE_PRODUCCION : self::OSE_BETA;
+        }
+
+        return $this->esProduccion() ? SunatEndpoints::FE_PRODUCCION : SunatEndpoints::FE_BETA;
+    }
+
     private function see(): See
     {
         if ($this->see) {
             return $this->see;
         }
-
-        if ((string) $this->empresa->tip_env_fac_id === '02') {
-            throw new RuntimeException('La empresa está configurada para envío por OSE; este módulo solo envía directo a SUNAT.');
+        // OSE Nubefact: con el usuario y la clave que Nubefact le dio a la empresa (en producción y en su demo)
+        if ($this->esOse() && (! $this->empresa->wsusuario || ! $this->empresa->claveSunat)) {
+            throw new RuntimeException('La empresa envía por OSE: configura el usuario y la clave del OSE (Nubefact) en Mantenimiento > Empresas > Editar.');
         }
 
         $pem = storage_path('app/certificados/'.$this->empresa->IdEmpresa.'.pem');
@@ -98,7 +119,10 @@ class SunatService
         $firma = new FirmaSha256;
         $firma->setCertificate(file_get_contents($pem));
         $see->getFactory()->setSigner($firma);
-        if ($this->esProduccion()) {
+        if ($this->esOse()) {
+            $see->setService($this->endpoint());
+            $see->setClaveSOL($this->empresa->IdEmpresa, $this->empresa->wsusuario, $this->empresa->claveSunat);
+        } elseif ($this->esProduccion()) {
             if (! $this->empresa->wsusuario || ! $this->empresa->claveSunat) {
                 throw new RuntimeException('Configura el usuario y la clave SOL de la empresa.');
             }
@@ -406,12 +430,13 @@ class SunatService
      */
     public function consultarCdr(object $cab, ?string $nombre = null): ?array
     {
-        if (! $this->esProduccion() || ! $this->empresa->wsusuario || ! $this->empresa->claveSunat) {
+        if (! ($this->esProduccion() || $this->esOse()) || ! $this->empresa->wsusuario || ! $this->empresa->claveSunat) {
             return null;
         }
         try {
-            $ws = new SoapClient(WsdlProvider::getConsultPath());
-            $ws->setService(SunatEndpoints::FE_CONSULTA_CDR);
+            // OSE: la constancia se pide al mismo servicio del OSE (getStatusCdr); directo: al servicio de consulta de SUNAT
+            $ws = new SoapClient($this->esOse() ? WsdlProvider::getBillPath() : WsdlProvider::getConsultPath());
+            $ws->setService($this->esOse() ? $this->endpoint() : SunatEndpoints::FE_CONSULTA_CDR);
             $ws->setCredentials($this->empresa->IdEmpresa.$this->empresa->wsusuario, $this->empresa->claveSunat);
             $servicio = new ConsultCdrService;
             $servicio->setClient($ws);
@@ -429,7 +454,7 @@ class SunatService
             file_put_contents($this->rutaArchivo($nombre, 'cdr'), $res->getCdrZip());
         }
         $r = $this->interpretarCdr($res->getCdrResponse());
-        $r['mensaje'] = 'Constancia recuperada de SUNAT: '.$r['mensaje'];
+        $r['mensaje'] = 'Constancia recuperada de '.($this->esOse() ? 'el OSE' : 'SUNAT').': '.$r['mensaje'];
 
         return $r;
     }

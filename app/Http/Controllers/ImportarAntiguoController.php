@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\CargarRespaldoAntiguo;
 use App\Jobs\ImportarSistemaAntiguo;
-use App\Support\Antiguo\CargadorSql;
 use App\Support\Antiguo\Importador;
 use App\Support\Procesos;
 use App\Support\Tenancy\Tenancy;
@@ -85,26 +85,26 @@ class ImportarAntiguoController extends Controller
         }
         $bd = $this->prefijo().now()->format('Ymd_His');
 
-        try {
-            $res = CargadorSql::cargar($completa, $bd);
-        } catch (\Throwable $e) {
-            report($e);
+        // En segundo plano: un respaldo grande (100 MB o más) tarda minutos en cargarse y la página se cortaba
+        $id = Procesos::lanzar(Auth::user(), 'importar_carga', 'Cargar el respaldo del sistema antiguo',
+            fn (string $base, int $proceso, int $usuario) => new CargarRespaldoAntiguo($base, $proceso, $usuario, $completa, $bd));
 
-            return back()->withErrors(['archivo' => 'No se pudo cargar el respaldo: '.$e->getMessage()]);
-        } finally {
-            @unlink($completa);
-        }
+        return redirect()->route('procesos.show', $id);
+    }
 
-        if (! in_array('productos', $res['tablas'], true)) {
-            DB::statement("DROP DATABASE IF EXISTS `{$bd}`");
+    /** Respaldo ya cargado en su base temporal: sigue al paso 2 */
+    public function cargado(int $id)
+    {
+        $this->autorizar();
+        $proceso = DB::table('procesos')->where('id', $id)->where('tipo', 'importar_carga')->first();
+        $archivo = $proceso && $proceso->estado === 'LISTO' && $proceso->archivo ? realpath($proceso->archivo) : false;
+        $carpeta = realpath(Procesos::carpeta(Tenancy::baseActual()));
+        abort_unless($archivo && $carpeta && str_starts_with($archivo, $carpeta.DIRECTORY_SEPARATOR) && is_file($archivo), 404);
+        $datos = json_decode((string) file_get_contents($archivo), true) ?: [];
 
-            return back()->withErrors(['archivo' => 'El archivo no trae la tabla productos del sistema antiguo.'
-                .($res['errores'] ? ' Primer error: '.$res['errores'][0] : '')]);
-        }
-
-        return redirect()->route('importar.revisar', ['bd' => $bd])
-            ->with('success', "Respaldo cargado: {$res['ejecutadas']} sentencias de ".count($res['tablas']).' tablas.')
-            ->with('errores_carga', $res['errores']);
+        return redirect()->route('importar.revisar', ['bd' => $this->baseValida($datos['bd'] ?? null)])
+            ->with('success', "Respaldo cargado: {$datos['ejecutadas']} sentencias de {$datos['tablas']} tablas.")
+            ->with('errores_carga', $datos['errores'] ?? []);
     }
 
     /** Paso 2: qué trae la base antigua y opciones de importación */

@@ -2,6 +2,7 @@
 
 namespace App\Support\Antiguo;
 
+use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,13 +30,24 @@ class CargadorSql
 
     private const TABLA = '/^(?:INSERT\s+(?:IGNORE\s+)?INTO|REPLACE\s+INTO|CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?|DROP\s+TABLE(?:\s+IF\s+EXISTS)?|ALTER\s+TABLE)\s+`?([A-Za-z0-9_]+)`?/i';
 
+    /**
+     * Conexión sin base elegida para crear y borrar las bases temporales: un CREATE/DROP DATABASE en la conexión de la
+     * empresa cerraría la transacción que esté abierta.
+     */
+    public static function admin(): Connection
+    {
+        config(['database.connections.antiguo_admin' => array_merge(config('database.connections.mysql'), ['database' => null])]);
+
+        return DB::connection('antiguo_admin');
+    }
+
     /** @return array{ejecutadas: int, omitidas: int, errores: string[], tablas: string[]} */
     public static function cargar(string $archivo, string $bd): array
     {
         if (! preg_match('/^[A-Za-z0-9_]+$/', $bd)) {
             throw new \RuntimeException('Nombre de base de datos no válido.');
         }
-        DB::statement("CREATE DATABASE IF NOT EXISTS `{$bd}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        self::admin()->statement("CREATE DATABASE IF NOT EXISTS `{$bd}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
         Importador::conectar($bd);
         $pdo = DB::connection(Importador::CONEXION)->getPdo();
         $pdo->exec("SET NAMES utf8mb4, FOREIGN_KEY_CHECKS = 0, UNIQUE_CHECKS = 0, SQL_MODE = ''");

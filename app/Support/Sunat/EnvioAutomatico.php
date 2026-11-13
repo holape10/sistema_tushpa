@@ -22,7 +22,7 @@ class EnvioAutomatico
             $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->first(['tdocod', 'IdEmpresa']);
             $empresa = $cab ? Empresa::find($cab->IdEmpresa) : null;
             if (! $cab || ! in_array($cab->tdocod, self::TIPOS, true) || ! $empresa
-                || (int) $empresa->tipo_envio !== 1 || (string) $empresa->tip_env_fac_id === '02') {
+                || (int) $empresa->tipo_envio !== 1) {
                 return;
             }
             $user = Auth::user();
