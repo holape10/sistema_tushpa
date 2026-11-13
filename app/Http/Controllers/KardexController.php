@@ -290,16 +290,77 @@ class KardexController extends Controller
             ->tap(fn ($qq) => Buscar::palabras($qq, $q, ['productos.pronom'], ['productos.procod', 'productos.codigo_barra']))
             ->select('productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod',
                 'productos.promocion', 'productos.stock_min', 'productos.costo', 'productos.ume_equivalente', 'productos.factor_equivalente',
-                DB::raw('COALESCE(ps.stock, 0) as stock'))
+                'productos.control_lote', 'productos.control_serie', DB::raw('COALESCE(ps.stock, 0) as stock'))
             ->paginate(30)->withQueryString();
 
         return view('empresas.kardex.stock', compact('productos', 'almacenes', 'idAlmacen', 'q'));
     }
 
+    /**
+     * Ajustar stock: se escribe el stock REAL y el sistema registra la diferencia como un movimiento de ajuste (operación
+     * 28 · ajuste por diferencia de inventario): hay 10 y se cuentan 6 → salida de 4; hay 10 y se cuentan 12 → ingreso de 2.
+     * Así el stock queda en lo contado y el kardex muestra el movimiento.
+     */
+    public function ajustar(Request $request)
+    {
+        $user = Auth::user();
+        $d = $request->validate([
+            'IdProducto' => 'required|integer',
+            'id_almacen' => 'required|integer',
+            'stock_real' => 'required|numeric|min:0|max:99999999',
+            'observacion' => 'nullable|string|max:200',
+        ], [], ['stock_real' => 'el stock real']);
+
+        $almacen = Almacen::where('id_almacen', $d['id_almacen'])->where('id_empresa_negocio', $user->id_empresa_negocio)->first();
+        $prod = $this->productosConStock()->where('IdProducto', $d['IdProducto'])->first();
+        if (! $almacen || ! $prod) {
+            return back()->with('error', 'Producto o almacén no válido.');
+        }
+        if ($prod->control_lote || $prod->control_serie) {
+            return back()->with('error', "{$prod->pronom} se controla por ".($prod->control_lote ? 'lote' : 'serie').': ajústalo con un Ingreso o una Salida indicando el lote o las series.');
+        }
+
+        $actual = round((float) DB::table('producto_stock')->where('IdProducto', $prod->IdProducto)->where('id_almacen', $almacen->id_almacen)->value('stock'), 5);
+        $real = round((float) $d['stock_real'], 5);
+        $diferencia = round($real - $actual, 5);
+        $num = fn ($n) => rtrim(rtrim(number_format((float) $n, 3, '.', ''), '0'), '.');
+        if (abs($diferencia) < 0.00001) {
+            return back()->with('success', "{$prod->pronom} ya tiene {$num($real)} en el sistema: no hizo falta ajustar.");
+        }
+        $tipo = $diferencia > 0 ? 'I' : 'E';
+        $nota = mb_substr('AJUSTE DE STOCK: sistema '.$num($actual).' → real '.$num($real).(trim((string) ($d['observacion'] ?? '')) !== '' ? ' · '.trim($d['observacion']) : ''), 0, 255);
+
+        try {
+            $cabId = DB::transaction(function () use ($user, $tipo, $almacen, $prod, $diferencia, $nota) {
+                $cabId = DB::table('movimientos_cabecera')->insertGetId([
+                    'mov_tip' => $tipo, 'cod_tip_ope' => '28', 'fecha' => now()->toDateString(), 'observaciones' => $nota,
+                    'estado' => 'REGISTRADO', 'usu_ent' => $user->IdUsuario,
+                    'part_alm' => $tipo === 'E' ? $almacen->id_almacen : null,
+                    'des_alm' => $tipo === 'I' ? $almacen->id_almacen : null,
+                    'id_empresa_negocio' => $user->id_empresa_negocio,
+                ]);
+                Kardex::registrar($prod->IdProducto, $almacen->id_almacen, abs($diferencia), $tipo, [
+                    'cod_tip_ope' => '28', 'mov_cab_id' => $cabId, 'fecha_mov' => now()->toDateString(),
+                    'costo' => (float) $prod->costo, 'descripcion' => $nota, 'numero' => (string) $cabId,
+                ]);
+
+                return $cabId;
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        Bitacora::registrar('almacen.ajuste', "Ajustó el stock de {$prod->pronom} en {$almacen->descripcion}: ".$num($actual).' → '.$num($real)
+            .' ('.($tipo === 'I' ? 'ingreso' : 'salida').' de '.$num(abs($diferencia)).')', null,
+            ['referencia' => ['movimiento', $cabId], 'alerta' => $tipo === 'E']);
+
+        return back()->with('success', "{$prod->pronom}: stock ajustado a {$num($real)} (".($tipo === 'I' ? 'ingreso' : 'salida').' de '.$num(abs($diferencia)).', MOV-'.$cabId.').');
+    }
+
     public function movimiento(Request $request)
     {
         $tipo = $request->get('tipo') === 'E' ? 'E' : 'I';
-        $productos = $this->productosConStock()->get(['IdProducto', 'pronom', 'procod', 'costo', 'control_lote', 'control_serie', 'umecod', 'ume_equivalente', 'factor_equivalente']);
+        $productos = $this->productosConStock()->get(['IdProducto', 'pronom', 'procod', 'codigo_barra', 'costo', 'control_lote', 'control_serie', 'umecod', 'ume_equivalente', 'factor_equivalente']);
         $almacenes = $this->almacenes();
         $operaciones = DB::table('tipo_operacion_sunat')->whereIn('cod_tip_ope', self::OPERACIONES[$tipo])->get();
 

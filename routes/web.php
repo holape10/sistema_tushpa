@@ -132,6 +132,7 @@ use App\Http\Controllers\TiendaConfigController;
 use App\Http\Controllers\TiendaController;
 use App\Http\Controllers\TipoCambioController;
 use App\Http\Controllers\TransferenciaController;
+use App\Http\Controllers\TransporteGuiaController;
 use App\Http\Controllers\TratamientoClinicoController;
 use App\Http\Controllers\TributoController;
 use App\Http\Controllers\TurnoController;
@@ -400,6 +401,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/ubigeos', [GuiaController::class, 'ubigeos'])->name('ubigeos');
 
     // Guías de remisión electrónicas
+    // Conductores y vehículos de las guías (y su consulta por DNI y por placa en json.pe)
+    Route::controller(TransporteGuiaController::class)->prefix('guias')->name('guias.')->group(function () {
+        Route::get('/transporte', 'index')->name('transporte');
+        Route::post('/transporte/conductor', 'guardarConductor')->name('transporte.conductor');
+        Route::post('/transporte/vehiculo', 'guardarVehiculo')->name('transporte.vehiculo');
+        Route::post('/transporte/{tipo}/{id}/eliminar', 'eliminar')->whereIn('tipo', ['conductor', 'vehiculo'])->whereNumber('id')->name('transporte.eliminar');
+        Route::get('/conductor/{dni}', 'conductor')->where('dni', '[0-9A-Za-z]{6,15}')->middleware('throttle:30,1')->name('conductor');
+        Route::get('/placa/{placa}', 'placa')->where('placa', '[0-9A-Za-z -]{4,10}')->middleware('throttle:30,1')->name('placa');
+    });
     Route::controller(GuiaController::class)->prefix('guias')->name('guias.')->group(function () {
         Route::get('/', 'index')->name('index');
         Route::get('/crear', 'crear')->name('crear');
@@ -625,6 +635,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/kardex/inventario/excel', [KardexController::class, 'inventarioExcel'])->name('kardex.inventario.excel');
     Route::get('/kardex/movimiento', [KardexController::class, 'movimiento'])->name('kardex.movimiento');
     Route::post('/kardex/movimiento', [KardexController::class, 'guardarMovimiento'])->name('kardex.guardar_movimiento');
+    // Ajustar stock: se escribe el stock real y se registra la diferencia (ingreso o salida)
+    Route::post('/kardex/ajustar', [KardexController::class, 'ajustar'])->name('kardex.ajustar');
     Route::get('/kardex/movimientos', [KardexController::class, 'movimientos'])->name('kardex.movimientos');
     Route::get('/kardex/movimientos/{id}', [KardexController::class, 'verMovimiento'])->whereNumber('id')->name('kardex.movimiento.ver');
 });

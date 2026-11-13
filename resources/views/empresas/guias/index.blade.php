@@ -11,6 +11,7 @@
                 <h1 class="text-2xl font-extrabold text-gray-800"><i class="fas fa-truck-fast text-indigo-600"></i> Guías de remisión</h1>
                 <p class="text-sm text-gray-500">Emite una guía sola, o desde <a href="{{ route('ventas.index') }}" class="text-indigo-600 font-semibold underline">Panel de ventas</a> (botón ⋮ de la venta → Guía de remisión) para que se llene sola.</p>
             </div>
+            <a href="{{ route('guias.transporte') }}" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold hover:bg-gray-200"><i class="fas fa-id-card"></i> Conductores y vehículos</a>
             <a href="{{ route('guias.crear') }}" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"><i class="fas fa-plus"></i> Nueva guía</a>
         </div>
 

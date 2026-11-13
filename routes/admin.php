@@ -146,4 +146,6 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/mi-perfil/clave', [PerfilController::class, 'clave'])->middleware('throttle:10,1')->name('perfil.clave');
     Route::get('/subdominio/{sub}', [ClienteController::class, 'revisarSubdominio'])->where('sub', '[A-Za-z0-9-]{1,40}')->name('subdominio');
     Route::get('/ruc/{ruc}', [ClienteController::class, 'consultarRuc'])->where('ruc', '\d{11}')->name('ruc');
+    // Buscar la ciudad o el distrito (ubigeo) al crear la empresa
+    Route::get('/ubigeos', [ClienteController::class, 'ubigeos'])->name('ubigeos');
 });

@@ -127,4 +127,15 @@ class LogoSucursalTest extends FlujoTestCase
         $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['redondeo_linea' => '']))->assertSessionHasNoErrors();
         $this->assertNull(DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('redondeo_linea'));
     }
+
+    public function test_con_un_ubigeo_que_no_esta_en_el_catalogo_se_guarda_igual_el_nombre(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['departamento' => 'LORETO', 'provincia' => 'MAYNAS', 'distrito' => 'IQUITOS']);
+
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['ubigeo' => '999999', 'nombre_comercial' => 'HOTEL EL PARAISO']))
+            ->assertSessionHasNoErrors()->assertRedirect(route('sucursales.index'));
+
+        $s = DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->first();
+        $this->assertSame(['HOTEL EL PARAISO', 'LORETO', 'MAYNAS', 'IQUITOS'], [$s->nombre_comercial, $s->departamento, $s->provincia, $s->distrito]);
+    }
 }

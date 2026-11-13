@@ -98,6 +98,8 @@ class GuiaRemision
                 ]);
             }
             DB::table('empresa_negocios')->where('id_empresa_negocio', $suc->id_empresa_negocio)->update(['NumGuia' => $numero]);
+            // El conductor y el vehículo quedan en su lista (Guías › Conductores y vehículos)
+            TransporteGuias::guardarDeGuia((int) $suc->id_empresa_negocio, $d);
             // El comprobante muestra su número de guía (casilla "Número Guía" del A4)
             if (! empty($d['IdCpe_cabecera'])) {
                 DB::table('cpe_cabecera')->where('IdCpe_cabecera', $d['IdCpe_cabecera'])->update(['guia_remision' => $serie.'-'.$numero]);

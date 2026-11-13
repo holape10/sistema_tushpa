@@ -4,7 +4,8 @@
     Uso en formulario normal:  @include('empresas.partials.ubigeo', ['name' => 'ubigeo', 'valor' => $sucursal->ubigeo])
 --}}
 @php $valorInicial = $valor ?? ''; @endphp
-<div class="relative" x-data="ubigeoCampo(@js((string) $valorInicial))"
+{{-- En el panel la búsqueda va por otra ruta: 'url' => route('admin.ubigeos') --}}
+<div class="relative" x-data="ubigeoCampo(@js((string) $valorInicial), @js($url ?? route('ubigeos')))"
      @if (!empty($model)) x-modelable="codigo" x-model="{{ $model }}" @endif
      @click.outside="res = []">
     @if (!empty($name))<input type="hidden" name="{{ $name }}" :value="codigo">@endif
@@ -28,7 +29,7 @@
 
 @once
     <script>
-        function ubigeoCampo(inicial) {
+        function ubigeoCampo(inicial, url) {
             return {
                 codigo: inicial || '', nombre: '', q: '', res: [], editando: false, sinResultados: false,
                 init() {
@@ -36,7 +37,7 @@
                     this.ponerNombre(this.codigo);
                 },
                 async consultar(q) {
-                    return fetch(@json(route('ubigeos')) + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } }).then(r => r.json()).catch(() => []);
+                    return fetch(url + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } }).then(r => r.json()).catch(() => []);
                 },
                 async ponerNombre(c) {
                     if (!/^\d{6}$/.test(c || '')) { this.nombre = ''; return; }

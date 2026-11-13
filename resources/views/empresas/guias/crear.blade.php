@@ -113,14 +113,19 @@
                 <label class="flex items-center gap-2"><input type="checkbox" x-model="g.vehiculo_m1l" class="rounded"> Vehículo de categoría M1 o L (auto, moto, mototaxi): no requiere datos del conductor ni placa</label>
                 <div x-show="!g.vehiculo_m1l" class="grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
                     <label>Doc.<select x-model="g.cond_tdicod" class="{{ $in }} mt-1"><option value="1">DNI</option><option value="4">Carné ext.</option><option value="7">Pasaporte</option></select></label>
-                    <label>N° documento<input x-model="g.cond_num" @change="buscarConductor()" maxlength="15" class="{{ $in }} mt-1"></label>
+                    <label>N° documento<input x-model="g.cond_num" @change="buscarConductor()" list="lista_conductores" maxlength="15" class="{{ $in }} mt-1"></label>
+                    <datalist id="lista_conductores">@foreach ($conductores as $c)<option value="{{ $c->num }}">{{ trim($c->nombres.' '.$c->apellidos) }}</option>@endforeach</datalist>
                     {{-- Un solo campo; al guardar se separa en nombres y apellidos (los dos últimos nombres = apellidos) como pide SUNAT --}}
                     <label class="lg:col-span-2">Nombre completo<input x-model="g.cond_completo" maxlength="200" placeholder="NOMBRES Y APELLIDOS" class="{{ $in }} mt-1 uppercase"></label>
-                    <label>Licencia<input x-model="g.cond_licencia" maxlength="10" placeholder="Q12345678" class="{{ $in }} mt-1 uppercase"></label>
-                    <label>Placa<input x-model="g.placa" maxlength="8" placeholder="ABC123" class="{{ $in }} mt-1 uppercase"></label>
+                    <label>Licencia<input x-model="g.cond_licencia" maxlength="10" placeholder="Q12345678" class="{{ $in }} mt-1 uppercase">
+                        <span x-show="licenciaInfo" x-cloak class="block text-[11px] mt-0.5" :class="licenciaInfo.includes('VENCIDA') ? 'text-rose-600 font-bold' : 'text-emerald-700'" x-text="licenciaInfo"></span></label>
+                    <label>Placa<input x-model="g.placa" @change="buscarPlaca()" list="lista_vehiculos" maxlength="8" placeholder="ABC123" class="{{ $in }} mt-1 uppercase">
+                        <span x-show="vehiculoInfo" x-cloak class="block text-[11px] text-emerald-700 mt-0.5" x-text="vehiculoInfo"></span></label>
+                    <datalist id="lista_vehiculos">@foreach ($vehiculos as $v)<option value="{{ $v->placa }}">{{ trim($v->marca.' '.$v->modelo) }}</option>@endforeach</datalist>
                 </div>
             </div>
-            <p class="text-xs text-gray-500 mt-3"><i class="fas fa-rotate"></i> Se propone el transporte de tu última guía: si es el mismo carro y chofer, no escribas nada.</p>
+            <p class="text-xs text-gray-500 mt-3"><i class="fas fa-rotate"></i> Se propone el transporte de tu última guía: si es el mismo carro y chofer, no escribas nada.
+                Al escribir el DNI se trae el nombre y la licencia; con la placa, el vehículo. <a href="{{ route('guias.transporte') }}" target="_blank" class="text-indigo-600 font-semibold underline">Ver conductores y vehículos</a></p>
         </div>
 
         {{-- 5. Bienes --}}
@@ -189,6 +194,7 @@
             const ALMACENES = @js($almacenes->keyBy('id_almacen'));
             return {
                 g: @js($guia), items: @js($items), faltan: [], busca: '', resultados: [], sel: 0, buscando: false, ocupado: false, resultado: { ok: true, mensaje: '' },
+                licenciaInfo: '', vehiculoInfo: '',
                 init() {
                     // El conductor se escribe en un solo campo; se guarda separado: los dos últimos nombres son los apellidos
                     this.g.cond_completo = [this.g.cond_nombres, this.g.cond_apellidos].filter(Boolean).join(' ');
@@ -216,13 +222,27 @@
                     const d = await this.json(@json(url('guias/documento')) + '/' + this.g.transp_ruc);
                     if (d.nom) this.g.transp_nom = d.nom;
                 },
+                // El conductor por su DNI: el guardado o json.pe (nombre y licencia con su vencimiento)
                 async buscarConductor() {
+                    this.licenciaInfo = '';
                     if (!/^\d{8}$/.test(this.g.cond_num)) return;
-                    const d = await this.json(@json(url('guias/documento')) + '/' + this.g.cond_num);
-                    if (d.conductor) {
-                        Object.assign(this.g, { cond_licencia: d.conductor.licencia });
-                        this.g.cond_completo = [d.conductor.nombres, d.conductor.apellidos].filter(Boolean).join(' ');
-                    } else if (d.nom && !this.g.cond_completo) { this.g.cond_completo = d.nom; }
+                    const d = await this.json(@json(url('guias/conductor')) + '/' + this.g.cond_num);
+                    if (!d.nombres) return;
+                    this.g.cond_completo = [d.nombres, d.apellidos].filter(Boolean).join(' ');
+                    if (d.licencia) this.g.cond_licencia = d.licencia;
+                    if (d.vence) {
+                        const vence = d.vence.split('-').reverse().join('/');
+                        this.licenciaInfo = (d.categoria ? d.categoria + ' · ' : '') + (d.vence < new Date().toISOString().slice(0, 10) ? 'VENCIDA el ' : 'vence ') + vence;
+                    }
+                },
+                // El vehículo por su placa: marca, modelo y color (lo guardado o json.pe)
+                async buscarPlaca() {
+                    this.vehiculoInfo = '';
+                    const placa = (this.g.placa || '').replace(/[\s-]/g, '').toUpperCase();
+                    if (placa.length < 5) return;
+                    this.g.placa = placa;
+                    const d = await this.json(@json(url('guias/placa')) + '/' + encodeURIComponent(placa));
+                    this.vehiculoInfo = [d.marca, d.modelo, d.color].filter(Boolean).join(' · ');
                 },
                 usarAlmacen(id) {
                     const a = ALMACENES[id];

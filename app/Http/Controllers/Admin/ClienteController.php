@@ -17,6 +17,7 @@ use App\Support\Tenancy\Eliminador;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Reiniciador;
 use App\Support\Tenancy\Tenancy;
+use App\Support\Ubigeo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -573,6 +574,12 @@ class ClienteController extends Controller
         $dominio = $actual ? $actual->dominio() : ($this->marcaId() ? (string) Auth::guard('superadmin')->user()->marca?->dominio : null);
 
         return response()->json(Tenancy::revisarSubdominio($sub, $actual, $dominio));
+    }
+
+    /** Ubigeos por el nombre de la ciudad o distrito (o por su código) */
+    public function ubigeos(Request $request)
+    {
+        return response()->json(Ubigeo::buscar((string) $request->get('q')));
     }
 
     public function consultarRuc(string $ruc)

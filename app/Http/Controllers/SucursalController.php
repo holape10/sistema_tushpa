@@ -191,8 +191,9 @@ class SucursalController extends Controller
 
         $datos['codigofiscal'] = $datos['codigofiscal'] ?? null;
         $datos = array_merge($datos, Ubigeo::partes($datos['ubigeo']) ?? []);
+        // Ubigeo que no está en el catálogo (código antiguo o importado): se quedan el departamento, provincia y distrito que tenía
         foreach (['departamento', 'provincia', 'distrito'] as $campo) {
-            $datos[$campo] = mb_strtoupper(trim($datos[$campo]));
+            $datos[$campo] = mb_strtoupper(trim((string) ($datos[$campo] ?? $sucursal->$campo ?? '')));
         }
         $datos['comandas_solo_mesas'] = $request->boolean('comandas_solo_mesas');
         // Wi-Fi del local: IP(s) públicas separadas por coma; vacío = mozos y promotores entran desde cualquier red

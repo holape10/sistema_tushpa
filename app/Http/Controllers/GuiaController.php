@@ -6,6 +6,7 @@ use App\Support\Buscar;
 use App\Support\ConsultaPeru;
 use App\Support\Proformas;
 use App\Support\Sunat\GuiaRemision;
+use App\Support\Sunat\TransporteGuias;
 use App\Support\Ubigeo;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -165,6 +166,9 @@ class GuiaController extends Controller
             'almacenes' => DB::table('almacenes')->where('id_empresa_negocio', $suc->id_empresa_negocio)->whereNotNull('ubigeo')->get(['id_almacen', 'descripcion', 'ubigeo', 'direccion', 'codigo']),
             'yaTieneGuias' => $ventaId ? DB::table('gre_cabecera')->where('IdCpe_cabecera', $ventaId)->whereIn('est_sunat', ['ACEPTADO', 'ENVIADO', 'PENDIENTE'])
                 ->get(['serie', 'numero', 'est_sunat']) : collect(),
+            // Para elegir con el teclado el conductor (por DNI) y el vehículo (por placa) ya usados
+            'conductores' => TransporteGuias::hay() ? DB::table('gre_conductores')->where('id_empresa_negocio', $suc->id_empresa_negocio)->orderBy('nombres')->get(['num', 'nombres', 'apellidos']) : collect(),
+            'vehiculos' => TransporteGuias::hay() ? DB::table('gre_vehiculos')->where('id_empresa_negocio', $suc->id_empresa_negocio)->orderBy('placa')->get(['placa', 'marca', 'modelo']) : collect(),
         ]);
     }
 

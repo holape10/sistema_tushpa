@@ -63,10 +63,11 @@
                         <span class="text-sm font-semibold text-slate-600">Dirección fiscal</span>
                         <input type="text" name="direccion" x-ref="direccion" value="{{ old('direccion') }}" required class="mt-1 w-full rounded-xl border-slate-300">
                     </label>
-                    <label class="block">
-                        <span class="text-sm font-semibold text-slate-600">Ubigeo</span>
-                        <input type="text" name="ubigeo" x-ref="ubigeo" value="{{ old('ubigeo') }}" maxlength="6" inputmode="numeric" class="mt-1 w-full rounded-xl border-slate-300 font-mono">
-                    </label>
+                    {{-- Se escribe la ciudad o el distrito y se elige (con el RUC de SUNAT se llena solo); la persona natural casi nunca lo trae --}}
+                    <div class="block">
+                        <span class="text-sm font-semibold text-slate-600">Ciudad / distrito <span class="font-normal text-slate-400">(ubigeo)</span></span>
+                        <div class="mt-1">@include('empresas.partials.ubigeo', ['name' => 'ubigeo', 'model' => 'ubigeo', 'valor' => old('ubigeo'), 'url' => route('admin.ubigeos')])</div>
+                    </div>
                 @endif
             </div>
         </section>
@@ -302,7 +303,7 @@
 <script>
     function clienteForm() {
         return {
-            ruc: @json(old('ruc', $cliente->ruc ?? '')), sub: @json(old('subdominio', $cliente->subdominio ?? '')), subMsg: '', subOk: true, subSugerencias: [], buscando: false, msg: '', msgOk: true, enviando: false, ultimo: '',
+            ubigeo: @json((string) old('ubigeo', '')), ruc: @json(old('ruc', $cliente->ruc ?? '')), sub: @json(old('subdominio', $cliente->subdominio ?? '')), subMsg: '', subOk: true, subSugerencias: [], buscando: false, msg: '', msgOk: true, enviando: false, ultimo: '',
             // Avisa mientras se escribe si el subdominio ya lo usa otra empresa o está reservado
             async revisarSub() {
                 this.subSugerencias = [];
@@ -322,7 +323,7 @@
                     if (d.error) { this.msg = d.error; this.msgOk = false; return; }
                     this.$refs.razon.value = d.nom || '';
                     this.$refs.direccion.value = d.dir || '';
-                    this.$refs.ubigeo.value = d.ubigeo || '';
+                    if (d.ubigeo) this.ubigeo = d.ubigeo;
                     this.msg = '✔ Datos de SUNAT cargados';
                     // Ese RUC ya tiene sistema: se creará otro aparte (bd_RUC_2…) y necesita su propio subdominio
                     if ((d.sistemas || []).length) {
