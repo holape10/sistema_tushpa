@@ -12,7 +12,8 @@
         {{-- Filtros y acciones --}}
         <div class="flex flex-col lg:flex-row gap-3 mb-4">
             <form method="GET" class="bg-white rounded-2xl shadow-sm p-3 flex flex-wrap items-end gap-2 flex-1">
-                <label class="text-sm">Mes<input type="month" name="mes" value="{{ $mes }}" onchange="this.form.submit()" class="block rounded-lg border-gray-300 text-sm font-semibold"></label>
+                <label class="text-sm">Mes<input type="month" name="mes" value="{{ $mes }}" onchange="this.form.dia.value = ''; this.form.submit()" class="block rounded-lg border-gray-300 text-sm font-semibold"></label>
+                <label class="text-sm">Día <span class="text-gray-400">(opcional)</span><input type="date" name="dia" value="{{ $dia }}" onchange="this.form.submit()" class="block rounded-lg border-gray-300 text-sm"></label>
                 <label class="text-sm">Categoría
                     <select name="categoria" onchange="this.form.submit()" class="block rounded-lg border-gray-300 text-sm">
                         <option value="">Todas</option>
@@ -33,8 +34,8 @@
         {{-- Resumen --}}
         <div class="grid lg:grid-cols-3 gap-4 mb-4">
             <div class="grid grid-cols-2 gap-3 lg:col-span-1">
-                <div class="bg-white rounded-2xl shadow-sm p-4 col-span-2"><p class="text-xs text-gray-500">Gastos del mes</p><p class="text-3xl font-black text-rose-600">{{ $soles($totales['total']) }}</p>
-                    <p class="text-xs text-gray-400">{{ $totales['n'] }} comprobante(s)</p></div>
+                <div class="bg-white rounded-2xl shadow-sm p-4 col-span-2"><p class="text-xs text-gray-500">Gastos {{ $dia ? 'del '.\Carbon\Carbon::parse($dia)->format('d/m/Y') : 'del mes' }}</p><p class="text-3xl font-black text-rose-600">{{ $soles($totales['total']) }}</p>
+                    <p class="text-xs text-gray-400">{{ $totales['n'] }} comprobante(s) · <span class="font-semibold text-gray-600">{{ $soles($totales['caja']) }} salió de la caja</span></p></div>
                 <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500">IGV crédito fiscal</p><p class="text-lg font-black text-emerald-600">{{ $soles($totales['igv']) }}</p></div>
                 <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500">Retenciones 4ta</p><p class="text-lg font-black text-amber-600">{{ $soles($totales['retencion']) }}</p></div>
             </div>
@@ -59,7 +60,7 @@
             <table class="w-full text-sm">
                 <thead class="bg-slate-700 text-white text-xs uppercase">
                     <tr><th class="px-3 py-2 text-left">Fecha</th><th class="px-3 py-2 text-left">Comprobante</th><th class="px-3 py-2 text-left">Proveedor</th>
-                        <th class="px-3 py-2 text-left">Categoría</th><th class="px-3 py-2 text-right">Base</th><th class="px-3 py-2 text-right">IGV</th>
+                        <th class="px-3 py-2 text-left">Categoría</th><th class="px-3 py-2 text-left">Pago</th><th class="px-3 py-2 text-right">Base</th><th class="px-3 py-2 text-right">IGV</th>
                         <th class="px-3 py-2 text-right">Total</th><th class="px-3 py-2"></th></tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -71,6 +72,14 @@
                                 @if ($g->origen === 'SIRE')<span class="text-[10px] px-1.5 rounded bg-indigo-100 text-indigo-700 font-bold">SIRE</span>@endif</td>
                             <td class="px-3 py-2"><span class="font-semibold text-gray-700">{{ $g->prov_nombre ?: '—' }}</span><span class="block text-xs text-gray-400">{{ $g->prov_doc }} {{ $g->descripcion ? '· ' . $g->descripcion : '' }}</span></td>
                             <td class="px-3 py-2"><span class="text-[11px] px-2 py-0.5 rounded-full font-bold text-white" style="background: {{ $g->color ?? '#9ca3af' }}">{{ $g->categoria ?? '—' }}</span></td>
+                            <td class="px-3 py-2 text-xs whitespace-nowrap">
+                                @if ($g->forma_pago === 'CREDITO')<span class="text-amber-600 font-semibold">Por pagar</span>
+                                @else<span class="font-semibold text-gray-700">{{ $g->medio ?: '—' }}</span>
+                                    @if (($g->caja_estado ?? null) === 'ACTIVO')<span class="block text-emerald-700">💵 Salió de caja · turno {{ $g->caja_turno }}</span>
+                                    @elseif ($g->estado === 'Registrado' && $g->origen !== 'ANTIGUO' && mb_strtoupper(trim((string) $g->medio)) === 'EFECTIVO')<span class="block text-rose-600" title="Se registró sin turno abierto o con fecha anterior al turno">No salió de caja</span>@endif
+                                @endif
+                                @if ($g->usuario)<span class="block text-gray-400">{{ $g->usuario }}</span>@endif
+                            </td>
                             <td class="px-3 py-2 text-right">{{ number_format($g->base + $g->no_gravado, 2) }}</td>
                             <td class="px-3 py-2 text-right {{ $g->credito_fiscal ? 'text-emerald-700' : 'text-gray-400' }}">{{ number_format($g->igv, 2) }}</td>
                             <td class="px-3 py-2 text-right font-bold whitespace-nowrap">{{ $g->moneda === 'USD' ? 'US$' : 'S/' }} {{ $g->tdocod === '07' ? '-' : '' }}{{ number_format($g->total, 2) }}
@@ -88,7 +97,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="px-4 py-10 text-center text-gray-400">No hay gastos en este mes. Registra luz, agua, alquiler, internet, honorarios…</td></tr>
+                        <tr><td colspan="9" class="px-4 py-10 text-center text-gray-400">No hay gastos en este mes. Registra luz, agua, alquiler, internet, honorarios…</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -154,6 +163,7 @@
                                 @foreach ($medios as $m)<option value="{{ $m->id_med_pag }}">{{ $m->nom_med_pag }}</option>@endforeach
                             </select></label>
                     </div>
+                    <p x-show="g.forma_pago === 'CONTADO' && g.moneda === 'PEN' && efectivo(g.id_med_pag)" class="text-xs text-emerald-700">💵 En efectivo: sale de tu caja (turno abierto) y aparece en el arqueo.</p>
                     <p class="text-rose-600 font-semibold" x-text="error"></p>
                 </div>
                 <div class="px-5 py-3 border-t flex justify-end gap-2 sticky bottom-0 bg-white">
@@ -251,11 +261,16 @@
                     if (['02', '12', '00'].includes(this.g.tdocod)) this.conIgv = false;
                     this.repartir();
                 },
+                /** El medio de pago es EFECTIVO: el gasto sale de la caja */
+                efectivo(id) {
+                    return (@js($medios->filter(fn ($m) => mb_strtoupper(trim($m->nom_med_pag)) === 'EFECTIVO')->pluck('id_med_pag')->map(fn ($i) => (string) $i)->values())).includes(String(id));
+                },
                 async guardar() {
                     this.enviando = true; this.error = '';
                     const d = await post(@js(url('gastos')) + (this.id ? '/' + this.id : ''), this.g);
                     this.enviando = false;
                     if (!d.success) { this.error = d.message; return; }
+                    if (d.aviso) alert(d.aviso);
                     location.href = @js(route('gastos.index')) + '?mes=' + d.mes;
                 },
                 abrirSire() { this.modal = 'sire'; },

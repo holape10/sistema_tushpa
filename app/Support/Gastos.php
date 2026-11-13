@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Turno;
 use App\Models\User;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
@@ -88,6 +89,86 @@ class Gastos
 
         return DB::table('gastos')->insertGetId($datos + ['IdEmpresa' => $ruc, 'id_empresa_negocio' => $user->id_empresa_negocio,
             'estado' => 'Registrado', 'origen' => $origen, 'IdUsuario' => $user->IdUsuario, 'created_at' => now()]);
+    }
+
+    // ------------------------------------------------------------------ salida de caja
+
+    /** Tipo de movimiento de caja con que sale un gasto pagado en efectivo (GASTOS VARIOS, como en el sistema antiguo) */
+    public const TIPO_CAJA = '003';
+
+    /** Al contado, en soles y pagado en EFECTIVO: ese dinero sale de la caja */
+    public static function saleDeCaja(object $g): bool
+    {
+        if ($g->estado !== 'Registrado' || $g->forma_pago !== 'CONTADO' || $g->moneda !== 'PEN' || $g->tdocod === '07' || ! $g->id_med_pag) {
+            return false;
+        }
+        $medio = DB::table('medios_pagos')->where('id_med_pag', $g->id_med_pag)->value('nom_med_pag');
+
+        return mb_strtoupper(trim((string) $medio)) === 'EFECTIVO';
+    }
+
+    /** Lo que dice la salida de caja: qué se pagó y a quién */
+    private static function datosCaja(object $g): array
+    {
+        $categoria = DB::table('gasto_categorias')->where('id', $g->categoria_id)->value('nombre');
+        $detalle = trim(($g->descripcion ?: $categoria ?: 'GASTO').($g->prov_nombre ? ' - '.$g->prov_nombre : ''));
+
+        return ['tip_caj_id' => self::TIPO_CAJA, 'mov_com' => mb_substr($detalle, 0, 255), 'importe' => round((float) $g->total - (float) $g->retencion, 2),
+            'mov_num_doc' => trim(($g->serie ? $g->serie.'-' : '').$g->numero, '-') ?: null];
+    }
+
+    /** Registra la salida de caja del gasto en ese turno y la enlaza al gasto */
+    public static function sacarDeCaja(object $g, object $turno, ?string $registro = null): int
+    {
+        $registro ??= now()->format('Y-m-d H:i:s');
+        $id = DB::table('movimientoscaja')->insertGetId(self::datosCaja($g) + [
+            'estado' => 'ACTIVO', 'mov_fecha' => substr($registro, 0, 10), 'registro' => $registro,
+            'IdEmpresa' => $g->IdEmpresa, 'id_empresa_negocio' => $turno->id_empresa_negocio, 'id_turno' => $turno->id_turno, 'IdUsuario' => $turno->IdUsuario,
+        ]);
+        DB::table('gastos')->where('id', $g->id)->update(['mov_caj_id' => $id]);
+
+        return $id;
+    }
+
+    /**
+     * Deja la caja de acuerdo con el gasto: en efectivo sale de la caja del turno abierto (así lo cuenta el arqueo); al
+     * editarlo se corrige esa salida y al anularlo o pagarlo con otro medio se anula. Lo de un turno ya cerrado no se
+     * toca: ese efectivo ya se contó. Los gastos traídos del sistema antiguo ya trajeron su salida de caja.
+     *
+     * @return string|null aviso cuando debía salir de caja y no se pudo
+     */
+    public static function sincronizarCaja(User $user, int $id): ?string
+    {
+        $g = DB::table('gastos')->where('id', $id)->first();
+        if (! $g || $g->origen === 'ANTIGUO') {
+            return null;
+        }
+        $mov = $g->mov_caj_id ? DB::table('movimientoscaja')->where('mov_caj_id', $g->mov_caj_id)->first() : null;
+        if ($mov && DB::table('turnos')->where('id_turno', $mov->id_turno)->value('estado') !== 'ABIERTO') {
+            return null;
+        }
+        if (! self::saleDeCaja($g)) {
+            if ($mov && $mov->estado === 'ACTIVO') {
+                DB::table('movimientoscaja')->where('mov_caj_id', $mov->mov_caj_id)->update(['estado' => 'ANULADO']);
+            }
+
+            return null;
+        }
+        if ($mov) {
+            DB::table('movimientoscaja')->where('mov_caj_id', $mov->mov_caj_id)->update(self::datosCaja($g) + ['estado' => 'ACTIVO']);
+
+            return null;
+        }
+        $turno = Turno::abiertoDe($user);
+        if (! $turno) {
+            return 'El gasto se guardó, pero NO salió de la caja: no tienes un turno abierto. Si lo pagaste con efectivo de la caja, abre tu turno y regístralo en Caja › Movimientos.';
+        }
+        if ($g->fecha < $turno->apertura->toDateString()) {
+            return 'El gasto se guardó, pero NO salió de la caja: es de una fecha anterior a tu turno abierto.';
+        }
+        self::sacarDeCaja($g, $turno);
+
+        return null;
     }
 
     /** Importe en soles con signo (las notas de crédito restan) */

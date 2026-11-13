@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class GastoController extends Controller
 {
@@ -42,35 +43,48 @@ class GastoController extends Controller
         $ruc = $this->ruc();
         $mes = $request->get('mes', now()->format('Y-m'));
         [$desde, $hasta] = [Carbon::parse("$mes-01")->toDateString(), Carbon::parse("$mes-01")->endOfMonth()->toDateString()];
+        // Un día del mes (p. ej. para cuadrar con el arqueo de ese día)
+        $dia = $request->filled('dia') && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->dia) ? (string) $request->dia : null;
+        if ($dia) {
+            [$desde, $hasta, $mes] = [$dia, $dia, substr($dia, 0, 7)];
+        }
         $q = trim((string) $request->get('q'));
 
+        $conCaja = Schema::hasColumn('gastos', 'mov_caj_id');
         $base = DB::table('gastos as g')->leftJoin('gasto_categorias as c', 'c.id', '=', 'g.categoria_id')
+            ->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'g.id_med_pag')
+            ->leftJoin('users as u', 'u.IdUsuario', '=', 'g.IdUsuario')
+            ->when($conCaja, fn ($w) => $w->leftJoin('movimientoscaja as mc', 'mc.mov_caj_id', '=', 'g.mov_caj_id'))
             ->where('g.IdEmpresa', $ruc)->whereBetween('g.fecha', [$desde, $hasta])
             ->when($request->filled('categoria'), fn ($w) => $w->where('g.categoria_id', $request->categoria))
             ->when($request->get('estado', 'Registrado') !== 'todos', fn ($w) => $w->where('g.estado', $request->get('estado', 'Registrado')))
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('g.prov_nombre', 'like', "%$q%")->orWhere('g.prov_doc', 'like', "$q%")
                 ->orWhere('g.descripcion', 'like', "%$q%")->orWhere(DB::raw("CONCAT(g.serie, '-', g.numero)"), 'like', "%$q%")));
 
-        $gastos = (clone $base)->orderByDesc('g.fecha')->orderByDesc('g.id')->select('g.*', 'c.nombre as categoria', 'c.color')->get();
+        $gastos = (clone $base)->orderByDesc('g.fecha')->orderByDesc('g.id')->select('g.*', 'c.nombre as categoria', 'c.color', 'mp.nom_med_pag as medio', 'u.apeusu as usuario')
+            ->when($conCaja, fn ($w) => $w->addSelect('mc.estado as caja_estado', 'mc.id_turno as caja_turno', 'mc.importe as caja_importe'))->get();
 
         if ($request->get('excel')) {
             $filas = $gastos->map(fn ($g) => [Carbon::parse($g->fecha)->format('d/m/Y'), Gastos::DOCUMENTOS[$g->tdocod] ?? $g->tdocod,
                 trim(($g->serie ? $g->serie.'-' : '').$g->numero, '-'), (string) $g->prov_doc, $g->prov_nombre, $g->categoria, $g->descripcion, $g->moneda,
-                (float) $g->base, (float) $g->igv, (float) $g->no_gravado, (float) $g->total, (float) $g->retencion, $g->credito_fiscal ? 'SÍ' : 'NO', $g->forma_pago, $g->estado])->all();
-            $ruta = (new Excel)->hoja('Gastos '.$mes, ['Fecha', 'Documento', 'Número', 'RUC/DNI', 'Proveedor', 'Categoría', 'Descripción', 'Moneda',
-                'Base', 'IGV', 'No gravado', 'Total', 'Retención', 'Crédito fiscal', 'Pago', 'Estado'], $filas)->guardar();
+                (float) $g->base, (float) $g->igv, (float) $g->no_gravado, (float) $g->total, (float) $g->retencion, $g->credito_fiscal ? 'SÍ' : 'NO', $g->forma_pago,
+                $g->forma_pago === 'CONTADO' ? (string) $g->medio : '', ($g->caja_estado ?? null) === 'ACTIVO' ? 'SÍ (turno '.$g->caja_turno.')' : 'NO',
+                (string) $g->usuario, $g->estado])->all();
+            $ruta = (new Excel)->hoja('Gastos '.($dia ?: $mes), ['Fecha', 'Documento', 'Número', 'RUC/DNI', 'Proveedor', 'Categoría', 'Descripción', 'Moneda',
+                'Base', 'IGV', 'No gravado', 'Total', 'Retención', 'Crédito fiscal', 'Pago', 'Pagado con', 'Salió de caja', 'Registró', 'Estado'], $filas)->guardar();
 
-            return response()->download($ruta, "gastos_{$mes}.xlsx")->deleteFileAfterSend();
+            return response()->download($ruta, 'gastos_'.($dia ?: $mes).'.xlsx')->deleteFileAfterSend();
         }
 
         $registrados = $gastos->where('estado', 'Registrado');
 
         return view('empresas.gastos.index', [
-            'gastos' => $gastos, 'mes' => $mes, 'q' => $q,
+            'gastos' => $gastos, 'mes' => $mes, 'dia' => $dia, 'q' => $q,
             'categorias' => Gastos::categorias($ruc),
             'porCategoria' => $registrados->groupBy('categoria')->map(fn ($g) => ['total' => $g->sum(fn ($x) => Gastos::soles($x)), 'color' => $g->first()->color])->sortByDesc('total'),
             'totales' => ['total' => $registrados->sum(fn ($x) => Gastos::soles($x)), 'igv' => $registrados->where('credito_fiscal', 1)->sum(fn ($x) => Gastos::soles($x, 'igv')),
-                'n' => $registrados->count(), 'retencion' => $registrados->sum(fn ($x) => Gastos::soles($x, 'retencion'))],
+                'n' => $registrados->count(), 'retencion' => $registrados->sum(fn ($x) => Gastos::soles($x, 'retencion')),
+                'caja' => $registrados->filter(fn ($x) => ($x->caja_estado ?? null) === 'ACTIVO')->sum('caja_importe')],
             'medios' => DB::table('medios_pagos')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag']),
             'documentos' => Gastos::DOCUMENTOS,
             'centros' => CentrosCosto::lista($ruc, true)->map(fn ($c) => ['id' => $c->id, 'nombre' => $c->codigo.' · '.$c->nombre])->values(),
@@ -96,7 +110,9 @@ class GastoController extends Controller
         }
         $antes = $id ? Bitacora::foto('gastos', ['id' => $id]) : null;
         try {
-            Gastos::guardar(Auth::user(), $d + ['credito_fiscal' => $request->boolean('credito_fiscal')], $id);
+            $guardado = Gastos::guardar(Auth::user(), $d + ['credito_fiscal' => $request->boolean('credito_fiscal')], $id);
+            // Pagado en efectivo: sale de la caja del turno abierto (lo cuenta el arqueo)
+            $aviso = Gastos::sincronizarCaja(Auth::user(), $guardado);
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
@@ -105,7 +121,7 @@ class GastoController extends Controller
                 $antes, Bitacora::foto('gastos', ['id' => $id]), self::ETIQUETAS_BITACORA, ['referencia' => ['gasto', $id]]);
         }
 
-        return response()->json(['success' => true, 'mes' => substr($d['fecha'], 0, 7)]);
+        return response()->json(['success' => true, 'mes' => substr($d['fecha'], 0, 7), 'aviso' => $aviso]);
     }
 
     /** Consulta en SUNAT si el comprobante del gasto es válido (apiperu.dev) y guarda lo que respondió */
@@ -132,6 +148,8 @@ class GastoController extends Controller
             return back()->with('error', 'Este gasto es de un mes CERRADO (ya declarado): no se anula. Si de verdad hay que corregirlo, el administrador debe reabrir el mes.');
         }
         DB::table('gastos')->where('id', $id)->where('IdEmpresa', $ruc)->update(['estado' => 'Anulado', 'updated_at' => now()]);
+        // Si salió de la caja de un turno abierto, esa salida también se anula
+        Gastos::sincronizarCaja(Auth::user(), $id);
         if ($g && $g->estado !== 'Anulado') {
             Bitacora::registrar('gasto.anular', 'Anuló el gasto '.trim($g->serie.'-'.$g->numero, '-').' de '.$g->prov_nombre.' por S/ '.number_format((float) $g->total, 2),
                 null, ['referencia' => ['gasto', $id], 'alerta' => true]);
