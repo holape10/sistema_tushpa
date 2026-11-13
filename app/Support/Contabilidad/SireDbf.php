@@ -173,6 +173,8 @@ class SireDbf
                 $cuentaXml = collect($c['lineas'])->pluck('cuenta')->filter()->unique();
                 $c['ctacargo'] = $a->ctacargo ?? $u->ctacargo ?? ($cuentaXml->count() === 1 ? $cuentaXml->first() : null) ?? $cfg['cta_compras'];
                 $c['ctaabono'] = $a->ctaabono ?? $u->ctaabono ?? $cfg['cta_por_pagar'];
+                // Centro de costo (94, 95, 97…): el del comprobante o el último de ese proveedor
+                $c['ccosto'] = $a->ccosto ?? $u->ccosto ?? null;
             } else {
                 $c['ctacargo'] = $a->ctacargo ?? $u->ctacargo ?? $cfg['cta_por_cobrar'];
                 $c['ctaabono'] = $a->ctaabono ?? $u->ctaabono ?? ($c['montos']['gravada'] != 0 ? $cfg['cta_ventas'] : $cfg['cta_ventas_exo']);
@@ -181,6 +183,10 @@ class SireDbf
             $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
             $c['diferencia'] = self::diferencia($libro, $c['montos']);
             $c['alerta'] = self::revisarIgv($c['montos'], $libro);
+            // Cuentas de gasto 62–68: sin centro de costo no se descarga
+            if (! $c['alerta'] && $libro === 'compras' && CuentasCompras::requiereCentro($c['ctacargo']) && ! ($c['ccosto'] ?? null)) {
+                $c['alerta'] = "La Cta. cargo {$c['ctacargo']} es de gasto: elige su centro de costo.";
+            }
             $lista[] = $c;
         }
         usort($lista, fn ($x, $y) => [$x['fecha'], $x['tipo'], $x['serie'], (int) $x['numero']] <=> [$y['fecha'], $y['tipo'], $y['serie'], (int) $y['numero']]);
@@ -280,7 +286,7 @@ class SireDbf
         $llave = ['IdEmpresa' => $ruc, 'libro' => $libro, 'periodo' => $periodo, 'clave' => $clave];
         $actual = DB::table('sire_ajustes')->where($llave)->first();
         $fila = ['ruc' => $rucTercero, 'updated_at' => now()];
-        foreach (['excluido', 'ctacargo', 'ctaabono'] as $campo) {
+        foreach (['excluido', 'ctacargo', 'ctaabono', 'ccosto'] as $campo) {
             if (array_key_exists($campo, $datos)) {
                 $fila[$campo] = $campo === 'excluido' ? (bool) $datos[$campo] : (trim((string) $datos[$campo]) ?: null);
             }
@@ -348,6 +354,7 @@ class SireDbf
                 'IMPOPAGO' => $m['total'], 'TOTAL' => $m['total'], 'TC' => $c['tc'], 'MONEDA' => $c['moneda'] === 'USD' ? 'US$' : 'S/',
                 'MES' => (int) $mes, 'ANO' => $anio, 'NOMAREA' => $c['nombre'], 'PROVE' => $c['nombre'], 'FCON' => $mes.$anio,
                 'REGCOMPRA' => 1, 'NUM1' => $correlativo, 'MPAGO' => '08', 'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'],
+                'CODDESTINO' => $c['ccosto'] ?? null,
                 'OGYE' => $m['base_dg'] ?: null, 'IGV_1' => $m['igv_dg'] ?: null, 'OGYEYONG' => $m['base_dgng'] ?: null, 'IGV_2' => $m['igv_dgng'] ?: null,
                 'ONG' => $m['base_dng'] ?: null, 'IGV_3' => $m['igv_dng'] ?: null, 'NG' => $m['no_gravado'] ?: null,
                 'ISC' => $m['isc'] ?: null, 'OTROS' => $m['otros'] ?: null,

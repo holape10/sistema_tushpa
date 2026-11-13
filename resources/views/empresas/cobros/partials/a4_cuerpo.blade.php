@@ -226,8 +226,9 @@
     @include('empresas.cobros.partials.a4_cuentas', ['simple' => false])
 
     <div class="pie">
-        @if ($electronico)Representación impresa del comprobante electrónico · Consúltelo en <strong>{{ \App\Support\ConsultaCpe::direccion() }}</strong><br>@endif
         @if (\App\Support\Impresion\Impresion::leyendaAmazonia($cab))<strong>"BIENES TRANSFERIDOS EN LA AMAZONÍA PARA SER CONSUMIDOS EN LA MISMA" - "SERVICIOS PRESTADOS EN LA AMAZONÍA"</strong><br>@endif
+        {{-- La consulta y los datos del sistema en una sola línea --}}
+        @if ($electronico)Representación impresa del comprobante electrónico · Consúltelo en <strong>{{ \App\Support\ConsultaCpe::direccion() }}</strong> &nbsp;·&nbsp; @endif
         <span style="font-size:8px; color:#9ca3af;">{{ config('soporte.firma_comprobante') }}</span>
     </div>
 </div>

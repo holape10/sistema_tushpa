@@ -13,7 +13,8 @@
     }
     $sinCuenta = $compras ? collect($c['lineas'])->filter(fn ($l) => ! $l->cuenta)->count() : 0;
     $xmlId = $c['xml_id'] ?? ($c['lineas'][0]->compra_xml_id ?? null);
-    $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'],
+    $centros = $compras ? \App\Support\Contabilidad\CuentasCompras::centros((string) auth()->user()->IdEmpresa) : [];
+    $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ccosto' => $c['ccosto'] ?? '',
         'montos' => $m, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'editado' => $c['editado'], 'redondeo' => $c['redondeo'],
         'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta];
     $soles = fn ($n) => number_format((float) $n, 2);
@@ -26,7 +27,9 @@
             Llevar
         </label>
         <span class="font-bold whitespace-nowrap">{{ $c['serie'] }}-{{ $c['numero'] }}</span>
-        <span class="text-xs text-slate-400 whitespace-nowrap">{{ $tipos[$c['tipo']] ?? 'Tipo '.$c['tipo'] }} · {{ $c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '' }}@if ($c['moneda'] !== 'PEN') · {{ $c['moneda'] }} TC {{ $c['tc'] }}@endif</span>
+        <span class="text-xs text-slate-400 whitespace-nowrap">{{ $tipos[$c['tipo']] ?? 'Tipo '.$c['tipo'] }} · {{ $c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '' }}</span>
+        {{-- En dólares: que se vea (los montos de abajo están en esa moneda) --}}
+        @if ($c['moneda'] !== 'PEN')<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-800" title="Los montos están en {{ $c['moneda'] }}">{{ $c['moneda'] === 'USD' ? 'US$ DÓLARES' : $c['moneda'] }} · TC {{ $c['tc'] }}</span>@endif
         <span class="flex-1 min-w-[180px] text-sm text-slate-700">{{ $c['nombre'] }} <span class="text-xs text-slate-400">{{ $c['ruc'] }}</span>
             @if ($c['anulado'])<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">ANULADO</span>@endif</span>
         @if ($compras || $c['lineas'])
@@ -43,7 +46,7 @@
         <span x-show="guardando" class="text-[11px] text-slate-400">Guardando…</span>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-[repeat(11,minmax(0,1fr))] gap-2 px-4 pb-3 text-xs">
+    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-[repeat(12,minmax(0,1fr))] gap-2 px-4 pb-3 text-xs">
         @if ($compras)
             @foreach (['base_dg' => ['B.I. gravadas', ''], 'igv_dg' => ['IGV 1', 'bg-indigo-50/60'], 'base_dgng' => ['B.I. grav. y no grav.', ''],
                 'igv_dgng' => ['IGV 2', 'bg-indigo-50/60'], 'base_dng' => ['B.I. no gravadas', ''], 'igv_dng' => ['IGV 3', 'bg-indigo-50/60'],
@@ -62,11 +65,20 @@
             @endforeach
         @endif
         <label class="font-semibold text-slate-500">Cta. cargo
-            <input type="text" maxlength="12" inputmode="numeric" x-model="fila.ctacargo" @change="guardar({ ctacargo: fila.ctacargo })"
+            <input type="text" maxlength="12" list="plan_cuentas" x-model="fila.ctacargo" @change="guardar({ ctacargo: fila.ctacargo })"
                    class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
         <label class="font-semibold text-slate-500">Cta. abono
-            <input type="text" maxlength="12" inputmode="numeric" x-model="fila.ctaabono" @change="guardar({ ctaabono: fila.ctaabono })"
+            <input type="text" maxlength="12" list="plan_cuentas" x-model="fila.ctaabono" @change="guardar({ ctaabono: fila.ctaabono })"
                    class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
+        @if ($compras)
+            {{-- Cuentas de gasto 62–68: centro de costo obligatorio --}}
+            <label x-show="requiereCC(fila.ctacargo)" class="font-semibold text-slate-500">C. costo
+                <select x-model="fila.ccosto" @change="guardar({ ccosto: fila.ccosto })" :class="fila.ccosto ? '' : 'bg-rose-50 border-rose-300'"
+                        class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm">
+                    <option value="">Elegir…</option>
+                    @foreach ($centros as $codigo => $nombre)<option value="{{ $codigo }}">{{ $codigo }} {{ $nombre }}</option>@endforeach
+                </select></label>
+        @endif
     </div>
     <div x-show="Math.abs(fila.diferencia) >= 0.01 || fila.alerta || fila.editado || fila.redondeo" class="flex flex-wrap items-center gap-3 px-4 pb-3 text-xs">
         <span x-show="fila.redondeo && !fila.editado && Math.abs(fila.diferencia) < 0.01" class="font-semibold text-sky-700"
@@ -93,10 +105,17 @@
                                 <td class="px-3 py-1.5 text-right">{{ $soles($l->base) }}</td>
                                 <td class="px-3 py-1.5 text-right">{{ $soles($l->igv) }}</td>
                                 @if ($compras)
-                                <td class="px-3 py-1">
-                                    <input type="text" inputmode="numeric" maxlength="12" value="{{ $l->cuenta }}" placeholder="{{ $cfg['cta_compras'] }}" data-vacia="{{ $l->cuenta ? '0' : '1' }}"
+                                <td class="px-3 py-1" x-data="{ cta: @js((string) ($l->cuenta ?: $cfg['cta_compras'])), cc: @js((string) ($l->centro_costo ?? '')) }">
+                                    <input type="text" list="plan_cuentas" maxlength="12" value="{{ $l->cuenta }}" placeholder="{{ $cfg['cta_compras'] }}" data-vacia="{{ $l->cuenta ? '0' : '1' }}"
+                                           @input="cta = $event.target.value || @js((string) $cfg['cta_compras'])"
                                            @keydown.enter.prevent="cuentaLinea([{{ $l->id }}], $event.target)" @change="cuentaLinea([{{ $l->id }}], $event.target)"
                                            class="w-full h-8 rounded-lg border-slate-300 text-xs font-mono {{ $l->cuenta ? '' : 'bg-rose-50' }}">
+                                    {{-- Cuenta de gasto 62–68: su centro de costo (obligatorio para CONCAR) --}}
+                                    <select x-show="requiereCC(cta)" x-model="cc" @change="centroLinea([{{ $l->id }}], cc)" title="Centro de costo"
+                                            :class="cc ? '' : 'bg-rose-50 border-rose-300'" class="mt-1 w-full h-8 rounded-lg border-slate-300 text-xs">
+                                        <option value="">C. costo…</option>
+                                        @foreach ($centros as $codigo => $nombre)<option value="{{ $codigo }}">{{ $codigo }} {{ $nombre }}</option>@endforeach
+                                    </select>
                                 </td>
                                 @endif
                             </tr>
@@ -107,7 +126,7 @@
             @if ($compras && count($c['lineas']) > 1)
                 <div class="flex flex-wrap items-center gap-2 px-4 py-2 bg-slate-50 text-xs">
                     <span class="text-slate-600">Todas las líneas a la cuenta</span>
-                    <input type="text" inputmode="numeric" maxlength="12" placeholder="Ej. 6563" class="w-28 h-8 rounded-lg border-slate-300 text-xs font-mono"
+                    <input type="text" list="plan_cuentas" maxlength="12" placeholder="Ej. 6563" class="w-28 h-8 rounded-lg border-slate-300 text-xs font-mono"
                            @keydown.enter.prevent="cuentaLinea(@js(collect($c['lineas'])->pluck('id')->all()), $event.target, true)">
                     <span class="text-slate-400">y presiona Enter</span>
                 </div>

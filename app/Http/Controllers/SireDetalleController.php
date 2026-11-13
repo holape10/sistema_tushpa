@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Empresa;
 use App\Support\ComprasDetalle;
 use App\Support\Concar;
+use App\Support\Contabilidad\CuentasCompras;
 use App\Support\Contabilidad\SireDbf;
 use App\Support\Excel;
 use App\Support\Sunat\CompraXml;
@@ -167,6 +168,17 @@ class SireDetalleController extends Controller
             'quedan' => max(0, $pendientes->count() - 2)]);
     }
 
+    /** Pone el centro de costo a una o varias líneas (las de cuentas de gasto 62–68 lo llevan obligatorio) */
+    public function centro(Request $request): JsonResponse
+    {
+        $ruc = $this->autorizar();
+        $d = $request->validate(['lineas' => 'required|array|max:500', 'lineas.*' => 'integer', 'centro' => 'nullable|string|max:6|regex:/^[0-9A-Za-z]*$/']);
+        $n = DB::table('compras_xml_lineas as l')->join('compras_xml as c', 'c.id', '=', 'l.compra_xml_id')
+            ->where('c.IdEmpresa', $ruc)->whereIn('l.id', $d['lineas'])->update(['l.centro_costo' => $d['centro'] ?: null]);
+
+        return response()->json(['ok' => true, 'cambiadas' => $n]);
+    }
+
     /** Pone la cuenta a una o varias líneas (y la aprende para las próximas) */
     public function cuenta(Request $request): JsonResponse
     {
@@ -214,6 +226,15 @@ class SireDetalleController extends Controller
             DB::table('concar_config')->updateOrInsert(['IdEmpresa' => $ruc], ['subdiario_compras' => $v['subdiario'], 'updated_at' => now()]);
         }
         $d = $this->datos($ruc, $periodo);
+        // Cuentas de gasto 62–68 sin centro de costo: CONCAR no las acepta
+        $cfg = Concar::config($ruc);
+        $faltaCentro = collect($d['comprobantes'])->flatMap(fn ($c) => collect($c['lineas'])
+            ->filter(fn ($l) => CuentasCompras::requiereCentro($l->cuenta ?: $cfg['cta_compras']) && ! ($l->centro_costo ?? null))
+            ->map(fn () => $c['serie'].'-'.$c['numero']))->unique()->values();
+        if ($faltaCentro->isNotEmpty()) {
+            return back()->with('error', 'Falta el centro de costo en líneas con cuenta de gasto (62, 63, 64, 65, 67 o 68) de '.$faltaCentro->count()
+                .' comprobante(s): '.$faltaCentro->take(8)->implode(', ').($faltaCentro->count() > 8 ? '…' : '').'. Elígelo en «Ver detalle».');
+        }
         $datos = Concar::comprasConDetalle($ruc, $periodo, $d['comprobantes'], $desde);
         if (! $datos['filas']) {
             return back()->with('error', 'No hay compras para exportar en ese periodo.');

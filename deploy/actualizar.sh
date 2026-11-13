@@ -15,12 +15,25 @@ git config --global --add safe.directory "${DIR}" || true
 git fetch origin "${RAMA}"
 tiempo
 
-echo "==> Modo mantenimiento"
-# Pantalla amable "Estamos actualizando el sistema" (resources/views/errors/503.blade.php). Solo dura lo indispensable:
-# código, dependencias, base de datos, estilos y cachés. Lo demás se hace con el sistema ya funcionando.
-php artisan down --retry=10 --render="errors::503" || true
+# Qué cambió: el modo mantenimiento solo hace falta si cambia la base de datos (migraciones) o las dependencias (composer).
+# Si solo cambian vistas, textos o código, se actualiza "en caliente": los clientes no ven la pantalla de actualización
+# (lo nuevo lo ven al recargar). FORZAR_MANTENIMIENTO=1 bash actualizar.sh lo pone siempre.
+CAMBIOS="$(git diff --name-only HEAD "origin/${RAMA}" || echo TODO)"
+cambio() { [ "${CAMBIOS}" = "TODO" ] || echo "${CAMBIOS}" | grep -qE "$1"; }
+NECESITA_PARAR=0
+if [ "${FORZAR_MANTENIMIENTO:-0}" = "1" ] || cambio '^database/migrations/' || cambio '^composer\.(json|lock)$'; then
+    NECESITA_PARAR=1
+fi
+
 INICIO_MANTENIMIENTO=$SECONDS
-trap 'php artisan up || true' EXIT
+if [ "${NECESITA_PARAR}" = "1" ]; then
+    echo "==> Modo mantenimiento (hay cambios en la base de datos o en las dependencias)"
+    # Pantalla amable "Estamos actualizando el sistema" (resources/views/errors/503.blade.php). Solo dura lo indispensable.
+    php artisan down --retry=10 --render="errors::503" || true
+    trap 'php artisan up || true' EXIT
+else
+    echo "==> Actualización en caliente (sin cambios en la base de datos): el sistema sigue atendiendo"
+fi
 
 echo "==> Código"
 git reset --hard "origin/${RAMA}"
@@ -30,13 +43,19 @@ tiempo
 sed -i 's/^APP_LOCALE=en$/APP_LOCALE=es/; s/^APP_FALLBACK_LOCALE=en$/APP_FALLBACK_LOCALE=es/' .env
 
 echo "==> Dependencias y base de datos"
-composer install --no-dev --optimize-autoloader --no-interaction
-tiempo
-php artisan migrate --force
-# Multi-empresa: base central (planes, subdominios) y bases de cada cliente
-if grep -qE '^TENANCY_DOMINIO=.+' .env; then
-    php artisan migrate --database=central --path=database/migrations/central --force
-    php artisan clientes:migrar || true
+if [ "${NECESITA_PARAR}" = "1" ]; then
+    composer install --no-dev --optimize-autoloader --no-interaction
+    tiempo
+    php artisan migrate --force
+    # Multi-empresa: base central (planes, subdominios) y bases de cada cliente
+    if grep -qE '^TENANCY_DOMINIO=.+' .env; then
+        php artisan migrate --database=central --path=database/migrations/central --force
+        php artisan clientes:migrar || true
+    fi
+else
+    # Clases nuevas del código: el autoload se rehace sin tocar los paquetes (rápido)
+    composer dump-autoload --optimize --no-dev --no-interaction
+    echo "    sin migraciones ni paquetes nuevos"
 fi
 tiempo
 
@@ -64,9 +83,13 @@ chown -R apache:apache storage bootstrap/cache public/build public/imagenes
 chmod -R ug+rwX storage bootstrap/cache public/imagenes
 systemctl reload php-fpm httpd
 
-echo "==> Sistema funcionando de nuevo"
-php artisan up || true
-echo "    mantenimiento duró $(( SECONDS - INICIO_MANTENIMIENTO )) s"; tiempo
+if [ "${NECESITA_PARAR}" = "1" ]; then
+    echo "==> Sistema funcionando de nuevo"
+    php artisan up || true
+    echo "    mantenimiento duró $(( SECONDS - INICIO_MANTENIMIENTO )) s"; tiempo
+else
+    echo "==> Listo sin parar el sistema ($(( SECONDS - INICIO_MANTENIMIENTO )) s)"
+fi
 
 # ---- De aquí en adelante el sistema ya atiende: el resto no apura ----
 echo "==> Permisos del resto (solo lo que cambió)"

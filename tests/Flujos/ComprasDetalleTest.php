@@ -111,6 +111,11 @@ class ComprasDetalleTest extends FlujoTestCase
             'Sin XML va a la cuenta de compras.');
 
         $this->get(route('sire.detalle.excel', ['periodo' => '202607']))->assertOk()->assertDownload('COMPRAS_DETALLE_'.$ruc.'_202607.xlsx');
+        // La 6365 es de gasto: sin centro de costo CONCAR no sale; con el centro (94) sale en su columna
+        $this->get(route('sire.detalle.concar', ['periodo' => '202607']))->assertRedirect()->assertSessionHas('error', fn ($m) => str_contains($m, 'centro de costo'));
+        $this->postJson(route('sire.detalle.centro'), ['lineas' => DB::table('compras_xml_lineas')->where('cuenta', '6365')->pluck('id')->all(), 'centro' => '94'])->assertOk();
+        $conCentro = Concar::comprasConDetalle($ruc, '202607', ComprasDetalle::delPeriodo($ruc, '202607', $propuesta)['comprobantes']);
+        $this->assertSame('94', collect($conCentro['filas'])->first(fn ($f) => $f[10] === '6365')[12]);
         $this->get(route('sire.detalle.concar', ['periodo' => '202607']))->assertOk()->assertDownload('CONCAR_COMPRAS_DETALLE_'.$ruc.'_202607.xlsx');
         // El subdiario de compras se cambia junto al botón y queda guardado para la empresa (11 → 14)
         $this->assertSame('11', $concar['filas'][0][1]);

@@ -83,8 +83,11 @@ class SireDbfTest extends FlujoTestCase
         // Lo mismo con el IGV escrito en la base y la base en el IGV
         $r = $guardar('20553510661|01|F001|134277', ['montos' => ['igv_dg' => 150, 'base_dgng' => 27, 'total' => 177]]);
         $this->assertNotNull($r->json('alerta'));
-        // Cada IGV junto a su base: ahora sí; cambia la cuenta y la tercera compra no se lleva
+        // Cada IGV junto a su base: cuadra, pero la 63691 es de gasto y le falta su centro de costo
         $r = $guardar('20553510661|01|F001|134277', ['montos' => ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177], 'ctaabono' => '42121']);
+        $this->assertStringContainsString('centro de costo', $r->json('alerta'));
+        // Con su centro de costo (94 gastos de administración) ya se puede; la tercera compra no se lleva
+        $r = $guardar('20553510661|01|F001|134277', ['ccosto' => '94']);
         $this->assertNull($r->json('alerta'));
         $r = $guardar('20603067534|01|FX02|3444', ['excluido' => true]);
         $this->assertGreaterThan(0, $r->json('totales.no_llevan.total'), 'Lo que no se lleva se ve aparte (la diferencia con SUNAT).');
@@ -98,6 +101,7 @@ class SireDbfTest extends FlujoTestCase
         $this->assertSame(['SIRE', 'F001', '000000134277', '20553510661', '01', 'FACTURA', '2026-05-22', 150.0, 27.0, null, null, 177.0, '63691', '42121', '050002', '0002', '052026', 'S/'],
             [$factura['ORIGEN'], $factura['SERIEDOC'], $factura['NUMDOC'], $factura['RUC_DNI'], $factura['CODDOC'], $factura['DESDOC'], $factura['FECHADOC'],
                 $factura['OGYE'], $factura['IGV_1'], $factura['IGV_2'], $factura['IGV_3'], $factura['TOTAL'], $factura['CTACARGO'], $factura['CTAABONO'], $factura['NORDEN'], $factura['NUM1'], $factura['FCON'], $factura['MONEDA']]);
+        $this->assertSame('94', $factura['CODDESTINO'], 'El centro de costo va en CODDESTINO.');
         $this->assertSame([40.10, 40.10], [$redondeo['NG'], $redondeo['TOTAL']], 'El céntimo de redondeo del proveedor se corrige solo.');
         $this->get(route('sire.dbf.excel', ['compras', 'periodo' => '202605']))->assertOk()->assertDownload("almaingr_{$ruc}_202605.xlsx");
         $this->assertSame(['07', 'NOTA CRED', -160.0, -160.0, '01', 'FE02', '000000005907', '2026-04-22', '601111', '421201'],
@@ -174,7 +178,7 @@ class SireDbfTest extends FlujoTestCase
             $this->compra('28/04/2026', '01', 'FX02', '3444', '20603067534', 'INVERSIONES FU YUAN S.A.C.', ['ng' => 42, 'total' => 42]),
         ]);
         $guardar = fn (string $clave, array $datos) => $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202605', 'clave' => $clave] + $datos)->assertOk();
-        $guardar('20553510661|01|F001|134277', ['ctacargo' => '6365']);
+        $guardar('20553510661|01|F001|134277', ['ctacargo' => '6365', 'ccosto' => '94']);
         $guardar('20603067534|01|FX02|3444', ['ctacargo' => '99999']);
 
         $this->from(route('sire.dbf', ['periodo' => '202605']))->post(route('sire.dbf.registrar', ['compras', 'periodo' => '202605']))->assertSessionHas('success');

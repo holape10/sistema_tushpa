@@ -1,6 +1,9 @@
 {{-- Lo que hace cada fila del .dbf: guardar al momento, ver si cuadra y si el IGV está en su casilla. Variables: $libro, $periodo --}}
 <script>
-    const SIRE_DBF = { libro: @json($libro), periodo: @json($periodo), url: @json(route('sire.dbf.guardar')), cuenta: @json(route('sire.detalle.cuenta')) };
+    const SIRE_DBF = { libro: @json($libro), periodo: @json($periodo), url: @json(route('sire.dbf.guardar')), cuenta: @json(route('sire.detalle.cuenta')),
+        centro: @json(route('sire.detalle.centro')), conCentro: @json(\App\Support\Contabilidad\CuentasCompras::CON_CENTRO) };
+    /** Cuentas de gasto 62, 63, 64, 65, 67 y 68: llevan centro de costo */
+    const requiereCC = c => SIRE_DBF.conCentro.includes(String(c || '').trim().slice(0, 2));
     const solesDbf = n => 'S/ ' + (Number(n) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     /** Igual que SireDbf::revisarIgv: cada IGV va del 10 % al 18 % de su base (si no, está en otra casilla) */
@@ -33,7 +36,20 @@
 
     function filaDbf(fila) {
         return {
-            fila, detalle: false, guardando: false, soles: solesDbf,
+            fila, detalle: false, guardando: false, soles: solesDbf, requiereCC,
+            /** Centro de costo de una o varias líneas del XML */
+            async centroLinea(lineas, centro) {
+                try {
+                    const r = await fetch(SIRE_DBF.centro, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
+                        body: JSON.stringify({ lineas, centro }),
+                    });
+                    if (!r.ok) tushpaAviso('No se pudo guardar el centro de costo.', false);
+                } catch (e) {
+                    tushpaAviso('Se cortó la conexión: el centro de costo no se guardó.', false);
+                }
+            },
             async guardar(cambios) {
                 this.guardando = true;
                 try {

@@ -352,16 +352,20 @@ class Concar
                 'ref' => $c['ref'] ? [$tipos[$c['ref'][0]] ?? $c['ref'][0], $c['ref'][1], $c['ref'][2]] : null, 'glosa' => null];
             $dh = fn (string $normal) => $esNota ? ($normal === 'D' ? 'H' : 'D') : $normal;
 
+            // Una línea por cuenta y centro de costo (las de gasto 62–68 llevan el suyo: 94, 95, 97…)
             $pesos = [];
             foreach ($c['lineas'] as $l) {
-                $cuenta = $l->cuenta ?: $cfg['cta_compras'];
-                $pesos[$cuenta] = ($pesos[$cuenta] ?? 0) + abs((float) $l->base);
+                $clave = ($l->cuenta ?: $cfg['cta_compras']).'|'.($l->centro_costo ?? '');
+                $pesos[$clave] = ($pesos[$clave] ?? 0) + abs((float) $l->base);
             }
             $base = round($c['total'] - $c['igv'], 2);
-            $reparto = array_sum($pesos) > 0 ? self::repartir($base, $pesos) : ($base > 0 ? [$cfg['cta_compras'] => $base] : []);
-            $detalle = collect($c['lineas'])->keyBy(fn ($l) => $l->cuenta ?: $cfg['cta_compras'])->map(fn ($l) => $l->descripcion);
-            foreach ($reparto as $cuenta => $importe) {
-                $filas[] = self::linea($cab, (string) $cuenta, $c['ruc'], $dh('D'), $importe, ['glosa' => $detalle[$cuenta] ?? null] + $doc, 'COMPRA');
+            $reparto = array_sum($pesos) > 0 ? self::repartir($base, $pesos) : ($base > 0 ? [$cfg['cta_compras'].'|' => $base] : []);
+            $detalle = collect($c['lineas'])->keyBy(fn ($l) => ($l->cuenta ?: $cfg['cta_compras']).'|'.($l->centro_costo ?? ''))->map(fn ($l) => $l->descripcion);
+            foreach ($reparto as $clave => $importe) {
+                [$cuenta, $centro] = explode('|', (string) $clave, 2);
+                $fila = self::linea($cab, $cuenta, $c['ruc'], $dh('D'), $importe, ['glosa' => $detalle[$clave] ?? null] + $doc, 'COMPRA');
+                $fila[12] = $centro !== '' ? $centro : null;
+                $filas[] = $fila;
             }
             if ($c['igv'] > 0) {
                 $filas[] = self::linea($cab, $cfg['cta_igv'], $c['ruc'], $dh('D'), $c['igv'], $doc, 'IGV');

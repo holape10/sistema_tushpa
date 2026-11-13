@@ -64,12 +64,12 @@ class SireDbfController extends Controller
         $cuenta = ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]*$/'];
         $d = $request->validate([
             'libro' => ['required', Rule::in(array_keys(SireDbf::LIBROS))], 'periodo' => 'required|digits:6', 'clave' => 'required|string|max:40',
-            'excluido' => 'sometimes|boolean', 'ctacargo' => $cuenta, 'ctaabono' => $cuenta,
+            'excluido' => 'sometimes|boolean', 'ctacargo' => $cuenta, 'ctaabono' => $cuenta, 'ccosto' => 'nullable|string|max:6|regex:/^[0-9A-Za-z]*$/',
             'montos' => 'sometimes|nullable|array', 'montos.*' => 'nullable|numeric|between:-99999999,99999999',
         ], ['regex' => 'La cuenta va solo con números (sin puntos ni espacios).']);
         $c = $this->comprobante($ruc, $d['libro'], $d['periodo'], $d['clave']);
 
-        $cambios = array_intersect_key($d, array_flip(['excluido', 'ctacargo', 'ctaabono']));
+        $cambios = array_intersect_key($d, array_flip(['excluido', 'ctacargo', 'ctaabono', 'ccosto']));
         if ($request->has('montos')) {
             $cambios['montos'] = $d['montos'] ? $this->montos($d['libro'], $d['montos']) : null;
         }

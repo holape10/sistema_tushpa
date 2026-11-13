@@ -204,15 +204,16 @@
     {{-- Solo en sucursales exoneradas (afectación 20) --}}
     @if (\App\Support\Impresion\Impresion::leyendaAmazonia($cab))
         <div class="leyenda c">
-            "BIENES TRANSFERIDOS EN LA AMAZONÍA PARA SER CONSUMIDOS EN LA MISMA."<br>
-            "SERVICIOS PRESTADOS EN LA AMAZONÍA"
+            {{-- Las dos leyendas en una sola línea (el pie ocupa menos) --}}
+            "BIENES TRANSFERIDOS EN LA AMAZONÍA PARA SER CONSUMIDOS EN LA MISMA." &nbsp;&nbsp;&nbsp; "SERVICIOS PRESTADOS EN LA AMAZONÍA"
         </div>
     @endif
 
     @include('empresas.cobros.partials.a4_cuentas', ['simple' => true])
 
     <div class="consulta c">
-        @if ($electronico)Consulte su comprobante en {{ \App\Support\ConsultaCpe::direccion() }}<br>@endif
+        {{-- La consulta y los datos del sistema en una sola línea --}}
+        @if ($electronico)Consulte su comprobante en {{ \App\Support\ConsultaCpe::direccion() }} &nbsp;&nbsp;&nbsp; @endif
         <span style="font-size:7px">{{ config('soporte.firma_comprobante') }}</span>
     </div>
 </div>
