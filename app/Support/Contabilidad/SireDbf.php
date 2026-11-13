@@ -177,7 +177,8 @@ class SireDbf
                 $c['sinCtaCargo'] = $elegida === null;
                 $c['ctaabono'] = $a->ctaabono ?? $u->ctaabono ?? $cfg['cta_por_pagar'];
                 // Centro de costo (94, 95, 97…): el del comprobante o el último de ese proveedor
-                $c['ccosto'] = $a->ccosto ?? $u->ccosto ?? null;
+                // Apagado no sale en ningún lado: el .dbf queda como antes (CODDESTINO vacío)
+                $c['ccosto'] = CuentasCompras::activo() ? ($a->ccosto ?? $u->ccosto ?? null) : null;
             } else {
                 $c['ctacargo'] = $a->ctacargo ?? $u->ctacargo ?? $cfg['cta_por_cobrar'];
                 $c['ctaabono'] = $a->ctaabono ?? $u->ctaabono ?? ($c['montos']['gravada'] != 0 ? $cfg['cta_ventas'] : $cfg['cta_ventas_exo']);

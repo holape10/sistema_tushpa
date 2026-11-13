@@ -109,6 +109,10 @@ class SireDbfTest extends FlujoTestCase
             [$factura['ORIGEN'], $factura['SERIEDOC'], $factura['NUMDOC'], $factura['RUC_DNI'], $factura['CODDOC'], $factura['DESDOC'], $factura['FECHADOC'],
                 $factura['OGYE'], $factura['IGV_1'], $factura['IGV_2'], $factura['IGV_3'], $factura['TOTAL'], $factura['CTACARGO'], $factura['CTAABONO'], $factura['NORDEN'], $factura['NUM1'], $factura['FCON'], $factura['MONEDA']]);
         $this->assertSame('94', $factura['CODDESTINO'], 'El centro de costo va en CODDESTINO.');
+        // Apagado, el .dbf sale como antes aunque haya un centro guardado: su sistema contable no lo acepta en CODDESTINO
+        config(['services.contabilidad.centro_costo' => false]);
+        $this->assertSame('', $this->dbf('compras')[1][1]['CODDESTINO'], 'CODDESTINO en blanco, como antes.');
+        config(['services.contabilidad.centro_costo' => true]);
         $this->assertSame([40.10, 40.10], [$redondeo['NG'], $redondeo['TOTAL']], 'El céntimo de redondeo del proveedor se corrige solo.');
         $this->get(route('sire.dbf.excel', ['compras', 'periodo' => '202605']))->assertOk()->assertDownload("almaingr_{$ruc}_202605.xlsx");
         $this->assertSame(['07', 'NOTA CRED', -160.0, -160.0, '01', 'FE02', '000000005907', '2026-04-22', '601111', '421201'],

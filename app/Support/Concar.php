@@ -364,7 +364,7 @@ class Concar
             foreach ($reparto as $clave => $importe) {
                 [$cuenta, $centro] = explode('|', (string) $clave, 2);
                 $fila = self::linea($cab, $cuenta, $c['ruc'], $dh('D'), $importe, ['glosa' => $detalle[$clave] ?? null] + $doc, 'COMPRA');
-                $fila[12] = $centro !== '' ? $centro : null;
+                $fila[12] = $centro !== '' && Contabilidad\CuentasCompras::activo() ? $centro : null;
                 $filas[] = $fila;
             }
             if ($c['igv'] > 0) {
