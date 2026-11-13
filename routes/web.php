@@ -845,6 +845,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/importar-antiguo/cargar', [ImportarAntiguoController::class, 'cargar'])->name('importar.cargar');
     Route::get('/importar-antiguo/revisar', [ImportarAntiguoController::class, 'revisar'])->name('importar.revisar');
     Route::post('/importar-antiguo/ejecutar', [ImportarAntiguoController::class, 'ejecutar'])->name('importar.ejecutar');
+    Route::get('/importar-antiguo/resultado/{id}', [ImportarAntiguoController::class, 'resultado'])->whereNumber('id')->name('importar.resultado');
     Route::post('/importar-antiguo/eliminar', [ImportarAntiguoController::class, 'eliminar'])->name('importar.eliminar');
 
     // PV Grifo: combustible por importe o galones (placa para factura) y productos de la tienda

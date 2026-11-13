@@ -385,7 +385,8 @@ class Historial
                         if ($medioPred && in_array($c->tdocod, ['01', '03', '13'], true) && mb_strtoupper((string) ($c->estadopago ?? 'CONTADO')) !== 'CREDITO'
                             && (float) $c->ccaitv > 0 && $this->estadoSunat($c) !== 'ANULADO') {
                             $vmp[] = ['IdCpe_cabecera' => $nuevos[$idAntiguo], 'id_med_pag' => $medioPred, 'monto' => round((float) $c->ccaitv, 2),
-                                'id_empresa_negocio' => $suc, 'id_turno' => $this->turnoDe($c)];
+                                // Sin turno en el sistema antiguo: 0 (la columna no admite vacío; con null fallaba TODO el historial)
+                                'id_empresa_negocio' => $suc, 'id_turno' => $this->turnoDe($c) ?? 0];
                             $pagoSupuesto++;
                         }
                     }

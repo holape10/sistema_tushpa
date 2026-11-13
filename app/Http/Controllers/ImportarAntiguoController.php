@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ImportarSistemaAntiguo;
 use App\Support\Antiguo\CargadorSql;
 use App\Support\Antiguo\Importador;
+use App\Support\Procesos;
+use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -136,8 +139,13 @@ class ImportarAntiguoController extends Controller
         ], ['secciones.required' => 'Elige al menos una sección para importar.'], ['imagenes' => 'ZIP de imágenes']);
         $bd = $this->baseValida($datos['bd']);
 
-        set_time_limit(0);
-        $zip = $request->hasFile('imagenes') ? $request->file('imagenes')->getRealPath() : null;
+        set_time_limit(0);   // por si se hace en el momento (sin trabajador de colas)
+        // El ZIP subido se borra al terminar la petición: se copia para la tarea en segundo plano
+        $zip = null;
+        if ($request->hasFile('imagenes')) {
+            $zip = Procesos::carpeta(Tenancy::baseActual()).'/imagenes-'.uniqid().'.zip';
+            copy($request->file('imagenes')->getRealPath(), $zip);
+        }
         Importador::conectar($bd);
         // Solo sucursales de esta empresa; "no importar" llega vacío. Dos sucursales antiguas no pueden ir a la misma nueva.
         $nuevas = $this->sucursalesNuevas();
@@ -145,13 +153,28 @@ class ImportarAntiguoController extends Controller
         if (! $mapa || array_diff($mapa, array_keys($nuevas)) || count($mapa) !== count(array_unique($mapa))) {
             return back()->withErrors(['mapa' => 'Elige a qué sucursal va cada sucursal antigua (sin repetir ninguna).']);
         }
-        $resultado = Importador::porSucursales(Auth::user(), $mapa, [
-            'secciones' => $datos['secciones'], 'dia0' => $datos['dia0'], 'imagenes' => $zip,
-        ]);
-        $nombresAntiguas = collect((new Importador)->sucursales())->pluck('nombre', 'id');
+        // En segundo plano: con mucho historial toma varios minutos y la página se cortaba a la mitad (solo productos y clientes)
+        $opciones = ['secciones' => $datos['secciones'], 'dia0' => $datos['dia0'], 'imagenes' => $zip];
+        $id = Procesos::lanzar(Auth::user(), 'importar', 'Importar el sistema antiguo',
+            fn (string $base, int $proceso, int $usuario) => new ImportarSistemaAntiguo($base, $proceso, $usuario, $bd, $mapa, $opciones));
 
-        return view('empresas.importar.index', ['paso' => 3, 'bd' => $bd, 'resultado' => $resultado, 'nuevas' => $nuevas,
-            'nombresAntiguas' => $nombresAntiguas, 'temporal' => str_starts_with($bd, 'antiguo_')]);
+        return redirect()->route('procesos.show', $id);
+    }
+
+    /** Paso 3: lo que dejó la importación (creados por sección y los avisos de cada sucursal) */
+    public function resultado(int $id)
+    {
+        $this->autorizar();
+        $proceso = DB::table('procesos')->where('id', $id)->where('tipo', 'importar')->first();
+        $archivo = $proceso && $proceso->estado === 'LISTO' && $proceso->archivo ? realpath($proceso->archivo) : false;
+        $carpeta = realpath(Procesos::carpeta(Tenancy::baseActual()));
+        abort_unless($archivo && $carpeta && str_starts_with($archivo, $carpeta.DIRECTORY_SEPARATOR) && is_file($archivo), 404,
+            'El resultado de la importación ya no está disponible (se guarda '.Procesos::HORAS.' horas).');
+        $datos = json_decode((string) file_get_contents($archivo), true) ?: [];
+
+        return view('empresas.importar.index', ['paso' => 3, 'bd' => (string) ($datos['bd'] ?? ''), 'resultado' => $datos['resultado'] ?? [],
+            'nuevas' => $this->sucursalesNuevas(), 'nombresAntiguas' => collect($datos['nombres'] ?? []),
+            'temporal' => str_starts_with((string) ($datos['bd'] ?? ''), 'antiguo_')]);
     }
 
     /** @return array<int, string> id => nombre de las sucursales de la empresa (la del usuario primero) */

@@ -4,6 +4,7 @@ namespace Tests\Flujos;
 
 use App\Models\Producto;
 use App\Support\Antiguo\Importador;
+use App\Support\Colas;
 use App\Support\MenusUsuarios;
 use Illuminate\Support\Facades\DB;
 
@@ -33,6 +34,7 @@ class ImportarAntiguoTest extends FlujoTestCase
     {
         DB::connection('antiguo_admin')->statement('DROP DATABASE IF EXISTS `'.$this->base.'`');
         DB::purge(Importador::CONEXION);
+        Colas::$fingir = null;
         parent::tearDown();
     }
 
@@ -216,9 +218,14 @@ class ImportarAntiguoTest extends FlujoTestCase
             'nombre_comercial' => 'TIENDA 2', 'direccion' => 'JR. PRUEBA 2', 'estado' => 'Activo']);
         DB::table('almacenes')->insert(['descripcion' => 'TIENDA 2', 'predeterminado' => 1, 'id_empresa_negocio' => $otra, 'direccion' => '-', 'ubigeo' => '']);
 
-        $this->post(route('importar.ejecutar'), ['bd' => $this->base, 'mapa' => [20 => $this->sucursal, 22 => $otra],
-            'secciones' => array_keys(Importador::SECCIONES), 'dia0' => 'domingo'])
-            ->assertOk()->assertSee('Importación terminada')->assertSee('QUIÑONES')->assertSee('TIENDA 2');
+        // Se importa en segundo plano (aquí sin trabajador de colas, en el momento): la pantalla de avance y luego el resultado
+        Colas::$fingir = false;
+        $avance = $this->post(route('importar.ejecutar'), ['bd' => $this->base, 'mapa' => [20 => $this->sucursal, 22 => $otra],
+            'secciones' => array_keys(Importador::SECCIONES), 'dia0' => 'domingo'])->assertRedirect();
+        $proceso = DB::table('procesos')->where('tipo', 'importar')->latest('id')->first();
+        $this->assertSame('LISTO', $proceso->estado, (string) $proceso->mensaje);
+        $this->get($avance->headers->get('Location'))->assertOk()->assertSee(route('importar.resultado', $proceso->id), false);
+        $this->get(route('importar.resultado', $proceso->id))->assertOk()->assertSee('Importación terminada')->assertSee('QUIÑONES')->assertSee('TIENDA 2');
 
         $nicolas = DB::table('users')->where('email', 'nicolas'.$this->usuario->IdEmpresa)->first();
         $this->assertEquals($otra, $nicolas->id_empresa_negocio, 'Cada usuario queda en su sucursal.');
@@ -372,5 +379,23 @@ class ImportarAntiguoTest extends FlujoTestCase
         $this->assertSame([[0, null], [1, 'BONIFICACIÓN']], $lineas->map(fn ($l) => [(int) $l->cortesia, $l->cortesia_motivo])->all());
         $this->assertSame(1, (int) DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('permite_bonificaciones'),
             'Daba bonificaciones: sigue pudiendo darlas en el Punto de venta.');
+    }
+
+    public function test_las_ventas_sin_turno_ni_medio_de_pago_no_tumban_el_historial(): void
+    {
+        // Contado, sin medio de pago guardado y sin turno de caja en el sistema antiguo (EPC tenía miles así)
+        $a = DB::connection(Importador::CONEXION);
+        $a->table('cpe_cabecera')->insert(['IdCpe_cabecera' => 1011, 'tdocod' => '03', 'serdoc' => 'B002', 'numdoc' => 13, 'ccafem' => '2026-10-02',
+            'fecha_hora' => '2026-10-02 09:00:00', 'tdicod' => '1', 'ccandi' => '00000000', 'ccanom' => 'VARIOS', 'ccaitv' => 32, 'ccatexo' => 32,
+            'moncod' => 'PEN', 'estadopago' => 'CONTADO', 'ccacodsun' => '0', 'enviado' => 1, 'facturado' => 0, 'IdUsuario' => 71, 'IdUsuario_ven' => 71, 'id_empresa_negocio' => 20]);
+        $a->table('cpe_detalle')->insert(['IdCpe_detalle' => 12, 'IdCpe_cabecera' => 1011, 'IdProducto' => 1, 'cdedes' => 'CEMENTO SOL', 'cdecan' => 1, 'cdepuni' => 32, 'umecod' => '3H']);
+        // Sola: MySQL rechaza el turno vacío cuando la fila va sola (en grupo la dejaba pasar, por eso no se veía antes)
+        $a->table('cpe_cabecera')->where('IdCpe_cabecera', '<>', 1011)->whereIn('tdocod', ['01', '03'])->delete();
+
+        $r = $this->importar();
+
+        $this->assertArrayNotHasKey('error', $r['secciones']['historial'] ?? [], implode(' | ', $r['avisos']));
+        $boleta = DB::table('cpe_cabecera')->where('serdoc', 'B002')->where('numdoc', 13)->value('IdCpe_cabecera');
+        $this->assertEquals(32.0, (float) DB::table('venta_medio_pago')->where('IdCpe_cabecera', $boleta)->sum('monto'), 'Queda cobrada con el medio predeterminado.');
     }
 }
