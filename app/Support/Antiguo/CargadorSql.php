@@ -40,6 +40,9 @@ class CargadorSql
         $pdo = DB::connection(Importador::CONEXION)->getPdo();
         $pdo->exec("SET NAMES utf8mb4, FOREIGN_KEY_CHECKS = 0, UNIQUE_CHECKS = 0, SQL_MODE = ''");
 
+        // .zip (lo que se puede comprimir en Windows sin programas): se saca el .sql de adentro
+        $temporal = str_ends_with(strtolower($archivo), '.zip') ? self::sacarDelZip($archivo) : null;
+        $archivo = $temporal ?? $archivo;
         $gz = str_ends_with(strtolower($archivo), '.gz');
         $f = $gz ? gzopen($archivo, 'rb') : fopen($archivo, 'rb');
         if (! $f) {
@@ -97,11 +100,48 @@ class CargadorSql
             self::ejecutar($pdo, trim($sentencia), $res);
         }
         $gz ? gzclose($f) : fclose($f);
+        if ($temporal) {
+            @unlink($temporal);
+        }
 
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 1, UNIQUE_CHECKS = 1');
         $res['tablas'] = array_values(array_unique($res['tablas']));
 
         return $res;
+    }
+
+    /** El .sql (o .sql.gz) que viene dentro del .zip, copiado a un archivo temporal (el más grande, si trae varios) */
+    public static function sacarDelZip(string $zip): string
+    {
+        $z = new \ZipArchive;
+        if ($z->open($zip) !== true) {
+            throw new \RuntimeException('No se pudo abrir el .zip.');
+        }
+        $elegido = null;
+        for ($i = 0; $i < $z->numFiles; $i++) {
+            $st = $z->statIndex($i);
+            $nombre = strtolower((string) $st['name']);
+            if ((str_ends_with($nombre, '.sql') || str_ends_with($nombre, '.sql.gz')) && (! $elegido || $st['size'] > $elegido['size'])) {
+                $elegido = $st;
+            }
+        }
+        if (! $elegido) {
+            $z->close();
+            throw new \RuntimeException('El .zip no trae ningún archivo .sql.');
+        }
+        $destino = tempnam(sys_get_temp_dir(), 'antiguo').(str_ends_with(strtolower($elegido['name']), '.gz') ? '.sql.gz' : '.sql');
+        $origen = $z->getStream($elegido['name']);
+        $salida = fopen($destino, 'wb');
+        if (! $origen || ! $salida) {
+            $z->close();
+            throw new \RuntimeException('No se pudo descomprimir el .zip.');
+        }
+        stream_copy_to_stream($origen, $salida);
+        fclose($origen);
+        fclose($salida);
+        $z->close();
+
+        return $destino;
     }
 
     /**

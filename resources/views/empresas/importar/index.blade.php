@@ -20,7 +20,7 @@
         <div class="grid lg:grid-cols-2 gap-6">
             <section class="bg-white rounded-2xl shadow-sm p-5 sm:p-6" x-data="{ enviando: false, nombre: '' }">
                 <h2 class="font-bold text-gray-800 text-lg">Subir respaldo del sistema antiguo</h2>
-                <p class="text-sm text-gray-500 mt-1 mb-4">El archivo <strong>.sql</strong> (o .sql.gz) que exportas de la base antigua. Se carga en una base temporal
+                <p class="text-sm text-gray-500 mt-1 mb-4">El archivo <strong>.sql</strong> que exportas de la base antigua (o comprimido en <strong>.zip</strong>, más rápido de subir). Se carga en una base temporal
                     y desde ahí eliges qué pasar: productos, clientes, usuarios, stock y el historial (ventas, turnos, compras, guías, kardex). El sistema antiguo no se toca.</p>
                 <form method="POST" action="{{ route('importar.cargar') }}" enctype="multipart/form-data" @submit="enviando = true" class="space-y-4">
                     @csrf
@@ -28,7 +28,7 @@
                         <span class="text-4xl">🗄️</span>
                         <span class="font-semibold text-indigo-600" x-text="nombre || 'Elegir archivo .sql'"></span>
                         <span class="text-xs text-gray-400">Si está en .rar o .zip, descomprímelo primero</span>
-                        <input type="file" name="archivo" accept=".sql,.gz" required class="sr-only" @change="nombre = $event.target.files[0]?.name || ''">
+                        <input type="file" name="archivo" accept=".sql,.gz,.zip" required class="sr-only" @change="nombre = $event.target.files[0]?.name || ''">
                     </label>
                     <button :disabled="enviando" class="w-full h-12 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-60"
                             x-text="enviando ? 'Cargando respaldo… puede tardar unos minutos' : 'Cargar respaldo'"></button>

@@ -73,12 +73,12 @@ class ImportarAntiguoController extends Controller
         $this->autorizar();
         $request->validate(['archivo' => 'required|file|max:2097152'], [], ['archivo' => 'Respaldo .sql']);
         $nombre = strtolower($request->file('archivo')->getClientOriginalName());
-        if (! str_ends_with($nombre, '.sql') && ! str_ends_with($nombre, '.sql.gz')) {
-            return back()->withErrors(['archivo' => 'Sube el respaldo en formato .sql (o .sql.gz). Si es .rar o .zip, descomprímelo primero.']);
+        if (! str_ends_with($nombre, '.sql') && ! str_ends_with($nombre, '.sql.gz') && ! str_ends_with($nombre, '.zip')) {
+            return back()->withErrors(['archivo' => 'Sube el respaldo en formato .sql, .zip o .sql.gz. Si es .rar, descomprímelo y vuelve a comprimirlo en .zip.']);
         }
 
         set_time_limit(0);
-        $ruta = $request->file('archivo')->storeAs('antiguo', uniqid().(str_ends_with($nombre, '.gz') ? '.sql.gz' : '.sql'));
+        $ruta = $request->file('archivo')->storeAs('antiguo', uniqid().(str_ends_with($nombre, '.gz') ? '.sql.gz' : (str_ends_with($nombre, '.zip') ? '.zip' : '.sql')));
         $completa = storage_path('app/private/'.$ruta);
         if (! is_file($completa)) {
             $completa = storage_path('app/'.$ruta);

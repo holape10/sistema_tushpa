@@ -151,7 +151,7 @@ Artisan::command('clientes:migrar {--ruc= : Solo este cliente}', function () {
     return $fallas ? 1 : 0;
 })->purpose('Corre las migraciones pendientes en la base de cada cliente');
 
-Artisan::command('antiguo:cargar {archivo : Ruta del respaldo .sql o .sql.gz del sistema antiguo} {--ruc= : RUC de la empresa que lo importará}', function () {
+Artisan::command('antiguo:cargar {archivo : Ruta del respaldo .sql, .zip o .sql.gz del sistema antiguo} {--ruc= : RUC de la empresa que lo importará}', function () {
     $archivo = $this->argument('archivo');
     if (! is_file($archivo)) {
         $this->error("No existe el archivo {$archivo}");
@@ -180,7 +180,8 @@ Artisan::command('antiguo:cargar {archivo : Ruta del respaldo .sql o .sql.gz del
 
 Artisan::command('antiguo:importar {bd : Base temporal cargada con antiguo:cargar} {--ruc= : RUC de la empresa (cliente) que recibe los datos}
     {--mapa= : Sucursal antigua:sucursal nueva, separadas por coma (ej. 20:1,22:2)} {--usuario= : Usuario (login) administrador de la empresa}
-    {--secciones=* : Secciones a importar (por defecto todas)}', function () {
+    {--secciones=* : Secciones a importar (por defecto todas)}
+    {--base= : Si el RUC tiene varios sistemas (sedes), la base del que recibe los datos (ej. bd_ws_20123456789_2)}', function () {
     $bd = (string) $this->argument('bd');
     $ruc = preg_replace('/\D/', '', (string) $this->option('ruc'));
     if ($ruc === '' || ! preg_match('/^antiguo_'.$ruc.'_\d{8}_\d{6}$/', $bd)) {
@@ -188,9 +189,12 @@ Artisan::command('antiguo:importar {bd : Base temporal cargada con antiguo:carga
 
         return 1;
     }
-    $cliente = Cliente::where('ruc', $ruc)->where('estado', '!=', 'ELIMINADO')->first();
+    $clientes = Cliente::where('ruc', $ruc)->where('estado', '!=', 'ELIMINADO')->orderBy('id')->get();
+    $base = (string) $this->option('base');
+    $cliente = $base !== '' ? $clientes->firstWhere('base_datos', $base) : ($clientes->count() === 1 ? $clientes->first() : null);
     if (! $cliente) {
-        $this->error("No hay un cliente con RUC {$ruc}.");
+        $this->error($clientes->isEmpty() ? "No hay un cliente con RUC {$ruc}."
+            : ($base !== '' ? "La base {$base} no es de ese RUC." : "El RUC {$ruc} tiene varios sistemas: indica cuál con --base= (".$clientes->pluck('base_datos')->implode(', ').').'));
 
         return 1;
     }
