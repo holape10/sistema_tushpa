@@ -120,15 +120,19 @@
                 <td class="r">{{ number_format($cab->ccaigv, 2) }}</td><td class="r">{{ number_format($cab->ccaitv, 2) }}</td></tr>
         @else
             @foreach ($detalle as $i => $d)
-                @php $linea = \App\Support\Descuentos::linea($d); @endphp
-                <tr>
+                @php
+                    $linea = \App\Support\Descuentos::linea($d);
+                    // Bonificación: toda la línea en rojo y en el total dice BONIFICACIÓN (como el sistema anterior)
+                    $bonificada = \App\Support\Descuentos::esBonificacion($d);
+                @endphp
+                <tr @if ($bonificada) style="color:#dc2626;font-weight:bold" @endif>
                     <td class="c">{{ $i + 1 }}</td>
                     <td class="c">{{ $cant($d->cdecan) }}</td>
-                    <td>{!! nl2br(e(($d->descripcion_impresa ?? null) ?: $d->cdedes)) !!}@if ($linea->cortesia)<br><strong>{{ \App\Support\Descuentos::esBonificacion($d) ? 'BONIFICACIÓN' : 'CORTESÍA (operación gratuita)' }}</strong>@endif @if (!empty($d->lotes))<br>Lote: {{ $d->lotes }}@endif @if (!empty($d->series))<br>S/N: {{ $d->series }}@endif</td>
+                    <td>{!! nl2br(e(($d->descripcion_impresa ?? null) ?: $d->cdedes)) !!}@if ($linea->cortesia && ! $bonificada)<br><strong>CORTESÍA (operación gratuita)</strong>@endif @if (!empty($d->lotes))<br>Lote: {{ $d->lotes }}@endif @if (!empty($d->series))<br>S/N: {{ $d->series }}@endif</td>
                     <td class="c">{{ $d->umecod }}</td>
                     <td class="r">{{ number_format($linea->precio, 2) }}</td>
                     <td class="r">{{ number_format((float) ($d->cdeigv ?? 0), 2) }}</td>
-                    <td class="r">{{ number_format($linea->total, 2) }}</td>
+                    <td class="r">{{ $bonificada ? 'BONIFICACIÓN' : number_format($linea->total, 2) }}</td>
                 </tr>
             @endforeach
         @endif

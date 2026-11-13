@@ -102,7 +102,7 @@
                     <td class="um">{{ mb_strtoupper($unidades[$d->umecod] ?? $d->umecod) }}</td>
                     <td class="r">{{ number_format($d->cdecan, 2) }}</td>
                     <td class="r">{{ number_format($linea->precio, 2) }}</td>
-                    <td class="r">{{ number_format($linea->total, 2) }}</td>
+                    <td class="r">{{ \App\Support\Descuentos::esBonificacion($d) ? 'BONIF.' : number_format($linea->total, 2) }}</td>
                 </tr>
             @endforeach
         @endif
