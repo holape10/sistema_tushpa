@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\PerfilController;
 use App\Http\Controllers\Admin\PromocionController;
 use App\Http\Controllers\Admin\ProspectoController;
 use App\Http\Controllers\Admin\RespaldoController;
+use App\Http\Controllers\Admin\ServidorController;
 use App\Http\Controllers\Admin\SoporteIaController;
 use App\Http\Controllers\Admin\TableroController;
 use App\Http\Controllers\Admin\TicketController;
@@ -126,6 +127,8 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/errores', [ErrorController::class, 'index'])->name('errores.index');
     // Asistente IA: gasto del mes y qué empresas lo tienen (solo el dueño)
     Route::get('/asistente', [AsistenteController::class, 'index'])->name('asistente.index');
+    // Estado del servidor: memoria, disco, MySQL y cuánto pesa la base de cada empresa (solo el dueño)
+    Route::get('/servidor', [ServidorController::class, 'index'])->name('servidor.index');
     // Soporte con IA: preguntas sobre la base de una empresa (solo lectura)
     Route::get('/soporte-ia', [SoporteIaController::class, 'index'])->name('soporte_ia.index');
     Route::post('/soporte-ia/{cliente}', [SoporteIaController::class, 'preguntar'])->whereNumber('cliente')->middleware('throttle:20,1')->name('soporte_ia.preguntar');
