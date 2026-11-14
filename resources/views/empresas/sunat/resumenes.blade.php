@@ -82,24 +82,25 @@
             <h3 class="font-semibold text-gray-700 p-4 pb-2">Resúmenes enviados</h3>
             <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
-                    <tr><th class="px-3 py-2 text-left">Resumen</th><th class="px-3 py-2 text-left">Boletas del</th><th class="px-3 py-2 text-right">Docs / Total</th><th class="px-3 py-2 text-left">Estado</th><th class="px-3 py-2 text-right"></th></tr>
+                    <tr><th class="px-3 py-2 text-left">Resumen</th><th class="px-3 py-2 text-left hidden sm:table-cell">Boletas del</th><th class="px-3 py-2 text-right">Docs / Total</th><th class="px-3 py-2 text-left">Estado</th></tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     @forelse ($resumenes as $r)
                         <tr class="align-top">
-                            <td class="px-3 py-2 whitespace-nowrap">
-                                <span class="font-semibold">{{ $r->res_tip ?: 'RC' }}-{{ str_replace('-', '', $r->res_fec_gen) }}-{{ str_pad($r->res_cor, 3, '0', STR_PAD_LEFT) }}</span>
+                            <td class="px-3 py-2">
+                                <span class="font-semibold whitespace-nowrap">{{ $r->res_tip ?: 'RC' }}-{{ str_replace('-', '', $r->res_fec_gen) }}-{{ str_pad($r->res_cor, 3, '0', STR_PAD_LEFT) }}</span>
                                 @if ($r->es_baja ?? 0)<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">BAJA {{ $r->tip_res_com === '01' ? 'FACTURA' : 'BOLETA' }}</span>@endif
-                                <span class="block text-xs text-gray-400">Ticket: {{ $r->res_ticket ?? '—' }}</span>
+                                <span class="block text-xs font-semibold text-gray-600 sm:hidden">Boletas del {{ \Carbon\Carbon::parse($r->res_fec_com)->format('d/m/Y') }}</span>
+                                <span class="block text-xs text-gray-400 break-all">Ticket: {{ $r->res_ticket ?? '—' }}</span>
                                 <span class="block text-xs text-gray-400">{{ \Carbon\Carbon::parse($r->fecha_hora)->format('d/m/Y H:i') }} · {{ $r->apeusu }}</span>
                             </td>
-                            <td class="px-3 py-2 whitespace-nowrap">{{ \Carbon\Carbon::parse($r->res_fec_com)->format('d/m/Y') }}</td>
+                            <td class="px-3 py-2 whitespace-nowrap hidden sm:table-cell">{{ \Carbon\Carbon::parse($r->res_fec_com)->format('d/m/Y') }}</td>
                             <td class="px-3 py-2 text-right whitespace-nowrap">{{ $r->res_cant }}<span class="block text-xs text-gray-500">S/ {{ number_format($r->res_total, 2) }}</span></td>
-                            <td class="px-3 py-2">
+                            <td class="px-3 py-2 min-w-[150px]">
                                 @include('empresas.sunat._estado', ['estado' => $r->est_sunat])
                                 <span class="block text-xs text-gray-500 mt-1 break-words">{{ $r->res_est }}</span>
-                            </td>
-                            <td class="px-3 py-2 text-right whitespace-nowrap space-x-2">
+                                {{-- Acciones debajo del estado: así la tabla no se sale del recuadro --}}
+                                <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2">
                                 {{-- Trabado: SUNAT no responde el ticket por horas. Se revisa boleta por boleta y se liberan las que no tiene --}}
                                 @if (in_array($r->est_sunat, ['ENVIADO', 'EN PROCESO', 'GENERADO'], true) && ! ($r->es_baja ?? 0))
                                     <form method="POST" action="{{ route('sunat.resumen_liberar', $r->res_id) }}" class="inline"
@@ -114,10 +115,11 @@
                                 @endif
                                 <a href="{{ route('sunat.resumen_descargar', [$r->res_id, 'xml']) }}" class="text-xs text-indigo-600 hover:underline">XML</a>
                                 <a href="{{ route('sunat.resumen_descargar', [$r->res_id, 'cdr']) }}" class="text-xs text-indigo-600 hover:underline">CDR</a>
+                                </div>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Aún no se envió ningún resumen.</td></tr>
+                        <tr><td colspan="4" class="px-4 py-8 text-center text-gray-400">Aún no se envió ningún resumen.</td></tr>
                     @endforelse
                 </tbody>
             </table>
