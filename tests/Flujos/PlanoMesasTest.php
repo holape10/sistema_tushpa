@@ -91,7 +91,9 @@ class PlanoMesasTest extends FlujoTestCase
         ])->assertOk();
         $this->assertSame(1600, (int) DB::table('pisos')->where('pis_id', $this->piso)->value('plano_alto'));
         $this->assertSame(1400, (int) DB::table('mesas')->where('mes_id', $this->mesa1)->value('plano_y'), 'En un ambiente largo la mesa puede ir más abajo.');
-        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('aspect-ratio: 1000 / 1600', false);
+        // Más largo que ancho: en la PC se ve girado de costado (la mesa de abajo a la izquierda queda arriba a la izquierda)
+        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('plano-lienzo plano-girado', false)
+            ->assertSee('--ar: 1000 / 1600; --ar-g: 1600 / 1000', false)->assertSee('--lg:6.875%;--tg:10%', false);
         $this->get(route('mesas.plano'))->assertOk()->assertSee('Medidas del local');
 
         // Si se achica el ambiente, nada queda fuera
@@ -112,7 +114,7 @@ class PlanoMesasTest extends FlujoTestCase
         $this->assertSame([600, 1500], [(int) DB::table('pisos')->where('pis_id', $this->piso)->value('plano_ancho'), (int) DB::table('pisos')->where('pis_id', $this->piso)->value('plano_alto')]);
         $box = DB::table('mesas')->where('mes_id', $this->mesa1)->first();
         $this->assertSame([200, 400], [(int) $box->plano_w, (int) $box->plano_x], 'El box mide lo mismo y se acomoda dentro de los 12 m (600 - 200).');
-        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('aspect-ratio: 600 / 1500', false);
+        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('--ar: 600 / 1500', false);
         $this->get(route('mesas.plano'))->assertOk()->assertSee('Medidas del local');
     }
 
@@ -128,7 +130,8 @@ class PlanoMesasTest extends FlujoTestCase
             'elementos' => [], 'usar_plano' => true,
         ])->assertOk();
 
-        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('--max-pc: 962px', false)->assertSee('--max-movil: 846px', false);
+        $this->get(route('comandas.seleccion'))->assertOk()->assertSee('--max-pc: 962px', false)->assertSee('--max-movil: 846px', false)
+            ->assertSee('aspect-ratio: 1000 / 625', false)->assertDontSee('plano-lienzo plano-girado', false);
     }
 
     public function test_la_mesa_mas_chica_se_ve_como_un_boton_de_la_cuadricula_y_hay_cocina(): void

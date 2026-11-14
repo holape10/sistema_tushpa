@@ -195,6 +195,24 @@ class PlanoMesas
         return 'left:'.$p($x, $ancho).';top:'.$p($y, $alto).';min-width:'.$p($w, $ancho).';min-height:'.$p($h, $alto);
     }
 
+    /** Un local mucho más largo que ancho: en la PC (pantalla ancha) se muestra girado de costado */
+    public static function girarEnPc(int $alto, int $ancho): bool
+    {
+        return $alto > $ancho * 1.2;
+    }
+
+    /**
+     * Posición de algo en un plano que se gira en la PC: la normal (--l, --t, --w, --h) y la girada 90° a la derecha
+     * (--lg, --tg, --wg, --hg), en % del lienzo. El CSS del plano elige cuál usar según la pantalla.
+     */
+    public static function variables(int|float $x, int|float $y, int|float $w, int|float $h, int $alto, int $ancho): string
+    {
+        $p = fn ($v, $total) => round($v / $total * 100, 3).'%';
+
+        return '--l:'.$p($x, $ancho).';--t:'.$p($y, $alto).';--w:'.$p($w, $ancho).';--h:'.$p($h, $alto)
+            .';--lg:'.$p($alto - $y - $h, $alto).';--tg:'.$p($x, $ancho).';--wg:'.$p($h, $alto).';--hg:'.$p($w, $ancho);
+    }
+
     /** Estilo de posición de algo en el plano (en % del lienzo, así se ve igual en cualquier pantalla) */
     public static function estilo(int|float $x, int|float $y, int|float $w, int|float $h, int $alto = self::ALTO, int $ancho = self::ANCHO): string
     {

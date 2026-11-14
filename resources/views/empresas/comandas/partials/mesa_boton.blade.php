@@ -12,7 +12,7 @@
     // En el plano la letra va según el ancho del plano (cqw): se lee igual en el celular y en la PC
     $letra = fn (int $min, float $cqw, int $max) => $enPlano ? 'style="font-size: clamp('.$min.'px, '.$cqw.'cqw, '.$max.'px)"' : '';
 @endphp
-<button type="button" @if ($enPlano) style="{{ \App\Support\PlanoMesas::estiloMesa($m->plano_x, $m->plano_y, $m->plano_w, $m->plano_h, $alto ?? \App\Support\PlanoMesas::ALTO, $ancho ?? \App\Support\PlanoMesas::ANCHO) }}" @endif
+<button type="button" @if ($enPlano) style="{{ ($girar ?? false) ? \App\Support\PlanoMesas::variables($m->plano_x, $m->plano_y, $m->plano_w, $m->plano_h, $alto, $ancho) : \App\Support\PlanoMesas::estiloMesa($m->plano_x, $m->plano_y, $m->plano_w, $m->plano_h, $alto ?? \App\Support\PlanoMesas::ALTO, $ancho ?? \App\Support\PlanoMesas::ANCHO) }}" @endif
     class="btn-mesa-comanda {{ $enPlano ? 'absolute '.($m->pedido_id ? 'z-30' : 'z-20').' flex flex-col items-center justify-center overflow-visible px-2 py-1 leading-tight whitespace-nowrap' : 'relative min-h-[88px] px-2 py-2.5' }} {{ $forma }} text-white shadow-sm ring-1 ring-black/5 active:scale-95 transition-transform select-none {{ $color }}"
     data-id="{{ $principal['mes_id'] ?? $m->mes_id }}" data-nombre="{{ $principal['nombre'] ?? $m->etiqueta }}" data-estado="{{ $estado }}"
     data-pedido-id="{{ $m->pedido_id }}" data-listos="{{ $m->listos ?? 0 }}" data-listos-texto="{{ $m->listos_texto ?? '' }}">
