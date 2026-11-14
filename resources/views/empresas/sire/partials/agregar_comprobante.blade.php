@@ -33,7 +33,8 @@
                     <label class="col-span-2 sm:col-span-1">Fecha de emisión<input type="date" x-model="f.fecha" :max="fin" required class="block w-full mt-1 rounded-lg border-slate-300"></label>
                     <label class="col-span-2 sm:col-span-1">Vencimiento <span class="text-slate-400">(opcional)</span><input type="date" x-model="f.vence" class="block w-full mt-1 rounded-lg border-slate-300"></label>
                     <label class="col-span-2">{{ $libro === 'compras' ? 'RUC del proveedor' : 'Documento del cliente' }}
-                        <input x-model="f.ruc" maxlength="15" required inputmode="numeric" class="block w-full mt-1 rounded-lg border-slate-300"></label>
+                        <input x-model="f.ruc" @input="buscarRuc()" maxlength="15" required inputmode="numeric" class="block w-full mt-1 rounded-lg border-slate-300">
+                        <span x-show="ruc.estado" x-text="ruc.estado" class="block mt-0.5 text-xs" :class="ruc.error ? 'text-rose-600' : 'text-slate-500'"></span></label>
                     <label class="col-span-2 sm:col-span-4">{{ $libro === 'compras' ? 'Proveedor' : 'Cliente' }} (nombre o razón social)
                         <input x-model="f.nombre" maxlength="200" required class="block w-full mt-1 rounded-lg border-slate-300 uppercase"></label>
                 </div>
@@ -83,7 +84,25 @@
             ref_tipo: '01', ref_serie: '', ref_numero: '', ref_fecha: '', montos: Object.fromEntries(montos.map(k => [k, ''])) });
         const pares = { igv_dg: 'base_dg', igv_dgng: 'base_dgng', igv_dng: 'base_dng', igv: 'gravada' };
         return {
-            abierto: false, guardando: false, error: '', fin, f: vacio(),
+            abierto: false, guardando: false, error: '', fin, f: vacio(), ruc: { estado: '', error: false, ultimo: '', auto: '' },
+            /** Con los 11 dígitos del RUC trae la razón social (padrón de SUNAT del sistema o apiperu.dev) */
+            async buscarRuc() {
+                const ruc = String(this.f.ruc || '').trim();
+                if (!/^\d{11}$/.test(ruc)) { this.ruc.estado = ''; return; }
+                if (ruc === this.ruc.ultimo) return;
+                this.ruc.ultimo = ruc; this.ruc.error = false; this.ruc.estado = 'Buscando el RUC…';
+                try {
+                    const r = await fetch(@json(url('api/ruc')) + '/' + ruc, { headers: { Accept: 'application/json' } });
+                    const d = await r.json().catch(() => ({}));
+                    if (ruc !== String(this.f.ruc).trim()) return;
+                    if (!r.ok || !d.nom) { this.ruc.error = true; this.ruc.estado = 'No se encontró el RUC: escribe el nombre a mano.'; return; }
+                    // Solo reemplaza el nombre si está vacío o lo puso la búsqueda anterior (no lo que escribió el contador)
+                    if (!this.f.nombre || this.f.nombre === this.ruc.auto) { this.f.nombre = d.nom; this.ruc.auto = d.nom; }
+                    this.ruc.estado = '✔ ' + d.nom;
+                } catch (e) {
+                    this.ruc.error = true; this.ruc.estado = 'Sin conexión para buscar el RUC: escribe el nombre a mano.';
+                }
+            },
             /** @param d datos ya llenos (desde un XML) o {} para uno nuevo */
             abrir(d) {
                 const f = vacio();
@@ -91,6 +110,7 @@
                 Object.keys(f.montos).forEach(k => { f.montos[k] = Number(f.montos[k]) ? String(f.montos[k]) : ''; });
                 if (f.fecha && f.fecha > fin) f.fecha = '';
                 this.f = f; this.error = ''; this.abierto = true;
+                this.ruc = { estado: '', error: false, ultimo: '', auto: '' };
             },
             total() { return Math.round(Object.values(this.f.montos).reduce((s, v) => s + (Number(v) || 0), 0) * 100) / 100; },
             igv(k) { const base = Number(this.f.montos[pares[k]]) || 0; this.f.montos[k] = base ? (Math.round(base * 18) / 100).toFixed(2) : ''; },
