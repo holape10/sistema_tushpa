@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\ProcesosLinux;
 use App\Support\Servidor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,7 +20,7 @@ class ServidorController extends Controller
 
         return view('admin.servidor', [
             'memoria' => Servidor::memoria(), 'disco' => Servidor::disco(), 'mysql' => Servidor::mysql(), 'bases' => $bases,
-            'consultas' => Servidor::consultasActivas(), 'trabajos' => Servidor::trabajos(),
+            'consultas' => Servidor::consultasActivas(), 'trabajos' => Servidor::trabajos(), 'procesos' => ProcesosLinux::agrupados(),
             'elegida' => $bases->firstWhere('base', $elegida),
             'tablas' => $bases->contains('base', $elegida) ? Servidor::tablasDe($elegida) : collect(),
         ]);

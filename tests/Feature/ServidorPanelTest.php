@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Central\Superadmin;
+use App\Support\ProcesosLinux;
 use App\Support\Servidor;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
@@ -46,6 +47,43 @@ class ServidorPanelTest extends TestCase
         $this->assertTrue(Servidor::tablasDe('mysql')->isEmpty());
         $this->assertTrue(Servidor::tablasDe("x' OR 1=1 --")->isEmpty());
         $this->assertNotEmpty(Servidor::tablasDe(DB::connection('central')->getDatabaseName()));
+    }
+
+    /** Un /proc de Linux de mentira: [pid, nombre, cmdline, MB de RAM, hilos, uid, ticks de CPU] */
+    private function procFalso(array $procesos): string
+    {
+        $dir = sys_get_temp_dir().'/proc_'.uniqid();
+        mkdir($dir);
+        file_put_contents("{$dir}/stat", "cpu  1000 0 500 8500 0 0 0 0 0 0\ncpu0 250 0 125 2125 0 0 0 0 0 0\n");
+        foreach ($procesos as [$pid, $nombre, $cmdline, $mb, $hilos, $uid, $ticks]) {
+            mkdir("{$dir}/{$pid}");
+            file_put_contents("{$dir}/{$pid}/stat", "{$pid} ({$nombre}) S 1 1 1 0 -1 4194560 100 0 0 0 {$ticks} 0 0 0 20 0 {$hilos} 0");
+            file_put_contents("{$dir}/{$pid}/status", "Name:\t{$nombre}\nUid:\t{$uid}\t{$uid}\t{$uid}\t{$uid}\nVmRSS:\t".($mb * 1024)." kB\nThreads:\t{$hilos}\n");
+            file_put_contents("{$dir}/{$pid}/cmdline", str_replace(' ', "\0", $cmdline));
+        }
+
+        return $dir;
+    }
+
+    public function test_los_procesos_se_agrupan_y_se_explican(): void
+    {
+        $proc = $this->procFalso([
+            [1, 'systemd', '/usr/lib/systemd/systemd', 16, 1, 0, 10],
+            [200, 'mysqld', '/usr/sbin/mysqld', 5300, 40, 27, 50],
+            [300, 'php-fpm', 'php-fpm: pool www', 70, 1, 48, 5],
+            [301, 'php-fpm', 'php-fpm: pool www', 72, 1, 48, 5],
+            [400, 'php', 'php artisan queue:work --sleep=3', 90, 1, 48, 0],
+            [500, 'minero-raro', '/tmp/minero-raro', 900, 8, 48, 0],
+        ]);
+
+        $lista = ProcesosLinux::agrupados($proc, 0)->keyBy('clave');
+
+        $this->assertSame('mysqld', $lista->keys()->first(), 'Primero el que más memoria usa.');
+        $this->assertSame(['MySQL (base de datos)', 'necesario', 40, 5300 * 1048576], [$lista['mysqld']->nombre, $lista['mysqld']->nivel, $lista['mysqld']->hilos, $lista['mysqld']->memoria]);
+        $this->assertSame([2, 142 * 1048576, [300, 301]], [$lista['php-fpm']->procesos, $lista['php-fpm']->memoria, $lista['php-fpm']->pids], 'Los PHP de las páginas van juntos.');
+        $this->assertSame('Trabajador de colas (TUSHPA)', $lista['php:colas']->nombre);
+        $this->assertSame('revisar', $lista['minero-raro']->nivel, 'Algo desconocido que gasta mucho se marca para revisar.');
+        $this->assertNull(ProcesosLinux::agrupados(sys_get_temp_dir().'/no_existe_'.uniqid()), 'Sin /proc (Windows) no se inventa nada.');
     }
 
     public function test_consultas_en_curso_y_trabajos_en_segundo_plano(): void

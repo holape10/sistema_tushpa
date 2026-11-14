@@ -122,6 +122,50 @@
         </section>
     </div>
 
+    {{-- Programas del VPS (como htop, pero agrupados y explicados) --}}
+    <section class="rounded-2xl bg-white shadow-sm overflow-hidden mb-6" x-data="{ todos: false }">
+        <div class="px-4 py-3 border-b flex flex-wrap items-center gap-2">
+            <h2 class="flex-1 font-bold">Procesos del servidor <span class="text-sm font-normal text-slate-500">· lo que muestra htop, agrupado y explicado</span></h2>
+            @if ($procesos)<button type="button" @click="todos = !todos" class="text-xs font-bold text-indigo-700 hover:underline" x-text="todos ? 'Ver solo los principales' : 'Ver todos ({{ $procesos->count() }})'"></button>@endif
+        </div>
+        @if ($procesos === null)
+            <p class="px-4 py-6 text-center text-sm text-slate-500">Solo se puede ver en el servidor Linux.</p>
+        @else
+            @php
+                $niveles = ['revisar' => ['🔴 Revisar', 'bg-rose-100 text-rose-700'], 'desconocido' => ['❔ Desconocido', 'bg-slate-200 text-slate-700'],
+                    'opcional' => ['🟡 Opcional', 'bg-amber-100 text-amber-800'], 'necesario' => ['✅ Necesario', 'bg-emerald-100 text-emerald-700']];
+                $memTotal = $memoria['total'] ?? 0;
+            @endphp
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+                        <tr><th class="px-4 py-2 text-left">Programa</th><th class="px-3 py-2 text-left">Qué es</th><th class="px-3 py-2 text-right">Memoria</th>
+                            <th class="px-3 py-2 text-right">Procesador</th><th class="px-3 py-2 text-left">¿Se toca?</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach ($procesos as $i => $p)
+                            <tr @if ($i >= 12 && $p->nivel !== 'revisar') x-show="todos" x-cloak @endif class="{{ $p->nivel === 'revisar' ? 'bg-rose-50' : '' }}">
+                                <td class="px-4 py-2">
+                                    <span class="font-bold">{{ $p->nombre }}</span>
+                                    <span class="block font-mono text-[11px] text-slate-400">{{ str_starts_with($p->clave, 'php:') ? 'php' : $p->clave }} · {{ $p->procesos }} proceso(s){{ $p->hilos > $p->procesos ? ' · '.$p->hilos.' hilos' : '' }} · {{ $p->usuario }}</span>
+                                </td>
+                                <td class="px-3 py-2 text-slate-600 min-w-[260px]">{{ $p->que }}
+                                    @if ($p->nivel === 'revisar')
+                                        <span class="block mt-1 text-xs text-rose-700">Si de verdad está pegado, en la consola: <code class="rounded bg-white px-1 font-mono">kill {{ implode(' ', array_slice($p->pids, 0, 5)) }}</code></span>
+                                    @endif</td>
+                                <td class="px-3 py-2 text-right whitespace-nowrap">{{ $t($p->memoria) }}
+                                    @if ($memTotal)<span class="block text-[11px] text-slate-400">{{ round($p->memoria / $memTotal * 100, 1) }}% de la RAM</span>@endif</td>
+                                <td class="px-3 py-2 text-right whitespace-nowrap {{ $p->cpu >= 50 ? 'font-bold text-rose-600' : '' }}">{{ number_format($p->cpu, 1) }}%</td>
+                                <td class="px-3 py-2"><span class="whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-bold {{ $niveles[$p->nivel][1] }}">{{ $niveles[$p->nivel][0] }}</span></td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            <p class="px-4 py-2 text-[11px] text-slate-400">Procesador = % de todo el procesador, medido en medio segundo. Desde aquí no se detiene nada: si algo hay que parar, se hace por consola.</p>
+        @endif
+    </section>
+
     <div class="grid lg:grid-cols-[1fr_380px] gap-4 items-start">
         <section class="rounded-2xl bg-white shadow-sm overflow-hidden">
             <div class="px-4 py-3 border-b flex flex-wrap items-center gap-2">
