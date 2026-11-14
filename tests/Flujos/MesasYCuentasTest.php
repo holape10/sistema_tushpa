@@ -125,6 +125,31 @@ class MesasYCuentasTest extends FlujoTestCase
         $this->assertEquals(4.0, (float) DB::table('pedidos_detalle')->where('ped_id', $pedId)->sum('item_facturado'), 'Todo lo pedido quedó cobrado una sola vez.');
     }
 
+    public function test_eliminar_todo_el_pedido_lo_anula_y_libera_la_mesa(): void
+    {
+        $lomo = $this->producto('LOMO', 30, 10);
+        $chicha = $this->producto('CHICHA', 8, 10);
+        $mozo = $this->usuarioConRol(8, 'MOZO DE PRUEBA');
+        DB::table('users')->where('IdUsuario', $this->usuario->IdUsuario)->update(['password' => Hash::make('clave-admin')]);
+        $this->actingAs($mozo);
+        $pedId = $this->pedir($this->mesas[1], [[$lomo, 2], [$chicha, 1]]);
+        $this->postJson(route('comandas.set_servicio'), ['order_type' => 'salon', 'mesa_id' => $this->mesas[1], 'mesa_nombre' => 'MESA', 'pedido_id' => $pedId])->assertOk();
+        $this->get(route('comandas.menu'))->assertOk()->assertSee('Eliminar todo el pedido');
+        $this->postJson(route('comandas.add_to_cart'), ['id' => $chicha->IdProducto])->assertOk();
+
+        // Sin la clave del administrador no se puede
+        $this->postJson(route('comandas.eliminar_todo'), ['reason' => 'PRUEBA', 'auth_user' => $this->usuario->email, 'auth_password' => 'otra'])
+            ->assertJsonPath('success', false);
+        $this->postJson(route('comandas.eliminar_todo'), ['reason' => 'PRUEBA', 'auth_user' => $this->usuario->email, 'auth_password' => 'clave-admin'])
+            ->assertJsonPath('success', true)->assertJsonPath('total', 0);
+        $this->postJson(route('comandas.enviar'))->assertOk()->assertJsonPath('success', true);
+
+        $this->assertSame('Anulado', DB::table('pedidos')->where('ped_id', $pedId)->value('ped_est'));
+        $this->assertSame(0, DB::table('pedidos_detalle')->where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')->count(), 'Todos los platos quedaron eliminados.');
+        $this->assertStringContainsString('PRUEBA', (string) DB::table('pedidos_detalle')->where('ped_id', $pedId)->value('item_obs'));
+        $this->assertSame('Libre', DB::table('mesas')->where('mes_id', $this->mesas[1])->value('mes_est'));
+    }
+
     public function test_el_mozo_quita_un_plato_enviado_solo_con_la_clave_del_administrador(): void
     {
         $lomo = $this->producto('LOMO', 30, 10);

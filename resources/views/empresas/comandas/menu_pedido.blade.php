@@ -129,6 +129,8 @@
                 <div class="grid grid-cols-[1fr_2fr] gap-2 border-t bg-white px-3 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] lg:rounded-b-2xl">
                     <button type="button" id="btn_vaciar" class="h-12 rounded-2xl bg-gray-100 text-sm font-bold text-gray-600 active:bg-gray-200">Vaciar nuevos</button>
                     <button type="button" class="btn-enviar h-12 rounded-2xl bg-emerald-600 text-base font-black text-white shadow active:bg-emerald-700 disabled:opacity-60">ENVIAR COMANDA</button>
+                    {{-- Todo el pedido de una vez: se anula y la mesa queda libre --}}
+                    <button type="button" id="btn_eliminar_todo" class="col-span-2 h-10 rounded-2xl border border-rose-200 text-sm font-bold text-rose-600 active:bg-rose-50">🗑️ Eliminar todo el pedido</button>
                 </div>
             </aside>
         </div>
@@ -183,6 +185,7 @@
         vaciar: @json(route('comandas.clear_cart')),
         reducir: @json(route('comandas.reducir_autorizado')),
         eliminar: @json(route('comandas.eliminar_autorizado')),
+        eliminarTodo: @json(route('comandas.eliminar_todo')),
         enviar: @json(route('comandas.enviar')),
         opciones: @json(url('/comandas/opciones')),
         promotor: @json(route('comandas.promotor')),
@@ -539,6 +542,22 @@
             restaurar();
         }).catch(() => { aviso('Error de conexión. Intenta de nuevo.', false); restaurar(); });
     }
+
+    // Eliminar todo el pedido: con autorización y motivo; se envía de una vez (anula el pedido y libera la mesa)
+    $('btn_eliminar_todo').addEventListener('click', () => {
+        const items = [...document.querySelectorAll('#cart_items .cart-item')];
+        if (!items.some((i) => i.dataset.old === '1')) {
+            aviso(items.length ? 'Este pedido aún no se envió a cocina: usa "Vaciar nuevos".' : 'El pedido está vacío.', 'aviso');
+            return;
+        }
+        abrirModalAuth('Vas a eliminar TODO el pedido: se anula, la mesa queda libre y la cocina recibe la anulación.', (user, pass, reason) =>
+            enCola(() => post(URL.eliminarTodo, { auth_user: user, auth_password: pass, reason }).then((res) => {
+                if (!res.success) { aviso(res.message, false); return; }
+                cerrarModalAuth();
+                aplicar(res);
+                enviar();
+            })));
+    });
 
     // Vaciar: requiere datos de un Administrador (si el usuario ya es admin, solo confirma)
     $('btn_vaciar').addEventListener('click', () => {

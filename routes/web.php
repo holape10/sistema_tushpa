@@ -208,6 +208,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/comandas/activos-llevar-delivery', [ComandasController::class, 'activosLlevarDelivery'])->name('comandas.activos_llevar_delivery');
     Route::post('/comandas/carrito/reducir-autorizado', [ComandaCarritoController::class, 'reducirItemAutorizado'])->name('comandas.reducir_autorizado');
     Route::post('/comandas/carrito/eliminar-autorizado', [ComandaCarritoController::class, 'eliminarItemAutorizado'])->name('comandas.eliminar_autorizado');
+    Route::post('/comandas/carrito/eliminar-todo', [ComandaCarritoController::class, 'eliminarTodoAutorizado'])->name('comandas.eliminar_todo');
     Route::get('/comandas/precuenta/{ped_id}', [ComandasController::class, 'precuenta'])->whereNumber('ped_id')->name('comandas.precuenta');
     Route::get('/comandas/mesas-disponibles', [ComandaMesaController::class, 'mesasDisponibles'])->name('comandas.mesas_disponibles');
     Route::post('/comandas/cambiar-mesa', [ComandaMesaController::class, 'cambiarMesa'])->name('comandas.cambiar_mesa');

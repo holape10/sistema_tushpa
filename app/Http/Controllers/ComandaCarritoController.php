@@ -299,6 +299,37 @@ class ComandaCarritoController extends Controller
         return response()->json(['success' => true] + $this->carrito());
     }
 
+    /**
+     * Todo el pedido de una vez (pruebas, el cliente se fue...): con la misma autorización que un producto, quedan
+     * marcados para eliminar todos los productos enviados y se quitan los nuevos. Al enviar la comanda el pedido se anula,
+     * la mesa queda libre y la cocina recibe la anulación. Si algo ya se cobró en una cuenta separada, no se puede.
+     */
+    public function eliminarTodoAutorizado(Request $request)
+    {
+        $request->validate($this->reglasAutorizacion(), [], ['auth_user' => 'Usuario', 'auth_password' => 'Contraseña', 'reason' => 'Motivo']);
+
+        if ($error = $this->validarAutorizacionAdminCaja($request)) {
+            return response()->json(['success' => false, 'message' => $error]);
+        }
+
+        $cart = session('comanda_cart', []);
+        $enviados = array_filter($cart, fn ($item) => ! empty($item['is_old_item']));
+        if (! $enviados) {
+            return response()->json(['success' => false, 'message' => 'Este pedido aún no se envió a cocina: usa "Vaciar nuevos".']);
+        }
+        if (collect($enviados)->contains(fn ($item) => ($item['facturado'] ?? 0) > 0)) {
+            return response()->json(['success' => false, 'message' => 'Parte del pedido ya se cobró en una cuenta separada: no se puede eliminar entero.']);
+        }
+
+        $eliminados = session('comanda_eliminados', []);
+        $eliminados[] = ['ped_det_ids' => collect($enviados)->flatMap(fn ($item) => $item['ped_det_ids'] ?? [])->values()->all(),
+            'motivo' => trim($request->reason), 'autorizado_por' => $this->autorizadoPor($request)];
+        session()->put('comanda_eliminados', $eliminados);
+        session()->put('comanda_cart', []);
+
+        return response()->json(['success' => true] + $this->carrito());
+    }
+
     public function removeCartItem(Request $request)
     {
         $cart = session('comanda_cart', []);
