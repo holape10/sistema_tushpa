@@ -6,10 +6,14 @@ use App\Support\Concar;
 use App\Support\Contabilidad\SireARegistro;
 use App\Support\Contabilidad\SireDbf;
 use App\Support\Excel;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -186,6 +190,38 @@ class SireDbfController extends Controller
         return response()->download($ruta, "{$tabla}_{$ruc}_{$periodo}.xlsx", [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend();
+    }
+
+    /**
+     * Reporte para imprimir (PDF horizontal): solo la cabecera de cada comprobante que se lleva al .dbf, con sus montos
+     * y cuentas, y los totales. El detalle de los XML no va: sirve solo para elegir las cuentas.
+     */
+    public function imprimir(Request $request, string $libro): Response|RedirectResponse
+    {
+        $ruc = $this->autorizar();
+        abort_unless(isset(SireDbf::LIBROS[$libro]), 404);
+        $periodo = $this->periodo($request);
+        $todos = SireDbf::delPeriodo($ruc, $libro, $periodo)['comprobantes'];
+        $comprobantes = array_values(array_filter($todos, fn ($c) => ! $c['excluido']));
+        if (! $comprobantes) {
+            return back()->with('error', 'No hay comprobantes para imprimir en ese periodo.');
+        }
+
+        $html = view('empresas.sire.reporte_pdf', [
+            'libro' => $libro, 'periodo' => $periodo, 'comprobantes' => $comprobantes, 'excluidos' => count($todos) - count($comprobantes),
+            'totales' => SireDbf::totales($libro, $todos), 'ruc' => $ruc,
+            'empresa' => DB::table('empresa')->where('IdEmpresa', $ruc)->value('NomEmpresa'),
+        ])->render();
+        $opciones = new Options;
+        $opciones->set('defaultFont', 'DejaVu Sans');
+        $opciones->set('isRemoteEnabled', false);
+        $pdf = new Dompdf($opciones);
+        $pdf->loadHtml($html, 'UTF-8');
+        $pdf->setPaper('A4', 'landscape');
+        $pdf->render();
+
+        return response($pdf->output(), 200, ['Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.($libro === 'ventas' ? 'registro_ventas' : 'registro_compras')."_{$periodo}.pdf\""]);
     }
 
     /** tienfact.dbf (ventas) o almaingr.dbf (compras), solo con los comprobantes que se llevan y si todos cuadran */

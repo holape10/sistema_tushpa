@@ -49,6 +49,10 @@
                 </button>
             </form>
         @endif
+        <a href="{{ route('sire.dbf.imprimir', [$libro, 'periodo' => $periodo]) }}" target="_blank"
+           class="h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-white border border-slate-400 text-slate-700 hover:bg-slate-50 text-sm font-bold {{ $propuesta ? '' : 'pointer-events-none opacity-50' }}">
+            🖨 Imprimir
+        </a>
         <a href="{{ route('sire.dbf.excel', [$libro, 'periodo' => $periodo]) }}"
            class="h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-bold {{ $propuesta ? '' : 'pointer-events-none opacity-50' }}">
             ⬇ Excel

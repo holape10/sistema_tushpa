@@ -138,6 +138,12 @@ class SireDbfTest extends FlujoTestCase
         $this->from(route('sire.dbf', ['libro' => 'ventas', 'periodo' => '202605']))
             ->post(route('sire.dbf.aplicar'), ['libro' => 'ventas', 'periodo' => '202605', 'ctacargo' => '1212', 'ctaabono' => '70001'])->assertSessionHas('success');
 
+        // El registro para imprimir: solo la cabecera con montos y cuentas
+        $pdf = $this->get(route('sire.dbf.imprimir', ['ventas', 'periodo' => '202605']))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+        $this->from(route('sire.dbf', ['libro' => 'ventas', 'periodo' => '202604']))
+            ->get(route('sire.dbf.imprimir', ['ventas', 'periodo' => '202604']))->assertSessionHas('error');
+
         [, $filas] = $this->dbf('ventas');
         $this->assertCount(2, $filas);
         $f = $filas[0];

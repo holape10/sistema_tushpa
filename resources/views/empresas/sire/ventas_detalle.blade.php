@@ -45,6 +45,8 @@
 
         @if ($propuesta)
             <div class="flex flex-wrap gap-2 lg:justify-end">
+                <a href="{{ route('sire.dbf.imprimir', ['ventas', 'periodo' => $periodo]) }}" target="_blank"
+                   class="h-10 px-4 inline-flex items-center rounded-xl bg-white border border-slate-400 text-slate-700 hover:bg-slate-50 text-sm font-bold">🖨 Imprimir</a>
                 <a href="{{ route('sire.dbf.excel', ['ventas', 'periodo' => $periodo]) }}"
                    class="h-10 px-4 inline-flex items-center rounded-xl bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-bold">⬇ Excel (DBF)</a>
                 <a href="{{ route('sire.dbf.descargar', ['ventas', 'periodo' => $periodo]) }}"
