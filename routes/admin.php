@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AgendaController;
 use App\Http\Controllers\Admin\AgenteController;
 use App\Http\Controllers\Admin\AnuncioController;
 use App\Http\Controllers\Admin\AsistenteController;
+use App\Http\Controllers\Admin\BaseDatosController;
 use App\Http\Controllers\Admin\CertificadoController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\ComprobanteController;
@@ -129,6 +130,9 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/asistente', [AsistenteController::class, 'index'])->name('asistente.index');
     // Estado del servidor: memoria, disco, MySQL y cuánto pesa la base de cada empresa (solo el dueño)
     Route::get('/servidor', [ServidorController::class, 'index'])->name('servidor.index');
+    // Explorador de bases de solo lectura: tablas, filas y consultas SELECT (solo el dueño)
+    Route::get('/base-datos', [BaseDatosController::class, 'index'])->name('basedatos.index');
+    Route::post('/base-datos/consulta', [BaseDatosController::class, 'consulta'])->middleware('throttle:60,1')->name('basedatos.consulta');
     // Soporte con IA: preguntas sobre la base de una empresa (solo lectura)
     Route::get('/soporte-ia', [SoporteIaController::class, 'index'])->name('soporte_ia.index');
     Route::post('/soporte-ia/{cliente}', [SoporteIaController::class, 'preguntar'])->whereNumber('cliente')->middleware('throttle:20,1')->name('soporte_ia.preguntar');

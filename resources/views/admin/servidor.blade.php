@@ -63,6 +63,65 @@
         MySQL usa su caché ({{ $t($mysql['cache']) }}) a propósito para ir rápido; esa memoria es compartida por todas las bases.
     </div>
 
+    <div class="grid lg:grid-cols-2 gap-4 items-start mb-6">
+        {{-- Consultas en curso: si un cliente dice «está lento», aquí se ve si hay una pegada --}}
+        <section class="rounded-2xl bg-white shadow-sm overflow-hidden">
+            <div class="px-4 py-3 border-b flex items-center gap-2">
+                <h2 class="flex-1 font-bold">Consultas en curso <span class="text-sm font-normal text-slate-500">· {{ $consultas['activas']->count() }} trabajando · {{ $consultas['dormidas'] }} conexiones en espera</span></h2>
+                <a href="{{ route('admin.servidor.index', request()->only('base')) }}" class="text-xs font-bold text-indigo-700 hover:underline">↻ Actualizar</a>
+            </div>
+            @forelse ($consultas['activas'] as $p)
+                <div class="px-4 py-2 border-b border-slate-100 text-sm">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="rounded-full px-2 py-0.5 text-xs font-extrabold {{ $p->segundos >= 30 ? 'bg-rose-100 text-rose-700' : ($p->segundos >= 5 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600') }}">{{ $p->segundos }} s</span>
+                        <span class="font-mono text-xs font-bold">{{ $p->base ?: '—' }}</span>
+                        <span class="text-xs text-slate-500">{{ $p->empresa }}</span>
+                        <span class="ml-auto text-xs text-slate-400">{{ $p->estado ?: $p->comando }}</span>
+                    </div>
+                    @if ($p->consulta)<p class="mt-1 font-mono text-[11px] text-slate-600 break-all line-clamp-3" title="{{ $p->consulta }}">{{ $p->consulta }}</p>@endif
+                </div>
+            @empty
+                <p class="px-4 py-6 text-center text-sm text-emerald-700">✔ No hay ninguna consulta trabajando: MySQL está tranquilo.</p>
+            @endforelse
+            <p class="px-4 py-2 text-[11px] text-slate-400">Más de 30 segundos (en rojo) suele ser una consulta pegada o un reporte muy pesado.</p>
+        </section>
+
+        {{-- Trabajos en segundo plano: importaciones, envíos a SUNAT, XML de json.pe… --}}
+        <section class="rounded-2xl bg-white shadow-sm overflow-hidden">
+            <div class="px-4 py-3 border-b flex flex-wrap items-center gap-2">
+                <h2 class="flex-1 font-bold">Trabajos en segundo plano</h2>
+                @if ($trabajos['vivo'])
+                    <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">● Trabajador activo</span>
+                @else
+                    <span class="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-700" title="Sin él, los trabajos corren mientras se espera en la página">● Trabajador detenido{{ $trabajos['latido'] !== null ? ' hace '.intdiv($trabajos['latido'], 60).' min' : '' }}</span>
+                @endif
+            </div>
+            <div class="grid grid-cols-2 divide-x border-b text-center">
+                <div class="py-2"><p class="text-xs text-slate-500">En espera</p><p class="text-xl font-extrabold">{{ $trabajos['total_pendientes'] }}</p></div>
+                <div class="py-2"><p class="text-xs text-slate-500">Fallidos</p><p class="text-xl font-extrabold {{ $trabajos['total_fallidas'] ? 'text-rose-600' : '' }}">{{ $trabajos['total_fallidas'] }}</p></div>
+            </div>
+            @foreach ($trabajos['pendientes'] as $j)
+                <div class="px-4 py-1.5 border-b border-slate-100 text-sm flex items-center gap-2">
+                    <span class="font-mono text-xs">{{ $j->trabajo }}</span>
+                    @if ($j->corriendo)<span class="rounded bg-sky-100 px-1.5 text-[11px] font-bold text-sky-700">corriendo</span>@endif
+                    <span class="ml-auto text-xs text-slate-400">desde {{ \Carbon\Carbon::createFromTimestamp($j->desde)->diffForHumans() }} · intento {{ $j->intentos }}</span>
+                </div>
+            @endforeach
+            @if ($trabajos['fallidas']->isNotEmpty())
+                <p class="px-4 pt-3 pb-1 text-xs font-bold uppercase text-rose-700">Últimos fallidos</p>
+                @foreach ($trabajos['fallidas'] as $j)
+                    <div class="px-4 py-1.5 border-b border-slate-100 text-sm">
+                        <div class="flex items-center gap-2"><span class="font-mono text-xs font-bold">{{ $j->trabajo }}</span>
+                            <span class="ml-auto text-xs text-slate-400">{{ $j->cuando ? \Carbon\Carbon::parse($j->cuando)->format('d/m/Y H:i') : '' }}</span></div>
+                        <p class="mt-0.5 font-mono text-[11px] text-rose-700 break-all line-clamp-2" title="{{ $j->error }}">{{ $j->error }}</p>
+                    </div>
+                @endforeach
+            @elseif ($trabajos['pendientes']->isEmpty())
+                <p class="px-4 py-6 text-center text-sm text-emerald-700">✔ No hay trabajos en espera ni fallidos.</p>
+            @endif
+        </section>
+    </div>
+
     <div class="grid lg:grid-cols-[1fr_380px] gap-4 items-start">
         <section class="rounded-2xl bg-white shadow-sm overflow-hidden">
             <div class="px-4 py-3 border-b flex flex-wrap items-center gap-2">

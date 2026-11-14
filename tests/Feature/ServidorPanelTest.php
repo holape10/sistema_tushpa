@@ -48,6 +48,49 @@ class ServidorPanelTest extends TestCase
         $this->assertNotEmpty(Servidor::tablasDe(DB::connection('central')->getDatabaseName()));
     }
 
+    public function test_consultas_en_curso_y_trabajos_en_segundo_plano(): void
+    {
+        $this->conCentral();
+
+        $consultas = Servidor::consultasActivas();
+        $trabajos = Servidor::trabajos();
+
+        $this->assertIsInt($consultas['dormidas']);
+        $this->assertTrue($consultas['activas']->every(fn ($p) => $p->comando !== 'Sleep'), 'Solo las que están trabajando.');
+        $this->assertSame(['vivo', 'latido', 'pendientes', 'fallidas', 'total_pendientes', 'total_fallidas'], array_keys($trabajos));
+    }
+
+    /** El dueño sin guardar en la base (el explorador corre en su propia conexión, fuera de la transacción de la prueba) */
+    private function dueno(bool $esDueno = true): Superadmin
+    {
+        URL::defaults(['panelDominio' => strtolower((string) config('tenancy.dominio'))]);
+        config(['database.default' => 'central']);
+
+        return (new Superadmin)->forceFill(['id' => 999999, 'nombre' => 'DUEÑO', 'email' => 'dueno@prueba.test', 'activo' => true, 'es_dueno' => $esDueno]);
+    }
+
+    public function test_el_explorador_solo_lee(): void
+    {
+        $this->conCentral();
+        $base = DB::connection('central')->getDatabaseName();
+        $dueno = $this->dueno();
+
+        $this->actingAs($dueno, 'superadmin')->get(route('admin.basedatos.index', ['base' => $base, 'tabla' => 'migrations']))->assertOk()
+            ->assertSee('solo lectura')->assertSee('migrations')->assertSee('Columnas');
+        $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'SELECT 41 + 1 AS respuesta'])->assertOk()->assertSee('respuesta')->assertSee('42');
+        // Nada que escriba, ni otra base, ni las del motor
+        $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'DELETE FROM migrations'])->assertOk()->assertSee('Solo se permiten consultas de lectura');
+        $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'SELECT 1; DROP TABLE migrations'])->assertOk()->assertSee('Solo una sentencia');
+        $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'SELECT * FROM mysql.user'])->assertOk()->assertDontSee('authentication_string');
+        $this->post(route('admin.basedatos.consulta'), ['base' => 'mysql', 'sql' => 'SELECT 1'])->assertNotFound();
+        $this->get(route('admin.basedatos.index', ['base' => $base, 'tabla' => 'no_existe']))->assertOk()->assertSee('No existe la tabla');
+        $this->assertTrue(DB::connection('central')->getSchemaBuilder()->hasTable('migrations'));
+        // El Excel de la consulta
+        $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'SELECT migration FROM migrations', 'excel' => 1])->assertOk()->assertDownload();
+
+        $this->actingAs($this->dueno(false), 'superadmin')->get(route('admin.basedatos.index'))->assertForbidden();
+    }
+
     public function test_solo_el_dueno_ve_la_pagina(): void
     {
         $this->conCentral();

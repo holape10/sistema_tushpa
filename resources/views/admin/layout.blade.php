@@ -57,6 +57,7 @@
                     $yo->es_dueno ? ['Asistente IA', 'admin.asistente.index', 'admin.asistente.*', 0, 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.29 6.86L22 12l-6.71 2.14L13 21l-2.29-6.86L4 12l6.71-2.14L13 3z'] : null,
                     $yo->es_dueno ? ['Soporte con IA', 'admin.soporte_ia.index', 'admin.soporte_ia.*', 0, 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z'] : null,
                     $yo->es_dueno ? ['Servidor', 'admin.servidor.index', 'admin.servidor.*', 0, 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01'] : null,
+                    $yo->es_dueno ? ['Base de datos', 'admin.basedatos.index', 'admin.basedatos.*', 0, 'M4 7c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3zm0 0v10c0 1.66 3.58 3 8 3s8-1.34 8-3V7M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3'] : null,
                     $yo->es_dueno ? ['Respaldos', 'admin.respaldos.index', 'admin.respaldos.*', 0, 'M4 7v10c0 2 3.6 3 8 3s8-1 8-3V7M4 7c0 2 3.6 3 8 3s8-1 8-3M4 7c0-2 3.6-3 8-3s8 1 8 3m-16 5c0 2 3.6 3 8 3s8-1 8-3'] : null,
                 ]),
             ]);

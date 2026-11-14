@@ -19,6 +19,7 @@ class ServidorController extends Controller
 
         return view('admin.servidor', [
             'memoria' => Servidor::memoria(), 'disco' => Servidor::disco(), 'mysql' => Servidor::mysql(), 'bases' => $bases,
+            'consultas' => Servidor::consultasActivas(), 'trabajos' => Servidor::trabajos(),
             'elegida' => $bases->firstWhere('base', $elegida),
             'tablas' => $bases->contains('base', $elegida) ? Servidor::tablasDe($elegida) : collect(),
         ]);

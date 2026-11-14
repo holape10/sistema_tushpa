@@ -92,8 +92,53 @@ class Servidor
 
         return collect(DB::connection('central')->select(
             'SELECT TABLE_NAME AS tabla, COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0) AS total, COALESCE(TABLE_ROWS, 0) AS filas
-             FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY total DESC LIMIT '.max(1, min(50, $cuantas)), [$base]))
+             FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY total DESC LIMIT '.max(1, min(2000, $cuantas)), [$base]))
             ->map(fn ($t) => (object) ['tabla' => $t->tabla, 'total' => (int) $t->total, 'filas' => (int) $t->filas]);
+    }
+
+    /**
+     * Lo que MySQL está haciendo ahora (sin las conexiones dormidas): de qué base, hace cuántos segundos y qué consulta.
+     * Si un cliente dice «está lento», aquí se ve si hay una consulta pegada.
+     *
+     * @return array{activas: Collection<int, object>, dormidas: int}
+     */
+    public static function consultasActivas(): array
+    {
+        $db = DB::connection('central');
+        $todas = collect($db->select('SELECT ID AS id, USER AS usuario, DB AS base, COMMAND AS comando, TIME AS segundos, STATE AS estado,
+                LEFT(INFO, 600) AS consulta FROM information_schema.PROCESSLIST WHERE ID <> CONNECTION_ID()'));
+        $activas = $todas->filter(fn ($p) => $p->comando !== 'Sleep' && $p->comando !== 'Daemon' && $p->comando !== 'Binlog Dump')
+            ->sortByDesc('segundos')->take(30)->values();
+        $rucs = $activas->map(fn ($p) => preg_match('/(\d{11})/', (string) $p->base, $m) ? $m[1] : null)->filter()->unique();
+        $empresas = $rucs->isEmpty() ? collect() : Cliente::whereIn('ruc', $rucs->all())->pluck('razon_social', 'ruc');
+
+        return [
+            'activas' => $activas->map(fn ($p) => (object) ((array) $p + ['empresa' => preg_match('/(\d{11})/', (string) $p->base, $m) ? ($empresas[$m[1]] ?? null) : null])),
+            'dormidas' => $todas->where('comando', 'Sleep')->count(),
+        ];
+    }
+
+    /**
+     * Los trabajos en segundo plano (cola de la base central): si el trabajador está vivo, los que esperan y los que
+     * fallaron (con el primer renglón del error).
+     *
+     * @return array{vivo: bool, latido: ?int, pendientes: Collection<int, object>, fallidas: Collection<int, object>, total_pendientes: int, total_fallidas: int}
+     */
+    public static function trabajos(): array
+    {
+        $estado = Colas::estado();
+        $db = DB::connection('central');
+        $nombre = fn (?string $payload) => (string) (json_decode((string) $payload, true)['displayName'] ?? 'Trabajo');
+        $corto = fn (string $clase) => class_basename(str_replace('\\', '/', $clase));
+        $pendientes = rescue(fn () => $db->table('jobs')->orderBy('id')->limit(20)->get(['id', 'queue', 'payload', 'attempts', 'reserved_at', 'created_at']), collect(), false)
+            ->map(fn ($j) => (object) ['id' => $j->id, 'trabajo' => $corto($nombre($j->payload)), 'cola' => $j->queue, 'intentos' => (int) $j->attempts,
+                'corriendo' => (bool) $j->reserved_at, 'desde' => (int) $j->created_at]);
+        $fallidas = rescue(fn () => $db->table('failed_jobs')->orderByDesc('id')->limit(20)->get(['id', 'payload', 'exception', 'failed_at']), collect(), false)
+            ->map(fn ($j) => (object) ['id' => $j->id, 'trabajo' => $corto($nombre($j->payload)), 'cuando' => $j->failed_at,
+                'error' => mb_substr(strtok((string) $j->exception, "\n") ?: '', 0, 300)]);
+
+        return ['vivo' => $estado['vivo'], 'latido' => $estado['latido'], 'pendientes' => $pendientes, 'fallidas' => $fallidas,
+            'total_pendientes' => (int) ($estado['pendientes'] ?? 0), 'total_fallidas' => (int) ($estado['fallidas'] ?? 0)];
     }
 
     /** 1536 → "1.5 KB"; 5 400 000 000 → "5.03 GB" */

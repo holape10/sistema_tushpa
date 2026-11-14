@@ -61,9 +61,10 @@ class ConsultaSegura
     }
 
     /**
+     * @param  int  $maximo  filas que devuelve (el explorador del panel pide más para el Excel)
      * @return array{filas: list<array<string, mixed>>, total: int, cortado: bool}
      */
-    public static function ejecutar(string $sql): array
+    public static function ejecutar(string $sql, int $maximo = self::FILAS): array
     {
         if ($motivo = self::problema($sql)) {
             throw new \InvalidArgumentException($motivo);
@@ -85,7 +86,7 @@ class ConsultaSegura
         }
         $total = count($filas);
 
-        return ['filas' => array_map(fn ($f) => self::tapar((array) $f), array_slice($filas, 0, self::FILAS)), 'total' => $total, 'cortado' => $total > self::FILAS];
+        return ['filas' => array_map(fn ($f) => self::tapar((array) $f), array_slice($filas, 0, $maximo)), 'total' => $total, 'cortado' => $total > $maximo];
     }
 
     /** Tablas de la base (con un filtro opcional) y, si se pide una, sus columnas */
@@ -105,8 +106,12 @@ class ConsultaSegura
         return ['tablas_en_total' => $todas->count(), 'tablas' => $todas->take(300)->all()];
     }
 
-    /** @param  array<string, mixed>  $fila */
-    private static function tapar(array $fila): array
+    /**
+     * Claves, contraseñas, tokens y certificados tapados; textos muy largos, recortados.
+     *
+     * @param  array<string, mixed>  $fila
+     */
+    public static function tapar(array $fila): array
     {
         foreach ($fila as $col => $valor) {
             if ($valor !== null && $valor !== '' && preg_match(self::SENSIBLE, (string) $col)) {
