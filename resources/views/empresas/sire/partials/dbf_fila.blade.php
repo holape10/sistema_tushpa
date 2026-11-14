@@ -33,7 +33,16 @@
         {{-- En dólares: que se vea (los montos de abajo están en esa moneda) --}}
         @if ($c['moneda'] !== 'PEN')<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-800" title="Los montos están en {{ $c['moneda'] }}">{{ $c['moneda'] === 'USD' ? 'US$ DÓLARES' : $c['moneda'] }} · TC {{ $c['tc'] }}</span>@endif
         <span class="flex-1 min-w-[180px] text-sm text-slate-700">{{ $c['nombre'] }} <span class="text-xs text-slate-400">{{ $c['ruc'] }}</span>
-            @if ($c['anulado'])<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">ANULADO</span>@endif</span>
+            @if ($c['anulado'])<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">ANULADO</span>@endif
+            {{-- Agregado a mano (SUNAT aún no lo tiene) o ya agregado en otro mes --}}
+            @if (! empty($c['manual']))
+                <span class="ml-1 rounded bg-indigo-100 px-1.5 text-[11px] font-bold text-indigo-700" title="Agregado a mano: SUNAT aún no lo tiene en la propuesta">MANUAL</span>
+                <button type="button" onclick="sireQuitarManual(@js(route('sire.dbf.quitar_manual', $c['manual'])), @js($c['serie'].'-'.$c['numero']))"
+                        class="ml-1 text-[11px] font-bold text-rose-600 hover:underline">Borrar</button>
+            @endif
+            @if (! empty($c['yaManual']))
+                <span class="ml-1 rounded bg-amber-100 px-1.5 text-[11px] font-bold text-amber-800">Ya se agregó a mano en {{ substr($c['yaManual'], 4, 2) }}/{{ substr($c['yaManual'], 0, 4) }}: no se lleva</span>
+            @endif</span>
         @if ($compras || $c['lineas'])
             @if ($c['lineas'])
                 <span x-show="fila.sinCuenta" class="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700" x-text="'Sin Cta. cargo'"></span>

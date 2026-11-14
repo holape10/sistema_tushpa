@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Support\Contabilidad\SireManuales;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
 use Illuminate\Support\Facades\DB;
@@ -132,6 +133,10 @@ class ComprasDetalle
     public static function conPropuesta(string $idEmpresa, string $periodo): array
     {
         $propuesta = self::propuestaSire($idEmpresa, $periodo);
+        // Los agregados a mano a este mes van como si estuvieran en la propuesta (también se les trae el XML)
+        if ($propuesta !== null) {
+            $propuesta += array_diff_key(SireManuales::comprasDelPeriodo($idEmpresa, $periodo), $propuesta);
+        }
 
         return ['propuesta' => $propuesta !== null] + self::delPeriodo($idEmpresa, $periodo, $propuesta);
     }

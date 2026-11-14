@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Support\Concar;
 use App\Support\Contabilidad\SireARegistro;
 use App\Support\Contabilidad\SireDbf;
+use App\Support\Contabilidad\SireManuales;
 use App\Support\Excel;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -190,6 +191,37 @@ class SireDbfController extends Controller
         return response()->download($ruta, "{$tabla}_{$ruc}_{$periodo}.xlsx", [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend();
+    }
+
+    /** Agrega a mano un comprobante que SUNAT aún no tiene en la propuesta del mes (el proveedor mandó tarde la factura) */
+    public function agregar(Request $request): JsonResponse
+    {
+        $ruc = $this->autorizar();
+        $d = $request->validate([
+            'libro' => ['required', Rule::in(array_keys(SireDbf::LIBROS))], 'periodo' => 'required|regex:/^\d{6}$/',
+            'tipo' => 'required|string|max:2', 'serie' => 'required|string|max:20', 'numero' => 'required|string|max:20',
+            'fecha' => 'required|date', 'vence' => 'nullable|date', 'ruc' => 'required|string|max:15', 'nombre' => 'required|string|max:200',
+            'moneda' => 'nullable|in:PEN,USD', 'tc' => 'nullable|numeric|min:0|max:99', 'montos' => 'required|array',
+            'montos.*' => 'nullable|numeric|min:0|max:99999999', 'ref_tipo' => 'nullable|string|max:2', 'ref_serie' => 'nullable|string|max:20',
+            'ref_numero' => 'nullable|string|max:20', 'ref_fecha' => 'nullable|date',
+        ], [], ['numero' => 'número', 'nombre' => 'nombre o razón social', 'tc' => 'tipo de cambio']);
+
+        try {
+            $id = SireManuales::guardar($ruc, $d['libro'], $d['periodo'], $d, (int) Auth::id());
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['ok' => true, 'id' => $id]);
+    }
+
+    /** Borra un comprobante agregado a mano (los de la propuesta de SUNAT no se borran: se desmarca «Llevar») */
+    public function quitarManual(int $id): JsonResponse
+    {
+        $ruc = $this->autorizar();
+        abort_unless(SireManuales::eliminar($ruc, $id), 404);
+
+        return response()->json(['ok' => true]);
     }
 
     /**

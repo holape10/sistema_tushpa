@@ -235,6 +235,73 @@ class SireDbfTest extends FlujoTestCase
         $this->assertSame([100.0, 18.0, 118.0], [(float) $reg['8067']->base, (float) $reg['8067']->igv, (float) $reg['8067']->total]);
     }
 
+    /** Una factura que SUNAT aún no tiene: se agrega a mano y va como las demás, sin repetirse nunca */
+    public function test_agregar_a_mano_una_compra_que_sunat_aun_no_tiene(): void
+    {
+        Storage::fake();
+        $ruc = $this->usuario->IdEmpresa;
+        $this->propuesta(Sire::COMPRAS, self::RCE, [
+            $this->compra('22/05/2026', '01', 'F001', '134277', '20553510661', 'LLAMA PE SA', ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177]),
+        ]);
+        $factura = ['libro' => 'compras', 'periodo' => '202605', 'tipo' => '01', 'serie' => 'f005', 'numero' => '00099', 'fecha' => '2026-05-30',
+            'ruc' => '20100070970', 'nombre' => 'supermercados peruanos', 'montos' => ['base_dg' => 100, 'igv_dg' => 18]];
+        $agregar = fn (array $cambios = []) => $this->postJson(route('sire.dbf.agregar'), array_replace($factura, $cambios));
+
+        $id = (int) $agregar()->assertOk()->json('id');
+        $mayo = collect(SireDbf::delPeriodo($ruc, 'compras', '202605')['comprobantes'])->keyBy('clave');
+        $manual = $mayo['20100070970|01|F005|99'];
+        $this->assertSame([$id, 'SUPERMERCADOS PERUANOS', 118.0, false, 0.0, null], [$manual['manual'], $manual['nombre'], $manual['montos']['total'], $manual['excluido'], $manual['diferencia'], $manual['alerta']]);
+        $this->get(route('sire.dbf', ['libro' => 'compras', 'periodo' => '202605']))->assertOk()->assertSee('MANUAL')->assertSee('SUPERMERCADOS PERUANOS');
+
+        // Se le ponen cuentas como a cualquiera y va al .dbf y al CONCAR con detalle
+        $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202605', 'clave' => $manual['clave'], 'ctacargo' => '6011'])->assertOk();
+        [, $filas] = $this->dbf('compras');
+        $fila = collect($filas)->firstWhere('SERIEDOC', 'F005');
+        $this->assertSame(['000000000099', 100.0, 18.0, 118.0, '6011'], [$fila['NUMDOC'], $fila['OGYE'], $fila['IGV_1'], $fila['TOTAL'], $fila['CTACARGO']]);
+        $this->assertArrayHasKey('20100070970|01|F005|99', collect(ComprasDetalle::conPropuesta($ruc, '202605')['comprobantes'])->keyBy(fn ($c) => "{$c['ruc']}|{$c['tipo']}|{$c['serie']}|{$c['numero']}"));
+
+        // No se repite, no se agrega lo que ya está en la propuesta ni con fecha de un mes posterior, ni sin propuesta
+        $agregar()->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'ya se agregó'));
+        $agregar(['ruc' => '20553510661', 'serie' => 'F001', 'numero' => '134277'])->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'ya está en la propuesta'));
+        $agregar(['numero' => '100', 'fecha' => '2026-06-01'])->assertStatus(422);
+        $agregar(['numero' => '101', 'periodo' => '202604'])->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'propuesta'));
+        $agregar(['numero' => '102', 'montos' => ['base_dg' => -5]])->assertStatus(422);
+
+        // La nota de crédito se resta sola
+        $agregar(['tipo' => '07', 'serie' => 'FC05', 'numero' => '7', 'montos' => ['no_gravado' => 20], 'ref_serie' => 'F005', 'ref_numero' => '99'])->assertOk();
+        $nota = collect(SireDbf::delPeriodo($ruc, 'compras', '202605')['comprobantes'])->firstWhere('serie', 'FC05');
+        $this->assertSame([-20.0, -20.0, 'F005'], [$nota['montos']['no_gravado'], $nota['montos']['total'], $nota['ref']['serie']]);
+
+        // En junio SUNAT ya la trae: allí no se lleva (no entra dos veces)
+        $this->propuesta(Sire::COMPRAS, self::RCE, [$this->compra('30/05/2026', '01', 'F005', '99', '20100070970', 'SUPERMERCADOS PERUANOS', ['base_dg' => 100, 'igv_dg' => 18, 'total' => 118])], '202606');
+        $junio = collect(SireDbf::delPeriodo($ruc, 'compras', '202606')['comprobantes'])->firstWhere('serie', 'F005');
+        $this->assertSame([true, '202605', null], [$junio['excluido'], $junio['yaManual'], $junio['manual']]);
+        $this->get(route('sire.dbf', ['libro' => 'compras', 'periodo' => '202606']))->assertOk()->assertSee('Ya se agregó a mano en 05/2026');
+
+        // Se borra con sus cuentas
+        $this->postJson(route('sire.dbf.quitar_manual', $id))->assertOk();
+        $this->assertNull(collect(SireDbf::delPeriodo($ruc, 'compras', '202605')['comprobantes'])->firstWhere('serie', 'F005'));
+        $this->assertFalse(DB::table('sire_ajustes')->where('clave', '20100070970|01|F005|99')->where('periodo', '202605')->exists());
+        $this->assertFalse(collect(SireDbf::delPeriodo($ruc, 'compras', '202606')['comprobantes'])->firstWhere('serie', 'F005')['excluido'], 'Borrado el manual, junio ya lo lleva.');
+        $this->postJson(route('sire.dbf.quitar_manual', $id))->assertNotFound();
+    }
+
+    public function test_agregar_a_mano_una_venta_y_se_imprime(): void
+    {
+        Storage::fake();
+        $ruc = $this->usuario->IdEmpresa;
+        $this->propuesta(Sire::VENTAS, self::RVIE, []);
+        $this->postJson(route('sire.dbf.agregar'), ['libro' => 'ventas', 'periodo' => '202605', 'tipo' => '03', 'serie' => 'B001', 'numero' => '45',
+            'fecha' => '2026-05-10', 'ruc' => '0', 'nombre' => 'Clientes varios', 'montos' => ['gravada' => 50, 'igv' => 9]])->assertOk();
+        $this->postJson(route('sire.dbf.agregar'), ['libro' => 'ventas', 'periodo' => '202605', 'tipo' => '12', 'serie' => 'T001', 'numero' => '1',
+            'fecha' => '2026-05-10', 'ruc' => '0', 'nombre' => 'X', 'montos' => ['gravada' => 1]])->assertStatus(422);
+
+        [, $filas] = $this->dbf('ventas');
+        $this->assertSame(['B001', 50.0, 9.0, 59.0, false], [$filas[0]['SERIEDOC'], $filas[0]['GRAVADA'], $filas[0]['IGV'], $filas[0]['TOTAL'], (bool) $filas[0]['ANULADA']]);
+        $this->get(route('sire.dbf.imprimir', ['ventas', 'periodo' => '202605']))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->get(route('sire.ventas.detalle', ['periodo' => '202605']))->assertOk()->assertSee('MANUAL')->assertSee('Agregar comprobante');
+    }
+
     public function test_sin_permiso_del_registro_no_aparece_ni_se_puede(): void
     {
         $cajero = $this->usuario->replicate();

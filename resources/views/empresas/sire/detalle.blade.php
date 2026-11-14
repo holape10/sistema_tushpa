@@ -139,6 +139,7 @@
                 <button type="button" @click="filtro = '{{ $valor }}'" class="px-3 h-8 rounded-full font-semibold"
                         :class="filtro === '{{ $valor }}' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'">{{ $texto }}</button>
             @endforeach
+            @include('empresas.sire.partials.agregar_comprobante', ['libro' => 'compras'])
             <span class="text-xs text-slate-400 ml-auto">Los cambios se guardan solos · desmarca «Llevar» lo que no va al .dbf.</span>
         </div>
         <p class="text-xs text-slate-500">
@@ -173,6 +174,11 @@
                     <span class="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-700">{{ $sinCuenta }} sin cuenta</span>
                 @else
                     <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">✔ {{ count($c['lineas']) }} línea(s)</span>
+                @endif
+                {{-- SUNAT aún no lo tiene: se agrega a este mes con lo que dice su XML --}}
+                @if ($propuesta && $c['xml'])
+                    <span role="button" tabindex="0" @click.stop="window.dispatchEvent(new CustomEvent('sire-agregar', { detail: @js(\App\Support\Contabilidad\SireManuales::desdeXml($c['xml'], $c['lineas'])) }))"
+                          class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100">➕ Agregar a este mes</span>
                 @endif
                 @if ($c['xml'])<a href="{{ route('sire.detalle.pdf', $c['xml']->id) }}" target="_blank" @click.stop class="text-xs font-bold text-slate-600 hover:text-indigo-700">📄 PDF</a>
                     <span x-text="abierto ? '−' : '+'" class="text-slate-400 text-lg w-4 text-center"></span>@endif

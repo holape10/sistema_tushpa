@@ -712,6 +712,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/sire/dbf', [SireDbfController::class, 'index'])->name('sire.dbf');
     Route::post('/sire/dbf/guardar', [SireDbfController::class, 'guardar'])->name('sire.dbf.guardar');
     Route::post('/sire/dbf/aplicar', [SireDbfController::class, 'aplicar'])->name('sire.dbf.aplicar');
+    Route::post('/sire/dbf/agregar', [SireDbfController::class, 'agregar'])->name('sire.dbf.agregar');
+    Route::post('/sire/dbf/agregado/{id}/quitar', [SireDbfController::class, 'quitarManual'])->whereNumber('id')->name('sire.dbf.quitar_manual');
     Route::post('/sire/dbf/{libro}/registrar', [SireDbfController::class, 'registrar'])->whereIn('libro', ['ventas', 'compras'])->name('sire.dbf.registrar');
     Route::get('/sire/dbf/{libro}/excel', [SireDbfController::class, 'excel'])->whereIn('libro', ['ventas', 'compras'])->name('sire.dbf.excel');
     Route::get('/sire/dbf/{libro}/imprimir', [SireDbfController::class, 'imprimir'])->whereIn('libro', ['ventas', 'compras'])->name('sire.dbf.imprimir');

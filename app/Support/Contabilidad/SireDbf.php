@@ -147,6 +147,10 @@ class SireDbf
             return ['comprobantes' => [], 'propuesta' => false];
         }
         $comprobantes = self::leer($libro, $propuesta);
+        // Los que el contador agregó a mano a este mes (si SUNAT ya lo trae en la propuesta, vale el de la propuesta)
+        $comprobantes += array_diff_key(SireManuales::delPeriodo($ruc, $libro, $periodo), $comprobantes);
+        // Los de la propuesta que ya se agregaron a mano en otro mes: aquí no se llevan (no entran dos veces)
+        $yaManual = SireManuales::enOtroPeriodo($ruc, $libro, $periodo, array_keys($comprobantes));
         $ajustes = DB::table('sire_ajustes')->where('IdEmpresa', $ruc)->where('libro', $libro)->where('periodo', $periodo)->get()->keyBy('clave');
         $cfg = Concar::config($ruc);
         // La última cuenta que se usó con cada proveedor o cliente (de cualquier mes)
@@ -166,7 +170,9 @@ class SireDbf
             if ($libro === 'ventas' && ($v = $ventasXml["{$c['tipo']}|{$c['serie']}|{$c['numero']}"] ?? null)) {
                 [$c['lineas'], $c['xml_id']] = [$v['lineas'], $v['xml_id']];
             }
-            $c['excluido'] = (bool) ($a->excluido ?? false);
+            $c['manual'] ??= null;
+            $c['yaManual'] = $yaManual[$clave] ?? null;
+            $c['excluido'] = (bool) ($a->excluido ?? isset($yaManual[$clave]));
             $c['editado'] = $a && $a->montos;
             $c['montos'] = $a && $a->montos ? array_map('floatval', json_decode($a->montos, true)) + array_fill_keys(array_keys($c['montos']), 0.0) : $c['montos'];
             if ($libro === 'compras') {

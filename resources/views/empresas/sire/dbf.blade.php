@@ -87,6 +87,7 @@
                 <button type="button" @click="filtro = '{{ $valor }}'" class="px-3 h-8 rounded-full font-semibold"
                         :class="filtro === '{{ $valor }}' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'">{{ $texto }}</button>
             @endforeach
+            @include('empresas.sire.partials.agregar_comprobante')
             <span class="text-xs text-slate-400 ml-auto">Los cambios se guardan solos.</span>
         </div>
 
