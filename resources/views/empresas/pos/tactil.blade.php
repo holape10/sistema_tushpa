@@ -22,6 +22,8 @@
     <script>
         window.PVT = {
             usuario: @json(auth()->user()->IdUsuario),
+            // Cobrar a otro precio (Acciones › cambiar_precio): el servidor también lo valida
+            puedePrecio: @json(auth()->user()->puede('cambiar_precio')),
             csrf: @json(csrf_token()),
             categorias: @json($categorias),
             productos: @json($productos),
@@ -95,7 +97,7 @@
         <div class="flex-1 min-h-0 overflow-y-auto scroll-fino px-3 pb-28 md:px-0 md:pb-2">
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5 md:gap-3">
                 <template x-for="p in visibles" :key="p.id">
-                    <button type="button" @click="agregar(p)"
+                    <button type="button" @click="tocar(p)"
                             class="relative bg-white rounded-2xl shadow-sm h-32 sm:h-36 p-2.5 flex flex-col text-center overflow-hidden active:scale-[.97] active:bg-indigo-50 transition">
                         <span class="absolute top-0 inset-x-0 h-1.5" :style="`background:${colorCat(p.cat)}`"></span>
                         <span x-show="cantidadEn(p.id)" x-cloak x-text="cantidadEn(p.id)"
@@ -255,16 +257,52 @@
         <p class="text-center font-extrabold text-lg uppercase leading-tight" x-text="elegir?.nombre"></p>
         <p class="text-center text-sm text-slate-500 mb-3">¿Cómo lo vendes?</p>
         <div class="grid gap-2">
-            <button type="button" @click="agregar(elegir, null)" class="h-14 px-4 rounded-2xl bg-slate-100 active:bg-slate-200 flex items-center justify-between font-bold">
+            <button type="button" @click="tocar(elegir, null)" class="h-14 px-4 rounded-2xl bg-slate-100 active:bg-slate-200 flex items-center justify-between font-bold">
                 <span>Unidad</span><span class="text-emerald-600" x-text="soles(elegir?.precio)"></span>
             </button>
             <template x-for="pr in (elegir?.pres || [])" :key="pr.id">
-                <button type="button" @click="agregar(elegir, pr)" class="h-14 px-4 rounded-2xl bg-indigo-50 active:bg-indigo-100 flex items-center justify-between font-bold text-indigo-800">
+                <button type="button" @click="tocar(elegir, pr)" class="h-14 px-4 rounded-2xl bg-indigo-50 active:bg-indigo-100 flex items-center justify-between font-bold text-indigo-800">
                     <span x-text="pr.nombre + ' (x' + pr.factor + ')'"></span><span class="text-emerald-600" x-text="soles(pr.precio)"></span>
                 </button>
             </template>
         </div>
         <button type="button" @click="elegir = null" class="mt-3 w-full h-11 rounded-xl bg-slate-200 font-bold">Cancelar</button>
+    </div>
+</div>
+
+{{-- Celular: al tocar un producto se pone de una vez la cantidad (y el precio, con permiso) --}}
+<div x-show="rapido" x-cloak class="fixed inset-0 z-[60] bg-slate-900/60 flex items-end sm:items-center justify-center sm:p-4" @click.self="rapido = null">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm p-4 pb-5" x-show="rapido" x-transition.opacity>
+        <p class="text-center font-extrabold text-lg uppercase leading-tight" x-text="rapido?.nombre"></p>
+        <div class="grid grid-cols-2 gap-2 mt-3">
+            <button type="button" @click="rapido.campo = 'cant'; rapido.nuevo = true"
+                    class="rounded-2xl p-2 text-center border-2" :class="rapido?.campo === 'cant' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200'">
+                <span class="block text-[11px] font-bold uppercase text-slate-500">Cantidad</span>
+                <span class="block text-3xl font-black" x-text="rapido?.cant || '0'"></span>
+            </button>
+            <button type="button" @click="if (cfg.puedePrecio) { rapido.campo = 'precio'; rapido.nuevo = true } else aviso('No tienes permiso para cambiar el precio.', 'error')"
+                    class="rounded-2xl p-2 text-center border-2" :class="rapido?.campo === 'precio' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200'">
+                <span class="block text-[11px] font-bold uppercase text-slate-500">Precio <span x-show="cfg.puedePrecio">✎</span></span>
+                <span class="block text-3xl font-black" :class="Number(rapido?.precio) !== rapido?.base ? 'text-orange-600' : 'text-emerald-600'" x-text="rapido?.precio || '0'"></span>
+            </button>
+        </div>
+        <div class="flex items-center justify-between gap-2 mt-2" :class="rapido?.campo === 'cant' ? '' : 'invisible'">
+            <button type="button" @click="rapidoSumar(-1)" class="w-14 h-11 rounded-xl bg-rose-50 text-rose-600 text-2xl font-bold active:bg-rose-100" aria-label="Menos">−</button>
+            <template x-for="n in [5, 10, 12]" :key="n">
+                <button type="button" @click="rapido.cant = String(n); rapido.nuevo = true" class="flex-1 h-11 rounded-xl bg-slate-100 font-bold active:bg-slate-200" x-text="n"></button>
+            </template>
+            <button type="button" @click="rapidoSumar(1)" class="w-14 h-11 rounded-xl bg-indigo-50 text-indigo-600 text-2xl font-bold active:bg-indigo-100" aria-label="Más">+</button>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-2">
+            <template x-for="k in ['7','8','9','4','5','6','1','2','3','.','0','⌫']" :key="k">
+                <button type="button" @click="rapidoTecla(k)" class="h-12 rounded-xl bg-slate-100 text-2xl font-bold active:bg-slate-200" x-text="k"></button>
+            </template>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-3">
+            <button type="button" @click="rapido = null" class="h-14 rounded-2xl bg-slate-200 font-bold">Cancelar</button>
+            <button type="button" @click="rapidoAgregar()" class="col-span-2 h-14 rounded-2xl bg-emerald-500 text-white font-black active:scale-[.98]"
+                    x-text="'AGREGAR ' + soles((Number(rapido?.cant) || 0) * (Number(rapido?.precio) || 0))"></button>
+        </div>
     </div>
 </div>
 

@@ -25,6 +25,7 @@ document.addEventListener('alpine:init', () => {
         medio: CFG.medios[0]?.id ?? null,
         pedidoAbierto: false,
         teclado: null,
+        rapido: null, // celular: cantidad y precio del producto tocado, antes de agregarlo
         venta: null,
         procesando: false,
         intento: false,
@@ -122,6 +123,48 @@ document.addEventListener('alpine:init', () => {
             setTimeout(() => { it.flash = false; }, 500);
             this.sonido(true);
         },
+        /** Tocar un producto: en celular se pone la cantidad (y el precio) de una vez; en PC se agrega directo */
+        tocar(p, pres) {
+            if (pres === undefined && p.pres.length) { this.elegir = p; return; }
+            if (!window.matchMedia('(max-width: 767px)').matches) { this.agregar(p, pres ?? null); return; }
+            this.elegir = null;
+            const precio = pres ? pres.precio : p.precio;
+            this.rapido = { p, pres: pres ?? null, nombre: p.nombre + (pres ? ' (' + pres.nombre + ')' : ''), base: precio,
+                cant: '1', precio: String(precio), campo: 'cant', nuevo: true };
+        },
+        rapidoTecla(k) {
+            const r = this.rapido, campo = r.campo;
+            let v = r.nuevo ? '' : r[campo];
+            r.nuevo = false;
+            const decimales = campo === 'cant' ? 3 : 2;
+            if (k === '⌫') v = v.slice(0, -1);
+            else if (k === '.') { if (!v.includes('.')) v = (v || '0') + '.'; }
+            else if (!new RegExp('\\.\\d{' + decimales + '}$').test(v)) v += k;
+            r[campo] = v;
+        },
+        rapidoSumar(d) {
+            const r = this.rapido;
+            r.cant = String(Math.max(1, r3((parseFloat(r.cant) || 0) + d)));
+            r.nuevo = true;
+        },
+        rapidoAgregar() {
+            const r = this.rapido;
+            const cant = r3(parseFloat(r.cant)), precio = r2(parseFloat(r.precio));
+            if (!(cant > 0)) { this.aviso('La cantidad debe ser mayor a 0.', 'error'); return; }
+            if (!(precio > 0)) { this.aviso('El precio debe ser mayor a 0.', 'error'); return; }
+            if (precio !== r.base && !CFG.puedePrecio) { this.aviso('No tienes permiso para cambiar el precio.', 'error'); return; }
+            const presId = r.pres?.id ?? null;
+            let it = this.carrito.find(x => x.id === r.p.id && (x.presentacion || null) === presId && !x.desc50 && x.precio === precio && !x.nota);
+            if (it) {
+                it.cant = r3(it.cant + cant);
+            } else {
+                this.carrito.push({ key: this._key++, id: r.p.id, nombre: r.nombre, precio, precioBase: precio, presentacion: presId,
+                    cant, desc50: false, nota: '', verNota: false, flash: false });
+            }
+            this.rapido = null;
+            this.sonido(true);
+            this.aviso('Agregado: ' + this.num3(cant) + ' × ' + r.nombre);
+        },
         cambiar(i, d) {
             this.carrito[i].cant = r3(this.carrito[i].cant + d);
             if (this.carrito[i].cant <= 0) this.carrito.splice(i, 1);
@@ -132,6 +175,7 @@ document.addEventListener('alpine:init', () => {
             it.precio = it.desc50 ? r2(it.precioBase / 2) : it.precioBase;
         },
         editarPrecio(i) {
+            if (!CFG.puedePrecio) { this.aviso('No tienes permiso para cambiar el precio.', 'error'); return; }
             if (this.carrito[i].desc50) { this.aviso('Quita el -50% antes de cambiar el precio.', 'error'); return; }
             this.teclado = { i, tipo: 'precio', nombre: this.carrito[i].nombre, valor: String(this.carrito[i].precio) };
         },
@@ -330,6 +374,7 @@ document.addEventListener('alpine:init', () => {
         tecla(e) {
             if (this.venta && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); this.nuevaVenta(); return; }
             if (this.elegir && e.key === 'Escape') { this.elegir = null; return; }
+            if (this.rapido && e.key === 'Escape') { this.rapido = null; return; }
             if (e.key === 'F9') { e.preventDefault(); this.cobrar(); }
             if (e.key === 'F2') { e.preventDefault(); this.$refs.buscador.focus(); }
         },
