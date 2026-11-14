@@ -33,7 +33,7 @@
                 'vencidos' => ['vencidos sin pagar', 'bg-orange-100 text-orange-700 ring-orange-500'], 'por_vencer' => ['vencen en 7 días', 'bg-amber-100 text-amber-700 ring-amber-500'],
                 'certificados' => ['🔐 certificados por vencer', 'bg-violet-100 text-violet-700 ring-violet-500']] as $valor => [$texto, $color])
                 @if ($valor === 'activos' || $totales[$valor] || $filtro === $valor)
-                    <a href="{{ route('admin.clientes.index', array_filter(['filtro' => $filtro === $valor ? '' : $valor, 'q' => $q, 'usuario' => $usuario])) }}"
+                    <a href="{{ route('admin.clientes.index', array_filter(['filtro' => $filtro === $valor ? '' : $valor, 'q' => $q, 'usuario' => $usuario, 'rubro' => $rubro])) }}"
                        title="{{ $filtro === $valor ? 'Ver todos' : 'Ver solo estos' }}"
                        class="px-2.5 py-1 rounded-full hover:ring-2 {{ $color }} {{ $filtro === $valor ? 'ring-2' : '' }}">{{ $totales[$valor] }} {{ $texto }}</a>
                 @endif
@@ -45,7 +45,7 @@
         <div data-totales class="w-full flex flex-wrap gap-2 text-xs font-semibold">
             @foreach (['' => 'Todos', 'prueba' => '🎁 En prueba ('.$totales['en_prueba'].')', 'web' => '🌐 Desde la web',
                 'eliminar' => '🗑 Para eliminar ('.$totales['para_eliminar'].')', 'eliminados' => 'Eliminados'] as $valor => $texto)
-                <a href="{{ route('admin.clientes.index', array_filter(['filtro' => $valor, 'q' => $q, 'usuario' => $usuario])) }}"
+                <a href="{{ route('admin.clientes.index', array_filter(['filtro' => $valor, 'q' => $q, 'usuario' => $usuario, 'rubro' => $rubro])) }}"
                    class="px-3 py-1.5 rounded-full border {{ $filtro === $valor ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400' }}">{{ $texto }}</a>
             @endforeach
         </div>
@@ -59,6 +59,17 @@
                     @endforeach
                 </select>
             @endif
+            {{-- Rubro del negocio: solo restobares, solo comercios… --}}
+            <select name="rubro" @change="buscar()" class="rounded-xl border-slate-300 text-sm h-10">
+                <option value="">Todos los rubros</option>
+                @foreach (\App\Support\Rubros::RUBROS as $clave => $r)
+                    @if (($porRubro[$clave] ?? 0) || $rubro === $clave)
+                        <option value="{{ $clave }}" @selected($rubro === $clave)>{{ $r['nombre'] }} ({{ $porRubro[$clave] ?? 0 }})</option>
+                    @endif
+                @endforeach
+                @php $sinRubroTotal = $porRubro->filter(fn ($n, $k) => $k === null || $k === '')->sum(); @endphp
+                @if ($sinRubroTotal || $rubro === 'sin')<option value="sin" @selected($rubro === 'sin')>Sin rubro ({{ $sinRubroTotal }})</option>@endif
+            </select>
             <div class="relative">
                 <input type="search" name="q" value="{{ $q }}" placeholder="RUC o nombre" autocomplete="off" @input.debounce.300ms="buscar()"
                        class="rounded-xl border-slate-300 text-sm h-10 w-56 sm:w-64 pr-8">

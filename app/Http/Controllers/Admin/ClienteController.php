@@ -93,7 +93,14 @@ class ClienteController extends Controller
         $limiteEliminar = now()->subDays(config('sitio.dias_para_eliminar'))->toDateString();
         // El dueño puede ver solo las empresas de un usuario del panel (los totales también se calculan solo de ese usuario)
         $usuario = $this->esDueno() ? (int) $request->get('usuario') : 0;
+        // Rubro del negocio (restobar, comercio…); "sin" = los que aún no tienen rubro
+        $rubro = (string) $request->get('rubro');
+        $rubro = $rubro === 'sin' || isset(Rubros::RUBROS[$rubro]) ? $rubro : '';
         $base = fn () => $this->mios()->when($usuario, fn ($w) => $w->where('clientes.creado_por', $usuario));
+        $porRubro = $base()->where('estado', '!=', 'ELIMINADO')->groupBy('rubro')->selectRaw('rubro, COUNT(*) AS cantidad')->pluck('cantidad', 'rubro');
+        $base = fn () => $this->mios()->when($usuario, fn ($w) => $w->where('clientes.creado_por', $usuario))
+            ->when($rubro === 'sin', fn ($w) => $w->where(fn ($x) => $x->whereNull('clientes.rubro')->orWhere('clientes.rubro', '')))
+            ->when($rubro !== '' && $rubro !== 'sin', fn ($w) => $w->where('clientes.rubro', $rubro));
         $clientes = $base()->with('planContratado')
             ->when($filtro === '', fn ($w) => $w->where('estado', '!=', 'ELIMINADO'))
             ->when($filtro === 'prueba', fn ($w) => $w->where('estado', 'ACTIVO')->whereNotNull('prueba_hasta'))
@@ -135,7 +142,7 @@ class ClienteController extends Controller
         $porUsuario = $this->esDueno() ? Cliente::where('estado', '!=', 'ELIMINADO')->groupBy('creado_por')
             ->select('creado_por', DB::raw('COUNT(*) as n'))->pluck('n', 'creado_por') : collect();
 
-        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'filtro', 'comprobantes', 'usuarios', 'limiteEliminar', 'usuario', 'porUsuario', 'consumoXml'));
+        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'filtro', 'comprobantes', 'usuarios', 'limiteEliminar', 'usuario', 'porUsuario', 'consumoXml', 'rubro', 'porRubro'));
     }
 
     public function create()
