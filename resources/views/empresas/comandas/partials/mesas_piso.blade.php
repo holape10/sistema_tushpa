@@ -8,10 +8,11 @@
     @include('empresas.comandas.partials.mesas_grid', ['mesas' => $mesas])
 @else
     {{-- La mesa más chica nunca es menor que un botón de la cuadrícula: si no entra, el plano se desliza (celular y PC).
-         En la PC, si sobra espacio, el plano entra entero en la pantalla --}}
+         Si sobra espacio, el plano entra entero en la pantalla, pero sin pasar del tope: una mesa normal queda del tamaño
+         de un botón (en la tablet llenaba todo y las mesas salían enormes) --}}
     <style>
-        .plano-lienzo { width: max(var(--min-movil), 100%); }
-        @media (min-width: 768px) { .plano-lienzo { width: max(var(--min-pc), min(100%, var(--entra-pc))); } }
+        .plano-lienzo { width: max(var(--min-movil), min(100%, var(--max-movil))); }
+        @media (min-width: 768px) { .plano-lienzo { width: max(var(--min-pc), min(100%, var(--entra-pc), var(--max-pc))); } }
     </style>
     <div class="col-span-full overflow-x-auto -mx-1 px-1 pb-2">
         @php
@@ -19,8 +20,10 @@
             $ancho = $ancho ?? \App\Support\PlanoMesas::ANCHO;
             $minMovil = round($ancho * \App\Support\PlanoMesas::escalaMinima($enPlano, 100, 80));
             $minPc = round($ancho * \App\Support\PlanoMesas::escalaMinima($enPlano, 110, 88));
+            $maxMovil = round($ancho * \App\Support\PlanoMesas::escalaMaxima($enPlano, 110));
+            $maxPc = round($ancho * \App\Support\PlanoMesas::escalaMaxima($enPlano, 125));
         @endphp
-        <div class="plano-lienzo relative rounded-2xl bg-slate-50 ring-1 ring-slate-200" style="container-type: inline-size; aspect-ratio: {{ $ancho }} / {{ $alto }}; margin-inline: auto; --min-movil: {{ $minMovil }}px; --min-pc: {{ $minPc }}px; --entra-pc: calc(85vh * {{ $ancho }} / {{ $alto }})">
+        <div class="plano-lienzo relative rounded-2xl bg-slate-50 ring-1 ring-slate-200" style="container-type: inline-size; aspect-ratio: {{ $ancho }} / {{ $alto }}; margin-inline: auto; --min-movil: {{ $minMovil }}px; --min-pc: {{ $minPc }}px; --max-movil: {{ $maxMovil }}px; --max-pc: {{ $maxPc }}px; --entra-pc: calc(85vh * {{ $ancho }} / {{ $alto }})">
             @foreach ($elementos ?? [] as $e)
                 @php
                     $c = $e->color ?: (\App\Support\PlanoMesas::ELEMENTOS[$e->tipo][2] ?? '#475569');

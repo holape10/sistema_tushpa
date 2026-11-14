@@ -171,6 +171,20 @@ class PlanoMesas
     }
 
     /**
+     * Cuánto se puede agrandar el plano: que una mesa de tamaño normal (la mediana) no pase de $boton px de ancho. Sin
+     * este tope, en una tablet el plano llenaba toda la pantalla y las mesas salían enormes.
+     */
+    public static function escalaMaxima(Collection $mesas, int $boton): float
+    {
+        $anchos = $mesas->pluck('plano_w')->map(fn ($w) => max(self::MINIMO, (int) $w))->sort()->values();
+        if ($anchos->isEmpty()) {
+            return 0;
+        }
+
+        return round($boton / $anchos[intdiv($anchos->count(), 2)], 3);
+    }
+
+    /**
      * Una mesa en Comandas: arranca en su lugar con su tamaño como mínimo, pero crece lo que necesite para que se lea
      * todo (nombre, total, tiempo y mozo), aunque en un celular se pase un poco de su lugar.
      */

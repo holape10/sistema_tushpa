@@ -31,18 +31,25 @@
             </div>
             <p x-show="mensaje" x-text="mensaje" class="rounded-xl px-4 py-2 text-sm font-semibold" :class="error ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'"></p>
 
-            <div class="grid xl:grid-cols-[1fr_280px] gap-4 items-start">
+            {{-- Cómo se usa, en tres pasos --}}
+            <ol class="grid sm:grid-cols-3 gap-2 text-sm">
+                <li class="bg-white rounded-xl shadow-sm px-3 py-2"><b class="text-indigo-600">1.</b> Agrega mesas y partes del local con los botones <b>➕</b>.</li>
+                <li class="bg-white rounded-xl shadow-sm px-3 py-2"><b class="text-indigo-600">2.</b> Arrástralas a su lugar. Toca una para cambiarle nombre, forma o tamaño.</li>
+                <li class="bg-white rounded-xl shadow-sm px-3 py-2"><b class="text-indigo-600">3.</b> Presiona <b>💾 Guardar plano</b>. El mozo lo ve en Comandas.</li>
+            </ol>
+
+            <div class="grid md:grid-cols-[1fr_250px] xl:grid-cols-[1fr_280px] gap-4 items-start">
                 {{-- Lienzo --}}
                 <div class="bg-white rounded-2xl shadow-sm p-3 overflow-x-auto">
-                    <div x-ref="lienzo" class="relative w-full rounded-xl bg-slate-50 ring-1 ring-slate-200 select-none overflow-hidden"
-                         :style="'aspect-ratio: ' + ancho + ' / ' + alto + '; width: ' + (100 * ancho / Math.max(ancho, 1000)) + '%; min-width: ' + Math.round(560 * ancho / Math.max(ancho, 1000)) + 'px; background-image: radial-gradient(#94a3b8 1.2px, transparent 1.2px); background-size: ' + (5000 / ancho) + '% ' + (5000 / alto) + '%;'"
+                    <div x-ref="lienzo" class="relative rounded-xl bg-slate-50 ring-1 ring-slate-200 select-none overflow-hidden mx-auto"
+                         :style="'container-type: inline-size; aspect-ratio: ' + ancho + ' / ' + alto + '; width: min(100%, calc(78vh * ' + ancho + ' / ' + alto + ')); min-width: ' + Math.round(560 * ancho / Math.max(ancho, 1000)) + 'px; background-image: radial-gradient(#94a3b8 1.2px, transparent 1.2px); background-size: ' + (5000 / ancho) + '% ' + (5000 / alto) + '%;'"
                          @pointerdown.self="sel = null">
                         {{-- Barra, paredes, DJ... (debajo de las mesas) --}}
                         <template x-for="(e, i) in elementos" :key="'e' + i">
                             <div class="plano-item absolute flex items-center justify-center text-center font-bold leading-tight cursor-move"
                                  :style="pos(e) + ';' + estiloElemento(e)" :class="esSel('elem', i) ? 'ring-4 ring-indigo-400 z-30' : 'z-10'"
                                  @pointerdown.stop="iniciar($event, 'elem', i, 'mover')">
-                                <span class="px-1 pointer-events-none" style="font-size: clamp(9px, 1.1vw, 15px)" x-text="(tipos[e.tipo][0] ? tipos[e.tipo][0] + ' ' : '') + (e.texto ?? '')"></span>
+                                <span class="px-1 pointer-events-none" style="font-size: clamp(10px, 2cqw, 16px)" x-text="(tipos[e.tipo][0] ? tipos[e.tipo][0] + ' ' : '') + (e.texto ?? '')"></span>
                                 <span class="plano-item absolute -right-2 -bottom-2 w-6 h-6 sm:w-4 sm:h-4 sm:-right-1 sm:-bottom-1 bg-indigo-600 rounded-md cursor-se-resize" x-show="esSel('elem', i)" @pointerdown.stop="iniciar($event, 'elem', i, 'tamano')"></span>
                             </div>
                         </template>
@@ -51,8 +58,8 @@
                             <div x-show="m.ubicada" class="plano-item absolute flex flex-col items-center justify-center text-white font-black shadow-md cursor-move"
                                  :style="pos(m)" :class="[claseMesa(m), esSel('mesa', i) ? 'ring-4 ring-indigo-400 z-40' : 'z-20']"
                                  @pointerdown.stop="iniciar($event, 'mesa', i, 'mover')">
-                                <span x-show="m.forma === 'BOX'" class="pointer-events-none text-[10px] font-black text-amber-200 tracking-widest">VIP</span>
-                                <span class="pointer-events-none px-1 text-center leading-tight" style="font-size: clamp(9px, 1.1vw, 15px)" x-text="m.nombre"></span>
+                                <span x-show="m.forma === 'BOX'" class="pointer-events-none font-black text-amber-200 tracking-widest" style="font-size: clamp(8px, 1.3cqw, 11px)">VIP</span>
+                                <span class="pointer-events-none px-1 text-center leading-tight" style="font-size: clamp(10px, 2.2cqw, 17px)" x-text="m.nombre"></span>
                                 <span class="plano-item absolute -right-2 -bottom-2 w-6 h-6 sm:w-4 sm:h-4 sm:-right-1 sm:-bottom-1 bg-indigo-600 rounded-md cursor-se-resize" x-show="esSel('mesa', i)" @pointerdown.stop="iniciar($event, 'mesa', i, 'tamano')"></span>
                             </div>
                         </template>
@@ -60,8 +67,8 @@
                     <p class="mt-2 text-xs text-gray-500">Toca algo para elegirlo · arrástralo para moverlo · la esquina ◢ cambia el tamaño · en el celular también puedes usar los botones de "Mover".</p>
                 </div>
 
-                {{-- Herramientas --}}
-                <div class="space-y-4">
+                {{-- Herramientas: al lado del plano desde la tablet y siempre a la vista al bajar --}}
+                <div class="space-y-4 md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] md:overflow-y-auto">
                     <div class="bg-white rounded-2xl shadow-sm p-4" x-show="sel" x-cloak>
                         <template x-if="sel && sel.kind === 'mesa'">
                             <div class="space-y-3">
@@ -104,19 +111,6 @@
                     </div>
 
                     <div class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
-                        <p class="font-bold text-gray-800">📏 Medidas del local</p>
-                        <div class="grid grid-cols-2 gap-2">
-                            <label class="text-xs font-semibold text-gray-600">↔ Ancho
-                                <span class="mt-1 flex items-center gap-1"><input type="number" min="2" max="60" step="0.5" :value="metros(ancho)" @change="cambiarMedidas(Number($event.target.value), metros(alto))"
-                                    class="w-full h-10 rounded-lg border-gray-300 text-center font-bold"> m</span></label>
-                            <label class="text-xs font-semibold text-gray-600">↕ Largo
-                                <span class="mt-1 flex items-center gap-1"><input type="number" min="2" max="60" step="0.5" :value="metros(alto)" @change="cambiarMedidas(metros(ancho), Number($event.target.value))"
-                                    class="w-full h-10 rounded-lg border-gray-300 text-center font-bold"> m</span></label>
-                        </div>
-                        <p class="text-[11px] text-gray-500">Las medidas reales del ambiente. Las mesas conservan su tamaño: si achicas el local, queda menos espacio alrededor. Cada punto de la cuadrícula es 1 metro.</p>
-                    </div>
-
-                    <div class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
                         <p class="font-bold text-gray-800">➕ Mesas nuevas</p>
                         <div class="grid grid-cols-2 gap-1.5">
                             <template x-for="(f, clave) in formas" :key="clave">
@@ -126,7 +120,7 @@
                     </div>
 
                     <div class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
-                        <p class="font-bold text-gray-800">🧱 Partes del local</p>
+                        <p class="font-bold text-gray-800">➕ Partes del local</p>
                         <div class="grid grid-cols-2 gap-1.5">
                             <template x-for="(t, clave) in tipos" :key="clave">
                                 <button type="button" @click="agregarElemento(clave)" class="h-10 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200" x-text="(t[0] ? t[0] + ' ' : '') + t[1]"></button>
@@ -145,6 +139,19 @@
                             </template>
                         </div>
                         <button type="button" @click="sinUbicar().forEach(m => ubicar(m))" class="text-xs font-semibold text-indigo-600">Ubicar todas</button>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm p-4 space-y-2">
+                        <p class="font-bold text-gray-800">📏 Medidas del local</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="text-xs font-semibold text-gray-600">↔ Ancho
+                                <span class="mt-1 flex items-center gap-1"><input type="number" min="2" max="60" step="0.5" :value="metros(ancho)" @change="cambiarMedidas(Number($event.target.value), metros(alto))"
+                                    class="w-full h-10 rounded-lg border-gray-300 text-center font-bold"> m</span></label>
+                            <label class="text-xs font-semibold text-gray-600">↕ Largo
+                                <span class="mt-1 flex items-center gap-1"><input type="number" min="2" max="60" step="0.5" :value="metros(alto)" @change="cambiarMedidas(metros(ancho), Number($event.target.value))"
+                                    class="w-full h-10 rounded-lg border-gray-300 text-center font-bold"> m</span></label>
+                        </div>
+                        <p class="text-[11px] text-gray-500">Las medidas reales del ambiente. Las mesas conservan su tamaño: si achicas el local, queda menos espacio alrededor. Cada punto de la cuadrícula es 1 metro.</p>
                     </div>
                 </div>
             </div>
