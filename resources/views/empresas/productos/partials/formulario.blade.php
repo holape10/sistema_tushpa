@@ -95,7 +95,8 @@
                         @if ($p)
                             <input type="text" value="{{ $p->procod }}" disabled class="w-full h-9 rounded-xl border-gray-200 bg-gray-100 text-sm text-gray-500">
                         @else
-                            <input type="text" name="procod" value="{{ old('procod') }}" maxlength="20" placeholder="Se genera solo si lo dejas vacío" class="{{ $campo }}">
+                            <input type="text" name="procod" value="{{ old('procod') }}" maxlength="20" placeholder="Se genera solo si lo dejas vacío" class="{{ $campo }} @error('procod') border-rose-400 bg-rose-50 @enderror">
+                            @error('procod')<span class="block mt-1 text-xs text-rose-600 font-semibold">{{ $message }}</span>@enderror
                         @endif
                     </div>
 

@@ -128,6 +128,34 @@ class ProductoController extends Controller
     ];
 
     /**
+     * El código interno identifica al producto: no puede repetirse en la sucursal (ni ser el código de barras de otro
+     * producto o presentación, porque las cajas buscan por ambos). El nombre sí puede repetirse. Al editar solo se revisa
+     * si cambió el código: los repetidos que ya existían (importados) se siguen pudiendo editar.
+     */
+    private function errorCodigoInterno(Request $request, ?Producto $producto): ?string
+    {
+        $codigo = trim((string) $request->procod);
+        if ($codigo === '' || ($producto && mb_strtoupper(trim((string) $producto->procod)) === mb_strtoupper($codigo))) {
+            return null;
+        }
+        $sucursal = Auth::user()->id_empresa_negocio;
+        $otro = Producto::where('id_empresa_negocio', $sucursal)
+            ->when($producto, fn ($q) => $q->where('IdProducto', '!=', $producto->IdProducto))
+            ->where(fn ($q) => $q->whereRaw('UPPER(TRIM(procod)) = ?', [mb_strtoupper($codigo)])->orWhere('codigo_barra', $codigo))
+            ->first(['pronom', 'proest', 'procod']);
+        if ($otro) {
+            $donde = mb_strtoupper(trim((string) $otro->procod)) === mb_strtoupper($codigo) ? 'el código' : 'como código de barras el código';
+
+            return "Ya existe un producto con {$donde} {$codigo}: {$otro->pronom}".($otro->proest !== 'Activo' ? ' (desactivado)' : '').'. Usa otro código.';
+        }
+        $pres = DB::table('producto_presentacion as pp')->join('productos as p', 'p.IdProducto', '=', 'pp.IdProducto')
+            ->where('p.id_empresa_negocio', $sucursal)->where('pp.estado', 1)->where('pp.codigo_barra', $codigo)
+            ->first(['p.pronom', 'pp.nombre']);
+
+        return $pres ? "El código {$codigo} ya lo usa la presentación {$pres->nombre} de {$pres->pronom}. Usa otro código." : null;
+    }
+
+    /**
      * Un código de barras debe llevar a un solo producto o presentación de la sucursal
      * (tampoco puede ser el código interno de otro producto, porque las cajas buscan por ambos).
      */
@@ -289,6 +317,9 @@ class ProductoController extends Controller
         if ($request->promocion == 6 && empty(array_filter((array) $request->combo_items))) {
             return back()->withInput()->withErrors(['combo_items' => 'Un combo debe tener al menos un producto o preparado dentro.']);
         }
+        if ($error = $this->errorCodigoInterno($request, null)) {
+            return back()->withInput()->withErrors(['procod' => $error]);
+        }
         if ($error = $this->errorCodigos($request, null, (int) $request->promocion === 0)) {
             return back()->withInput()->withErrors(['codigo_barra' => $error]);
         }
@@ -421,6 +452,9 @@ class ProductoController extends Controller
         }
         $aviso = '';
 
+        if ($error = $this->errorCodigoInterno($request, $producto)) {
+            return back()->withInput()->withErrors(['procod' => $error]);
+        }
         if ($error = $this->errorCodigos($request, $producto, $tipo === 0)) {
             return back()->withInput()->withErrors(['codigo_barra' => $error]);
         }
