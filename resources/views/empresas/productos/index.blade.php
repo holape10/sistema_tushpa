@@ -60,6 +60,10 @@
                         </select>
                         <span class="text-xs text-gray-400">La columna "Stock inicial" solo se carga a productos sin movimientos en este almacén.</span>
                     </label>
+                    <label class="flex items-start gap-2 text-xs text-gray-600">
+                        <input type="checkbox" name="mismo_precio" value="1" class="mt-0.5 rounded">
+                        <span>Sí, quiero poner el mismo precio a muchos productos. <span class="text-gray-400">(Sin marcarla, si el Excel deja a {{ \App\Http\Controllers\ProductoController::FRENO_MISMO_PRECIO }} o más productos con un mismo precio nuevo, no se importa y se avisa.)</span></span>
+                    </label>
                     <div class="flex justify-end gap-2">
                         <button type="button" @click="importar = false" class="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm font-semibold">Cancelar</button>
                         <button :disabled="enviando" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"

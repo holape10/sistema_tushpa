@@ -30,8 +30,13 @@
 
     <div class="flex flex-wrap items-center gap-3 mb-4">
         <p class="font-bold">Una sola empresa:</p>
-        <form method="GET">
-            <select name="base" onchange="this.form.submit()" class="rounded-xl border-slate-300 text-sm min-w-[280px]">
+        {{-- Se escribe parte del nombre, RUC, subdominio o base y la lista se achica; Enter elige si queda una sola --}}
+        <form method="GET" class="flex flex-wrap items-center gap-2" x-data="{ q: '' }">
+            <input type="search" x-model="q" placeholder="Buscar: nombre, RUC, subdominio o base…" autocomplete="off"
+                   @input="const t = q.trim().toLowerCase(); [...$refs.lista.options].forEach(o => o.hidden = t !== '' && !o.text.toLowerCase().includes(t))"
+                   @keydown.enter.prevent="const v = [...$refs.lista.options].filter(o => !o.hidden); if (v.length === 1) { $refs.lista.value = v[0].value; $el.form.submit() } else if (v.length) { $refs.lista.focus() }"
+                   class="rounded-xl border-slate-300 text-sm w-64">
+            <select name="base" x-ref="lista" onchange="this.form.submit()" class="rounded-xl border-slate-300 text-sm min-w-[280px] max-w-full">
                 @foreach ($bases as $clave => $nombre)
                     <option value="{{ $clave }}" @selected($clave === $base)>{{ $nombre }}</option>
                 @endforeach

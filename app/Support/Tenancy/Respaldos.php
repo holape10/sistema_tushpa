@@ -31,8 +31,9 @@ class Respaldos
         if ($central !== '' && $central !== config('tenancy.base_sistema')) {
             $bases[$central] = '◆ Panel: clientes, planes y web ('.$central.')';
         }
-        foreach (Cliente::where('estado', '!=', 'ELIMINADO')->orderBy('razon_social')->get() as $c) {
-            $bases[$c->base_datos] = ($c->nombre_comercial ?: $c->razon_social).' · '.$c->ruc;
+        // Nombre, RUC, subdominio y base: un mismo RUC puede tener varios sistemas (bd_RUC, bd_RUC_2…)
+        foreach (Cliente::where('estado', '!=', 'ELIMINADO')->orderBy('razon_social')->orderBy('base_datos')->get() as $c) {
+            $bases[$c->base_datos] = ($c->nombre_comercial ?: $c->razon_social).' · '.$c->ruc.' · '.$c->host().' · '.$c->base_datos;
         }
 
         return $bases;
