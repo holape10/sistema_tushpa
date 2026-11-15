@@ -115,7 +115,7 @@ document.addEventListener('alpine:init', () => {
             if (it) {
                 it.cant = r3(it.cant + 1);
             } else {
-                this.carrito.push({ key: this._key++, id: p.id, nombre: p.nombre + (pres ? ' (' + pres.nombre + ')' : ''), precio, precioBase: precio,
+                this.carrito.push({ key: this._key++, id: p.id, nombre: p.nombre + (pres ? ' (' + pres.nombre + ')' : ''), precio, precioBase: precio, lista: precio,
                     presentacion: presId, cant: 1, desc50: false, nota: '', verNota: false, flash: false });
                 it = this.carrito[this.carrito.length - 1];
             }
@@ -152,13 +152,14 @@ document.addEventListener('alpine:init', () => {
             const cant = r3(parseFloat(r.cant)), precio = r2(parseFloat(r.precio));
             if (!(cant > 0)) { this.aviso('La cantidad debe ser mayor a 0.', 'error'); return; }
             if (!(precio > 0)) { this.aviso('El precio debe ser mayor a 0.', 'error'); return; }
-            if (precio !== r.base && !CFG.puedePrecio) { this.aviso('No tienes permiso para cambiar el precio.', 'error'); return; }
+            // Subir el precio siempre se puede; bajarlo, solo con permiso (Bajar el precio de lista)
+            if (precio < r.base - 0.005 && !CFG.puedePrecio) { this.aviso('No tienes permiso para bajar el precio: el de lista es ' + this.soles(r.base) + '.', 'error'); return; }
             const presId = r.pres?.id ?? null;
             let it = this.carrito.find(x => x.id === r.p.id && (x.presentacion || null) === presId && !x.desc50 && x.precio === precio && !x.nota);
             if (it) {
                 it.cant = r3(it.cant + cant);
             } else {
-                this.carrito.push({ key: this._key++, id: r.p.id, nombre: r.nombre, precio, precioBase: precio, presentacion: presId,
+                this.carrito.push({ key: this._key++, id: r.p.id, nombre: r.nombre, precio, precioBase: precio, lista: r.base, presentacion: presId,
                     cant, desc50: false, nota: '', verNota: false, flash: false });
             }
             this.rapido = null;
@@ -171,11 +172,11 @@ document.addEventListener('alpine:init', () => {
         },
         toggle50(i) {
             const it = this.carrito[i];
+            if (!it.desc50 && !CFG.puedePrecio) { this.aviso('No tienes permiso para bajar el precio.', 'error'); return; }
             it.desc50 = !it.desc50;
             it.precio = it.desc50 ? r2(it.precioBase / 2) : it.precioBase;
         },
         editarPrecio(i) {
-            if (!CFG.puedePrecio) { this.aviso('No tienes permiso para cambiar el precio.', 'error'); return; }
             if (this.carrito[i].desc50) { this.aviso('Quita el -50% antes de cambiar el precio.', 'error'); return; }
             this.teclado = { i, tipo: 'precio', nombre: this.carrito[i].nombre, valor: String(this.carrito[i].precio) };
         },
@@ -202,6 +203,8 @@ document.addEventListener('alpine:init', () => {
             const v = r2(parseFloat(this.teclado.valor));
             if (!(v > 0)) { this.aviso('El precio debe ser mayor a 0.', 'error'); return; }
             const it = this.carrito[this.teclado.i];
+            const lista = it.lista ?? it.precioBase;
+            if (!CFG.puedePrecio && v < lista - 0.005) { this.aviso('No tienes permiso para bajar el precio: el de lista es ' + this.soles(lista) + '.', 'error'); return; }
             it.precio = v; it.precioBase = v;
             this.teclado = null;
         },

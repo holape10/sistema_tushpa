@@ -22,7 +22,7 @@
     <script>
         window.PVT = {
             usuario: @json(auth()->user()->IdUsuario),
-            // Cobrar a otro precio (Acciones › cambiar_precio): el servidor también lo valida
+            // Bajar el precio de lista (Acciones › cambiar_precio); subirlo siempre se puede. El servidor también lo valida
             puedePrecio: @json(auth()->user()->puede('cambiar_precio')),
             csrf: @json(csrf_token()),
             categorias: @json($categorias),
@@ -280,9 +280,9 @@
                 <span class="block text-[11px] font-bold uppercase text-slate-500">Cantidad</span>
                 <span class="block text-3xl font-black" x-text="rapido?.cant || '0'"></span>
             </button>
-            <button type="button" @click="if (cfg.puedePrecio) { rapido.campo = 'precio'; rapido.nuevo = true } else aviso('No tienes permiso para cambiar el precio.', 'error')"
+            <button type="button" @click="rapido.campo = 'precio'; rapido.nuevo = true"
                     class="rounded-2xl p-2 text-center border-2" :class="rapido?.campo === 'precio' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200'">
-                <span class="block text-[11px] font-bold uppercase text-slate-500">Precio <span x-show="cfg.puedePrecio">✎</span></span>
+                <span class="block text-[11px] font-bold uppercase text-slate-500">Precio ✎</span>
                 <span class="block text-3xl font-black" :class="Number(rapido?.precio) !== rapido?.base ? 'text-orange-600' : 'text-emerald-600'" x-text="rapido?.precio || '0'"></span>
             </button>
         </div>

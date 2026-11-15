@@ -119,7 +119,7 @@ class VentaDirecta
                 $datos['paga'] = 0;
             }
             $lineas = self::juntarTextos(self::lineas($user, collect($datos['items'])));
-            // Cobrar a otro precio que el de lista: solo con permiso (la proforma y la atención de la clínica ya traen su precio)
+            // Cobrar MÁS BARATO que el de lista: solo con permiso; subirlo siempre se puede (la proforma y la clínica ya traen su precio)
             $distintos = self::preciosDistintos($lineas);
             if ($distintos && ! $proformaId && ! $pedidoClinica && ! $user->puede('cambiar_precio')) {
                 throw new \RuntimeException(Acciones::mensaje('cambiar_precio')." {$distintos[0][0]} se vende a S/ {$distintos[0][1]}.");
@@ -151,8 +151,9 @@ class VentaDirecta
     }
 
     /**
-     * Productos cobrados a un precio distinto al de lista (el de ese momento, con su precio por horario o el de su
-     * presentación): [[descripción, lista, cobrado], ...]. No cuentan las cortesías ni la venta por importe (grifo).
+     * Productos cobrados MÁS BARATO que su precio de lista (el de ese momento, con su precio por horario o el de su
+     * presentación): [[descripción, lista, cobrado], ...]. Cobrar más caro no cuenta (eso siempre se puede), ni las
+     * cortesías ni la venta por importe (grifo).
      *
      * @return array<int, array{0: string, 1: string, 2: string}>
      */
@@ -174,7 +175,7 @@ class VentaDirecta
                 // El precio 2 o 3 del producto también es de lista (la caja lo elige)
                 $alternos = $pres ? [] : array_column(CatalogoVenta::preciosExtra($productos[$l['IdProducto']] ?? (object) []), 'precio');
                 $esAlterno = collect($alternos)->contains(fn ($a) => abs((float) $l['precio'] - $a) < 0.01);
-                if ($lista > 0 && ! $esAlterno && abs((float) $l['precio'] - $lista) >= 0.01) {
+                if ($lista > 0 && ! $esAlterno && $lista - (float) $l['precio'] >= 0.01) {
                     $distintos[] = [$l['descripcion'], number_format($lista, 2, '.', ''), number_format((float) $l['precio'], 2, '.', '')];
                 }
             }

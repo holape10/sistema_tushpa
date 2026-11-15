@@ -36,7 +36,7 @@ class PreciosExtraVendedorTest extends FlujoTestCase
         $this->assertGreaterThan(0, VentaDirecta::registrar($cajero, $this->venta([[$cemento, 10, 29]], '13'), 'PV'));
         $this->assertGreaterThan(0, VentaDirecta::registrar($cajero, $this->venta([[$cemento, 10, 27.5]], '13'), 'PV'));
 
-        $this->expectExceptionMessage('No tienes permiso para cobrar a otro precio');
+        $this->expectExceptionMessage('No tienes permiso para bajar el precio de lista');
         VentaDirecta::registrar($cajero, $this->venta([[$cemento, 1, 28]], '13'), 'PV');
     }
 

@@ -46,20 +46,23 @@ class AccionesTest extends FlujoTestCase
         $this->actingAs($cajero)->postJson(route('ventas.anular', $id), ['motivo' => 'ERROR DEL CAJERO'])->assertJson(['success' => true]);
     }
 
-    public function test_sin_el_permiso_no_se_cobra_a_otro_precio_pero_si_al_de_lista(): void
+    public function test_sin_el_permiso_no_se_cobra_mas_barato_pero_si_al_de_lista_o_mas_caro(): void
     {
         $cajero = $this->cajero(['cambiar_precio']);
         $plato = $this->producto('JUANE', 15, 10);
 
         try {
             VentaDirecta::registrar($cajero, $this->venta([[$plato, 1, 10]], '13'), 'PV');
-            $this->fail('Vendió a otro precio sin permiso.');
+            $this->fail('Vendió más barato sin permiso.');
         } catch (\RuntimeException $e) {
-            $this->assertSame('No tienes permiso para cobrar a otro precio. Pídeselo al administrador. JUANE se vende a S/ 15.00.', $e->getMessage());
+            $this->assertSame('No tienes permiso para bajar el precio de lista. Pídeselo al administrador. JUANE se vende a S/ 15.00.', $e->getMessage());
         }
         $this->assertSame(0, DB::table('cpe_cabecera')->where('IdUsuario', $cajero->IdUsuario)->count());
 
         $this->assertGreaterThan(0, VentaDirecta::registrar($cajero, $this->venta([[$plato, 1]], '13'), 'PV'));
+        // Subir el precio siempre se puede (por ejemplo, un plato con algo extra)
+        $mas = VentaDirecta::registrar($cajero, $this->venta([[$plato, 1, 18]], '13'), 'PV');
+        $this->assertSame(18.0, (float) DB::table('cpe_detalle')->where('IdCpe_cabecera', $mas)->value('cdepuni'));
     }
 
     public function test_el_administrador_siempre_puede_aunque_tenga_algo_apagado(): void
@@ -96,7 +99,7 @@ class AccionesTest extends FlujoTestCase
         $this->assertFalse($cajero->puede('cambiar_precio'));
         $this->assertTrue($cajero->puede('notas_credito'));
         $cambio = json_decode(DB::table('bitacora')->where('accion', 'usuario.editar')->value('cambios'), true)['acciones'];
-        $this->assertSame(['Anular ventas', 'Cobrar a otro precio'], $cambio['quito']);
+        $this->assertSame(['Anular ventas', 'Bajar el precio de lista'], $cambio['quito']);
 
         // Si se le pone de administrador, ya no le queda nada bloqueado
         $this->put(route('usuarios.update', $cajero->IdUsuario), ['role_id' => '2'] + $datos);
