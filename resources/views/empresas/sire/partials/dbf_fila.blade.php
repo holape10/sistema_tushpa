@@ -18,7 +18,9 @@
     $centros = $compras ? \App\Support\Contabilidad\CuentasCompras::centros((string) auth()->user()->IdEmpresa) : [];
     $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ctacance' => $c['ctacance'] ?? '', 'mpago' => $c['mpago'] ?? '', 'fepago' => $c['fepago'] ?? '', 'ccosto' => $c['ccosto'] ?? '',
         'montos' => $m, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'editado' => $c['editado'], 'redondeo' => $c['redondeo'],
-        'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta];
+        'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta, 'moneda' => $c['moneda'], 'en_soles' => $c['en_soles'] ?? false,
+        'xml_dif' => $c['xml_dif'] ?? null,
+        'buscar' => mb_strtolower($c['serie'].'-'.$c['numero'].' '.$c['serie'].'-'.str_pad($c['numero'], 8, '0', STR_PAD_LEFT).' '.$c['numero'].' '.$c['ruc'].' '.$c['nombre'])];
     $soles = fn ($n) => number_format((float) $n, 2);
 @endphp
 <section class="bg-white rounded-2xl shadow-sm overflow-hidden" x-data="filaDbf(@js($datosFila))" x-show="visible(fila)"
@@ -31,7 +33,12 @@
         <span class="font-bold whitespace-nowrap">{{ $c['serie'] }}-{{ $c['numero'] }}</span>
         <span class="text-xs text-slate-400 whitespace-nowrap">{{ $tipos[$c['tipo']] ?? 'Tipo '.$c['tipo'] }} · {{ $c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '' }}</span>
         {{-- En dólares: que se vea (los montos de abajo están en esa moneda) --}}
-        @if ($c['moneda'] !== 'PEN')<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-800" title="Los montos están en {{ $c['moneda'] }}">{{ $c['moneda'] === 'USD' ? 'US$ DÓLARES' : $c['moneda'] }} · TC {{ $c['tc'] }} · <span x-text="'= ' + soles((Number(fila.montos.total) || 0) * {{ (float) $c['tc'] }})"></span></span>@endif
+        @if ($c['moneda'] !== 'PEN')
+            <span x-show="!fila.en_soles" class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-800" title="Los montos están en {{ $c['moneda'] }}">{{ $c['moneda'] === 'USD' ? 'US$ DÓLARES' : $c['moneda'] }} · TC {{ $c['tc'] }} · <span x-text="'= ' + soles((Number(fila.montos.total) || 0) * {{ (float) $c['tc'] }})"></span></span>
+            {{-- En dólares pero los montos se escribieron en soles: baja como soles con TC 1 --}}
+            <span x-show="fila.en_soles" x-cloak class="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-extrabold text-sky-800"
+                  title="Factura en dólares (US$ {{ number_format((float) ($c['total_sunat'] ?? 0), 2) }} · TC {{ $c['tc'] }}) con los montos escritos en soles">US$ ESCRITO EN SOLES · baja S/ con TC 1</span>
+        @endif
         <span class="flex-1 min-w-[180px] text-sm text-slate-700">{{ $c['nombre'] }} <span class="text-xs text-slate-400">{{ $c['ruc'] }}</span>
             @if ($c['anulado'])<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">ANULADO</span>@endif
             {{-- Agregado a mano (SUNAT aún no lo tiene) o ya agregado en otro mes --}}
@@ -106,7 +113,11 @@
                 </select></label>
         @endif
     </div>
-    <div x-show="Math.abs(fila.diferencia) >= 0.01 || fila.alerta || fila.editado || fila.redondeo" class="flex flex-wrap items-center gap-3 px-4 pb-3 text-xs">
+    <div x-show="Math.abs(fila.diferencia) >= 0.01 || fila.alerta || fila.editado || fila.redondeo || Math.abs(fila.xml_dif || 0) >= 0.01" class="flex flex-wrap items-center gap-3 px-4 pb-3 text-xs">
+        @if (($c['xml_total'] ?? null) !== null)
+            <span x-show="Math.abs(fila.xml_dif || 0) >= 0.01" class="font-bold text-orange-600"
+                  x-text="'≠ XML: el XML dice {{ ($c['xml_moneda'] ?? 'PEN') === 'USD' ? 'US$' : 'S/' }} {{ number_format((float) $c['xml_total'], 2) }} · diferencia ' + soles(fila.xml_dif)"></span>
+        @endif
         <span x-show="fila.redondeo && !fila.editado && Math.abs(fila.diferencia) < 0.01" class="font-semibold text-sky-700"
               x-text="'Redondeo del proveedor corregido solo: ' + soles(fila.redondeo) + ' (su XML no cuadraba por céntimos)'"></span>
         <span x-show="Math.abs(fila.diferencia) >= 0.01" class="font-bold text-rose-600" x-text="'No cuadra: las partes suman ' + soles(fila.montos.total - fila.diferencia) + ' y el total es ' + soles(fila.montos.total)"></span>

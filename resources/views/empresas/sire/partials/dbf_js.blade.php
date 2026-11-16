@@ -26,10 +26,14 @@
 
     function sireDbf(totales) {
         return {
-            totales, filtro: 'todos', soles: solesDbf,
+            totales, filtro: 'todos', busca: '', soles: solesDbf,
             visible(f) {
+                // Buscador: número (con o sin ceros), serie-número, RUC o nombre
+                const q = this.busca.trim().toLowerCase().replace(/^0+(?=\d)/, '');
+                if (q && !q.split(/\s+/).every(p => f.buscar.includes(p))) return false;
                 return this.filtro === 'todos' || (this.filtro === 'descuadre' && !f.excluido && (Math.abs(f.diferencia) >= 0.01 || f.alerta))
-                    || (this.filtro === 'excluidos' && f.excluido) || (this.filtro === 'sinxml' && !f.xml) || (this.filtro === 'sincuenta' && f.sinCuenta > 0);
+                    || (this.filtro === 'excluidos' && f.excluido) || (this.filtro === 'sinxml' && !f.xml) || (this.filtro === 'sincuenta' && f.sinCuenta > 0)
+                    || (this.filtro === 'dolares' && f.moneda === 'USD') || (this.filtro === 'xml' && Math.abs(f.xml_dif || 0) >= 0.01);
             },
         };
     }
@@ -66,6 +70,8 @@
                     this.fila.diferencia = d.diferencia;
                     this.fila.alerta = d.alerta;
                     this.fila.editado = d.editado;
+                    this.fila.en_soles = d.en_soles;
+                    this.fila.xml_dif = d.xml_dif;
                     // Al elegir el medio de pago, su cuenta de cancelación se pone sola
                     if (cambios.mpago !== undefined && d.ctacance) this.fila.ctacance = d.ctacance;
                     // En efectivo la fecha de pago es la de emisión (si no se puso otra)

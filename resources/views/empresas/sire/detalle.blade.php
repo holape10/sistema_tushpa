@@ -134,14 +134,7 @@
         @include('empresas.sire.partials.dbf_resumen', ['comprobantes' => $dbf])
         @include('empresas.sire.partials.dbf_cuentas_todos')
 
-        <div class="flex flex-wrap items-center gap-2 text-sm">
-            @foreach (['todos' => 'Todos', 'descuadre' => 'No cuadran / IGV mal', 'excluidos' => 'No se llevan', 'sinxml' => 'Sin detalle (XML)', 'sincuenta' => 'Sin Cta. cargo'] as $valor => $texto)
-                <button type="button" @click="filtro = '{{ $valor }}'" class="px-3 h-8 rounded-full font-semibold"
-                        :class="filtro === '{{ $valor }}' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'">{{ $texto }}</button>
-            @endforeach
-            @include('empresas.sire.partials.agregar_comprobante', ['libro' => 'compras'])
-            <span class="text-xs text-slate-400 ml-auto">Los cambios se guardan solos · desmarca «Llevar» lo que no va al .dbf.</span>
-        </div>
+        @include('empresas.sire.partials.dbf_filtros')
         <p class="text-xs text-slate-500">
             💡 En «Ver detalle» escribe la cuenta de cada línea y presiona Enter: el sistema la recuerda y la pone sola a las líneas iguales de ese proveedor, ahora y en los próximos meses.
         </p>

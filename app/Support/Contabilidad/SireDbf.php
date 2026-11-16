@@ -164,6 +164,8 @@ class SireDbf
             ->whereIn('ruc', array_unique(array_column($comprobantes, 'ruc')) ?: ['-'])->where(fn ($q) => $q->whereNotNull('ctacargo')->orWhereNotNull('ctaabono')->when(self::conCancelacion(), fn ($w) => $w->orWhereNotNull('ctacance'))->when(self::conMedioPago(), fn ($w) => $w->orWhereNotNull('mpago')))
             ->orderBy('updated_at')->get()->keyBy('ruc');
         $lineas = $libro === 'compras' ? self::lineasXml($ruc, array_keys($comprobantes)) : [];
+        // Total y moneda que dice el XML de cada compra (para ver si lo que se va a llevar es lo mismo)
+        $cabecerasXml = $libro === 'compras' ? self::$cabecerasXml : [];
         // Ventas: los XML que subió el contador, por tipo|serie|número (la empresa los emitió)
         $ventasXml = $libro === 'ventas' ? VentasDetalle::lineas($ruc, array_map(fn ($c) => "{$c['tipo']}|{$c['serie']}|{$c['numero']}", $comprobantes)) : [];
 
@@ -206,6 +208,12 @@ class SireDbf
             $c['cuentaPropia'] = (bool) ($a?->ctacargo || $a?->ctaabono);
             $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
             $c['diferencia'] = self::diferencia($libro, $c['montos']);
+            // En dólares pero ya escritos en soles: bajan como soles (S/ y TC 1) para no convertirse dos veces
+            $c['en_soles'] = self::escritoEnSoles($c);
+            $x = $cabecerasXml[$clave] ?? null;
+            $c['xml_total'] = $x ? (float) $x->total : null;
+            $c['xml_moneda'] = $x ? $x->moneda : null;
+            $c['xml_dif'] = self::diferenciaXml($c);
             $c['alerta'] = self::revisarIgv($c['montos'], $libro) ?? self::revisarMoneda($c);
             // Cuentas de gasto 62–68: sin centro de costo no se descarga
             if (! $c['alerta'] && $libro === 'compras' && CuentasCompras::requiereCentro($c['ctacargo']) && ! ($c['ccosto'] ?? null)) {
@@ -286,10 +294,14 @@ class SireDbf
     }
 
     /** @return array<string, array<int, object>> líneas de los XML de compras por clave */
+    /** @var array<string, object> cabecera del XML (total y moneda) de cada compra, de la última lectura de lineasXml */
+    private static array $cabecerasXml = [];
+
     private static function lineasXml(string $ruc, array $claves): array
     {
         $xmls = DB::table('compras_xml')->where('IdEmpresa', $ruc)
             ->whereIn(DB::raw("CONCAT(ruc_emisor, '|', tipo, '|', serie, '|', numero)"), $claves ?: ['-'])->get();
+        self::$cabecerasXml = $xmls->keyBy(fn ($x) => "{$x->ruc_emisor}|{$x->tipo}|{$x->serie}|{$x->numero}")->all();
         $lineas = DB::table('compras_xml_lineas')->whereIn('compra_xml_id', $xmls->pluck('id')->all() ?: [0])->orderBy('orden')->get()->groupBy('compra_xml_id');
         $res = [];
         foreach ($xmls as $x) {
@@ -387,23 +399,46 @@ class SireDbf
     }
 
     /**
-     * En dólares los montos van EN DÓLARES (como los da SUNAT) y el .dbf lleva su tipo de cambio: el sistema contable los
-     * pasa a soles. Si al editar se escribieron ya en soles, se convertirían dos veces. También avisa si falta el TC.
+     * ¿Comprobante en dólares cuyos montos el contador escribió ya en soles? (editado y su total es el de SUNAT por el
+     * tipo de cambio). Esos bajan al .dbf como soles: moneda S/ y TC 1, para que el sistema contable no los convierta otra vez.
      */
-    public static function revisarMoneda(array $c): ?string
+    public static function escritoEnSoles(array $c): bool
     {
-        if (($c['moneda'] ?? 'PEN') !== 'USD') {
-            return null;
-        }
         $tc = (float) ($c['tc'] ?? 0);
-        if ($tc <= 1) {
-            return 'Comprobante en dólares sin tipo de cambio: el sistema contable no podrá pasarlo a soles.';
-        }
         $sunat = (float) ($c['total_sunat'] ?? 0);
         $total = (float) $c['montos']['total'];
-        if (! empty($c['editado']) && abs($sunat) >= 0.01 && abs($total - $sunat) >= 0.01 && abs($total - round($sunat * $tc, 2)) <= max(1.0, abs($sunat) * 0.01)) {
-            return 'Los montos están en soles, pero este comprobante es en dólares: van en dólares (SUNAT: US$ '.number_format($sunat, 2)
-                .'). El tipo de cambio '.$tc.' los pasa a soles en el sistema contable; así se convertirían dos veces. Usa «Restaurar» y vuelve a repartir en dólares.';
+
+        return ($c['moneda'] ?? 'PEN') === 'USD' && ! empty($c['editado']) && $tc > 1 && abs($sunat) >= 0.01
+            && abs($total - $sunat) >= 0.01 && abs($total - round($sunat * $tc, 2)) <= max(1.0, abs($sunat) * 0.01);
+    }
+
+    /**
+     * Diferencia entre lo que se va a llevar y lo que dice el XML de la compra (en la misma moneda: si se escribió en
+     * soles, el XML en dólares se pasa con el TC). null si no hay XML.
+     */
+    public static function diferenciaXml(array $c): ?float
+    {
+        if (($c['xml_total'] ?? null) === null) {
+            return null;
+        }
+        $xml = (float) $c['xml_total'];
+        if (! empty($c['en_soles']) && ($c['xml_moneda'] ?? 'PEN') === 'USD') {
+            $dif = round((float) $c['montos']['total'] - round($xml * (float) $c['tc'], 2), 2);
+
+            // Al pasar a soles el redondeo puede mover unos céntimos
+            return abs($dif) <= 0.10 ? 0.0 : $dif;
+        }
+        // Las notas de crédito: SUNAT las da en negativo y el XML en positivo
+        $total = (float) $c['montos']['total'];
+
+        return round(abs($total) - abs($xml), 2);
+    }
+
+    /** En dólares los montos van en dólares y el .dbf lleva su tipo de cambio: sin TC el sistema contable no puede convertirlos */
+    public static function revisarMoneda(array $c): ?string
+    {
+        if (($c['moneda'] ?? 'PEN') === 'USD' && empty($c['en_soles']) && (float) ($c['tc'] ?? 0) <= 1) {
+            return 'Comprobante en dólares sin tipo de cambio: el sistema contable no podrá pasarlo a soles.';
         }
 
         return null;
@@ -423,7 +458,7 @@ class SireDbf
     {
         $llevar = array_filter($comprobantes, fn ($c) => ! $c['excluido']);
         $fuera = array_filter($comprobantes, fn ($c) => $c['excluido']);
-        $enSoles = fn (array $c) => ($c['moneda'] ?? 'PEN') === 'USD' && (float) ($c['tc'] ?? 0) > 0 ? (float) $c['tc'] : 1.0;
+        $enSoles = fn (array $c) => ($c['moneda'] ?? 'PEN') === 'USD' && empty($c['en_soles']) && (float) ($c['tc'] ?? 0) > 0 ? (float) $c['tc'] : 1.0;
         $montos = function (array $lista) use ($libro, $enSoles): array {
             $suma = fn (string ...$k) => round(array_sum(array_map(fn ($c) => round(array_sum(array_intersect_key($c['montos'], array_flip($k))) * $enSoles($c), 2), $lista)), 2);
 
@@ -440,6 +475,7 @@ class SireDbf
             'descuadrados' => count(array_filter($llevar, fn ($c) => self::conError($c))),
             'sin_cta_cargo' => count(array_filter($llevar, fn ($c) => $c['sinCtaCargo'] ?? false)),
             'en_dolares' => count(array_filter($llevar, fn ($c) => ($c['moneda'] ?? 'PEN') === 'USD')),
+            'distinto_xml' => count(array_filter($llevar, fn ($c) => abs((float) ($c['xml_dif'] ?? 0)) >= 0.01)),
             'no_llevan' => $montos($fuera),
         ] + $montos($llevar);
     }
@@ -467,7 +503,9 @@ class SireDbf
                 'ID' => 'G', 'NORDEN' => $mes.$correlativo, 'CODMOV' => str_pad((string) $n, 6, '0', STR_PAD_LEFT), 'ALMA' => '01', 'COD_OPERA' => '02',
                 'CODDOC' => $c['tipo'], 'DESDOC' => self::DESCRIPCION[$c['tipo']] ?? $c['tipo'],
                 'FECHADOC' => $c['fecha'], 'FECHAING' => $c['fecha'], 'FECVENCI' => $c['vence'] ?: $c['fecha'],
-                'IMPOPAGO' => $m['total'], 'TOTAL' => $m['total'], 'TC' => $c['tc'], 'MONEDA' => $c['moneda'] === 'USD' ? 'US$' : 'S/',
+                'IMPOPAGO' => $m['total'], 'TOTAL' => $m['total'],
+                // Escrito en soles (aunque sea en dólares): va como soles con TC 1
+                'TC' => ! empty($c['en_soles']) ? 1 : $c['tc'], 'MONEDA' => $c['moneda'] === 'USD' && empty($c['en_soles']) ? 'US$' : 'S/',
                 'MES' => (int) $mes, 'ANO' => $anio, 'NOMAREA' => $c['nombre'], 'PROVE' => $c['nombre'], 'FCON' => $mes.$anio,
                 'REGCOMPRA' => 1, 'NUM1' => $correlativo, 'MPAGO' => $c['mpago'] ?? '08', 'FEPAGO' => $c['fepago'] ?? null, 'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'], 'CTACANCE' => $c['ctacance'] ?? null,
                 'CODDESTINO' => $c['ccosto'] ?? null,
