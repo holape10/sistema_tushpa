@@ -22,7 +22,9 @@ class Reportes
         'ventas-delivery' => ['Ventas Delivery', 'Ventas', 'Pedidos delivery con dirección, teléfono y motorizado.', 'fa-motorcycle'],
         'sunat' => ['Reporte SUNAT', 'Ventas', 'Solo comprobantes tributarios (facturas, boletas y notas), sin notas de venta, con su estado en SUNAT.', 'fa-landmark'],
         'ventas-cliente' => ['Ventas por Cliente', 'Ventas', 'Tus mejores clientes y su frecuencia.', 'fa-users'],
+        'ventas-detallado' => ['Ventas Detallado', 'Ventas', 'Cada comprobante con los productos que llevó: código, unidad, cantidad, precio y total.', 'fa-list-ul'],
         'ventas-producto' => ['Ventas por Producto', 'Ventas', 'Cantidades e importes por producto.', 'fa-box'],
+        'ventas-producto-detalle' => ['Ventas por Producto Detallado', 'Ventas', 'Cada venta de cada producto con su fecha, comprobante y cliente (busca un producto o una categoría).', 'fa-boxes-packing'],
         'productos-ranking' => ['Productos (+/-) Vendidos', 'Ventas', 'Los más y los menos vendidos (incluye los que no se vendieron).', 'fa-ranking-star'],
         'rentabilidad' => ['Rentabilidad', 'Ventas', 'Ventas, costo, utilidad y margen.', 'fa-chart-line'],
         'compras' => ['Reporte de Compras', 'Compras', 'Todas las compras registradas.', 'fa-cart-shopping'],
@@ -48,7 +50,9 @@ class Reportes
             'ventas-delivery' => self::delivery($f),
             'sunat' => self::sunat($f),
             'ventas-cliente' => self::porCliente($f),
+            'ventas-detallado' => self::detallado($f),
             'ventas-producto' => self::porProducto($f),
+            'ventas-producto-detalle' => self::productoDetallado($f),
             'productos-ranking' => self::ranking($f),
             'rentabilidad' => self::rentabilidad($f),
             'compras' => self::compras($f),
@@ -275,6 +279,63 @@ class Reportes
         return ['columnas' => ['doc' => ['DNI/RUC', 'text'], 'cliente' => ['Cliente', 'text'], 'compras' => ['Compras', 'num'], 'total' => ['Total', 'money'],
             'ticket' => ['Ticket promedio', 'money'], 'credito' => ['Al crédito', 'num'], 'ultima' => ['Última compra', 'date']], 'filas' => $filas,
             'grafico' => ['etiqueta' => 'cliente', 'valor' => 'total']];
+    }
+
+    /** Líneas vendidas con su comprobante (las notas de crédito restan), para los reportes detallados */
+    private static function lineas(array $f)
+    {
+        $producto = trim((string) ($f['producto'] ?? ''));
+
+        return self::detalle($f)->leftJoin('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
+            ->leftJoin('categorias as cat', 'cat.cat_id', '=', 'p.cat_id')
+            ->when(! empty($f['categoria']), fn ($w) => $w->where('p.cat_id', $f['categoria']))
+            ->when($producto !== '', fn ($w) => $w->where(fn ($x) => $x->where('d.procod', $producto)->orWhere('d.cdedes', 'like', '%'.$producto.'%')))
+            ->select('c.IdCpe_cabecera', 'c.ccafem', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccandi', 'c.ccanom', 'c.ccaitv', 'c.moncod',
+                'd.procod', 'd.cdedes', 'd.umecod', 'd.cdepuni', 'd.cdevve', 'cat.cat_nom',
+                DB::raw('d.cdecan * '.self::SIGNO_CANT.' as cantidad'), DB::raw(self::SIGNO.' as signo'));
+    }
+
+    /**
+     * Cada comprobante (una fila de cabecera: fecha, comprobante, cliente y total) y debajo los productos que llevó.
+     * Las filas de cabecera llevan «_grupo»: no suman en los totales.
+     */
+    private static function detallado(array $f): array
+    {
+        $rows = self::lineas($f)->orderBy('c.ccafem')->orderBy('c.tdocod')->orderBy('c.serdoc')->orderByRaw('CAST(c.numdoc AS UNSIGNED)')
+            ->orderBy('d.IdCpe_detalle')->get();
+        $filas = [];
+        $comprobantes = 0;
+        foreach ($rows->groupBy('IdCpe_cabecera') as $lineas) {
+            $c = $lineas->first();
+            $comprobantes++;
+            $filas[] = ['_grupo' => Carbon::parse($c->ccafem)->format('d/m/Y').' · '.(self::TIPOS[$c->tdocod] ?? $c->tdocod).' '.$c->serdoc.'-'.$c->numdoc
+                .' · '.trim(($c->ccandi && $c->ccandi !== '00000000' ? $c->ccandi.' ' : '').$c->ccanom), '_grupo_total' => $c->signo * (float) $c->ccaitv];
+            foreach ($lineas as $l) {
+                $filas[] = ['codigo' => $l->procod, 'producto' => $l->cdedes, 'unidad' => $l->umecod, 'cantidad' => (float) $l->cantidad,
+                    'precio' => (float) $l->cdepuni, 'total' => $l->signo * (float) $l->cdevve];
+            }
+        }
+        $total = array_sum(array_column($filas, 'total'));
+
+        return ['columnas' => ['codigo' => ['Código', 'text'], 'producto' => ['Producto', 'text'], 'unidad' => ['Unidad', 'text'],
+            'cantidad' => ['Cantidad', 'num'], 'precio' => ['Precio', 'money'], 'total' => ['Total', 'money']],
+            'filas' => $filas, 'usa' => ['categoria', 'producto'], 'resumen' => [['Comprobantes', $comprobantes], ['Total vendido', $total, 'money'],
+                ['Ticket promedio', $comprobantes ? $total / $comprobantes : 0, 'money']]];
+    }
+
+    /** Cada línea vendida de cada producto, con su fecha, comprobante y cliente; ordenado por producto y fecha */
+    private static function productoDetallado(array $f): array
+    {
+        $rows = self::lineas($f)->orderBy('d.cdedes')->orderBy('c.ccafem')->orderBy('c.serdoc')->orderByRaw('CAST(c.numdoc AS UNSIGNED)')->get();
+        $filas = $rows->map(fn ($l) => ['fecha' => $l->ccafem, 'tipo' => self::TIPOS[$l->tdocod] ?? $l->tdocod, 'serie' => $l->serdoc, 'numero' => $l->numdoc,
+            'doc' => $l->ccandi, 'cliente' => $l->ccanom, 'moneda' => $l->moncod ?: 'PEN', 'codigo' => $l->procod, 'producto' => $l->cdedes,
+            'categoria' => $l->cat_nom ?? '—', 'cantidad' => (float) $l->cantidad, 'precio' => (float) $l->cdepuni, 'total' => $l->signo * (float) $l->cdevve])->all();
+
+        return ['columnas' => ['fecha' => ['Fecha', 'date'], 'tipo' => ['Tipo', 'text'], 'serie' => ['Serie', 'text'], 'numero' => ['Número', 'text'],
+            'doc' => ['RUC/DNI', 'text'], 'cliente' => ['Razón social', 'text'], 'moneda' => ['Moneda', 'text'], 'codigo' => ['Código', 'text'],
+            'producto' => ['Producto', 'text'], 'categoria' => ['Categoría', 'text'], 'cantidad' => ['Cantidad', 'num'], 'precio' => ['P. unitario', 'money'],
+            'total' => ['Total', 'money']],
+            'filas' => $filas, 'usa' => ['categoria', 'producto']];
     }
 
     private static function porProducto(array $f): array

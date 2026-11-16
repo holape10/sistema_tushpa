@@ -17,6 +17,10 @@
     <label class="text-sm">Cliente
         <input name="cliente" value="{{ request('cliente') }}" placeholder="DNI/RUC o nombre" class="block rounded-lg border-gray-300 text-sm w-44"></label>
 @endif
+@if (in_array('producto', $usa, true))
+    <label class="text-sm">Producto
+        <input name="producto" value="{{ request('producto') }}" placeholder="Código o nombre" class="block rounded-lg border-gray-300 text-sm w-44"></label>
+@endif
 @if (in_array('motorizado', $usa, true))
     <label class="text-sm">Motorizado
         <select name="motorizado" class="block rounded-lg border-gray-300 text-sm">

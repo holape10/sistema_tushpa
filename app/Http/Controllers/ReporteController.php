@@ -51,7 +51,7 @@ class ReporteController extends Controller
             [$desde, $hasta] = [$hasta, $desde];
         }
         $filtros = ['sucursal' => $sucursal, 'sucursales' => $ids, 'desde' => $desde, 'hasta' => $hasta]
-            + $request->only(['tipo', 'estado', 'agrupar', 'categoria', 'orden', 'limite', 'vendedor', 'medio', 'cliente', 'motorizado', 'estado_sunat', 'jornada', 'por_dia']);
+            + $request->only(['tipo', 'estado', 'agrupar', 'categoria', 'orden', 'limite', 'vendedor', 'medio', 'cliente', 'producto', 'motorizado', 'estado_sunat', 'jornada', 'por_dia']);
         $r = Reportes::generar($clave, $filtros);
         $nombreSucursal = SucursalesVisibles::nombre($user, $sucursal);
         $archivo = "reporte_{$clave}_{$desde}_{$hasta}";
@@ -93,6 +93,10 @@ class ReporteController extends Controller
     {
         $cols = $r['columnas'];
         $filas = array_map(function ($f) use ($cols) {
+            // Cabecera de un grupo (el comprobante): su texto en la primera columna y su total en la última
+            if (isset($f['_grupo'])) {
+                return array_merge([$f['_grupo']], array_fill(0, count($cols) - 2, ''), [isset($f['_grupo_total']) ? round((float) $f['_grupo_total'], 2) : '']);
+            }
             $out = [];
             foreach ($cols as $k => [$t, $tipo]) {
                 $v = $f[$k] ?? '';

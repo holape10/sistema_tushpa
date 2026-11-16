@@ -49,7 +49,7 @@
 
     {{-- Resumen --}}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500">Registros</p><p class="text-2xl font-black text-gray-800">{{ count($filas) }}</p></div>
+        <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500">Registros</p><p class="text-2xl font-black text-gray-800">{{ collect($filas)->whereNull('_grupo')->count() }}</p></div>
         @foreach (($resumen ?? collect($totales)->filter(fn($v, $k) => ($columnas[$k][1] ?? '') === 'money')->take(3)->map(fn($v, $k) => [$columnas[$k][0], $v, 'money'])->values()->all()) as $res)
             <div class="bg-white rounded-2xl shadow-sm p-4"><p class="text-xs text-gray-500">{{ $res[0] }}</p>
                 <p class="text-2xl font-black {{ isset($res[2]) && $res[1] < 0 ? 'text-rose-600' : 'text-indigo-700' }}">{{ isset($res[2]) ? 'S/ ' . number_format($res[1], 2) : $res[1] }}</p></div>
@@ -79,6 +79,14 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
                 @forelse ($filas as $f)
+                    @if (isset($f['_grupo']))
+                        {{-- Cabecera de un grupo (por ejemplo, el comprobante): no suma en los totales --}}
+                        <tr class="bg-slate-100 font-bold text-gray-800">
+                            <td colspan="{{ count($columnas) - 1 }}" class="px-3 pt-3 pb-1.5">{{ $f['_grupo'] }}</td>
+                            <td class="px-3 pt-3 pb-1.5 text-right whitespace-nowrap">{{ isset($f['_grupo_total']) ? R::texto($f['_grupo_total'], 'money') : '' }}</td>
+                        </tr>
+                        @continue
+                    @endif
                     <tr class="hover:bg-gray-50">
                         @foreach ($columnas as $k => [$t, $tipo])
                             @php $v = $f[$k] ?? ''; @endphp

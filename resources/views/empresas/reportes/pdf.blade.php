@@ -27,7 +27,7 @@
         @include('empresas.partials.logo_reporte')
         <h1>{{ mb_strtoupper($titulo) }}</h1>
         <p><strong>{{ $empresa->NomEmpresa ?? '' }}</strong> · RUC {{ $empresa->IdEmpresa ?? '' }} · {{ $sucursal }}</p>
-        <p>Del {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }} al {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }} · {{ count($filas) }} registro(s)</p>
+        <p>Del {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }} al {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }} · {{ collect($filas)->whereNull('_grupo')->count() }} registro(s)</p>
     </div>
     @if (!empty($resumen))
         <div class="resumen">@foreach ($resumen as $res)<span>{{ $res[0] }}: <strong>{{ isset($res[2]) ? 'S/ ' . number_format($res[1], 2) : $res[1] }}</strong></span>@endforeach</div>
@@ -36,6 +36,11 @@
         <thead><tr>@foreach ($columnas as [$t, $tipo])<th class="{{ in_array($tipo, ['money', 'num', 'pct']) ? 'r' : '' }}">{{ $t }}</th>@endforeach</tr></thead>
         <tbody>
             @forelse ($filas as $f)
+                @if (isset($f['_grupo']))
+                    <tr style="background:#f1f5f9; font-weight:bold"><td colspan="{{ count($columnas) - 1 }}">{{ $f['_grupo'] }}</td>
+                        <td class="r">{{ isset($f['_grupo_total']) ? R::texto($f['_grupo_total'], 'money') : '' }}</td></tr>
+                    @continue
+                @endif
                 <tr>@foreach ($columnas as $k => [$t, $tipo])<td class="{{ in_array($tipo, ['money', 'num', 'pct']) ? 'r' : '' }}">{{ R::texto($f[$k] ?? '', $tipo) }}</td>@endforeach</tr>
             @empty
                 <tr><td colspan="{{ count($columnas) }}" style="text-align:center; padding:20px; color:#9ca3af">Sin datos en el periodo.</td></tr>
