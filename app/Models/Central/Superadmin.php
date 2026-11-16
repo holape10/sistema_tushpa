@@ -15,7 +15,7 @@ class Superadmin extends Authenticatable
 
     protected $guarded = [];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password', 'remember_token', 'clave_bd'];
 
     protected $casts = ['ultimo_acceso' => 'datetime', 'password' => 'hashed', 'fecha_nacimiento' => 'date', 'clave_cambiada_el' => 'datetime'];
 

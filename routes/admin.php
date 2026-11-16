@@ -138,6 +138,13 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     // Explorador de bases de solo lectura: tablas, filas y consultas SELECT (solo el dueño)
     Route::get('/base-datos', [BaseDatosController::class, 'index'])->name('basedatos.index');
     Route::post('/base-datos/consulta', [BaseDatosController::class, 'consulta'])->middleware('throttle:60,1')->name('basedatos.consulta');
+    // Asistente IA que sugiere consultas, y modo edición con una segunda clave (cada cambio se prueba y queda registrado)
+    Route::post('/base-datos/ia', [BaseDatosController::class, 'ia'])->middleware('throttle:20,1')->name('basedatos.ia');
+    Route::post('/base-datos/clave', [BaseDatosController::class, 'clave'])->middleware('throttle:5,1')->name('basedatos.clave');
+    Route::post('/base-datos/desbloquear', [BaseDatosController::class, 'desbloquear'])->middleware('throttle:5,1')->name('basedatos.desbloquear');
+    Route::post('/base-datos/bloquear', [BaseDatosController::class, 'bloquear'])->name('basedatos.bloquear');
+    Route::post('/base-datos/probar', [BaseDatosController::class, 'probar'])->middleware('throttle:30,1')->name('basedatos.probar');
+    Route::post('/base-datos/ejecutar', [BaseDatosController::class, 'ejecutar'])->middleware('throttle:30,1')->name('basedatos.ejecutar');
     // Soporte con IA: preguntas sobre la base de una empresa (solo lectura)
     Route::get('/soporte-ia', [SoporteIaController::class, 'index'])->name('soporte_ia.index');
     Route::post('/soporte-ia/{cliente}', [SoporteIaController::class, 'preguntar'])->whereNumber('cliente')->middleware('throttle:20,1')->name('soporte_ia.preguntar');

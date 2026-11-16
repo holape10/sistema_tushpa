@@ -60,6 +60,8 @@ class AccionesTest extends FlujoTestCase
         $this->assertSame(0, DB::table('cpe_cabecera')->where('IdUsuario', $cajero->IdUsuario)->count());
 
         $this->assertGreaterThan(0, VentaDirecta::registrar($cajero, $this->venta([[$plato, 1]], '13'), 'PV'));
+        // En la pantalla el precio se puede tocar (para subirlo), pero sin permiso para bajarlo
+        $this->actingAs($cajero)->get(route('pv.index'))->assertOk()->assertSee('editarPrecio: true', false)->assertSee('puedeBajar: false', false);
         // Subir el precio siempre se puede (por ejemplo, un plato con algo extra)
         $mas = VentaDirecta::registrar($cajero, $this->venta([[$plato, 1, 18]], '13'), 'PV');
         $this->assertSame(18.0, (float) DB::table('cpe_detalle')->where('IdCpe_cabecera', $mas)->value('cdepuni'));

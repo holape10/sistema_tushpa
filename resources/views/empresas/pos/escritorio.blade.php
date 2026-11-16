@@ -558,7 +558,7 @@
                            class="mt-1 w-full h-16 rounded-2xl border-2 border-indigo-300 text-center text-3xl font-extrabold text-slate-800 focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500">
                 </label>
                 <label class="block">
-                    <span class="text-xs font-bold uppercase text-slate-500">Precio <span x-show="!cfg.editarPrecio" class="normal-case font-normal">(solo administrador)</span></span>
+                    <span class="text-xs font-bold uppercase text-slate-500">Precio <span x-show="!cfg.puedeBajar" class="normal-case font-normal">(solo se puede subir)</span></span>
                     <input id="pedir-precio" type="number" step="any" min="0" x-model.number="pedir.precio" :readonly="!cfg.editarPrecio" @focus="$event.target.select()"
                            @keydown.enter.prevent="confirmarPedir()"
                            :class="cfg.editarPrecio ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'"
@@ -594,7 +594,9 @@
     window.PV = {
         usuario: @json(auth()->user()->IdUsuario),
         // Solo el administrador cambia el precio de los productos (las líneas libres siempre se escriben)
-        editarPrecio: @json(auth()->user()->esAdmin()),
+        // Todos pueden SUBIR el precio; BAJARLO solo con el permiso «Bajar el precio de lista» (el servidor también lo valida)
+        editarPrecio: true,
+        puedeBajar: @json(auth()->user()->puede('cambiar_precio')),
         // Vendedor sin caja: solo guarda pedidos (proformas) que la caja cobra
         soloPedido: @json($soloPedido ?? false),
         csrf: @json(csrf_token()),

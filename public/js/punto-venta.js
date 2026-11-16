@@ -420,7 +420,14 @@ document.addEventListener('alpine:init', () => {
             return p.presentacion ? ((p.presentaciones || []).find(x => x.id === p.presentacion) || null) : null;
         },
 
-        // ---------- Modal: cantidad y precio (el precio solo lo cambia el administrador) ----------
+        /** Sin el permiso «Bajar el precio de lista» el precio se puede subir, pero no bajar */
+        bajaSinPermiso(precio, lista) {
+            if (CFG.puedeBajar || !(Number(lista) > 0) || Number(precio) >= Number(lista) - 0.005) return false;
+            this.aviso('No tienes permiso para bajar el precio: el de lista es ' + this.soles(lista) + '. Subirlo sí puedes.', 'error');
+            return true;
+        },
+
+        // ---------- Modal: cantidad y precio (subir el precio, todos; bajarlo, con permiso) ----------
         abrirPedir(p, pres) {
             const precio = pres ? pres.precio : p.precio;
             this.pedir = { p, pres, cantidad: 1, precio: redondear(precio),
@@ -437,6 +444,7 @@ document.addEventListener('alpine:init', () => {
             const precio = CFG.editarPrecio ? redondear(this.pedir.precio) : redondear(this.pedir.pres ? this.pedir.pres.precio : this.pedir.p.precio);
             if (!(cantidad > 0)) { this.aviso('Escribe una cantidad mayor a 0', 'error'); this.enfocar('pedir-cantidad'); return; }
             if (!(precio >= 0)) { this.aviso('Escribe un precio válido', 'error'); this.enfocar('pedir-precio'); return; }
+            if (this.bajaSinPermiso(precio, this.pedir.pres ? this.pedir.pres.precio : this.pedir.p.precio)) { this.enfocar('pedir-precio'); return; }
             const { p, pres } = this.pedir;
             this.pedir = null;
             this.agregar(p, false, pres, cantidad, precio);
@@ -490,6 +498,7 @@ document.addEventListener('alpine:init', () => {
             if (it.control_serie) it.cantidad = it.series.length;
             else if (!(Number(it.cantidad) > 0)) it.cantidad = 1;
             if (!(Number(it.precio) >= 0)) it.precio = it.precioBase;
+            if (it.id && this.bajaSinPermiso(it.precio, it.precioBase)) it.precio = it.precioBase;
             it.cantidad = redondear(it.cantidad);
             it.precio = redondear(it.precio);
         },
