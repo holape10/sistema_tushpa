@@ -214,6 +214,111 @@ class Estudio
         self::anotarEnPanel();
     }
 
+    /**
+     * Tablas que solo guardan la configuración de la empresa (se crean al registrarla o al trabajarla): se borran con ella.
+     * Si la empresa tiene datos en cualquier otra tabla (comprobantes, compras, asientos, planillas…) no se elimina.
+     */
+    private const SOLO_CONFIGURACION = ['empresa', 'empresa_negocios', 'almacenes', 'estudio_empresas', 'estudio_accesos', 'estudio_descargas',
+        'estudio_declaraciones', 'concar_config', 'conta_config', 'conta_periodos', 'conta_plan', 'compras_cuentas_reglas', 'tributos_config',
+        'sire_solicitudes', 'planilla_parametros', 'medios_pagos', 'tiposcaja', 'credito_dias', 'configuracion_impresoras', 'bancos_cuentas',
+        'centros_costo', 'categorias', 'subcategorias', 'tipo_producto', 'gasto_categorias', 'series', 'correlativos', 'feriados'];
+
+    /** Tablas que no se tocan al eliminar: la historia (bitácora) y los usuarios del estudio (se devuelven a la empresa del estudio) */
+    private const NO_SE_BORRAN = ['bitacora', 'users', 'role_user'];
+
+    /**
+     * Qué tiene guardado una empresa del estudio, tabla por tabla (por su RUC, sus sucursales o sus almacenes).
+     *
+     * @return array<string, array{filas: int, condicion: array{0: string, 1: array<int, mixed>}}>
+     */
+    public static function datosDe(string $ruc): array
+    {
+        $sucursales = DB::table('empresa_negocios')->where('IdEmpresa', $ruc)->pluck('id_empresa_negocio')->all();
+        $almacenes = $sucursales ? DB::table('almacenes')->whereIn('id_empresa_negocio', $sucursales)->pluck('id_almacen')->all() : [];
+        $columnas = DB::table('information_schema.COLUMNS')->where('TABLE_SCHEMA', DB::connection()->getDatabaseName())
+            ->whereIn('COLUMN_NAME', ['IdEmpresa', 'id_empresa_negocio', 'id_almacen'])->get(['TABLE_NAME', 'COLUMN_NAME']);
+        $res = [];
+        foreach ($columnas->groupBy('TABLE_NAME') as $tabla => $cols) {
+            if (in_array($tabla, self::NO_SE_BORRAN, true)) {
+                continue;
+            }
+            $condiciones = [];
+            foreach ($cols as $c) {
+                $valores = match ($c->COLUMN_NAME) {
+                    'IdEmpresa' => [$ruc], 'id_empresa_negocio' => $sucursales, default => $almacenes,
+                };
+                if ($valores) {
+                    $condiciones[] = ['`'.$c->COLUMN_NAME.'` IN ('.implode(',', array_fill(0, count($valores), '?')).')', $valores];
+                }
+            }
+            if (! $condiciones) {
+                continue;
+            }
+            $sql = implode(' OR ', array_column($condiciones, 0));
+            $parametros = array_merge(...array_column($condiciones, 1));
+            $filas = (int) DB::table($tabla)->whereRaw($sql, $parametros)->count();
+            if ($filas > 0) {
+                $res[$tabla] = ['filas' => $filas, 'condicion' => [$sql, $parametros]];
+            }
+        }
+
+        return $res;
+    }
+
+    /**
+     * Por qué no se puede eliminar una empresa del estudio (null = se puede): la del propio estudio nunca, y una que ya
+     * tiene datos de trabajo tampoco (esa se desactiva).
+     */
+    public static function motivoParaNoEliminar(string $ruc): ?string
+    {
+        $fila = DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->first();
+        if (! $fila || $fila->propia) {
+            return 'Solo se eliminan las empresas de los clientes del estudio.';
+        }
+        $conDatos = array_diff_key(self::datosDe($ruc), array_flip(self::SOLO_CONFIGURACION));
+        if ($conDatos) {
+            $detalle = collect($conDatos)->map(fn ($d, $tabla) => $tabla.' ('.number_format($d['filas']).')')->implode(', ');
+
+            return "La empresa {$ruc} ya tiene datos de trabajo ({$detalle}): no se puede eliminar. Desactívala para que ya no se vea.";
+        }
+
+        return null;
+    }
+
+    /**
+     * Elimina una empresa registrada por error (por ejemplo, con un RUC mal escrito) que aún no tiene datos de trabajo:
+     * su configuración, sucursal y almacén. Los usuarios que estaban parados en ella vuelven a la empresa del estudio.
+     *
+     * @throws \RuntimeException si no se puede eliminar
+     */
+    public static function eliminarEmpresa(string $ruc): void
+    {
+        if ($motivo = self::motivoParaNoEliminar($ruc)) {
+            throw new \RuntimeException($motivo);
+        }
+        $estudio = (string) self::ruc();
+        $sucursalEstudio = self::sucursalDe($estudio);
+        $sucursales = DB::table('empresa_negocios')->where('IdEmpresa', $ruc)->pluck('id_empresa_negocio')->all();
+        // Primero lo que cuelga de la sucursal y del almacén; la empresa al final
+        $orden = fn (string $tabla) => match ($tabla) {
+            'empresa' => 3, 'empresa_negocios' => 2, 'almacenes' => 1, default => 0
+        };
+        $datos = collect(self::datosDe($ruc))->sortBy(fn ($d, $tabla) => $orden($tabla));
+
+        DB::transaction(function () use ($ruc, $estudio, $sucursalEstudio, $sucursales, $datos) {
+            DB::table('users')->where('IdEmpresa', $ruc)->update(['IdEmpresa' => $estudio, 'id_empresa_negocio' => $sucursalEstudio]);
+            if ($sucursales) {
+                DB::table('users')->whereIn('id_empresa_negocio', $sucursales)->update(['IdEmpresa' => $estudio, 'id_empresa_negocio' => $sucursalEstudio]);
+                DB::table('role_user')->whereIn('id_empresa_negocio', $sucursales)->update(['id_empresa_negocio' => $sucursalEstudio]);
+            }
+            foreach ($datos as $tabla => $d) {
+                DB::table($tabla)->whereRaw($d['condicion'][0], $d['condicion'][1])->delete();
+            }
+        });
+        cache()->forget('sire_token_'.$ruc);
+        self::anotarEnPanel();
+    }
+
     /** Guarda las credenciales (las claves solo si se escriben) y las cuentas por defecto de una empresa del estudio */
     public static function configurar(string $ruc, array $d): void
     {

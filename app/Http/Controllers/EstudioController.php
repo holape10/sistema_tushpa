@@ -182,6 +182,26 @@ class EstudioController extends Controller
         return back()->with('success', $fila->activa ? "Empresa {$ruc} desactivada: ya nadie la ve en el selector. Sus datos se conservan." : "Empresa {$ruc} activada de nuevo.");
     }
 
+    /** Elimina una empresa registrada por error (RUC mal escrito) que aún no tiene datos de trabajo; hay que escribir su RUC */
+    public function eliminar(Request $request, string $ruc): RedirectResponse
+    {
+        $this->administrar();
+        abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->where('propia', false)->exists(), 404);
+        if (trim((string) $request->input('confirmacion')) !== $ruc) {
+            return back()->with('error', "Para eliminar escribe el RUC {$ruc} tal cual.");
+        }
+        $nombre = (string) DB::table('empresa')->where('IdEmpresa', $ruc)->value('NomEmpresa');
+        try {
+            Estudio::eliminarEmpresa($ruc);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+        Bitacora::registrar('config.estudio_eliminar', "Eliminó la empresa {$ruc} {$nombre} del estudio (registrada por error)", null,
+            ['referencia' => ['empresa', $ruc], 'alerta' => true]);
+
+        return back()->with('success', "Empresa {$ruc} {$nombre} eliminada.");
+    }
+
     public function accesos(Request $request, string $ruc): RedirectResponse
     {
         $this->administrar();

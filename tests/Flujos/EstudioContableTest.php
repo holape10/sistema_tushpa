@@ -56,6 +56,41 @@ class EstudioContableTest extends FlujoTestCase
         return $u;
     }
 
+    public function test_una_empresa_registrada_por_error_se_elimina_escribiendo_su_ruc(): void
+    {
+        $this->post(route('estudio.configurar', self::EMPRESA_B), ['cta_compras' => '601111'])->assertSessionHasNoErrors();
+        $this->cambiar(self::EMPRESA_B);
+        $this->cambiar($this->estudio);
+        $sucursalB = Estudio::sucursalDe(self::EMPRESA_B);
+        // Un contador que se quedó trabajando en ella vuelve a la empresa del estudio
+        $contador = $this->contador();
+        Estudio::guardarAccesos(self::EMPRESA_B, [$contador->IdUsuario]);
+        $this->cambiar(self::EMPRESA_B, $contador);
+
+        $this->actingAs($this->usuario)->post(route('estudio.eliminar', self::EMPRESA_B), ['confirmacion' => self::EMPRESA_A])->assertSessionHas('error');
+        $this->assertDatabaseHas('empresa', ['IdEmpresa' => self::EMPRESA_B]);
+
+        $this->post(route('estudio.eliminar', self::EMPRESA_B), ['confirmacion' => self::EMPRESA_B])->assertSessionHas('success');
+        foreach (['empresa', 'estudio_empresas', 'estudio_accesos', 'concar_config', 'empresa_negocios'] as $tabla) {
+            $this->assertDatabaseMissing($tabla, ['IdEmpresa' => self::EMPRESA_B]);
+        }
+        $this->assertDatabaseMissing('almacenes', ['id_empresa_negocio' => $sucursalB]);
+        $contador->refresh();
+        $this->assertSame([$this->estudio, Estudio::sucursalDe($this->estudio)], [(string) $contador->IdEmpresa, (int) $contador->id_empresa_negocio]);
+        $this->assertSame(0, DB::table('role_user')->where('id_empresa_negocio', $sucursalB)->count());
+        // La otra empresa sigue intacta
+        $this->assertDatabaseHas('empresa', ['IdEmpresa' => self::EMPRESA_A]);
+    }
+
+    public function test_no_se_elimina_una_empresa_con_datos_de_trabajo_ni_la_del_estudio(): void
+    {
+        DB::table('sire_ajustes')->insert(['IdEmpresa' => self::EMPRESA_A, 'libro' => 'compras', 'periodo' => '202611', 'clave' => 'X-1', 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->post(route('estudio.eliminar', self::EMPRESA_A), ['confirmacion' => self::EMPRESA_A])->assertSessionHas('error', fn ($m) => str_contains($m, 'sire_ajustes'));
+        $this->assertDatabaseHas('empresa', ['IdEmpresa' => self::EMPRESA_A]);
+        $this->post(route('estudio.eliminar', $this->estudio), ['confirmacion' => $this->estudio])->assertNotFound();
+    }
+
     public function test_el_estudio_registra_empresas_y_trabaja_en_cada_una(): void
     {
         $this->get(route('estudio.index'))->assertOk()->assertSee('LLAMA PE SA')->assertSee('SUPERMERCADOS PERUANOS SA')->assertSee('Faltan credenciales');

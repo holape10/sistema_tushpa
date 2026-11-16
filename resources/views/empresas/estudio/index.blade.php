@@ -156,6 +156,11 @@
                                     <form method="POST" action="{{ route('estudio.estado', $e->IdEmpresa) }}"
                                           @if ($e->activa) onsubmit="return confirm('¿Desactivar {{ addslashes($e->NomEmpresa) }}? Ya nadie la verá en el selector; sus datos se conservan.')" @endif>
                                         @csrf<button class="h-9 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold">{{ $e->activa ? 'Desactivar' : 'Activar' }}</button></form>
+                                    {{-- Para una empresa registrada por error (RUC mal escrito): solo si aún no tiene datos de trabajo --}}
+                                    <form method="POST" action="{{ route('estudio.eliminar', $e->IdEmpresa) }}" x-data
+                                          @submit="const r = prompt(@js('Eliminar '.$e->IdEmpresa.' '.$e->NomEmpresa.'. Solo se puede si aún no tiene comprobantes, compras ni asientos. Escribe su RUC para confirmar:')); if (r === null) { $event.preventDefault() } else { $el.querySelector('[name=confirmacion]').value = r }">
+                                        @csrf<input type="hidden" name="confirmacion">
+                                        <button class="h-9 px-3 rounded-lg bg-white ring-1 ring-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-semibold" title="Eliminar (registrada por error)">Eliminar</button></form>
                                 </div>
                             </td>
                         </tr>
