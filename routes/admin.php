@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\CertificadoController;
 use App\Http\Controllers\Admin\ClienteController;
 use App\Http\Controllers\Admin\ComprobanteController;
 use App\Http\Controllers\Admin\ContratoController;
+use App\Http\Controllers\Admin\CorreccionProductosController;
 use App\Http\Controllers\Admin\DatosCobroController;
 use App\Http\Controllers\Admin\ErrorController;
 use App\Http\Controllers\Admin\LoginController;
@@ -130,6 +131,10 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/asistente', [AsistenteController::class, 'index'])->name('asistente.index');
     // Estado del servidor: memoria, disco, MySQL y cuánto pesa la base de cada empresa (solo el dueño)
     Route::get('/servidor', [ServidorController::class, 'index'])->name('servidor.index');
+    // Corregir productos de una empresa con un Excel (precios, nombres, costos, estado, stock), sin su usuario (solo el dueño)
+    Route::get('/corregir-productos', [CorreccionProductosController::class, 'index'])->name('correccion_productos.index');
+    Route::post('/corregir-productos', [CorreccionProductosController::class, 'revisar'])->name('correccion_productos.revisar');
+    Route::post('/corregir-productos/{token}', [CorreccionProductosController::class, 'aplicar'])->name('correccion_productos.aplicar');
     // Explorador de bases de solo lectura: tablas, filas y consultas SELECT (solo el dueño)
     Route::get('/base-datos', [BaseDatosController::class, 'index'])->name('basedatos.index');
     Route::post('/base-datos/consulta', [BaseDatosController::class, 'consulta'])->middleware('throttle:60,1')->name('basedatos.consulta');

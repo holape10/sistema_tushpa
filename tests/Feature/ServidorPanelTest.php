@@ -129,6 +129,16 @@ class ServidorPanelTest extends TestCase
         $this->actingAs($this->dueno(false), 'superadmin')->get(route('admin.basedatos.index'))->assertForbidden();
     }
 
+    public function test_corregir_productos_solo_lo_ve_el_dueno(): void
+    {
+        $this->conCentral();
+
+        $this->actingAs($this->dueno(), 'superadmin')->get(route('admin.correccion_productos.index'))->assertOk()
+            ->assertSee('Corregir productos con Excel')->assertSee('Revisar (todavía no cambia nada)');
+        $this->actingAs($this->dueno(false), 'superadmin')->get(route('admin.correccion_productos.index'))->assertForbidden();
+        $this->actingAs($this->dueno(), 'superadmin')->post(route('admin.correccion_productos.aplicar', '00000000-0000-0000-0000-000000000000'))->assertNotFound();
+    }
+
     public function test_solo_el_dueno_ve_la_pagina(): void
     {
         $this->conCentral();
