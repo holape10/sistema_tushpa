@@ -524,6 +524,10 @@ class SireDbf
             }
             $n++;
             $m = $c['montos'];
+            // Las notas de crédito van en positivo: el sistema contable las resta por su tipo (07)
+            if (in_array($c['tipo'], SireAuditoria::NOTAS_CREDITO, true)) {
+                $m = array_map(fn ($v) => abs((float) $v), $m);
+            }
             $correlativo = str_pad((string) $n, 4, '0', STR_PAD_LEFT);
             $filas[] = [
                 'ORIGEN' => 'SIRE', 'NUMDOC' => str_pad($c['numero'], 12, '0', STR_PAD_LEFT), 'SERIEDOC' => $c['serie'], 'RUC_DNI' => $c['ruc'],

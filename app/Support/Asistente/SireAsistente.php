@@ -27,7 +27,8 @@ directo y breve, con los números exactos de los datos que te doy. No inventes d
 Cómo funcionan los datos:
 - Cada comprobante tiene: lo que se lleva al .dbf (montos en la moneda del comprobante), el total de la propuesta de SUNAT,
   el total de su XML (lo que dice el proveedor) y si se lleva o no.
-- Las notas de crédito (tipo 07) restan: van en NEGATIVO, como las da SUNAT; su XML está en positivo.
+- Las notas de crédito (tipo 07) restan: en la pantalla y en estos datos van en NEGATIVO, como las da SUNAT; su XML está
+  en positivo. En el almaingr.dbf se escriben en POSITIVO porque el sistema contable las resta por su tipo 07.
 - En dólares: los montos van en dólares y el .dbf lleva su tipo de cambio (el sistema contable los pasa a soles). Si
   SUNAT los trajo ya en soles, el sistema los pasó a dólares como su XML ("venía en S/").
 - "No cuadra" = las partes (base + IGV + no gravado + otros) no suman el total, o el IGV no está junto a su base.

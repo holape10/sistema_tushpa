@@ -124,9 +124,9 @@ class SireDbfTest extends FlujoTestCase
         config(['services.contabilidad.centro_costo' => true]);
         $this->assertSame([40.10, 40.10], [$redondeo['NG'], $redondeo['TOTAL']], 'El céntimo de redondeo del proveedor se corrige solo.');
         $this->get(route('sire.dbf.excel', ['compras', 'periodo' => '202605']))->assertOk()->assertDownload("almaingr_{$ruc}_202605.xlsx");
-        $this->assertSame(['07', 'NOTA CRED', -160.0, -160.0, '01', 'FE02', '000000005907', '2026-04-22', '601111', '421201'],
+        $this->assertSame(['07', 'NOTA CRED', 160.0, 160.0, '01', 'FE02', '000000005907', '2026-04-22', '601111', '421201'],
             [$nota['CODDOC'], $nota['DESDOC'], $nota['NG'], $nota['TOTAL'], $nota['FCODDOC'], $nota['FSERIE'], $nota['FNUMERO'], $nota['FECHANC'], $nota['CTACARGO'], $nota['CTAABONO']],
-            'La nota de crédito en negativo como la da SUNAT; sin cuentas propias, las de CONCAR.');
+            'La nota de crédito en positivo (el sistema contable la resta por su tipo); sin cuentas propias, las de CONCAR.');
 
         // El mes siguiente el mismo proveedor ya trae las cuentas que se le pusieron
         $this->propuesta(Sire::COMPRAS, self::RCE, [$this->compra('20/06/2026', '01', 'F001', '135001', '20553510661', 'LLAMA PE SA', ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177])], '202606');
