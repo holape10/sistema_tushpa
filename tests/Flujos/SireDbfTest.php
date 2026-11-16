@@ -41,12 +41,12 @@ class SireDbfTest extends FlujoTestCase
     }
 
     /** Fila del RCE: [fecha, tipo, serie, número, RUC, proveedor, bases y montos DG/DGNG/DNG/NG..., total, ref] */
-    private function compra(string $fecha, string $tipo, string $serie, string $num, string $rucProv, string $prov, array $m, array $ref = ['', '', '', '']): string
+    private function compra(string $fecha, string $tipo, string $serie, string $num, string $rucProv, string $prov, array $m, array $ref = ['', '', '', ''], string $moneda = 'PEN', string $tc = '1.000'): string
     {
         $v = fn ($k) => number_format($m[$k] ?? 0, 2, '.', '');
         $ruc = $this->usuario->IdEmpresa;
 
-        return "{$ruc}|WILCAT|202605|CAR|{$fecha}|{$fecha}|{$tipo}|{$serie}||{$num}||6|{$rucProv}|{$prov}|{$v('base_dg')}|{$v('igv_dg')}|0.00|0.00|{$v('base_dng')}|{$v('igv_dng')}|{$v('ng')}|0.00|0.00|0.00|{$v('total')}|PEN|1.000|{$ref[0]}|{$ref[1]}|{$ref[2]}||{$ref[3]}";
+        return "{$ruc}|WILCAT|202605|CAR|{$fecha}|{$fecha}|{$tipo}|{$serie}||{$num}||6|{$rucProv}|{$prov}|{$v('base_dg')}|{$v('igv_dg')}|0.00|0.00|{$v('base_dng')}|{$v('igv_dng')}|{$v('ng')}|0.00|0.00|0.00|{$v('total')}|{$moneda}|{$tc}|{$ref[0]}|{$ref[1]}|{$ref[2]}||{$ref[3]}";
     }
 
     private function dbf(string $libro): array
@@ -133,6 +133,33 @@ class SireDbfTest extends FlujoTestCase
         $this->get(route('sire.dbf', ['libro' => 'compras', 'periodo' => '202606']))->assertOk();
         $junio = SireDbf::delPeriodo($ruc, 'compras', '202606')['comprobantes'][0];
         $this->assertSame(['63691', '42121', '10411', '03'], [$junio['ctacargo'], $junio['ctaabono'], $junio['ctacance'], $junio['mpago']], 'El proveedor recuerda sus cuentas y su medio de pago.');
+    }
+
+    public function test_las_compras_en_dolares_van_en_dolares_con_su_tc_y_avisa_si_se_escribieron_en_soles(): void
+    {
+        Storage::fake();
+        $this->propuesta(Sire::COMPRAS, self::RCE, [
+            $this->compra('22/05/2026', '01', 'F001', '1', '20553510661', 'LLAMA PE SA', ['base_dg' => 100, 'igv_dg' => 18, 'total' => 118]),
+            $this->compra('27/05/2026', '01', 'F581', '8323900', '20100041953', 'RIMAC SEGUROS', ['base_dg' => 194.98, 'igv_dg' => 35.09, 'total' => 230.07], ['', '', '', ''], 'USD', '3.446'),
+        ]);
+        $clave = '20100041953|01|F581|8323900';
+
+        // Los totales de la pantalla van en soles: la de dólares con su tipo de cambio (230.07 × 3.446 = 792.82)
+        $pantalla = $this->get(route('sire.dbf', ['libro' => 'compras', 'periodo' => '202605']))->assertOk()->assertSee('US$ DÓLARES · TC 3.446', false);
+        $this->assertEquals(round(118 + 792.82, 2), $pantalla->viewData('totales')['total']);
+        $this->assertSame(1, $pantalla->viewData('totales')['en_dolares']);
+
+        // Repartir en dólares está bien; escribirlo en soles se convertiría dos veces: avisa y no deja descargar
+        $guardar = fn (array $m) => $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202605', 'clave' => $clave, 'montos' => $m])->assertOk();
+        $this->assertNull($guardar(['base_dng' => 194.98, 'igv_dng' => 35.09, 'total' => 230.07])->json('alerta'));
+        $this->assertStringContainsString('Los montos están en soles', (string) $guardar(['base_dng' => 671.90, 'igv_dng' => 120.92, 'total' => 792.82])->json('alerta'));
+        $this->get(route('sire.dbf.descargar', ['compras', 'periodo' => '202605']))->assertRedirect();
+
+        // En el .dbf va en dólares con su tipo de cambio (el sistema contable la pasa a soles)
+        $guardar(['base_dng' => 194.98, 'igv_dng' => 35.09, 'total' => 230.07]);
+        $filas = collect($this->dbf('compras')[1])->keyBy('SERIEDOC');
+        $this->assertEquals([230.07, 3.446, 'US$'], [(float) $filas['F581']['TOTAL'], (float) $filas['F581']['TC'], trim($filas['F581']['MONEDA'])]);
+        $this->assertSame('S/', trim($filas['F001']['MONEDA']));
     }
 
     public function test_ventas_con_sus_cuentas_en_tienfact(): void

@@ -180,6 +180,8 @@ class SireDbf
             $c['yaManual'] = $yaManual[$clave] ?? null;
             $c['excluido'] = (bool) ($a->excluido ?? isset($yaManual[$clave]));
             $c['editado'] = $a && $a->montos;
+            // Lo que dice SUNAT (en la moneda del comprobante), para notar si al editar se escribió en otra moneda
+            $c['total_sunat'] = (float) $c['montos']['total'];
             $c['montos'] = $a && $a->montos ? array_map('floatval', json_decode($a->montos, true)) + array_fill_keys(array_keys($c['montos']), 0.0) : $c['montos'];
             if ($libro === 'compras') {
                 $cuentaXml = collect($c['lineas'])->pluck('cuenta')->filter()->unique();
@@ -204,7 +206,7 @@ class SireDbf
             $c['cuentaPropia'] = (bool) ($a?->ctacargo || $a?->ctaabono);
             $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
             $c['diferencia'] = self::diferencia($libro, $c['montos']);
-            $c['alerta'] = self::revisarIgv($c['montos'], $libro);
+            $c['alerta'] = self::revisarIgv($c['montos'], $libro) ?? self::revisarMoneda($c);
             // Cuentas de gasto 62–68: sin centro de costo no se descarga
             if (! $c['alerta'] && $libro === 'compras' && CuentasCompras::requiereCentro($c['ctacargo']) && ! ($c['ccosto'] ?? null)) {
                 $c['alerta'] = "La Cta. cargo {$c['ctacargo']} es de gasto: elige su centro de costo.";
@@ -384,19 +386,46 @@ class SireDbf
         return $hay ??= Schema::hasColumn('sire_ajustes', 'ctacance');
     }
 
+    /**
+     * En dólares los montos van EN DÓLARES (como los da SUNAT) y el .dbf lleva su tipo de cambio: el sistema contable los
+     * pasa a soles. Si al editar se escribieron ya en soles, se convertirían dos veces. También avisa si falta el TC.
+     */
+    public static function revisarMoneda(array $c): ?string
+    {
+        if (($c['moneda'] ?? 'PEN') !== 'USD') {
+            return null;
+        }
+        $tc = (float) ($c['tc'] ?? 0);
+        if ($tc <= 1) {
+            return 'Comprobante en dólares sin tipo de cambio: el sistema contable no podrá pasarlo a soles.';
+        }
+        $sunat = (float) ($c['total_sunat'] ?? 0);
+        $total = (float) $c['montos']['total'];
+        if (! empty($c['editado']) && abs($sunat) >= 0.01 && abs($total - $sunat) >= 0.01 && abs($total - round($sunat * $tc, 2)) <= max(1.0, abs($sunat) * 0.01)) {
+            return 'Los montos están en soles, pero este comprobante es en dólares: van en dólares (SUNAT: US$ '.number_format($sunat, 2)
+                .'). El tipo de cambio '.$tc.' los pasa a soles en el sistema contable; así se convertirían dos veces. Usa «Restaurar» y vuelve a repartir en dólares.';
+        }
+
+        return null;
+    }
+
     /** ¿Este comprobante impide descargar? (no cuadra o su IGV no está junto a su base) */
     public static function conError(array $c): bool
     {
         return abs($c['diferencia']) >= 0.01 || ! empty($c['alerta']);
     }
 
-    /** Suma de lo que se va a llevar al .dbf y, aparte, de lo que no se lleva (para ver la diferencia con SUNAT) */
+    /**
+     * Suma de lo que se va a llevar al .dbf y, aparte, de lo que no se lleva (para ver la diferencia con SUNAT). En SOLES:
+     * los comprobantes en dólares se pasan con su tipo de cambio (como en el resumen de SUNAT).
+     */
     public static function totales(string $libro, array $comprobantes): array
     {
         $llevar = array_filter($comprobantes, fn ($c) => ! $c['excluido']);
         $fuera = array_filter($comprobantes, fn ($c) => $c['excluido']);
-        $montos = function (array $lista) use ($libro): array {
-            $suma = fn (string ...$k) => round(array_sum(array_map(fn ($c) => array_sum(array_intersect_key($c['montos'], array_flip($k))), $lista)), 2);
+        $enSoles = fn (array $c) => ($c['moneda'] ?? 'PEN') === 'USD' && (float) ($c['tc'] ?? 0) > 0 ? (float) $c['tc'] : 1.0;
+        $montos = function (array $lista) use ($libro, $enSoles): array {
+            $suma = fn (string ...$k) => round(array_sum(array_map(fn ($c) => round(array_sum(array_intersect_key($c['montos'], array_flip($k))) * $enSoles($c), 2), $lista)), 2);
 
             return [
                 'base' => $libro === 'compras' ? $suma('base_dg', 'base_dgng', 'base_dng') : $suma('gravada'),
@@ -410,6 +439,7 @@ class SireDbf
             'registros' => count($llevar), 'excluidos' => count($fuera),
             'descuadrados' => count(array_filter($llevar, fn ($c) => self::conError($c))),
             'sin_cta_cargo' => count(array_filter($llevar, fn ($c) => $c['sinCtaCargo'] ?? false)),
+            'en_dolares' => count(array_filter($llevar, fn ($c) => ($c['moneda'] ?? 'PEN') === 'USD')),
             'no_llevan' => $montos($fuera),
         ] + $montos($llevar);
     }

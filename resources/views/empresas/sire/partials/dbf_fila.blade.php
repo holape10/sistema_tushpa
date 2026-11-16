@@ -31,7 +31,7 @@
         <span class="font-bold whitespace-nowrap">{{ $c['serie'] }}-{{ $c['numero'] }}</span>
         <span class="text-xs text-slate-400 whitespace-nowrap">{{ $tipos[$c['tipo']] ?? 'Tipo '.$c['tipo'] }} · {{ $c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '' }}</span>
         {{-- En dólares: que se vea (los montos de abajo están en esa moneda) --}}
-        @if ($c['moneda'] !== 'PEN')<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-800" title="Los montos están en {{ $c['moneda'] }}">{{ $c['moneda'] === 'USD' ? 'US$ DÓLARES' : $c['moneda'] }} · TC {{ $c['tc'] }}</span>@endif
+        @if ($c['moneda'] !== 'PEN')<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-800" title="Los montos están en {{ $c['moneda'] }}">{{ $c['moneda'] === 'USD' ? 'US$ DÓLARES' : $c['moneda'] }} · TC {{ $c['tc'] }} · <span x-text="'= ' + soles((Number(fila.montos.total) || 0) * {{ (float) $c['tc'] }})"></span></span>@endif
         <span class="flex-1 min-w-[180px] text-sm text-slate-700">{{ $c['nombre'] }} <span class="text-xs text-slate-400">{{ $c['ruc'] }}</span>
             @if ($c['anulado'])<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">ANULADO</span>@endif
             {{-- Agregado a mano (SUNAT aún no lo tiene) o ya agregado en otro mes --}}

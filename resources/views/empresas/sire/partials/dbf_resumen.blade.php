@@ -12,6 +12,7 @@
         <p class="text-2xl font-extrabold" x-text="totales.registros"></p>
         <p class="text-[11px]" :class="totales.excluidos ? 'font-semibold text-amber-700' : 'text-slate-400'"
            x-text="totales.excluidos ? totales.excluidos + ' no se llevan' : 'de {{ count($comprobantes) }}'"></p>
+        <p x-show="totales.en_dolares" class="text-[11px] font-semibold text-amber-700" x-text="totales.en_dolares + ' en dólares (sumados en soles con su TC)'"></p>
     </div>
     @foreach ($tarjetas as [$campo, $texto, $color])
         <div class="bg-white rounded-2xl shadow-sm p-4">
