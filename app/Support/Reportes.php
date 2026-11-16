@@ -223,25 +223,34 @@ class Reportes
                 ['Promedio por pedido', count($filas) ? array_sum(array_column($filas, 'total')) / count($filas) : 0, 'money']]];
     }
 
-    /** Solo comprobantes tributarios (sin notas de venta), con su estado en SUNAT; las notas de crédito restan */
+    /**
+     * Solo comprobantes tributarios (sin notas de venta), con su estado en SUNAT; las notas de crédito restan. Van TODOS,
+     * también los anulados (con montos en 0, para que no falte ningún correlativo), ordenados por código, serie y número.
+     */
     private static function sunat(array $f): array
     {
         $estado = $f['estado_sunat'] ?? '';
-        $rows = self::cpe($f)->whereIn('c.tdocod', ['01', '03', '07', '08'])
+        $rows = self::filtrosComunes(self::enFechas(DB::table('cpe_cabecera as c')->whereIn('c.id_empresa_negocio', $f['sucursales']), $f), $f)
+            ->whereIn('c.tdocod', ['01', '03', '07', '08'])
+            ->when($estado === 'ANULADO', fn ($w) => $w->whereNotNull('c.ccabaj'))
+            ->when($estado !== '' && $estado !== 'ANULADO', fn ($w) => $w->whereNull('c.ccabaj'))
             ->when($estado === 'pendientes', fn ($w) => $w->whereIn('c.est_sunat', ['PENDIENTE', 'ERROR', 'RECHAZADO', 'EN RESUMEN']))
-            ->when($estado !== '' && $estado !== 'pendientes', fn ($w) => $w->where('c.est_sunat', $estado))
-            ->orderBy('c.ccafem')->orderBy('c.tdocod')->orderBy('c.serdoc')->orderBy('c.numdoc')->get();
+            ->when($estado !== '' && ! in_array($estado, ['pendientes', 'ANULADO'], true), fn ($w) => $w->where('c.est_sunat', $estado))
+            ->orderBy('c.tdocod')->orderBy('c.serdoc')->orderByRaw('CAST(c.numdoc AS UNSIGNED)')->get();
         $filas = $rows->map(function ($c) {
-            $s = $c->tdocod === '07' ? -1 : 1;
+            // Anulado: sale con montos en 0 (no suma), pero sale
+            $s = $c->ccabaj ? 0 : ($c->tdocod === '07' ? -1 : 1);
 
-            return ['fecha' => $c->ccafem, 'tipo' => self::TIPOS[$c->tdocod] ?? $c->tdocod, 'numero' => $c->serdoc.'-'.str_pad($c->numdoc, 8, '0', STR_PAD_LEFT),
+            return ['fecha' => $c->ccafem, 'tipo' => self::TIPOS[$c->tdocod] ?? $c->tdocod, 'codigo' => $c->tdocod, 'serie' => $c->serdoc,
+                'numero' => str_pad($c->numdoc, 8, '0', STR_PAD_LEFT),
                 'doc' => $c->ccandi, 'cliente' => $c->ccanom, 'gravada' => $s * (float) $c->ccatvg, 'exonerada' => $s * round((float) $c->ccatexo + (float) $c->ccatinaf, 2),
                 'igv' => $s * (float) $c->ccaigv, 'total' => $s * (float) $c->ccaitv,
-                'referencia' => $c->serie_ref ? $c->serie_ref.'-'.$c->num_ref : '', 'sunat' => $c->est_sunat ?? 'PENDIENTE'];
+                'referencia' => $c->serie_ref ? $c->serie_ref.'-'.$c->num_ref : '', 'sunat' => $c->ccabaj ? 'ANULADO' : ($c->est_sunat ?? 'PENDIENTE')];
         })->all();
         $porEstado = collect($filas)->countBy('sunat');
 
-        return ['columnas' => ['fecha' => ['Fecha', 'date'], 'tipo' => ['Tipo', 'text'], 'numero' => ['Número', 'text'], 'doc' => ['DNI/RUC', 'text'],
+        return ['columnas' => ['fecha' => ['Fecha', 'date'], 'tipo' => ['Tipo', 'text'], 'codigo' => ['Código', 'text'], 'serie' => ['Serie', 'text'],
+            'numero' => ['Número', 'text'], 'doc' => ['DNI/RUC', 'text'],
             'cliente' => ['Cliente', 'text'], 'gravada' => ['Gravada', 'money'], 'exonerada' => ['Exon./Inaf.', 'money'], 'igv' => ['IGV', 'money'],
             'total' => ['Total', 'money'], 'referencia' => ['Doc. ref.', 'text'], 'sunat' => ['SUNAT', 'text']],
             'filas' => $filas, 'usa' => ['estado_sunat'], 'resumen' => [
@@ -249,6 +258,7 @@ class Reportes
                 ['IGV', array_sum(array_column($filas, 'igv')), 'money'],
                 ['Aceptados', (int) ($porEstado['ACEPTADO'] ?? 0) + (int) ($porEstado['OBSERVADO'] ?? 0)],
                 ['Pendientes / con error', (int) ($porEstado['PENDIENTE'] ?? 0) + (int) ($porEstado['ERROR'] ?? 0) + (int) ($porEstado['RECHAZADO'] ?? 0) + (int) ($porEstado['EN RESUMEN'] ?? 0)],
+                ['Anulados', (int) ($porEstado['ANULADO'] ?? 0)],
             ]];
     }
 

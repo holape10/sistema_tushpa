@@ -28,7 +28,7 @@
 @if (in_array('estado_sunat', $usa, true))
     <label class="text-sm">Estado SUNAT
         <select name="estado_sunat" class="block rounded-lg border-gray-300 text-sm">
-            @foreach (['' => 'Todos', 'ACEPTADO' => 'Aceptados', 'OBSERVADO' => 'Observados', 'pendientes' => 'Pendientes / con error', 'RECHAZADO' => 'Rechazados'] as $k => $n)<option value="{{ $k }}" @selected((string) request('estado_sunat') === $k)>{{ $n }}</option>@endforeach
+            @foreach (['' => 'Todos', 'ACEPTADO' => 'Aceptados', 'OBSERVADO' => 'Observados', 'pendientes' => 'Pendientes / con error', 'RECHAZADO' => 'Rechazados', 'ANULADO' => 'Anulados'] as $k => $n)<option value="{{ $k }}" @selected((string) request('estado_sunat') === $k)>{{ $n }}</option>@endforeach
         </select></label>
 @endif
 @if (in_array('tipo', $usa, true))
