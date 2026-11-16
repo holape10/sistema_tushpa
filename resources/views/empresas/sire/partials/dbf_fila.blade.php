@@ -18,7 +18,7 @@
     $centros = $compras ? \App\Support\Contabilidad\CuentasCompras::centros((string) auth()->user()->IdEmpresa) : [];
     $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ctacance' => $c['ctacance'] ?? '', 'mpago' => $c['mpago'] ?? '', 'fepago' => $c['fepago'] ?? '', 'ccosto' => $c['ccosto'] ?? '',
         'montos' => $m, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'editado' => $c['editado'], 'redondeo' => $c['redondeo'],
-        'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta, 'moneda' => $c['moneda'], 'en_soles' => $c['en_soles'] ?? false,
+        'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta, 'moneda' => $c['moneda'],
         'xml_dif' => $c['xml_dif'] ?? null,
         'buscar' => mb_strtolower($c['serie'].'-'.$c['numero'].' '.$c['serie'].'-'.str_pad($c['numero'], 8, '0', STR_PAD_LEFT).' '.$c['numero'].' '.$c['ruc'].' '.$c['nombre'])];
     $soles = fn ($n) => number_format((float) $n, 2);
@@ -34,10 +34,9 @@
         <span class="text-xs text-slate-400 whitespace-nowrap">{{ $tipos[$c['tipo']] ?? 'Tipo '.$c['tipo'] }} · {{ $c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '' }}</span>
         {{-- En dólares: que se vea (los montos de abajo están en esa moneda) --}}
         @if ($c['moneda'] !== 'PEN')
-            <span x-show="!fila.en_soles" class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-800" title="Los montos están en {{ $c['moneda'] }}">{{ $c['moneda'] === 'USD' ? 'US$ DÓLARES' : $c['moneda'] }} · TC {{ $c['tc'] }} · <span x-text="'= ' + soles((Number(fila.montos.total) || 0) * {{ (float) $c['tc'] }})"></span></span>
-            {{-- En dólares pero los montos se escribieron en soles: baja como soles con TC 1 --}}
-            <span x-show="fila.en_soles" x-cloak class="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-extrabold text-sky-800"
-                  title="Factura en dólares (US$ {{ number_format((float) ($c['total_sunat'] ?? 0), 2) }} · TC {{ $c['tc'] }}) con los montos escritos en soles">US$ ESCRITO EN SOLES · baja S/ con TC 1</span>
+            <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-800" title="Los montos están en {{ $c['moneda'] }}">{{ $c['moneda'] === 'USD' ? 'US$ DÓLARES' : $c['moneda'] }} · TC {{ $c['tc'] }} · <span x-text="'= ' + soles((Number(fila.montos.total) || 0) * {{ (float) $c['tc'] }})"></span></span>
+            {{-- SUNAT (o una edición) lo tenía en soles: se pasó a dólares, como su XML --}}
+            @if ($c['de_soles'] ?? null)<span class="text-[11px] font-semibold text-sky-700" title="Los montos venían en soles; se pasaron a dólares con el TC {{ $c['tc'] }}">venía en S/ {{ number_format((float) $c['de_soles'], 2) }} → en dólares, como su XML</span>@endif
         @endif
         <span class="flex-1 min-w-[180px] text-sm text-slate-700">{{ $c['nombre'] }} <span class="text-xs text-slate-400">{{ $c['ruc'] }}</span>
             @if ($c['anulado'])<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">ANULADO</span>@endif

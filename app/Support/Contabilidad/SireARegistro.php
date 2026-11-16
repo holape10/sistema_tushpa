@@ -52,8 +52,7 @@ class SireARegistro
                     11 => '6', 8 => '1', default => '0'
                 }, 'doc_num' => $c['ruc'] ?: null,
                 'nombre' => mb_substr($c['nombre'] ?: 'SIN NOMBRE', 0, 200),
-                // Escrito ya en soles (aunque sea en dólares): va como soles
-                'moneda' => $c['moneda'] === 'USD' && empty($c['en_soles']) ? 'USD' : 'PEN', 'tipo_cambio' => $c['moneda'] === 'USD' && empty($c['en_soles']) ? (float) $c['tc'] : 1,
+                'moneda' => $c['moneda'] === 'USD' ? 'USD' : 'PEN', 'tipo_cambio' => $c['moneda'] === 'USD' ? (float) $c['tc'] : 1,
                 'retencion' => 0, 'cuenta' => $cuenta, 'condicion' => 'CREDITO', 'cuenta_pago' => null, 'glosa' => null,
             ];
             $d['total'] = Registro::total($d);

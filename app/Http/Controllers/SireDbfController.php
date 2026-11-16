@@ -87,7 +87,7 @@ class SireDbfController extends Controller
         $c = $this->comprobante($ruc, $d['libro'], $d['periodo'], $d['clave']);
 
         return response()->json(['ok' => true, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'montos' => $c['montos'], 'editado' => $c['editado'],
-            'en_soles' => $c['en_soles'] ?? false, 'xml_dif' => $c['xml_dif'] ?? null,
+            'de_soles' => $c['de_soles'] ?? null, 'xml_dif' => $c['xml_dif'] ?? null,
             'ctacance' => $c['ctacance'] ?? null, 'mpago' => $c['mpago'] ?? null, 'fepago' => $c['fepago'] ?? null,
             'totales' => SireDbf::totales($d['libro'], SireDbf::delPeriodo($ruc, $d['libro'], $d['periodo'])['comprobantes'])]);
     }
@@ -193,7 +193,7 @@ class SireDbfController extends Controller
         foreach ($comprobantes as $c) {
             $filas[] = array_merge([$c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '', $c['tipo'], $c['serie'], $c['numero'], $c['ruc'], $c['nombre']],
                 array_map(fn ($k) => (float) ($c['montos'][$k] ?? 0), array_keys($montos)),
-                [! empty($c['en_soles']) ? 'PEN' : $c['moneda'], ! empty($c['en_soles']) ? 1 : $c['tc'], (string) $c['ctacargo'], (string) $c['ctaabono'], (string) ($c['ctacance'] ?? ''), (string) ($c['mpago'] ?? ''), ! empty($c['fepago']) ? date('d/m/Y', strtotime($c['fepago'])) : '',
+                [$c['moneda'], $c['tc'], (string) $c['ctacargo'], (string) $c['ctaabono'], (string) ($c['ctacance'] ?? ''), (string) ($c['mpago'] ?? ''), ! empty($c['fepago']) ? date('d/m/Y', strtotime($c['fepago'])) : '',
                     $c['ref'] ? $c['ref']['serie'].'-'.$c['ref']['numero'] : '']);
         }
         $filas[] = array_merge(['TOTAL', '', '', '', '', count($comprobantes).' comprobante(s)'],

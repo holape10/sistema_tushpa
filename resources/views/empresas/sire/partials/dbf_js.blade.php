@@ -70,7 +70,6 @@
                     this.fila.diferencia = d.diferencia;
                     this.fila.alerta = d.alerta;
                     this.fila.editado = d.editado;
-                    this.fila.en_soles = d.en_soles;
                     this.fila.xml_dif = d.xml_dif;
                     // Al elegir el medio de pago, su cuenta de cancelación se pone sola
                     if (cambios.mpago !== undefined && d.ctacance) this.fila.ctacance = d.ctacance;

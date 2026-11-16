@@ -135,7 +135,7 @@ class SireDbfTest extends FlujoTestCase
         $this->assertSame(['63691', '42121', '10411', '03'], [$junio['ctacargo'], $junio['ctaabono'], $junio['ctacance'], $junio['mpago']], 'El proveedor recuerda sus cuentas y su medio de pago.');
     }
 
-    public function test_las_compras_en_dolares_van_en_dolares_y_las_escritas_en_soles_bajan_como_soles(): void
+    public function test_las_compras_en_dolares_van_en_dolares_con_su_tc_y_se_comparan_con_su_xml(): void
     {
         Storage::fake();
         $ruc = $this->usuario->IdEmpresa;
@@ -144,10 +144,8 @@ class SireDbfTest extends FlujoTestCase
             $this->compra('27/05/2026', '01', 'F581', '8323900', '20100041953', 'RIMAC SEGUROS', ['base_dg' => 194.98, 'igv_dg' => 35.09, 'total' => 230.07], ['', '', '', ''], 'USD', '3.446'),
         ]);
         // Sus XML: el de LLAMA dice 118.10 (10 céntimos más que lo que se lleva)
-        foreach ([['20553510661', 'F001', '1', 'PEN', 118.10], ['20100041953', 'F581', '8323900', 'USD', 230.07]] as [$emisor, $serie, $numero, $moneda, $total]) {
-            DB::table('compras_xml')->insert(['IdEmpresa' => $ruc, 'ruc_emisor' => $emisor, 'tipo' => '01', 'serie' => $serie, 'numero' => $numero,
-                'fecha' => '2026-05-22', 'moneda' => $moneda, 'total' => $total, 'created_at' => now(), 'updated_at' => now()]);
-        }
+        $this->xmlCompra('20553510661', 'F001', '1', 'PEN', 118.10);
+        $this->xmlCompra('20100041953', 'F581', '8323900', 'USD', 230.07);
         $clave = '20100041953|01|F581|8323900';
 
         // Los totales de la pantalla van en soles: la de dólares con su tipo de cambio (230.07 × 3.446 = 792.82)
@@ -155,21 +153,42 @@ class SireDbfTest extends FlujoTestCase
             ->assertSee('En dólares')->assertSee('Distinto al XML')->assertSee('Buscar número, RUC o nombre');
         $this->assertEquals(round(118 + 792.82, 2), $pantalla->viewData('totales')['total']);
         $this->assertSame([1, 1], [$pantalla->viewData('totales')['en_dolares'], $pantalla->viewData('totales')['distinto_xml']]);
-        $llama = collect($pantalla->viewData('dbf'))->firstWhere('serie', 'F001');
-        $this->assertEquals(-0.10, $llama['xml_dif']);
+        $this->assertEquals(-0.10, collect($pantalla->viewData('dbf'))->firstWhere('serie', 'F001')['xml_dif']);
 
-        // En dólares, en el .dbf va en dólares con su tipo de cambio (el sistema contable la pasa a soles)
+        // En el .dbf va en dólares con su tipo de cambio (el sistema contable la pasa a soles)
         $filas = collect($this->dbf('compras')[1])->keyBy('SERIEDOC');
         $this->assertEquals([230.07, 3.446, 'US$'], [(float) $filas['F581']['TOTAL'], (float) $filas['F581']['TC'], trim($filas['F581']['MONEDA'])]);
         $this->assertSame('S/', trim($filas['F001']['MONEDA']));
 
-        // Si el contador ya la escribió en soles: baja como soles con TC 1 (no se convierte dos veces) y cuadra con su XML
+        // Si se escribieron en soles, se vuelven a pasar a dólares (como su XML): nunca baja convertida dos veces
         $r = $this->postJson(route('sire.dbf.guardar'), ['libro' => 'compras', 'periodo' => '202605', 'clave' => $clave,
             'montos' => ['base_dng' => 671.90, 'igv_dng' => 120.92, 'total' => 792.82]])->assertOk();
-        $this->assertSame([true, 0.0, null], [$r->json('en_soles'), (float) $r->json('xml_dif'), $r->json('alerta')]);
-        $this->assertEquals(round(118 + 792.82, 2), $r->json('totales.total'));
+        $this->assertEquals([792.82, 0.0, 230.07], [$r->json('de_soles'), $r->json('xml_dif'), $r->json('montos.total')]);
         $filas = collect($this->dbf('compras')[1])->keyBy('SERIEDOC');
-        $this->assertEquals([792.82, 1.0, 'S/'], [(float) $filas['F581']['TOTAL'], (float) $filas['F581']['TC'], trim($filas['F581']['MONEDA'])]);
+        $this->assertEquals([194.98, 35.09, 230.07, 3.446, 'US$'], [(float) $filas['F581']['ONG'], (float) $filas['F581']['IGV_3'], (float) $filas['F581']['TOTAL'],
+            (float) $filas['F581']['TC'], trim($filas['F581']['MONEDA'])]);
+    }
+
+    public function test_si_sunat_trae_en_soles_una_compra_en_dolares_se_muestra_en_dolares_como_su_xml(): void
+    {
+        Storage::fake();
+        $this->propuesta(Sire::COMPRAS, self::RCE, [
+            $this->compra('27/05/2026', '01', 'F581', '8323900', '20100041953', 'RIMAC SEGUROS', ['base_dng' => 671.90, 'igv_dng' => 120.92, 'total' => 792.82], ['', '', '', ''], 'USD', '3.446'),
+        ]);
+        $this->xmlCompra('20100041953', 'F581', '8323900', 'USD', 230.07);
+
+        $pantalla = $this->get(route('sire.detalle', ['periodo' => '202605']))->assertOk()->assertSee('venía en S/ 792.82');
+        $c = $pantalla->viewData('dbf')[0];
+        $this->assertEquals([194.98, 35.09, 230.07, 0.0, 0.0], [$c['montos']['base_dng'], $c['montos']['igv_dng'], $c['montos']['total'], $c['diferencia'], $c['xml_dif']]);
+        $this->assertEquals(792.82, $pantalla->viewData('totales')['total']);
+        $fila = Dbf::leer($this->get(route('sire.dbf.descargar', ['compras', 'periodo' => '202605']))->assertOk()->getContent())[0];
+        $this->assertEquals([230.07, 3.446, 'US$'], [(float) $fila['TOTAL'], (float) $fila['TC'], trim($fila['MONEDA'])]);
+    }
+
+    private function xmlCompra(string $emisor, string $serie, string $numero, string $moneda, float $total): void
+    {
+        DB::table('compras_xml')->insert(['IdEmpresa' => $this->usuario->IdEmpresa, 'ruc_emisor' => $emisor, 'tipo' => '01', 'serie' => $serie,
+            'numero' => $numero, 'fecha' => '2026-05-22', 'moneda' => $moneda, 'total' => $total, 'created_at' => now(), 'updated_at' => now()]);
     }
 
     public function test_ventas_con_sus_cuentas_en_tienfact(): void

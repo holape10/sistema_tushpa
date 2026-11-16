@@ -60,7 +60,7 @@
                         @if (! empty($c['ref']))<br><span class="usd">ref. {{ $c['ref']['serie'] }}-{{ $c['ref']['numero'] }}</span>@endif</td>
                     <td class="nw">{{ $c['ruc'] }}</td>
                     <td>{{ mb_strimwidth((string) $c['nombre'], 0, 38, '…') }}
-                        @if (($c['moneda'] ?? 'PEN') === 'USD')<br><span class="usd">{{ ! empty($c['en_soles']) ? 'US$ escrito en S/' : 'US$ · T.C. '.$c['tc'] }}</span>@endif</td>
+                        @if (($c['moneda'] ?? 'PEN') === 'USD')<br><span class="usd">US$ · T.C. {{ $c['tc'] }}</span>@endif</td>
                     @foreach ($columnas as $titulo => $claves)<td class="d">{{ $n($monto($c, $claves)) }}</td>@endforeach
                     <td class="c">{{ $c['ctacargo'] }}</td>
                     <td class="c">{{ $c['ctaabono'] }}</td>

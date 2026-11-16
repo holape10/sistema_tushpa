@@ -206,13 +206,17 @@ class SireDbf
             // En efectivo (el 08 por defecto o el 09) se paga el mismo día: sin otra fecha, la de emisión
             $c['fepago'] = $a->fepago ?? (in_array($c['mpago'] ?? '08', ['08', '09'], true) ? $c['fecha'] : null);
             $c['cuentaPropia'] = (bool) ($a?->ctacargo || $a?->ctaabono);
-            $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
-            $c['diferencia'] = self::diferencia($libro, $c['montos']);
-            // En dólares pero ya escritos en soles: bajan como soles (S/ y TC 1) para no convertirse dos veces
-            $c['en_soles'] = self::escritoEnSoles($c);
             $x = $cabecerasXml[$clave] ?? null;
             $c['xml_total'] = $x ? (float) $x->total : null;
             $c['xml_moneda'] = $x ? $x->moneda : null;
+            // En dólares pero con los montos en soles: se pasan a dólares, como su XML (el .dbf lleva US$ y su TC)
+            $c['de_soles'] = null;
+            if (self::montosEnSoles($c)) {
+                $c['de_soles'] = (float) $c['montos']['total'];
+                $c['montos'] = self::aDolares($c['montos'], (float) $c['tc'], $c['xml_total']);
+            }
+            $c['redondeo'] = $c['editado'] || $c['de_soles'] !== null ? 0.0 : self::redondear($libro, $c['montos']);
+            $c['diferencia'] = self::diferencia($libro, $c['montos']);
             $c['xml_dif'] = self::diferenciaXml($c);
             $c['alerta'] = self::revisarIgv($c['montos'], $libro) ?? self::revisarMoneda($c);
             // Cuentas de gasto 62–68: sin centro de costo no se descarga
@@ -399,45 +403,62 @@ class SireDbf
     }
 
     /**
-     * ¿Comprobante en dólares cuyos montos el contador escribió ya en soles? (editado y su total es el de SUNAT por el
-     * tipo de cambio). Esos bajan al .dbf como soles: moneda S/ y TC 1, para que el sistema contable no los convierta otra vez.
+     * ¿Comprobante en dólares cuyos montos están en soles? (SUNAT o una edición los dejó ya convertidos). Se sabe con su
+     * XML, que está en dólares: el total es el del XML por el tipo de cambio. Sin XML, con el total de SUNAT si se editó.
      */
-    public static function escritoEnSoles(array $c): bool
+    public static function montosEnSoles(array $c): bool
     {
         $tc = (float) ($c['tc'] ?? 0);
-        $sunat = (float) ($c['total_sunat'] ?? 0);
-        $total = (float) $c['montos']['total'];
+        if (($c['moneda'] ?? 'PEN') !== 'USD' || $tc <= 1) {
+            return false;
+        }
+        $total = abs((float) $c['montos']['total']);
+        $esPorTc = fn (float $dolares) => $dolares >= 0.01 && abs($total - $dolares) >= 0.01
+            && abs($total - round($dolares * $tc, 2)) <= max(1.0, $dolares * $tc * 0.005);
+        if (($c['xml_total'] ?? null) !== null && ($c['xml_moneda'] ?? 'USD') === 'USD') {
+            return $esPorTc(abs((float) $c['xml_total']));
+        }
 
-        return ($c['moneda'] ?? 'PEN') === 'USD' && ! empty($c['editado']) && $tc > 1 && abs($sunat) >= 0.01
-            && abs($total - $sunat) >= 0.01 && abs($total - round($sunat * $tc, 2)) <= max(1.0, abs($sunat) * 0.01);
+        return ! empty($c['editado']) && $esPorTc(abs((float) ($c['total_sunat'] ?? 0)));
     }
 
     /**
-     * Diferencia entre lo que se va a llevar y lo que dice el XML de la compra (en la misma moneda: si se escribió en
-     * soles, el XML en dólares se pasa con el TC). null si no hay XML.
+     * Pasa a dólares los montos que vinieron en soles: cada uno entre el tipo de cambio y el total, el del XML (lo que
+     * dice el proveedor); los céntimos del redondeo van a la parte más grande.
+     *
+     * @return array<string, float>
      */
+    public static function aDolares(array $montos, float $tc, ?float $totalXml): array
+    {
+        $res = array_map(fn ($v) => round((float) $v / $tc, 2), $montos);
+        if ($totalXml !== null) {
+            $res['total'] = ($res['total'] < 0 ? -1 : 1) * round(abs($totalXml), 2);
+        }
+        $partes = array_diff_key($res, ['total' => 0]);
+        $dif = round($res['total'] - array_sum($partes), 2);
+        if ($partes && abs($dif) >= 0.01 && abs($dif) <= 0.10) {
+            $mayor = array_search(max(array_map('abs', $partes)), array_map('abs', $partes), true);
+            $res[$mayor] = round($res[$mayor] + $dif, 2);
+        }
+
+        return $res;
+    }
+
+    /** Diferencia entre el total que se va a llevar y el de su XML (en la moneda del comprobante). null si no hay XML. */
     public static function diferenciaXml(array $c): ?float
     {
         if (($c['xml_total'] ?? null) === null) {
             return null;
         }
-        $xml = (float) $c['xml_total'];
-        if (! empty($c['en_soles']) && ($c['xml_moneda'] ?? 'PEN') === 'USD') {
-            $dif = round((float) $c['montos']['total'] - round($xml * (float) $c['tc'], 2), 2);
 
-            // Al pasar a soles el redondeo puede mover unos céntimos
-            return abs($dif) <= 0.10 ? 0.0 : $dif;
-        }
         // Las notas de crédito: SUNAT las da en negativo y el XML en positivo
-        $total = (float) $c['montos']['total'];
-
-        return round(abs($total) - abs($xml), 2);
+        return round(abs((float) $c['montos']['total']) - abs((float) $c['xml_total']), 2);
     }
 
     /** En dólares los montos van en dólares y el .dbf lleva su tipo de cambio: sin TC el sistema contable no puede convertirlos */
     public static function revisarMoneda(array $c): ?string
     {
-        if (($c['moneda'] ?? 'PEN') === 'USD' && empty($c['en_soles']) && (float) ($c['tc'] ?? 0) <= 1) {
+        if (($c['moneda'] ?? 'PEN') === 'USD' && (float) ($c['tc'] ?? 0) <= 1) {
             return 'Comprobante en dólares sin tipo de cambio: el sistema contable no podrá pasarlo a soles.';
         }
 
@@ -458,7 +479,7 @@ class SireDbf
     {
         $llevar = array_filter($comprobantes, fn ($c) => ! $c['excluido']);
         $fuera = array_filter($comprobantes, fn ($c) => $c['excluido']);
-        $enSoles = fn (array $c) => ($c['moneda'] ?? 'PEN') === 'USD' && empty($c['en_soles']) && (float) ($c['tc'] ?? 0) > 0 ? (float) $c['tc'] : 1.0;
+        $enSoles = fn (array $c) => ($c['moneda'] ?? 'PEN') === 'USD' && (float) ($c['tc'] ?? 0) > 0 ? (float) $c['tc'] : 1.0;
         $montos = function (array $lista) use ($libro, $enSoles): array {
             $suma = fn (string ...$k) => round(array_sum(array_map(fn ($c) => round(array_sum(array_intersect_key($c['montos'], array_flip($k))) * $enSoles($c), 2), $lista)), 2);
 
@@ -503,9 +524,7 @@ class SireDbf
                 'ID' => 'G', 'NORDEN' => $mes.$correlativo, 'CODMOV' => str_pad((string) $n, 6, '0', STR_PAD_LEFT), 'ALMA' => '01', 'COD_OPERA' => '02',
                 'CODDOC' => $c['tipo'], 'DESDOC' => self::DESCRIPCION[$c['tipo']] ?? $c['tipo'],
                 'FECHADOC' => $c['fecha'], 'FECHAING' => $c['fecha'], 'FECVENCI' => $c['vence'] ?: $c['fecha'],
-                'IMPOPAGO' => $m['total'], 'TOTAL' => $m['total'],
-                // Escrito en soles (aunque sea en dólares): va como soles con TC 1
-                'TC' => ! empty($c['en_soles']) ? 1 : $c['tc'], 'MONEDA' => $c['moneda'] === 'USD' && empty($c['en_soles']) ? 'US$' : 'S/',
+                'IMPOPAGO' => $m['total'], 'TOTAL' => $m['total'], 'TC' => $c['tc'], 'MONEDA' => $c['moneda'] === 'USD' ? 'US$' : 'S/',
                 'MES' => (int) $mes, 'ANO' => $anio, 'NOMAREA' => $c['nombre'], 'PROVE' => $c['nombre'], 'FCON' => $mes.$anio,
                 'REGCOMPRA' => 1, 'NUM1' => $correlativo, 'MPAGO' => $c['mpago'] ?? '08', 'FEPAGO' => $c['fepago'] ?? null, 'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'], 'CTACANCE' => $c['ctacance'] ?? null,
                 'CODDESTINO' => $c['ccosto'] ?? null,
