@@ -17,9 +17,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Explorador de bases (solo el dueño): tablas, filas con búsqueda, consultas SELECT con Excel y un asistente IA que
- * sugiere consultas. Además, con una SEGUNDA clave (aparte de la del panel), un modo edición de 15 minutos para
- * cambiar datos con frenos (ver App\Support\EdicionBd): primero se prueba cuántas filas cambia y luego se ejecuta.
+ * Explorador de bases (solo el dueño), simple: tablas, filas con búsqueda y un solo cuadro de SQL. Las consultas de lectura
+ * muestran sus filas (o un Excel); los cambios (UPDATE, DELETE, INSERT) se ejecutan directo después de poner una SEGUNDA
+ * clave, que queda abierta un rato. Un asistente IA escribe la consulta por ti.
  */
 class BaseDatosController extends Controller
 {
@@ -41,12 +41,6 @@ class BaseDatosController extends Controller
         return is_array($e) && (int) ($e['id'] ?? 0) === (int) $this->yo()->id && (int) ($e['hasta'] ?? 0) > now()->timestamp;
     }
 
-    /** Firma de una orden ya probada: solo se ejecuta exactamente lo que se probó, en esa base */
-    private function firma(string $base, string $sql): string
-    {
-        return hash_hmac('sha256', $this->yo()->id.'|'.$base.'|'.trim($sql), (string) config('app.key'));
-    }
-
     public function index(Request $request)
     {
         $this->autorizar();
@@ -54,15 +48,31 @@ class BaseDatosController extends Controller
         return $this->pantalla($request);
     }
 
-    /** Corre una consulta de lectura; con «excel» la descarga (hasta 5 000 filas) */
+    /**
+     * Un solo cuadro: una consulta de lectura muestra sus filas (con «excel» las descarga, hasta 5 000); un UPDATE, DELETE,
+     * INSERT o REPLACE se ejecuta de una vez si la segunda clave está puesta.
+     */
     public function consulta(Request $request)
     {
         $this->autorizar();
-        $d = $request->validate(['base' => 'required|string|max:64', 'sql' => 'required|string|max:5000']);
+        $d = $request->validate(['base' => 'required|string|max:64', 'sql' => 'required|string|max:20000']);
         $base = ExploradorBd::base($d['base']);
         abort_unless($base, 404, 'Esa base no existe.');
-        // Queda anotado quién consultó qué (solo lectura, pero es la base de un cliente)
+        // Queda anotado quién consultó qué (es la base de un cliente)
         Log::info('Explorador de bases', ['usuario' => $this->yo()->email, 'base' => $base, 'sql' => mb_substr($d['sql'], 0, 1000)]);
+
+        if (preg_match('/^\s*(update|delete|insert|replace)\b/i', $d['sql'])) {
+            if (! $this->edicionActiva($request)) {
+                return $this->pantalla($request, ['error' => 'Para cambiar datos pon primero tu segunda clave (arriba).']);
+            }
+            try {
+                $filas = EdicionBd::ejecutar($base, $d['sql'], $this->yo(), $request->ip());
+            } catch (\InvalidArgumentException $e) {
+                return $this->pantalla($request, ['error' => $e->getMessage()]);
+            }
+
+            return $this->pantalla($request, ['okCambio' => 'Listo: '.number_format($filas).' fila(s) cambiada(s).']);
+        }
 
         try {
             $resultado = ExploradorBd::consultar($base, $d['sql'], $request->boolean('excel') ? ExploradorBd::FILAS_EXCEL : ExploradorBd::FILAS_PANTALLA);
@@ -100,7 +110,7 @@ class BaseDatosController extends Controller
     {
         $this->autorizar();
         $yo = $this->yo();
-        $d = $request->validate(['actual' => 'required|string', 'nueva' => 'required|string|min:8|confirmed'], [],
+        $d = $request->validate(['actual' => 'required|string', 'nueva' => 'required|string|min:6'], [],
             ['actual' => 'clave actual', 'nueva' => 'segunda clave']);
         $valida = $yo->clave_bd ? Hash::check($d['actual'], $yo->clave_bd) : Hash::check($d['actual'], $yo->password);
         if (! $valida) {
@@ -112,7 +122,7 @@ class BaseDatosController extends Controller
         DB::connection('central')->table('superadmins')->where('id', $yo->id)->update(['clave_bd' => Hash::make($d['nueva'])]);
         $request->session()->forget('bd_edicion');
 
-        return $this->volver($request)->with('ok', 'Segunda clave guardada. Úsala para abrir el modo edición.');
+        return $this->volver($request)->with('ok', 'Segunda clave guardada.');
     }
 
     /** Abre el modo edición por unos minutos con la segunda clave */
@@ -128,7 +138,7 @@ class BaseDatosController extends Controller
         }
         $request->session()->put('bd_edicion', ['id' => $yo->id, 'hasta' => now()->addMinutes(EdicionBd::MINUTOS)->timestamp]);
 
-        return $this->volver($request)->with('ok', 'Modo edición abierto por '.EdicionBd::MINUTOS.' minutos. Cada cambio se prueba primero y queda registrado.');
+        return $this->volver($request)->with('ok', 'Listo: ya puedes cambiar datos por '.EdicionBd::MINUTOS.' minutos.');
     }
 
     public function bloquear(Request $request): RedirectResponse
@@ -136,46 +146,7 @@ class BaseDatosController extends Controller
         $this->autorizar();
         $request->session()->forget('bd_edicion');
 
-        return $this->volver($request)->with('ok', 'Modo edición cerrado.');
-    }
-
-    /** Prueba una orden de cambio: corre y se deshace, para ver cuántas filas cambiaría */
-    public function probar(Request $request)
-    {
-        $this->autorizar();
-        $d = $request->validate(['base' => 'required|string|max:64', 'sql_cambio' => 'required|string|max:20000']);
-        abort_unless(ExploradorBd::base($d['base']), 404, 'Esa base no existe.');
-        if (! $this->edicionActiva($request)) {
-            return $this->pantalla($request, ['errorCambio' => 'El modo edición está cerrado: ábrelo con tu segunda clave.']);
-        }
-        try {
-            $filas = EdicionBd::probar($d['base'], $d['sql_cambio']);
-        } catch (\InvalidArgumentException $e) {
-            return $this->pantalla($request, ['errorCambio' => $e->getMessage()]);
-        }
-
-        return $this->pantalla($request, ['prueba' => ['sql' => $d['sql_cambio'], 'filas' => $filas, 'firma' => $this->firma($d['base'], $d['sql_cambio'])]]);
-    }
-
-    /** Ejecuta de verdad la orden que se probó (exactamente esa, en esa base) */
-    public function ejecutar(Request $request)
-    {
-        $this->autorizar();
-        $d = $request->validate(['base' => 'required|string|max:64', 'sql_cambio' => 'required|string|max:20000', 'firma' => 'required|string']);
-        abort_unless(ExploradorBd::base($d['base']), 404, 'Esa base no existe.');
-        if (! $this->edicionActiva($request)) {
-            return $this->pantalla($request, ['errorCambio' => 'El modo edición se cerró: ábrelo de nuevo con tu segunda clave.']);
-        }
-        if (! hash_equals($this->firma($d['base'], $d['sql_cambio']), $d['firma'])) {
-            return $this->pantalla($request, ['errorCambio' => 'La orden cambió después de probarla: pruébala de nuevo.']);
-        }
-        try {
-            $filas = EdicionBd::ejecutar($d['base'], $d['sql_cambio'], $this->yo(), $request->ip());
-        } catch (\InvalidArgumentException $e) {
-            return $this->pantalla($request, ['errorCambio' => $e->getMessage()]);
-        }
-
-        return $this->pantalla($request, ['okCambio' => number_format($filas).' fila(s) cambiada(s) en '.$d['base'].'. Quedó registrado.']);
+        return $this->volver($request)->with('ok', 'Cerrado: otra vez solo lectura.');
     }
 
     /** Vuelve al explorador en la misma base (no a la página anterior: puede ser el resultado de un POST) */
@@ -201,7 +172,7 @@ class BaseDatosController extends Controller
         $tabla = $base ? (string) $request->input('tabla', '') : '';
         $vista = null;
         $errorTabla = null;
-        if ($base && $tabla !== '' && ! array_intersect_key($extra, array_flip(['resultado', 'error', 'respuestaIa', 'errorIa', 'prueba', 'errorCambio', 'okCambio']))) {
+        if ($base && $tabla !== '' && ! array_intersect_key($extra, array_flip(['resultado', 'error', 'respuestaIa', 'errorIa', 'okCambio']))) {
             try {
                 $vista = ExploradorBd::ver($base, $tabla, $request->input('q'), (int) $request->input('pagina', 1));
             } catch (\Throwable $e) {
@@ -216,7 +187,6 @@ class BaseDatosController extends Controller
             'pagina' => max(1, (int) $request->input('pagina', 1)), 'sql' => (string) $request->input('sql', ''),
             'resultado' => $extra['resultado'] ?? null, 'error' => $extra['error'] ?? null,
             'tieneClave' => (bool) $this->yo()->clave_bd, 'edicion' => $this->edicionActiva($request) ? (int) $sesion['hasta'] : null,
-            'sqlCambio' => (string) $request->input('sql_cambio', ''),
         ]);
     }
 }

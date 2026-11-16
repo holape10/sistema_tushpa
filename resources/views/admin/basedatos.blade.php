@@ -7,14 +7,8 @@
         $elegida = $base ? $bases->firstWhere('base', $base) : null;
     @endphp
 
-    <h1 class="text-xl font-bold mb-1">🗄️ Base de datos
-        @if ($edicion)
-            <span class="ml-1 rounded-full bg-rose-100 px-2.5 py-0.5 align-middle text-xs font-bold text-rose-700">modo edición abierto</span>
-        @else
-            <span class="ml-1 rounded-full bg-emerald-100 px-2.5 py-0.5 align-middle text-xs font-bold text-emerald-700">solo lectura</span>
-        @endif
-    </h1>
-    <p class="text-sm text-slate-500 mb-4">Mira las tablas y filas de cualquier base y corre consultas SELECT (las claves salen tapadas). Para cambiar datos abre el modo edición con tu segunda clave.</p>
+    <h1 class="text-xl font-bold mb-1">🗄️ Base de datos</h1>
+    <p class="text-sm text-slate-500 mb-4">Elige la base, mira sus tablas y escribe tu orden SQL. Para cambiar datos pon tu segunda clave.</p>
 
     @if ($errors->any())
         <div class="mb-4 rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm font-semibold text-rose-700">{{ $errors->first() }}</div>
@@ -63,32 +57,56 @@
             </aside>
 
             <div class="space-y-4 min-w-0">
-                {{-- Consulta SQL --}}
-                <form method="POST" action="{{ route('admin.basedatos.consulta') }}" class="rounded-2xl bg-white shadow-sm p-4 space-y-2">
-                    @csrf
-                    <input type="hidden" name="base" value="{{ $base }}">
-                    <label class="block text-sm font-bold text-slate-700">Consulta (SELECT, SHOW, DESCRIBE o EXPLAIN)
-                        <textarea id="sql-lectura" name="sql" rows="4" spellcheck="false" placeholder="SELECT tdocod, COUNT(*) FROM cpe_cabecera WHERE est_sunat = 'PENDIENTE' GROUP BY tdocod"
-                                  class="mt-1 w-full rounded-xl border-slate-300 font-mono text-sm" @keydown.ctrl.enter="$el.form.submit()">{{ $sql }}</textarea></label>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button class="h-10 px-5 rounded-xl bg-indigo-600 text-white text-sm font-bold">▶ Ejecutar</button>
-                        <button name="excel" value="1" class="h-10 px-4 rounded-xl bg-white border border-emerald-600 text-emerald-700 text-sm font-bold">⬇ Excel (hasta {{ number_format(\App\Support\ExploradorBd::FILAS_EXCEL) }} filas)</button>
-                        <span class="text-xs text-slate-400">Ctrl + Enter ejecuta · máximo 8 segundos · una sola sentencia</span>
+                {{-- Un solo cuadro de SQL: lo de lectura muestra filas; los cambios se ejecutan directo con la segunda clave puesta --}}
+                <section class="rounded-2xl bg-white shadow-sm p-4 space-y-3">
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                        @if ($edicion)
+                            <span class="font-semibold text-rose-700" x-data="{ resta: {{ max(0, $edicion - now()->timestamp) }} }" x-init="setInterval(() => { if (resta > 0) resta-- }, 1000)">
+                                🔓 Puedes cambiar datos · <span x-text="Math.floor(resta / 60) + ' min'"></span></span>
+                            <form method="POST" action="{{ route('admin.basedatos.bloquear') }}">@csrf <input type="hidden" name="base" value="{{ $base }}">
+                                <button class="h-8 px-3 rounded-lg bg-slate-100 text-xs font-bold">🔒 Cerrar</button></form>
+                        @elseif ($tieneClave)
+                            <form method="POST" action="{{ route('admin.basedatos.desbloquear') }}" class="flex flex-wrap items-center gap-2">
+                                @csrf <input type="hidden" name="base" value="{{ $base }}">
+                                <span class="text-slate-500">🔒 Solo lectura. Para cambiar datos:</span>
+                                <input type="password" name="clave_bd" required placeholder="Segunda clave" autocomplete="off" class="h-9 w-44 rounded-lg border-slate-300 text-sm">
+                                <button class="h-9 px-4 rounded-lg bg-rose-600 text-white text-xs font-bold">Abrir</button>
+                            </form>
+                        @else
+                            <form method="POST" action="{{ route('admin.basedatos.clave') }}" class="flex flex-wrap items-center gap-2">
+                                @csrf <input type="hidden" name="base" value="{{ $base }}">
+                                <span class="text-slate-500">🔒 Para poder cambiar datos crea tu segunda clave:</span>
+                                <input type="password" name="actual" required placeholder="Clave del panel" autocomplete="current-password" class="h-9 w-40 rounded-lg border-slate-300 text-sm">
+                                <input type="password" name="nueva" required minlength="6" placeholder="Segunda clave nueva" autocomplete="new-password" class="h-9 w-44 rounded-lg border-slate-300 text-sm">
+                                <button class="h-9 px-4 rounded-lg bg-slate-800 text-white text-xs font-bold">Guardar</button>
+                            </form>
+                        @endif
                     </div>
-                    @if ($error)<p class="rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{{ $error }}</p>@endif
-                </form>
 
-                {{-- Asistente IA: sugiere la consulta, no ejecuta nada --}}
-                <section class="rounded-2xl bg-white shadow-sm p-4 space-y-2" x-data="{ enviando: false }">
-                    <form method="POST" action="{{ route('admin.basedatos.ia') }}" @submit="enviando = true" class="space-y-2">
+                    <form method="POST" action="{{ route('admin.basedatos.consulta') }}" class="space-y-2">
                         @csrf
                         <input type="hidden" name="base" value="{{ $base }}">
-                        <label class="block text-sm font-bold text-slate-700">🤖 Pregúntale al asistente qué consulta escribir
-                            <textarea name="pregunta" rows="2" required maxlength="2000" placeholder="Ej.: ¿cómo veo las boletas pendientes de hoy? · ¿cómo le pongo precio 25 al producto AF00016?"
-                                      class="mt-1 w-full rounded-xl border-slate-300 text-sm">{{ $pregunta ?? '' }}</textarea></label>
+                        <textarea id="sql" name="sql" rows="5" spellcheck="false" placeholder="SELECT * FROM productos WHERE procod = 'AF00016'&#10;UPDATE productos SET propun = 25 WHERE IdProducto = 123"
+                                  class="w-full rounded-xl border-slate-300 font-mono text-sm" @keydown.ctrl.enter="$el.form.submit()">{{ $sql }}</textarea>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button class="h-10 px-6 rounded-xl bg-indigo-600 text-white text-sm font-bold">▶ Ejecutar</button>
+                            <button name="excel" value="1" class="h-10 px-4 rounded-xl bg-white border border-emerald-600 text-emerald-700 text-sm font-bold">⬇ Excel</button>
+                            <span class="text-xs text-slate-400">Ctrl + Enter ejecuta · una orden a la vez</span>
+                        </div>
+                    </form>
+                    @if ($error)<p class="rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{{ $error }}</p>@endif
+                    @isset($okCambio)<p class="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">✅ {{ $okCambio }}</p>@endisset
+                </section>
+
+                {{-- Asistente IA: escribe la consulta; con «Usar» pasa al cuadro de arriba --}}
+                <section class="rounded-2xl bg-white shadow-sm p-4 space-y-2" x-data="{ enviando: false }">
+                    <form method="POST" action="{{ route('admin.basedatos.ia') }}" @submit="enviando = true" class="flex flex-wrap gap-2">
+                        @csrf
+                        <input type="hidden" name="base" value="{{ $base }}">
+                        <input name="pregunta" required maxlength="2000" value="{{ $pregunta ?? '' }}" placeholder="🤖 Pídele la consulta: «ponle precio 25 al producto AF00016»"
+                               class="flex-1 min-w-[240px] h-10 rounded-xl border-slate-300 text-sm">
                         <button class="h-10 px-5 rounded-xl bg-violet-600 text-white text-sm font-bold disabled:opacity-60" :disabled="enviando"
-                                x-text="enviando ? 'Pensando… (puede tardar un minuto)' : 'Preguntar'">Preguntar</button>
-                        <span class="text-xs text-slate-400">Solo mira la base y sugiere: tú revisas y ejecutas.</span>
+                                x-text="enviando ? 'Escribiendo…' : 'Pedir'">Pedir</button>
                     </form>
                     @isset($errorIa)<p class="rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{{ $errorIa }}</p>@endisset
                     @isset($respuestaIa)
@@ -97,73 +115,15 @@
                                 @if ($i % 2 === 0)
                                     @if (trim($parte) !== '')<div class="whitespace-pre-line text-slate-700">{{ trim($parte) }}</div>@endif
                                 @else
-                                    @php $esLectura = (bool) preg_match('/^\s*(select|show|describe|desc|explain|with)\b/i', $parte); @endphp
-                                    <div class="rounded-lg bg-slate-900 p-3">
-                                        <pre class="whitespace-pre-wrap font-mono text-xs text-emerald-200">{{ trim($parte) }}</pre>
-                                        <button type="button" class="mt-2 rounded-lg bg-white px-3 py-1 text-xs font-bold text-slate-800"
-                                                @click="const c = document.getElementById(@js($esLectura ? 'sql-lectura' : 'sql-cambio')); if (c) { c.value = @js(trim($parte)); c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.focus() } else { alert('Abre primero el modo edición con tu segunda clave.') }">
-                                            {{ $esLectura ? '↑ Usar en la consulta' : '↓ Pasar al modo edición' }}</button>
+                                    <div class="flex items-start gap-2 rounded-lg bg-slate-900 p-3">
+                                        <pre class="flex-1 whitespace-pre-wrap font-mono text-xs text-emerald-200">{{ trim($parte) }}</pre>
+                                        <button type="button" class="shrink-0 rounded-lg bg-white px-3 py-1 text-xs font-bold text-slate-800"
+                                                @click="const c = document.getElementById('sql'); c.value = @js(trim($parte)); c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.focus()">↑ Usar</button>
                                     </div>
                                 @endif
                             @endforeach
                         </div>
                     @endisset
-                </section>
-
-                {{-- Modo edición: segunda clave, probar y luego ejecutar --}}
-                <section class="rounded-2xl shadow-sm p-4 space-y-3 {{ $edicion ? 'bg-rose-50 border border-rose-200' : 'bg-white' }}">
-                    <h2 class="font-bold text-slate-700">✏️ Cambiar datos</h2>
-                    @if (! $tieneClave)
-                        <p class="text-sm text-slate-600">Primero crea tu <b>segunda clave</b> (distinta a la del panel). Solo con ella se podrá cambiar algo en las bases.</p>
-                        <form method="POST" action="{{ route('admin.basedatos.clave') }}" class="grid sm:grid-cols-3 gap-2">
-                            @csrf <input type="hidden" name="base" value="{{ $base }}">
-                            <input type="password" name="actual" required placeholder="Tu clave del panel" autocomplete="current-password" class="h-10 rounded-xl border-slate-300 text-sm">
-                            <input type="password" name="nueva" required minlength="8" placeholder="Segunda clave (mín. 8)" autocomplete="new-password" class="h-10 rounded-xl border-slate-300 text-sm">
-                            <input type="password" name="nueva_confirmation" required minlength="8" placeholder="Repite la segunda clave" autocomplete="new-password" class="h-10 rounded-xl border-slate-300 text-sm">
-                            <button class="sm:col-span-3 h-10 rounded-xl bg-slate-800 text-white text-sm font-bold">Guardar segunda clave</button>
-                        </form>
-                    @elseif (! $edicion)
-                        <form method="POST" action="{{ route('admin.basedatos.desbloquear') }}" class="flex flex-wrap gap-2">
-                            @csrf <input type="hidden" name="base" value="{{ $base }}">
-                            <input type="password" name="clave_bd" required placeholder="Segunda clave" autocomplete="off" class="h-10 w-64 rounded-xl border-slate-300 text-sm">
-                            <button class="h-10 px-5 rounded-xl bg-rose-600 text-white text-sm font-bold">🔓 Abrir modo edición ({{ \App\Support\EdicionBd::MINUTOS }} min)</button>
-                        </form>
-                        <details class="text-xs text-slate-500"><summary class="cursor-pointer">Cambiar mi segunda clave</summary>
-                            <form method="POST" action="{{ route('admin.basedatos.clave') }}" class="mt-2 grid sm:grid-cols-3 gap-2">
-                                @csrf <input type="hidden" name="base" value="{{ $base }}">
-                                <input type="password" name="actual" required placeholder="Segunda clave actual" class="h-9 rounded-lg border-slate-300 text-sm">
-                                <input type="password" name="nueva" required minlength="8" placeholder="Nueva (mín. 8)" class="h-9 rounded-lg border-slate-300 text-sm">
-                                <input type="password" name="nueva_confirmation" required minlength="8" placeholder="Repite la nueva" class="h-9 rounded-lg border-slate-300 text-sm">
-                                <button class="sm:col-span-3 h-9 rounded-lg bg-slate-700 text-white text-sm font-bold">Cambiar</button>
-                            </form>
-                        </details>
-                    @else
-                        <div class="flex flex-wrap items-center gap-2 text-sm" x-data="{ resta: {{ max(0, $edicion - now()->timestamp) }} }" x-init="setInterval(() => { if (resta > 0) resta-- }, 1000)">
-                            <span class="font-semibold text-rose-700">Abierto · se cierra en <span x-text="Math.floor(resta / 60) + ':' + String(resta % 60).padStart(2, '0')"></span></span>
-                            <form method="POST" action="{{ route('admin.basedatos.bloquear') }}">@csrf <input type="hidden" name="base" value="{{ $base }}">
-                                <button class="h-8 px-3 rounded-lg bg-white border text-xs font-bold">🔒 Cerrar ya</button></form>
-                        </div>
-                        <form method="POST" action="{{ route('admin.basedatos.probar') }}" class="space-y-2">
-                            @csrf <input type="hidden" name="base" value="{{ $base }}">
-                            <label class="block text-sm font-bold text-slate-700">Orden (UPDATE, DELETE, INSERT o REPLACE · una sola · UPDATE/DELETE siempre con WHERE)
-                                <textarea id="sql-cambio" name="sql_cambio" rows="4" spellcheck="false" required placeholder="UPDATE productos SET precio_venta = 25 WHERE IdProducto = 123"
-                                          class="mt-1 w-full rounded-xl border-rose-300 font-mono text-sm">{{ isset($prueba) ? $prueba['sql'] : $sqlCambio }}</textarea></label>
-                            <button class="h-10 px-5 rounded-xl bg-amber-500 text-white text-sm font-bold">🧪 Probar (no cambia nada)</button>
-                            <span class="text-xs text-slate-500">Primero se prueba y se deshace, para ver cuántas filas cambiaría. Máximo {{ number_format(\App\Support\EdicionBd::FILAS_MAXIMAS) }} filas.</span>
-                        </form>
-                        @isset($prueba)
-                            <form method="POST" action="{{ route('admin.basedatos.ejecutar') }}" class="rounded-xl bg-white border border-rose-300 p-3 space-y-2"
-                                  onsubmit="return confirm(@js('¿Cambiar de verdad '.$prueba['filas'].' fila(s) en '.$base.'? No se puede deshacer desde aquí.'))">
-                                @csrf <input type="hidden" name="base" value="{{ $base }}">
-                                <input type="hidden" name="sql_cambio" value="{{ $prueba['sql'] }}"><input type="hidden" name="firma" value="{{ $prueba['firma'] }}">
-                                <p class="text-sm">Esta orden cambiaría <b class="text-rose-700">{{ number_format($prueba['filas']) }} fila(s)</b>. Si es lo que esperabas, ejecútala.</p>
-                                <button class="h-10 px-5 rounded-xl bg-rose-600 text-white text-sm font-bold">⚠ Ejecutar de verdad</button>
-                            </form>
-                        @endisset
-                    @endif
-                    @isset($errorCambio)<p class="rounded-xl bg-rose-100 px-3 py-2 text-sm font-semibold text-rose-800">{{ $errorCambio }}</p>@endisset
-                    @isset($okCambio)<p class="rounded-xl bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800">✅ {{ $okCambio }}</p>@endisset
-                    <p class="text-xs text-slate-400">Consejo: saca una copia de seguridad de la base antes de un cambio grande. Cada cambio queda registrado (quién, base, orden y filas).</p>
                 </section>
 
                 {{-- Resultado de la consulta --}}

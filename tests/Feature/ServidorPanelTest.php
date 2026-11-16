@@ -114,10 +114,10 @@ class ServidorPanelTest extends TestCase
         $dueno = $this->dueno();
 
         $this->actingAs($dueno, 'superadmin')->get(route('admin.basedatos.index', ['base' => $base, 'tabla' => 'migrations']))->assertOk()
-            ->assertSee('solo lectura')->assertSee('migrations')->assertSee('Columnas');
+            ->assertSee('Ejecutar')->assertSee('migrations')->assertSee('Columnas');
         $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'SELECT 41 + 1 AS respuesta'])->assertOk()->assertSee('respuesta')->assertSee('42');
-        // Nada que escriba, ni otra base, ni las del motor
-        $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'DELETE FROM migrations'])->assertOk()->assertSee('Solo se permiten consultas de lectura');
+        // Sin la segunda clave nada escribe; ni otra base, ni las del motor
+        $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'DELETE FROM migrations'])->assertOk()->assertSee('pon primero tu segunda clave');
         $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'SELECT 1; DROP TABLE migrations'])->assertOk()->assertSee('Solo una sentencia');
         $this->post(route('admin.basedatos.consulta'), ['base' => $base, 'sql' => 'SELECT * FROM mysql.user'])->assertOk()->assertDontSee('authentication_string');
         $this->post(route('admin.basedatos.consulta'), ['base' => 'mysql', 'sql' => 'SELECT 1'])->assertNotFound();

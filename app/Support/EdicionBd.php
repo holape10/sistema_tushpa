@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\Log;
  * - una sola orden de datos: INSERT, UPDATE, DELETE o REPLACE (nunca DROP, TRUNCATE, ALTER, CREATE, GRANT…);
  * - UPDATE y DELETE siempre con WHERE (y no uno que lo abarque todo, como WHERE 1=1);
  * - solo en la base elegida (nunca otra empresa ni las del motor);
- * - primero se PRUEBA (corre y se deshace, para ver cuántas filas cambiaría) y recién después se ejecuta;
  * - como mucho FILAS_MAXIMAS filas por orden, y cada cambio queda registrado (quién, base, orden y filas).
  */
 class EdicionBd
@@ -20,7 +19,7 @@ class EdicionBd
     public const FILAS_MAXIMAS = 20000;
 
     /** Minutos que dura el modo edición después de poner la segunda clave */
-    public const MINUTOS = 15;
+    public const MINUTOS = 30;
 
     private const PROHIBIDO = '/\b(drop|truncate|alter|create|grant|revoke|rename|shutdown|kill|load\s+data|lock\s+tables|unlock|handler|prepare|execute|deallocate|call|set\s+global|set\s+persist|install|uninstall)\b|into\s+(outfile|dumpfile)|\b(sleep|benchmark|load_file|sys_exec|sys_eval)\s*\(/i';
 
@@ -40,7 +39,7 @@ class EdicionBd
             return 'Sin comentarios dentro de la orden.';
         }
         if (! preg_match('/^(update|delete|insert|replace)\b/i', $limpio, $m)) {
-            return 'En modo edición solo se permite INSERT, UPDATE, DELETE o REPLACE. Para consultar usa el cuadro de consultas.';
+            return 'Solo se permite INSERT, UPDATE, DELETE o REPLACE.';
         }
         if (preg_match(self::PROHIBIDO, $sinTextos, $p)) {
             return 'No se permite «'.trim($p[0]).'»: solo se cambian datos, nunca la estructura de la base.';
@@ -66,28 +65,6 @@ class EdicionBd
         }
 
         return null;
-    }
-
-    /**
-     * Corre la orden y la deshace: cuántas filas cambiaría.
-     *
-     * @throws \InvalidArgumentException con el motivo
-     */
-    public static function probar(string $base, string $sql): int
-    {
-        return Tenancy::en($base, function () use ($sql) {
-            if ($motivo = self::problema($sql)) {
-                throw new \InvalidArgumentException($motivo);
-            }
-            DB::beginTransaction();
-            try {
-                return DB::affectingStatement(trim(rtrim(trim($sql), ';')));
-            } catch (QueryException $e) {
-                throw new \InvalidArgumentException('MySQL respondió: '.mb_substr($e->getPrevious()?->getMessage() ?? $e->getMessage(), 0, 300));
-            } finally {
-                DB::rollBack();
-            }
-        });
     }
 
     /**
