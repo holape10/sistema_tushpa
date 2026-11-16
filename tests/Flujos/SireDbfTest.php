@@ -116,7 +116,7 @@ class SireDbfTest extends FlujoTestCase
         $this->assertSame('94', $factura['CODDESTINO'], 'El centro de costo va en CODDESTINO.');
         $this->assertSame('10411', $factura['CTACANCE'], 'La cuenta de cancelación (la del medio de pago) va en CTACANCE.');
         $this->assertSame(['03', '2026-05-25'], [$factura['MPAGO'], $factura['FEPAGO']], 'Medio y fecha de pago en MPAGO y FEPAGO.');
-        $this->assertSame('08', $redondeo['MPAGO'], 'Sin medio elegido, sigue saliendo 08 (efectivo).');
+        $this->assertSame(['08', $redondeo['FECHADOC']], [$redondeo['MPAGO'], $redondeo['FEPAGO']], 'Sin medio elegido sale 08 (efectivo) y se paga el día que se emitió.');
         $this->assertSame('', $redondeo['CTACANCE'], 'Sin cuenta de cancelación, el campo queda vacío.');
         // Apagado, el .dbf sale como antes aunque haya un centro guardado: su sistema contable no lo acepta en CODDESTINO
         config(['services.contabilidad.centro_costo' => false]);

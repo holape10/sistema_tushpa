@@ -92,7 +92,7 @@
                     <option value="">08 EFECTIVO (por defecto)</option>
                     @foreach (\App\Support\Contabilidad\SireDbf::MEDIOS_PAGO as $codigo => $nombre)<option value="{{ $codigo }}">{{ $codigo }} {{ $nombre }}</option>@endforeach
                 </select></label>
-            <label class="font-semibold text-slate-500 whitespace-nowrap">Fecha de pago
+            <label class="font-semibold text-slate-500 whitespace-nowrap col-span-2 sm:col-span-1 lg:col-span-2">Fecha de pago
                 <input type="date" x-model="fila.fepago" @change="guardar({ fepago: fila.fepago })"
                        class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm"></label>
         @endif

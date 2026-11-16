@@ -68,6 +68,8 @@
                     this.fila.editado = d.editado;
                     // Al elegir el medio de pago, su cuenta de cancelación se pone sola
                     if (cambios.mpago !== undefined && d.ctacance) this.fila.ctacance = d.ctacance;
+                    // En efectivo la fecha de pago es la de emisión (si no se puso otra)
+                    if (cambios.mpago !== undefined) this.fila.fepago = d.fepago || '';
                     this.totales = d.totales;
                 } catch (e) {
                     tushpaAviso('Se cortó la conexión: el cambio no se guardó.', false);

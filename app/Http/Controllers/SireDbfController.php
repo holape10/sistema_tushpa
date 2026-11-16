@@ -87,7 +87,7 @@ class SireDbfController extends Controller
         $c = $this->comprobante($ruc, $d['libro'], $d['periodo'], $d['clave']);
 
         return response()->json(['ok' => true, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'montos' => $c['montos'], 'editado' => $c['editado'],
-            'ctacance' => $c['ctacance'] ?? null, 'mpago' => $c['mpago'] ?? null,
+            'ctacance' => $c['ctacance'] ?? null, 'mpago' => $c['mpago'] ?? null, 'fepago' => $c['fepago'] ?? null,
             'totales' => SireDbf::totales($d['libro'], SireDbf::delPeriodo($ruc, $d['libro'], $d['periodo'])['comprobantes'])]);
     }
 

@@ -199,7 +199,8 @@ class SireDbf
             $c['ctacance'] = $a->ctacance ?? $u->ctacance ?? null;
             // Medio de pago (el del comprobante o el último de ese proveedor) y fecha de pago (la del comprobante)
             $c['mpago'] = $a->mpago ?? $u->mpago ?? null;
-            $c['fepago'] = $a->fepago ?? null;
+            // En efectivo (el 08 por defecto o el 09) se paga el mismo día: sin otra fecha, la de emisión
+            $c['fepago'] = $a->fepago ?? (in_array($c['mpago'] ?? '08', ['08', '09'], true) ? $c['fecha'] : null);
             $c['cuentaPropia'] = (bool) ($a?->ctacargo || $a?->ctaabono);
             $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
             $c['diferencia'] = self::diferencia($libro, $c['montos']);
