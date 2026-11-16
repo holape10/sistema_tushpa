@@ -124,6 +124,7 @@ class SireDbfTest extends FlujoTestCase
         config(['services.contabilidad.centro_costo' => true]);
         $this->assertSame([40.10, 40.10], [$redondeo['NG'], $redondeo['TOTAL']], 'El céntimo de redondeo del proveedor se corrige solo.');
         $this->get(route('sire.dbf.excel', ['compras', 'periodo' => '202605']))->assertOk()->assertDownload("almaingr_{$ruc}_202605.xlsx");
+        $this->assertSame('6', $nota['TIPO_2'], 'TIPO_2: el tipo de documento del proveedor (6 = RUC).');
         $this->assertSame(['07', 'NOTA CRED', 160.0, 160.0, '01', 'FE02', '000000005907', '2026-04-22', '601111', '421201'],
             [$nota['CODDOC'], $nota['DESDOC'], $nota['NG'], $nota['TOTAL'], $nota['FCODDOC'], $nota['FSERIE'], $nota['FNUMERO'], $nota['FECHANC'], $nota['CTACARGO'], $nota['CTAABONO']],
             'La nota de crédito en positivo (el sistema contable la resta por su tipo); sin cuentas propias, las de CONCAR.');
@@ -195,10 +196,11 @@ class SireDbfTest extends FlujoTestCase
     {
         Storage::fake();
         $ruc = $this->usuario->IdEmpresa;
-        $venta = fn (string $tipo, string $serie, string $num, string $doc, string $cliente, string $exo, string $grav, string $igv, string $total, string $estado = '1') => "{$ruc}|WILCAT|202605|CAR|30/05/2026|30/05/2026|{$tipo}|{$serie}|{$num}||6|{$doc}|{$cliente}|0.00|{$grav}|0.00|{$igv}|0.00|{$exo}|0.00|0.00|0.00|0.00|0.00|0.00|{$total}|PEN|1.000|||||||{$estado}";
+        $venta = fn (string $tipo, string $serie, string $num, string $doc, string $cliente, string $exo, string $grav, string $igv, string $total, string $estado = '1', string $tipoDoc = '6') => "{$ruc}|WILCAT|202605|CAR|30/05/2026|30/05/2026|{$tipo}|{$serie}|{$num}||{$tipoDoc}|{$doc}|{$cliente}|0.00|{$grav}|0.00|{$igv}|0.00|{$exo}|0.00|0.00|0.00|0.00|0.00|0.00|{$total}|PEN|1.000|||||||{$estado}";
         $this->propuesta(Sire::VENTAS, self::RVIE, [
             $venta('01', 'F001', '8066', '20607721956', 'SANTA MARIA CAPITAL S.A.C.', '50.00', '0.00', '0.00', '50.00'),
             $venta('01', 'F001', '8067', '20100070970', 'CLIENTE LIMA SAC', '0.00', '100.00', '18.00', '118.00'),
+            $venta('03', 'B001', '15', '45678912', 'JUAN PEREZ', '20.00', '0.00', '0.00', '20.00', '1', '1'),
         ]);
         $this->from(route('sire.dbf', ['libro' => 'ventas', 'periodo' => '202605']))
             ->post(route('sire.dbf.aplicar'), ['libro' => 'ventas', 'periodo' => '202605', 'ctacargo' => '1212', 'ctaabono' => '70001', 'ctacance' => '1011'])->assertSessionHas('success');
@@ -210,7 +212,9 @@ class SireDbfTest extends FlujoTestCase
             ->get(route('sire.dbf.imprimir', ['ventas', 'periodo' => '202604']))->assertSessionHas('error');
 
         [, $filas] = $this->dbf('ventas');
-        $this->assertCount(2, $filas);
+        $this->assertCount(3, $filas);
+        // TIPO_2: tipo de documento del cliente (6 = RUC, 1 = DNI)
+        $this->assertSame(['6', '6', '1'], array_column($filas, 'TIPO_2'));
         $f = $filas[0];
         $this->assertSame([substr($ruc.'01F0', 0, 15), 5.0, '1', '01', 'F001', '000000008066', '20607721956', 'FACTURA', 'SANTA MARIA CAPITAL S.A.C.', 'SANTA MARI', 50.0, 50.0, 'PEN', '1212', '70001'],
             [$f['CODMOV'], $f['NUM_MES'], $f['ID'], $f['COD_DOC'], $f['SERIEDOC'], $f['NUM_DOC'], $f['RUC'], $f['DES_DOC'], $f['NOTA'], $f['NOMBRE'], $f['EXONERADA'], $f['TOTAL'], $f['MONEDA'], $f['CTACARGO'], $f['CTAABONO']]);

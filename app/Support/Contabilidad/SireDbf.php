@@ -98,6 +98,7 @@ class SireDbf
         $col = array_map($donde, self::COLUMNAS[$libro]);
         $otras = [
             'vence' => $empieza('fecha vcto'), 'moneda' => $donde('moneda'), 'tc' => $donde('tipo de cambio') ?? $donde('tipo cambio'),
+            'docTipo' => $empieza('tipo doc identidad'),
             'refFecha' => $empieza('fecha emision doc modificado'), 'refTipo' => $empieza('tipo cp modificado'),
             'refSerie' => $empieza('serie cp modificado'), 'refNumero' => $empieza('nro cp modificado'), 'estado' => $empieza('est comp'),
         ];
@@ -132,7 +133,7 @@ class SireDbf
             $res[$clave] = [
                 'clave' => $clave, 'tipo' => $tipo, 'serie' => $serie, 'numero' => $numero,
                 'fecha' => $fecha($valor($f, $c['fecha'])), 'vence' => $fecha($valor($f, $otras['vence'])),
-                'ruc' => $ruc, 'nombre' => $valor($f, $c['nombre']),
+                'ruc' => $ruc, 'doc_tipo' => $valor($f, $otras['docTipo']), 'nombre' => $valor($f, $c['nombre']),
                 'moneda' => $valor($f, $otras['moneda']) ?: 'PEN', 'tc' => (float) ($valor($f, $otras['tc']) ?: 1) ?: 1.0,
                 'ref' => $refSerie !== '' ? ['tipo' => str_pad($valor($f, $otras['refTipo']), 2, '0', STR_PAD_LEFT), 'serie' => strtoupper($refSerie),
                     'numero' => ltrim($valor($f, $otras['refNumero']), '0') ?: '0', 'fecha' => $fecha($valor($f, $otras['refFecha']))] : null,
@@ -512,6 +513,25 @@ class SireDbf
         return new Dbf(resource_path("dbf/{$tabla}.dbf"));
     }
 
+    /**
+     * Tipo de documento del proveedor o cliente (campo TIPO_2 del .dbf): 6 = RUC, 1 = DNI, 4 = carné de extranjería,
+     * 7 = pasaporte, 0 = otros. El que dice SUNAT; si no lo trae (agregados a mano), por el largo del número.
+     */
+    public static function tipoDocumento(array $c): string
+    {
+        $tipo = strtoupper(trim((string) ($c['doc_tipo'] ?? '')));
+        if (preg_match('/^[0-9A-Z]$/', $tipo)) {
+            return $tipo;
+        }
+        $numero = trim((string) ($c['ruc'] ?? ''));
+
+        return match (true) {
+            preg_match('/^\d{11}$/', $numero) === 1 => '6',
+            preg_match('/^\d{8}$/', $numero) === 1 => '1',
+            default => '0',
+        };
+    }
+
     /** Compras → almaingr.dbf, como el sistema contable registra lo que trae del SIRE */
     public static function almaingr(string $periodo, array $comprobantes): string
     {
@@ -530,7 +550,7 @@ class SireDbf
             }
             $correlativo = str_pad((string) $n, 4, '0', STR_PAD_LEFT);
             $filas[] = [
-                'ORIGEN' => 'SIRE', 'NUMDOC' => str_pad($c['numero'], 12, '0', STR_PAD_LEFT), 'SERIEDOC' => $c['serie'], 'RUC_DNI' => $c['ruc'],
+                'ORIGEN' => 'SIRE', 'NUMDOC' => str_pad($c['numero'], 12, '0', STR_PAD_LEFT), 'SERIEDOC' => $c['serie'], 'RUC_DNI' => $c['ruc'], 'TIPO_2' => self::tipoDocumento($c),
                 'ID' => 'G', 'NORDEN' => $mes.$correlativo, 'CODMOV' => str_pad((string) $n, 6, '0', STR_PAD_LEFT), 'ALMA' => '01', 'COD_OPERA' => '02',
                 'CODDOC' => $c['tipo'], 'DESDOC' => self::DESCRIPCION[$c['tipo']] ?? $c['tipo'],
                 'FECHADOC' => $c['fecha'], 'FECHAING' => $c['fecha'], 'FECVENCI' => $c['vence'] ?: $c['fecha'],
@@ -561,7 +581,7 @@ class SireDbf
             $m = $c['montos'];
             $numero = str_pad($c['numero'], 12, '0', STR_PAD_LEFT);
             $filas[] = [
-                'CODMOV' => substr($ruc.$c['tipo'].$c['serie'].$numero, 0, 15), 'NUM_MES' => $mes, 'ID' => '1',
+                'CODMOV' => substr($ruc.$c['tipo'].$c['serie'].$numero, 0, 15), 'NUM_MES' => $mes, 'ID' => '1', 'TIPO_2' => self::tipoDocumento($c),
                 'COD_DOC' => $c['tipo'], 'SERIEDOC' => $c['serie'], 'NUM_DOC' => $numero, 'RUC' => $c['ruc'], 'COD_OPERA' => '01',
                 'DES_DOC' => self::DESCRIPCION[$c['tipo']] ?? $c['tipo'], 'FECHA_DOC' => $c['fecha'], 'FECHA_SAL' => $c['fecha'],
                 'ALMA' => '01', 'FPAGO' => '01', 'FECVENCI' => $c['vence'] ?: $c['fecha'], 'NOTA' => $c['nombre'], 'NOMBRE' => $c['nombre'],
