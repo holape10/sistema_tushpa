@@ -66,6 +66,8 @@
                     this.fila.diferencia = d.diferencia;
                     this.fila.alerta = d.alerta;
                     this.fila.editado = d.editado;
+                    // Al elegir el medio de pago, su cuenta de cancelación se pone sola
+                    if (cambios.mpago !== undefined && d.ctacance) this.fila.ctacance = d.ctacance;
                     this.totales = d.totales;
                 } catch (e) {
                     tushpaAviso('Se cortó la conexión: el cambio no se guardó.', false);

@@ -92,6 +92,11 @@ class SireDbfTest extends FlujoTestCase
         $this->assertNotNull($r->json('alerta'));
         // Cada IGV junto a su base: cuadra, pero la 63691 es de gasto y le falta su centro de costo
         $r = $guardar('20553510661|01|F001|134277', ['montos' => ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177], 'ctaabono' => '42121', 'ctacance' => '1041']);
+        // El medio de pago trae su cuenta de cancelación (03 transferencia → 10411) y la fecha de pago va aparte
+        $this->postJson(route('sire.dbf.medio_pago'), ['codigo' => '03', 'cuenta' => '10411'])->assertOk();
+        $this->postJson(route('sire.dbf.medio_pago'), ['codigo' => '77', 'cuenta' => '1'])->assertStatus(422);
+        $guardar('20553510661|01|F001|134277', ['mpago' => '03'])->assertJsonPath('ctacance', '10411');
+        $guardar('20553510661|01|F001|134277', ['fepago' => '2026-05-25']);
         $this->assertStringContainsString('centro de costo', $r->json('alerta'));
         // Con su centro de costo (94 gastos de administración) ya se puede; la tercera compra no se lleva
         $r = $guardar('20553510661|01|F001|134277', ['ccosto' => '94']);
@@ -109,7 +114,9 @@ class SireDbfTest extends FlujoTestCase
             [$factura['ORIGEN'], $factura['SERIEDOC'], $factura['NUMDOC'], $factura['RUC_DNI'], $factura['CODDOC'], $factura['DESDOC'], $factura['FECHADOC'],
                 $factura['OGYE'], $factura['IGV_1'], $factura['IGV_2'], $factura['IGV_3'], $factura['TOTAL'], $factura['CTACARGO'], $factura['CTAABONO'], $factura['NORDEN'], $factura['NUM1'], $factura['FCON'], $factura['MONEDA']]);
         $this->assertSame('94', $factura['CODDESTINO'], 'El centro de costo va en CODDESTINO.');
-        $this->assertSame('1041', $factura['CTACANCE'], 'La cuenta de cancelación va en CTACANCE.');
+        $this->assertSame('10411', $factura['CTACANCE'], 'La cuenta de cancelación (la del medio de pago) va en CTACANCE.');
+        $this->assertSame(['03', '2026-05-25'], [$factura['MPAGO'], $factura['FEPAGO']], 'Medio y fecha de pago en MPAGO y FEPAGO.');
+        $this->assertSame('08', $redondeo['MPAGO'], 'Sin medio elegido, sigue saliendo 08 (efectivo).');
         $this->assertSame('', $redondeo['CTACANCE'], 'Sin cuenta de cancelación, el campo queda vacío.');
         // Apagado, el .dbf sale como antes aunque haya un centro guardado: su sistema contable no lo acepta en CODDESTINO
         config(['services.contabilidad.centro_costo' => false]);
@@ -125,7 +132,7 @@ class SireDbfTest extends FlujoTestCase
         $this->propuesta(Sire::COMPRAS, self::RCE, [$this->compra('20/06/2026', '01', 'F001', '135001', '20553510661', 'LLAMA PE SA', ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177])], '202606');
         $this->get(route('sire.dbf', ['libro' => 'compras', 'periodo' => '202606']))->assertOk();
         $junio = SireDbf::delPeriodo($ruc, 'compras', '202606')['comprobantes'][0];
-        $this->assertSame(['63691', '42121', '1041'], [$junio['ctacargo'], $junio['ctaabono'], $junio['ctacance']]);
+        $this->assertSame(['63691', '42121', '10411', '03'], [$junio['ctacargo'], $junio['ctaabono'], $junio['ctacance'], $junio['mpago']], 'El proveedor recuerda sus cuentas y su medio de pago.');
     }
 
     public function test_ventas_con_sus_cuentas_en_tienfact(): void
@@ -303,6 +310,15 @@ class SireDbfTest extends FlujoTestCase
         $this->assertSame(['B001', 50.0, 9.0, 59.0, false], [$filas[0]['SERIEDOC'], $filas[0]['GRAVADA'], $filas[0]['IGV'], $filas[0]['TOTAL'], (bool) $filas[0]['ANULADA']]);
         $this->get(route('sire.dbf.imprimir', ['ventas', 'periodo' => '202605']))->assertOk()->assertHeader('Content-Type', 'application/pdf');
         $this->get(route('sire.ventas.detalle', ['periodo' => '202605']))->assertOk()->assertSee('MANUAL')->assertSee('Agregar comprobante');
+    }
+
+    public function test_ventas_avisa_los_correlativos_que_faltan(): void
+    {
+        $c = fn (string $tipo, string $serie, string $numero) => ['tipo' => $tipo, 'serie' => $serie, 'numero' => $numero];
+        $faltan = SireDbf::correlativosFaltantes([$c('03', 'B001', '1'), $c('03', 'B001', '2'), $c('03', 'B001', '3'), $c('03', 'B001', '6'),
+            $c('03', 'B001', '9'), $c('01', 'F001', '10'), $c('01', 'F001', '11'), $c('07', 'BC01', '5')]);
+
+        $this->assertSame([['serie' => 'B001', 'tipo' => '03', 'faltan' => ['4–5', '7–8'], 'cantidad' => 4]], $faltan, 'Solo la serie con saltos; F001 y BC01 están completas.');
     }
 
     public function test_sin_permiso_del_registro_no_aparece_ni_se_puede(): void

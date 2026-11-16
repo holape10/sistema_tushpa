@@ -19,6 +19,11 @@ class SireDbf
 {
     public const LIBROS = ['ventas' => Sire::VENTAS, 'compras' => Sire::COMPRAS];
 
+    /** Medios de pago del sistema contable (Tabla 1 de SUNAT): van en almaingr.MPAGO */
+    public const MEDIOS_PAGO = ['01' => 'DEPÓSITO EN CUENTA', '02' => 'GIRO', '03' => 'TRANSFERENCIA DE FONDOS', '04' => 'ORDEN DE PAGO',
+        '05' => 'TARJETA DE DÉBITO', '06' => 'TARJETA DE CRÉDITO', '07' => 'CHEQUE NO NEGOCIABLE', '08' => 'EFECTIVO',
+        '09' => 'EFECTIVO EN DEMÁS CASOS', '10' => 'COMERCIO EXTERIOR', '99' => 'CRÉDITO'];
+
     /** Montos de una compra (por destino del crédito fiscal, como el RCE) */
     public const MONTOS_COMPRA = ['base_dg', 'igv_dg', 'base_dgng', 'igv_dgng', 'base_dng', 'igv_dng', 'no_gravado', 'isc', 'otros', 'total'];
 
@@ -156,7 +161,7 @@ class SireDbf
         $cfg = Concar::config($ruc);
         // La última cuenta que se usó con cada proveedor o cliente (de cualquier mes)
         $ultimas = DB::table('sire_ajustes')->where('IdEmpresa', $ruc)->where('libro', $libro)
-            ->whereIn('ruc', array_unique(array_column($comprobantes, 'ruc')) ?: ['-'])->where(fn ($q) => $q->whereNotNull('ctacargo')->orWhereNotNull('ctaabono')->when(self::conCancelacion(), fn ($w) => $w->orWhereNotNull('ctacance')))
+            ->whereIn('ruc', array_unique(array_column($comprobantes, 'ruc')) ?: ['-'])->where(fn ($q) => $q->whereNotNull('ctacargo')->orWhereNotNull('ctaabono')->when(self::conCancelacion(), fn ($w) => $w->orWhereNotNull('ctacance'))->when(self::conMedioPago(), fn ($w) => $w->orWhereNotNull('mpago')))
             ->orderBy('updated_at')->get()->keyBy('ruc');
         $lineas = $libro === 'compras' ? self::lineasXml($ruc, array_keys($comprobantes)) : [];
         // Ventas: los XML que subió el contador, por tipo|serie|número (la empresa los emitió)
@@ -192,6 +197,9 @@ class SireDbf
             }
             // Cuenta de cancelación (con qué se pagó o cobró): la del comprobante o la última de ese proveedor o cliente
             $c['ctacance'] = $a->ctacance ?? $u->ctacance ?? null;
+            // Medio de pago (el del comprobante o el último de ese proveedor) y fecha de pago (la del comprobante)
+            $c['mpago'] = $a->mpago ?? $u->mpago ?? null;
+            $c['fepago'] = $a->fepago ?? null;
             $c['cuentaPropia'] = (bool) ($a?->ctacargo || $a?->ctaabono);
             $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
             $c['diferencia'] = self::diferencia($libro, $c['montos']);
@@ -299,7 +307,7 @@ class SireDbf
         $llave = ['IdEmpresa' => $ruc, 'libro' => $libro, 'periodo' => $periodo, 'clave' => $clave];
         $actual = DB::table('sire_ajustes')->where($llave)->first();
         $fila = ['ruc' => $rucTercero, 'updated_at' => now()];
-        foreach (array_merge(['excluido', 'ctacargo', 'ctaabono', 'ccosto'], self::conCancelacion() ? ['ctacance'] : []) as $campo) {
+        foreach (array_merge(['excluido', 'ctacargo', 'ctaabono', 'ccosto'], self::conCancelacion() ? ['ctacance'] : [], self::conMedioPago() ? ['mpago', 'fepago'] : []) as $campo) {
             if (array_key_exists($campo, $datos)) {
                 $fila[$campo] = $campo === 'excluido' ? (bool) $datos[$campo] : (trim((string) $datos[$campo]) ?: null);
             }
@@ -310,6 +318,61 @@ class SireDbf
         $actual
             ? DB::table('sire_ajustes')->where('id', $actual->id)->update($fila)
             : DB::table('sire_ajustes')->insert($llave + $fila + ['created_at' => now()]);
+    }
+
+    /** ¿Ya existen las columnas del medio y la fecha de pago? */
+    private static function conMedioPago(): bool
+    {
+        static $hay = null;
+
+        return $hay ??= Schema::hasColumn('sire_ajustes', 'mpago');
+    }
+
+    /**
+     * Los medios de pago con la cuenta contable que la empresa le puso a cada uno.
+     *
+     * @return array<string, array{nombre: string, cuenta: ?string}>
+     */
+    public static function mediosPago(string $ruc): array
+    {
+        $cuentas = Schema::hasTable('sire_medios_pago') ? DB::table('sire_medios_pago')->where('IdEmpresa', $ruc)->pluck('cuenta', 'codigo')->all() : [];
+
+        return array_map(fn ($codigo) => ['nombre' => self::MEDIOS_PAGO[$codigo], 'cuenta' => $cuentas[$codigo] ?? null],
+            array_combine(array_keys(self::MEDIOS_PAGO), array_keys(self::MEDIOS_PAGO)));
+    }
+
+    public static function guardarCuentaMedio(string $ruc, string $codigo, ?string $cuenta): void
+    {
+        DB::table('sire_medios_pago')->updateOrInsert(['IdEmpresa' => $ruc, 'codigo' => $codigo],
+            ['cuenta' => trim((string) $cuenta) ?: null, 'updated_at' => now(), 'created_at' => now()]);
+    }
+
+    /**
+     * Ventas: los correlativos que faltan en cada serie del periodo (entre el primero y el último que trae SUNAT).
+     * Puede ser un comprobante que no se envió, uno de otro mes o un salto de numeración: hay que revisarlo.
+     *
+     * @return list<array{serie: string, faltan: list<string>, cantidad: int}> «B001», ["7–8", "12"], 3
+     */
+    public static function correlativosFaltantes(array $comprobantes): array
+    {
+        $res = [];
+        foreach (collect($comprobantes)->groupBy(fn ($c) => $c['tipo'].'|'.$c['serie']) as $clave => $grupo) {
+            $numeros = $grupo->pluck('numero')->map(fn ($n) => (int) $n)->filter(fn ($n) => $n > 0)->unique()->sort()->values();
+            $tramos = [];
+            $cantidad = 0;
+            for ($i = 1; $i < $numeros->count(); $i++) {
+                [$desde, $hasta] = [$numeros[$i - 1] + 1, $numeros[$i] - 1];
+                if ($hasta >= $desde) {
+                    $tramos[] = $desde === $hasta ? (string) $desde : "{$desde}–{$hasta}";
+                    $cantidad += $hasta - $desde + 1;
+                }
+            }
+            if ($tramos) {
+                $res[] = ['serie' => explode('|', $clave)[1], 'tipo' => explode('|', $clave)[0], 'faltan' => $tramos, 'cantidad' => $cantidad];
+            }
+        }
+
+        return $res;
     }
 
     /** ¿Ya existe la columna de la cuenta de cancelación? (antes de migrar, el resto sigue funcionando) */
@@ -375,7 +438,7 @@ class SireDbf
                 'FECHADOC' => $c['fecha'], 'FECHAING' => $c['fecha'], 'FECVENCI' => $c['vence'] ?: $c['fecha'],
                 'IMPOPAGO' => $m['total'], 'TOTAL' => $m['total'], 'TC' => $c['tc'], 'MONEDA' => $c['moneda'] === 'USD' ? 'US$' : 'S/',
                 'MES' => (int) $mes, 'ANO' => $anio, 'NOMAREA' => $c['nombre'], 'PROVE' => $c['nombre'], 'FCON' => $mes.$anio,
-                'REGCOMPRA' => 1, 'NUM1' => $correlativo, 'MPAGO' => '08', 'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'], 'CTACANCE' => $c['ctacance'] ?? null,
+                'REGCOMPRA' => 1, 'NUM1' => $correlativo, 'MPAGO' => $c['mpago'] ?? '08', 'FEPAGO' => $c['fepago'] ?? null, 'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'], 'CTACANCE' => $c['ctacance'] ?? null,
                 'CODDESTINO' => $c['ccosto'] ?? null,
                 'OGYE' => $m['base_dg'] ?: null, 'IGV_1' => $m['igv_dg'] ?: null, 'OGYEYONG' => $m['base_dgng'] ?: null, 'IGV_2' => $m['igv_dgng'] ?: null,
                 'ONG' => $m['base_dng'] ?: null, 'IGV_3' => $m['igv_dng'] ?: null, 'NG' => $m['no_gravado'] ?: null,

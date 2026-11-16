@@ -69,12 +69,17 @@ class SireDbfController extends Controller
         $cuenta = ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]*$/'];
         $d = $request->validate([
             'libro' => ['required', Rule::in(array_keys(SireDbf::LIBROS))], 'periodo' => 'required|digits:6', 'clave' => 'required|string|max:40',
-            'excluido' => 'sometimes|boolean', 'ctacargo' => $cuenta, 'ctaabono' => $cuenta, 'ctacance' => $cuenta, 'ccosto' => 'nullable|string|max:6|regex:/^[0-9A-Za-z]*$/',
+            'excluido' => 'sometimes|boolean', 'ctacargo' => $cuenta, 'ctaabono' => $cuenta, 'ctacance' => $cuenta,
+            'mpago' => ['nullable', Rule::in(array_keys(SireDbf::MEDIOS_PAGO))], 'fepago' => 'nullable|date', 'ccosto' => 'nullable|string|max:6|regex:/^[0-9A-Za-z]*$/',
             'montos' => 'sometimes|nullable|array', 'montos.*' => 'nullable|numeric|between:-99999999,99999999',
         ], ['regex' => 'La cuenta va solo con números (sin puntos ni espacios).']);
         $c = $this->comprobante($ruc, $d['libro'], $d['periodo'], $d['clave']);
 
-        $cambios = array_intersect_key($d, array_flip(['excluido', 'ctacargo', 'ctaabono', 'ctacance', 'ccosto']));
+        $cambios = array_intersect_key($d, array_flip(['excluido', 'ctacargo', 'ctaabono', 'ctacance', 'mpago', 'fepago', 'ccosto']));
+        // El medio de pago trae su cuenta: la cuenta de cancelación se pone sola (si el medio la tiene)
+        if (! empty($d['mpago']) && ! array_key_exists('ctacance', $d) && ($cuentaMedio = SireDbf::mediosPago($ruc)[$d['mpago']]['cuenta'] ?? null)) {
+            $cambios['ctacance'] = $cuentaMedio;
+        }
         if ($request->has('montos')) {
             $cambios['montos'] = $d['montos'] ? $this->montos($d['libro'], $d['montos']) : null;
         }
@@ -82,6 +87,7 @@ class SireDbfController extends Controller
         $c = $this->comprobante($ruc, $d['libro'], $d['periodo'], $d['clave']);
 
         return response()->json(['ok' => true, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'montos' => $c['montos'], 'editado' => $c['editado'],
+            'ctacance' => $c['ctacance'] ?? null, 'mpago' => $c['mpago'] ?? null,
             'totales' => SireDbf::totales($d['libro'], SireDbf::delPeriodo($ruc, $d['libro'], $d['periodo'])['comprobantes'])]);
     }
 
@@ -106,10 +112,15 @@ class SireDbfController extends Controller
         $ruc = $this->autorizar();
         $cuenta = ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]*$/'];
         $d = $request->validate(['libro' => ['required', Rule::in(array_keys(SireDbf::LIBROS))], 'periodo' => 'required|digits:6',
-            'ctacargo' => $cuenta, 'ctaabono' => $cuenta, 'ctacance' => $cuenta], ['regex' => 'La cuenta va solo con números (sin puntos ni espacios).']);
-        $cambios = array_filter(array_intersect_key($d, array_flip(['ctacargo', 'ctaabono', 'ctacance'])), fn ($v) => trim((string) $v) !== '');
+            'ctacargo' => $cuenta, 'ctaabono' => $cuenta, 'ctacance' => $cuenta, 'mpago' => ['nullable', Rule::in(array_keys(SireDbf::MEDIOS_PAGO))]],
+            ['regex' => 'La cuenta va solo con números (sin puntos ni espacios).']);
+        $cambios = array_filter(array_intersect_key($d, array_flip(['ctacargo', 'ctaabono', 'ctacance', 'mpago'])), fn ($v) => trim((string) $v) !== '');
+        // El medio de pago trae su cuenta de cancelación (si no se escribió otra)
+        if (! empty($cambios['mpago']) && empty($cambios['ctacance']) && ($cuentaMedio = SireDbf::mediosPago($ruc)[$cambios['mpago']]['cuenta'] ?? null)) {
+            $cambios['ctacance'] = $cuentaMedio;
+        }
         if (! $cambios) {
-            return back()->with('error', 'Escribe la cuenta de cargo, la de abono, la de cancelación o varias.');
+            return back()->with('error', 'Escribe la cuenta de cargo, la de abono, la de cancelación, el medio de pago o varios.');
         }
         $n = 0;
         foreach (SireDbf::delPeriodo($ruc, $d['libro'], $d['periodo'])['comprobantes'] as $c) {
@@ -176,21 +187,33 @@ class SireDbfController extends Controller
             : ['exporta' => 'Exportación', 'gravada' => 'Gravada', 'igv' => 'IGV', 'exonerada' => 'Exonerada', 'inafecta' => 'Inafecta',
                 'isc' => 'ISC', 'icbper' => 'ICBPER', 'otros' => 'Otros tributos', 'total' => 'Total'];
         $cabecera = array_merge(['Fecha', 'Tipo', 'Serie', 'Número', $libro === 'compras' ? 'RUC proveedor' : 'Doc. cliente', $libro === 'compras' ? 'Proveedor' : 'Cliente'],
-            array_values($montos), ['Moneda', 'T.C.', 'Cta. cargo', 'Cta. abono', 'Cta. cancelación', 'Doc. que modifica']);
+            array_values($montos), ['Moneda', 'T.C.', 'Cta. cargo', 'Cta. abono', 'Cta. cancelación', 'Medio de pago', 'Fecha de pago', 'Doc. que modifica']);
         $filas = [];
         foreach ($comprobantes as $c) {
             $filas[] = array_merge([$c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '', $c['tipo'], $c['serie'], $c['numero'], $c['ruc'], $c['nombre']],
                 array_map(fn ($k) => (float) ($c['montos'][$k] ?? 0), array_keys($montos)),
-                [$c['moneda'], $c['tc'], (string) $c['ctacargo'], (string) $c['ctaabono'], (string) ($c['ctacance'] ?? ''), $c['ref'] ? $c['ref']['serie'].'-'.$c['ref']['numero'] : '']);
+                [$c['moneda'], $c['tc'], (string) $c['ctacargo'], (string) $c['ctaabono'], (string) ($c['ctacance'] ?? ''), (string) ($c['mpago'] ?? ''), ! empty($c['fepago']) ? date('d/m/Y', strtotime($c['fepago'])) : '',
+                    $c['ref'] ? $c['ref']['serie'].'-'.$c['ref']['numero'] : '']);
         }
         $filas[] = array_merge(['TOTAL', '', '', '', '', count($comprobantes).' comprobante(s)'],
-            array_map(fn ($k) => round(array_sum(array_map(fn ($c) => (float) ($c['montos'][$k] ?? 0), $comprobantes)), 2), array_keys($montos)), ['', '', '', '', '', '']);
+            array_map(fn ($k) => round(array_sum(array_map(fn ($c) => (float) ($c['montos'][$k] ?? 0), $comprobantes)), 2), array_keys($montos)), ['', '', '', '', '', '', '', '']);
         $tabla = $libro === 'ventas' ? 'tienfact' : 'almaingr';
         $ruta = (new Excel)->hoja(ucfirst($libro).' '.$periodo, $cabecera, $filas, range(6, 5 + count($montos)))->guardar();
 
         return response()->download($ruta, "{$tabla}_{$ruc}_{$periodo}.xlsx", [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend();
+    }
+
+    /** La cuenta contable de un medio de pago (al elegir ese medio en una compra, la cuenta de cancelación se pone sola) */
+    public function medioPago(Request $request): JsonResponse
+    {
+        $ruc = $this->autorizar();
+        $d = $request->validate(['codigo' => ['required', Rule::in(array_keys(SireDbf::MEDIOS_PAGO))],
+            'cuenta' => ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]*$/']], ['regex' => 'La cuenta va solo con números (sin puntos ni espacios).']);
+        SireDbf::guardarCuentaMedio($ruc, $d['codigo'], $d['cuenta'] ?? null);
+
+        return response()->json(['ok' => true]);
     }
 
     /** Agrega a mano un comprobante que SUNAT aún no tiene en la propuesta del mes (el proveedor mandó tarde la factura) */
@@ -274,7 +297,7 @@ class SireDbfController extends Controller
         foreach ($comprobantes as $c) {
             if (! $c['excluido']) {
                 SireDbf::guardar($ruc, $libro, $periodo, $c['clave'], $c['ruc'], ['ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono']]
-                    + ($c['ctacance'] ? ['ctacance' => $c['ctacance']] : []));
+                    + ($c['ctacance'] ? ['ctacance' => $c['ctacance']] : []) + (! empty($c['mpago']) ? ['mpago' => $c['mpago']] : []));
             }
         }
         $tabla = $libro === 'ventas' ? 'tienfact' : 'almaingr';

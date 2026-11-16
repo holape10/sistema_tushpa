@@ -78,6 +78,7 @@
 
         {{-- Lo que se va a descargar --}}
         @include('empresas.sire.partials.dbf_resumen')
+        @unless ($compras)@include('empresas.sire.partials.correlativos_faltantes')@endunless
 
         {{-- Las mismas cuentas a todos --}}
         @include('empresas.sire.partials.dbf_cuentas_todos')

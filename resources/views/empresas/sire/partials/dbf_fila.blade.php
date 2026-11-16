@@ -16,7 +16,7 @@
     $sinCuenta = $compras && ($c['sinCtaCargo'] ?? false) ? 1 : 0;
     $xmlId = $c['xml_id'] ?? ($c['lineas'][0]->compra_xml_id ?? null);
     $centros = $compras ? \App\Support\Contabilidad\CuentasCompras::centros((string) auth()->user()->IdEmpresa) : [];
-    $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ctacance' => $c['ctacance'] ?? '', 'ccosto' => $c['ccosto'] ?? '',
+    $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ctacance' => $c['ctacance'] ?? '', 'mpago' => $c['mpago'] ?? '', 'fepago' => $c['fepago'] ?? '', 'ccosto' => $c['ccosto'] ?? '',
         'montos' => $m, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'editado' => $c['editado'], 'redondeo' => $c['redondeo'],
         'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta];
     $soles = fn ($n) => number_format((float) $n, 2);
@@ -85,6 +85,17 @@
         <label class="font-semibold text-slate-500 whitespace-nowrap">Cta. cancelación
             <input type="text" maxlength="12" list="plan_cuentas" x-model="fila.ctacance" @change="guardar({ ctacance: fila.ctacance })"
                    class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
+        @if ($compras)
+            {{-- Medio de pago (almaingr.MPAGO): trae su cuenta de cancelación. Vacío = 08 EFECTIVO, como siempre --}}
+            <label class="font-semibold text-slate-500 whitespace-nowrap col-span-2">Medio de pago
+                <select x-model="fila.mpago" @change="guardar({ mpago: fila.mpago })" class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm">
+                    <option value="">08 EFECTIVO (por defecto)</option>
+                    @foreach (\App\Support\Contabilidad\SireDbf::MEDIOS_PAGO as $codigo => $nombre)<option value="{{ $codigo }}">{{ $codigo }} {{ $nombre }}</option>@endforeach
+                </select></label>
+            <label class="font-semibold text-slate-500 whitespace-nowrap">Fecha de pago
+                <input type="date" x-model="fila.fepago" @change="guardar({ fepago: fila.fepago })"
+                       class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm"></label>
+        @endif
         @if ($compras)
             {{-- Cuentas de gasto 62–68: centro de costo obligatorio --}}
             <label x-show="requiereCC(fila.ctacargo)" class="font-semibold text-slate-500">C. costo

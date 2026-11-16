@@ -79,6 +79,7 @@
         </div>
 
         @include('empresas.sire.partials.dbf_resumen', ['comprobantes' => $dbf])
+        @include('empresas.sire.partials.correlativos_faltantes', ['comprobantes' => $dbf])
         @include('empresas.sire.partials.dbf_cuentas_todos')
 
         <div class="flex flex-wrap items-center gap-2 text-sm">
