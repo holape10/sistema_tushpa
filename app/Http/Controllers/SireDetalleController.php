@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Empresa;
+use App\Support\Asistente\SireAsistente;
 use App\Support\ComprasDetalle;
 use App\Support\Concar;
 use App\Support\Contabilidad\CuentasCompras;
+use App\Support\Contabilidad\SireAuditoria;
 use App\Support\Contabilidad\SireDbf;
 use App\Support\Excel;
 use App\Support\Sunat\CompraXml;
@@ -19,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
@@ -57,7 +60,8 @@ class SireDetalleController extends Controller
         $dbf = SireDbf::delPeriodo($ruc, 'compras', $periodo)['comprobantes'];
 
         return view('empresas.sire.detalle', ['periodo' => $periodo, 'cfg' => Concar::config($ruc), 'faltaJsonPe' => XmlJsonPe::falta(),
-            'libro' => 'compras', 'dbf' => $dbf, 'totales' => SireDbf::totales('compras', $dbf)] + $this->datos($ruc, $periodo, $dbf));
+            'libro' => 'compras', 'dbf' => $dbf, 'totales' => SireDbf::totales('compras', $dbf), 'auditoria' => SireAuditoria::calcular('compras', $dbf),
+            'asistente' => SireAsistente::bloqueo()] + $this->datos($ruc, $periodo, $dbf));
     }
 
     /**
@@ -180,6 +184,22 @@ class SireDetalleController extends Controller
             ->where('c.IdEmpresa', $ruc)->whereIn('l.id', $d['lineas'])->update(['l.centro_costo' => $d['centro'] ?: null]);
 
         return response()->json(['ok' => true, 'cambiadas' => $n]);
+    }
+
+    /** Pregunta al asistente IA sobre las compras del mes (responde con los datos del mes; no cambia nada) */
+    public function preguntar(Request $request): JsonResponse
+    {
+        $ruc = $this->autorizar();
+        $d = $request->validate(['periodo' => 'required|digits:6', 'pregunta' => 'required|string|max:2000',
+            'historial' => 'nullable|array|max:20', 'historial.*.role' => 'required|in:user,assistant', 'historial.*.content' => 'required|string|max:20000']);
+        try {
+            $r = SireAsistente::preguntar(Auth::user(), $ruc, $d['periodo'], $d['historial'] ?? [], $d['pregunta']);
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['ok' => true, 'respuesta' => $r['respuesta'],
+            'html' => (string) Str::markdown($r['respuesta'], ['html_input' => 'escape', 'allow_unsafe_links' => false])]);
     }
 
     /** Pone la cuenta a una o varias líneas (y la aprende para las próximas) */

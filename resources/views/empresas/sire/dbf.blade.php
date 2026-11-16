@@ -83,10 +83,11 @@
         {{-- Las mismas cuentas a todos --}}
         @include('empresas.sire.partials.dbf_cuentas_todos')
 
+        @include('empresas.sire.partials.auditoria')
         @include('empresas.sire.partials.dbf_filtros', ['lista' => $comprobantes])
 
         {{-- Comprobantes --}}
-        <div class="space-y-2">
+        <div id="lista-dbf" class="space-y-2 scroll-mt-4">
             @forelse ($comprobantes as $c)
                 @include('empresas.sire.partials.dbf_fila')
             @empty

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\Concar;
 use App\Support\Contabilidad\SireARegistro;
+use App\Support\Contabilidad\SireAuditoria;
 use App\Support\Contabilidad\SireDbf;
 use App\Support\Contabilidad\SireManuales;
 use App\Support\Excel;
@@ -50,6 +51,7 @@ class SireDbfController extends Controller
 
         return view('empresas.sire.dbf', $datos + [
             'libro' => $libro, 'periodo' => $periodo, 'totales' => SireDbf::totales($libro, $datos['comprobantes']), 'cfg' => Concar::config($ruc),
+            'auditoria' => SireAuditoria::calcular($libro, $datos['comprobantes']),
         ]);
     }
 

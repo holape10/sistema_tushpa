@@ -189,6 +189,7 @@ class SireDbf
             $c['editado'] = $a && $a->montos;
             // Lo que dice SUNAT (en la moneda del comprobante), para notar si al editar se escribió en otra moneda
             $c['total_sunat'] = (float) $c['montos']['total'];
+            $c['montos_sunat'] = $c['montos'];
             $c['montos'] = $a && $a->montos ? array_map('floatval', json_decode($a->montos, true)) + array_fill_keys(array_keys($c['montos']), 0.0) : $c['montos'];
             if ($libro === 'compras') {
                 $cuentaXml = collect($c['lineas'])->pluck('cuenta')->filter()->unique();

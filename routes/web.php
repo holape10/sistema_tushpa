@@ -724,6 +724,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/sire/compras/detalle', [SireDetalleController::class, 'index'])->name('sire.detalle');
     Route::post('/sire/compras/detalle/xml', [SireDetalleController::class, 'subir'])->name('sire.detalle.subir');
     Route::post('/sire/compras/detalle/traer', [SireDetalleController::class, 'traer'])->middleware('throttle:60,1')->name('sire.detalle.traer');
+    Route::post('/sire/compras/detalle/preguntar', [SireDetalleController::class, 'preguntar'])->middleware('throttle:20,1')->name('sire.detalle.preguntar');
     Route::post('/sire/compras/detalle/cuenta', [SireDetalleController::class, 'cuenta'])->name('sire.detalle.cuenta');
     Route::post('/sire/compras/detalle/centro', [SireDetalleController::class, 'centro'])->name('sire.detalle.centro');
     Route::get('/sire/compras/detalle/excel', [SireDetalleController::class, 'excel'])->name('sire.detalle.excel');
