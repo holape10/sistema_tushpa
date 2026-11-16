@@ -30,6 +30,11 @@ class SireDbf
     /** Hasta cuánto se corrige solo una diferencia de redondeo del proveedor (su total y sus líneas no cuadran por céntimos) */
     public const REDONDEO_MAXIMO = 0.10;
 
+    /** Nombre de cada tipo de comprobante, para el filtro «Documento» */
+    public const NOMBRES_TIPO = ['01' => 'Factura', '02' => 'Recibo por honorarios', '03' => 'Boleta', '05' => 'Boleto aéreo', '07' => 'Nota de crédito',
+        '08' => 'Nota de débito', '10' => 'Recibo de arrendamiento', '12' => 'Ticket', '13' => 'Doc. bancario / financiero', '14' => 'Servicio público',
+        '46' => 'Formulario SUNAT', '50' => 'DUA (importación)', '87' => 'Nota de crédito especial', '88' => 'Nota de débito especial', '91' => 'Comprobante no domiciliado'];
+
     private const DESCRIPCION = ['01' => 'FACTURA', '02' => 'R/H', '03' => 'BOLETA', '07' => 'NOTA CRED', '08' => 'NOTA DEB', '12' => 'TICKET', '14' => 'RSP'];
 
     /** Columnas de importes de la propuesta, por su título (sin tildes ni signos) */

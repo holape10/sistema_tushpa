@@ -83,7 +83,7 @@
         {{-- Las mismas cuentas a todos --}}
         @include('empresas.sire.partials.dbf_cuentas_todos')
 
-        @include('empresas.sire.partials.dbf_filtros')
+        @include('empresas.sire.partials.dbf_filtros', ['lista' => $comprobantes])
 
         {{-- Comprobantes --}}
         <div class="space-y-2">

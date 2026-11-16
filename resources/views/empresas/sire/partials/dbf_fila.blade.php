@@ -18,7 +18,7 @@
     $centros = $compras ? \App\Support\Contabilidad\CuentasCompras::centros((string) auth()->user()->IdEmpresa) : [];
     $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ctacance' => $c['ctacance'] ?? '', 'mpago' => $c['mpago'] ?? '', 'fepago' => $c['fepago'] ?? '', 'ccosto' => $c['ccosto'] ?? '',
         'montos' => $m, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'editado' => $c['editado'], 'redondeo' => $c['redondeo'],
-        'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta, 'moneda' => $c['moneda'],
+        'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta, 'moneda' => $c['moneda'], 'tipo' => $c['tipo'],
         'xml_dif' => $c['xml_dif'] ?? null,
         'buscar' => mb_strtolower($c['serie'].'-'.$c['numero'].' '.$c['serie'].'-'.str_pad($c['numero'], 8, '0', STR_PAD_LEFT).' '.$c['numero'].' '.$c['ruc'].' '.$c['nombre'])];
     $soles = fn ($n) => number_format((float) $n, 2);

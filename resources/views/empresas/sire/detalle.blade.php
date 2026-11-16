@@ -134,7 +134,7 @@
         @include('empresas.sire.partials.dbf_resumen', ['comprobantes' => $dbf])
         @include('empresas.sire.partials.dbf_cuentas_todos')
 
-        @include('empresas.sire.partials.dbf_filtros')
+        @include('empresas.sire.partials.dbf_filtros', ['lista' => $dbf])
         <p class="text-xs text-slate-500">
             💡 En «Ver detalle» escribe la cuenta de cada línea y presiona Enter: el sistema la recuerda y la pone sola a las líneas iguales de ese proveedor, ahora y en los próximos meses.
         </p>

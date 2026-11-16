@@ -150,7 +150,7 @@ class SireDbfTest extends FlujoTestCase
 
         // Los totales de la pantalla van en soles: la de dólares con su tipo de cambio (230.07 × 3.446 = 792.82)
         $pantalla = $this->get(route('sire.detalle', ['periodo' => '202605']))->assertOk()->assertSee('US$ DÓLARES · TC 3.446', false)
-            ->assertSee('En dólares')->assertSee('Distinto al XML')->assertSee('Buscar número, RUC o nombre');
+            ->assertSee('En dólares')->assertSee('Distinto al XML')->assertSee('Buscar número, RUC o nombre')->assertSee('Factura (2)');
         $this->assertEquals(round(118 + 792.82, 2), $pantalla->viewData('totales')['total']);
         $this->assertSame([1, 1], [$pantalla->viewData('totales')['en_dolares'], $pantalla->viewData('totales')['distinto_xml']]);
         $this->assertEquals(-0.10, collect($pantalla->viewData('dbf'))->firstWhere('serie', 'F001')['xml_dif']);

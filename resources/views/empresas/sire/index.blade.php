@@ -9,7 +9,7 @@
 
 @section('content')
 <div class="max-w-7xl mx-auto space-y-4"
-     x-data="sirePagina(@js($solicitud && !$solicitud->archivo && !in_array($solicitud->cod_estado, ['03']) ? route('sire.estado', [$libro, $solicitud->id]) : null))" x-init="iniciar()">
+     x-data="Object.assign({ tipoDoc: '' }, sirePagina(@js($solicitud && !$solicitud->archivo && !in_array($solicitud->cod_estado, ['03']) ? route('sire.estado', [$libro, $solicitud->id]) : null)))" x-init="iniciar()">
 
     {{-- Pestañas --}}
     <div class="flex flex-wrap items-center gap-2">
@@ -163,6 +163,20 @@
             </section>
         @endif
 
+        {{-- Filtro por tipo de documento (solo los que hay en el cuadre) --}}
+        @php $tiposCuadre = collect(array_merge($cuadre['coinciden'], $cuadre['soloSunat'], $cuadre['soloSistema'], array_column($cuadre['diferencias'], 'sunat')))->countBy('tipo')->sortKeys(); @endphp
+        @if ($tiposCuadre->count() > 1)
+            <div class="flex items-center gap-2 text-sm">
+                <span class="font-semibold text-slate-500">Documento</span>
+                <select x-model="tipoDoc" class="h-9 rounded-full border-slate-300 py-0 text-sm font-semibold" :class="tipoDoc && 'bg-indigo-50 text-indigo-700'">
+                    <option value="">Todos</option>
+                    @foreach ($tiposCuadre as $tipo => $cantidad)
+                        <option value="{{ $tipo }}">{{ \App\Support\Contabilidad\SireDbf::NOMBRES_TIPO[$tipo] ?? 'Tipo '.$tipo }} ({{ $cantidad }})</option>
+                    @endforeach
+                </select>
+            </div>
+        @endif
+
         @foreach ([
             ['diferencias', 'Total distinto', 'Están en ambos lados pero el importe no coincide.', 'bg-rose-500'],
             ['soloSunat', 'Solo en SUNAT', $libro === 'ventas' ? 'SUNAT los tiene y tu sistema no (¿emitidos desde otro sistema o anulados aquí?).' : 'Tus proveedores los emitieron a tu RUC y no los registraste en Compras.', 'bg-amber-500'],
@@ -193,7 +207,7 @@
                         <tbody>
                             @foreach ($cuadre[$clave] as $fila)
                                 @php $c = $clave === 'diferencias' ? $fila['sunat'] : $fila; @endphp
-                                <tr class="border-t border-slate-100">
+                                <tr class="border-t border-slate-100" x-show="!tipoDoc || tipoDoc === @js((string) $c['tipo'])">
                                     <td class="px-4 py-2 whitespace-nowrap"><span class="font-semibold">{{ $c['serie'] }}-{{ $c['numero'] }}</span>
                                         <span class="text-xs text-slate-400">{{ $tipos[$c['tipo']] ?? $c['tipo'] }}</span></td>
                                     <td class="px-4 py-2 whitespace-nowrap">{{ $c['fecha'] }}</td>
@@ -244,7 +258,7 @@
                     <table class="w-full text-sm">
                         <tbody class="divide-y divide-slate-50">
                             @foreach ($cuadre['coinciden'] as $c)
-                                <tr>
+                                <tr x-show="!tipoDoc || tipoDoc === @js((string) $c['tipo'])">
                                     <td class="px-4 py-2 whitespace-nowrap"><span class="font-semibold">{{ $c['serie'] }}-{{ $c['numero'] }}</span> <span class="text-xs text-slate-400">{{ $tipos[$c['tipo']] ?? $c['tipo'] }}</span></td>
                                     <td class="px-4 py-2">{{ $c['fecha'] }}</td>
                                     <td class="px-4 py-2">{{ $c['nombre'] }}</td>

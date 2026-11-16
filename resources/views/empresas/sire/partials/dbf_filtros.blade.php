@@ -1,11 +1,12 @@
 {{--
-    Filtros de la lista de comprobantes del .dbf y el buscador (número, RUC o nombre). Usa `filtro`, `busca` y `totales`
-    del x-data de la pantalla. Variables: $compras
+    Filtros de la lista de comprobantes del .dbf, el tipo de documento y el buscador (número, RUC o nombre). Usa `filtro`,
+    `tipoDoc`, `busca` y `totales` del x-data de la pantalla. Variables: $compras, $lista (los comprobantes)
 --}}
 @php
     $filtros = ['todos' => 'Todos', 'descuadre' => 'No cuadran / IGV mal', 'excluidos' => 'No se llevan']
         + ($compras ? ['sinxml' => 'Sin detalle (XML)', 'sincuenta' => 'Sin Cta. cargo', 'xml' => 'Distinto al XML'] : [])
         + ['dolares' => 'En dólares'];
+    $tiposDelMes = collect($lista)->countBy('tipo')->sortKeys();
 @endphp
 <div class="flex flex-wrap items-center gap-2 text-sm">
     @foreach ($filtros as $valor => $texto)
@@ -15,6 +16,12 @@
             @if ($valor === 'xml')<span x-show="totales.distinto_xml" class="text-rose-500" :class="filtro === 'xml' && 'text-white'" x-text="'(' + totales.distinto_xml + ')'"></span>@endif
         </button>
     @endforeach
+    <select x-model="tipoDoc" class="h-8 rounded-full border-slate-300 py-0 text-sm font-semibold" :class="tipoDoc && 'bg-indigo-50 text-indigo-700'">
+        <option value="">Todos los documentos</option>
+        @foreach ($tiposDelMes as $tipo => $cantidad)
+            <option value="{{ $tipo }}">{{ \App\Support\Contabilidad\SireDbf::NOMBRES_TIPO[$tipo] ?? 'Tipo '.$tipo }} ({{ $cantidad }})</option>
+        @endforeach
+    </select>
     <input type="search" x-model.debounce.200ms="busca" placeholder="🔍 Buscar número, RUC o nombre"
            class="h-8 w-60 rounded-full border-slate-300 text-sm">
     @include('empresas.sire.partials.agregar_comprobante', ['libro' => $compras ? 'compras' : 'ventas'])

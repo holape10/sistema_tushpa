@@ -26,10 +26,11 @@
 
     function sireDbf(totales) {
         return {
-            totales, filtro: 'todos', busca: '', soles: solesDbf,
+            totales, filtro: 'todos', busca: '', tipoDoc: '', soles: solesDbf,
             visible(f) {
                 // Buscador: número (con o sin ceros), serie-número, RUC o nombre
                 const q = this.busca.trim().toLowerCase().replace(/^0+(?=\d)/, '');
+                if (this.tipoDoc && f.tipo !== this.tipoDoc) return false;
                 if (q && !q.split(/\s+/).every(p => f.buscar.includes(p))) return false;
                 return this.filtro === 'todos' || (this.filtro === 'descuadre' && !f.excluido && (Math.abs(f.diferencia) >= 0.01 || f.alerta))
                     || (this.filtro === 'excluidos' && f.excluido) || (this.filtro === 'sinxml' && !f.xml) || (this.filtro === 'sincuenta' && f.sinCuenta > 0)
