@@ -8,6 +8,8 @@
         <input name="ctacargo" list="plan_cuentas" maxlength="12" class="block mt-1 w-28 h-10 rounded-xl border-slate-300 text-sm font-mono" placeholder="{{ $compras ? '63141' : '1212' }}"></label>
     <label class="text-xs font-semibold text-slate-500">Cta. abono
         <input name="ctaabono" list="plan_cuentas" maxlength="12" class="block mt-1 w-28 h-10 rounded-xl border-slate-300 text-sm font-mono" placeholder="{{ $compras ? '42121' : '70001' }}"></label>
+    <label class="text-xs font-semibold text-slate-500">Cta. cancelación
+        <input name="ctacance" list="plan_cuentas" maxlength="12" class="block mt-1 w-28 h-10 rounded-xl border-slate-300 text-sm font-mono" placeholder="1041"></label>
     <button class="h-10 px-4 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold">Poner a todos</button>
 </form>
 {{-- Ayuda: al escribir una cuenta se filtra el plan contable (por número o por nombre) --}}

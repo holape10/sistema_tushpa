@@ -91,7 +91,7 @@ class SireDbfTest extends FlujoTestCase
         $r = $guardar('20553510661|01|F001|134277', ['montos' => ['igv_dg' => 150, 'base_dgng' => 27, 'total' => 177]]);
         $this->assertNotNull($r->json('alerta'));
         // Cada IGV junto a su base: cuadra, pero la 63691 es de gasto y le falta su centro de costo
-        $r = $guardar('20553510661|01|F001|134277', ['montos' => ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177], 'ctaabono' => '42121']);
+        $r = $guardar('20553510661|01|F001|134277', ['montos' => ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177], 'ctaabono' => '42121', 'ctacance' => '1041']);
         $this->assertStringContainsString('centro de costo', $r->json('alerta'));
         // Con su centro de costo (94 gastos de administración) ya se puede; la tercera compra no se lleva
         $r = $guardar('20553510661|01|F001|134277', ['ccosto' => '94']);
@@ -109,6 +109,8 @@ class SireDbfTest extends FlujoTestCase
             [$factura['ORIGEN'], $factura['SERIEDOC'], $factura['NUMDOC'], $factura['RUC_DNI'], $factura['CODDOC'], $factura['DESDOC'], $factura['FECHADOC'],
                 $factura['OGYE'], $factura['IGV_1'], $factura['IGV_2'], $factura['IGV_3'], $factura['TOTAL'], $factura['CTACARGO'], $factura['CTAABONO'], $factura['NORDEN'], $factura['NUM1'], $factura['FCON'], $factura['MONEDA']]);
         $this->assertSame('94', $factura['CODDESTINO'], 'El centro de costo va en CODDESTINO.');
+        $this->assertSame('1041', $factura['CTACANCE'], 'La cuenta de cancelación va en CTACANCE.');
+        $this->assertSame('', $redondeo['CTACANCE'], 'Sin cuenta de cancelación, el campo queda vacío.');
         // Apagado, el .dbf sale como antes aunque haya un centro guardado: su sistema contable no lo acepta en CODDESTINO
         config(['services.contabilidad.centro_costo' => false]);
         $this->assertSame('', $this->dbf('compras')[1][1]['CODDESTINO'], 'CODDESTINO en blanco, como antes.');
@@ -123,7 +125,7 @@ class SireDbfTest extends FlujoTestCase
         $this->propuesta(Sire::COMPRAS, self::RCE, [$this->compra('20/06/2026', '01', 'F001', '135001', '20553510661', 'LLAMA PE SA', ['base_dg' => 150, 'igv_dg' => 27, 'total' => 177])], '202606');
         $this->get(route('sire.dbf', ['libro' => 'compras', 'periodo' => '202606']))->assertOk();
         $junio = SireDbf::delPeriodo($ruc, 'compras', '202606')['comprobantes'][0];
-        $this->assertSame(['63691', '42121'], [$junio['ctacargo'], $junio['ctaabono']]);
+        $this->assertSame(['63691', '42121', '1041'], [$junio['ctacargo'], $junio['ctaabono'], $junio['ctacance']]);
     }
 
     public function test_ventas_con_sus_cuentas_en_tienfact(): void
@@ -136,7 +138,7 @@ class SireDbfTest extends FlujoTestCase
             $venta('01', 'F001', '8067', '20100070970', 'CLIENTE LIMA SAC', '0.00', '100.00', '18.00', '118.00'),
         ]);
         $this->from(route('sire.dbf', ['libro' => 'ventas', 'periodo' => '202605']))
-            ->post(route('sire.dbf.aplicar'), ['libro' => 'ventas', 'periodo' => '202605', 'ctacargo' => '1212', 'ctaabono' => '70001'])->assertSessionHas('success');
+            ->post(route('sire.dbf.aplicar'), ['libro' => 'ventas', 'periodo' => '202605', 'ctacargo' => '1212', 'ctaabono' => '70001', 'ctacance' => '1011'])->assertSessionHas('success');
 
         // El registro para imprimir: solo la cabecera con montos y cuentas
         $pdf = $this->get(route('sire.dbf.imprimir', ['ventas', 'periodo' => '202605']))->assertOk()->assertHeader('Content-Type', 'application/pdf');
@@ -149,6 +151,7 @@ class SireDbfTest extends FlujoTestCase
         $f = $filas[0];
         $this->assertSame([substr($ruc.'01F0', 0, 15), 5.0, '1', '01', 'F001', '000000008066', '20607721956', 'FACTURA', 'SANTA MARIA CAPITAL S.A.C.', 'SANTA MARI', 50.0, 50.0, 'PEN', '1212', '70001'],
             [$f['CODMOV'], $f['NUM_MES'], $f['ID'], $f['COD_DOC'], $f['SERIEDOC'], $f['NUM_DOC'], $f['RUC'], $f['DES_DOC'], $f['NOTA'], $f['NOMBRE'], $f['EXONERADA'], $f['TOTAL'], $f['MONEDA'], $f['CTACARGO'], $f['CTAABONO']]);
+        $this->assertSame('1011', $f['NUMERO'], 'En ventas la cuenta de cancelación va en el campo NUMERO.');
         $this->assertSame([100.0, 18.0, 118.0], [$filas[1]['GRAVADA'], $filas[1]['IGV'], $filas[1]['TOTAL']]);
     }
 

@@ -7,6 +7,7 @@ use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
 use App\Support\VentasDetalle;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -155,7 +156,7 @@ class SireDbf
         $cfg = Concar::config($ruc);
         // La última cuenta que se usó con cada proveedor o cliente (de cualquier mes)
         $ultimas = DB::table('sire_ajustes')->where('IdEmpresa', $ruc)->where('libro', $libro)
-            ->whereIn('ruc', array_unique(array_column($comprobantes, 'ruc')) ?: ['-'])->where(fn ($q) => $q->whereNotNull('ctacargo')->orWhereNotNull('ctaabono'))
+            ->whereIn('ruc', array_unique(array_column($comprobantes, 'ruc')) ?: ['-'])->where(fn ($q) => $q->whereNotNull('ctacargo')->orWhereNotNull('ctaabono')->when(self::conCancelacion(), fn ($w) => $w->orWhereNotNull('ctacance')))
             ->orderBy('updated_at')->get()->keyBy('ruc');
         $lineas = $libro === 'compras' ? self::lineasXml($ruc, array_keys($comprobantes)) : [];
         // Ventas: los XML que subió el contador, por tipo|serie|número (la empresa los emitió)
@@ -189,6 +190,8 @@ class SireDbf
                 $c['ctacargo'] = $a->ctacargo ?? $u->ctacargo ?? $cfg['cta_por_cobrar'];
                 $c['ctaabono'] = $a->ctaabono ?? $u->ctaabono ?? ($c['montos']['gravada'] != 0 ? $cfg['cta_ventas'] : $cfg['cta_ventas_exo']);
             }
+            // Cuenta de cancelación (con qué se pagó o cobró): la del comprobante o la última de ese proveedor o cliente
+            $c['ctacance'] = $a->ctacance ?? $u->ctacance ?? null;
             $c['cuentaPropia'] = (bool) ($a?->ctacargo || $a?->ctaabono);
             $c['redondeo'] = $c['editado'] ? 0.0 : self::redondear($libro, $c['montos']);
             $c['diferencia'] = self::diferencia($libro, $c['montos']);
@@ -289,14 +292,14 @@ class SireDbf
      * Guarda lo que el contador revisó de un comprobante. Los montos solo se guardan si cambiaron; las cuentas quedan
      * como las últimas de ese proveedor o cliente para los próximos meses.
      *
-     * @param  array{excluido?: bool, ctacargo?: ?string, ctaabono?: ?string, montos?: ?array<string, float>}  $datos
+     * @param  array{excluido?: bool, ctacargo?: ?string, ctaabono?: ?string, ctacance?: ?string, montos?: ?array<string, float>}  $datos
      */
     public static function guardar(string $ruc, string $libro, string $periodo, string $clave, string $rucTercero, array $datos): void
     {
         $llave = ['IdEmpresa' => $ruc, 'libro' => $libro, 'periodo' => $periodo, 'clave' => $clave];
         $actual = DB::table('sire_ajustes')->where($llave)->first();
         $fila = ['ruc' => $rucTercero, 'updated_at' => now()];
-        foreach (['excluido', 'ctacargo', 'ctaabono', 'ccosto'] as $campo) {
+        foreach (array_merge(['excluido', 'ctacargo', 'ctaabono', 'ccosto'], self::conCancelacion() ? ['ctacance'] : []) as $campo) {
             if (array_key_exists($campo, $datos)) {
                 $fila[$campo] = $campo === 'excluido' ? (bool) $datos[$campo] : (trim((string) $datos[$campo]) ?: null);
             }
@@ -307,6 +310,14 @@ class SireDbf
         $actual
             ? DB::table('sire_ajustes')->where('id', $actual->id)->update($fila)
             : DB::table('sire_ajustes')->insert($llave + $fila + ['created_at' => now()]);
+    }
+
+    /** ¿Ya existe la columna de la cuenta de cancelación? (antes de migrar, el resto sigue funcionando) */
+    private static function conCancelacion(): bool
+    {
+        static $hay = null;
+
+        return $hay ??= Schema::hasColumn('sire_ajustes', 'ctacance');
     }
 
     /** ¿Este comprobante impide descargar? (no cuadra o su IGV no está junto a su base) */
@@ -364,7 +375,7 @@ class SireDbf
                 'FECHADOC' => $c['fecha'], 'FECHAING' => $c['fecha'], 'FECVENCI' => $c['vence'] ?: $c['fecha'],
                 'IMPOPAGO' => $m['total'], 'TOTAL' => $m['total'], 'TC' => $c['tc'], 'MONEDA' => $c['moneda'] === 'USD' ? 'US$' : 'S/',
                 'MES' => (int) $mes, 'ANO' => $anio, 'NOMAREA' => $c['nombre'], 'PROVE' => $c['nombre'], 'FCON' => $mes.$anio,
-                'REGCOMPRA' => 1, 'NUM1' => $correlativo, 'MPAGO' => '08', 'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'],
+                'REGCOMPRA' => 1, 'NUM1' => $correlativo, 'MPAGO' => '08', 'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'], 'CTACANCE' => $c['ctacance'] ?? null,
                 'CODDESTINO' => $c['ccosto'] ?? null,
                 'OGYE' => $m['base_dg'] ?: null, 'IGV_1' => $m['igv_dg'] ?: null, 'OGYEYONG' => $m['base_dgng'] ?: null, 'IGV_2' => $m['igv_dgng'] ?: null,
                 'ONG' => $m['base_dng'] ?: null, 'IGV_3' => $m['igv_dng'] ?: null, 'NG' => $m['no_gravado'] ?: null,
@@ -394,7 +405,7 @@ class SireDbf
                 'DES_DOC' => self::DESCRIPCION[$c['tipo']] ?? $c['tipo'], 'FECHA_DOC' => $c['fecha'], 'FECHA_SAL' => $c['fecha'],
                 'ALMA' => '01', 'FPAGO' => '01', 'FECVENCI' => $c['vence'] ?: $c['fecha'], 'NOTA' => $c['nombre'], 'NOMBRE' => $c['nombre'],
                 'TOTAL' => $m['total'], 'TC' => $c['tc'], 'MONEDA' => $c['moneda'], 'ANULADA' => $c['anulado'] ? 1 : 0,
-                'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'], 'TBRUTO' => 0, 'TNETO' => 0,
+                'CTACARGO' => $c['ctacargo'], 'CTAABONO' => $c['ctaabono'], 'NUMERO' => $c['ctacance'] ?? null, 'TBRUTO' => 0, 'TNETO' => 0,
                 'EXPORTA' => $m['exporta'], 'GRAVADA' => $m['gravada'], 'IGV' => $m['igv'],
                 'EXONERADA' => $m['exonerada'], 'INAFECTA' => $m['inafecta'], 'ISC' => $m['isc'],
                 'IBOLSAS' => $m['icbper'], 'OTROS' => $m['otros'] ?: null,

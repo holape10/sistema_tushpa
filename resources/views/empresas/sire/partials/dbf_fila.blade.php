@@ -16,7 +16,7 @@
     $sinCuenta = $compras && ($c['sinCtaCargo'] ?? false) ? 1 : 0;
     $xmlId = $c['xml_id'] ?? ($c['lineas'][0]->compra_xml_id ?? null);
     $centros = $compras ? \App\Support\Contabilidad\CuentasCompras::centros((string) auth()->user()->IdEmpresa) : [];
-    $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ccosto' => $c['ccosto'] ?? '',
+    $datosFila = ['clave' => $c['clave'], 'excluido' => $c['excluido'], 'ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono'], 'ctacance' => $c['ctacance'] ?? '', 'ccosto' => $c['ccosto'] ?? '',
         'montos' => $m, 'diferencia' => $c['diferencia'], 'alerta' => $c['alerta'] ?? null, 'editado' => $c['editado'], 'redondeo' => $c['redondeo'],
         'xml' => (bool) $c['lineas'], 'sinCuenta' => $sinCuenta];
     $soles = fn ($n) => number_format((float) $n, 2);
@@ -80,6 +80,10 @@
                    class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
         <label class="font-semibold text-slate-500">Cta. abono
             <input type="text" maxlength="12" list="plan_cuentas" x-model="fila.ctaabono" @change="guardar({ ctaabono: fila.ctaabono })"
+                   class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
+        {{-- Con qué se pagó o cobró (caja, banco…): almaingr.CTACANCE / tienfact.NUMERO --}}
+        <label class="font-semibold text-slate-500 whitespace-nowrap">Cta. cancelación
+            <input type="text" maxlength="12" list="plan_cuentas" x-model="fila.ctacance" @change="guardar({ ctacance: fila.ctacance })"
                    class="block mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>
         @if ($compras)
             {{-- Cuentas de gasto 62–68: centro de costo obligatorio --}}

@@ -69,12 +69,12 @@ class SireDbfController extends Controller
         $cuenta = ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]*$/'];
         $d = $request->validate([
             'libro' => ['required', Rule::in(array_keys(SireDbf::LIBROS))], 'periodo' => 'required|digits:6', 'clave' => 'required|string|max:40',
-            'excluido' => 'sometimes|boolean', 'ctacargo' => $cuenta, 'ctaabono' => $cuenta, 'ccosto' => 'nullable|string|max:6|regex:/^[0-9A-Za-z]*$/',
+            'excluido' => 'sometimes|boolean', 'ctacargo' => $cuenta, 'ctaabono' => $cuenta, 'ctacance' => $cuenta, 'ccosto' => 'nullable|string|max:6|regex:/^[0-9A-Za-z]*$/',
             'montos' => 'sometimes|nullable|array', 'montos.*' => 'nullable|numeric|between:-99999999,99999999',
         ], ['regex' => 'La cuenta va solo con números (sin puntos ni espacios).']);
         $c = $this->comprobante($ruc, $d['libro'], $d['periodo'], $d['clave']);
 
-        $cambios = array_intersect_key($d, array_flip(['excluido', 'ctacargo', 'ctaabono', 'ccosto']));
+        $cambios = array_intersect_key($d, array_flip(['excluido', 'ctacargo', 'ctaabono', 'ctacance', 'ccosto']));
         if ($request->has('montos')) {
             $cambios['montos'] = $d['montos'] ? $this->montos($d['libro'], $d['montos']) : null;
         }
@@ -106,10 +106,10 @@ class SireDbfController extends Controller
         $ruc = $this->autorizar();
         $cuenta = ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]*$/'];
         $d = $request->validate(['libro' => ['required', Rule::in(array_keys(SireDbf::LIBROS))], 'periodo' => 'required|digits:6',
-            'ctacargo' => $cuenta, 'ctaabono' => $cuenta], ['regex' => 'La cuenta va solo con números (sin puntos ni espacios).']);
-        $cambios = array_filter(array_intersect_key($d, array_flip(['ctacargo', 'ctaabono'])), fn ($v) => trim((string) $v) !== '');
+            'ctacargo' => $cuenta, 'ctaabono' => $cuenta, 'ctacance' => $cuenta], ['regex' => 'La cuenta va solo con números (sin puntos ni espacios).']);
+        $cambios = array_filter(array_intersect_key($d, array_flip(['ctacargo', 'ctaabono', 'ctacance'])), fn ($v) => trim((string) $v) !== '');
         if (! $cambios) {
-            return back()->with('error', 'Escribe la cuenta de cargo, la de abono o las dos.');
+            return back()->with('error', 'Escribe la cuenta de cargo, la de abono, la de cancelación o varias.');
         }
         $n = 0;
         foreach (SireDbf::delPeriodo($ruc, $d['libro'], $d['periodo'])['comprobantes'] as $c) {
@@ -176,15 +176,15 @@ class SireDbfController extends Controller
             : ['exporta' => 'Exportación', 'gravada' => 'Gravada', 'igv' => 'IGV', 'exonerada' => 'Exonerada', 'inafecta' => 'Inafecta',
                 'isc' => 'ISC', 'icbper' => 'ICBPER', 'otros' => 'Otros tributos', 'total' => 'Total'];
         $cabecera = array_merge(['Fecha', 'Tipo', 'Serie', 'Número', $libro === 'compras' ? 'RUC proveedor' : 'Doc. cliente', $libro === 'compras' ? 'Proveedor' : 'Cliente'],
-            array_values($montos), ['Moneda', 'T.C.', 'Cta. cargo', 'Cta. abono', 'Doc. que modifica']);
+            array_values($montos), ['Moneda', 'T.C.', 'Cta. cargo', 'Cta. abono', 'Cta. cancelación', 'Doc. que modifica']);
         $filas = [];
         foreach ($comprobantes as $c) {
             $filas[] = array_merge([$c['fecha'] ? date('d/m/Y', strtotime($c['fecha'])) : '', $c['tipo'], $c['serie'], $c['numero'], $c['ruc'], $c['nombre']],
                 array_map(fn ($k) => (float) ($c['montos'][$k] ?? 0), array_keys($montos)),
-                [$c['moneda'], $c['tc'], (string) $c['ctacargo'], (string) $c['ctaabono'], $c['ref'] ? $c['ref']['serie'].'-'.$c['ref']['numero'] : '']);
+                [$c['moneda'], $c['tc'], (string) $c['ctacargo'], (string) $c['ctaabono'], (string) ($c['ctacance'] ?? ''), $c['ref'] ? $c['ref']['serie'].'-'.$c['ref']['numero'] : '']);
         }
         $filas[] = array_merge(['TOTAL', '', '', '', '', count($comprobantes).' comprobante(s)'],
-            array_map(fn ($k) => round(array_sum(array_map(fn ($c) => (float) ($c['montos'][$k] ?? 0), $comprobantes)), 2), array_keys($montos)), ['', '', '', '', '']);
+            array_map(fn ($k) => round(array_sum(array_map(fn ($c) => (float) ($c['montos'][$k] ?? 0), $comprobantes)), 2), array_keys($montos)), ['', '', '', '', '', '']);
         $tabla = $libro === 'ventas' ? 'tienfact' : 'almaingr';
         $ruta = (new Excel)->hoja(ucfirst($libro).' '.$periodo, $cabecera, $filas, range(6, 5 + count($montos)))->guardar();
 
@@ -273,7 +273,8 @@ class SireDbfController extends Controller
         // Las cuentas con que se descargó quedan como las de cada proveedor o cliente para los próximos meses
         foreach ($comprobantes as $c) {
             if (! $c['excluido']) {
-                SireDbf::guardar($ruc, $libro, $periodo, $c['clave'], $c['ruc'], ['ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono']]);
+                SireDbf::guardar($ruc, $libro, $periodo, $c['clave'], $c['ruc'], ['ctacargo' => $c['ctacargo'], 'ctaabono' => $c['ctaabono']]
+                    + ($c['ctacance'] ? ['ctacance' => $c['ctacance']] : []));
             }
         }
         $tabla = $libro === 'ventas' ? 'tienfact' : 'almaingr';

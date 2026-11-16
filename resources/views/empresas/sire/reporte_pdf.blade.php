@@ -47,7 +47,7 @@
             <tr>
                 <th>N°</th><th>Fecha</th><th>Doc.</th><th>Serie-Número</th><th>{{ $compras ? 'RUC' : 'Doc. cliente' }}</th><th>{{ $compras ? 'Proveedor' : 'Cliente' }}</th>
                 @foreach ($columnas as $titulo => $claves)<th class="d">{{ $titulo }}</th>@endforeach
-                <th class="c">Cta. cargo</th><th class="c">Cta. abono</th>
+                <th class="c">Cta. cargo</th><th class="c">Cta. abono</th><th class="c">Cta. canc.</th>
             </tr>
         </thead>
         <tbody>
@@ -64,12 +64,13 @@
                     @foreach ($columnas as $titulo => $claves)<td class="d">{{ $n($monto($c, $claves)) }}</td>@endforeach
                     <td class="c">{{ $c['ctacargo'] }}</td>
                     <td class="c">{{ $c['ctaabono'] }}</td>
+                    <td class="c">{{ $c['ctacance'] ?? '' }}</td>
                 </tr>
             @endforeach
             <tr class="tot">
                 <td colspan="6">TOTAL · {{ count($comprobantes) }} comprobante(s)</td>
                 @foreach ($columnas as $titulo => $claves)<td class="d">{{ number_format($suma($claves), 2) }}</td>@endforeach
-                <td colspan="2"></td>
+                <td colspan="3"></td>
             </tr>
         </tbody>
     </table>
