@@ -45,6 +45,17 @@ class SucursalController extends Controller
             ->firstOrFail();
     }
 
+    /** ¿El comprobante con ese número aún no se mandó a SUNAT? (entonces su número todavía se puede corregir) */
+    private function sinEnviar(int $idSucursal, string $tdocod, string $serie, int $numero): bool
+    {
+        if (in_array($tdocod, ['PR', '09'], true)) {
+            return false;
+        }
+
+        return DB::table('cpe_cabecera')->where('id_empresa_negocio', $idSucursal)->where('tdocod', $tdocod)->where('serdoc', $serie)
+            ->where('numdoc', $numero)->where('enviado', 0)->whereIn('est_sunat', ['PENDIENTE', 'ERROR'])->exists();
+    }
+
     /** Último número emitido de una serie en la sucursal */
     private function ultimoEmitido(int $idSucursal, string $tdocod, string $serie): int
     {
@@ -174,7 +185,10 @@ class SucursalController extends Controller
             // El correlativo es el ÚLTIMO número usado: no puede quedar por debajo de lo emitido (se duplicaría)
             $ultimo = $this->ultimoEmitido($sucursal->id_empresa_negocio, $c['tdocod'] ?? $tdocod, $serie);
             if ((int) $datos[$c['numero']] < $ultimo) {
-                $errores[$c['numero']] = "{$c['nombre']} {$serie}: ya se emitió hasta el número {$ultimo}; el correlativo no puede ser menor.";
+                $errores[$c['numero']] = "{$c['nombre']} {$serie}: ya se emitió hasta el número {$ultimo}; el correlativo no puede ser menor (se repetirían números)."
+                    .($this->sinEnviar($sucursal->id_empresa_negocio, $c['tdocod'] ?? $tdocod, $serie, $ultimo)
+                        ? " El {$serie}-{$ultimo} aún no se envía a SUNAT: si su número salió por error, no lo envíes y pide a soporte que lo corrija."
+                        : '');
             }
 
             // Otra sucursal de la misma empresa no puede usar la misma serie

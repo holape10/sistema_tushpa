@@ -74,6 +74,21 @@ class LogoSucursalTest extends FlujoTestCase
         $this->assertNull(ComandasController::fotoRedes($this->sucursal), 'Sin marcar, la foto para redes queda apagada.');
     }
 
+    public function test_el_correlativo_no_baja_de_lo_emitido_y_avisa_si_ese_ultimo_aun_no_se_envio(): void
+    {
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('JUANE', 15, 10), 1]], '03'), 'PV');
+        $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first(['serdoc', 'numdoc']);
+        DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update(['est_sunat' => 'PENDIENTE', 'enviado' => 0]);
+
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => $cab->numdoc - 1]))
+            ->assertSessionHasErrors(['BnuEmpresa' => "Boleta {$cab->serdoc}: ya se emitió hasta el número {$cab->numdoc}; el correlativo no puede ser menor (se repetirían números). El {$cab->serdoc}-{$cab->numdoc} aún no se envía a SUNAT: si su número salió por error, no lo envíes y pide a soporte que lo corrija."]);
+
+        DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update(['est_sunat' => 'ACEPTADO', 'enviado' => 1]);
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => $cab->numdoc - 1]))
+            ->assertSessionHasErrors(['BnuEmpresa' => "Boleta {$cab->serdoc}: ya se emitió hasta el número {$cab->numdoc}; el correlativo no puede ser menor (se repetirían números)."]);
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => $cab->numdoc]))->assertSessionHasNoErrors();
+    }
+
     public function test_las_pantallas_de_empresa_y_sucursal_abren_dentro_del_menu(): void
     {
         $this->get(route('empresas.edit', $this->usuario->IdEmpresa))->assertOk()->assertSee('Logo de la empresa')

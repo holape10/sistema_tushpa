@@ -151,7 +151,7 @@
                                                 <label class="col-span-2 text-xs text-gray-500">Serie
                                                     <input name="{{ $c['serie'] }}" x-model="serie" required maxlength="4" class="{{ $input }} uppercase font-mono font-bold text-center"></label>
                                                 <label class="col-span-3 text-xs text-gray-500">Último usado
-                                                    <input type="number" name="{{ $c['numero'] }}" x-model.number="num" :min="nueva ? 0 : emitido" min="0" required class="{{ $input }} font-mono text-right"></label>
+                                                    <input type="number" name="{{ $c['numero'] }}" x-model.number="num" min="0" required class="{{ $input }} font-mono text-right"></label>
                                             </div>
                                             <div class="mt-3 rounded-xl bg-gray-50 px-3 py-2">
                                                 <p class="text-[10px] uppercase text-gray-400">Próximo</p>
