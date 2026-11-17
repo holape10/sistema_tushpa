@@ -431,8 +431,24 @@ class EstudioContableTest extends FlujoTestCase
             ->assertDontSee('SECRETO-API-A')->assertDontSee('CLAVE-SIRE-A')->assertDontSee('CLAVE-SOL-A');
         $this->post(route('estudio.configurar', self::EMPRESA_A), ['client_id' => 'ID-API-A', 'sire_usuario' => 'USUARIOA', 'sol_usuario' => 'SOLPRINA'])->assertSessionHas('success');
         $this->assertSame('CLAVE-SOL-A', decrypt(DB::table('empresa')->where('IdEmpresa', self::EMPRESA_A)->value('sol_clave'), false));
-        // El propio estudio no se configura por esta vía
-        $this->post(route('estudio.configurar', $this->estudio), ['client_id' => 'X'])->assertNotFound();
+        // El propio estudio también se configura (sale primero en la lista)
+        $this->get(route('estudio.index'))->assertSeeInOrder(['TU ESTUDIO', 'Importar plan contable']);
+        $this->post(route('estudio.configurar', $this->estudio), ['tipo_empresa' => 'SERVICIO', 'cta_compras' => '601111'])->assertSessionHas('success');
+        $this->assertSame('SERVICIO', Estudio::tipoEmpresa($this->estudio));
+        $this->post(route('estudio.configurar', '20999999990'), ['client_id' => 'X'])->assertNotFound();
+    }
+
+    public function test_el_plan_contable_se_importa_desde_configurar_tambien_el_del_estudio(): void
+    {
+        $excel = fn () => new UploadedFile((new Excel)->hoja('Plan', [['Pckey', 'Nomcta', 'Tipcta', 'Orden1', 'Cargo', 'Abono']],
+            [['60', 'COMPRAS', '1', '', '', ''], ['60111', 'MERCADERÖAS MANUFACTURADAS', '3', '', '20111', '61111']])->guardar(), 'plan.xlsx', null, null, true);
+
+        foreach ([self::EMPRESA_A, $this->estudio] as $ruc) {
+            $this->post(route('estudio.plan', $ruc), ['archivo' => $excel()])->assertSessionHas('success', fn ($m) => str_contains($m, '2 cuentas leídas'));
+            $this->assertSame('MERCADERÍAS MANUFACTURADAS', DB::table('conta_plan')->where('IdEmpresa', $ruc)->where('cuenta', '60111')->value('descripcion'));
+        }
+        // Solo en su empresa: la otra no recibe el plan
+        $this->assertFalse(DB::table('conta_plan')->where('IdEmpresa', self::EMPRESA_B)->where('cuenta', '60111')->exists());
     }
 
     public function test_cada_empresa_trae_sus_xml_con_su_propia_clave_sol_y_se_cuentan_en_el_panel(): void

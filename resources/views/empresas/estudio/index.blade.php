@@ -120,6 +120,7 @@
                         <tbody x-data="{ accesos: false, configurar: false }">
                         <tr class="border-t border-slate-100 {{ $e->activa ? '' : 'opacity-50' }}">
                             <td class="px-4 py-3 font-mono font-bold text-indigo-700 whitespace-nowrap">{{ $e->IdEmpresa }}
+                                @if ($e->propia)<span class="ml-1 rounded bg-indigo-600 px-1.5 text-[11px] font-bold text-white">TU ESTUDIO</span>@endif
                                 @unless ($e->activa)<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">INACTIVA</span>@endunless</td>
                             <td class="px-4 py-3"><p class="font-semibold text-slate-800">{{ $e->NomEmpresa }}</p><p class="text-xs text-slate-400">{{ $e->DirEmpresa }}
                                 @if ($e->tipo_empresa)<span class="ml-1 rounded bg-indigo-50 px-1.5 text-[11px] font-bold text-indigo-700">{{ \App\Support\Estudio::TIPOS_EMPRESA[$e->tipo_empresa] ?? $e->tipo_empresa }}</span>@endif</p></td>
@@ -132,6 +133,9 @@
                                 <span class="ml-1 rounded-full px-2 py-0.5 text-xs font-bold {{ $e->sol_usuario ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ $e->sol_usuario ? 'SOL ✔' : 'Sin Clave SOL' }}</span>
                             </td>
                             <td class="px-4 py-3 relative">
+                                @if ($e->propia)
+                                    <span class="text-xs font-semibold text-slate-500">Todos sus usuarios</span>
+                                @else
                                 <button type="button" @click="accesos = !accesos" class="text-xs font-semibold text-slate-600 hover:text-indigo-700">
                                     {{ $conAcceso ? count($conAcceso).' usuario(s)' : 'Solo administradores' }} ▾</button>
                                 <form x-show="accesos" x-cloak @click.outside="accesos = false" method="POST" action="{{ route('estudio.accesos', $e->IdEmpresa) }}"
@@ -146,14 +150,16 @@
                                     @endforelse
                                     <button class="mt-2 w-full h-9 rounded-lg bg-indigo-600 text-white text-sm font-bold">Guardar accesos</button>
                                 </form>
+                                @endif
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-2">
                                     <button type="button" @click="configurar = !configurar" class="h-9 px-3 rounded-lg bg-white ring-1 ring-indigo-200 hover:bg-indigo-50 text-indigo-700 text-xs font-bold">Configurar</button>
-                                    @if ($e->activa)
+                                    @if ($e->activa || $e->propia)
                                         <form method="POST" action="{{ route('estudio.cambiar') }}">@csrf<input type="hidden" name="ruc" value="{{ $e->IdEmpresa }}">
                                             <button class="h-9 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold whitespace-nowrap">Trabajar aquí</button></form>
                                     @endif
+                                    @unless ($e->propia)
                                     <form method="POST" action="{{ route('estudio.estado', $e->IdEmpresa) }}"
                                           @if ($e->activa) onsubmit="return confirm('¿Desactivar {{ addslashes($e->NomEmpresa) }}? Ya nadie la verá en el selector; sus datos se conservan.')" @endif>
                                         @csrf<button class="h-9 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold">{{ $e->activa ? 'Desactivar' : 'Activar' }}</button></form>
@@ -162,6 +168,7 @@
                                           @submit="const r = prompt(@js('Eliminar '.$e->IdEmpresa.' '.$e->NomEmpresa.'. Solo se puede si aún no tiene comprobantes, compras ni asientos. Escribe su RUC para confirmar:')); if (r === null) { $event.preventDefault() } else { $el.querySelector('[name=confirmacion]').value = r }">
                                         @csrf<input type="hidden" name="confirmacion">
                                         <button class="h-9 px-3 rounded-lg bg-white ring-1 ring-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-semibold" title="Eliminar (registrada por error)">Eliminar</button></form>
+                                    @endunless
                                 </div>
                             </td>
                         </tr>
@@ -177,12 +184,25 @@
                                         <button class="h-9 px-5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">Guardar datos de {{ $e->IdEmpresa }}</button>
                                     </div>
                                 </form>
+                                {{-- 4 · Plan contable: el Excel del sistema contable en FoxPro (Pckey, Nomcta, Tipcta, Cargo, Abono) --}}
+                                <form method="POST" action="{{ route('estudio.plan', $e->IdEmpresa) }}" enctype="multipart/form-data" x-data="{ subiendo: false }" @submit="subiendo = true"
+                                      class="mt-4 pt-4 border-t border-slate-200 flex flex-wrap items-end gap-3">
+                                    @csrf
+                                    <label class="flex-1 min-w-[260px] text-xs font-bold uppercase text-slate-500">4 · Plan contable (Excel)
+                                        <input type="file" name="archivo" accept=".xlsx,.xls,.csv" required class="mt-1 block w-full text-sm font-normal normal-case file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700">
+                                        <span class="block mt-1 text-xs font-normal normal-case text-slate-400">El que exporta tu sistema contable en FoxPro, tal cual. Las cuentas que ya están se actualizan; no se borra ninguna.</span></label>
+                                    <button class="h-9 px-5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold disabled:opacity-50" :disabled="subiendo"
+                                            x-text="subiendo ? 'Importando…' : 'Importar plan contable'">Importar plan contable</button>
+                                </form>
                             </td>
                         </tr>
                         </tbody>
                     @empty
                         <tbody><tr><td colspan="5" class="px-4 py-10 text-center text-slate-400">{{ $q ? 'Ninguna empresa coincide con la búsqueda.' : 'Aún no registras empresas: usa "+ Nueva empresa".' }}</td></tr></tbody>
                     @endforelse
+                    @if (! $q && $empresas->where('propia', false)->isEmpty())
+                        <tbody><tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">Aún no registras empresas de tus clientes: usa "+ Nueva empresa".</td></tr></tbody>
+                    @endif
             </table>
         </div>
     </div>

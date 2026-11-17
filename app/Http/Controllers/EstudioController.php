@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\Contabilidad\Contabilidad;
+use App\Support\Contabilidad\PlanImportar;
 use App\Support\Estudio;
 use App\Support\EstudioDescargas;
 use App\Support\EstudioImportar;
@@ -39,11 +40,11 @@ class EstudioController extends Controller
     {
         $estudio = $this->administrar();
         $q = trim((string) $request->get('q'));
+        // La empresa del propio estudio va primero: también se configura (tipo de empresa, claves, cuentas y plan contable)
         $empresas = DB::table('estudio_empresas as ee')->join('empresa as e', 'e.IdEmpresa', '=', 'ee.IdEmpresa')
-            ->where('ee.propia', false)
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('e.NomEmpresa', 'like', "%{$q}%")->orWhere('ee.IdEmpresa', 'like', "{$q}%")))
-            ->orderByDesc('ee.activa')->orderBy('e.NomEmpresa')
-            ->get(['ee.IdEmpresa', 'e.NomEmpresa', 'e.DirEmpresa', 'ee.activa', 'ee.tipo_empresa', 'e.client_id', 'e.sire_usuario', 'e.sol_usuario']);
+            ->orderByDesc('ee.propia')->orderByDesc('ee.activa')->orderBy('e.NomEmpresa')
+            ->get(['ee.IdEmpresa', 'e.NomEmpresa', 'e.DirEmpresa', 'ee.activa', 'ee.propia', 'ee.tipo_empresa', 'e.client_id', 'e.sire_usuario', 'e.sol_usuario']);
         $accesos = DB::table('estudio_accesos')->get()->groupBy('IdEmpresa')->map(fn ($a) => $a->pluck('IdUsuario')->map(fn ($id) => (int) $id)->all());
         // Los usuarios del estudio que no son administradores (el administrador ya ve todas)
         $usuarios = User::query()->whereNotIn('IdUsuario', DB::table('role_user')->where('role_id', 2)->select('user_IdUsuario'))
@@ -115,7 +116,8 @@ class EstudioController extends Controller
     public function configurar(Request $request, string $ruc): RedirectResponse
     {
         $this->administrar();
-        abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->where('propia', false)->exists(), 404);
+        // Las de sus clientes y la del propio estudio
+        abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->exists(), 404);
         $d = $request->validate(self::reglasConfiguracion(), ['regex' => 'Solo letras y números, sin espacios ni puntos.'], self::NOMBRES);
         $tipo = fn () => ['tipo_empresa' => Estudio::tipoEmpresa($ruc)];
         $antes = (Bitacora::foto('empresa', ['IdEmpresa' => $ruc]) ?? []) + (Bitacora::foto('concar_config', ['IdEmpresa' => $ruc]) ?? []) + $tipo();
@@ -203,6 +205,26 @@ class EstudioController extends Controller
             ['referencia' => ['empresa', $ruc], 'alerta' => true]);
 
         return back()->with('success', "Empresa {$ruc} {$nombre} eliminada.");
+    }
+
+    /** Importa el plan contable de una empresa del estudio (o del propio estudio) desde el Excel del sistema contable */
+    public function plan(Request $request, string $ruc): RedirectResponse
+    {
+        $this->administrar();
+        abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->exists(), 404);
+        $request->validate(['archivo' => 'required|file|max:20480|extensions:xlsx,xls,csv'],
+            ['archivo.extensions' => 'Sube el plan contable en Excel (.xlsx, .xls o .csv).'], ['archivo' => 'archivo']);
+        $archivo = $request->file('archivo');
+        $leido = PlanImportar::leer($archivo->getRealPath(), strtolower($archivo->getClientOriginalExtension()));
+        if (! $leido['cuentas']) {
+            return back()->with('error', 'No encontré cuentas en ese Excel. '.implode(' ', array_slice($leido['errores'], 0, 3)));
+        }
+        $r = PlanImportar::importar($ruc, $leido['cuentas']);
+        Bitacora::registrar('contabilidad.plan_importar', 'Importó el plan contable ('.count($leido['cuentas']).") de la empresa {$ruc}", null,
+            ['referencia' => ['empresa', $ruc], 'alerta' => true]);
+
+        return back()->with('success', "Plan contable de {$ruc}: ".count($leido['cuentas'])." cuentas leídas, {$r['nuevas']} nuevas y {$r['actualizadas']} actualizadas."
+            .($leido['errores'] ? ' No se leyeron '.count($leido['errores']).' fila(s).' : ''));
     }
 
     public function accesos(Request $request, string $ruc): RedirectResponse
