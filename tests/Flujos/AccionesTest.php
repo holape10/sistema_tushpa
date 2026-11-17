@@ -11,12 +11,14 @@ use Illuminate\Support\Facades\DB;
 class AccionesTest extends FlujoTestCase
 {
     /** Un cajero con su turno abierto y, si se pide, acciones apagadas */
-    private function cajero(array $bloqueadas = []): User
+    /** Un cajero: $bloqueadas = lo que se le apagó; $permitidas = lo que solo tiene si se lo dan (anular, editar…) */
+    private function cajero(array $bloqueadas = [], array $permitidas = []): User
     {
         $u = $this->usuario->replicate();
         $u->email = 'cajero'.uniqid().'@prueba.test';
         $u->apeusu = 'CAJERO DE PRUEBA';
         $u->acciones_bloqueadas = $bloqueadas ? json_encode($bloqueadas) : null;
+        $u->acciones_permitidas = $permitidas ? json_encode($permitidas) : null;
         $u->save();
         DB::table('role_user')->insert(['role_id' => 4, 'user_IdUsuario' => $u->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
         Turno::create(['turno' => 2, 'IdUsuario' => $u->IdUsuario, 'apertura' => now(), 'IdEmpresa' => $u->IdEmpresa,
@@ -37,13 +39,27 @@ class AccionesTest extends FlujoTestCase
         $this->assertNull($this->cabecera($id)->ccabaj);
     }
 
-    public function test_lo_que_no_se_apago_sigue_permitido(): void
+    public function test_anular_y_editar_son_solo_del_administrador_salvo_que_se_los_den(): void
     {
-        $cajero = $this->cajero(['cambiar_precio']);
         $plato = $this->producto('JUANE', 15, 10);
+        // Un cajero cualquiera: no anula ni edita (ni ve esos botones)
+        $cajero = $this->cajero();
         $id = VentaDirecta::registrar($cajero, $this->venta([[$plato, 1]], '13'), 'PV');
+        $this->actingAs($cajero)->postJson(route('ventas.anular', $id), ['motivo' => 'ERROR DEL CAJERO'])
+            ->assertJson(['success' => false, 'message' => 'No tienes permiso para anular ventas. Pídeselo al administrador.']);
+        $this->get(route('ventas.editar', $id))->assertForbidden();
+        $this->postJson(route('ventas.editar.guardar', $id), $this->venta([[$plato, 2]], '13'))
+            ->assertJson(['estado' => 'error', 'mensaje' => 'No tienes permiso para editar ventas. Pídeselo al administrador.']);
+        $this->get(route('ventas.index'))->assertOk()->assertDontSee('title="Anular"', false)->assertDontSee('title="Editar venta', false);
+        $this->assertFalse($cajero->puede('notas_credito'));
+        $this->assertTrue($cajero->puede('medio_pago'), 'Lo demás sigue permitido.');
 
-        $this->actingAs($cajero)->postJson(route('ventas.anular', $id), ['motivo' => 'ERROR DEL CAJERO'])->assertJson(['success' => true]);
+        // Con el permiso dado, sí
+        $conPermiso = $this->cajero(['cambiar_precio'], ['anular_ventas', 'editar_ventas']);
+        $otra = VentaDirecta::registrar($conPermiso, $this->venta([[$plato, 1]], '13'), 'PV');
+        $this->actingAs($conPermiso)->get(route('ventas.index'))->assertOk()->assertSee('title="Anular"', false);
+        $this->get(route('ventas.editar', $otra))->assertRedirect();
+        $this->postJson(route('ventas.anular', $otra), ['motivo' => 'ERROR DEL CAJERO'])->assertJson(['success' => true]);
     }
 
     public function test_sin_el_permiso_no_se_cobra_mas_barato_pero_si_al_de_lista_o_mas_caro(): void
@@ -122,13 +138,15 @@ class AccionesTest extends FlujoTestCase
 
         $cajero->refresh();
         $this->assertFalse($cajero->puede('anular_ventas'));
+        $this->assertFalse($cajero->puede('editar_ventas'));
         $this->assertFalse($cajero->puede('cambiar_precio'));
         $this->assertTrue($cajero->puede('notas_credito'));
         $cambio = json_decode(DB::table('bitacora')->where('accion', 'usuario.editar')->value('cambios'), true)['acciones'];
-        $this->assertSame(['Anular ventas', 'Bajar el precio de lista', 'Subir el precio de lista'], $cambio['quito']);
+        $this->assertSame(['Bajar el precio de lista', 'Subir el precio de lista'], $cambio['quito']);
 
-        // Si se le pone de administrador, ya no le queda nada bloqueado
+        // Si se le pone de administrador, no se le guarda nada (puede todo)
         $this->put(route('usuarios.update', $cajero->IdUsuario), ['role_id' => '2'] + $datos);
         $this->assertNull($cajero->fresh()->acciones_bloqueadas);
+        $this->assertNull($cajero->fresh()->acciones_permitidas);
     }
 }

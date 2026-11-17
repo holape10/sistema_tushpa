@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EmpresaNegocio;
 use App\Models\MedioPago;
 use App\Models\Turno;
+use App\Support\Acciones;
 use App\Support\Clinica;
 use App\Support\EdicionVenta;
 use App\Support\Lotes;
@@ -100,6 +101,7 @@ class PuntoVentaController extends Controller
     public function editar(int $id)
     {
         $this->autorizar();
+        abort_unless(Auth::user()->puede('editar_ventas'), 403, Acciones::mensaje('editar_ventas'));
         $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first(['ped_tip']);
 
         return redirect()->route(($cab->ped_tip ?? '') === 'FARMACIA' ? 'pv.farmacia' : 'pv.index', ['editar' => $id]);
@@ -108,6 +110,9 @@ class PuntoVentaController extends Controller
     public function guardarEdicion(Request $request, int $id)
     {
         $this->autorizar();
+        if (! Auth::user()->puede('editar_ventas')) {
+            return response()->json(['estado' => 'error', 'mensaje' => Acciones::mensaje('editar_ventas')]);
+        }
         $request->validate(VentaDirecta::REGLAS, VentaDirecta::MENSAJES, VentaDirecta::NOMBRES);
         if (is_string($error = $this->ventaEditable($id))) {
             return response()->json(['estado' => 'error', 'mensaje' => $error]);

@@ -292,8 +292,7 @@ class UsuarioController extends Controller
                 'IdEmpresa' => $this->empresaUsuarios(),
                 'id_empresa_negocio' => $d['id_empresa_negocio'],
                 'emp_id' => $empleado->emp_id,
-                'acciones_bloqueadas' => $this->accionesBloqueadas($d),
-            ]);
+            ] + ($this->acciones($d) ?? []));
 
             DB::table('role_user')->insert([
                 'role_id' => $d['role_id'], 'user_IdUsuario' => $usuario->IdUsuario, 'id_empresa_negocio' => $d['id_empresa_negocio'],
@@ -347,8 +346,8 @@ class UsuarioController extends Controller
             if (! empty($d['password'])) {
                 $usuario->password = bcrypt($d['password']);
             }
-            if (array_key_exists('acciones_enviadas', $d)) {
-                $usuario->acciones_bloqueadas = $this->accionesBloqueadas($d);
+            if ($acciones = $this->acciones($d)) {
+                $usuario->fill($acciones);
             }
             $usuario->save();
 
@@ -370,8 +369,12 @@ class UsuarioController extends Controller
         return redirect()->route('usuarios.index')->with('success', 'Usuario actualizado.');
     }
 
-    /** Lo que el formulario dejó sin marcar (sin la sección en el formulario, todo permitido) */
-    private function accionesBloqueadas(array $d): ?string
+    /**
+     * Los permisos especiales marcados en el formulario (null si el formulario no traía esa sección).
+     *
+     * @return ?array{acciones_bloqueadas: ?string, acciones_permitidas: ?string}
+     */
+    private function acciones(array $d): ?array
     {
         if (! array_key_exists('acciones_enviadas', $d)) {
             return null;
@@ -403,8 +406,7 @@ class UsuarioController extends Controller
             'rol' => DB::table('role_user as r')->join('roles as ro', 'ro.id', '=', 'r.role_id')->where('r.user_IdUsuario', $id)->value('ro.description'),
             'modulos' => DB::table('modulos_usuario as mu')->join('modulos as m', 'm.mod_id', '=', 'mu.mod_id')->where('mu.user_IdUsuario', $id)
                 ->orderBy('m.mod_nom')->pluck('m.mod_nom')->all(),
-            'acciones' => collect(Acciones::LISTA)->keys()->diff(json_decode((string) ($u->acciones_bloqueadas ?? ''), true) ?: [])
-                ->map(fn ($k) => Acciones::LISTA[$k][0])->values()->all(),
+            'acciones' => collect(Acciones::LISTA)->keys()->intersect(Acciones::marcadas($u))->map(fn ($k) => Acciones::LISTA[$k][0])->values()->all(),
             'pin' => $u->codigo_movil ?? null,
             'password' => $u->password,
         ];

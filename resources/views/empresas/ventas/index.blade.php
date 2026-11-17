@@ -8,6 +8,10 @@
         $in = 'block w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500';
         $colorTipo = ['01' => 'bg-blue-600', '03' => 'bg-emerald-600', '07' => 'bg-orange-500', '08' => 'bg-purple-600', '13' => 'bg-gray-600'];
         $abrev = ['01' => 'FACTURA', '03' => 'BOLETA', '07' => 'N. CRÉDITO', '08' => 'N. DÉBITO', '13' => 'N. VENTA'];
+        // Editar, anular y notas: solo el administrador o a quien se le dio el permiso (Usuarios › permisos especiales)
+        $puedeEditar = auth()->user()->puede('editar_ventas');
+        $puedeAnular = auth()->user()->puede('anular_ventas');
+        $puedeNotas = auth()->user()->puede('notas_credito');
     @endphp
 
     <div x-data="panelVentas()" @keydown.escape.window="cerrar()">
@@ -153,26 +157,26 @@
                                     @endif
                                     <button type="button" @click="verDetalle({{ $v->IdCpe_cabecera }})" title="Detalle" class="btn-ico text-emerald-700"><i class="fas fa-eye"></i></button>
                                     {{-- Corregir productos, cliente, pago o tipo de comprobante mientras no llegue a SUNAT --}}
-                                    @if (!$anulada && !$v->anulado_nc && $turnoAbierto && in_array($v->tdocod, ['01', '03', '13'], true)
+                                    @if (!$anulada && !$v->anulado_nc && $turnoAbierto && $puedeEditar && in_array($v->tdocod, ['01', '03', '13'], true)
                                         && ($v->tdocod === '13' || in_array($v->est_sunat ?: 'PENDIENTE', \App\Support\Sunat\SunatService::ESTADOS_REENVIABLES, true)))
                                         <a href="{{ route('ventas.editar', $v->IdCpe_cabecera) }}" title="Editar venta (aún no enviada a SUNAT)" class="btn-ico text-amber-600"><i class="fas fa-pen-to-square"></i></a>
                                     @endif
                                     @if (!$anulada && $v->estadopago === 'CONTADO' && $turnoAbierto)
                                         <button type="button" @click="editarMedios({{ $v->IdCpe_cabecera }})" title="Editar medio de pago" class="btn-ico text-indigo-600"><i class="fas fa-money-bill-transfer"></i></button>
                                     @endif
-                                    @if (!$anulada && $turnoAbierto && ($v->tdocod === '13' || \App\Support\AnulacionVenta::sinEnviarASunat($v)))
+                                    @if (!$anulada && $turnoAbierto && $puedeAnular && ($v->tdocod === '13' || \App\Support\AnulacionVenta::sinEnviarASunat($v)))
                                         <button type="button" @click="abrirAnular({{ $v->IdCpe_cabecera }}, @js($numero))" title="Anular" class="btn-ico text-red-600"><i class="fas fa-xmark"></i></button>
                                     @endif
                                     {{-- Más opciones: notas de crédito/débito y otro formato de impresión --}}
                                     <button type="button" title="Más opciones" class="btn-ico text-gray-600"
                                             @click.stop="abrirMenu($event, @js([
                                                 'id' => $v->IdCpe_cabecera, 'numero' => $numero,
-                                                'notas' => in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc,
+                                                'notas' => $puedeNotas && in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc,
                                                 'aceptado' => in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
                                                 'estado' => $v->est_sunat ?: 'PENDIENTE',
                                                 'guia' => !$anulada,
                                                 'descartar' => !$anulada && auth()->user()->esAdmin() && $v->est_sunat === 'RECHAZADO' && in_array($v->tdocod, ['01', '03', '07', '08'], true),
-                                                'baja' => $puedeBaja = in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja
+                                                'baja' => $puedeBaja = $puedeAnular && in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja
                                                     && in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
                                                 // Por qué no se puede dar de baja (la opción se ve, pero apagada)
                                                 'bajaNo' => ! $puedeBaja ? null : match (true) {

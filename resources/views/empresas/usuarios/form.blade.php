@@ -176,15 +176,14 @@
 
         {{-- PERMISOS ESPECIALES: lo delicado, aparte del menú (el administrador siempre puede todo) --}}
         @php
-            $bloqueadas = $usuario ? \App\Support\Acciones::bloqueadas($usuario) : [];
-            $accSel = old('acciones_enviadas') ? (array) old('acciones', []) : array_diff(array_keys(\App\Support\Acciones::LISTA), $bloqueadas);
+            $accSel = old('acciones_enviadas') ? (array) old('acciones', []) : \App\Support\Acciones::marcadas($usuario);
         @endphp
         <div class="bg-white rounded-2xl shadow-sm p-5">
             <input type="hidden" name="acciones_enviadas" value="1">
             <h3 class="text-sm font-bold text-rose-700 uppercase tracking-wide mb-1">Permisos especiales</h3>
             <p x-show="Number(rol) === 2" x-cloak class="text-sm text-gray-500">El administrador puede hacer todo esto siempre.</p>
             <div x-show="Number(rol) !== 2">
-                <p class="text-xs text-gray-400 mb-4">Lo marcado está permitido. Desmarca lo que esta persona no debe hacer: si lo intenta, el sistema le avisa que lo pida al administrador. Todo queda en la bitácora.</p>
+                <p class="text-xs text-gray-400 mb-4">Lo marcado está permitido. <b>Anular y editar</b> son solo del administrador: márcalos únicamente si esta persona debe poder hacerlo. Si intenta algo sin permiso, el sistema le avisa que lo pida al administrador. Todo queda en la bitácora.</p>
                 <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     @foreach (\App\Support\Acciones::LISTA as $clave => [$nombre, $detalle])
                         <label class="flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm cursor-pointer hover:border-rose-300">
