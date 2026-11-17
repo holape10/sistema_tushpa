@@ -112,7 +112,7 @@ class EmpresaController extends Controller
         'passcert' => 'Contraseña del certificado', 'certificado_archivo' => 'Certificado digital', 'fec_ini_cer' => 'Certificado vigente desde',
         'fec_fin_cer' => 'Certificado vigente hasta', 'icbper' => 'ICBPER', 'tip_env_fac_id' => 'Envío de facturas', 'tipo_envio' => 'Tipo de envío',
         'client_id' => 'ID API SUNAT (SIRE)', 'client_secret' => 'Clave API SUNAT (SIRE)', 'sire_usuario' => 'Usuario SOL del SIRE', 'sire_clave' => 'Clave SOL del SIRE',
-        'cuentas_bancarias' => 'Cuentas bancarias del A4'];
+        'cuentas_bancarias' => 'Cuentas bancarias del A4', 'anular_sin_enviar' => 'Anular boletas y facturas no enviadas a SUNAT'];
 
     public function update(Request $request, $id)
     {
@@ -158,6 +158,9 @@ class EmpresaController extends Controller
         $empresa->icbper = $request->get('icbper');
         $empresa->tip_env_fac_id = $request->get('tip_env_fac');
         $empresa->tipo_envio = $request->get('envio');
+        if ($request->has('anular_sin_enviar')) {
+            $empresa->anular_sin_enviar = $request->boolean('anular_sin_enviar');
+        }
         // Cuentas bancarias del A4: solo las que tienen banco y número o CCI
         if ($request->has('cuentas')) {
             $cuentas = collect($request->input('cuentas', []))->map(fn ($c) => [

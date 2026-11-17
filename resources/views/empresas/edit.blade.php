@@ -160,6 +160,14 @@
                             <span class="relative block"><input type="password" name="txtWsContrasena" id="txtWsContrasena" value="" autocomplete="new-password" placeholder="{{ $empresa->claveSunat ? 'Guardada · escribe para cambiarla' : 'Clave SOL' }}" class="{{ $input }} pr-9">{!! $ojo('txtWsContrasena') !!}</span></label>
                         <label class="text-sm font-medium text-gray-600">ICBPER (bolsas) S/
                             <input type="number" step="0.01" min="0" name="icbper" value="{{ old('icbper', $empresa->icbper) }}" class="{{ $input }}"></label>
+                        {{-- Apagado de fábrica: con él, una boleta o factura que aún no se envió a SUNAT se anula como una nota de venta --}}
+                        <label class="sm:col-span-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 cursor-pointer">
+                            <input type="hidden" name="anular_sin_enviar" value="0">
+                            <input type="checkbox" name="anular_sin_enviar" value="1" @checked(old('anular_sin_enviar', $empresa->anular_sin_enviar ?? false)) class="mt-0.5 rounded text-amber-600">
+                            <span class="text-sm"><span class="font-semibold text-gray-800">Anular boletas y facturas que aún no se envían a SUNAT</span>
+                                <span class="block text-xs text-gray-500">Se anulan en Ventas igual que una nota de venta (vuelve el stock y sale de la caja). Ya enviadas a SUNAT
+                                    no se puede: solo con comunicación de baja o nota de crédito. Ojo: SUNAT verá ese número como faltante en la serie.</span></span>
+                        </label>
                     </div>
                 </section>
 

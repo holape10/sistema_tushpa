@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Anula una venta en el sistema: marca la baja, anula los cobros de la cuenta por cobrar,
@@ -11,6 +12,27 @@ use Illuminate\Support\Facades\DB;
  */
 class AnulacionVenta
 {
+    /**
+     * ¿Esta boleta o factura se puede anular aquí mismo, como una nota de venta? Solo si la empresa activó la opción
+     * (Empresas › editar) y el comprobante aún no se envió a SUNAT (ni va en un resumen diario). Ya enviado, solo con
+     * comunicación de baja o nota de crédito.
+     */
+    public static function sinEnviarASunat(object $cab): bool
+    {
+        return in_array($cab->tdocod, ['01', '03'], true) && ! $cab->ccabaj && (int) ($cab->enviado ?? 0) === 0
+            && in_array($cab->est_sunat ?: 'PENDIENTE', ['PENDIENTE', 'ERROR'], true) && empty($cab->res_id)
+            && self::empresaLoPermite((string) $cab->IdEmpresa);
+    }
+
+    /** ¿La empresa activó «anular boletas y facturas que aún no se envían a SUNAT»? */
+    public static function empresaLoPermite(string $ruc): bool
+    {
+        static $hay = null;
+        $hay ??= Schema::hasColumn('empresa', 'anular_sin_enviar');
+
+        return $hay && (bool) DB::table('empresa')->where('IdEmpresa', $ruc)->value('anular_sin_enviar');
+    }
+
     /** @return int|null movimientos de kardex devueltos, o null si la venta ya estaba anulada */
     public static function anular(int $cabId, string $motivo, ?int $usuarioId, string $etiqueta = 'ANULADO'): ?int
     {

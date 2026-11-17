@@ -160,7 +160,7 @@
                                     @if (!$anulada && $v->estadopago === 'CONTADO' && $turnoAbierto)
                                         <button type="button" @click="editarMedios({{ $v->IdCpe_cabecera }})" title="Editar medio de pago" class="btn-ico text-indigo-600"><i class="fas fa-money-bill-transfer"></i></button>
                                     @endif
-                                    @if (!$anulada && $v->tdocod === '13' && $turnoAbierto)
+                                    @if (!$anulada && $turnoAbierto && ($v->tdocod === '13' || \App\Support\AnulacionVenta::sinEnviarASunat($v)))
                                         <button type="button" @click="abrirAnular({{ $v->IdCpe_cabecera }}, @js($numero))" title="Anular" class="btn-ico text-red-600"><i class="fas fa-xmark"></i></button>
                                     @endif
                                     {{-- Más opciones: notas de crédito/débito y otro formato de impresión --}}
