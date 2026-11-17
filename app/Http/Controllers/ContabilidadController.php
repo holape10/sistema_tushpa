@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Support\Bitacora;
 use App\Support\Contabilidad\Contabilidad;
 use App\Support\Contabilidad\Pcge;
+use App\Support\Contabilidad\PlanImportar;
+use App\Support\Estudio;
 use App\Support\Excel;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -61,6 +63,41 @@ class ContabilidadController extends Controller
             'elementos' => ['1' => 'Activo disponible y exigible', '2' => 'Activo realizable', '3' => 'Activo inmovilizado', '4' => 'Pasivo',
                 '5' => 'Patrimonio', '6' => 'Gastos', '7' => 'Ingresos', '8' => 'Saldos intermediarios', '9' => 'Contabilidad analítica'],
         ]);
+    }
+
+    /**
+     * Importa el plan contable desde Excel (el que exporta el sistema contable en FoxPro: Pckey, Nomcta, Tipcta, Cargo,
+     * Abono). En un estudio contable se puede poner el mismo plan a todas sus empresas de una vez.
+     */
+    public function planImportar(Request $request)
+    {
+        $ruc = $this->ruc();
+        $request->validate(['archivo' => 'required|file|max:20480|extensions:xlsx,xls,csv', 'todas' => 'nullable|boolean'],
+            ['archivo.extensions' => 'Sube el plan contable en Excel (.xlsx, .xls o .csv).'], ['archivo' => 'archivo']);
+        $archivo = $request->file('archivo');
+        $leido = PlanImportar::leer($archivo->getRealPath(), strtolower($archivo->getClientOriginalExtension()));
+        if (! $leido['cuentas']) {
+            return back()->with('error', 'No encontré cuentas en ese Excel. '.implode(' ', array_slice($leido['errores'], 0, 3)));
+        }
+        $empresas = $request->boolean('todas') && Estudio::activo() && Auth::user()->esAdmin()
+            ? DB::table('estudio_empresas')->where(fn ($q) => $q->where('propia', true)->orWhere('activa', true))->pluck('IdEmpresa')->all()
+            : [$ruc];
+        $total = ['nuevas' => 0, 'actualizadas' => 0];
+        foreach ($empresas as $empresa) {
+            $r = PlanImportar::importar($empresa, $leido['cuentas']);
+            $total['nuevas'] += $r['nuevas'];
+            $total['actualizadas'] += $r['actualizadas'];
+        }
+        Bitacora::registrar('contabilidad.plan_importar', 'Importó el plan contable ('.count($leido['cuentas']).' cuentas) en '
+            .(count($empresas) > 1 ? count($empresas).' empresas' : 'la empresa '.$ruc), null, ['alerta' => true]);
+
+        $aviso = count($leido['cuentas']).' cuentas leídas'.(count($empresas) > 1 ? ' y puestas en '.count($empresas).' empresas' : '')
+            .": {$total['nuevas']} nuevas y {$total['actualizadas']} actualizadas.";
+        if ($leido['errores']) {
+            $aviso .= ' No se leyeron '.count($leido['errores']).' fila(s): '.implode(' ', array_slice($leido['errores'], 0, 3));
+        }
+
+        return redirect()->route('contabilidad.plan')->with('success', $aviso);
     }
 
     public function cuentaGuardar(Request $request)

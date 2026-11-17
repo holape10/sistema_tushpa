@@ -1177,6 +1177,7 @@ Route::middleware('auth')->group(function () {
 Route::middleware('auth')->prefix('contabilidad')->name('contabilidad.')->group(function () {
     Route::get('/plan', [ContabilidadController::class, 'plan'])->name('plan');
     Route::get('/plan/excel', [ContabilidadController::class, 'planExcel'])->name('plan.excel');
+    Route::post('/plan/importar', [ContabilidadController::class, 'planImportar'])->middleware('throttle:10,1')->name('plan.importar');
     Route::post('/plan', [ContabilidadController::class, 'cuentaGuardar'])->name('cuenta.guardar');
     Route::delete('/plan/{id}', [ContabilidadController::class, 'cuentaEliminar'])->whereNumber('id')->name('cuenta.eliminar');
     Route::post('/configuracion', [ContabilidadController::class, 'configGuardar'])->name('config');

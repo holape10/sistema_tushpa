@@ -19,7 +19,7 @@
         ];
     @endphp
 
-    <div x-data="{ tab: @js(request('tab', 'plan')), form: null }">
+    <div x-data="{ tab: @js(request('tab', 'plan')), form: null, importar: false, subiendo: false }">
         <div class="flex gap-2 mb-4">
             <button type="button" @click="tab = 'plan'" :class="tab === 'plan' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm">Plan de cuentas</button>
             <button type="button" @click="tab = 'config'" :class="tab === 'config' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm">Cuentas e impuestos</button>
@@ -34,9 +34,23 @@
                 </form>
                 <div class="flex gap-2">
                     <button type="button" @click="form = { cuenta: '', descripcion: '', estado: 'Activo', nueva: true }" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700"><i class="fas fa-plus"></i> Nueva subcuenta</button>
+                    <button type="button" @click="importar = !importar" class="px-4 py-2 rounded-xl bg-white ring-1 ring-indigo-300 text-indigo-700 text-sm font-semibold hover:bg-indigo-50"><i class="fas fa-file-import"></i> Importar Excel</button>
                     <a href="{{ route('contabilidad.plan.excel') }}" class="px-4 py-2 rounded-xl bg-green-700 text-white text-sm font-semibold"><i class="fas fa-file-excel"></i></a>
                 </div>
             </div>
+            {{-- Importar el plan desde Excel (el del sistema contable en FoxPro, o uno simple con Cuenta y Descripción) --}}
+            <form x-show="importar" x-cloak method="POST" action="{{ route('contabilidad.plan.importar') }}" enctype="multipart/form-data" @submit="subiendo = true"
+                  class="mb-3 rounded-2xl bg-white shadow-sm p-4 flex flex-wrap items-end gap-3">
+                @csrf
+                <label class="flex-1 min-w-[260px] text-sm font-semibold text-gray-700">Plan contable en Excel
+                    <input type="file" name="archivo" accept=".xlsx,.xls,.csv" required class="mt-1 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-semibold file:text-indigo-700">
+                    <span class="block text-xs font-normal text-gray-500 mt-1">El que exporta tu sistema contable en FoxPro (Pckey, Nomcta, Tipcta, Cargo, Abono) o uno con las columnas <b>Cuenta</b> y <b>Descripción</b>.
+                        Las cuentas que ya existen se actualizan; no se borra ninguna. Las tildes de FoxPro se corrigen solas.</span></label>
+                @if (\App\Support\Estudio::activo() && auth()->user()->esAdmin())
+                    <label class="flex items-center gap-2 text-sm font-semibold text-gray-700"><input type="checkbox" name="todas" value="1" class="rounded text-indigo-600"> Ponerlo a todas las empresas del estudio</label>
+                @endif
+                <button class="h-10 px-5 rounded-xl bg-indigo-600 text-white text-sm font-bold disabled:opacity-50" :disabled="subiendo" x-text="subiendo ? 'Importando…' : 'Importar'">Importar</button>
+            </form>
             <div class="flex flex-wrap gap-1.5 mb-3 text-xs">
                 <a href="{{ route('contabilidad.plan') }}" class="px-3 py-1 rounded-full font-semibold {{ !request('elemento') ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600' }}">Todos</a>
                 @foreach ($elementos as $e => $nom)

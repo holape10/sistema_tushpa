@@ -38,16 +38,32 @@ class CuentasCompras
         return $propios ?: self::CENTROS_PCGE;
     }
 
-    /** @return array<string, string> cuenta => nombre (el plan de la empresa manda sobre el PCGE) */
+    /**
+     * Solo las cuentas de nivel 3 (las de movimiento, las que se usan en los asientos), para la ayuda al escribir.
+     * Con el plan importado del sistema contable (Tipcta), las de Tipcta 3. Si no, las que no tienen subcuentas
+     * (el plan de la empresa manda sobre el PCGE).
+     *
+     * @return array<string, string> cuenta => nombre
+     */
     public static function plan(string $ruc): array
     {
-        $propias = Schema::hasTable('conta_plan')
-            ? DB::table('conta_plan')->where('IdEmpresa', $ruc)->where(fn ($q) => $q->whereNull('estado')->orWhere('estado', '!=', 'INACTIVO'))
-                ->pluck('descripcion', 'cuenta')->all()
-            : [];
+        $activas = fn () => DB::table('conta_plan')->where('IdEmpresa', $ruc)->where(fn ($q) => $q->whereNull('estado')->orWhere('estado', '!=', 'INACTIVO'));
+        if (Schema::hasTable('conta_plan') && Schema::hasColumn('conta_plan', 'tipcta') && $activas()->whereNotNull('tipcta')->exists()) {
+            return $activas()->where('tipcta', 3)->orderBy('cuenta')->pluck('descripcion', 'cuenta')->all();
+        }
+        $propias = Schema::hasTable('conta_plan') ? $activas()->pluck('descripcion', 'cuenta')->all() : [];
         $todas = $propias + Pcge::CUENTAS;
         ksort($todas, SORT_STRING);
+        $numeros = array_map('strval', array_keys($todas));
+        $res = [];
+        foreach ($numeros as $i => $cuenta) {
+            $siguiente = $numeros[$i + 1] ?? '';
+            // De título: la que tiene subcuentas (la siguiente empieza igual) o la de 2 dígitos (elemento)
+            if (strlen($cuenta) > 2 && ! ($siguiente !== '' && str_starts_with($siguiente, $cuenta))) {
+                $res[$cuenta] = $todas[$cuenta];
+            }
+        }
 
-        return $todas;
+        return $res;
     }
 }
