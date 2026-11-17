@@ -5,6 +5,8 @@ namespace Tests\Flujos;
 use App\Models\Central\Cliente;
 use App\Models\Empresa;
 use App\Models\User;
+use App\Support\Contabilidad\Dbf;
+use App\Support\Contabilidad\SireDbf;
 use App\Support\Estudio;
 use App\Support\EstudioImportar;
 use App\Support\Excel;
@@ -54,6 +56,28 @@ class EstudioContableTest extends FlujoTestCase
         DB::table('role_user')->insert(['role_id' => 4, 'user_IdUsuario' => $u->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
 
         return $u;
+    }
+
+    public function test_el_tipo_de_empresa_lleva_el_total_de_las_ventas_a_su_campo_del_tienfact(): void
+    {
+        $ruc = '20601312710';
+        $this->post(route('estudio.guardar'), ['ruc' => $ruc, 'razon_social' => 'CONSORCIO FLUVIAL', 'tipo_empresa' => 'SERVICIO'])->assertSessionHasNoErrors();
+        $this->assertSame('SERVICIO', Estudio::tipoEmpresa($ruc));
+        $this->get(route('estudio.index'))->assertOk()->assertSee('Tipo de empresa')->assertSee('Servicio');
+        $this->post(route('estudio.guardar'), ['ruc' => '20100047218', 'razon_social' => 'OTRA', 'tipo_empresa' => 'MINERIA'])->assertSessionHasErrors('tipo_empresa');
+
+        $venta = ['excluido' => false, 'tipo' => '01', 'serie' => 'F001', 'numero' => '7', 'ruc' => '20553510661', 'doc_tipo' => '6', 'nombre' => 'CLIENTE SA',
+            'fecha' => '2026-05-10', 'vence' => null, 'moneda' => 'PEN', 'tc' => 1.0, 'anulado' => false, 'ref' => null,
+            'ctacargo' => '1212', 'ctaabono' => '70111', 'ctacance' => null,
+            'montos' => ['exporta' => 0, 'gravada' => 100, 'igv' => 18, 'exonerada' => 0, 'inafecta' => 0, 'isc' => 0, 'icbper' => 0, 'otros' => 0, 'total' => 118]];
+        $campos = fn () => array_intersect_key(Dbf::leer(SireDbf::tienfact($ruc, '202605', [$venta]))[0], array_flip(['SERVI', 'MERCA', 'PROTE', 'OTR']));
+
+        $this->assertEquals(['SERVI' => 118.0, 'MERCA' => 0.0, 'PROTE' => 0.0, 'OTR' => 0.0], array_map('floatval', $campos()));
+        // Al editarla se cambia el tipo: el total pasa a su nuevo campo
+        $this->post(route('estudio.configurar', $ruc), ['tipo_empresa' => 'COMERCIO'])->assertSessionHasNoErrors();
+        $this->assertEquals(['SERVI' => 0.0, 'MERCA' => 118.0, 'PROTE' => 0.0, 'OTR' => 0.0], array_map('floatval', $campos()));
+        $this->post(route('estudio.configurar', $ruc), ['tipo_empresa' => 'OTROS']);
+        $this->assertEquals(118.0, (float) $campos()['OTR']);
     }
 
     public function test_una_empresa_registrada_por_error_se_elimina_escribiendo_su_ruc(): void

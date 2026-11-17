@@ -11,6 +11,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Estudio contable: en una misma base, el estudio y las empresas de sus clientes. Cada usuario trabaja en una empresa a
@@ -319,7 +320,19 @@ class Estudio
         self::anotarEnPanel();
     }
 
-    /** Guarda las credenciales (las claves solo si se escriben) y las cuentas por defecto de una empresa del estudio */
+    /** Tipos de empresa: en el tienfact.dbf el total de cada venta va al campo de su tipo */
+    public const TIPOS_EMPRESA = ['SERVICIO' => 'Servicio', 'COMERCIO' => 'Comercio', 'PRODUCCION' => 'Producción', 'OTROS' => 'Otros'];
+
+    /** Tipo de una empresa del estudio (SERVICIO, COMERCIO, PRODUCCION u OTROS), o null si no se puso o no es de un estudio */
+    public static function tipoEmpresa(string $ruc): ?string
+    {
+        static $hay = null;
+        $hay ??= Schema::hasTable('estudio_empresas') && Schema::hasColumn('estudio_empresas', 'tipo_empresa');
+
+        return $hay ? DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->value('tipo_empresa') : null;
+    }
+
+    /** Guarda las credenciales (las claves solo si se escriben), el tipo de empresa y las cuentas por defecto de una empresa del estudio */
     public static function configurar(string $ruc, array $d): void
     {
         $empresa = Empresa::findOrFail($ruc);
@@ -333,6 +346,10 @@ class Estudio
         }
         $empresa->save();
         cache()->forget('sire_token_'.$ruc);
+
+        if (array_key_exists('tipo_empresa', $d)) {
+            DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->update(['tipo_empresa' => $d['tipo_empresa'] ?: null, 'updated_at' => now()]);
+        }
 
         $cuentas = array_filter(array_intersect_key($d, array_flip(['cta_compras', 'cta_por_pagar', 'cta_por_cobrar', 'cta_ventas', 'cta_ventas_exo'])), fn ($v) => trim((string) $v) !== '');
         if ($cuentas) {

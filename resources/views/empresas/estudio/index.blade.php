@@ -121,7 +121,8 @@
                         <tr class="border-t border-slate-100 {{ $e->activa ? '' : 'opacity-50' }}">
                             <td class="px-4 py-3 font-mono font-bold text-indigo-700 whitespace-nowrap">{{ $e->IdEmpresa }}
                                 @unless ($e->activa)<span class="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-bold text-slate-600">INACTIVA</span>@endunless</td>
-                            <td class="px-4 py-3"><p class="font-semibold text-slate-800">{{ $e->NomEmpresa }}</p><p class="text-xs text-slate-400">{{ $e->DirEmpresa }}</p></td>
+                            <td class="px-4 py-3"><p class="font-semibold text-slate-800">{{ $e->NomEmpresa }}</p><p class="text-xs text-slate-400">{{ $e->DirEmpresa }}
+                                @if ($e->tipo_empresa)<span class="ml-1 rounded bg-indigo-50 px-1.5 text-[11px] font-bold text-indigo-700">{{ \App\Support\Estudio::TIPOS_EMPRESA[$e->tipo_empresa] ?? $e->tipo_empresa }}</span>@endif</p></td>
                             <td class="px-4 py-3 whitespace-nowrap">
                                 @if ($sireListo[$e->IdEmpresa] ?? false)
                                     <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">SIRE ✔</span>

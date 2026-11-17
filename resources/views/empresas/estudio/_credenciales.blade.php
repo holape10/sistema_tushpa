@@ -37,7 +37,14 @@
     <p class="text-xs text-slate-400">El ID y la CLAVE se generan en SUNAT SOL → "Credenciales de API SUNAT".</p>
 </fieldset>
 <fieldset class="grid grid-cols-2 gap-2 content-start">
-    <legend class="col-span-2 text-xs font-bold uppercase text-slate-500">3 · Cuentas por defecto (asientos y .dbf)</legend>
+    <legend class="col-span-2 text-xs font-bold uppercase text-slate-500">3 · Tipo de empresa y cuentas por defecto (asientos y .dbf)</legend>
+    <label class="col-span-2 text-xs font-semibold text-slate-500">Tipo de empresa <span class="font-normal text-slate-400">(en el tienfact.dbf el total va a SERVI, MERCA, PROTE u OTR)</span>
+        <select name="tipo_empresa" class="mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm">
+            <option value="">— Sin elegir —</option>
+            @foreach (\App\Support\Estudio::TIPOS_EMPRESA as $clave => $nombre)
+                <option value="{{ $clave }}" @selected($valor('tipo_empresa') === $clave)>{{ $nombre }}</option>
+            @endforeach
+        </select></label>
     @foreach (['cta_compras' => 'Compras (cargo)', 'cta_por_pagar' => 'Por pagar (abono)', 'cta_por_cobrar' => 'Por cobrar (cargo)', 'cta_ventas' => 'Ventas gravadas', 'cta_ventas_exo' => 'Ventas exoneradas'] as $campo => $texto)
         <label class="text-xs font-semibold text-slate-500">{{ $texto }}
             <input name="{{ $campo }}" value="{{ $e ? ($cta->{$campo} ?? '') : old($campo, '') }}" maxlength="12" inputmode="numeric" placeholder="{{ \App\Support\Concar::DEFECTO[$campo] }}" class="mt-0.5 w-full h-9 rounded-lg border-slate-300 text-sm font-mono"></label>

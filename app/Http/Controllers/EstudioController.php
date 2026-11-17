@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -42,7 +43,7 @@ class EstudioController extends Controller
             ->where('ee.propia', false)
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('e.NomEmpresa', 'like', "%{$q}%")->orWhere('ee.IdEmpresa', 'like', "{$q}%")))
             ->orderByDesc('ee.activa')->orderBy('e.NomEmpresa')
-            ->get(['ee.IdEmpresa', 'e.NomEmpresa', 'e.DirEmpresa', 'ee.activa', 'e.client_id', 'e.sire_usuario', 'e.sol_usuario']);
+            ->get(['ee.IdEmpresa', 'e.NomEmpresa', 'e.DirEmpresa', 'ee.activa', 'ee.tipo_empresa', 'e.client_id', 'e.sire_usuario', 'e.sol_usuario']);
         $accesos = DB::table('estudio_accesos')->get()->groupBy('IdEmpresa')->map(fn ($a) => $a->pluck('IdUsuario')->map(fn ($id) => (int) $id)->all());
         // Los usuarios del estudio que no son administradores (el administrador ya ve todas)
         $usuarios = User::query()->whereNotIn('IdUsuario', DB::table('role_user')->where('role_id', 2)->select('user_IdUsuario'))
@@ -91,6 +92,7 @@ class EstudioController extends Controller
         $cuenta = ['nullable', 'string', 'max:12', 'regex:/^[0-9A-Za-z]+$/'];
 
         return [
+            'tipo_empresa' => ['nullable', Rule::in(array_keys(Estudio::TIPOS_EMPRESA))],
             'client_id' => 'nullable|string|max:100', 'client_secret' => 'nullable|string|max:255',
             'sire_usuario' => ['nullable', 'string', 'max:30', 'regex:/^[A-Za-z0-9]+$/'], 'sire_clave' => 'nullable|string|max:100',
             'sol_usuario' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'], 'sol_clave' => 'nullable|string|max:60',
@@ -115,13 +117,14 @@ class EstudioController extends Controller
         $this->administrar();
         abort_unless(DB::table('estudio_empresas')->where('IdEmpresa', $ruc)->where('propia', false)->exists(), 404);
         $d = $request->validate(self::reglasConfiguracion(), ['regex' => 'Solo letras y números, sin espacios ni puntos.'], self::NOMBRES);
-        $antes = (Bitacora::foto('empresa', ['IdEmpresa' => $ruc]) ?? []) + (Bitacora::foto('concar_config', ['IdEmpresa' => $ruc]) ?? []);
+        $tipo = fn () => ['tipo_empresa' => Estudio::tipoEmpresa($ruc)];
+        $antes = (Bitacora::foto('empresa', ['IdEmpresa' => $ruc]) ?? []) + (Bitacora::foto('concar_config', ['IdEmpresa' => $ruc]) ?? []) + $tipo();
         $this->aplicarConfiguracion($ruc, $d);
         $etiquetas = ['client_id' => 'ID API SUNAT (SIRE)', 'client_secret' => 'Clave API SUNAT (SIRE)', 'sire_usuario' => 'Usuario SOL del SIRE',
             'sire_clave' => 'Clave SOL del SIRE', 'sol_usuario' => 'Usuario SOL principal', 'sol_clave' => 'Clave SOL principal'] + ['cta_compras' => 'Cuenta compras', 'cta_por_pagar' => 'Cuenta por pagar', 'cta_por_cobrar' => 'Cuenta por cobrar',
                 'cta_ventas' => 'Cuenta ventas', 'cta_ventas_exo' => 'Cuenta ventas exoneradas'];
         Bitacora::siCambio('config.estudio_empresa', "Cambió las credenciales o cuentas de la empresa {$ruc}", $antes,
-            (Bitacora::foto('empresa', ['IdEmpresa' => $ruc]) ?? []) + (Bitacora::foto('concar_config', ['IdEmpresa' => $ruc]) ?? []), $etiquetas,
+            (Bitacora::foto('empresa', ['IdEmpresa' => $ruc]) ?? []) + (Bitacora::foto('concar_config', ['IdEmpresa' => $ruc]) ?? []) + $tipo(), $etiquetas + ['tipo_empresa' => 'Tipo de empresa'],
             ['referencia' => ['empresa', $ruc], 'alerta' => true]);
 
         return back()->with('success', "Datos de la empresa {$ruc} guardados.");

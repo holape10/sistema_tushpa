@@ -3,6 +3,7 @@
 namespace App\Support\Contabilidad;
 
 use App\Support\Concar;
+use App\Support\Estudio;
 use App\Support\Sunat\Sire;
 use App\Support\Sunat\SireCuadre;
 use App\Support\VentasDetalle;
@@ -532,6 +533,9 @@ class SireDbf
         };
     }
 
+    /** Campo del tienfact.dbf donde va el total de la venta, según el tipo de empresa del estudio */
+    private const CAMPO_TIPO_EMPRESA = ['SERVICIO' => 'SERVI', 'COMERCIO' => 'MERCA', 'PRODUCCION' => 'PROTE', 'OTROS' => 'OTR'];
+
     /** Compras → almaingr.dbf, como el sistema contable registra lo que trae del SIRE */
     public static function almaingr(string $periodo, array $comprobantes): string
     {
@@ -573,6 +577,8 @@ class SireDbf
     public static function tienfact(string $ruc, string $periodo, array $comprobantes): string
     {
         $mes = (int) substr($periodo, 4, 2);
+        // Empresa de un estudio: el total de cada venta va también al campo de su tipo de empresa
+        $campoTipo = self::CAMPO_TIPO_EMPRESA[Estudio::tipoEmpresa($ruc) ?? ''] ?? null;
         $filas = [];
         foreach ($comprobantes as $c) {
             if ($c['excluido']) {
@@ -592,7 +598,7 @@ class SireDbf
                 'IBOLSAS' => $m['icbper'], 'OTROS' => $m['otros'] ?: null,
                 'FECHA_C' => $c['ref']['fecha'] ?? null, 'TIP_DOC_C' => $c['ref']['tipo'] ?? null, 'SER_DOC_C' => $c['ref']['serie'] ?? null,
                 'NUM_DOC_C' => isset($c['ref']) ? str_pad($c['ref']['numero'], 12, '0', STR_PAD_LEFT) : null,
-            ];
+            ] + ($campoTipo ? [$campoTipo => $m['total']] : []);
         }
 
         return self::plantilla('tienfact')->generar($filas);
