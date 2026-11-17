@@ -166,7 +166,7 @@ class Notas
                 throw new \RuntimeException("La serie {$serie} no es válida para notas de ".($letra === 'F' ? 'facturas' : 'boletas')
                     ." (debe empezar con {$letra}). Corrígela en Sucursales.");
             }
-            $numero = (int) $sucursal->$colNum + 1;
+            $numero = Comprobante::numeroLibre($sucursal, $tdocod, $serie, (int) $sucursal->$colNum + 1);
             $sucursal->$colNum = $numero;
             $sucursal->save();
 

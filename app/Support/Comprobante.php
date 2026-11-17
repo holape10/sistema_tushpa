@@ -62,6 +62,21 @@ class Comprobante
     }
 
     // Comprobante => columnas de serie y correlativo en empresa_negocios
+    /**
+     * El número que toca, o el siguiente libre si ya existe en esa serie (por ejemplo, un tramo de números de antes que
+     * quedó más adelante: 695-700 cuando la serie volvió a empezar en 1). Nunca se repite un número.
+     */
+    public static function numeroLibre(object $sucursal, string $tdocod, string $serie, int $numero): int
+    {
+        $ocupados = DB::table('cpe_cabecera')->where('IdEmpresa', $sucursal->IdEmpresa)->where('tdocod', $tdocod)->where('serdoc', $serie)
+            ->where('numdoc', '>=', $numero)->where('numdoc', '<', $numero + 1000)->pluck('numdoc')->map(fn ($n) => (int) $n)->flip();
+        while (isset($ocupados[$numero])) {
+            $numero++;
+        }
+
+        return $numero;
+    }
+
     private const SERIES = [
         '01' => ['FseEmpresa', 'FnuEmpresa'],
         '03' => ['BseEmpresa', 'BnuEmpresa'],
@@ -119,8 +134,8 @@ class Comprobante
             // Venta hecha sin internet: ya salió impresa con el número de la serie propia de esa caja
             [$serie, $numero] = CajaSinInternet::validarNumero($user, $tdocod, (string) $datos['serie_offline']['serie'], (int) $datos['serie_offline']['numero']);
         } else {
-            $numero = $sucursal->$colNum + 1;
             $serie = $sucursal->$colSerie;
+            $numero = self::numeroLibre($sucursal, $tdocod, (string) $serie, (int) $sucursal->$colNum + 1);
             $sucursal->$colNum = $numero;
             $sucursal->save();
         }
@@ -259,8 +274,8 @@ class Comprobante
             }
             $sucursal->$colNumAnt = (int) $cab->numdoc - 1;   // su número queda libre para la próxima venta
             [$colSerie, $colNum] = self::SERIES[$tdocod];
-            $numero = $sucursal->$colNum + 1;
             $serie = $sucursal->$colSerie;
+            $numero = self::numeroLibre($sucursal, $tdocod, (string) $serie, (int) $sucursal->$colNum + 1);
             $sucursal->$colNum = $numero;
             $sucursal->save();
         }

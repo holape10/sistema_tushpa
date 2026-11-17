@@ -81,12 +81,36 @@ class LogoSucursalTest extends FlujoTestCase
         DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update(['est_sunat' => 'PENDIENTE', 'enviado' => 0]);
 
         $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => $cab->numdoc - 1]))
-            ->assertSessionHasErrors(['BnuEmpresa' => "Boleta {$cab->serdoc}: ya se emitió hasta el número {$cab->numdoc}; el correlativo no puede ser menor (se repetirían números). El {$cab->serdoc}-{$cab->numdoc} aún no se envía a SUNAT: si su número salió por error, no lo envíes y pide a soporte que lo corrija."]);
+            ->assertSessionHasErrors(['BnuEmpresa' => "Boleta {$cab->serdoc}: el {$cab->serdoc}-{$cab->numdoc} ya existe; el correlativo no puede ser menor (se repetirían números). Lo último emitido es el {$cab->numdoc}. El {$cab->serdoc}-{$cab->numdoc} aún no se envía a SUNAT: si su número salió por error, no lo envíes y pide a soporte que lo corrija."]);
 
         DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->update(['est_sunat' => 'ACEPTADO', 'enviado' => 1]);
         $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => $cab->numdoc - 1]))
-            ->assertSessionHasErrors(['BnuEmpresa' => "Boleta {$cab->serdoc}: ya se emitió hasta el número {$cab->numdoc}; el correlativo no puede ser menor (se repetirían números)."]);
+            ->assertSessionHasErrors(['BnuEmpresa' => "Boleta {$cab->serdoc}: el {$cab->serdoc}-{$cab->numdoc} ya existe; el correlativo no puede ser menor (se repetirían números). Lo último emitido es el {$cab->numdoc}."]);
         $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => $cab->numdoc]))->assertSessionHasNoErrors();
+    }
+
+    public function test_con_un_tramo_antiguo_mas_adelante_el_correlativo_baja_y_al_emitir_se_salta_lo_que_ya_existe(): void
+    {
+        // La serie volvió a empezar: hay boletas nuevas (1, 2…) y un tramo de antes más adelante (695-700)
+        $juane = $this->producto('JUANE', 15, 50);
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[$juane, 1]], '03'), 'PV');
+        $cab = (array) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first();
+        foreach (range(695, 700) as $n) {
+            DB::table('cpe_cabecera')->insert(array_merge(array_diff_key($cab, ['IdCpe_cabecera' => 0]), ['numdoc' => $n, 'ccafem' => '2026-06-25', 'est_sunat' => 'ACEPTADO', 'enviado' => 1]));
+        }
+        $actual = (int) $cab['numdoc'];
+
+        // Se puede dejar en el último del tramo nuevo (los 100 siguientes están libres)…
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => $actual]))->assertSessionHasNoErrors();
+        // …pero no tan cerca del tramo antiguo
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => 650]))
+            ->assertSessionHasErrors(['BnuEmpresa' => "Boleta {$cab['serdoc']}: el {$cab['serdoc']}-695 ya existe; el correlativo no puede ser menor (se repetirían números). Lo último emitido es el 700."]);
+
+        // Al llegar al tramo antiguo, la venta salta al siguiente número libre (nunca repite)
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['BnuEmpresa' => 694]);
+        $nueva = VentaDirecta::registrar($this->usuario, $this->venta([[$juane, 1]], '03'), 'PV');
+        $this->assertSame(701, (int) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $nueva)->value('numdoc'));
+        $this->assertSame(701, (int) DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->value('BnuEmpresa'));
     }
 
     public function test_las_pantallas_de_empresa_y_sucursal_abren_dentro_del_menu(): void
@@ -103,7 +127,7 @@ class LogoSucursalTest extends FlujoTestCase
         VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('JUANE', 15, 10), 1]], '03'), 'PV');
 
         $this->get(route('sucursales.edit', $this->sucursal))->assertOk()->assertSee('Serie nueva: pon 0');
-        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BseEmpresa' => 'B001', 'BnuEmpresa' => 0]))
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BseEmpresa' => 'B001', 'BnuEmpresa' => 54300]))
             ->assertSessionHasErrors('BnuEmpresa');
         $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BseEmpresa' => 'B002', 'BnuEmpresa' => 0]))->assertSessionHasNoErrors();
 
