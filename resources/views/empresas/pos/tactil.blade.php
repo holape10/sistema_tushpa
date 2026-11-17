@@ -22,8 +22,9 @@
     <script>
         window.PVT = {
             usuario: @json(auth()->user()->IdUsuario),
-            // Bajar el precio de lista (Acciones › cambiar_precio); subirlo siempre se puede. El servidor también lo valida
+            // Bajar y subir el precio de lista (Acciones › cambiar_precio y subir_precio). El servidor también lo valida
             puedePrecio: @json(auth()->user()->puede('cambiar_precio')),
+            puedeSubir: @json(auth()->user()->puede('subir_precio')),
             csrf: @json(csrf_token()),
             categorias: @json($categorias),
             productos: @json($productos),

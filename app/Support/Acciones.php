@@ -15,7 +15,8 @@ class Acciones
     public const LISTA = [
         'anular_ventas' => ['Anular ventas', 'Anular notas de venta, pedir a SUNAT la baja de boletas y facturas y descartar rechazados.'],
         'notas_credito' => ['Emitir notas de crédito y débito', 'Devoluciones y correcciones de boletas y facturas ya emitidas.'],
-        'cambiar_precio' => ['Bajar el precio de lista', 'Cobrar más barato que el precio de lista al vender. Subir el precio siempre se puede.'],
+        'cambiar_precio' => ['Bajar el precio de lista', 'Cobrar más barato que el precio de lista al vender.'],
+        'subir_precio' => ['Subir el precio de lista', 'Cobrar más caro que el precio de lista al vender (por ejemplo, un plato con algo extra).'],
         'medio_pago' => ['Cambiar el medio de pago', 'Corregir con qué pagó el cliente una venta del turno abierto.'],
         'compras_editar' => ['Editar y anular compras', 'Cambian el stock y el costo de los productos.'],
         'caja_anular' => ['Anular movimientos de caja, cobros y pagos', 'Ingresos y salidas de efectivo, cobros a clientes y pagos a proveedores.'],

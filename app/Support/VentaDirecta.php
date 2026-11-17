@@ -119,10 +119,14 @@ class VentaDirecta
                 $datos['paga'] = 0;
             }
             $lineas = self::juntarTextos(self::lineas($user, collect($datos['items'])));
-            // Cobrar MÁS BARATO que el de lista: solo con permiso; subirlo siempre se puede (la proforma y la clínica ya traen su precio)
+            // Cobrar más barato o más caro que el de lista: cada uno con su permiso (la proforma y la clínica ya traen su precio)
             $distintos = self::preciosDistintos($lineas);
-            if ($distintos && ! $proformaId && ! $pedidoClinica && ! $user->puede('cambiar_precio')) {
-                throw new \RuntimeException(Acciones::mensaje('cambiar_precio')." {$distintos[0][0]} se vende a S/ {$distintos[0][1]}.");
+            if (! $proformaId && ! $pedidoClinica) {
+                foreach (['cambiar_precio' => $distintos, 'subir_precio' => null] as $accion => $lista) {
+                    if (! $user->puede($accion) && ($lista ??= self::preciosDistintos($lineas, true))) {
+                        throw new \RuntimeException(Acciones::mensaje($accion)." {$lista[0][0]} se vende a S/ {$lista[0][1]}.");
+                    }
+                }
             }
             if ($recargos) {
                 [$lineas, $datos] = self::aplicarRecargos($user, $lineas, $datos);
@@ -157,7 +161,7 @@ class VentaDirecta
      *
      * @return array<int, array{0: string, 1: string, 2: string}>
      */
-    public static function preciosDistintos(array $lineas): array
+    public static function preciosDistintos(array $lineas, bool $mayores = false): array
     {
         try {
             $conProducto = array_values(array_filter($lineas, fn ($l) => ! empty($l['IdProducto']) && empty($l['cortesia']) && ! isset($l['importe'])));
@@ -175,7 +179,8 @@ class VentaDirecta
                 // El precio 2 o 3 del producto también es de lista (la caja lo elige)
                 $alternos = $pres ? [] : array_column(CatalogoVenta::preciosExtra($productos[$l['IdProducto']] ?? (object) []), 'precio');
                 $esAlterno = collect($alternos)->contains(fn ($a) => abs((float) $l['precio'] - $a) < 0.01);
-                if ($lista > 0 && ! $esAlterno && $lista - (float) $l['precio'] >= 0.01) {
+                $diferencia = $mayores ? (float) $l['precio'] - $lista : $lista - (float) $l['precio'];
+                if ($lista > 0 && ! $esAlterno && $diferencia >= 0.01) {
                     $distintos[] = [$l['descripcion'], number_format($lista, 2, '.', ''), number_format((float) $l['precio'], 2, '.', '')];
                 }
             }

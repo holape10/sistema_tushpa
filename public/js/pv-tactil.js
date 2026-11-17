@@ -152,8 +152,9 @@ document.addEventListener('alpine:init', () => {
             const cant = r3(parseFloat(r.cant)), precio = r2(parseFloat(r.precio));
             if (!(cant > 0)) { this.aviso('La cantidad debe ser mayor a 0.', 'error'); return; }
             if (!(precio > 0)) { this.aviso('El precio debe ser mayor a 0.', 'error'); return; }
-            // Subir el precio siempre se puede; bajarlo, solo con permiso (Bajar el precio de lista)
+            // Bajarlo o subirlo, cada uno con su permiso (Bajar / Subir el precio de lista)
             if (precio < r.base - 0.005 && !CFG.puedePrecio) { this.aviso('No tienes permiso para bajar el precio: el de lista es ' + this.soles(r.base) + '.', 'error'); return; }
+            if (precio > r.base + 0.005 && !CFG.puedeSubir) { this.aviso('No tienes permiso para subir el precio: el de lista es ' + this.soles(r.base) + '.', 'error'); return; }
             const presId = r.pres?.id ?? null;
             let it = this.carrito.find(x => x.id === r.p.id && (x.presentacion || null) === presId && !x.desc50 && x.precio === precio && !x.nota);
             if (it) {
@@ -205,6 +206,7 @@ document.addEventListener('alpine:init', () => {
             const it = this.carrito[this.teclado.i];
             const lista = it.lista ?? it.precioBase;
             if (!CFG.puedePrecio && v < lista - 0.005) { this.aviso('No tienes permiso para bajar el precio: el de lista es ' + this.soles(lista) + '.', 'error'); return; }
+            if (!CFG.puedeSubir && v > lista + 0.005) { this.aviso('No tienes permiso para subir el precio: el de lista es ' + this.soles(lista) + '.', 'error'); return; }
             it.precio = v; it.precioBase = v;
             this.teclado = null;
         },

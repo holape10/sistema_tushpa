@@ -61,10 +61,34 @@ class AccionesTest extends FlujoTestCase
 
         $this->assertGreaterThan(0, VentaDirecta::registrar($cajero, $this->venta([[$plato, 1]], '13'), 'PV'));
         // En la pantalla el precio se puede tocar (para subirlo), pero sin permiso para bajarlo
-        $this->actingAs($cajero)->get(route('pv.index'))->assertOk()->assertSee('editarPrecio: true', false)->assertSee('puedeBajar: false', false);
-        // Subir el precio siempre se puede (por ejemplo, un plato con algo extra)
+        $this->actingAs($cajero)->get(route('pv.index'))->assertOk()->assertSee('editarPrecio: true', false)->assertSee('puedeBajar: false', false)->assertSee('puedeSubir: true', false);
+        // Subir el precio se puede mientras no le quiten «Subir el precio de lista» (por ejemplo, un plato con algo extra)
         $mas = VentaDirecta::registrar($cajero, $this->venta([[$plato, 1, 18]], '13'), 'PV');
         $this->assertSame(18.0, (float) DB::table('cpe_detalle')->where('IdCpe_cabecera', $mas)->value('cdepuni'));
+    }
+
+    public function test_sin_ninguno_de_los_dos_permisos_el_precio_no_se_cambia(): void
+    {
+        $cajero = $this->cajero(['cambiar_precio', 'subir_precio']);
+        $plato = $this->producto('JUANE', 15, 10);
+
+        foreach ([10 => 'bajar', 18 => 'subir'] as $precio => $verbo) {
+            try {
+                VentaDirecta::registrar($cajero, $this->venta([[$plato, 1, $precio]], '13'), 'PV');
+                $this->fail("Pudo {$verbo} el precio sin permiso.");
+            } catch (\RuntimeException $e) {
+                $this->assertSame("No tienes permiso para {$verbo} el precio de lista. Pídeselo al administrador. JUANE se vende a S/ 15.00.", $e->getMessage());
+            }
+        }
+        // Al precio de lista sí vende, y en la pantalla el precio queda fijo
+        $this->assertGreaterThan(0, VentaDirecta::registrar($cajero, $this->venta([[$plato, 1]], '13'), 'PV'));
+        $this->actingAs($cajero)->get(route('pv.index'))->assertOk()->assertSee('editarPrecio: false', false);
+
+        // Solo sin «Subir»: bajar sí puede, subir no
+        $soloBaja = $this->cajero(['subir_precio']);
+        $this->assertGreaterThan(0, VentaDirecta::registrar($soloBaja, $this->venta([[$plato, 1, 12]], '13'), 'PV'));
+        $this->expectExceptionMessage('No tienes permiso para subir el precio de lista.');
+        VentaDirecta::registrar($soloBaja, $this->venta([[$plato, 1, 20]], '13'), 'PV');
     }
 
     public function test_el_administrador_siempre_puede_aunque_tenga_algo_apagado(): void
@@ -101,7 +125,7 @@ class AccionesTest extends FlujoTestCase
         $this->assertFalse($cajero->puede('cambiar_precio'));
         $this->assertTrue($cajero->puede('notas_credito'));
         $cambio = json_decode(DB::table('bitacora')->where('accion', 'usuario.editar')->value('cambios'), true)['acciones'];
-        $this->assertSame(['Anular ventas', 'Bajar el precio de lista'], $cambio['quito']);
+        $this->assertSame(['Anular ventas', 'Bajar el precio de lista', 'Subir el precio de lista'], $cambio['quito']);
 
         // Si se le pone de administrador, ya no le queda nada bloqueado
         $this->put(route('usuarios.update', $cajero->IdUsuario), ['role_id' => '2'] + $datos);

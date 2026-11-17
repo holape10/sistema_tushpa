@@ -420,11 +420,18 @@ document.addEventListener('alpine:init', () => {
             return p.presentacion ? ((p.presentaciones || []).find(x => x.id === p.presentacion) || null) : null;
         },
 
-        /** Sin el permiso «Bajar el precio de lista» el precio se puede subir, pero no bajar */
+        /** Bajar o subir el precio de lista: cada uno con su permiso («Bajar el precio de lista», «Subir el precio de lista») */
         bajaSinPermiso(precio, lista) {
-            if (CFG.puedeBajar || !(Number(lista) > 0) || Number(precio) >= Number(lista) - 0.005) return false;
-            this.aviso('No tienes permiso para bajar el precio: el de lista es ' + this.soles(lista) + '. Subirlo sí puedes.', 'error');
-            return true;
+            if (!(Number(lista) > 0)) return false;
+            if (!CFG.puedeBajar && Number(precio) < Number(lista) - 0.005) {
+                this.aviso('No tienes permiso para bajar el precio: el de lista es ' + this.soles(lista) + '.', 'error');
+                return true;
+            }
+            if (!CFG.puedeSubir && Number(precio) > Number(lista) + 0.005) {
+                this.aviso('No tienes permiso para subir el precio: el de lista es ' + this.soles(lista) + '.', 'error');
+                return true;
+            }
+            return false;
         },
 
         // ---------- Modal: cantidad y precio (subir el precio, todos; bajarlo, con permiso) ----------
