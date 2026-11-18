@@ -560,6 +560,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/impresoras/cola/{id}/reintentar', [ImpresionController::class, 'reintentar'])->whereNumber('id')->name('impresion.reintentar');
     Route::post('/impresoras/{id}', [ImpresionController::class, 'guardarImpresora'])->whereNumber('id')->name('impresion.actualizar');
     Route::post('/impresoras/{id}/prueba', [ImpresionController::class, 'prueba'])->whereNumber('id')->name('impresion.prueba');
+    Route::get('/impresoras/{id}/diseno', [ImpresionController::class, 'diseno'])->whereNumber('id')->name('impresion.diseno');
+    Route::post('/impresoras/{id}/diseno', [ImpresionController::class, 'guardarDiseno'])->whereNumber('id')->name('impresion.diseno.guardar');
+    Route::post('/impresoras/{id}/vista', [ImpresionController::class, 'vista'])->whereNumber('id')->middleware('throttle:120,1')->name('impresion.vista');
     Route::delete('/impresoras/{id}', [ImpresionController::class, 'eliminarImpresora'])->whereNumber('id')->name('impresion.eliminar');
 
     // Panel de ventas

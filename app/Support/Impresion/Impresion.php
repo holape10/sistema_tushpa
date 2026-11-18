@@ -314,6 +314,23 @@ class Impresion
 
     public static function ticketComprobante(object $cab, object $imp, int $copias = 1): string
     {
+        return self::conCopias($imp, self::lienzoComprobante($cab, $imp)->bytes(), $copias, true);
+    }
+
+    /**
+     * Cómo se vería el ticket del comprobante con el diseño y el papel de $imp, línea por línea (vista previa en pantalla:
+     * es exactamente lo mismo que se manda a la ticketera).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function vistaPrevia(object $cab, object $imp): array
+    {
+        return self::lienzoComprobante($cab, $imp)->vista();
+    }
+
+    /** El ticket del comprobante armado con el diseño de $imp (sin copias ni cajón) */
+    private static function lienzoComprobante(object $cab, object $imp): Escpos
+    {
         $idCpe = (int) $cab->IdCpe_cabecera;
         // Con líneas de texto (servicio en varias líneas) se imprime todo; a SUNAT fue solo cdedes
         $detalle = DB::table('cpe_detalle')->where('IdCpe_cabecera', $idCpe)->get()
@@ -327,12 +344,13 @@ class Impresion
             ->first(['m.mes_nom', 'pi.pis_nom', 'u.apeusu as mozo']) : null;
         $numero = $cab->serdoc.'-'.str_pad($cab->numdoc, 8, '0', STR_PAD_LEFT);
 
+        if (($imp->diseno ?? '') === 'PERSONALIZADO') {
+            return self::ticketPersonalizado($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido);
+        }
         if (($imp->diseno ?? 'CLASICO') !== 'MODERNO') {
-            $p = ($imp->diseno ?? '') === 'COMPACTO'
+            return ($imp->diseno ?? '') === 'COMPACTO'
                 ? self::ticketCompacto($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido)
                 : self::ticketClasico($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido, ($imp->diseno ?? '') === 'EN_LINEA');
-
-            return self::conCopias($imp, $p->bytes(), $copias, true);
         }
 
         $p = new Escpos((int) $imp->columnas);
@@ -424,9 +442,162 @@ class Impresion
         }
         $p->texto('¡Gracias por su preferencia!');
         self::firma($p);
-        $p->avanzar(3)->cortar();
 
-        return self::conCopias($imp, $p->bytes(), $copias, true);
+        return $p->avanzar(3)->cortar();
+    }
+
+    /**
+     * Diseño "Personalizado": las partes que eligió la empresa, en su orden y con su formato (PlantillaTicket).
+     */
+    private static function ticketPersonalizado(object $cab, object $imp, $detalle, $medios, string $tdodes, ?object $pedido): Escpos
+    {
+        $p = new Escpos((int) $imp->columnas);
+        $ancho = $p->columnas();
+        $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $cab->id_empresa_negocio)->first();
+        $empresa = DB::table('empresa')->where('IdEmpresa', $negocio->IdEmpresa)->first();
+        $soles = fn ($n) => number_format((float) $n, 2);
+        $electronico = in_array($cab->tdocod, ['01', '03', '07', '08'], true);
+
+        foreach (PlantillaTicket::leer($imp->plantilla ?? null) as $parte) {
+            if (! $parte['visible']) {
+                continue;
+            }
+            // Formato de la parte: alineación, negrita y tamaño (la letra grande ocupa el doble: entran la mitad de letras)
+            [$an, $al] = ['normal' => [1, 1], 'alto' => [1, 2], 'grande' => [2, 2]][$parte['tamano']];
+            $p->alinear($parte['alinear'])->negrita($parte['negrita'])->tamano($an, $al);
+            $parrafo = fn (string $t) => trim($t) === '' ? null : $p->parrafo($t, intdiv($ancho, $an));
+
+            switch ($parte['tipo']) {
+                case 'logo':
+                    $logo = $negocio->logo_suc ?: $empresa->LogEmpresa;
+                    $p->logo($logo ? public_path($logo) : null);
+                    break;
+                case 'nombre_comercial':
+                    $parrafo((string) ($negocio->nombre_comercial ?: $empresa->NomEmpresa));
+                    break;
+                case 'razon_social':
+                    $parrafo((string) $empresa->NomEmpresa);
+                    break;
+                case 'ruc':
+                    $parrafo('RUC: '.$empresa->IdEmpresa);
+                    break;
+                case 'direccion':
+                    $parrafo((string) $negocio->direccion);
+                    if ($negocio->distrito && ! str_contains(mb_strtoupper((string) $negocio->direccion), mb_strtoupper($negocio->distrito))) {
+                        $parrafo(trim($negocio->departamento.'-'.$negocio->provincia.'-'.$negocio->distrito, '-'));
+                    }
+                    break;
+                case 'telefono':
+                    if ($negocio->telefono) {
+                        $parrafo('Telf: '.$negocio->telefono);
+                    }
+                    break;
+                case 'documento':
+                    $parrafo(mb_strtoupper($tdodes));
+                    $parrafo($cab->serdoc.'-'.str_pad((string) $cab->numdoc, 8, '0', STR_PAD_LEFT));
+                    break;
+                case 'fecha':
+                    $parrafo('Fecha: '.self::fechaEmision($cab)->format('d/m/Y H:i'));
+                    break;
+                case 'cliente':
+                    $parrafo(($cab->tdicod === '6' ? 'RUC' : 'DNI').': '.$cab->ccandi);
+                    $parrafo('Cliente: '.$cab->ccanom);
+                    if ($cab->direccion && $cab->direccion !== '--') {
+                        $parrafo('Dirección: '.$cab->direccion);
+                    }
+                    break;
+                case 'atencion':
+                    if ($pedido?->mes_nom) {
+                        $parrafo('Mesa: '.Mesa::etiqueta($pedido->pis_nom, $pedido->mes_nom));
+                    }
+                    foreach (self::atencion($cab) as [$etiqueta, $nombre]) {
+                        $parrafo($etiqueta.': '.$nombre);
+                    }
+                    break;
+                case 'condicion':
+                    $parrafo('Condición: '.$cab->estadopago.($cab->estadopago === 'CREDITO' && $cab->ccafve ? ' (vence '.Carbon::parse($cab->ccafve)->format('d/m/Y').')' : ''));
+                    self::cuotasTicket($p, $cab);
+                    break;
+                case 'observacion':
+                    if (trim((string) $cab->ccaobs) !== '') {
+                        $parrafo('Obs.: '.trim($cab->ccaobs));
+                    }
+                    break;
+                case 'productos':
+                    $p->tamano()->alinear('izq');
+                    if ($parte['formato'] === 'en_linea') {
+                        self::productosEnLinea($p, $cab, $detalle);
+                    } elseif ($parte['formato'] === 'simple') {
+                        $p->linea();
+                        $filas = $cab->consumo ? [(object) ['cdedes' => 'POR CONSUMO', 'cdecan' => 1, 'cdepuni' => $cab->ccaitv, 'cdevve' => $cab->ccaitv, 'series' => null]] : $detalle;
+                        foreach ($filas as $d) {
+                            $l = Descuentos::linea($d);
+                            $p->item($d->cdedes.($l->cortesia ? ' (CORTESIA)' : ''), (float) $d->cdecan, $l->precio, $l->total);
+                        }
+                        $p->linea();
+                    } else {
+                        self::productosClasico($p, $cab, $detalle);
+                    }
+                    break;
+                case 'totales':
+                    self::lineasDescuento($p, $cab, ' S/');
+                    foreach (['OP. GRAVADA' => $cab->ccatvg, 'OP. EXONERADA' => $cab->ccatexo, 'OP. INAFECTA' => $cab->ccatinaf ?? 0, 'IGV' => $cab->ccaigv, 'ICBPER' => $cab->icbper ?? 0] as $nombre => $monto) {
+                        if ((float) $monto > 0) {
+                            $p->dosColumnas($nombre.' S/', $soles($monto));
+                        }
+                    }
+                    break;
+                case 'total':
+                    $total = $soles($cab->ccaitv);
+                    $p->texto(mb_str_pad('TOTAL S/', max(1, intdiv($ancho, $an) - mb_strlen($total))).$total);
+                    break;
+                case 'pagos':
+                    $p->tamano();
+                    foreach ($medios as $m) {
+                        $p->dosColumnas(($m->nom_med_pag ?? 'PAGO').' S/', $soles($m->monto));
+                    }
+                    if ($cab->paga > 0) {
+                        $p->dosColumnas('PAGA CON S/', $soles($cab->paga));
+                    }
+                    if ($cab->vuelto > 0) {
+                        $p->dosColumnas('VUELTO S/', $soles($cab->vuelto));
+                    }
+                    self::extrasDelCobro($p, $cab);
+                    break;
+                case 'son':
+                    $parrafo('Son: '.preg_replace('/^SON\s+/i', '', NumeroLetras::convertir((float) $cab->ccaitv)));
+                    break;
+                case 'puntos':
+                    if ($fid = Fidelizacion::delComprobante((int) $cab->IdCpe_cabecera)) {
+                        $p->tamano()->dosColumnas('Puntos ganados', '+'.$fid['ganados'])->dosColumnas('Te quedan', (string) $fid['saldo']);
+                    }
+                    break;
+                case 'qr':
+                    if ($electronico) {
+                        $chico = $p->columnasFuenteB();
+                        $p->tamano()->fuente('b')->parrafo('REPRESENTACION IMPRESA DE LA '.mb_strtoupper($tdodes), $chico)->fuente()
+                            ->qr(CodigoQr::texto($cab), 4)->avanzar()->fuente('b')->parrafo('Consulta tu comprobante en: '.ConsultaCpe::direccion(), $chico)->fuente();
+                    }
+                    break;
+                case 'amazonia':
+                    if (self::leyendaAmazonia($cab)) {
+                        $p->tamano()->fuente('b')->parrafo('BIENES TRANSFERIDOS EN LA AMAZONIA PARA SER CONSUMIDOS EN LA MISMA. SERVICIOS PRESTADOS EN LA AMAZONIA', $p->columnasFuenteB())->fuente();
+                    }
+                    break;
+                case 'texto':
+                    foreach (preg_split('/\R/u', (string) ($parte['texto'] ?? '')) as $linea) {
+                        $linea === '' ? $p->texto() : $parrafo($linea);
+                    }
+                    break;
+                case 'separador':
+                    $parte['caracter'] === ' ' ? $p->texto() : $p->texto(str_repeat($parte['caracter'], intdiv($ancho, $an)));
+                    break;
+            }
+            $p->tamano()->negrita(false)->alinear('izq');
+        }
+        self::firma($p);
+
+        return $p->avanzar(3)->cortar();
     }
 
     /**

@@ -137,10 +137,11 @@
                             <td class="px-4 py-2 font-semibold text-gray-700">{{ $i->descripcion }} @if ($i->abrir_cajon)<span class="text-xs text-gray-400">(abre cajón)</span>@endif</td>
                             <td class="px-4 py-2">{{ ['RED' => 'Red (IP)', 'WINDOWS' => 'A4 / PDF (Windows)'][$i->tip_conex_imp] ?? 'Compartida Windows' }}</td>
                             <td class="px-4 py-2 font-mono text-xs">{{ $i->ruta }}</td>
-                            <td class="px-4 py-2 text-center">@if ($i->tip_conex_imp === 'WINDOWS') A4 @else {{ $i->columnas == 32 ? '58 mm' : '80 mm' }} <span class="text-xs text-gray-400">({{ $i->columnas }} car.)</span><span class="block text-[11px] text-gray-400">{{ ['CLASICO' => 'Diseño clásico', 'COMPACTO' => 'Diseño compacto', 'EN_LINEA' => 'Diseño en una línea', 'MODERNO' => 'Diseño moderno'][$i->diseno ?? 'CLASICO'] ?? '' }}</span> @endif</td>
+                            <td class="px-4 py-2 text-center">@if ($i->tip_conex_imp === 'WINDOWS') A4 @else {{ $i->columnas == 32 ? '58 mm' : '80 mm' }} <span class="text-xs text-gray-400">({{ $i->columnas }} car.)</span><span class="block text-[11px] text-gray-400">{{ ['CLASICO' => 'Diseño clásico', 'COMPACTO' => 'Diseño compacto', 'EN_LINEA' => 'Diseño en una línea', 'MODERNO' => 'Diseño moderno', 'PERSONALIZADO' => 'Diseño personalizado'][$i->diseno ?? 'CLASICO'] ?? '' }}</span> @endif</td>
                             <td class="px-4 py-2 text-center">{{ $i->predeterminado ? '✅' : '' }}</td>
                             <td class="px-4 py-2 text-center">{{ $i->activo ? 'Activa' : 'Inactiva' }}</td>
                             <td class="px-4 py-2 text-right whitespace-nowrap space-x-2">
+                                @if ($i->tip_conex_imp !== 'WINDOWS')<a href="{{ route('impresion.diseno', $i->Id) }}" class="text-emerald-700 font-semibold hover:underline"><i class="fas fa-eye"></i> Diseño y vista previa</a>@endif
                                 <form method="POST" action="{{ route('impresion.prueba', $i->Id) }}" class="inline">@csrf<button class="text-indigo-600 hover:underline"><i class="fas fa-print"></i> Prueba</button></form>
                                 <button type="button" @click='editar(@json($i))' class="text-indigo-600 hover:underline">Editar</button>
                                 <form method="POST" action="{{ route('impresion.eliminar', $i->Id) }}" class="inline" onsubmit="return confirm('¿Eliminar la impresora {{ $i->descripcion }}?\n\nLas categorías, cajas y usuarios que la usan quedarán SIN impresora (sus comandas dejarán de salir) hasta que les asignes otra. Para cambiar su nombre o ruta usa Editar.')">
@@ -359,6 +360,7 @@
                         <option value="COMPACTO">Pequeño y compacto: ahorra papel (fecha y condición en una línea, TOTAL grande)</option>
                         <option value="EN_LINEA">En una línea: Cant. / U.M. / Descrip. / P.U. / Total en la misma fila</option>
                         <option value="MODERNO">Moderno: "1 x 9.00" debajo de cada producto</option>
+                        <option value="PERSONALIZADO">Personalizado: lo armas tú (en «Diseño y vista previa»)</option>
                     </select></label>
                 <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="predeterminado" value="1" x-model="form.predeterminado" class="rounded"> Impresora de caja por defecto</label>
                 <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="abrir_cajon" value="1" x-model="form.abrir_cajon" class="rounded"> Abrir el cajón de dinero al imprimir comprobantes</label>

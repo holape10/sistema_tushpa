@@ -15,6 +15,16 @@ class Escpos
 
     private string $buffer = '';
 
+    /**
+     * Lo mismo que va a la impresora, línea por línea y con su formato, para la vista previa en pantalla.
+     *
+     * @var list<array{tipo: string, texto?: string, alinear?: string, negrita?: bool, ancho?: int, alto?: int, fuente?: string, ruta?: ?string}>
+     */
+    private array $vista = [];
+
+    /** @var array{alinear: string, negrita: bool, ancho: int, alto: int, fuente: string} */
+    private array $estado = ['alinear' => 'izq', 'negrita' => false, 'ancho' => 1, 'alto' => 1, 'fuente' => 'a'];
+
     public function __construct(private int $columnas = 42)
     {
         // Inicializa y elige la página de códigos PC850 (á é í ó ú ñ Ñ ° ...)
@@ -36,6 +46,7 @@ class Escpos
     public function alinear(string $a): self
     {
         $this->buffer .= self::ESC.'a'.chr(['izq' => 0, 'centro' => 1, 'der' => 2][$a] ?? 0);
+        $this->estado['alinear'] = in_array($a, ['izq', 'centro', 'der'], true) ? $a : 'izq';
 
         return $this;
     }
@@ -43,6 +54,7 @@ class Escpos
     public function negrita(bool $on = true): self
     {
         $this->buffer .= self::ESC.'E'.chr($on ? 1 : 0);
+        $this->estado['negrita'] = $on;
 
         return $this;
     }
@@ -51,6 +63,7 @@ class Escpos
     public function tamano(int $ancho = 1, int $alto = 1): self
     {
         $this->buffer .= self::GS.'!'.chr((($ancho - 1) << 4) | ($alto - 1));
+        [$this->estado['ancho'], $this->estado['alto']] = [$ancho, $alto];
 
         return $this;
     }
@@ -59,6 +72,7 @@ class Escpos
     public function fuente(string $f = 'a'): self
     {
         $this->buffer .= self::ESC.'M'.chr($f === 'b' ? 1 : 0);
+        $this->estado['fuente'] = $f === 'b' ? 'b' : 'a';
 
         return $this;
     }
@@ -72,6 +86,7 @@ class Escpos
     public function texto(string $texto = ''): self
     {
         $this->buffer .= $this->codificar($texto)."\n";
+        $this->vista[] = ['tipo' => 'texto', 'texto' => $texto] + $this->estado;
 
         return $this;
     }
@@ -112,6 +127,9 @@ class Escpos
     public function avanzar(int $lineas = 1): self
     {
         $this->buffer .= self::ESC.'d'.chr(max(0, min(255, $lineas)));
+        for ($i = 0; $i < min($lineas, 3); $i++) {
+            $this->vista[] = ['tipo' => 'texto', 'texto' => ''] + $this->estado;
+        }
 
         return $this;
     }
@@ -119,6 +137,7 @@ class Escpos
     /** QR generado por la propia impresora (modelo 2) */
     public function qr(string $datos, int $tamano = 5): self
     {
+        $this->vista[] = ['tipo' => 'qr', 'texto' => $datos] + $this->estado;
         $datos = $this->codificar($datos);
         $len = strlen($datos) + 3;
         $this->buffer .= self::GS."(k\x04\x00\x31\x41\x32\x00"                       // modelo 2
@@ -166,6 +185,7 @@ class Escpos
         }
         $bytesFila = (int) ceil($w / 8);
         $this->alinear('centro');
+        $this->vista[] = ['tipo' => 'logo', 'ruta' => $ruta] + $this->estado;
         for ($desde = 0; $desde < $h; $desde += self::FILAS_POR_BLOQUE) {
             $filas = min(self::FILAS_POR_BLOQUE, $h - $desde);
             $this->buffer .= self::GS."v0\x00".chr($bytesFila % 256).chr(intdiv($bytesFila, 256)).chr($filas % 256).chr(intdiv($filas, 256))
@@ -222,6 +242,7 @@ class Escpos
     public function cortar(): self
     {
         $this->buffer .= self::GS.'V'."\x42\x00"; // avanza y corta
+        $this->vista[] = ['tipo' => 'corte'] + $this->estado;
 
         return $this;
     }
@@ -237,5 +258,11 @@ class Escpos
     public function bytes(): string
     {
         return $this->buffer;
+    }
+
+    /** @return list<array<string, mixed>> las líneas del ticket con su formato (vista previa) */
+    public function vista(): array
+    {
+        return $this->vista;
     }
 }

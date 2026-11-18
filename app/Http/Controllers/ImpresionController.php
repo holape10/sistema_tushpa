@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\Impresion\Impresion;
+use App\Support\Impresion\PlantillaTicket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
@@ -86,7 +87,7 @@ class ImpresionController extends Controller
             'ruta' => ['required', 'string', 'max:100', $request->tip_conex_imp === 'RED'
                 ? 'regex:/^[\w.\-]+(:\d{2,5})?$/' : 'regex:/^[^"<>|*?]+$/'],
             'columnas' => 'required|integer|in:32,42,48',
-            'diseno' => 'nullable|in:CLASICO,MODERNO,COMPACTO,EN_LINEA',
+            'diseno' => 'nullable|in:CLASICO,MODERNO,COMPACTO,EN_LINEA,PERSONALIZADO',
             'predeterminado' => 'nullable|boolean',
             'abrir_cajon' => 'nullable|boolean',
             'activo' => 'nullable|boolean',
@@ -119,6 +120,65 @@ class ImpresionController extends Controller
         });
 
         return redirect()->route('impresion.index')->with('success', 'Impresora '.$datos['descripcion'].' guardada.');
+    }
+
+    // ------------------------------------------------------------------ diseño del ticket y vista previa
+
+    /** Últimos comprobantes de la sucursal para la vista previa: tipo => IdCpe_cabecera */
+    private function ejemplos(): array
+    {
+        $res = [];
+        foreach (['03' => 'Boleta', '01' => 'Factura', '13' => 'Nota de venta'] as $tipo => $nombre) {
+            if ($id = DB::table('cpe_cabecera')->where('id_empresa_negocio', $this->sucursal())->where('tdocod', $tipo)->whereNull('ccabaj')->max('IdCpe_cabecera')) {
+                $res[$tipo] = ['id' => (int) $id, 'nombre' => $nombre];
+            }
+        }
+
+        return $res;
+    }
+
+    /** Pantalla para armar el ticket (diseño personalizado) y ver cómo queda cualquier diseño, sin imprimir */
+    public function diseno($id)
+    {
+        $this->soloAdmin();
+        $imp = DB::table('configuracion_impresoras')->where('Id', $id)->where('id_empresa_negocio', $this->sucursal())->first();
+        abort_unless($imp, 404);
+
+        return view('empresas.impresion.diseno', ['imp' => $imp, 'plantilla' => PlantillaTicket::leer($imp->plantilla ?? null), 'ejemplos' => $this->ejemplos()]);
+    }
+
+    public function guardarDiseno(Request $request, $id)
+    {
+        $this->soloAdmin();
+        $d = $request->validate(['diseno' => 'required|in:CLASICO,MODERNO,COMPACTO,EN_LINEA,PERSONALIZADO', 'columnas' => 'required|integer|in:32,42,48',
+            'plantilla' => 'nullable|string|max:20000']);
+        $hecho = DB::table('configuracion_impresoras')->where('Id', $id)->where('id_empresa_negocio', $this->sucursal())->update([
+            'diseno' => $d['diseno'], 'columnas' => (int) $d['columnas'],
+            'plantilla' => json_encode(PlantillaTicket::leer($d['plantilla'] ?? null), JSON_UNESCAPED_UNICODE),
+        ]);
+        abort_unless($hecho !== false, 404);
+
+        return redirect()->route('impresion.diseno', $id)->with('success', 'Diseño del ticket guardado.');
+    }
+
+    /** La vista previa del ticket con el diseño que se está armando (no se guarda ni se imprime nada) */
+    public function vista(Request $request, $id)
+    {
+        $this->soloAdmin();
+        $d = $request->validate(['diseno' => 'required|in:CLASICO,MODERNO,COMPACTO,EN_LINEA,PERSONALIZADO', 'columnas' => 'required|integer|in:32,42,48',
+            'plantilla' => 'nullable|array|max:60', 'ejemplo' => 'nullable|integer']);
+        $imp = DB::table('configuracion_impresoras')->where('Id', $id)->where('id_empresa_negocio', $this->sucursal())->first();
+        abort_unless($imp, 404);
+        $ejemplos = collect($this->ejemplos())->pluck('id')->all();
+        $cpe = in_array((int) ($d['ejemplo'] ?? 0), $ejemplos, true) ? (int) $d['ejemplo'] : ($ejemplos[0] ?? null);
+        $cab = $cpe ? DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cpe)->first() : null;
+        if (! $cab) {
+            return response()->json(['html' => '<p class="p-6 text-center text-sm text-gray-500">Haz una venta en esta sucursal para ver la vista previa con un comprobante real.</p>']);
+        }
+        $prueba = (object) array_merge((array) $imp, ['diseno' => $d['diseno'], 'columnas' => (int) $d['columnas'],
+            'plantilla' => PlantillaTicket::leer($d['plantilla'] ?? null)]);
+
+        return response()->json(['html' => view('empresas.impresion._vista', ['lineas' => Impresion::vistaPrevia($cab, $prueba), 'columnas' => (int) $d['columnas']])->render()]);
     }
 
     public function eliminarImpresora($id)
