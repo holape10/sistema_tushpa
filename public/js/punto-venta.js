@@ -683,7 +683,20 @@ document.addEventListener('alpine:init', () => {
         },
 
         // ---------- Registrar ----------
+        /** Vendedor elegido: la PC recuerda el último (varios venden en la misma computadora) */
+        vendedor: (() => {
+            if (!CFG.vendedores || !CFG.vendedores.length) return null;
+            try {
+                const v = Number(localStorage.getItem('pv_vendedor_' + CFG.sucursal));
+                return CFG.vendedores.some(x => x.id === v) ? v : null;
+            } catch (e) { return null; }
+        })(),
+        guardarVendedor() {
+            try { localStorage.setItem('pv_vendedor_' + CFG.sucursal, this.vendedor || ''); } catch (e) { /* sin almacenamiento: se elige cada vez */ }
+        },
+
         validar() {
+            if (CFG.vendedores && CFG.vendedores.length && !this.vendedor) return 'Elige el vendedor que hizo la venta.';
             if (!this.carrito.length) return 'Agrega al menos un producto.';
             if (this.carrito.some(it => !it.descripcion.trim())) return 'Escribe la descripción de todas las líneas.';
             const sinSerie = this.carrito.find(it => it.control_serie && (!it.series.length || it.series.length !== it.cantidad));
@@ -742,6 +755,7 @@ document.addEventListener('alpine:init', () => {
             const medios = this.esContado ? this.medios.filter(m => this.montoDe(m) > 0) : [];
             const body = {
                 items: this.itemsParaEnviar(),
+                vendedor: this.vendedor || null,
                 proforma_id: this.proformaId,
                 pedido_id: this.clinicaId,
                 tdocod: this.tdocod,

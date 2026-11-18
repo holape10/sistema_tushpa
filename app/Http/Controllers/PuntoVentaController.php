@@ -94,7 +94,10 @@ class PuntoVentaController extends Controller
             }
         }
 
-        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido'));
+        // Varios venden en la misma PC: se elige quién vendió
+        $vendedores = ! empty($negocio->pv_elegir_vendedor) && ! $soloPedido ? VentaDirecta::vendedores($user) : [];
+
+        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido', 'vendedores'));
     }
 
     /** Editar una venta del Panel de Ventas: se abre en el Punto Venta con sus productos, cliente y pago */

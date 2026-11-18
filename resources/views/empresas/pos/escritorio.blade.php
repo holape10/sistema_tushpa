@@ -333,6 +333,16 @@
                         <span class="text-[11px] text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full font-semibold">🧾 Vendedor: solo pedidos (la caja los cobra)</span>
                     @endif
                 </div>
+                {{-- Quién hizo la venta (varios venden en la misma PC) --}}
+                <template x-if="cfg.vendedores.length">
+                    <label class="flex items-center gap-2 rounded-xl px-3 py-2" :class="vendedor ? 'bg-indigo-50' : 'bg-amber-50 ring-1 ring-amber-300'">
+                        <span class="text-xs font-bold uppercase text-slate-600 whitespace-nowrap">🧑‍💼 Vendedor</span>
+                        <select x-model.number="vendedor" @change="guardarVendedor()" class="flex-1 h-9 rounded-lg border-slate-300 text-sm font-semibold">
+                            <option value="">— ¿Quién vendió? —</option>
+                            <template x-for="v in cfg.vendedores" :key="v.id"><option :value="v.id" x-text="v.nombre" :selected="v.id === vendedor"></option></template>
+                        </select>
+                    </label>
+                </template>
                 <div class="grid gap-1.5 p-1 bg-slate-100 rounded-xl" :style="`grid-template-columns: repeat(${cfg.comprobantes.length}, minmax(0, 1fr))`">
                     <template x-for="c in cfg.comprobantes" :key="c.tdocod">
                         <button type="button" @click="elegirComprobante(c.tdocod)"
@@ -601,6 +611,9 @@
         editarPrecio: @json(auth()->user()->puede('cambiar_precio') || auth()->user()->puede('subir_precio')),
         // Vendedor sin caja: solo guarda pedidos (proformas) que la caja cobra
         soloPedido: @json($soloPedido ?? false),
+        // Sucursal con «Elegir el vendedor en el Punto Venta»: quiénes pueden figurar como vendedor
+        vendedores: @json($vendedores ?? []),
+        sucursal: @json((int) auth()->user()->id_empresa_negocio),
         csrf: @json(csrf_token()),
         comprobantes: @json($comprobantes),
         tdocodPred: @json($negocio->tdocod_pred ?? '13'),

@@ -461,6 +461,13 @@
                         @elseif ($campo('clinica_doctor_cobra'))
                             <input type="hidden" name="clinica_doctor_cobra" value="1">
                         @endif
+                        {{-- Varias personas venden en la misma PC: en el Punto Venta se elige quién vendió --}}
+                        <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
+                            <input type="checkbox" name="pv_elegir_vendedor" value="1" @checked($campo('pv_elegir_vendedor')) class="mt-0.5 rounded text-indigo-600">
+                            <span><span class="font-semibold text-gray-800">🧑‍💼 Elegir el vendedor en el Punto Venta</span>
+                                <span class="block text-xs text-gray-500">Para cuando varios usan la misma computadora: antes de cobrar se elige quién hizo la venta. Sale en el ticket
+                                    («Vendedor: …») y en el reporte de ventas por vendedor. La PC recuerda el último elegido.</span></span>
+                        </label>
                         {{-- Fotos de los productos en los botones de venta (miniaturas livianas) --}}
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
                             <input type="checkbox" name="imagenes_venta" value="1" @checked($campo('imagenes_venta')) class="mt-0.5 rounded text-indigo-600">

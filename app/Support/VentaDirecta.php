@@ -17,6 +17,8 @@ class VentaDirecta
 {
     public const REGLAS = [
         'tdocod' => 'required|in:01,03,13',
+        // Quién vendió (si la sucursal elige el vendedor en el Punto Venta)
+        'vendedor' => 'nullable|integer',
         'estadopago' => 'required|integer',
         'fecEmi' => 'required|date',
         // Comprobante de contingencia (en papel, serie numérica) que se pasa al sistema después
@@ -133,7 +135,7 @@ class VentaDirecta
             }
 
             $cabId = Comprobante::emitir($user, $turno, $datos, $lineas, array_merge([
-                'ped_tip' => $origen, 'IdUsuario_ven' => $user->IdUsuario,
+                'ped_tip' => $origen, 'IdUsuario_ven' => self::vendedorElegido($user, $datos['vendedor'] ?? null) ?? $user->IdUsuario,
                 'placa' => mb_strtoupper(preg_replace('/[^A-Za-z0-9-]/', '', (string) ($datos['placa'] ?? ''))) ?: null,
                 'guia_remision' => mb_strtoupper(trim((string) ($datos['guia_remision'] ?? ''))) ?: null,
             ], $pedidoClinica ? [
@@ -161,6 +163,28 @@ class VentaDirecta
      *
      * @return array<int, array{0: string, 1: string, 2: string}>
      */
+    /**
+     * Los que pueden figurar como vendedor en el Punto Venta: los usuarios activos de la sucursal.
+     *
+     * @return list<array{id: int, nombre: string}>
+     */
+    public static function vendedores(User $user): array
+    {
+        return DB::table('users')->where('IdEmpresa', $user->IdEmpresa)->where('id_empresa_negocio', $user->id_empresa_negocio)->where('estusu', 1)
+            ->orderBy('apeusu')->get(['IdUsuario', 'apeusu', 'name'])
+            ->map(fn ($u) => ['id' => (int) $u->IdUsuario, 'nombre' => trim((string) ($u->apeusu ?: $u->name))])->values()->all();
+    }
+
+    /** El vendedor elegido, si la sucursal lo permite y es un usuario activo de ella (si no, null) */
+    public static function vendedorElegido(User $user, mixed $id): ?int
+    {
+        if (! $id || ! DB::table('empresa_negocios')->where('id_empresa_negocio', $user->id_empresa_negocio)->value('pv_elegir_vendedor')) {
+            return null;
+        }
+
+        return in_array((int) $id, array_column(self::vendedores($user), 'id'), true) ? (int) $id : null;
+    }
+
     public static function preciosDistintos(array $lineas, bool $mayores = false): array
     {
         try {

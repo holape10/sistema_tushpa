@@ -254,6 +254,7 @@ class SucursalController extends Controller
         $datos['foto_marco_color'] = strtolower($datos['foto_marco_color'] ?? '#111827');
         $datos['foto_texto'] = trim((string) ($datos['foto_texto'] ?? '')) ?: null;
         $datos['imagenes_venta'] = $request->boolean('imagenes_venta');
+        $datos['pv_elegir_vendedor'] = $request->boolean('pv_elegir_vendedor');
         $datos['igv_restaurante'] = $request->boolean('igv_restaurante');
         $datos['diseno_a4'] = $datos['diseno_a4'] ?? 'MODERNO';
         $datos['a4_cancelado_grande'] = $request->boolean('a4_cancelado_grande');

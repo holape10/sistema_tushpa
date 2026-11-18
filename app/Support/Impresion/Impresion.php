@@ -240,7 +240,14 @@ class Impresion
     public static function atencion(object $cab): array
     {
         if (in_array($cab->ped_tip ?? null, self::VENTA_DIRECTA, true)) {
-            return [];
+            // Con «Elegir el vendedor en el Punto Venta», sale quién vendió
+            $ven = (int) ($cab->IdUsuario_ven ?? 0);
+            if (! $ven || ! DB::table('empresa_negocios')->where('id_empresa_negocio', (int) ($cab->id_empresa_negocio ?? 0))->value('pv_elegir_vendedor')) {
+                return [];
+            }
+            $nombre = DB::table('users')->where('IdUsuario', $ven)->value(DB::raw("COALESCE(NULLIF(TRIM(apeusu), ''), name)"));
+
+            return $nombre ? [['Vendedor', NombreCorto::para((int) $cab->id_empresa_negocio, (string) $nombre)]] : [];
         }
         $cajero = (int) ($cab->IdUsuario ?? 0);
         $atendio = (int) (($cab->mozo ?? null) ?: ($cab->IdUsuario_ven ?? 0));
