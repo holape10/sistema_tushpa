@@ -7,6 +7,7 @@ use App\Models\Turno;
 use App\Support\Acciones;
 use App\Support\AnulacionVenta;
 use App\Support\Bitacora;
+use App\Support\ConsultaPeru;
 use App\Support\Contingencia;
 use App\Support\Impresion\ComprobantePdf;
 use App\Support\Notas;
@@ -205,6 +206,26 @@ class VentaController extends Controller
         });
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * ¿SUNAT tiene este comprobante? (consulta de validez, como en Compras). Si el sistema lo tiene como aceptado y SUNAT
+     * no, se avisa: pudo enviarse en BETA (pruebas).
+     */
+    public function consultarSunat($id)
+    {
+        $this->autorizar();
+        $cab = $this->venta($id);
+        if (! in_array($cab->tdocod, ['01', '03', '07', '08'], true)) {
+            return response()->json(['ok' => false, 'mensaje' => 'Solo se consultan facturas, boletas y notas electrónicas.']);
+        }
+        $r = ConsultaPeru::validarCpe((string) $cab->IdEmpresa, $cab->tdocod, (string) $cab->serdoc, (string) (int) $cab->numdoc, (string) $cab->ccafem, (float) $cab->ccaitv);
+        if ($r['ok'] && str_contains((string) $r['estado'], 'NO EXISTE') && in_array($cab->est_sunat, ['ACEPTADO', 'OBSERVADO'], true)) {
+            $r['mensaje'] = 'SUNAT NO lo tiene, aunque aquí figura '.$cab->est_sunat.': es probable que se haya enviado en BETA (pruebas). Pide a soporte que lo regrese a pendiente para enviarlo en producción.';
+            $r['color'] = 'rose';
+        }
+
+        return response()->json($r + ['numero' => $cab->serdoc.'-'.$cab->numdoc]);
     }
 
     public function anular(Request $request, $id)

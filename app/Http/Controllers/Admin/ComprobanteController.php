@@ -13,6 +13,7 @@ use App\Support\ConsultaPeru;
 use App\Support\EliminarPrueba;
 use App\Support\Impresion\ComprobantePdf;
 use App\Support\Sunat\CambioFecha;
+use App\Support\Sunat\EnviadoEnBeta;
 use App\Support\Sunat\SunatService;
 use App\Support\Tenancy\Tenancy;
 use Carbon\Carbon;
@@ -33,7 +34,7 @@ class ComprobanteController extends Controller
 {
     public const FILTROS = ['pendientes' => 'Pendientes de SUNAT', 'rechazados' => 'Rechazados', 'todos' => 'Todos', 'pruebas' => '🗑 Borrar pruebas'];
 
-    private const ACCIONES = ['consultar', 'enviar', 'fecha', 'aceptado', 'descartar', 'anular', 'eliminar'];
+    private const ACCIONES = ['consultar', 'enviar', 'fecha', 'aceptado', 'descartar', 'anular', 'eliminar', 'beta'];
 
     private function autorizar(Cliente $cliente): void
     {
@@ -47,6 +48,8 @@ class ComprobanteController extends Controller
         $filtro = array_key_exists($request->get('filtro'), self::FILTROS) ? $request->get('filtro') : 'pendientes';
         $q = trim((string) $request->get('q'));
         $anio = (int) $request->get('anio');
+        $desde = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->get('desde')) ? $request->get('desde') : null;
+        $hasta = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->get('hasta')) ? $request->get('hasta') : null;
 
         // Pendiente = todo lo que no está aceptado, anulado ni rechazado (cualquier otro estado, incluso escrito distinto
         // o vacío), igual que cuenta el Tablero; así lo que allí sale "por revisar" siempre aparece aquí
@@ -54,7 +57,7 @@ class ComprobanteController extends Controller
         $pendiente = fn ($x) => $x->whereNull('est_sunat')->orWhereRaw("UPPER(TRIM(est_sunat)) NOT REGEXP '^(ACEPTAD|OBSERVAD|ANULAD|RECHAZAD)'");
         $rechazado = fn ($w) => $w->whereRaw("UPPER(TRIM(est_sunat)) REGEXP '^RECHAZAD'");
 
-        [$lista, $conteo, $anios] = Tenancy::en($cliente->base_datos, function () use ($filtro, $q, $anio, $request, $pendiente, $rechazado) {
+        [$lista, $conteo, $anios] = Tenancy::en($cliente->base_datos, function () use ($filtro, $q, $anio, $desde, $hasta, $request, $pendiente, $rechazado) {
             $base = fn () => DB::table('cpe_cabecera')->whereIn('tdocod', SunatService::TIPOS_ELECTRONICOS)->whereNull('ccabaj');
             // Borrar pruebas: los últimos emitidos de todo tipo (también notas de venta y anulados), del más reciente al más antiguo
             $ultimos = $filtro === 'pruebas';
@@ -62,6 +65,7 @@ class ComprobanteController extends Controller
                 ->when($filtro === 'pendientes', fn ($w) => $w->where($pendiente))
                 ->when($filtro === 'rechazados', $rechazado)
                 ->when($anio, fn ($w) => $w->whereYear('ccafem', $anio))
+                ->when($desde, fn ($w) => $w->where('ccafem', '>=', $desde))->when($hasta, fn ($w) => $w->where('ccafem', '<=', $hasta))
                 ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->whereRaw("CONCAT(serdoc, '-', numdoc) LIKE ?", ["%{$q}%"])->orWhere('ccanom', 'like', "%{$q}%")->orWhere('ccandi', $q)))
                 ->when($ultimos, fn ($w) => $w->orderByDesc('IdCpe_cabecera'), fn ($w) => $w->orderBy('ccafem')->orderBy('IdCpe_cabecera'))
                 ->paginate(100, ['IdCpe_cabecera', 'tdocod', 'serdoc', 'numdoc', 'ccafem', 'ccanom', 'ccandi', 'ccaitv', 'est_sunat', 'ccadessun', 'ccasunrescod', 'ccabaj'], 'pagina', (int) $request->get('pagina', 1))
@@ -75,7 +79,7 @@ class ComprobanteController extends Controller
             return [$lista, $conteo, $anios];
         });
 
-        return view('admin.clientes.comprobantes', compact('cliente', 'lista', 'conteo', 'anios', 'filtro', 'q', 'anio'));
+        return view('admin.clientes.comprobantes', compact('cliente', 'lista', 'conteo', 'anios', 'filtro', 'q', 'anio', 'desde', 'hasta'));
     }
 
     /**
@@ -242,6 +246,9 @@ class ComprobanteController extends Controller
                     throw new \RuntimeException("SUNAT dice {$v['estado']}: todavía no lo tiene, envíalo.");
                 }
                 break;
+            case 'beta':        // Se envió en BETA (pruebas) y SUNAT no lo tiene: vuelve a pendiente para enviarlo en producción
+                EnviadoEnBeta::devolverAPendiente($cab, $quien);
+                break;
             case 'fecha':       // Fuera de plazo: al último día que SUNAT todavía acepta (luego se envía)
                 if (! $admin) {
                     throw new \RuntimeException('la empresa no tiene un administrador');
@@ -279,12 +286,12 @@ class ComprobanteController extends Controller
         }
 
         // Lo que el soporte cambió en los comprobantes del cliente queda en la bitácora de esa empresa
-        $hecho = ['fecha' => 'cambió la fecha (fuera de plazo) de', 'aceptado' => 'marcó como aceptado por SUNAT', 'descartar' => 'descartó', 'anular' => 'anuló'];
+        $hecho = ['beta' => 'devolvió a pendiente (se había enviado en BETA)', 'fecha' => 'cambió la fecha (fuera de plazo) de', 'aceptado' => 'marcó como aceptado por SUNAT', 'descartar' => 'descartó', 'anular' => 'anuló'];
         if (isset($hecho[$accion])) {
             $tipos = ['01' => 'Factura', '03' => 'Boleta', '07' => 'Nota de crédito', '08' => 'Nota de débito', '13' => 'Nota de venta'];
             Bitacora::registrar('venta.soporte', 'Soporte '.$hecho[$accion].' '.($tipos[$cab->tdocod] ?? 'Comprobante').' '.$cab->serdoc.'-'.$cab->numdoc, null, [
                 'usuario' => null, 'nombre' => mb_substr('Soporte: '.$quien, 0, 120), 'sucursal' => (int) $cab->id_empresa_negocio, 'empresa' => $cab->IdEmpresa,
-                'referencia' => ['venta', $cab->IdCpe_cabecera], 'alerta' => in_array($accion, ['descartar', 'anular'], true), 'datos' => ['motivo' => $motivo],
+                'referencia' => ['venta', $cab->IdCpe_cabecera], 'alerta' => in_array($accion, ['descartar', 'anular', 'beta'], true), 'datos' => ['motivo' => $motivo],
             ]);
         }
     }

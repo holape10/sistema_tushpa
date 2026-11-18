@@ -156,6 +156,9 @@
                                         <a href="{{ route('sunat.descargar', [$v->IdCpe_cabecera, 'cdr']) }}" title="CDR (constancia SUNAT)" class="btn-ico text-amber-700"><i class="fas fa-file-zipper"></i></a>
                                     @endif
                                     <button type="button" @click="verDetalle({{ $v->IdCpe_cabecera }})" title="Detalle" class="btn-ico text-emerald-700"><i class="fas fa-eye"></i></button>
+                                    @if (!$anulada && in_array($v->tdocod, ['01', '03', '07', '08'], true))
+                                        <button type="button" @click="consultarSunat({{ $v->IdCpe_cabecera }}, $el)" title="Consultar en SUNAT" class="btn-ico text-sky-700"><i class="fas fa-magnifying-glass"></i></button>
+                                    @endif
                                     {{-- Corregir productos, cliente, pago o tipo de comprobante mientras no llegue a SUNAT --}}
                                     @if (!$anulada && !$v->anulado_nc && $turnoAbierto && $puedeEditar && in_array($v->tdocod, ['01', '03', '13'], true)
                                         && ($v->tdocod === '13' || in_array($v->est_sunat ?: 'PENDIENTE', \App\Support\Sunat\SunatService::ESTADOS_REENVIABLES, true)))
@@ -584,6 +587,20 @@
                     }).then(x => x.json()).catch(() => ({ success: false, message: 'Sin conexión.' }));
                     alert(r.message);
                     if (r.success) location.reload();
+                },
+                /** ¿SUNAT lo tiene? (consulta de validez) */
+                async consultarSunat(id, boton) {
+                    boton.disabled = true;
+                    try {
+                        const r = await fetch(@js(url('/ventas')) + '/' + id + '/consultar-sunat', { method: 'POST', headers: { 'X-CSRF-TOKEN': @js(csrf_token()), Accept: 'application/json' } });
+                        const d = r.status === 429 ? { ok: false, mensaje: 'Muchas consultas seguidas: espera un minuto.' } : await r.json();
+                        if (!d.ok) { tushpaAviso(d.mensaje || 'No se pudo consultar.', false); return; }
+                        tushpaAviso((d.numero ? d.numero + ': ' : '') + d.estado + ' — ' + d.mensaje, d.color === 'emerald' ? 'ok' : (d.color === 'rose' ? 'error' : 'aviso'), 'Consulta en SUNAT');
+                    } catch (e) {
+                        tushpaAviso('Sin conexión con el servidor.', false);
+                    } finally {
+                        boton.disabled = false;
+                    }
                 },
                 abrirAnular(id, numero, esBaja = false) { this.idActual = id; this.anularNumero = numero; this.esBaja = esBaja; this.motivo = ''; this.error = ''; this.modal = 'anular'; },
 
