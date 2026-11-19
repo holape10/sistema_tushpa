@@ -69,6 +69,11 @@
                                 @if ($reenviable && $n->serdoc[0] === 'F')
                                     <button type="button" onclick="enviarNota(this, {{ $n->IdCpe_cabecera }})" title="Enviar a SUNAT" class="btn-ico text-indigo-600"><i class="fas fa-paper-plane"></i></button>
                                 @endif
+                                {{-- Dar de baja ante SUNAT (hasta 7 días): la nota queda sin efecto y el comprobante que modificaba, vigente --}}
+                                @if (auth()->user()->puede('anular_ventas') && ! $n->ccabaj && ! $n->res_id_baja && in_array($n->est_sunat, ['ACEPTADO', 'OBSERVADO'], true)
+                                    && $n->ccafem >= now()->subDays(\App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS)->toDateString())
+                                    <button type="button" onclick="darDeBaja(this, {{ $n->IdCpe_cabecera }}, @js($n->serdoc.'-'.str_pad($n->numdoc, 8, '0', STR_PAD_LEFT)))" title="Dar de baja ante SUNAT" class="btn-ico text-red-600"><i class="fas fa-ban"></i></button>
+                                @endif
                             </div>
                         </td>
                     </tr>
@@ -83,6 +88,27 @@
 
     <style>.btn-ico{display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;border-radius:.6rem;background:#f3f4f6}.btn-ico:hover{background:#e5e7eb}</style>
     <script>
+        async function darDeBaja(btn, id, numero) {
+            const motivo = prompt('Dar de baja la nota ' + numero + ' ante SUNAT: queda sin efecto y el comprobante que modificaba vuelve a estar vigente.\n\nMotivo (mínimo 5 letras):');
+            if (motivo === null) return;
+            if (motivo.trim().length < 5) { alert('Escribe un motivo de al menos 5 letras.'); return; }
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            try {
+                const r = await fetch(@json(url('ventas')) + '/' + id + '/anular', {
+                    method: 'POST', headers: { 'X-CSRF-TOKEN': @json(csrf_token()), Accept: 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ motivo: motivo.trim() }),
+                });
+                const d = await r.json();
+                alert(d.message || (d.success ? 'Baja enviada.' : 'No se pudo dar de baja.'));
+                location.reload();
+            } catch (e) {
+                alert('No se pudo conectar con el servidor.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-ban"></i>';
+            }
+        }
+
         async function enviarNota(btn, id) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';

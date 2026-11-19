@@ -49,6 +49,18 @@ class BajaNotaCreditoTest extends FlujoTestCase
         $this->assertNull(DB::table('cpe_cabecera')->where('IdCpe_cabecera', $nota)->value('ccabaj'));
     }
 
+    public function test_la_nota_aceptada_ofrece_la_baja_en_ventas_y_en_notas(): void
+    {
+        [, , $nota] = $this->facturaConNota();
+        DB::table('cpe_cabecera')->where('IdCpe_cabecera', $nota)->update(['est_sunat' => 'ACEPTADO', 'enviado' => 1]);
+
+        // En Ventas, el menú ⋮ de la nota trae la Comunicación de baja (aunque la nota no lleve notas propias)
+        $this->get(route('ventas.index'))->assertOk()->assertSee('menu.venta?.notas || menu.venta?.baja', false)
+            ->assertSee('\u0022baja\u0022:true', false)->assertSee('\u0022esNota\u0022:true', false);
+        // Y en Notas de crédito/débito, su botón
+        $this->get(route('notas.index'))->assertOk()->assertSee('title="Dar de baja ante SUNAT"', false);
+    }
+
     public function test_en_envio_manual_la_nota_de_factura_no_se_manda_sola(): void
     {
         DB::table('empresa')->where('IdEmpresa', $this->usuario->IdEmpresa)->update(['tipo_envio' => 0]);

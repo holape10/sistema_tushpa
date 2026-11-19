@@ -177,7 +177,8 @@
                                                 'notas' => $puedeNotas && in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc,
                                                 'aceptado' => in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
                                                 'estado' => $v->est_sunat ?: 'PENDIENTE',
-                                                'guia' => !$anulada,
+                                                'guia' => !$anulada && !in_array($v->tdocod, ['07', '08'], true),
+                                                'esNota' => in_array($v->tdocod, ['07', '08'], true),
                                                 'descartar' => !$anulada && auth()->user()->esAdmin() && $v->est_sunat === 'RECHAZADO' && in_array($v->tdocod, ['01', '03', '07', '08'], true),
                                                 'baja' => $puedeBaja = $puedeAnular && in_array($v->tdocod, ['01', '03', '07', '08'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja
                                                     && in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
@@ -205,13 +206,14 @@
              class="fixed z-40 w-64 bg-white rounded-xl shadow-2xl ring-1 ring-black/5 py-1 text-sm"
              :style="`top: ${menu.y}px; left: ${menu.x}px`">
             <p class="px-3 py-1.5 text-[11px] font-bold uppercase text-gray-400" x-text="menu.venta?.numero"></p>
-            <template x-if="menu.venta?.notas">
+            {{-- Notas, baja y descartar (la baja también sale en las notas de crédito y débito) --}}
+            <template x-if="menu.venta?.notas || menu.venta?.baja || menu.venta?.descartar">
                 <div>
-                    <button type="button" @click="abrirNota('07')" :disabled="!menu.venta.aceptado"
+                    <button type="button" x-show="menu.venta.notas" @click="abrirNota('07')" :disabled="!menu.venta.aceptado"
                             class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-rose-50 disabled:opacity-40 disabled:hover:bg-transparent">
                         <i class="fas fa-file-circle-minus text-rose-600 w-4"></i>
                         <span><span class="font-semibold">Nota de crédito</span><span class="block text-[11px] text-gray-400">Anular, devolver o rebajar</span></span></button>
-                    <button type="button" @click="abrirNota('08')" :disabled="!menu.venta.aceptado"
+                    <button type="button" x-show="menu.venta.notas" @click="abrirNota('08')" :disabled="!menu.venta.aceptado"
                             class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-amber-50 disabled:opacity-40 disabled:hover:bg-transparent">
                         <i class="fas fa-file-circle-plus text-amber-600 w-4"></i>
                         <span><span class="font-semibold">Nota de débito</span><span class="block text-[11px] text-gray-400">Intereses, penalidad, aumento</span></span></button>
@@ -219,12 +221,12 @@
                             class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-red-50 disabled:hover:bg-transparent">
                         <i class="fas fa-ban w-4" :class="menu.venta.bajaNo ? 'text-gray-300' : 'text-red-600'"></i>
                         <span><span class="font-semibold" :class="menu.venta.bajaNo && 'text-gray-400'">Comunicación de baja</span>
-                            <span class="block text-[11px]" :class="menu.venta.bajaNo ? 'text-amber-700' : 'text-gray-400'" x-text="menu.venta.bajaNo || 'Anular ante SUNAT sin nota de crédito'"></span></span></button>
+                            <span class="block text-[11px]" :class="menu.venta.bajaNo ? 'text-amber-700' : 'text-gray-400'" x-text="menu.venta.bajaNo || (menu.venta.esNota ? 'Deja sin efecto esta nota ante SUNAT' : 'Anular ante SUNAT sin nota de crédito')"></span></span></button>
                     <button type="button" x-show="menu.venta.descartar" @click="menu.abierto = false; descartar(menu.venta.id, menu.venta.numero)"
                             class="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50">
                         <i class="fas fa-ban text-gray-600 w-4"></i>
                         <span><span class="font-semibold">Descartar (rechazado)</span><span class="block text-[11px] text-gray-400">SUNAT lo rechazó y ya no se corregirá: sale de pendientes</span></span></button>
-                    <p x-show="!menu.venta.aceptado" class="px-3 py-1.5 text-[11px] text-amber-700 bg-amber-50"
+                    <p x-show="menu.venta.notas && !menu.venta.aceptado" class="px-3 py-1.5 text-[11px] text-amber-700 bg-amber-50"
                        x-text="'SUNAT: ' + menu.venta.estado + '. Las notas se habilitan cuando el comprobante esté ACEPTADO.'"></p>
                     <div class="border-t border-gray-100 my-1"></div>
                 </div>
