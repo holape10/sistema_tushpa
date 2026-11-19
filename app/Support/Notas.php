@@ -228,6 +228,34 @@ class Notas
         });
     }
 
+    /**
+     * SUNAT aceptó la baja de una nota de crédito o débito: queda anulada en el sistema, el comprobante que anulaba vuelve
+     * a estar vigente (se le puede emitir otra nota) y lo que la nota devolvió al stock vuelve a salir.
+     */
+    public static function anularPorBaja(object $nota): void
+    {
+        DB::transaction(function () use ($nota) {
+            $num = $nota->serdoc.'-'.str_pad((string) $nota->numdoc, 8, '0', STR_PAD_LEFT);
+            DB::table('cpe_cabecera')->where('IdCpe_cabecera', $nota->IdCpe_cabecera)->whereNull('ccabaj')->update([
+                'ccabaj' => 'BAJA SUNAT '.now()->format('d/m/Y H:i'),
+            ]);
+            if ($nota->IdCpe_cabecera_ref ?? null) {
+                DB::table('cpe_cabecera')->where('IdCpe_cabecera', $nota->IdCpe_cabecera_ref)->where('anulado_nc', $num)->update(['anulado_nc' => null]);
+            }
+            // Lo que la nota devolvió al almacén vuelve a salir
+            $devuelto = DB::table('movimientos_productos')->where('tdocod', $nota->tdocod)->where('serie', $nota->serdoc)
+                ->where('numero', (string) $nota->numdoc)->where('mov_tip', 'I')->get();
+            foreach ($devuelto as $m) {
+                Kardex::registrar((int) $m->IdProducto, (int) $m->id_almacen, (float) $m->cantidad, 'E', [
+                    'cod_tip_ope' => '01', 'IdCpe_cabecera' => $m->IdCpe_cabecera, 'IdProducto_rel' => $m->IdProducto_rel,
+                    'costo' => $m->costo, 'precio' => $m->precio, 'tdocod' => $nota->tdocod, 'serie' => $nota->serdoc, 'numero' => (string) $nota->numdoc,
+                    'id_empresa_negocio' => $m->id_empresa_negocio, 'cliente' => $nota->ccanom, 'descripcion' => 'BAJA DE LA NOTA '.$num,
+                    'fecha_mov' => now()->toDateString(), 'lote' => $m->mov_lote, 'vencimiento' => $m->mov_vencimiento,
+                ]);
+            }
+        });
+    }
+
     /** Línea de detalle con IGV según su afectación; $conStock = devolución de producto */
     private static function linea(string $desc, float $cant, float $precio, string $tig, ?object $ref, bool $conStock, float $factor, ?float $importe = null): array
     {

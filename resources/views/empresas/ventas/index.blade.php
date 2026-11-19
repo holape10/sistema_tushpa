@@ -179,12 +179,12 @@
                                                 'estado' => $v->est_sunat ?: 'PENDIENTE',
                                                 'guia' => !$anulada,
                                                 'descartar' => !$anulada && auth()->user()->esAdmin() && $v->est_sunat === 'RECHAZADO' && in_array($v->tdocod, ['01', '03', '07', '08'], true),
-                                                'baja' => $puedeBaja = $puedeAnular && in_array($v->tdocod, ['01', '03'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja
+                                                'baja' => $puedeBaja = $puedeAnular && in_array($v->tdocod, ['01', '03', '07', '08'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja
                                                     && in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
                                                 // Por qué no se puede dar de baja (la opción se ve, pero apagada)
                                                 'bajaNo' => ! $puedeBaja ? null : match (true) {
                                                     $v->ccafem < now()->subDays(\App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS)->toDateString() => 'Pasaron más de '.\App\Support\Sunat\SunatService::PLAZO_BAJA_DIAS.' días: usa nota de crédito',
-                                                    ! $turnoAbierto => 'El turno de esta venta ya se cerró: usa nota de crédito',
+                                                    ! $turnoAbierto && ! in_array($v->tdocod, ['07', '08'], true) => 'El turno de esta venta ya se cerró: usa nota de crédito',
                                                     default => null,
                                                 },
                                             ]))"><i class="fas fa-ellipsis-vertical"></i></button>

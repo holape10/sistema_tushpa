@@ -10,6 +10,7 @@ use App\Support\Comprobante;
 use App\Support\ConsultaPeru;
 use App\Support\Contingencia;
 use App\Support\CuotasCredito;
+use App\Support\Notas;
 use App\Support\Tenancy\Tenancy;
 use App\Support\Ubigeo;
 use App\Support\Unidades;
@@ -637,8 +638,8 @@ class SunatService
         if (! $cab) {
             throw new RuntimeException('Comprobante no encontrado.');
         }
-        if (! in_array($cab->tdocod, ['01', '03'], true)) {
-            throw new RuntimeException('La comunicación de baja es para facturas y boletas.');
+        if (! in_array($cab->tdocod, ['01', '03', '07', '08'], true)) {
+            throw new RuntimeException('La comunicación de baja es para facturas, boletas y sus notas de crédito o débito.');
         }
         if ($cab->ccabaj) {
             throw new RuntimeException('El comprobante ya está anulado.');
@@ -657,7 +658,8 @@ class SunatService
             throw new RuntimeException('SUNAT solo acepta la baja hasta '.self::PLAZO_BAJA_DIAS.' días después de emitido el comprobante. Emite una Nota de Crédito.');
         }
 
-        $esFactura = $cab->tdocod === '01';
+        // Facturas y sus notas (serie F): comunicación de baja (RA). Boletas y sus notas (serie B): resumen diario con estado 3 (RC)
+        $esFactura = $cab->tdocod === '01' || (in_array($cab->tdocod, ['07', '08'], true) && str_starts_with((string) $cab->serdoc, 'F'));
         $tipo = $esFactura ? 'RA' : 'RC';
         $hoy = now()->toDateString();
         $motivo = mb_strtoupper(mb_substr(trim($motivo), 0, 70));
@@ -686,16 +688,21 @@ class SunatService
                 ->setFecComunicacion(new DateTime($hoy, $zona))
                 ->setCompany($this->company())
                 ->setDetails([(new VoidedDetail)
-                    ->setTipoDoc('01')->setSerie($cab->serdoc)->setCorrelativo((string) (int) $cab->numdoc)
+                    ->setTipoDoc($cab->tdocod)->setSerie($cab->serdoc)->setCorrelativo((string) (int) $cab->numdoc)
                     ->setDesMotivoBaja($motivo)]);
         } else {
+            $detalle = new SummaryDetail;
+            if (in_array($cab->tdocod, ['07', '08'], true) && ($cab->serie_ref ?? null)) {
+                // La nota de una boleta va con la boleta que modifica
+                $detalle->setDocReferencia((new Document)->setTipoDoc((string) ($cab->tdocod_ref ?: '03'))->setNroDoc($cab->serie_ref.'-'.$cab->num_ref));
+            }
             $documento = (new Summary)
                 ->setFecGeneracion(new DateTime($cab->ccafem, $zona))
                 ->setFecResumen(new DateTime($hoy, $zona))
                 ->setCorrelativo($correlativo)
                 ->setCompany($this->company())
-                ->setDetails([(new SummaryDetail)
-                    ->setTipoDoc('03')
+                ->setDetails([$detalle
+                    ->setTipoDoc($cab->tdocod)
                     ->setSerieNro($cab->serdoc.'-'.$cab->numdoc)
                     ->setEstado('3') // 3 = anular
                     ->setClienteTipo((string) $cab->tdicod)
@@ -736,7 +743,9 @@ class SunatService
         $r = $this->consultarTicket($resId);
 
         return match ($r['estado']) {
-            'ACEPTADO' => ['ok' => true, 'estado' => 'ACEPTADO', 'mensaje' => "Baja aceptada por SUNAT ({$res->nom_arch}). La venta quedó anulada y el stock volvió al almacén."],
+            'ACEPTADO' => ['ok' => true, 'estado' => 'ACEPTADO', 'mensaje' => in_array($cab->tdocod, ['07', '08'], true)
+                ? "Baja aceptada por SUNAT ({$res->nom_arch}). La nota quedó anulada y el comprobante que modificaba vuelve a estar vigente."
+                : "Baja aceptada por SUNAT ({$res->nom_arch}). La venta quedó anulada y el stock volvió al almacén."],
             'RECHAZADO' => ['ok' => false, 'estado' => 'RECHAZADO', 'mensaje' => 'SUNAT rechazó la baja: '.$r['mensaje']],
             default => ['ok' => true, 'estado' => 'EN PROCESO', 'mensaje' => "Baja enviada ({$res->nom_arch}). SUNAT aún la procesa: consulta el ticket en Resumen diario en unos minutos; al aceptarse se anula la venta."],
         };
@@ -751,8 +760,13 @@ class SunatService
                 'est_sunat' => 'ANULADO',
                 'ccadessun' => mb_substr('Baja aceptada en '.$res->nom_arch.'. '.$r['mensaje'], 0, 500),
             ]);
-            AnulacionVenta::anular((int) $cab->IdCpe_cabecera, (string) ($cab->motivo_baja ?: 'COMUNICACIÓN DE BAJA'),
-                $cab->IdUsuario_baja ? (int) $cab->IdUsuario_baja : null, 'BAJA SUNAT');
+            if (in_array($cab->tdocod, ['07', '08'], true)) {
+                // Nota de crédito o débito: queda sin efecto (lo que devolvió al stock vuelve a salir)
+                Notas::anularPorBaja($cab);
+            } else {
+                AnulacionVenta::anular((int) $cab->IdCpe_cabecera, (string) ($cab->motivo_baja ?: 'COMUNICACIÓN DE BAJA'),
+                    $cab->IdUsuario_baja ? (int) $cab->IdUsuario_baja : null, 'BAJA SUNAT');
+            }
             Bitacora::registrar('venta.baja_aceptada', "SUNAT aceptó la baja de {$cab->serdoc}-{$cab->numdoc}: la venta quedó anulada", null, [
                 'usuario' => null, 'nombre' => 'SUNAT', 'sucursal' => (int) $cab->id_empresa_negocio, 'empresa' => $cab->IdEmpresa,
                 'referencia' => ['venta', $cab->IdCpe_cabecera],

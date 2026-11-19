@@ -240,10 +240,12 @@ class VentaController extends Controller
         if ($cab->ccabaj) {
             return response()->json(['success' => false, 'message' => 'La venta ya está anulada.']);
         }
-        if ($cab->tdocod !== '13' && ! in_array($cab->tdocod, ['01', '03'], true)) {
-            return response()->json(['success' => false, 'message' => 'Las notas de crédito y débito no se anulan aquí.']);
+        $esNota = in_array($cab->tdocod, ['07', '08'], true);
+        // Las notas de crédito y débito no van a la caja: solo se dan de baja ante SUNAT (no dependen del turno)
+        if ($esNota && ! in_array($cab->est_sunat, ['ACEPTADO', 'OBSERVADO'], true)) {
+            return response()->json(['success' => false, 'message' => 'La nota está '.($cab->est_sunat ?: 'PENDIENTE').' en SUNAT: solo se da de baja cuando está ACEPTADA.']);
         }
-        if ($error = $this->validarTurnoAbierto($cab)) {
+        if (! $esNota && ($error = $this->validarTurnoAbierto($cab))) {
             return response()->json(['success' => false, 'message' => $error]);
         }
 

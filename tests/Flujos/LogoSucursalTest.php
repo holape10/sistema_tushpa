@@ -100,10 +100,10 @@ class LogoSucursalTest extends FlujoTestCase
         }
         $actual = (int) $cab['numdoc'];
 
-        // Se puede dejar en el último del tramo nuevo (los 100 siguientes están libres)…
+        // Se puede dejar en el último del tramo nuevo (el número siguiente está libre)…
         $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => $actual]))->assertSessionHasNoErrors();
-        // …pero no tan cerca del tramo antiguo
-        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => 650]))
+        // …pero no si el número siguiente ya existe (el 695)
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BnuEmpresa' => 694]))
             ->assertSessionHasErrors(['BnuEmpresa' => "Boleta {$cab['serdoc']}: el {$cab['serdoc']}-695 ya existe; el correlativo no puede ser menor (se repetirían números). Lo último emitido es el 700."]);
 
         // Al llegar al tramo antiguo, la venta salta al siguiente número libre (nunca repite)
@@ -127,7 +127,7 @@ class LogoSucursalTest extends FlujoTestCase
         VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('JUANE', 15, 10), 1]], '03'), 'PV');
 
         $this->get(route('sucursales.edit', $this->sucursal))->assertOk()->assertSee('Serie nueva: pon 0');
-        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BseEmpresa' => 'B001', 'BnuEmpresa' => 54300]))
+        $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BseEmpresa' => 'B001', 'BnuEmpresa' => 54326]))
             ->assertSessionHasErrors('BnuEmpresa');
         $this->patch(route('sucursales.update', $this->sucursal), $this->formulario(['BseEmpresa' => 'B002', 'BnuEmpresa' => 0]))->assertSessionHasNoErrors();
 

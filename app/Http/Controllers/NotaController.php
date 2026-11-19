@@ -165,8 +165,12 @@ class NotaController extends Controller
         $numero = $nota->serdoc.'-'.str_pad($nota->numdoc, 8, '0', STR_PAD_LEFT);
         $mensaje = ($nota->tdocod === '07' ? 'Nota de crédito ' : 'Nota de débito ')."{$numero} emitida.";
 
-        // Las notas de facturas se envían en el momento; las de boletas van en el resumen diario
-        if ($nota->serdoc[0] === 'F') {
+        // Envío automático: las notas de facturas se envían en el momento (las de boletas van en el resumen diario).
+        // En manual se envían desde la lista, como las facturas.
+        $automatico = (int) DB::table('empresa')->where('IdEmpresa', $nota->IdEmpresa)->value('tipo_envio') === 1;
+        if ($nota->serdoc[0] === 'F' && ! $automatico) {
+            $mensaje .= ' Envíala a SUNAT desde esta lista (el envío está en manual).';
+        } elseif ($nota->serdoc[0] === 'F') {
             try {
                 $r = SunatService::paraUsuario(Auth::user())->enviarComprobante($id);
                 $mensaje .= ' SUNAT: '.$r['estado'].($r['ok'] ? '.' : ' — '.$r['mensaje'].' Puedes reenviarla desde esta lista.');

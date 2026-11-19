@@ -56,9 +56,6 @@ class SucursalController extends Controller
             ->where('numdoc', $numero)->where('enviado', 0)->whereIn('est_sunat', ['PENDIENTE', 'ERROR'])->exists();
     }
 
-    /** Para bajar el correlativo, cuántos números siguientes tienen que estar libres */
-    private const LIBRES = 100;
-
     /** El primer número ya emitido después de $numero en la serie (null si no hay) */
     private function primeroOcupado(int $idSucursal, string $tdocod, string $serie, int $numero): ?int
     {
@@ -197,13 +194,12 @@ class SucursalController extends Controller
         foreach (self::SERIES as $tdocod => $c) {
             $serie = $datos[$c['serie']];
 
-            // El correlativo es el ÚLTIMO número usado. Puede quedar debajo de lo emitido solo si los próximos números están
-            // libres: cuando la serie volvió a empezar y quedó un tramo antiguo más adelante (ej. FC01 1-44 y 695-700 de antes).
-            // Al emitir, los números que ya existen se saltan solos.
+            // El correlativo es el ÚLTIMO número usado. Puede quedar debajo de lo emitido si el número siguiente está libre (para
+            // usar un número que quedó libre, ej. FC01-45). Al emitir, los números que ya existen se saltan solos (46 → 47).
             $ultimo = $this->ultimoEmitido($sucursal->id_empresa_negocio, $c['tdocod'] ?? $tdocod, $serie);
             $nuevo = (int) $datos[$c['numero']];
             $choca = $nuevo < $ultimo ? $this->primeroOcupado($sucursal->id_empresa_negocio, $c['tdocod'] ?? $tdocod, $serie, $nuevo) : null;
-            if ($choca !== null && $choca <= $nuevo + self::LIBRES) {
+            if ($choca !== null && $choca <= $nuevo + 1) {
                 $errores[$c['numero']] = "{$c['nombre']} {$serie}: el {$serie}-{$choca} ya existe; el correlativo no puede ser menor (se repetirían números). Lo último emitido es el {$ultimo}."
                     .($this->sinEnviar($sucursal->id_empresa_negocio, $c['tdocod'] ?? $tdocod, $serie, $ultimo)
                         ? " El {$serie}-{$ultimo} aún no se envía a SUNAT: si su número salió por error, no lo envíes y pide a soporte que lo corrija."
