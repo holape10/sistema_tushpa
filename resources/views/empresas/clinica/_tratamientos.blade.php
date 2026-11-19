@@ -240,6 +240,10 @@
                                     <span x-text="Number(r.adelanto) > 0 ? soles(r.adelanto) : '—'"></span>
                                     <span x-show="r.cobrado === true" class="block text-[10px] font-bold text-emerald-600">cobrado en caja</span>
                                     <span x-show="r.cobrado === false" class="block text-[10px] font-bold text-amber-600">por cobrar en caja</span>
+                                    @if (auth()->user()->puedeCobrar())
+                                        <a x-show="r.cobrado === false && r.ped_id" :href="@js(route('pv.index')) + '?clinica=' + r.ped_id"
+                                           class="mt-1 inline-block rounded-md bg-teal-600 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-teal-700">💳 Cobrar en Punto Venta</a>
+                                    @endif
                                     <span x-show="r.cobrado === null && Number(r.adelanto) > 0" class="block text-[10px] font-bold text-gray-500">cobrado antes</span>
                                 </td>
                                 <td class="px-3 py-2 text-right whitespace-nowrap font-semibold" x-text="soles(r.saldo)"></td>

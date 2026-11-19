@@ -321,6 +321,27 @@ class Clinica
     }
 
     /** Cobrada desde el Punto Venta: sus líneas quedan cobradas y sale de "Por cobrar" */
+    /**
+     * Adelanto de un tratamiento cobrado con otro precio (en el Punto Venta o en Cobrar): la sesión queda con lo que de
+     * verdad se cobró y el saldo se recalcula. No deja que lo pagado pase el costo del tratamiento.
+     *
+     * @throws \RuntimeException si con ese monto lo pagado pasaría el costo
+     */
+    public static function ajustarAdelanto(int $pedId, float $cobrado): void
+    {
+        $reg = DB::table('clinica_tratamiento_registros')->where('ped_id', $pedId)->first();
+        if (! $reg) {
+            return;
+        }
+        $tra = DB::table('clinica_tratamientos')->where('tra_id', $reg->tra_id)->first();
+        $otros = (float) DB::table('clinica_tratamiento_registros')->where('tra_id', $reg->tra_id)->where('reg_id', '!=', $reg->reg_id)->sum('adelanto');
+        if ($tra && (float) $tra->costo > 0 && $otros + $cobrado > (float) $tra->costo + 0.001) {
+            throw new \RuntimeException('Con ese precio lo pagado pasaría el costo del tratamiento (S/ '.number_format((float) $tra->costo, 2).'): corrige primero el costo del tratamiento.');
+        }
+        DB::table('clinica_tratamiento_registros')->where('reg_id', $reg->reg_id)->update(['adelanto' => round($cobrado, 2)]);
+        self::actualizarEstado((int) $reg->tra_id);
+    }
+
     public static function marcarCobrado(int $pedId): void
     {
         PedidoDetalle::where('ped_id', $pedId)->where('estadoitem', '!=', 'Eliminado')->update(['item_facturado' => DB::raw('ped_det_can')]);
@@ -526,6 +547,24 @@ class Clinica
     {
         return $pedId && (DB::table('cpe_cabecera')->where('ped_id', $pedId)->exists()
             || DB::table('pedidos')->where('ped_id', $pedId)->where('ped_est', 'Cerrado')->exists());
+    }
+
+    /**
+     * Lo que estaba por cobrar ya se cobró aparte (por ejemplo, se vendió directo en el Punto Venta): sale de pendientes.
+     * Si era el pago de una sesión de tratamiento, la sesión queda como «cobrado antes».
+     *
+     * @throws \RuntimeException si no está pendiente
+     */
+    public static function quitarPorCobrar(int $suc, int $pedId): object
+    {
+        $ped = DB::table('pedidos')->where('ped_id', $pedId)->where('id_empresa_negocio', $suc)->where('ped_tip', 'Clinica')->first();
+        if (! $ped || $ped->ped_est !== 'Aperturado' || self::pagoCobrado($pedId)) {
+            throw new \RuntimeException('Ese cobro ya no está pendiente.');
+        }
+        DB::table('clinica_tratamiento_registros')->where('ped_id', $pedId)->update(['ped_id' => null]);
+        self::anularCobroPendiente($pedId);
+
+        return $ped;
     }
 
     /** El cobro pendiente en caja de una sesión se anula (lo que no tiene comprobante) */

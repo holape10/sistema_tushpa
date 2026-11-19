@@ -111,11 +111,20 @@ class TurnoController extends Controller
 
         $resumen = self::resumen($turno);
         $tiposCaja = DB::table('tiposcaja')->whereNotIn('tip_caj_id', ['001', '002'])->orderBy('tipo')->orderBy('tip_caj_id')->get();
-        $pedidosAbiertos = Pedido::where('id_empresa_negocio', $user->id_empresa_negocio)->where('ped_est', 'Aperturado')->count();
+        // Pedidos sin cobrar: de la clínica (se cobran desde la Agenda › Por cobrar) y de mesas o llevar (desde Comandas)
+        $abiertos = Pedido::where('id_empresa_negocio', $user->id_empresa_negocio)->where('ped_est', 'Aperturado')
+            ->selectRaw("SUM(ped_tip = 'Clinica') AS clinica, COUNT(*) AS total")->first();
+        $pedidosAbiertos = (int) ($abiertos->total ?? 0);
+        $pedidosClinica = (int) ($abiertos->clinica ?? 0);
+        $irPendientes = match (true) {
+            $pedidosAbiertos === 0 => null,
+            $pedidosClinica === $pedidosAbiertos => route('clinica.agenda').'#por-cobrar',
+            default => route('comandas.seleccion'),
+        };
 
         return view('empresas.turnos.panel', [
             'turno' => $turno, 'r' => $resumen, 'tiposCaja' => $tiposCaja,
-            'pedidosAbiertos' => $pedidosAbiertos, 'denominaciones' => Turno::DENOMINACIONES,
+            'pedidosAbiertos' => $pedidosAbiertos, 'pedidosClinica' => $pedidosClinica, 'irPendientes' => $irPendientes, 'denominaciones' => Turno::DENOMINACIONES,
             'ciego' => $turno->esCiegoPara($user),
         ]);
     }

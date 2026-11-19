@@ -3,7 +3,9 @@
 namespace Tests\Flujos;
 
 use App\Models\Cliente;
+use App\Models\Producto;
 use App\Models\Turno;
+use App\Support\VentaDirecta;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -88,6 +90,38 @@ class ClinicaTratamientoRapidoTest extends FlujoTestCase
         $reg = DB::table('clinica_tratamiento_registros')->where('reg_id', $reg->reg_id)->first();
         $this->assertEquals(150, (float) $reg->adelanto, 'La sesión queda con lo que de verdad se cobró.');
         $this->assertEquals(1850, (float) $reg->saldo);
+    }
+
+    public function test_el_adelanto_se_manda_al_punto_venta_y_se_cobra_con_otro_precio(): void
+    {
+        $r = $this->nuevo(['descripcion' => 'CURACIONES', 'costo' => 700, 'detalle' => 'PRIMERA SESION', 'adelanto' => 200]);
+        $reg = DB::table('clinica_tratamiento_registros')->where('tra_id', $r['tra_id'])->first();
+        $linea = DB::table('pedidos_detalle')->where('ped_id', $reg->ped_id)->first();
+
+        // En la historia: el pago por cobrar va directo al Punto Venta; en la caja, el aviso lleva a los pendientes
+        $this->get(route('clinica.historia', $this->historia))->assertOk()->assertSee('Cobrar en Punto Venta');
+        $this->get(route('turnos.index'))->assertOk()->assertSee('Ver y cobrar')->assertSee(route('clinica.agenda').'#por-cobrar', false);
+
+        // En el Punto Venta se cobra con otro precio: la sesión queda con lo cobrado y el saldo se recalcula
+        $id = VentaDirecta::registrar($this->usuario, $this->venta([[Producto::find($linea->IdProducto), 1, 150]], '13', ['pedido_id' => $reg->ped_id]), 'PV');
+        $this->assertEquals(150, (float) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->value('ccaitv'));
+        $reg = DB::table('clinica_tratamiento_registros')->where('reg_id', $reg->reg_id)->first();
+        $this->assertEquals([150, 550], [(float) $reg->adelanto, (float) $reg->saldo]);
+        $this->assertSame('Cerrado', DB::table('pedidos')->where('ped_id', $reg->ped_id)->value('ped_est'));
+    }
+
+    public function test_lo_que_ya_se_cobro_aparte_se_quita_de_por_cobrar(): void
+    {
+        $r = $this->nuevo(['descripcion' => 'CURACIONES', 'costo' => 700, 'detalle' => 'PRIMERA SESION', 'adelanto' => 200]);
+        $reg = DB::table('clinica_tratamiento_registros')->where('tra_id', $r['tra_id'])->first();
+        $this->get(route('clinica.agenda'))->assertOk()->assertSee('Ya se cobró aparte');
+
+        $this->post(route('clinica.porcobrar.quitar', $reg->ped_id))->assertSessionHas('success');
+        $this->assertSame('Anulado', DB::table('pedidos')->where('ped_id', $reg->ped_id)->value('ped_est'));
+        $this->assertNull(DB::table('clinica_tratamiento_registros')->where('reg_id', $reg->reg_id)->value('ped_id'), 'La sesión queda como cobrada antes.');
+        $this->assertDatabaseHas('bitacora', ['accion' => 'clinica.quitar_cobro']);
+        // Ya no está pendiente: no se puede quitar otra vez
+        $this->post(route('clinica.porcobrar.quitar', $reg->ped_id))->assertSessionHas('error');
     }
 
     public function test_el_cajero_no_puede_cambiar_el_precio(): void

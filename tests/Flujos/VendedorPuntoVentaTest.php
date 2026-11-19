@@ -10,13 +10,14 @@ use Illuminate\Support\Facades\DB;
 /** Sucursales › «Elegir el vendedor en el Punto Venta»: varios venden en la misma PC y se elige quién vendió */
 class VendedorPuntoVentaTest extends FlujoTestCase
 {
-    private function vendedora(bool $activa = true): User
+    private function vendedora(bool $activa = true, int $rol = VentaDirecta::ROL_VENDEDOR, string $nombre = 'ROSA VENDEDORA'): User
     {
         $u = $this->usuario->replicate();
         $u->email = 'vendedora'.uniqid().'@prueba.test';
-        $u->apeusu = 'ROSA VENDEDORA';
+        $u->apeusu = $nombre;
         $u->estusu = $activa ? 1 : 0;
         $u->save();
+        DB::table('role_user')->insert(['role_id' => $rol, 'user_IdUsuario' => $u->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
 
         return $u;
     }
@@ -40,8 +41,10 @@ class VendedorPuntoVentaTest extends FlujoTestCase
         DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['pv_elegir_vendedor' => 1]);
         $rosa = $this->vendedora();
         $inactiva = $this->vendedora(false);
+        $cajero = $this->vendedora(true, 4, 'PEDRO CAJERO');
 
-        $this->get(route('pv.index'))->assertOk()->assertSee('ROSA VENDEDORA')->assertSee('¿Quién vendió?');
+        // Solo los de rol Vendedor
+        $this->get(route('pv.index'))->assertOk()->assertSee('ROSA VENDEDORA')->assertSee('¿Quién vendió?')->assertDontSee('PEDRO CAJERO');
 
         $id = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('JUANE', 15, 10), 1]], '13', ['vendedor' => $rosa->IdUsuario]), 'PV');
         $this->assertSame((int) $rosa->IdUsuario, $this->vendedorDe($id));
@@ -49,8 +52,10 @@ class VendedorPuntoVentaTest extends FlujoTestCase
         $ticket = Impresion::ticketComprobante(DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first(), (object) ['columnas' => 42, 'diseno' => 'CLASICO', 'abrir_cajon' => 0]);
         $this->assertStringContainsString('ROSA VENDEDORA', $ticket);
 
-        // Un usuario inactivo (o de otra sucursal) no puede figurar: queda quien cobra
-        $otra = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('CECINA', 20, 10), 1]], '13', ['vendedor' => $inactiva->IdUsuario]), 'PV');
-        $this->assertSame((int) $this->usuario->IdUsuario, $this->vendedorDe($otra));
+        // Un usuario inactivo o que no es Vendedor no puede figurar: queda quien cobra
+        foreach ([$inactiva, $cajero] as $nadie) {
+            $otra = VentaDirecta::registrar($this->usuario, $this->venta([[$this->producto('CECINA '.uniqid(), 20, 10), 1]], '13', ['vendedor' => $nadie->IdUsuario]), 'PV');
+            $this->assertSame((int) $this->usuario->IdUsuario, $this->vendedorDe($otra));
+        }
     }
 }

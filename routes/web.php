@@ -330,6 +330,7 @@ Route::middleware('auth')->group(function () {
     Route::controller(AgendaController::class)->prefix('clinica')->name('clinica.')->group(function () {
         Route::get('/agenda', 'index')->name('agenda');
         Route::get('/agenda/datos', 'datos')->name('agenda.datos');
+        Route::post('/por-cobrar/{pedId}/quitar', 'quitarPorCobrar')->whereNumber('pedId')->name('porcobrar.quitar');
         Route::post('/citas', 'guardar')->name('cita');
         Route::post('/citas/{id}/estado', 'estado')->whereNumber('id')->name('cita.estado');
         Route::get('/citas/{id}/atender', 'atender')->whereNumber('id')->name('cita.atender');

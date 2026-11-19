@@ -180,9 +180,11 @@
         <div class="bg-white rounded-2xl shadow-sm p-4 h-fit" x-data="cierre({{ $ciego ? 'null' : $r['efectivoEsperado'] }})">
             <h3 class="font-semibold text-gray-700 mb-3">Cerrar turno (arqueo)</h3>
             @if ($pedidosAbiertos > 0)
-                <div class="mb-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-xs">
-                    ⚠️ Hay {{ $pedidosAbiertos }} pedido(s) sin cobrar en la sucursal.
-                </div>
+                {{-- Lleva a donde se cobran: la Agenda (clínica) o las Comandas (mesas, llevar, delivery) --}}
+                <a href="{{ $irPendientes }}" class="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-xs hover:bg-amber-100">
+                    <span class="flex-1">⚠️ Hay {{ $pedidosAbiertos }} pedido(s) sin cobrar en la sucursal{{ $pedidosClinica ? ' ('.$pedidosClinica.' de la clínica)' : '' }}.</span>
+                    <span class="font-bold underline whitespace-nowrap">Ver y cobrar →</span>
+                </a>
             @endif
             {{-- Ventas hechas sin internet en esta PC que aún no suben: el cierre no las contaría --}}
             <div x-data="{ offline: 0 }" x-init="window.CajaOffline && CajaOffline.pendientes().then((l) => offline = l.filter((v) => !v.usuario || v.usuario === {{ (int) auth()->user()->IdUsuario }}).length).catch(() => {})" x-show="offline" x-cloak

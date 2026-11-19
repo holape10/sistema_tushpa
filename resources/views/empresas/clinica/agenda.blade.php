@@ -71,7 +71,7 @@
             {{-- Por cobrar --}}
             <div class="space-y-3">
                 @if ($puedeCobrar)
-                    <div class="bg-white rounded-2xl shadow-sm p-5">
+                    <div id="por-cobrar" class="bg-white rounded-2xl shadow-sm p-5 scroll-mt-4">
                         <h2 class="font-bold text-gray-700 mb-2"><i class="fas fa-cash-register text-teal-600"></i> Por cobrar ({{ $porCobrar->count() }})</h2>
                         @forelse ($porCobrar as $p)
                             <div class="flex items-center justify-between gap-2 border-b py-2">
@@ -81,7 +81,14 @@
                                     {{-- Qué se cobra --}}
                                     @foreach ($p->lineas as $l)<p class="text-xs text-teal-800 truncate">• {{ $l }}</p>@endforeach
                                 </div>
-                                <a href="{{ route('pv.index', ['clinica' => $p->ped_id]) }}" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold whitespace-nowrap">Cobrar S/ {{ number_format($p->ped_tot, 2) }}</a>
+                                <div class="flex flex-col items-end gap-1">
+                                    <a href="{{ route('pv.index', ['clinica' => $p->ped_id]) }}" class="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold whitespace-nowrap">Cobrar S/ {{ number_format($p->ped_tot, 2) }}</a>
+                                    @if (auth()->user()->esAdmin())
+                                        <form method="POST" action="{{ route('clinica.porcobrar.quitar', $p->ped_id) }}"
+                                              onsubmit="return confirm('¿Ya se cobró aparte (por ejemplo, directo en el Punto Venta)? Deja de salir como pendiente. No se emite ni anula ningún comprobante.')">
+                                            @csrf<button class="text-[11px] font-semibold text-gray-500 hover:text-rose-600 underline">Ya se cobró aparte</button></form>
+                                    @endif
+                                </div>
                             </div>
                         @empty
                             <p class="text-sm text-gray-400">Nada pendiente. Cuando el doctor termina una atención aparece aquí.</p>

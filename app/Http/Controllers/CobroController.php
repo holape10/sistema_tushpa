@@ -206,16 +206,7 @@ class CobroController extends Controller
         $pedido->update(['ped_tot' => round($total, 2)]);
         // Adelanto de un tratamiento de la clínica: la sesión queda con lo que de verdad se cobra (y el saldo se recalcula)
         if ($pedido->ped_tip === 'Clinica') {
-            $reg = DB::table('clinica_tratamiento_registros')->where('ped_id', $pedido->ped_id)->first();
-            if ($reg) {
-                $tra = DB::table('clinica_tratamientos')->where('tra_id', $reg->tra_id)->first();
-                $otros = (float) DB::table('clinica_tratamiento_registros')->where('tra_id', $reg->tra_id)->where('reg_id', '!=', $reg->reg_id)->sum('adelanto');
-                if ((float) $tra->costo > 0 && $otros + $total > (float) $tra->costo + 0.001) {
-                    throw new \RuntimeException('Con ese precio lo pagado pasaría el costo del tratamiento (S/ '.number_format((float) $tra->costo, 2).'): corrige primero el costo del tratamiento.');
-                }
-                DB::table('clinica_tratamiento_registros')->where('reg_id', $reg->reg_id)->update(['adelanto' => round($total, 2)]);
-                Clinica::actualizarEstado((int) $reg->tra_id);
-            }
+            Clinica::ajustarAdelanto((int) $pedido->ped_id, $total);
         }
 
         return $claves;

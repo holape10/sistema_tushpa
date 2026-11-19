@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Bitacora;
 use App\Support\Clinica;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -114,6 +115,22 @@ class AgendaController extends Controller
         } catch (\RuntimeException $e) {
             return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
         }
+    }
+
+    /** Lo que estaba por cobrar ya se cobró aparte: sale de pendientes (solo el administrador; queda en la bitácora) */
+    public function quitarPorCobrar(int $pedId)
+    {
+        $this->usa();
+        abort_unless(Auth::user()->esAdmin(), 403, 'Solo el administrador quita cobros pendientes.');
+        try {
+            $ped = Clinica::quitarPorCobrar($this->suc(), $pedId);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+        Bitacora::registrar('clinica.quitar_cobro', 'Quitó de «Por cobrar» a '.$ped->ped_cli_nom.' (S/ '.number_format((float) $ped->ped_tot, 2).'): ya se cobró aparte', null,
+            ['alerta' => true, 'datos' => ['pedido' => $pedId, 'detalle' => $ped->ped_obs]]);
+
+        return back()->with('success', 'Listo: ya no sale como pendiente de cobro.');
     }
 
     public function estado(Request $request, int $id)

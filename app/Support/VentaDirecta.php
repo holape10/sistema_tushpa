@@ -149,6 +149,8 @@ class VentaDirecta
                 Proformas::marcarFacturada($proformaId, $cabId);
             }
             if ($pedidoClinica) {
+                // Adelanto de un tratamiento: la sesión queda con lo que de verdad se cobró (si se cambió el precio)
+                Clinica::ajustarAdelanto((int) $pedidoClinica->ped_id, (float) DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cabId)->value('ccaitv'));
                 Clinica::marcarCobrado((int) $pedidoClinica->ped_id);
             }
 
@@ -163,15 +165,19 @@ class VentaDirecta
      *
      * @return array<int, array{0: string, 1: string, 2: string}>
      */
+    /** Rol «Vendedor» */
+    public const ROL_VENDEDOR = 5;
+
     /**
-     * Los que pueden figurar como vendedor en el Punto Venta: los usuarios activos de la sucursal.
+     * Los que pueden figurar como vendedor en el Punto Venta: los usuarios activos de la sucursal con rol Vendedor.
      *
      * @return list<array{id: int, nombre: string}>
      */
     public static function vendedores(User $user): array
     {
-        return DB::table('users')->where('IdEmpresa', $user->IdEmpresa)->where('id_empresa_negocio', $user->id_empresa_negocio)->where('estusu', 1)
-            ->orderBy('apeusu')->get(['IdUsuario', 'apeusu', 'name'])
+        return DB::table('users as u')->join('role_user as r', 'r.user_IdUsuario', '=', 'u.IdUsuario')
+            ->where('r.role_id', self::ROL_VENDEDOR)->where('u.IdEmpresa', $user->IdEmpresa)->where('u.id_empresa_negocio', $user->id_empresa_negocio)
+            ->where('u.estusu', 1)->distinct()->orderBy('u.apeusu')->get(['u.IdUsuario', 'u.apeusu', 'u.name'])
             ->map(fn ($u) => ['id' => (int) $u->IdUsuario, 'nombre' => trim((string) ($u->apeusu ?: $u->name))])->values()->all();
     }
 
