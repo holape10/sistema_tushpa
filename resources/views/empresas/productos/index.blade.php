@@ -21,6 +21,10 @@
         </form>
 
         <div class="flex flex-wrap gap-2" x-data="{ importar: false }">
+            <a href="{{ route('productos.etiquetas') }}"
+               class="inline-flex justify-center items-center px-4 py-2 rounded-xl bg-white text-slate-700 border border-slate-200 text-sm font-semibold hover:bg-slate-50 transition whitespace-nowrap">
+                🏷️ Etiquetas
+            </a>
             <a href="{{ route('productos.exportar', ['tipo' => $tipo]) }}"
                class="inline-flex justify-center items-center px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition whitespace-nowrap">
                 ⬇ Exportar Excel

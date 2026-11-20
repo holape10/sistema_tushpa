@@ -149,6 +149,28 @@ class Escpos
         return $this;
     }
 
+    /**
+     * Código de barras Code 128 dibujado por la propia impresora (GS k), con el texto debajo.
+     *
+     * @param  int  $alto  alto en puntos (80 ≈ 1 cm)
+     * @param  int  $modulo  ancho de la barra más delgada (2 a 6)
+     */
+    public function codigoBarras(string $datos, int $alto = 80, int $modulo = 2): self
+    {
+        $contenido = CodigoBarras::datosEscpos($datos);
+        if (strlen($contenido) <= 2) {
+            return $this;
+        }
+        $this->vista[] = ['tipo' => 'barras', 'texto' => CodigoBarras::limpiar($datos)] + $this->estado;
+        $this->buffer .= self::GS.'h'.chr(max(1, min(255, $alto)))      // alto
+            .self::GS.'w'.chr(max(2, min(6, $modulo)))                     // ancho del módulo
+            .self::GS.'H'."\x02"                                           // texto debajo
+            .self::GS.'f'."\x00"
+            .self::GS.'k'."\x49".chr(min(255, strlen($contenido))).$contenido."\n";
+
+        return $this;
+    }
+
     /** Filas de puntos por cada bloque del logo: bloques chicos para que la ticketera no se llene ni se apague */
     private const FILAS_POR_BLOQUE = 48;
 
