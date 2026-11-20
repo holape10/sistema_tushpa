@@ -290,6 +290,21 @@
                         </tr>
                     </tfoot>
                 </table>
+                {{-- QR de cobro (Yape, Plin…): el cliente escanea; cuando el pago llega al celular del negocio, se cobra e imprime --}}
+                <template x-for="m in medios.filter(x => x.qr && montoDe(x) > 0)" :key="'qr' + m.id">
+                    <div class="mt-3 flex flex-wrap items-center gap-4 rounded-2xl bg-violet-50 ring-1 ring-violet-200 p-3">
+                        <button type="button" @click="qrGrande = m" title="Mostrar en grande al cliente"><img :src="m.qr" alt="QR" class="h-32 w-32 rounded-xl bg-white object-contain ring-1 ring-violet-200"></button>
+                        <div class="flex-1 min-w-[180px] space-y-2">
+                            <p class="text-sm font-bold text-violet-900">Escanea con <span x-text="m.nombre"></span></p>
+                            <p class="text-2xl font-black text-violet-700" x-text="soles(montoDe(m) + comisionDe(m))"></p>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" @click="qrGrande = m" class="h-9 px-3 rounded-lg bg-white ring-1 ring-violet-300 text-violet-700 text-xs font-bold">⛶ Mostrar al cliente</button>
+                                <button type="button" @click="registrar(true)" :disabled="procesando" class="h-9 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-50">✔ Ya pagó: cobrar e imprimir</button>
+                            </div>
+                            <p class="text-[11px] text-violet-600">Confirma en el celular del negocio que llegó el pago antes de cobrar.</p>
+                        </div>
+                    </div>
+                </template>
                 <p x-show="carrito.length && Math.abs(diferencia) > 0.009" x-cloak class="mt-2 rounded-lg bg-amber-50 text-amber-800 text-sm px-3 py-2">
                     <strong x-text="diferencia > 0 ? 'Falta por pagar:' : 'Excede el total por:'"></strong> <span x-text="soles(Math.abs(diferencia))"></span>
                 </p>
@@ -594,6 +609,19 @@
                  :class="t.tipo === 'error' ? 'bg-rose-600 text-white' : (t.tipo === 'ok' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-white')"
                  x-text="t.texto"></div>
         </template>
+    </div>
+
+    {{-- QR en grande para mostrarlo al cliente --}}
+    <div x-show="qrGrande" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 p-4" @click.self="qrGrande = null" @keydown.escape.window="qrGrande = null">
+        <div class="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <p class="text-lg font-bold text-slate-700">Escanea con <span x-text="qrGrande?.nombre"></span></p>
+            <p class="text-4xl font-black text-violet-700 my-2" x-text="qrGrande ? soles(montoDe(qrGrande) + comisionDe(qrGrande)) : ''"></p>
+            <img :src="qrGrande?.qr" alt="QR de cobro" class="mx-auto w-full max-w-xs rounded-2xl ring-1 ring-slate-200 object-contain">
+            <div class="mt-5 flex gap-2">
+                <button type="button" @click="qrGrande = null" class="flex-1 h-12 rounded-xl bg-slate-100 font-bold text-slate-700">Cerrar</button>
+                <button type="button" @click="qrGrande = null; registrar(true)" :disabled="procesando" class="flex-1 h-12 rounded-xl bg-emerald-600 font-bold text-white disabled:opacity-50">✔ Ya pagó: cobrar e imprimir</button>
+            </div>
+        </div>
     </div>
 </div>
 <script src="{{ asset('js/fidelizacion-pos.js') }}?v={{ filemtime(public_path('js/fidelizacion-pos.js')) }}" data-previa="{{ route('fidelizacion.previa') }}" data-reservar="{{ route('fidelizacion.reservar') }}" data-csrf="{{ csrf_token() }}"></script>

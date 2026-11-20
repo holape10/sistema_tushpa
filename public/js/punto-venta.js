@@ -66,6 +66,8 @@ document.addEventListener('alpine:init', () => {
         nCuotas: 2,
         diasCuota: 30,
         medios: [],
+        // QR de cobro mostrado en grande al cliente (el medio de pago con su QR)
+        qrGrande: null,
         nuevoMedio: null,
         nuevoMonto: null,
         paga: null,

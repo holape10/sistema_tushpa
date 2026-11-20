@@ -58,9 +58,11 @@ class PuntoVentaController extends Controller
         $estadopagos = DB::table('credito_dias')->where('id_empresa_negocio', $user->id_empresa_negocio)
             ->get(['cre_dia_id', 'cre_dia_nom', 'cre_dia_tip', 'cre_dia_fac']);
         $mediospagos = MedioPago::where('id_empresa_negocio', $user->id_empresa_negocio)
-            ->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag', 'predeterminado', 'comision'])
+            ->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag', 'predeterminado', 'comision', 'qr'])
             ->map(fn ($m) => [
                 'id' => $m->id_med_pag, 'nombre' => $m->nom_med_pag,
+                // QR de cobro (Yape, Plin…): se muestra al cliente al cobrar con este medio
+                'qr' => $m->qr && is_file(public_path($m->qr)) ? asset($m->qr) : null,
                 'comision' => (float) ($m->comision ?? 0), 'predeterminado' => $m->predeterminado == '1',
             ]);
         $documentos = DB::table('tipo_documento_identidad')->orderBy('orden')->get(['tdicod', 'tdides']);

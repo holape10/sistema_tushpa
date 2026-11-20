@@ -45,3 +45,4 @@ Thumbs.db
 /public/imagenes/promos
 # QR de pago de cada usuario del panel (Mis datos de cobro)
 /public/imagenes/cobros
+/public/imagenes/qr
