@@ -92,12 +92,10 @@
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Código interno</label>
-                        @if ($p)
-                            <input type="text" value="{{ $p->procod }}" disabled class="w-full h-9 rounded-xl border-gray-200 bg-gray-100 text-sm text-gray-500">
-                        @else
-                            <input type="text" name="procod" value="{{ old('procod') }}" maxlength="20" placeholder="Se genera solo si lo dejas vacío" class="{{ $campo }} @error('procod') border-rose-400 bg-rose-50 @enderror">
-                            @error('procod')<span class="block mt-1 text-xs text-rose-600 font-semibold">{{ $message }}</span>@enderror
-                        @endif
+                        {{-- Editable: no se puede repetir con otro producto (ni con un código de barras). Las ventas ya hechas guardan el código de ese momento --}}
+                        <input type="text" name="procod" value="{{ old('procod', $p->procod ?? '') }}" maxlength="20"
+                               placeholder="{{ $p ? 'Si lo dejas vacío, se queda el actual' : 'Se genera solo si lo dejas vacío' }}" class="{{ $campo }} @error('procod') border-rose-400 bg-rose-50 @enderror">
+                        @error('procod')<span class="block mt-1 text-xs text-rose-600 font-semibold">{{ $message }}</span>@enderror
                     </div>
 
                     @include('empresas.productos.partials.codigo_barra')

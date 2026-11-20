@@ -55,6 +55,25 @@ class ProductoCodigoTest extends FlujoTestCase
         $this->assertSame(60, DB::table('productos')->where('id_empresa_negocio', $this->sucursal)->where('propun', 352.36)->count());
     }
 
+    public function test_el_codigo_interno_se_puede_cambiar_al_editar_sin_repetirse(): void
+    {
+        $arroz = $this->producto('ARROZ', 4);
+        $azucar = $this->producto('AZUCAR', 5);
+        DB::table('productos')->where('IdProducto', $arroz->IdProducto)->update(['procod' => 'ARR-1']);
+        DB::table('productos')->where('IdProducto', $azucar->IdProducto)->update(['procod' => 'AZU-1']);
+
+        $this->get(route('productos.edit', $arroz->IdProducto))->assertOk()->assertSee('name="procod" value="ARR-1"', false);
+        // A un código de otro producto, no
+        $this->put(route('productos.update', $arroz->IdProducto), ['pronom' => 'ARROZ', 'propun' => 4, 'procod' => 'azu-1'])
+            ->assertSessionHasErrors(['procod' => 'Ya existe un producto con el código azu-1: AZUCAR. Usa otro código.']);
+        $this->assertSame('ARR-1', DB::table('productos')->where('IdProducto', $arroz->IdProducto)->value('procod'));
+
+        // A uno nuevo, sí (y queda en la bitácora)
+        $this->put(route('productos.update', $arroz->IdProducto), ['pronom' => 'ARROZ', 'propun' => 4, 'procod' => 'ARROZ-COSTENO'])->assertSessionHasNoErrors();
+        $this->assertSame('ARROZ-COSTENO', DB::table('productos')->where('IdProducto', $arroz->IdProducto)->value('procod'));
+        $this->assertStringContainsString('ARROZ-COSTENO', (string) DB::table('bitacora')->where('accion', 'producto.editar')->orderByDesc('id')->value('cambios'));
+    }
+
     public function test_los_repetidos_que_ya_existian_se_siguen_editando(): void
     {
         $a = $this->producto('ARROZ', 4);

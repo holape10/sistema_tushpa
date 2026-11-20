@@ -92,6 +92,7 @@ class ProductoController extends Controller
             'debe' => 'nullable|string|min:4|max:12|regex:/^[0-9A-Za-z]+$/',
             'haber' => 'nullable|string|min:4|max:12|regex:/^[0-9A-Za-z]+$/',
             'codigo_barra' => 'nullable|string|max:50',
+            'procod' => 'nullable|string|max:20',
             // Kardex SUNAT (PLE 12.1 / 13.1)
             'unspsc' => ['nullable', 'regex:'.KardexSunat::REGLA_CODIGO],
             'tipo_existencia' => 'nullable|in:'.implode(',', array_keys(KardexSunat::TIPOS_EXISTENCIA)),
@@ -469,6 +470,8 @@ class ProductoController extends Controller
                 + ['propun' => in_array($tipo, [4, 8], true) ? ($request->propun ?: 0) : $request->propun,
                     'precio2' => self::precioExtra($request->precio2, $tipo), 'precio3' => self::precioExtra($request->precio3, $tipo),
                     'codigo_barra' => trim((string) $request->codigo_barra) ?: null,
+                    // El código interno se puede cambiar (vacío = se queda el actual; ya se revisó que no se repita)
+                    'procod' => trim((string) $request->procod) ?: $producto->procod,
                     'descripcion' => trim((string) $request->descripcion) ?: null,
                     'debe' => trim((string) $request->debe) ?: null, 'haber' => trim((string) $request->haber) ?: null,
                     'unspsc' => in_array($tipo, [0, 4], true) ? ($request->unspsc ?: null) : null,
