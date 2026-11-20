@@ -10,8 +10,8 @@
                     2 => ['IMPRESO', 'bg-green-100 text-green-700'], 9 => ['ERROR', 'bg-red-100 text-red-700']];
     @endphp
 
-    <div x-data="{ form: null, nueva() { this.form = { id: null, descripcion: '', tip_conex_imp: 'COMPARTIDO', ruta: '', columnas: 42, diseno: 'CLASICO', predeterminado: false, abrir_cajon: false, activo: true }; },
-                   editar(i) { this.form = Object.assign({}, i, { predeterminado: !!+i.predeterminado, abrir_cajon: !!+i.abrir_cajon, activo: !!+i.activo, diseno: i.diseno || 'CLASICO' }); } }">
+    <div x-data="{ form: null, nueva() { this.form = { id: null, descripcion: '', tip_conex_imp: 'COMPARTIDO', ruta: '', columnas: 42, diseno: 'CLASICO', predeterminado: false, abrir_cajon: false, letra_invertida: false, activo: true }; },
+                   editar(i) { this.form = Object.assign({}, i, { predeterminado: !!+i.predeterminado, abrir_cajon: !!+i.abrir_cajon, letra_invertida: !!+i.letra_invertida, activo: !!+i.activo, diseno: i.diseno || 'CLASICO' }); } }">
 
         {{-- Agente --}}
         <div class="bg-white rounded-2xl shadow-sm p-5 mb-5">
@@ -364,6 +364,8 @@
                     </select></label>
                 <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="predeterminado" value="1" x-model="form.predeterminado" class="rounded"> Impresora de caja por defecto</label>
                 <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="abrir_cajon" value="1" x-model="form.abrir_cajon" class="rounded"> Abrir el cajón de dinero al imprimir comprobantes</label>
+                <label class="flex items-start gap-2 text-sm" x-show="form.tip_conex_imp !== 'WINDOWS'"><input type="checkbox" name="letra_invertida" value="1" x-model="form.letra_invertida" class="rounded mt-0.5">
+                    <span>Letra invertida <span class="block text-xs text-gray-500">Márcalo si el ticket sale con letra muy chica y angosta (sin llegar al borde) y el pie sale grande. Pasa con NES POS E804 y otras ticketeras genéricas. Compruébalo con «Imprimir prueba».</span></span></label>
                 <label class="flex items-center gap-2 text-sm"><input type="hidden" name="activo" value="0"><input type="checkbox" name="activo" value="1" x-model="form.activo" class="rounded"> Activa</label>
                 <div class="flex gap-2 pt-2">
                     <button type="button" @click="form = null" class="flex-1 py-2 rounded-xl bg-gray-100 text-gray-700">Cancelar</button>

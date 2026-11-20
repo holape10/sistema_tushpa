@@ -90,6 +90,7 @@ class ImpresionController extends Controller
             'diseno' => 'nullable|in:CLASICO,MODERNO,COMPACTO,EN_LINEA,PERSONALIZADO',
             'predeterminado' => 'nullable|boolean',
             'abrir_cajon' => 'nullable|boolean',
+            'letra_invertida' => 'nullable|boolean',
             'activo' => 'nullable|boolean',
         ], ['ruta.regex' => 'Para RED escribe la IP (ej. 192.168.1.50 o 192.168.1.50:9100); para COMPARTIDO el nombre con el que compartiste la impresora; para A4 el nombre de la impresora en Windows.'],
             ['descripcion' => 'Nombre', 'ruta' => 'Ruta / IP', 'tip_conex_imp' => 'Conexión']);
@@ -97,7 +98,7 @@ class ImpresionController extends Controller
         return [
             'descripcion' => mb_strtoupper(trim($d['descripcion'])), 'tip_conex_imp' => $d['tip_conex_imp'], 'ruta' => trim($d['ruta']),
             'columnas' => (int) $d['columnas'], 'diseno' => $d['diseno'] ?? 'CLASICO', 'predeterminado' => (int) $request->boolean('predeterminado'),
-            'abrir_cajon' => (int) $request->boolean('abrir_cajon'), 'activo' => (int) $request->boolean('activo', true),
+            'abrir_cajon' => (int) $request->boolean('abrir_cajon'), 'letra_invertida' => (int) $request->boolean('letra_invertida'), 'activo' => (int) $request->boolean('activo', true),
         ];
     }
 

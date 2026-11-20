@@ -184,9 +184,9 @@ class Impresion
     }
 
     /** Encabezado del ticket ya armado (logo, nombre, RUC, dirección) para la caja sin internet: ella agrega el resto */
-    public static function encabezadoBytes(int $sucursal, int $columnas): string
+    public static function encabezadoBytes(int $sucursal, int $columnas, bool $letraInvertida = false): string
     {
-        $p = new Escpos($columnas);
+        $p = new Escpos($columnas, $letraInvertida);
         self::encabezado($p, $sucursal);
 
         return $p->bytes();
@@ -229,7 +229,7 @@ class Impresion
     /** Los bytes del ticket repetidos tantas copias como se pidan; el cajón se abre una sola vez al final */
     private static function conCopias(object $imp, string $bytes, int $copias, bool $cajon): string
     {
-        return str_repeat($bytes, max(1, $copias)).($cajon && $imp->abrir_cajon ? (new Escpos((int) $imp->columnas))->abrirCajon()->bytes() : '');
+        return str_repeat($bytes, max(1, $copias)).($cajon && $imp->abrir_cajon ? (Escpos::para($imp))->abrirCajon()->bytes() : '');
     }
 
     /**
@@ -361,7 +361,7 @@ class Impresion
                 : self::ticketClasico($cab, $imp, $detalle, $medios, (string) $tdodes, $pedido, ($imp->diseno ?? '') === 'EN_LINEA');
         }
 
-        $p = new Escpos((int) $imp->columnas);
+        $p = Escpos::para($imp);
         self::encabezado($p, (int) $cab->id_empresa_negocio);
         $p->linea('=')->negrita()->texto(mb_strtoupper((string) $tdodes))->tamano(1, 2)->texto($numero)->tamano()->negrita(false)->linea('=');
 
@@ -459,7 +459,7 @@ class Impresion
      */
     private static function ticketPersonalizado(object $cab, object $imp, $detalle, $medios, string $tdodes, ?object $pedido): Escpos
     {
-        $p = new Escpos((int) $imp->columnas);
+        $p = Escpos::para($imp);
         $ancho = $p->columnas();
         $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $cab->id_empresa_negocio)->first();
         $empresa = DB::table('empresa')->where('IdEmpresa', $negocio->IdEmpresa)->first();
@@ -618,7 +618,7 @@ class Impresion
      */
     private static function ticketCompacto(object $cab, object $imp, $detalle, $medios, string $tdodes, ?object $pedido): Escpos
     {
-        $p = new Escpos((int) $imp->columnas);
+        $p = Escpos::para($imp);
         $ancho = $p->columnas();
         $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $cab->id_empresa_negocio)->first();
         $empresa = DB::table('empresa')->where('IdEmpresa', $negocio->IdEmpresa)->first();
@@ -736,7 +736,7 @@ class Impresion
      */
     private static function ticketClasico(object $cab, object $imp, $detalle, $medios, string $tdodes, ?object $pedido, bool $enLinea = false): Escpos
     {
-        $p = new Escpos((int) $imp->columnas);
+        $p = Escpos::para($imp);
         $ancho = $p->columnas();
         $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $cab->id_empresa_negocio)->first();
         $empresa = DB::table('empresa')->where('IdEmpresa', $negocio->IdEmpresa)->first();
@@ -1077,7 +1077,7 @@ class Impresion
             if (! $imp) {
                 continue;
             }
-            $p = new Escpos((int) $imp->columnas);
+            $p = Escpos::para($imp);
             $p->alinear('centro');
             if ($anulacion) {
                 $p->negrita()->tamano(2, 2)->texto('ANULACIÓN')->tamano()->negrita(false);
@@ -1139,7 +1139,7 @@ class Impresion
         $total = round($items->sum(fn ($i) => $i->cantidad * $i->precio), 2);
         $pagado = round($items->sum(fn ($i) => $i->pagado * $i->precio), 2);
 
-        $p = new Escpos((int) $imp->columnas);
+        $p = Escpos::para($imp);
         self::encabezado($p, (int) $pedido->id_empresa_negocio);
         $p->linea('=')->tamano(2, 2)->negrita()->texto('PRECUENTA')->negrita(false)->tamano()
             ->tamano(1, 2)->texto($pedido->mes_nom ? trim(($pedido->pis_nom ?? '').' / '.$pedido->mes_nom, ' /') : mb_strtoupper((string) $pedido->ped_tip))->tamano()
@@ -1193,7 +1193,7 @@ class Impresion
         }
         $soles = fn ($n) => number_format((float) $n, 2);
 
-        $p = new Escpos((int) $imp->columnas);
+        $p = Escpos::para($imp);
         self::encabezado($p, $sucursal);
         $p->linea('=')->negrita()->texto($tipo === 'cobrar' ? 'RECIBO DE COBRO' : 'CONSTANCIA DE PAGO')->tamano(1, 2)->texto((string) $pago->numero_recibo)->tamano()->negrita(false)
             ->alinear('izq')->linea('=')
@@ -1238,12 +1238,16 @@ class Impresion
             return;
         }
 
-        $p = new Escpos((int) $imp->columnas);
+        $p = Escpos::para($imp);
         self::encabezado($p, (int) $imp->id_empresa_negocio);
         $p->linea('=')->tamano(2, 2)->negrita()->texto('PRUEBA OK')->negrita(false)->tamano()
             ->texto('Impresora: '.$imp->descripcion)->texto(now()->format('d/m/Y H:i:s'))
             ->alinear('izq')->linea()->texto('Tildes: áéíóú ÁÉÍÓÚ ñÑ ¿? ¡!')
             ->texto(mb_substr(str_repeat('1234567890', 5), 0, $p->columnas()))->dosColumnas('Izquierda', 'Derecha')->linea()
+            // Para saber si la ticketera tiene la letra invertida: la normal debe llenar el ancho y la pequeña quedar más angosta
+            ->texto('LETRA NORMAL (debe llegar al borde):')->texto(mb_substr(str_repeat('1234567890', 5), 0, $p->columnas()))
+            ->fuente('b')->texto('LETRA PEQUENA (debe ser mas chica):')->texto(mb_substr(str_repeat('1234567890', 5), 0, $p->columnas()))->fuente()
+            ->texto('Si la normal salio chica, marca «Letra invertida».')->linea()
             ->alinear('centro')->qr('https://tushpa.app')->avanzar(3)->cortar();
         if ($imp->abrir_cajon) {
             $p->abrirCajon();

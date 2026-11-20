@@ -39,7 +39,7 @@ class Etiquetas
     /** Las etiquetas para la ticketera (ESC/POS): una debajo de otra, separadas por una línea y un corte al final */
     public static function ticketera(object $imp, array $etiquetas, bool $conNombre, bool $conPrecio): Escpos
     {
-        $p = new Escpos((int) $imp->columnas);
+        $p = Escpos::para($imp);
         $ancho = $p->columnas();
         foreach ($etiquetas as $i => $e) {
             $p->alinear('centro');

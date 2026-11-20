@@ -25,10 +25,20 @@ class Escpos
     /** @var array{alinear: string, negrita: bool, ancho: int, alto: int, fuente: string} */
     private array $estado = ['alinear' => 'izq', 'negrita' => false, 'ancho' => 1, 'alto' => 1, 'fuente' => 'a'];
 
-    public function __construct(private int $columnas = 42)
+    /**
+     * @param  bool  $letraInvertida  ticketeras que imprimen la fuente A chica y la B grande (NES POS E804 y similares)
+     */
+    public function __construct(private int $columnas = 42, private bool $letraInvertida = false)
     {
-        // Inicializa y elige la página de códigos PC850 (á é í ó ú ñ Ñ ° ...)
-        $this->buffer = self::ESC.'@'.self::ESC.'t'."\x02";
+        // Inicializa, elige la página de códigos PC850 (á é í ó ú ñ Ñ ° ...) y deja la letra normal pedida
+        // (algunas ticketeras arrancan con la letra pequeña si no se les pide)
+        $this->buffer = self::ESC.'@'.self::ESC.'t'."\x02".self::ESC.'M'.chr($letraInvertida ? 1 : 0);
+    }
+
+    /** El ticket para esa impresora (sus columnas y si tiene la letra invertida) */
+    public static function para(object $impresora): self
+    {
+        return new self((int) $impresora->columnas, (bool) ($impresora->letra_invertida ?? false));
     }
 
     public function columnas(): int
@@ -71,7 +81,7 @@ class Escpos
     /** Fuente A (normal) o B (pequeña, entran más letras por línea) */
     public function fuente(string $f = 'a'): self
     {
-        $this->buffer .= self::ESC.'M'.chr($f === 'b' ? 1 : 0);
+        $this->buffer .= self::ESC.'M'.chr(($f === 'b') !== $this->letraInvertida ? 1 : 0);
         $this->estado['fuente'] = $f === 'b' ? 'b' : 'a';
 
         return $this;

@@ -90,7 +90,7 @@ class RecetaExportarController extends Controller
             return response()->json(['directa' => false, 'mensaje' => 'No hay ticketera configurada: se abrirá para imprimir desde el navegador.']);
         }
 
-        $p = new Escpos((int) $imp->columnas);
+        $p = Escpos::para($imp);
         foreach ($fichas as $f) {
             $r = FichaReceta::resumen($f);
             $p->alinear('centro')->negrita()->texto('RECETA')->negrita(false)

@@ -161,7 +161,7 @@ class CajaSinInternet
                 'conexion' => $i->tip_conex_imp, 'columnas' => (int) $i->columnas ?: 42])->values(),
             'impresora_caja' => $caja && $caja->tip_conex_imp !== 'WINDOWS' ? (int) $caja->Id : null,
             'destinos_comanda' => $barra,
-            'encabezado' => $caja && $caja->tip_conex_imp !== 'WINDOWS' ? base64_encode(Impresion::encabezadoBytes($suc, (int) $caja->columnas ?: 42)) : null,
+            'encabezado' => $caja && $caja->tip_conex_imp !== 'WINDOWS' ? base64_encode(Impresion::encabezadoBytes($suc, (int) $caja->columnas ?: 42, (bool) ($caja->letra_invertida ?? false))) : null,
             'copias' => ['comprobante' => Impresion::copias($suc, 'copias_comprobante'), 'comanda' => Impresion::copias($suc, 'copias_comanda')],
         ];
     }
