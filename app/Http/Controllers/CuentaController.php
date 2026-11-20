@@ -9,6 +9,7 @@ use App\Support\Acciones;
 use App\Support\Bitacora;
 use App\Support\Cuentas;
 use App\Support\Excel;
+use App\Support\Impresion\Impresion;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,12 +18,12 @@ use Illuminate\Support\Facades\DB;
 /** Cuentas por cobrar / por pagar: listado, cobros/pagos, historial, recibos y reportes */
 class CuentaController extends Controller
 {
-    private const TITULOS = [
+    public const TITULOS = [
         'cobrar' => ['titulo' => 'Cuentas por Cobrar', 'persona' => 'Cliente', 'accion' => 'Cobrar', 'pasado' => 'Cobrado'],
         'pagar' => ['titulo' => 'Cuentas por Pagar', 'persona' => 'Proveedor', 'accion' => 'Pagar', 'pasado' => 'Pagado'],
     ];
 
-    private const TIPOS_DOC = ['01' => 'Factura', '03' => 'Boleta', '07' => 'N. Crédito', '08' => 'N. Débito', '12' => 'Ticket', '13' => 'N. Venta', '00' => 'Otro'];
+    public const TIPOS_DOC = ['01' => 'Factura', '03' => 'Boleta', '07' => 'N. Crédito', '08' => 'N. Débito', '12' => 'Ticket', '13' => 'N. Venta', '00' => 'Otro'];
 
     private function autorizar(): void
     {
@@ -117,8 +118,15 @@ class CuentaController extends Controller
         } catch (\RuntimeException $e) {
             return response()->json(['estado' => 'error', 'mensaje' => $e->getMessage()]);
         }
+        // El recibo sale solo en la impresora de caja (sin ventana); sin impresora, la pantalla lo imprime con el navegador
+        $impresora = null;
+        try {
+            $impresora = Impresion::reciboCuenta($tipo, $detId, (int) Auth::user()->id_empresa_negocio);
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
-        return response()->json(['estado' => 'ok', 'recibo' => route('cuentas.recibo', [$tipo, $detId])]);
+        return response()->json(['estado' => 'ok', 'recibo' => route('cuentas.recibo', [$tipo, $detId]), 'impresora' => $impresora]);
     }
 
     public function anularPago(Request $request, string $tipo, int $detId)
@@ -146,20 +154,35 @@ class CuentaController extends Controller
     public function recibo(string $tipo, int $detId)
     {
         $this->autorizar();
+        $datos = self::datosRecibo($tipo, $detId, (int) Auth::user()->id_empresa_negocio);
+        abort_unless($datos, 404);
+
+        return view('empresas.cuentas.recibo', $datos);
+    }
+
+    /**
+     * Lo que lleva el recibo de un cobro o pago (para la pantalla y para la ticketera). null si no existe en la sucursal.
+     *
+     * @return ?array<string, mixed>
+     */
+    public static function datosRecibo(string $tipo, int $detId, int $sucursal): ?array
+    {
         $t = Cuentas::T[$tipo];
         $pago = DB::table($t['det'])->where($t['detPk'], $detId)->first();
-        abort_unless($pago, 404);
-        $cuenta = Cuentas::consulta($tipo, Auth::user()->id_empresa_negocio)->where($tipo === 'cobrar' ? 'cc.cue_cob_id' : 'cp.cue_pag_id', $pago->{$t['pk']})->first();
-        abort_unless($cuenta, 404);
+        $cuenta = $pago ? Cuentas::consulta($tipo, $sucursal)->where($tipo === 'cobrar' ? 'cc.cue_cob_id' : 'cp.cue_pag_id', $pago->{$t['pk']})->first() : null;
+        if (! $cuenta) {
+            return null;
+        }
         $medios = DB::table($t['med'].' as m')->leftJoin('medios_pagos as mp', 'mp.id_med_pag', '=', 'm.med_pag_id')
             ->where('m.'.$t['detPk'], $detId)->get(['mp.nom_med_pag', 'm.monto']);
+        $negocio = EmpresaNegocio::find($sucursal);
 
-        return view('empresas.cuentas.recibo', [
+        return [
             'tipo' => $tipo, 'tx' => self::TITULOS[$tipo], 'pago' => $pago, 'cuenta' => $cuenta, 'medios' => $medios,
             'estado' => $pago->{$t['estDet']}, 'tiposDoc' => self::TIPOS_DOC,
-            'empresa' => Empresa::find(Auth::user()->IdEmpresa), 'negocio' => EmpresaNegocio::find(Auth::user()->id_empresa_negocio),
+            'empresa' => Empresa::find($negocio?->IdEmpresa), 'negocio' => $negocio,
             'usuario' => DB::table('users')->where('IdUsuario', $pago->IdUsuario)->value('apeusu'),
-        ]);
+        ];
     }
 
     // ---------------- Reportes ----------------

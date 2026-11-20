@@ -51,6 +51,6 @@
     <br><br>
     <div class="c">______________________<br>Firma</div>
 </div>
-<div class="acciones"><button onclick="window.print()">IMPRIMIR</button></div>
+@unless ($paraPdf ?? false)<div class="acciones"><button onclick="window.print()">IMPRIMIR</button></div>@endunless
 </body>
 </html>

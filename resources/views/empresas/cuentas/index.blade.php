@@ -278,8 +278,17 @@
                     const d = await r.json();
                     if (r.status === 422) { this.error = Object.values(d.errors)[0][0]; return; }
                     if (d.estado !== 'ok') { this.error = d.mensaje; return; }
-                    if (confirm('✔ Registrado. ¿Imprimir el recibo?')) window.open(d.recibo, '_blank');
-                    window.location.reload();
+                    // El recibo sale solo en la impresora de caja; sin impresora, se imprime aquí mismo (sin abrir otra ventana)
+                    if (d.impresora) {
+                        tushpaAviso('✔ Registrado. Recibo enviado a la impresora ' + d.impresora + '.', 'ok');
+                        setTimeout(() => window.location.reload(), 1200);
+                    } else {
+                        const marco = document.createElement('iframe');
+                        marco.style.display = 'none';
+                        marco.onload = () => { try { marco.contentWindow.focus(); marco.contentWindow.print(); } catch (e) {} setTimeout(() => window.location.reload(), 1500); };
+                        marco.src = d.recibo;
+                        document.body.appendChild(marco);
+                    }
                 } catch (e) { this.error = 'Error de conexión.'; } finally { this.enviando = false; }
             },
             async historial(id) {

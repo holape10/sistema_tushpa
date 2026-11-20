@@ -2,6 +2,7 @@
 
 namespace App\Support\Impresion;
 
+use App\Http\Controllers\CuentaController;
 use App\Models\Mesa;
 use App\Support\ConsultaCpe;
 use App\Support\CuotasCredito;
@@ -1164,6 +1165,62 @@ class Impresion
         self::encolar($imp, $p->bytes(), 'PRECUENTA', 'Pedido '.$pedido->ped_id);
 
         return true;
+    }
+
+    /**
+     * Recibo de un cobro (cuentas por cobrar) o de un pago (cuentas por pagar) en la impresora de caja, sin ventana.
+     * Devuelve el nombre de la impresora, o null si la sucursal no tiene impresora de caja.
+     */
+    public static function reciboCuenta(string $tipo, int $detId, int $sucursal): ?string
+    {
+        $imp = self::impresoraCaja($sucursal);
+        $d = CuentaController::datosRecibo($tipo, $detId, $sucursal);
+        if (! $imp || ! $d) {
+            return null;
+        }
+        $pago = $d['pago'];
+        $cuenta = $d['cuenta'];
+        $referencia = ($tipo === 'cobrar' ? 'Cobro ' : 'Pago ').$pago->numero_recibo;
+        if ($imp->tip_conex_imp === 'WINDOWS') {
+            // Impresora A4: el mismo recibo de la pantalla, en PDF
+            $pdf = new Dompdf;
+            $pdf->loadHtml(view('empresas.cuentas.recibo', $d + ['paraPdf' => true])->render(), 'UTF-8');
+            $pdf->setPaper('A4');
+            $pdf->render();
+            self::encolar($imp, $pdf->output(), 'RECIBO', $referencia);
+
+            return (string) $imp->descripcion;
+        }
+        $soles = fn ($n) => number_format((float) $n, 2);
+
+        $p = new Escpos((int) $imp->columnas);
+        self::encabezado($p, $sucursal);
+        $p->linea('=')->negrita()->texto($tipo === 'cobrar' ? 'RECIBO DE COBRO' : 'CONSTANCIA DE PAGO')->tamano(1, 2)->texto((string) $pago->numero_recibo)->tamano()->negrita(false)
+            ->alinear('izq')->linea('=')
+            ->texto('Fecha: '.Carbon::parse($pago->fec_dep)->format('d/m/Y'))
+            ->parrafo($d['tx']['persona'].': '.$cuenta->persona)
+            ->texto('Doc.: '.$cuenta->doc_persona)
+            ->parrafo('Por: '.($d['tiposDoc'][$cuenta->tdocod] ?? '').' '.$cuenta->serie.'-'.$cuenta->numero.' ('.Carbon::parse($cuenta->fecha)->format('d/m/Y').')')
+            ->linea();
+        foreach ($d['medios'] as $m) {
+            $p->dosColumnas((string) ($m->nom_med_pag ?? 'PAGO'), $soles($m->monto));
+        }
+        if ($pago->num_oper) {
+            $p->texto('N° operación: '.$pago->num_oper);
+        }
+        $p->linea()->dosColumnas('Total del documento', $soles($cuenta->total))
+            ->negrita()->tamano(1, 2)->dosColumnas($tipo === 'cobrar' ? 'RECIBIDO S/' : 'PAGADO S/', $soles($pago->abono))->tamano()->negrita(false)
+            ->dosColumnas('Saldo pendiente', $soles($pago->saldo_detalle));
+        if ($pago->comentario) {
+            $p->linea()->parrafo((string) $pago->comentario);
+        }
+        $p->linea()->alinear('centro')->texto('Atendido por: '.$d['usuario'])->texto('Registrado: '.Carbon::parse($pago->fec_reg)->format('d/m/Y H:i'))
+            ->avanzar(2)->texto('______________________')->texto('Firma');
+        self::firma($p);
+        $p->avanzar(3)->cortar();
+        self::encolar($imp, $p->bytes(), 'RECIBO', $referencia);
+
+        return (string) $imp->descripcion;
     }
 
     // ------------------------------------------------------------------ prueba
