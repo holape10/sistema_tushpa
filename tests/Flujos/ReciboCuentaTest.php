@@ -39,6 +39,14 @@ class ReciboCuentaTest extends FlujoTestCase
         $this->assertStringContainsString('20.00', $ticket);
         $this->assertStringContainsString('40.00', $ticket, 'Y el saldo que queda.');
         $this->get($r->json('recibo'))->assertOk()->assertSee('RECIBO DE COBRO');
+
+        // Desde el historial, «Recibo» lo vuelve a mandar a la impresora (sin abrir otra ventana)
+        $this->get(route('cuentas.index', 'cobrar'))->assertOk()->assertSee('reimprimir(p)', false)->assertDontSee('target="_blank" class="text-xs font-semibold text-indigo-700">Recibo', false);
+        $pago = (int) DB::table('cuentas_cobrar_detalle')->where('cue_cob_id', $cuenta)->value('cue_cob_det_id');
+        $this->postJson(route('cuentas.imprimir_recibo', ['cobrar', $pago]))->assertOk()->assertJson(['impresora' => 'CAJA']);
+        $this->assertSame(2, DB::table('cola_impresion')->where('tipo', 'RECIBO')->count());
+        // El de otra sucursal o que no existe, no
+        $this->postJson(route('cuentas.imprimir_recibo', ['cobrar', 999999]))->assertNotFound();
     }
 
     public function test_sin_impresora_la_pantalla_lo_imprime_sin_abrir_otra_ventana(): void

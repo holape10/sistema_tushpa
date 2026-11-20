@@ -150,6 +150,15 @@ class CuentaController extends Controller
         return response()->json(['estado' => 'ok']);
     }
 
+    /** Reimprime el recibo de un pago en la impresora de caja (sin ventana). impresora = null si la sucursal no tiene */
+    public function imprimirRecibo(string $tipo, int $detId)
+    {
+        $this->autorizar();
+        abort_unless(self::datosRecibo($tipo, $detId, (int) Auth::user()->id_empresa_negocio), 404);
+
+        return response()->json(['impresora' => Impresion::reciboCuenta($tipo, $detId, (int) Auth::user()->id_empresa_negocio)]);
+    }
+
     /** Recibo imprimible (ticket) */
     public function recibo(string $tipo, int $detId)
     {

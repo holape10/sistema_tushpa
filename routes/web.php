@@ -672,6 +672,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/{id}/pagar', [CuentaController::class, 'pagar'])->whereNumber('id')->name('cuentas.pagar');
         Route::post('/pago/{detId}/anular', [CuentaController::class, 'anularPago'])->whereNumber('detId')->name('cuentas.anular_pago');
         Route::get('/pago/{detId}/recibo', [CuentaController::class, 'recibo'])->whereNumber('detId')->name('cuentas.recibo');
+        Route::post('/pago/{detId}/imprimir', [CuentaController::class, 'imprimirRecibo'])->whereNumber('detId')->middleware('throttle:30,1')->name('cuentas.imprimir_recibo');
     });
 
     // CONCAR: exportar ventas y compras como asientos

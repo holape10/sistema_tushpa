@@ -228,7 +228,7 @@
                                     <p class="font-bold" x-text="num(p.monto)"></p>
                                     <p class="text-[11px] text-slate-400" x-text="'saldo ' + num(p.saldo)"></p>
                                     <div class="flex gap-2 justify-end mt-1">
-                                        <a :href="p.urlRecibo" target="_blank" class="text-xs font-semibold text-indigo-700">Recibo</a>
+                                        <button type="button" @click="reimprimir(p)" class="text-xs font-semibold text-indigo-700">🖨 Recibo</button>
                                         <button x-show="p.estado === 'REGISTRADO'" type="button" @click="anular(p)" class="text-xs font-semibold text-rose-600">Anular</button>
                                     </div>
                                 </div>
@@ -283,13 +283,31 @@
                         tushpaAviso('✔ Registrado. Recibo enviado a la impresora ' + d.impresora + '.', 'ok');
                         setTimeout(() => window.location.reload(), 1200);
                     } else {
-                        const marco = document.createElement('iframe');
-                        marco.style.display = 'none';
-                        marco.onload = () => { try { marco.contentWindow.focus(); marco.contentWindow.print(); } catch (e) {} setTimeout(() => window.location.reload(), 1500); };
-                        marco.src = d.recibo;
-                        document.body.appendChild(marco);
+                        this.imprimirAqui(d.recibo, () => window.location.reload());
                     }
                 } catch (e) { this.error = 'Error de conexión.'; } finally { this.enviando = false; }
+            },
+            /** Imprime una página (el recibo) desde esta misma pantalla, sin abrir otra ventana */
+            imprimirAqui(url, despues = null) {
+                const marco = document.createElement('iframe');
+                marco.style.display = 'none';
+                marco.onload = () => {
+                    try { marco.contentWindow.focus(); marco.contentWindow.print(); } catch (e) {}
+                    setTimeout(() => { marco.remove(); if (despues) despues(); }, 1500);
+                };
+                marco.src = url;
+                document.body.appendChild(marco);
+            },
+            /** Reimprimir el recibo de un pago del historial: a la impresora de caja (o aquí mismo si no hay) */
+            async reimprimir(p) {
+                try {
+                    const r = await fetch(@json(url('cuentas/' . $tipo)) + '/pago/' + p.id + '/imprimir', {
+                        method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrf },
+                    });
+                    const d = await r.json();
+                    if (d.impresora) { tushpaAviso('Recibo ' + p.recibo + ' enviado a la impresora ' + d.impresora + '.', 'ok'); return; }
+                } catch (e) { /* sin conexión con la impresora: se imprime aquí */ }
+                this.imprimirAqui(p.urlRecibo);
             },
             async historial(id) {
                 const r = await fetch(@json(url('cuentas/' . $tipo)) + '/' + id + '/pagos', { headers: { Accept: 'application/json' } });
