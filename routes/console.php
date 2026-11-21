@@ -30,6 +30,7 @@ use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Respaldos;
 use App\Support\Tenancy\Tenancy;
 use App\Support\Vencimientos;
+use App\Support\VentasCuaderno;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -709,3 +710,44 @@ Artisan::command('agenda:avisos', function () {
 })->purpose('Manda por Telegram los avisos de la agenda del panel');
 
 Schedule::command('agenda:avisos')->everyFiveMinutes()->withoutOverlapping(10);
+
+Artisan::command('ventas:cuaderno {archivo : JSON con las hojas del cuaderno (database/seeders/data/...)} {--tipo=13 : 13 = nota de venta, 03 = boleta} {--usuario= : IdUsuario que vende (vacío = el administrador con turno abierto)} {--grabar : Grabar de verdad (sin esto solo revisa y no deja nada)}', function () {
+    $ruta = is_file($this->argument('archivo')) ? $this->argument('archivo') : base_path($this->argument('archivo'));
+    $cuaderno = is_file($ruta) ? json_decode((string) file_get_contents($ruta), true) : null;
+    if (! is_array($cuaderno) || empty($cuaderno['hojas'])) {
+        $this->error('No pude leer el archivo '.$ruta);
+
+        return 1;
+    }
+    if (! in_array($this->option('tipo'), ['13', '03'], true)) {
+        $this->error('--tipo debe ser 13 (nota de venta) o 03 (boleta).');
+
+        return 1;
+    }
+    $correr = function () use ($cuaderno) {
+        $user = $this->option('usuario')
+            ? User::find((int) $this->option('usuario'))
+            : User::whereIn('IdUsuario', DB::table('turnos')->where('estado', 'ABIERTO')->pluck('IdUsuario'))->get()->first(fn ($u) => $u->esAdmin());
+        if (! $user) {
+            return ['ok' => false, 'mensajes' => ['No hay un administrador con turno abierto: abre la caja o indica --usuario=ID.']];
+        }
+        $this->line("Vende: {$user->IdUsuario} · ".$user->apeusu.' · fecha '.$cuaderno['fecha']);
+
+        return VentasCuaderno::cargar($user, $cuaderno, (string) $this->option('tipo'), (bool) $this->option('grabar'));
+    };
+    $base = Tenancy::activa() ? Cliente::where('ruc', $cuaderno['ruc'] ?? '')->value('base_datos') : null;
+    if (Tenancy::activa() && ! $base) {
+        $this->error('No encontré la empresa '.($cuaderno['ruc'] ?? ''));
+
+        return 1;
+    }
+    $r = $base ? Tenancy::en($base, $correr) : $correr();
+    foreach ($r['mensajes'] as $m) {
+        $r['ok'] ? $this->line($m) : $this->error($m);
+    }
+    if ($r['ok']) {
+        $this->info($this->option('grabar') ? 'Listo: ventas grabadas.' : 'Revisión OK: no se grabó nada. Vuelve a correrlo con --grabar.');
+    }
+
+    return $r['ok'] ? 0 : 1;
+})->purpose('Pasa al sistema, de una sola vez, las ventas de un cuaderno (una venta por hoja) con su fecha');
