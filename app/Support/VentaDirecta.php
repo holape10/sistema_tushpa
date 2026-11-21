@@ -129,6 +129,7 @@ class VentaDirecta
                         throw new \RuntimeException(Acciones::mensaje($accion)." {$lista[0][0]} se vende a S/ {$lista[0][1]}.");
                     }
                 }
+                self::topeBajarPrecio($user, $distintos);
             }
             if ($recargos) {
                 [$lineas, $datos] = self::aplicarRecargos($user, $lineas, $datos);
@@ -189,6 +190,37 @@ class VentaDirecta
         }
 
         return in_array((int) $id, array_column(self::vendedores($user), 'id'), true) ? (int) $id : null;
+    }
+
+    /**
+     * Quien tiene permiso para bajar el precio de lista (y no es administrador) solo puede bajarlo hasta el máximo por
+     * producto de la sucursal (Sucursales › Descuentos: «Máximo por producto», en soles por unidad o en %).
+     * Sin máximo configurado (0) no hay tope.
+     *
+     * @param  array<int, array{0: string, 1: string, 2: string}>  $distintos  [descripción, lista, cobrado]
+     */
+    private static function topeBajarPrecio(User $user, array $distintos): void
+    {
+        if (! $distintos || $user->esAdmin()) {
+            return;
+        }
+        $config = Descuentos::config((int) $user->id_empresa_negocio);
+        if ($config->itemMax <= 0) {
+            return;
+        }
+        foreach ($distintos as [$descripcion, $lista, $cobrado]) {
+            $baja = (float) $lista - (float) $cobrado;
+            $pasa = $config->itemTipo === 'S' ? $baja > $config->itemMax + 0.001 : $baja / (float) $lista * 100 > $config->itemMax + 0.001;
+            if ($pasa) {
+                $tope = $config->itemTipo === 'S'
+                    ? 'S/ '.number_format($config->itemMax, 2)
+                    : rtrim(rtrim(number_format($config->itemMax, 2), '0'), '.').'%';
+                $minimo = $config->itemTipo === 'S' ? (float) $lista - $config->itemMax : (float) $lista * (1 - $config->itemMax / 100);
+
+                throw new \RuntimeException("{$descripcion}: su precio es S/ {$lista} y solo puedes bajarlo hasta {$tope} (mínimo S/ "
+                    .number_format(max(0, $minimo), 2).'). Para bajarlo más, que lo cobre el administrador.');
+            }
+        }
     }
 
     public static function preciosDistintos(array $lineas, bool $mayores = false): array

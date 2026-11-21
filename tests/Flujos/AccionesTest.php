@@ -107,6 +107,39 @@ class AccionesTest extends FlujoTestCase
         VentaDirecta::registrar($soloBaja, $this->venta([[$plato, 1, 20]], '13'), 'PV');
     }
 
+    public function test_con_permiso_para_bajar_el_precio_solo_baja_hasta_el_tope_de_la_sucursal(): void
+    {
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['descuento_item_max' => 2, 'descuento_item_tipo' => 'S']);
+        $cajero = $this->cajero();
+        $plato = $this->producto('JUANE', 15, 10);
+
+        // Hasta S/ 2 menos por unidad, sí
+        $this->assertGreaterThan(0, VentaDirecta::registrar($cajero, $this->venta([[$plato, 3, 13]], '13'), 'PV'));
+        // Más que eso, no
+        try {
+            VentaDirecta::registrar($cajero, $this->venta([[$plato, 1, 12.90]], '13'), 'PV');
+            $this->fail('Debió frenar la baja de precio que pasa el tope.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('solo puedes bajarlo hasta S/ 2.00 (mínimo S/ 13.00)', $e->getMessage());
+        }
+
+        // En %: 10% de 15 = hasta S/ 13.50
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['descuento_item_max' => 10, 'descuento_item_tipo' => 'P']);
+        $this->assertGreaterThan(0, VentaDirecta::registrar($cajero, $this->venta([[$plato, 1, 13.50]], '13'), 'PV'));
+        $this->expectExceptionMessage('mínimo S/ 13.50');
+        VentaDirecta::registrar($cajero, $this->venta([[$plato, 1, 13]], '13'), 'PV');
+    }
+
+    public function test_el_administrador_baja_el_precio_sin_tope_y_sin_tope_configurado_no_hay_limite(): void
+    {
+        $plato = $this->producto('JUANE', 15, 10);
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['descuento_item_max' => 0]);
+        $this->assertGreaterThan(0, VentaDirecta::registrar($this->cajero(), $this->venta([[$plato, 1, 5]], '13'), 'PV'));
+
+        DB::table('empresa_negocios')->where('id_empresa_negocio', $this->sucursal)->update(['descuento_item_max' => 2, 'descuento_item_tipo' => 'S']);
+        $this->assertGreaterThan(0, VentaDirecta::registrar($this->usuario, $this->venta([[$plato, 1, 5]], '13'), 'PV'));
+    }
+
     public function test_el_administrador_siempre_puede_aunque_tenga_algo_apagado(): void
     {
         DB::table('users')->where('IdUsuario', $this->usuario->IdUsuario)->update(['acciones_bloqueadas' => json_encode(['cambiar_precio'])]);
