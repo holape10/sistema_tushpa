@@ -54,19 +54,21 @@
                 <p class="login-entra mt-4 text-indigo-100/80 text-base max-w-md" style="animation-delay:.22s">Vende, factura y controla tu inventario desde la PC, la tablet o el celular.</p>
 
                 <!-- Lo que hace el sistema (sin montos ni datos: que nadie lo confunda con sus ventas) -->
-                <div class="login-entra mt-10 grid grid-cols-2 gap-3 w-full max-w-md text-left" style="animation-delay:.3s">
+                <div class="login-entra mt-8 grid grid-cols-2 gap-2.5 w-full max-w-md text-left" style="animation-delay:.3s">
                     @foreach ([
                         ['fa-file-invoice', 'Facturación SUNAT', 'Boletas, facturas y notas al instante', 'from-emerald-400/25 text-emerald-300', 'login-flota'],
                         ['fa-cash-register', 'Ventas y caja', 'Cobra rápido con efectivo, Yape o tarjeta', 'from-cyan-400/25 text-cyan-300', 'login-flota-2'],
                         ['fa-boxes-stacked', 'Inventario', 'Stock y kardex siempre al día', 'from-indigo-400/25 text-indigo-200', 'login-flota-2'],
                         ['fa-chart-line', 'Reportes', 'Sabe qué vendes y cuánto ganas', 'from-fuchsia-400/25 text-fuchsia-300', 'login-flota'],
                     ] as $i => [$icono, $titulo, $detalle, $color, $flota])
-                        <div class="{{ $flota }} group rounded-2xl border border-white/15 bg-white/[0.07] backdrop-blur-xl p-4 shadow-[0_20px_50px_-20px_rgba(0,0,0,.6)] hover:bg-white/[0.12] hover:border-white/25 transition"
+                        <div class="{{ $flota }} flex items-center gap-3 rounded-xl border border-white/15 bg-white/[0.07] backdrop-blur-xl px-3 py-2.5 shadow-[0_15px_40px_-20px_rgba(0,0,0,.6)] hover:bg-white/[0.12] hover:border-white/25 transition"
                              style="animation-delay: -{{ $i * 1.5 }}s">
-                            <span class="w-10 h-10 rounded-xl bg-gradient-to-br {{ $color }} to-transparent border border-white/10 flex items-center justify-center mb-3">
-                                <i class="fas {{ $icono }}"></i></span>
-                            <span class="block text-sm font-bold text-white">{{ $titulo }}</span>
-                            <span class="block text-xs text-indigo-200/75 mt-0.5 leading-snug">{{ $detalle }}</span>
+                            <span class="w-9 h-9 shrink-0 rounded-lg bg-gradient-to-br {{ $color }} to-transparent border border-white/10 flex items-center justify-center">
+                                <i class="fas {{ $icono }} text-sm"></i></span>
+                            <span class="min-w-0">
+                                <span class="block text-[13px] font-bold text-white leading-tight">{{ $titulo }}</span>
+                                <span class="block text-[11px] text-indigo-200/75 leading-snug">{{ $detalle }}</span>
+                            </span>
                         </div>
                     @endforeach
                 </div>
