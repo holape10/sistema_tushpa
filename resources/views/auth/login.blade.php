@@ -20,57 +20,76 @@
 
         <!-- Panel izquierdo: marca + rubros (no va cuando se elige el rubro: ahí los rubros ocupan toda la pantalla) -->
         @unless ($rubros)
-        <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-indigo-950 via-indigo-800 to-blue-700 flex-col items-center justify-center overflow-hidden px-10 py-12 isolate"
+        <style>
+            @keyframes login-flota { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+            @keyframes login-orbe { 0%, 100% { transform: translate(0, 0) scale(1) } 50% { transform: translate(30px, -20px) scale(1.08) } }
+            @keyframes login-barra { from { transform: scaleY(0.15) } to { transform: scaleY(1) } }
+            @keyframes login-entra { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+            .login-flota { animation: login-flota 6s ease-in-out infinite; }
+            .login-flota-2 { animation: login-flota 7s ease-in-out infinite 1.2s; }
+            .login-orbe { animation: login-orbe 14s ease-in-out infinite; }
+            .login-barra { transform-origin: bottom; animation: login-barra 1.1s cubic-bezier(.2,.8,.2,1) both; }
+            .login-entra { animation: login-entra .8s cubic-bezier(.2,.8,.2,1) both; }
+            .login-rubro-sale { opacity: 0; transform: translateY(-8px); }
+            @media (prefers-reduced-motion: reduce) { .login-flota, .login-flota-2, .login-orbe, .login-barra, .login-entra { animation: none; } }
+        </style>
+        <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-[#0b0a2e] via-indigo-900 to-blue-800 flex-col items-center justify-center overflow-hidden px-10 py-12 isolate"
              @unless (config('marca.es_tushpa')) style="background-image: linear-gradient(135deg, {{ config('marca.color') }}, {{ config('marca.color_secundario') }})" @endunless>
-            <x-kene-adorno patron="laberinto" color="text-white/[0.07]" :franja="false" />
-            <!-- Decoración de fondo -->
-            <div class="absolute -top-24 -left-24 w-80 h-80 bg-white/5 rounded-full"></div>
-            <div class="absolute bottom-0 right-0 w-96 h-96 bg-white/5 rounded-full"></div>
-            <div class="absolute top-1/3 right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-xl"></div>
+            <x-kene-adorno patron="laberinto" color="text-white/[0.05]" :franja="false" />
+            <!-- Luces de fondo que se mueven despacio -->
+            <div class="login-orbe absolute -top-32 -left-24 w-[28rem] h-[28rem] rounded-full bg-fuchsia-500/25 blur-3xl -z-10"></div>
+            <div class="login-orbe absolute -bottom-40 -right-24 w-[32rem] h-[32rem] rounded-full bg-cyan-400/20 blur-3xl -z-10" style="animation-delay: -7s"></div>
+            <div class="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(5,5,30,.55))]"></div>
 
-            <div class="relative max-w-md w-full">
-                <img src="{{ asset(config('marca.logo')) }}" alt="Sistema {{ config('marca.nombre') }}" width="320" height="128" fetchpriority="high" class="w-72 h-24 object-contain drop-shadow-2xl -ml-3 mb-6">
-                <h1 class="text-white text-3xl xl:text-4xl font-extrabold leading-tight tracking-tight">Factura, vende y controla<br>tu negocio en un solo lugar.</h1>
-                <p class="text-indigo-100/80 text-base mt-3 mb-7">Un solo sistema para gestionar y facturar cualquier tipo de negocio.</p>
+            <div class="relative w-full max-w-lg flex flex-col items-center text-center">
+                <img src="{{ asset(config('marca.logo')) }}" alt="Sistema {{ config('marca.nombre') }}" width="320" height="128" fetchpriority="high"
+                     class="login-entra w-64 h-20 object-contain drop-shadow-[0_10px_30px_rgba(99,102,241,.55)] mb-5">
 
-                <ul class="space-y-3 mb-9">
-                    @foreach ([
-                        ['fa-file-invoice', 'Facturación electrónica SUNAT', 'Boletas, facturas y notas al instante.'],
-                        ['fa-cash-register', 'Ventas y caja en tiempo real', 'Desde la PC, la tablet o el celular.'],
-                        ['fa-boxes-stacked', 'Inventario y reportes', 'Stock, kardex y lo que más se vende.'],
-                    ] as [$icono, $titulo, $detalle])
-                        <li class="flex items-start gap-3">
-                            <span class="w-9 h-9 shrink-0 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center"><i class="fas {{ $icono }} text-sm text-white"></i></span>
-                            <span><span class="block text-sm font-semibold text-white">{{ $titulo }}</span><span class="block text-xs text-indigo-200/80">{{ $detalle }}</span></span>
-                        </li>
-                    @endforeach
-                </ul>
+                <span class="login-entra inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 backdrop-blur px-3.5 py-1 text-xs font-semibold text-indigo-100" style="animation-delay:.08s">
+                    <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-400"></span></span>
+                    Facturación electrónica SUNAT
+                </span>
 
-                <!-- Rubros -->
-                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-200/70 mb-3">Para todo tipo de negocio</p>
-                <div class="grid grid-cols-6 gap-2">
-                    @foreach ([
-                        ['fa-utensils', 'Restaurante'],
-                        ['fa-mug-hot', 'Cafetería'],
-                        ['fa-martini-glass-citrus', 'Discoteca / Bar'],
-                        ['fa-cart-shopping', 'Comercio'],
-                        ['fa-briefcase-medical', 'Farmacia'],
-                        ['fa-gas-pump', 'Grifo'],
-                        ['fa-screwdriver-wrench', 'Ferretería'],
-                        ['fa-hard-hat', 'Construcción'],
-                        ['fa-car', 'Automotriz'],
-                        ['fa-bed', 'Hotelería'],
-                        ['fa-shirt', 'Lavandería'],
-                        ['fa-spa', 'Belleza'],
-                    ] as [$icon, $label])
-                        <div class="flex flex-col items-center gap-1 bg-white/5 hover:bg-white/10 transition rounded-lg py-2 px-1 border border-white/10" title="{{ $label }}">
-                            <i class="fas {{ $icon }} text-indigo-200 text-sm"></i>
-                            <span class="text-[9px] text-indigo-100/90 leading-tight text-center truncate w-full">{{ $label }}</span>
+                <h1 class="login-entra mt-5 text-white text-4xl xl:text-5xl font-extrabold leading-[1.08] tracking-tight" style="animation-delay:.15s">
+                    Tu negocio,<br><span class="bg-gradient-to-r from-cyan-300 via-indigo-200 to-fuchsia-300 bg-clip-text text-transparent">bajo control.</span>
+                </h1>
+                <p class="login-entra mt-4 text-indigo-100/80 text-base max-w-md" style="animation-delay:.22s">Vende, factura y controla tu inventario desde la PC, la tablet o el celular.</p>
+
+                <!-- Vista del sistema en vivo (ilustrativa) -->
+                <div class="login-entra relative mt-10 w-full max-w-sm" style="animation-delay:.3s" aria-hidden="true">
+                    <div class="login-flota rounded-2xl border border-white/15 bg-white/10 backdrop-blur-xl p-5 shadow-[0_30px_80px_-20px_rgba(0,0,0,.6)] text-left">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-indigo-200/80">Ventas de hoy</span>
+                            <span class="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[11px] font-bold text-emerald-300"><i class="fas fa-arrow-trend-up"></i> +18%</span>
                         </div>
-                    @endforeach
+                        <p class="mt-1 text-3xl font-extrabold text-white tabular-nums">S/ 4,280.50</p>
+                        <div class="mt-4 flex items-end gap-1.5 h-20">
+                            @foreach ([35, 52, 40, 68, 58, 82, 74, 100] as $i => $alto)
+                                <span class="login-barra flex-1 rounded-t-md {{ $loop->last ? 'bg-gradient-to-t from-cyan-400 to-fuchsia-400' : 'bg-white/25' }}"
+                                      style="height: {{ $alto }}%; animation-delay: {{ 0.4 + $i * 0.07 }}s"></span>
+                            @endforeach
+                        </div>
+                    </div>
+                    <!-- Avisos flotantes -->
+                    <div class="login-flota-2 absolute -left-16 -top-9 flex items-center gap-2.5 rounded-xl border border-white/15 bg-[#14123d]/80 backdrop-blur-xl px-3 py-2 shadow-2xl text-left">
+                        <span class="w-7 h-7 rounded-lg bg-emerald-400/20 flex items-center justify-center"><i class="fas fa-check text-xs text-emerald-300"></i></span>
+                        <span><span class="block text-[11px] font-bold text-white">F001-00245</span><span class="block text-[10px] text-emerald-300">Aceptada por SUNAT</span></span>
+                    </div>
+                    <div class="login-flota absolute -right-12 -bottom-6 flex items-center gap-2.5 rounded-xl border border-white/15 bg-[#14123d]/80 backdrop-blur-xl px-3 py-2 shadow-2xl text-left" style="animation-delay:-3s">
+                        <span class="w-7 h-7 rounded-lg bg-fuchsia-400/20 flex items-center justify-center"><i class="fas fa-receipt text-xs text-fuchsia-300"></i></span>
+                        <span><span class="block text-[11px] font-bold text-white">Mesa 4 · Cobrado</span><span class="block text-[10px] text-indigo-200">S/ 86.00 · Yape</span></span>
+                    </div>
                 </div>
 
-                <p class="text-indigo-300/70 text-xs mt-9">Desarrollamos ideas, creamos soluciones</p>
+                <!-- Rubros: el nombre va cambiando solo -->
+                <div class="login-entra mt-14" style="animation-delay:.4s"
+                     x-data="{ rubros: ['Restaurantes', 'Cafeterías', 'Discotecas y bares', 'Comercios', 'Farmacias', 'Grifos', 'Ferreterías', 'Construcción', 'Talleres', 'Hoteles', 'Lavanderías', 'Salones de belleza'], i: 0, sale: false }"
+                     x-init="setInterval(() => { sale = true; setTimeout(() => { i = (i + 1) % rubros.length; sale = false }, 300) }, 2200)">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.25em] text-indigo-200/60">Para todo tipo de negocio</p>
+                    <p class="mt-2 h-8 text-2xl font-bold text-white transition-all duration-300" :class="sale && 'login-rubro-sale'" x-text="rubros[i]">Restaurantes</p>
+                </div>
+
+                <p class="text-indigo-300/60 text-xs mt-8">Desarrollamos ideas, creamos soluciones</p>
             </div>
         </div>
         @endunless
