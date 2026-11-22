@@ -28,14 +28,27 @@
             <div class="absolute bottom-0 right-0 w-96 h-96 bg-white/5 rounded-full"></div>
             <div class="absolute top-1/3 right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-xl"></div>
 
-            <div class="relative text-center max-w-md">
-                <img src="{{ asset(config('marca.logo')) }}" alt="Sistema {{ config('marca.nombre') }}" width="320" height="128" fetchpriority="high" class="w-80 h-28 object-contain mx-auto drop-shadow-2xl mb-4">
-                <!--<h1 class="text-white text-3xl font-bold tracking-wide">{{ config('marca.nombre') }}</h1>
-                <p class="text-indigo-200 text-sm mt-1 mb-2 tracking-wider uppercase">Facturación Electrónica</p>-->
-                <p class="text-indigo-100/80 text-sm mb-8">Un solo sistema para gestionar y facturar cualquier tipo de negocio</p>
+            <div class="relative max-w-md w-full">
+                <img src="{{ asset(config('marca.logo')) }}" alt="Sistema {{ config('marca.nombre') }}" width="320" height="128" fetchpriority="high" class="w-72 h-24 object-contain drop-shadow-2xl -ml-3 mb-6">
+                <h1 class="text-white text-3xl xl:text-4xl font-extrabold leading-tight tracking-tight">Factura, vende y controla<br>tu negocio en un solo lugar.</h1>
+                <p class="text-indigo-100/80 text-base mt-3 mb-7">Un solo sistema para gestionar y facturar cualquier tipo de negocio.</p>
+
+                <ul class="space-y-3 mb-9">
+                    @foreach ([
+                        ['fa-file-invoice', 'Facturación electrónica SUNAT', 'Boletas, facturas y notas al instante.'],
+                        ['fa-cash-register', 'Ventas y caja en tiempo real', 'Desde la PC, la tablet o el celular.'],
+                        ['fa-boxes-stacked', 'Inventario y reportes', 'Stock, kardex y lo que más se vende.'],
+                    ] as [$icono, $titulo, $detalle])
+                        <li class="flex items-start gap-3">
+                            <span class="w-9 h-9 shrink-0 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center"><i class="fas {{ $icono }} text-sm text-white"></i></span>
+                            <span><span class="block text-sm font-semibold text-white">{{ $titulo }}</span><span class="block text-xs text-indigo-200/80">{{ $detalle }}</span></span>
+                        </li>
+                    @endforeach
+                </ul>
 
                 <!-- Rubros -->
-                <div class="grid grid-cols-4 gap-4">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-200/70 mb-3">Para todo tipo de negocio</p>
+                <div class="grid grid-cols-6 gap-2">
                     @foreach ([
                         ['fa-utensils', 'Restaurante'],
                         ['fa-mug-hot', 'Cafetería'],
@@ -50,14 +63,14 @@
                         ['fa-shirt', 'Lavandería'],
                         ['fa-spa', 'Belleza'],
                     ] as [$icon, $label])
-                        <div class="flex flex-col items-center gap-1.5 bg-white/5 hover:bg-white/10 transition rounded-xl py-3 px-1 border border-white/10">
-                            <i class="fas {{ $icon }} text-indigo-200 text-lg"></i>
-                            <span class="text-[10px] text-indigo-100 leading-tight">{{ $label }}</span>
+                        <div class="flex flex-col items-center gap-1 bg-white/5 hover:bg-white/10 transition rounded-lg py-2 px-1 border border-white/10" title="{{ $label }}">
+                            <i class="fas {{ $icon }} text-indigo-200 text-sm"></i>
+                            <span class="text-[9px] text-indigo-100/90 leading-tight text-center truncate w-full">{{ $label }}</span>
                         </div>
                     @endforeach
                 </div>
 
-                <p class="text-indigo-300/70 text-xs mt-8">Desarrollamos ideas, creamos soluciones</p>
+                <p class="text-indigo-300/70 text-xs mt-9">Desarrollamos ideas, creamos soluciones</p>
             </div>
         </div>
         @endunless
@@ -101,7 +114,7 @@
                     </div>
                 @endif
 
-                <div class="bg-white rounded-2xl shadow-xl shadow-gray-200/60 border border-gray-100 p-8 {{ $rubros ? 'max-w-sm mx-auto' : '' }}"
+                <div class="bg-white rounded-3xl shadow-2xl shadow-indigo-900/10 border border-gray-100 p-8 sm:p-9 {{ $rubros ? 'max-w-sm mx-auto' : '' }}"
                      @if ($rubros) x-show="rubro" @if (! old('rubro')) style="display:none" @endif @endif>
                     @if ($rubros)
                         <button type="button" @click="rubro = ''" class="mb-4 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
@@ -109,8 +122,8 @@
                             <span class="text-xs font-normal text-indigo-400">· cambiar</span>
                         </button>
                     @endif
-                    <h2 class="text-xl font-bold text-gray-800 mb-1">Bienvenido de nuevo</h2>
-                    <p class="text-gray-400 text-sm mb-6">Ingresa tus credenciales para continuar</p>
+                    <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">Iniciar sesión</h2>
+                    <p class="text-gray-500 text-sm mt-1 mb-7">Bienvenido de nuevo. Ingresa con tu usuario y contraseña.</p>
 
                     @if (session('success'))
                         <div class="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-2 text-sm">
@@ -124,33 +137,41 @@
                         </div>
                     @endif
 
-                    <form method="POST" action="{{ route('login') }}" class="space-y-4">
+                    <form method="POST" action="{{ route('login') }}" class="space-y-5" x-data="{ ver: false, mayus: false, enviando: false }" @submit="enviando = true">
                         @csrf
                         @if ($rubros)
                             <input type="hidden" name="rubro" :value="rubro">
                         @endif
 
                         <div>
-                            <label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Usuario</label>
+                            <label for="login_usuario" class="block text-sm font-semibold text-gray-700 mb-1.5">Usuario</label>
                             <div class="relative">
-                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400 pointer-events-none">
                                     <i class="fas fa-user text-sm"></i>
                                 </span>
-                                <input type="text" name="email" value="{{ old('email') }}" placeholder="RUC o usuario"
-                                    autofocus required
-                                    class="w-full pl-10 pr-3 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm transition">
+                                <input id="login_usuario" type="text" name="email" value="{{ old('email') }}" placeholder="RUC o usuario"
+                                    autofocus required autocomplete="username" autocapitalize="none" spellcheck="false"
+                                    class="w-full h-12 pl-10 pr-3 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 text-sm transition">
                             </div>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Contraseña</label>
+                            <label for="login_clave" class="block text-sm font-semibold text-gray-700 mb-1.5">Contraseña</label>
                             <div class="relative">
-                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400 pointer-events-none">
                                     <i class="fas fa-lock text-sm"></i>
                                 </span>
-                                <input type="password" name="password" placeholder="••••••••" required
-                                    class="w-full pl-10 pr-3 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm transition">
+                                <input id="login_clave" :type="ver ? 'text' : 'password'" type="password" name="password" placeholder="Tu contraseña" required
+                                    autocomplete="current-password"
+                                    @keyup="mayus = $event.getModifierState && $event.getModifierState('CapsLock')" @blur="mayus = false"
+                                    class="w-full h-12 pl-10 pr-12 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 text-sm transition">
+                                {{-- Ojito: ver u ocultar la contraseña --}}
+                                <button type="button" @click="ver = ! ver" :aria-label="ver ? 'Ocultar contraseña' : 'Mostrar contraseña'" :title="ver ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                                        class="absolute inset-y-0 right-0 w-12 flex items-center justify-center text-gray-400 hover:text-indigo-600 focus:outline-none focus-visible:text-indigo-600">
+                                    <i class="fas" :class="ver ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
                             </div>
+                            <p x-show="mayus" x-cloak class="mt-1.5 text-xs font-medium text-amber-600"><i class="fas fa-triangle-exclamation"></i> Las mayúsculas están activadas</p>
                         </div>
 
                         {{-- Empresa con varias sucursales: se elige dónde trabajar (cada usuario entra a la suya) --}}
@@ -171,21 +192,25 @@
                             </div>
                         @endif
 
-                        <label class="flex items-center gap-2 text-sm text-gray-500 select-none">
-                            <input type="checkbox" name="remember" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                            Recordarme
+                        <label class="flex items-center gap-2 text-sm text-gray-600 select-none cursor-pointer w-fit">
+                            <input type="checkbox" name="remember" class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            Mantener la sesión iniciada
                         </label>
 
-                        <button type="submit"
-                            class="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-800 to-blue-600 text-white text-sm font-semibold tracking-wide hover:opacity-90 active:scale-[0.98] transition shadow-lg shadow-indigo-900/20"
+                        <button type="submit" :disabled="enviando"
+                            class="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-800 to-blue-600 text-white text-sm font-bold tracking-wide hover:opacity-95 hover:shadow-xl active:scale-[0.98] transition shadow-lg shadow-indigo-900/25 disabled:opacity-70 disabled:cursor-wait inline-flex items-center justify-center gap-2"
                             @unless (config('marca.es_tushpa')) style="background-image: linear-gradient(90deg, {{ config('marca.color') }}, {{ config('marca.color_secundario') }})" @endunless>
-                            INGRESAR
+                            <i class="fas fa-spinner fa-spin" x-show="enviando" x-cloak></i>
+                            <span x-text="enviando ? 'Ingresando…' : 'Ingresar'">Ingresar</span>
+                            <i class="fas fa-arrow-right text-xs" x-show="! enviando"></i>
                         </button>
+                        <p class="flex items-center justify-center gap-1.5 text-xs text-gray-400"><i class="fas fa-shield-halved"></i> Conexión segura y cifrada</p>
                     </form>
 
                     {{-- Solo los rubros con mozos o cobradores (en la demo, según el rubro elegido) --}}
                     @if ($rubros || \App\Support\Rubros::usaLoginMovil())
-                        <a href="{{ route('login.movil') }}" class="block text-center text-sm text-indigo-600 hover:underline mt-5"
+                        <div class="flex items-center gap-3 my-5 text-xs text-gray-400" @if ($rubros) x-show="@js(\App\Support\Rubros::LOGIN_MOVIL).includes(rubro)" x-cloak @endif><span class="h-px flex-1 bg-gray-200"></span>o<span class="h-px flex-1 bg-gray-200"></span></div>
+                        <a href="{{ route('login.movil') }}" class="flex items-center justify-center gap-2 w-full h-11 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-indigo-300 transition"
                            @if ($rubros) x-show="@js(\App\Support\Rubros::LOGIN_MOVIL).includes(rubro)" x-cloak @endif>
                             <i class="fas fa-tablet-screen-button"></i> Login para tablet / celular ({{ \App\Support\Rubros::actual() === 'PRESTAMOS' ? 'cobradores' : 'mozos' }})
                         </a>

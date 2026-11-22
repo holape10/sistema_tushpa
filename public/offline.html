@@ -28,6 +28,14 @@
     </div>
     <script>
         window.addEventListener('online', () => location.reload());
+        // Si el internet sí estaba (fue un corte de un instante), la pantalla vuelve sola: se prueba cada 5 segundos
+        setInterval(async () => {
+            if (navigator.onLine === false) return;
+            try {
+                const r = await fetch(location.href, { cache: 'no-store', credentials: 'same-origin' });
+                if (r.ok || r.status < 500) location.reload();
+            } catch (e) { /* sigue sin conexión */ }
+        }, 5000);
         // Si esta PC tiene guardada la caja sin internet, se ofrece abrirla
         if ('caches' in window && navigator.serviceWorker) {
             navigator.serviceWorker.getRegistration().then(async (r) => {

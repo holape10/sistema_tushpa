@@ -11,7 +11,7 @@
  * - Caja sin internet: su pantalla se guarda aparte (la guarda la misma página mientras hay internet) y sin conexión
  *   se abre desde la PC.
  */
-const VERSION = 'tushpa-v4';
+const VERSION = 'tushpa-v5';
 const CAJA = 'tushpa-caja';
 const BASE = new URL('./', self.location).pathname;
 const OFFLINE = BASE + 'offline.html';
@@ -42,6 +42,32 @@ async function recortar() {
     await Promise.all(sobran.map((r) => cache.delete(r)));
 }
 
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Una pantalla desde internet. Un corte de un instante (el servidor reinicia al actualizar, se cae una conexión que
+ * estaba abierta, la petición adelantada falla) no es "sin internet": se reintenta un par de veces antes de mostrar
+ * offline.html. Antes, a la primera falla salía "Sin conexión" aunque el internet estuviera bien.
+ */
+async function pantalla(e, req) {
+    try {
+        const adelantada = await e.preloadResponse;
+        if (adelantada) return adelantada;
+    } catch (error) {
+        // La petición adelantada falló: se pide de nuevo abajo
+    }
+    for (const espera of [0, 800, 2000]) {
+        if (espera) await esperar(espera);
+        try {
+            return await fetch(req);
+        } catch (error) {
+            // Sin internet de verdad: no tiene sentido seguir esperando
+            if (self.navigator && self.navigator.onLine === false) break;
+        }
+    }
+    return (await caches.match(OFFLINE)) || Response.error();
+}
+
 self.addEventListener('fetch', (e) => {
     const req = e.request;
     if (req.method !== 'GET') return;
@@ -68,13 +94,7 @@ self.addEventListener('fetch', (e) => {
         return;
     }
     if (req.mode === 'navigate') {
-        e.respondWith((async () => {
-            try {
-                return (await e.preloadResponse) || await fetch(req);
-            } catch (error) {
-                return (await caches.match(OFFLINE)) || Response.error();
-            }
-        })());
+        e.respondWith(pantalla(e, req));
         return;
     }
 
