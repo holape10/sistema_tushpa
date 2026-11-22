@@ -6,10 +6,7 @@
 
     <div class="flex flex-col sm:flex-row justify-between gap-3 mb-4">
         <form method="GET" class="flex flex-col sm:flex-row gap-3 flex-1">
-            {{-- Busca mientras se escribe (al dejar de escribir un momento); al volver, el cursor sigue al final del texto --}}
-            <input type="search" name="q" value="{{ $q }}" placeholder="Buscar por nombre, código o código de barras..." autocomplete="off"
-                x-data x-init="if ($el.value) { $el.focus(); $el.setSelectionRange($el.value.length, $el.value.length); }"
-                @input.debounce.500ms="$el.form.requestSubmit()"
+            <input type="text" name="q" value="{{ $q }}" placeholder="Buscar por nombre, código o código de barras..."
                 class="w-full sm:max-w-sm rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
 
             <select name="tipo" onchange="this.form.submit()"
