@@ -22,15 +22,24 @@
 
             {{-- Buscador: nombre, código o lector de barras --}}
             <div class="relative" @click.outside="resultadosAbiertos = false" x-show="!(edicion && edicion.soloCabecera)">
-                <div class="relative">
+                <div class="flex gap-2">
+                <div class="relative flex-1 min-w-0">
                     <svg class="w-7 h-7 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
                     <input x-ref="buscador" type="search" autocomplete="off" x-model="busqueda"
                            @input="cantidadPendiente = 1" @input.debounce.200ms="buscar()" @focus="resultadosAbiertos = resultados.length > 0"
                            @keydown.enter.prevent.stop="enterBuscador()" @keydown.arrow-down.prevent="moverResultado(1)" @keydown.arrow-up.prevent="moverResultado(-1)"
                            @keydown.escape="resultadosAbiertos = false"
-                           placeholder="Buscar producto o escanear código…  (F2)"
+                           :placeholder="escuchando ? 'Te escucho… di el producto (ej. 3 inca kola)' : 'Buscar producto o escanear código…  (F2)'"
                            class="w-full h-16 pl-14 pr-12 rounded-2xl border-0 shadow-sm text-2xl font-bold text-slate-800 placeholder:text-slate-300 placeholder:font-normal focus:ring-4 focus:ring-indigo-300">
                     <span x-show="buscando" x-cloak class="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></span>
+                </div>
+                {{-- Buscar por voz (Chrome / Edge): "3 inca kola" --}}
+                <button type="button" x-show="vozDisponible" x-cloak @click="alternarVoz()" :aria-pressed="escuchando"
+                        :class="escuchando ? 'bg-rose-500 animate-pulse' : 'bg-indigo-600 hover:bg-indigo-500'"
+                        class="w-16 h-16 shrink-0 rounded-2xl text-white flex items-center justify-center shadow-sm"
+                        :title="escuchando ? 'Escuchando… (clic para detener)' : 'Buscar por voz'" aria-label="Buscar por voz">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-14 0m7 7v4m-4 0h8M12 15a3 3 0 003-3V5a3 3 0 00-6 0v7a3 3 0 003 3z"/></svg>
+                </button>
                 </div>
                 <div x-show="resultadosAbiertos" x-cloak
                      class="absolute z-30 left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl ring-2 ring-indigo-400 overflow-hidden max-h-[65vh] overflow-y-auto">

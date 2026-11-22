@@ -48,6 +48,10 @@ document.addEventListener('alpine:init', () => {
         buscando: false,
         cantidadPendiente: 1,
         _ctrl: null,
+
+        // Buscar por voz (como en el PV Móvil): "3 inca kola" busca INCA KOLA y, si es uno solo, lo agrega con cantidad 3
+        vozDisponible: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+        escuchando: false,
         _teclas: '',
         _horaTecla: 0,
 
@@ -269,6 +273,61 @@ document.addEventListener('alpine:init', () => {
         },
 
         enfocar(id) { this.$nextTick(() => { const el = document.getElementById(id); if (el) { el.focus(); el.select?.(); } }); },
+
+        // ---------- Voz ----------
+        alternarVoz() {
+            if (this.escuchando) { this._reconocedor?.stop(); return; }
+            if (!window.isSecureContext) {
+                this.aviso('La voz necesita HTTPS (o localhost). Abre el sistema con https://', 'error');
+                return;
+            }
+            const NUMEROS = {
+                un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10,
+                once: 11, doce: 12, docena: 12, quince: 15, veinte: 20,
+            };
+            const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const rec = new Rec();
+            rec.lang = 'es-PE';
+            rec.interimResults = true;
+            rec.maxAlternatives = 1;
+
+            rec.onstart = () => { this.escuchando = true; this.busqueda = ''; };
+            rec.onend = () => { this.escuchando = false; };
+            rec.onerror = e => {
+                this.escuchando = false;
+                if (e.error === 'not-allowed') this.aviso('Permite el uso del micrófono para buscar por voz.', 'error');
+                else if (e.error !== 'no-speech' && e.error !== 'aborted') this.aviso('No se pudo usar el micrófono.', 'error');
+            };
+            rec.onresult = async e => {
+                const res = e.results[e.results.length - 1];
+                const texto = res[0].transcript.trim();
+                this.busqueda = texto;
+                if (!res.isFinal) return;
+
+                // "3 inca kola" / "tres inca kola" => cantidad 3 + búsqueda
+                const m = texto.toLowerCase().match(/^(\d+(?:[.,]\d+)?|[a-záéíóú]+)\s+(.+)$/i);
+                let cantidad = 1;
+                if (m) {
+                    const n = /^\d/.test(m[1]) ? parseFloat(m[1].replace(',', '.')) : NUMEROS[m[1]];
+                    if (n > 0) { cantidad = n; this.busqueda = m[2]; }
+                }
+                this.cantidadPendiente = cantidad;
+                const lista = await this.buscar();
+                if (lista.length === 1) {
+                    const p = lista[0];
+                    // Con presentaciones o varios precios se pregunta cuál; si no, entra directo con la cantidad dicha
+                    if ((p.presentaciones || []).length || (p.precios || []).length || p.control_serie) this.agregar(p);
+                    else this.agregar(p, false, null, cantidad, p.precio);
+                } else if (!lista.length) {
+                    this.sonido(false);
+                } else {
+                    this.$refs.buscador?.focus();
+                }
+            };
+
+            this._reconocedor = rec;
+            rec.start();
+        },
 
         // ---------- Búsqueda ----------
         async buscar() {
