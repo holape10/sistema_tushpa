@@ -6,7 +6,10 @@
 
     <div class="flex flex-col sm:flex-row justify-between gap-3 mb-4">
         <form method="GET" class="flex flex-col sm:flex-row gap-3 flex-1">
-            <input type="text" name="q" value="{{ $q }}" placeholder="Buscar por nombre, código o código de barras..."
+            {{-- Busca mientras se escribe (al dejar de escribir un momento); al volver, el cursor sigue al final del texto --}}
+            <input type="search" name="q" value="{{ $q }}" placeholder="Buscar por nombre, código o código de barras..." autocomplete="off"
+                x-data x-init="if ($el.value) { $el.focus(); $el.setSelectionRange($el.value.length, $el.value.length); }"
+                @input.debounce.500ms="$el.form.requestSubmit()"
                 class="w-full sm:max-w-sm rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
 
             <select name="tipo" onchange="this.form.submit()"
@@ -94,7 +97,9 @@
                     <th class="px-4 py-3 text-left">Nombre</th>
                     <th class="px-4 py-3 text-left">Tipo</th>
                     <th class="px-4 py-3 text-left">Categoría</th>
+                    <th class="px-4 py-3 text-right">Costo</th>
                     <th class="px-4 py-3 text-right">Precio</th>
+                    <th class="px-4 py-3 text-right">Stock</th>
                     <th class="px-4 py-3 text-center">Estado</th>
                     <th class="px-4 py-3 text-right">Acciones</th>
                 </tr>
@@ -119,7 +124,17 @@
                             <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">{{ $p->tipo_nombre }}</span>
                         </td>
                         <td class="px-4 py-3 text-gray-500">{{ $p->categoria->cat_nom ?? '-' }}</td>
+                        <td class="px-4 py-3 text-right text-gray-500">{{ (float) $p->costo > 0 ? 'S/ '.number_format($p->costo, 2) : '—' }}</td>
                         <td class="px-4 py-3 text-right">S/ {{ number_format($p->propun, 2) }}</td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            @if (in_array((int) $p->promocion, [0, 4], true))
+                                @php($stock = (float) ($p->stock_total ?? 0))
+                                <span class="font-semibold {{ $stock <= 0 ? 'text-rose-600' : ($p->stock_min > 0 && $stock <= (float) $p->stock_min ? 'text-amber-600' : 'text-gray-700') }}">{{ rtrim(rtrim(number_format($stock, 3), '0'), '.') }}</span>
+                                <span class="text-xs text-gray-400">{{ $p->umecod }}</span>
+                            @else
+                                <span class="text-gray-300">—</span>
+                            @endif
+                        </td>
                         <td class="px-4 py-3 text-center">
                             <span class="px-2 py-0.5 rounded-full text-xs {{ $p->proest == 'Activo' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500' }}">
                                 {{ $p->proest }}
@@ -135,7 +150,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">Sin productos registrados</td></tr>
+                    <tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">Sin productos registrados</td></tr>
                 @endforelse
             </tbody>
         </table>

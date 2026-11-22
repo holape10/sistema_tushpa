@@ -51,7 +51,7 @@ class ReporteController extends Controller
             [$desde, $hasta] = [$hasta, $desde];
         }
         $filtros = ['sucursal' => $sucursal, 'sucursales' => $ids, 'desde' => $desde, 'hasta' => $hasta]
-            + $request->only(['tipo', 'estado', 'agrupar', 'categoria', 'orden', 'limite', 'vendedor', 'medio', 'cliente', 'producto', 'motorizado', 'estado_sunat', 'jornada', 'por_dia']);
+            + $request->only(['tipo', 'estado', 'agrupar', 'categoria', 'orden', 'limite', 'vendedor', 'medio', 'cliente', 'producto', 'motorizado', 'estado_sunat', 'jornada', 'por_dia', 'vista']);
         $r = Reportes::generar($clave, $filtros);
         $nombreSucursal = SucursalesVisibles::nombre($user, $sucursal);
         $archivo = "reporte_{$clave}_{$desde}_{$hasta}";

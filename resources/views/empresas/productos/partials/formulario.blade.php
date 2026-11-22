@@ -266,8 +266,6 @@
                 </div>
             </section>
 
-            @include('empresas.productos.partials.imagen')
-
             {{-- Stock inicial: solo al crear un producto o insumo. Vacío = no pasa nada; con un número entra como inventario inicial --}}
             @if (! $p)
                 <section x-show="tipo == '0' || tipo == '4'" x-cloak class="bg-white rounded-2xl shadow-sm">
@@ -306,6 +304,9 @@
                                class="{{ $campo }} font-mono mt-1"></label>
                 </div>
             </section>
+
+            {{-- La foto va al final: es lo último que se llena (y lo que menos se usa) --}}
+            @include('empresas.productos.partials.imagen')
         </aside>
     </div>
 

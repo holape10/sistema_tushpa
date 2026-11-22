@@ -65,7 +65,7 @@ class EtiquetasProductoTest extends FlujoTestCase
 
         $this->postJson(route('productos.etiquetas.imprimir'), ['items' => [['id' => $producto->IdProducto, 'cantidad' => 1]], 'destino' => (string) $imp, 'usar_interno' => true])
             ->assertOk();
-        $this->assertStringContainsString($producto->procod, base64_decode(DB::table('cola_impresion')->value('contenido')));
+        $this->assertStringContainsString(CodigoBarras::datosEscpos($producto->procod), base64_decode(DB::table('cola_impresion')->value('contenido')));
     }
 
     public function test_no_imprime_productos_de_otra_sucursal(): void

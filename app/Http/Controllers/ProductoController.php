@@ -36,6 +36,9 @@ class ProductoController extends Controller
 
         $productos = Producto::where('productos.id_empresa_negocio', $sucursal)
             ->leftJoin('categorias as cb', 'cb.cat_id', '=', 'productos.cat_id')->select('productos.*')
+            // Stock de todos los almacenes de la sucursal (solo cuenta en productos e insumos)
+            ->selectSub(fn ($s) => $s->from('producto_stock as ps')->whereColumn('ps.IdProducto', 'productos.IdProducto')
+                ->where('ps.id_empresa_negocio', $sucursal)->selectRaw('SUM(ps.stock)'), 'stock_total')
             // Por palabras, sin tildes: "cafe leche" encuentra CAFÉ CON LECHE; también por categoría o código
             ->tap(fn ($query) => Buscar::palabras($query, $q, ['productos.pronom', 'cb.cat_nom'], ['productos.procod', 'productos.codigo_barra']))
             ->when($tipo !== '', fn ($query) => $query->where('productos.promocion', $tipo))

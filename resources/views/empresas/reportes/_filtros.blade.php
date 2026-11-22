@@ -48,6 +48,13 @@
             @foreach (['vigentes' => 'Vigentes', 'anuladas' => 'Anuladas', 'todas' => 'Todas'] as $v => $n)<option value="{{ $v }}" @selected(request('estado', 'vigentes') === $v)>{{ $n }}</option>@endforeach
         </select></label>
 @endif
+@if (in_array('vista', $usa, true))
+    <label class="text-sm">Ver
+        <select name="vista" class="block rounded-lg border-gray-300 text-sm">
+            <option value="comprobantes" @selected(request('vista', 'comprobantes') !== 'resumen')>Cada comprobante (contado / crédito)</option>
+            <option value="resumen" @selected(request('vista') === 'resumen')>Un total por cliente</option>
+        </select></label>
+@endif
 @if (in_array('agrupar', $usa, true))
     <label class="text-sm">Agrupar por
         <select name="agrupar" class="block rounded-lg border-gray-300 text-sm">

@@ -266,8 +266,37 @@ class Reportes
             ]];
     }
 
+    /** Nombre completo del comprobante (reporte por cliente) */
+    private const TIPOS_LARGOS = ['01' => 'FACTURA ELECTRONICA', '03' => 'BOLETA ELECTRONICA', '07' => 'NOTA DE CREDITO ELECTRONICA',
+        '08' => 'NOTA DE DEBITO ELECTRONICA', '13' => 'NOTA DE VENTA', '12' => 'TICKET'];
+
+    /**
+     * Ventas por cliente. Por comprobante (lo predeterminado): cada comprobante con su cliente y cuánto fue al contado y al
+     * crédito, del último al primero; para ver un cliente se filtra por su RUC/DNI o nombre. "resumen": un total por cliente.
+     */
     private static function porCliente(array $f): array
     {
+        if (($f['vista'] ?? 'comprobantes') !== 'resumen') {
+            $rows = self::cpe($f)->orderByDesc('c.ccafem')->orderBy('c.tdocod')->orderBy('c.serdoc')->orderByRaw('CAST(c.numdoc AS UNSIGNED) DESC')
+                ->get(['c.ccafem', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccandi', 'c.ccanom', 'c.totalcontado', 'c.totalcredito', 'c.ccaitv']);
+            $filas = $rows->map(function ($c) {
+                $s = $c->tdocod === '07' ? -1 : 1;
+
+                return ['fecha' => $c->ccafem, 'comprobante' => self::TIPOS_LARGOS[$c->tdocod] ?? (self::TIPOS[$c->tdocod] ?? $c->tdocod),
+                    'serie' => $c->serdoc, 'numero' => (string) (int) $c->numdoc, 'doc' => $c->ccandi,
+                    'cliente' => $c->ccandi === '00000000' ? 'CLIENTES VARIOS' : $c->ccanom,
+                    'contado' => $s * (float) $c->totalcontado, 'credito' => $s * (float) $c->totalcredito, 'total' => $s * (float) $c->ccaitv];
+            })->all();
+
+            return ['columnas' => ['fecha' => ['Fecha', 'date'], 'comprobante' => ['Comprobante', 'text'], 'serie' => ['Serie', 'text'],
+                'numero' => ['Número', 'text'], 'doc' => ['RUC/DNI', 'text'], 'cliente' => ['Cliente', 'text'],
+                'contado' => ['Contado', 'money'], 'credito' => ['Crédito', 'money'], 'total' => ['Total', 'money']],
+                'filas' => $filas, 'usa' => ['vista', 'tipo'], 'resumen' => [
+                    ['Comprobantes', count($filas)], ['Contado', array_sum(array_column($filas, 'contado')), 'money'],
+                    ['Crédito', array_sum(array_column($filas, 'credito')), 'money'], ['Total', array_sum(array_column($filas, 'total')), 'money'],
+                ]];
+        }
+
         $rows = self::cpe($f)->groupBy('c.ccandi', 'c.ccanom')
             ->select('c.ccandi', 'c.ccanom', DB::raw("SUM(c.tdocod NOT IN ('07','08')) as compras"), DB::raw('SUM('.self::SIGNO.' * c.ccaitv) as total'),
                 DB::raw('MAX(c.ccafem) as ultima'), DB::raw("SUM(c.estadopago = 'CREDITO') as credito"))
@@ -278,7 +307,7 @@ class Reportes
 
         return ['columnas' => ['doc' => ['DNI/RUC', 'text'], 'cliente' => ['Cliente', 'text'], 'compras' => ['Compras', 'num'], 'total' => ['Total', 'money'],
             'ticket' => ['Ticket promedio', 'money'], 'credito' => ['Al crédito', 'num'], 'ultima' => ['Última compra', 'date']], 'filas' => $filas,
-            'grafico' => ['etiqueta' => 'cliente', 'valor' => 'total']];
+            'usa' => ['vista'], 'grafico' => ['etiqueta' => 'cliente', 'valor' => 'total']];
     }
 
     /** Líneas vendidas con su comprobante (las notas de crédito restan), para los reportes detallados */
