@@ -23,15 +23,13 @@
         <style>
             @keyframes login-flota { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
             @keyframes login-orbe { 0%, 100% { transform: translate(0, 0) scale(1) } 50% { transform: translate(30px, -20px) scale(1.08) } }
-            @keyframes login-barra { from { transform: scaleY(0.15) } to { transform: scaleY(1) } }
             @keyframes login-entra { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
             .login-flota { animation: login-flota 6s ease-in-out infinite; }
             .login-flota-2 { animation: login-flota 7s ease-in-out infinite 1.2s; }
             .login-orbe { animation: login-orbe 14s ease-in-out infinite; }
-            .login-barra { transform-origin: bottom; animation: login-barra 1.1s cubic-bezier(.2,.8,.2,1) both; }
             .login-entra { animation: login-entra .8s cubic-bezier(.2,.8,.2,1) both; }
             .login-rubro-sale { opacity: 0; transform: translateY(-8px); }
-            @media (prefers-reduced-motion: reduce) { .login-flota, .login-flota-2, .login-orbe, .login-barra, .login-entra { animation: none; } }
+            @media (prefers-reduced-motion: reduce) { .login-flota, .login-flota-2, .login-orbe, .login-entra { animation: none; } }
         </style>
         <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-[#0b0a2e] via-indigo-900 to-blue-800 flex-col items-center justify-center overflow-hidden px-10 py-12 isolate"
              @unless (config('marca.es_tushpa')) style="background-image: linear-gradient(135deg, {{ config('marca.color') }}, {{ config('marca.color_secundario') }})" @endunless>
@@ -55,30 +53,22 @@
                 </h1>
                 <p class="login-entra mt-4 text-indigo-100/80 text-base max-w-md" style="animation-delay:.22s">Vende, factura y controla tu inventario desde la PC, la tablet o el celular.</p>
 
-                <!-- Vista del sistema en vivo (ilustrativa) -->
-                <div class="login-entra relative mt-10 w-full max-w-sm" style="animation-delay:.3s" aria-hidden="true">
-                    <div class="login-flota rounded-2xl border border-white/15 bg-white/10 backdrop-blur-xl p-5 shadow-[0_30px_80px_-20px_rgba(0,0,0,.6)] text-left">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-semibold uppercase tracking-wider text-indigo-200/80">Ventas de hoy</span>
-                            <span class="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[11px] font-bold text-emerald-300"><i class="fas fa-arrow-trend-up"></i> +18%</span>
+                <!-- Lo que hace el sistema (sin montos ni datos: que nadie lo confunda con sus ventas) -->
+                <div class="login-entra mt-10 grid grid-cols-2 gap-3 w-full max-w-md text-left" style="animation-delay:.3s">
+                    @foreach ([
+                        ['fa-file-invoice', 'Facturación SUNAT', 'Boletas, facturas y notas al instante', 'from-emerald-400/25 text-emerald-300', 'login-flota'],
+                        ['fa-cash-register', 'Ventas y caja', 'Cobra rápido con efectivo, Yape o tarjeta', 'from-cyan-400/25 text-cyan-300', 'login-flota-2'],
+                        ['fa-boxes-stacked', 'Inventario', 'Stock y kardex siempre al día', 'from-indigo-400/25 text-indigo-200', 'login-flota-2'],
+                        ['fa-chart-line', 'Reportes', 'Sabe qué vendes y cuánto ganas', 'from-fuchsia-400/25 text-fuchsia-300', 'login-flota'],
+                    ] as $i => [$icono, $titulo, $detalle, $color, $flota])
+                        <div class="{{ $flota }} group rounded-2xl border border-white/15 bg-white/[0.07] backdrop-blur-xl p-4 shadow-[0_20px_50px_-20px_rgba(0,0,0,.6)] hover:bg-white/[0.12] hover:border-white/25 transition"
+                             style="animation-delay: -{{ $i * 1.5 }}s">
+                            <span class="w-10 h-10 rounded-xl bg-gradient-to-br {{ $color }} to-transparent border border-white/10 flex items-center justify-center mb-3">
+                                <i class="fas {{ $icono }}"></i></span>
+                            <span class="block text-sm font-bold text-white">{{ $titulo }}</span>
+                            <span class="block text-xs text-indigo-200/75 mt-0.5 leading-snug">{{ $detalle }}</span>
                         </div>
-                        <p class="mt-1 text-3xl font-extrabold text-white tabular-nums">S/ 4,280.50</p>
-                        <div class="mt-4 flex items-end gap-1.5 h-20">
-                            @foreach ([35, 52, 40, 68, 58, 82, 74, 100] as $i => $alto)
-                                <span class="login-barra flex-1 rounded-t-md {{ $loop->last ? 'bg-gradient-to-t from-cyan-400 to-fuchsia-400' : 'bg-white/25' }}"
-                                      style="height: {{ $alto }}%; animation-delay: {{ 0.4 + $i * 0.07 }}s"></span>
-                            @endforeach
-                        </div>
-                    </div>
-                    <!-- Avisos flotantes -->
-                    <div class="login-flota-2 absolute -left-16 -top-9 flex items-center gap-2.5 rounded-xl border border-white/15 bg-[#14123d]/80 backdrop-blur-xl px-3 py-2 shadow-2xl text-left">
-                        <span class="w-7 h-7 rounded-lg bg-emerald-400/20 flex items-center justify-center"><i class="fas fa-check text-xs text-emerald-300"></i></span>
-                        <span><span class="block text-[11px] font-bold text-white">F001-00245</span><span class="block text-[10px] text-emerald-300">Aceptada por SUNAT</span></span>
-                    </div>
-                    <div class="login-flota absolute -right-12 -bottom-6 flex items-center gap-2.5 rounded-xl border border-white/15 bg-[#14123d]/80 backdrop-blur-xl px-3 py-2 shadow-2xl text-left" style="animation-delay:-3s">
-                        <span class="w-7 h-7 rounded-lg bg-fuchsia-400/20 flex items-center justify-center"><i class="fas fa-receipt text-xs text-fuchsia-300"></i></span>
-                        <span><span class="block text-[11px] font-bold text-white">Mesa 4 · Cobrado</span><span class="block text-[10px] text-indigo-200">S/ 86.00 · Yape</span></span>
-                    </div>
+                    @endforeach
                 </div>
 
                 <!-- Rubros: el nombre va cambiando solo -->
