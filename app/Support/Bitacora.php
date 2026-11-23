@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Support\Tenancy\AlertasPanel;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -83,10 +84,11 @@ class Bitacora
             $peticion = app()->runningInConsole() ? null : request();
             [$refTipo, $refId] = $extra['referencia'] ?? [null, null];
 
-            DB::table('bitacora')->insert([
+            $nombre = self::corto($extra['nombre'] ?? ($usuario ? (trim((string) $usuario->apeusu) ?: $usuario->name) : (app()->runningInConsole() ? 'Sistema' : null)), 120);
+            $id = DB::table('bitacora')->insertGetId([
                 'fecha' => now(),
                 'IdUsuario' => $usuario?->IdUsuario,
-                'usuario' => self::corto($extra['nombre'] ?? ($usuario ? (trim((string) $usuario->apeusu) ?: $usuario->name) : (app()->runningInConsole() ? 'Sistema' : null)), 120),
+                'usuario' => $nombre,
                 'rol' => $usuario ? self::rol((int) $usuario->IdUsuario) : null,
                 'id_empresa_negocio' => array_key_exists('sucursal', $extra) ? $extra['sucursal'] : $usuario?->id_empresa_negocio,
                 'IdEmpresa' => self::corto(array_key_exists('empresa', $extra) ? $extra['empresa'] : $usuario?->IdEmpresa, 11),
@@ -102,6 +104,8 @@ class Bitacora
                 'agente' => self::corto($peticion?->userAgent(), 255),
                 'ruta' => self::corto($peticion?->route()?->getName() ?? ($peticion ? $peticion->method().' '.$peticion->path() : null), 120),
             ]);
+            // Lo delicado (editar empresa o sucursal, importar precios, usuarios) también sale como alerta en el panel
+            AlertasPanel::avisar($accion, $descripcion, $nombre, $peticion?->ip(), (int) $id);
         } catch (\Throwable $e) {
             report($e);
         }

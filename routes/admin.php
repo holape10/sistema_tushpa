@@ -5,6 +5,7 @@
 use App\Http\Controllers\Admin\AccesoController;
 use App\Http\Controllers\Admin\AgendaController;
 use App\Http\Controllers\Admin\AgenteController;
+use App\Http\Controllers\Admin\AlertaController;
 use App\Http\Controllers\Admin\AnuncioController;
 use App\Http\Controllers\Admin\AsistenteController;
 use App\Http\Controllers\Admin\BaseDatosController;
@@ -106,6 +107,10 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/clientes/{cliente}/contrato/{id}/pdf', [ContratoController::class, 'pdf'])->whereNumber(['cliente', 'id'])->name('clientes.contrato.pdf');
     Route::get('/clientes/{cliente}/contrato/{id}/{campo}', [ContratoController::class, 'archivo'])->whereNumber(['cliente', 'id'])
         ->whereIn('campo', ['dni_frente', 'dni_reverso', 'firma', 'escaneado'])->name('clientes.contrato.archivo');
+    // Alertas (⚠️): cambios delicados de la empresa para revisar y descartar; y su bitácora en Excel
+    Route::get('/clientes/{cliente}/alertas', [AlertaController::class, 'index'])->whereNumber('cliente')->name('clientes.alertas');
+    Route::post('/clientes/{cliente}/alertas/descartar', [AlertaController::class, 'descartar'])->whereNumber('cliente')->name('clientes.alertas.descartar');
+    Route::get('/clientes/{cliente}/bitacora/excel', [AlertaController::class, 'bitacoraExcel'])->whereNumber('cliente')->middleware('throttle:10,1')->name('clientes.bitacora.excel');
     Route::get('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'index'])->whereNumber('cliente')->name('clientes.comprobantes');
     Route::post('/clientes/{cliente}/comprobantes/resumen', [ComprobanteController::class, 'resumen'])->whereNumber('cliente')->name('clientes.comprobantes.resumen');
     Route::get('/clientes/{cliente}/comprobantes/{id}/pdf', [ComprobanteController::class, 'pdf'])->whereNumber(['cliente', 'id'])->name('clientes.comprobantes.pdf');

@@ -12,6 +12,7 @@ use App\Support\Estudio;
 use App\Support\LogosClientes;
 use App\Support\Rubros;
 use App\Support\Sunat\SunatService;
+use App\Support\Tenancy\AlertasPanel;
 use App\Support\Tenancy\ConsumoXml;
 use App\Support\Tenancy\Eliminador;
 use App\Support\Tenancy\Provisionador;
@@ -107,6 +108,8 @@ class ClienteController extends Controller
             ->when($filtro === 'web', fn ($w) => $w->where('origen', 'web')->where('estado', '!=', 'ELIMINADO'))
             ->when($filtro === 'eliminar', fn ($w) => $w->where('estado', 'SUSPENDIDO')->where('suspendido_el', '<=', $limiteEliminar))
             ->when($filtro === 'eliminados', fn ($w) => $w->where('estado', 'ELIMINADO'))
+            // Con alertas por revisar (⚠️): cambios delicados que nadie del panel descartó aún
+            ->when($filtro === 'alertas', fn ($w) => $w->whereIn('clientes.id', $this->conAlertas()))
             // Los contadores de arriba también filtran (los vencidos y por vencer, del que vence primero)
             ->when($filtro === 'activos', fn ($w) => $w->where('estado', 'ACTIVO'))
             ->when($filtro === 'suspendidos', fn ($w) => $w->where('estado', 'SUSPENDIDO'))
@@ -134,6 +137,8 @@ class ClienteController extends Controller
             'para_eliminar' => $base()->where('estado', 'SUSPENDIDO')->where('suspendido_el', '<=', $limiteEliminar)->count(),
         ];
         $comprobantes = $clientes->getCollection()->mapWithKeys(fn ($cl) => [$cl->id => $this->comprobantes($cl)]);
+        $alertas = AlertasPanel::pendientes($clientes->pluck('id'));
+        $totales['alertas'] = $base()->whereIn('clientes.id', $this->conAlertas())->count();
         // XML de compras pedidos a json.pe este mes (cada consulta usa créditos de la cuenta de TUSHPA)
         $consumoXml = ConsumoXml::delMes();
         $totales['xml'] = (int) $consumoXml->sum('consultas');
@@ -142,7 +147,15 @@ class ClienteController extends Controller
         $porUsuario = $this->esDueno() ? Cliente::where('estado', '!=', 'ELIMINADO')->groupBy('creado_por')
             ->select('creado_por', DB::raw('COUNT(*) as n'))->pluck('n', 'creado_por') : collect();
 
-        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'filtro', 'comprobantes', 'usuarios', 'limiteEliminar', 'usuario', 'porUsuario', 'consumoXml', 'rubro', 'porRubro'));
+        return view('admin.clientes.index', compact('clientes', 'totales', 'q', 'filtro', 'comprobantes', 'usuarios', 'limiteEliminar', 'usuario', 'porUsuario', 'consumoXml', 'rubro', 'porRubro', 'alertas'));
+    }
+
+    /** Clientes con alertas sin descartar */
+    private function conAlertas(): array
+    {
+        return Schema::connection('central')->hasTable('panel_alertas')
+            ? DB::connection('central')->table('panel_alertas')->whereNull('descartada_el')->distinct()->pluck('cliente_id')->all()
+            : [];
     }
 
     public function create()

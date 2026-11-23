@@ -29,7 +29,7 @@
         <h1 class="text-xl font-bold">Clientes</h1>
         <div data-totales class="flex gap-2 text-xs font-semibold">
             {{-- Cada contador es un filtro: un clic muestra solo esas empresas, otro clic vuelve a todas --}}
-            @foreach (['activos' => ['activos', 'bg-emerald-100 text-emerald-700 ring-emerald-500'], 'suspendidos' => ['suspendidos', 'bg-rose-100 text-rose-700 ring-rose-500'],
+            @foreach (['alertas' => ['⚠️ con alertas por revisar', 'bg-red-600 text-white ring-red-300 animate-pulse'], 'activos' => ['activos', 'bg-emerald-100 text-emerald-700 ring-emerald-500'], 'suspendidos' => ['suspendidos', 'bg-rose-100 text-rose-700 ring-rose-500'],
                 'vencidos' => ['vencidos sin pagar', 'bg-orange-100 text-orange-700 ring-orange-500'], 'por_vencer' => ['vencen en 7 días', 'bg-amber-100 text-amber-700 ring-amber-500'],
                 'certificados' => ['🔐 certificados por vencer', 'bg-violet-100 text-violet-700 ring-violet-500']] as $valor => [$texto, $color])
                 @if ($valor === 'activos' || $totales[$valor] || $filtro === $valor)
@@ -101,6 +101,13 @@
                             <p class="font-semibold">{{ $cl->nombre_comercial ?: $cl->razon_social }}
                                 @if ($cl->rubro)<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700">{{ \App\Support\Rubros::RUBROS[$cl->rubro]['nombre'] ?? $cl->rubro }}</span>@endif</p>
                             <p class="text-xs text-slate-400">{{ $cl->ruc }} · {{ $cl->razon_social }}</p>
+                            @if ($nAlertas = $alertas[$cl->id] ?? 0)
+                                {{-- Cambios delicados por revisar (editó la empresa o una sucursal, importó precios, usuarios) --}}
+                                <a href="{{ route('admin.clientes.alertas', $cl->id) }}" title="Cambios delicados por revisar"
+                                   class="mt-1 inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-red-700">⚠️ {{ $nAlertas }} {{ $nAlertas === 1 ? 'alerta' : 'alertas' }} por revisar</a>
+                            @else
+                                <a href="{{ route('admin.clientes.alertas', $cl->id) }}" class="mt-0.5 inline-block text-[11px] text-slate-400 hover:text-indigo-600" title="Alertas y bitácora en Excel">🗂 Bitácora</a>
+                            @endif
                             @if ($xmlMes = $consumoXml[$cl->id] ?? null)
                                 <p class="mt-0.5 text-[11px] font-semibold text-amber-700" title="Consultas a json.pe este mes">📄 {{ number_format($xmlMes->consultas) }} XML pedidos · {{ number_format($xmlMes->traidos) }} traídos</p>
                             @endif
