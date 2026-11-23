@@ -138,6 +138,11 @@
                             </span>
                         </td>
                         <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                            {{-- Ajustar stock: solo el administrador, y no a lo que se controla por lote o serie (eso va con su lote o sus series) --}}
+                            @if (auth()->user()->esAdmin() && in_array((int) $p->promocion, [0, 4], true) && ! $p->control_lote && ! $p->control_serie)
+                                <button type="button" class="text-sky-600 hover:underline" x-data
+                                        @click="$dispatch('ajustar-stock', @js(['id' => (int) $p->IdProducto, 'nombre' => $p->pronom, 'unidad' => $p->umecod ?: 'NIU', 'stock' => $stockPorAlmacen[$p->IdProducto] ?? []]))">Ajustar</button>
+                            @endif
                             <a href="{{ route('productos.edit', $p->IdProducto) }}" class="text-indigo-600 hover:underline">Editar</a>
                             <form action="{{ route('productos.destroy', $p->IdProducto) }}" method="POST" class="inline"
                                   onsubmit="return confirm('¿Eliminar este producto?')">
@@ -152,6 +157,47 @@
             </tbody>
         </table>
     </div>
+
+    @if (auth()->user()->esAdmin())
+        {{-- Ajustar stock: se escribe lo que hay de verdad en ese almacén; el sistema hace el ingreso o la salida de la diferencia (Kardex) --}}
+        <div x-data="{ abierto: false, p: null, almacen: @js((string) ($almacenes->first()->id_almacen ?? '')), real: '',
+                       actual() { return Number(this.p?.stock?.[this.almacen] ?? 0); },
+                       dif() { const v = parseFloat(this.real); return isNaN(v) || v < 0 ? null : Math.round((v - this.actual()) * 100000) / 100000; },
+                       num(n) { return Number(Math.round(n * 1000) / 1000).toLocaleString('es-PE', { maximumFractionDigits: 3 }); } }"
+             @ajustar-stock.window="p = $event.detail; real = ''; abierto = true; $nextTick(() => $refs.real.focus())"
+             x-show="abierto" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="abierto = false" @keydown.escape.window="abierto = false">
+            <form method="POST" action="{{ route('kardex.ajustar') }}" class="w-full max-w-sm rounded-2xl bg-white shadow-xl p-5 space-y-3" x-data="{ enviando: false }" @submit="enviando = true">
+                @csrf
+                <input type="hidden" name="IdProducto" :value="p?.id">
+                <div class="flex items-start justify-between gap-3">
+                    <div><p class="text-xs font-bold uppercase text-sky-700">Ajustar stock</p><p class="font-bold text-gray-800" x-text="p?.nombre"></p></div>
+                    <button type="button" @click="abierto = false" class="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                </div>
+                @if ($almacenes->count() > 1)
+                    <label class="block text-sm font-semibold text-gray-700">Almacén
+                        <select name="id_almacen" x-model="almacen" class="mt-1 w-full h-10 rounded-xl border-gray-300 text-sm">
+                            @foreach ($almacenes as $a)<option value="{{ $a->id_almacen }}">{{ $a->descripcion }}</option>@endforeach
+                        </select></label>
+                @else
+                    <input type="hidden" name="id_almacen" :value="almacen">
+                @endif
+                <p class="text-sm text-gray-600">En el sistema: <b x-text="num(actual()) + ' ' + (p?.unidad ?? '')"></b></p>
+                <label class="block text-sm font-semibold text-gray-700">Stock real (lo que hay de verdad)
+                    <input x-ref="real" type="number" name="stock_real" x-model="real" step="any" min="0" required class="mt-1 w-full h-11 rounded-xl border-gray-300 text-right text-lg font-bold"></label>
+                <p x-show="dif() !== null" class="rounded-xl px-3 py-2 text-sm font-semibold"
+                   :class="dif() > 0 ? 'bg-emerald-50 text-emerald-800' : (dif() < 0 ? 'bg-rose-50 text-rose-800' : 'bg-gray-50 text-gray-600')"
+                   x-text="dif() > 0 ? 'Se hará un INGRESO de ' + num(dif()) + ' ' + p.unidad + ': quedará en ' + num(parseFloat(real)) + '.'
+                         : (dif() < 0 ? 'Se hará una SALIDA de ' + num(-dif()) + ' ' + p.unidad + ': quedará en ' + num(parseFloat(real)) + '.' : 'Es igual al sistema: no hay nada que ajustar.')"></p>
+                <label class="block text-sm text-gray-600">Motivo (opcional)
+                    <input name="observacion" maxlength="200" placeholder="Ej. conteo físico, producto dañado" class="mt-1 w-full h-10 rounded-xl border-gray-300 text-sm"></label>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" @click="abierto = false" class="h-10 px-4 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold">Cancelar</button>
+                    <button :disabled="enviando || dif() === null || dif() === 0" class="h-10 px-4 rounded-xl bg-sky-600 text-white text-sm font-bold hover:bg-sky-700 disabled:opacity-50"
+                            x-text="enviando ? 'Ajustando…' : 'Ajustar'"></button>
+                </div>
+            </form>
+        </div>
+    @endif
 
     <div class="mt-4">{{ $productos->links() }}</div>
 @endsection

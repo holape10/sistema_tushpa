@@ -47,8 +47,14 @@ class ProductoController extends Controller
             ->withQueryString();
 
         $almacenes = Almacen::where('id_empresa_negocio', $sucursal)->orderByDesc('predeterminado')->get();
+        // Para «Ajustar stock» (solo el administrador): el stock de cada producto de la página en cada almacén
+        $stockPorAlmacen = Auth::user()->esAdmin()
+            ? DB::table('producto_stock')->whereIn('IdProducto', $productos->pluck('IdProducto'))->whereIn('id_almacen', $almacenes->pluck('id_almacen'))
+                ->get(['IdProducto', 'id_almacen', 'stock'])->groupBy('IdProducto')
+                ->map(fn ($filas) => $filas->mapWithKeys(fn ($f) => [(int) $f->id_almacen => (float) $f->stock]))->all()
+            : [];
 
-        return view('empresas.productos.index', compact('productos', 'q', 'tipo', 'almacenes'));
+        return view('empresas.productos.index', compact('productos', 'q', 'tipo', 'almacenes', 'stockPorAlmacen'));
     }
 
     public function create()
