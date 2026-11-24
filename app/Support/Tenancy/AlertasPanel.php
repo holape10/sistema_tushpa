@@ -52,10 +52,11 @@ class AlertasPanel
             // También al Telegram del dueño (el mismo bot del monitor de errores), después de responder: no demora a la empresa
             $texto = self::textoTelegram($cliente, $accion, $descripcion, $usuario, $ip, $cambios);
             dispatch(fn () => MonitorErrores::avisar($texto))->afterResponse();
-            // Y al usuario del panel que tiene esa empresa (cada usuario de una marca ve solo las suyas), si vinculó su Telegram
-            if ($vendedor = self::encargado($cliente)) {
-                $suyo = self::textoTelegram($cliente, $accion, $descripcion, $usuario, $ip, $cambios, self::dominioPanel($vendedor));
-                dispatch(fn () => TelegramCitas::enviar((string) $vendedor->telegram_chat_id, $suyo))->afterResponse();
+            // Y a los Telegram vinculados en la Agenda: los del dueño y los del usuario del panel que tiene la empresa
+            // (cada usuario de una marca ve solo las suyas). El chat del .env no se repite.
+            foreach (self::destinatarios($cliente) as [$chat, $dominio]) {
+                $suyo = self::textoTelegram($cliente, $accion, $descripcion, $usuario, $ip, $cambios, $dominio);
+                dispatch(fn () => TelegramCitas::enviar($chat, $suyo))->afterResponse();
             }
         } catch (\Throwable $e) {
             report($e);
@@ -63,14 +64,30 @@ class AlertasPanel
     }
 
     /** El mensaje de Telegram: qué empresa, quién, desde qué IP y qué cambió exactamente (las claves solo dicen "cambió") */
-    /** El usuario del panel que creó la empresa, si no es el dueño (a él ya le llega) y vinculó su Telegram en la Agenda */
-    public static function encargado(Cliente $cliente): ?Superadmin
+    /**
+     * Los Telegram vinculados que reciben las alertas de esta empresa: los del dueño (todas) y los del usuario del panel
+     * que la creó, cada uno con el dominio de su panel.
+     *
+     * @return list<array{0: string, 1: string}> [chat, dominio del panel]
+     */
+    public static function destinatarios(Cliente $cliente): array
     {
-        if (! $cliente->creado_por || ! TelegramCitas::configurado()) {
-            return null;
+        if (! TelegramCitas::configurado()) {
+            return [];
+        }
+        $usuarios = Superadmin::where('activo', true)
+            ->where(fn ($q) => $q->where('es_dueno', true)->when($cliente->creado_por, fn ($w) => $w->orWhere('id', $cliente->creado_por)))->get();
+        $yaAvisado = (string) config('services.telegram.chat_id');
+        $destinos = [];
+        foreach ($usuarios as $u) {
+            foreach (TelegramCitas::chatsPanel((int) $u->id) as $chat) {
+                if ($chat !== $yaAvisado && ! isset($destinos[$chat])) {
+                    $destinos[$chat] = [$chat, self::dominioPanel($u)];
+                }
+            }
         }
 
-        return Superadmin::whereKey($cliente->creado_por)->where('activo', true)->where('es_dueno', false)->whereNotNull('telegram_chat_id')->first();
+        return array_values($destinos);
     }
 
     /** Dominio del panel de ese usuario: el de su marca o el de TUSHPA */

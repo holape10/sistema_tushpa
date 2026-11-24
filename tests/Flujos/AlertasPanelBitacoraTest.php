@@ -5,10 +5,13 @@ namespace Tests\Flujos;
 use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
 use App\Support\Bitacora;
+use App\Support\TelegramCitas;
 use App\Support\Tenancy\AlertasPanel;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /** Lo delicado de la bitácora de una empresa (editar sucursal o empresa, importar precios, usuarios) también va como alerta al panel */
 class AlertasPanelBitacoraTest extends FlujoTestCase
@@ -52,14 +55,28 @@ class AlertasPanelBitacoraTest extends FlujoTestCase
         $this->assertNotNull($alertas[0]->bitacora_id);
     }
 
-    public function test_la_alerta_tambien_le_llega_al_usuario_del_panel_que_tiene_la_empresa(): void
+    /** Telegram vinculado en la Agenda de un usuario del panel */
+    private function vincular(Superadmin $usuario, string $chat): void
+    {
+        DB::connection('central')->table('telegram_vinculos')->insert(['codigo' => Str::lower(Str::random(16)), 'base' => TelegramCitas::PANEL,
+            'IdUsuario' => $usuario->id, 'chat_id' => $chat, 'nombre' => 'CEL '.$chat, 'vinculado_at' => now()]);
+    }
+
+    public function test_la_alerta_le_llega_a_los_telegram_del_dueno_y_del_usuario_del_panel_que_tiene_la_empresa(): void
     {
         config(['tenancy.dominio' => config('tenancy.dominio') ?: 'tushpa.test',
             'services.telegram.token' => 'bot-dueno', 'services.telegram.chat_id' => '123', 'services.telegram.citas_token' => 'bot-panel']);
         Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
-        $vendedor = Superadmin::create(['nombre' => 'VENDEDOR', 'email' => uniqid().'@prueba.test', 'password' => 'clave-de-prueba', 'activo' => true,
-            'es_dueno' => false, 'telegram_chat_id' => '999']);
+        // Solo los usuarios de esta prueba
+        DB::connection('central')->table('superadmins')->update(['activo' => false]);
+        $dueno = Superadmin::create(['nombre' => 'DUEÑO', 'email' => uniqid().'@prueba.test', 'password' => 'clave-de-prueba', 'activo' => true, 'es_dueno' => true]);
+        $vendedor = Superadmin::create(['nombre' => 'VENDEDOR', 'email' => uniqid().'@prueba.test', 'password' => 'clave-de-prueba', 'activo' => true, 'es_dueno' => false]);
         $sinTelegram = Superadmin::create(['nombre' => 'OTRO', 'email' => uniqid().'@prueba.test', 'password' => 'clave-de-prueba', 'activo' => true, 'es_dueno' => false]);
+        $this->vincular($dueno, '123');
+        $this->vincular($dueno, 'D2');
+        $this->vincular($vendedor, 'V1');
+        $this->vincular($vendedor, 'V2');
+        $this->vincular($vendedor, 'V3');
         $suya = Cliente::create(['ruc' => '20555555557', 'base_datos' => 'bd_prueba_alertas', 'razon_social' => 'EMPRESA DEL VENDEDOR', 'estado' => 'ACTIVO', 'creado_por' => $vendedor->id]);
         $ajena = Cliente::create(['ruc' => '20555555558', 'base_datos' => 'bd_prueba_alertas2', 'razon_social' => 'EMPRESA DE OTRO', 'estado' => 'ACTIVO', 'creado_por' => $sinTelegram->id]);
 
@@ -70,9 +87,35 @@ class AlertasPanelBitacoraTest extends FlujoTestCase
         app()->forgetInstance('tenancy.cliente');
         app()->terminate();
 
-        $enviados = collect(Http::recorded())->map(fn ($p) => [$p[0]['chat_id'], str_contains($p[0]['text'], 'EMPRESA DEL VENDEDOR') ? 'suya' : 'ajena']);
-        $this->assertEqualsCanonicalizing([['123', 'suya'], ['999', 'suya'], ['123', 'ajena']], $enviados->all(),
-            'Al dueño le llegan todas; al vendedor solo las de sus empresas; quien no vinculó su Telegram no recibe.');
+        $enviados = collect(Http::recorded())->map(fn ($p) => $p[0]['chat_id'].':'.(str_contains($p[0]['text'], 'EMPRESA DEL VENDEDOR') ? 'suya' : 'ajena'));
+        $this->assertEqualsCanonicalizing(['123:suya', 'D2:suya', 'V1:suya', 'V2:suya', 'V3:suya', '123:ajena', 'D2:ajena'], $enviados->all(),
+            'El dueño recibe todas (sin repetir su chat del .env); el vendedor, en sus 3 Telegram, solo las de sus empresas; quien no vinculó no recibe.');
+    }
+
+    public function test_cada_usuario_del_panel_vincula_hasta_3_telegram(): void
+    {
+        config(['services.telegram.citas_token' => 'bot-panel']);
+        Cache::flush();
+        $vendedor = Superadmin::create(['nombre' => 'VENDEDOR', 'email' => uniqid().'@prueba.test', 'password' => 'clave-de-prueba', 'activo' => true, 'es_dueno' => false]);
+        foreach (['V1', 'V2', 'V3'] as $chat) {
+            $this->vincular($vendedor, $chat);
+        }
+        DB::connection('central')->table('telegram_vinculos')->insert(['codigo' => 'cuartocuartocuar', 'base' => TelegramCitas::PANEL, 'IdUsuario' => $vendedor->id]);
+        Http::fake([
+            'api.telegram.org/*/getUpdates*' => Http::response(['ok' => true, 'result' => [['update_id' => 1,
+                'message' => ['text' => '/start cuartocuartocuar', 'chat' => ['id' => 'V4'], 'from' => ['first_name' => 'CUARTO']]]]]),
+            'api.telegram.org/*' => Http::response(['ok' => true]),
+        ]);
+
+        TelegramCitas::recibir();
+
+        $this->assertSame(['V1', 'V2', 'V3'], TelegramCitas::chatsPanel((int) $vendedor->id), 'El cuarto no se vincula.');
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'sendMessage') && $r['chat_id'] === 'V4' && str_contains($r['text'], 'ya tiene 3 Telegram'));
+
+        // Al quitar uno, queda espacio y su ficha sigue con otro de los vinculados
+        TelegramCitas::quitarPanel((int) $vendedor->id, (int) TelegramCitas::vinculosPanel((int) $vendedor->id)->first()->id);
+        $this->assertSame(['V2', 'V3'], TelegramCitas::chatsPanel((int) $vendedor->id));
+        $this->assertSame('V2', DB::connection('central')->table('superadmins')->where('id', $vendedor->id)->value('telegram_chat_id'));
     }
 
     public function test_la_alerta_muestra_exactamente_que_cambio(): void

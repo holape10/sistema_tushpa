@@ -125,7 +125,9 @@ class AgendaPanel
                 if ($ya) {
                     continue;
                 }
-                [$ok] = TelegramCitas::enviar((string) $s->telegram_chat_id, self::texto($e, $inicio, $minutos));
+                // A todos sus Telegram (hasta 3); vale como enviado si llegó al menos a uno
+                $ok = collect(TelegramCitas::chatsPanel((int) $s->id))
+                    ->map(fn ($chat) => TelegramCitas::enviar($chat, self::texto($e, $inicio, $minutos))[0])->contains(true);
                 if ($ok) {
                     DB::connection('central')->table('agenda_avisos_enviados')->insertOrIgnore(['evento_id' => $e->id, 'superadmin_id' => $s->id, 'minutos' => $minutos, 'enviado_at' => now()]);
                     $enviados++;

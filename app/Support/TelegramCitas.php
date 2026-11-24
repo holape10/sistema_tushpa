@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Support\Tenancy\Tenancy;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -96,17 +97,71 @@ class TelegramCitas
                 continue;
             }
             $nombre = trim(($mensaje['from']['first_name'] ?? '').' '.($mensaje['from']['last_name'] ?? ''));
+            $chat = (string) $mensaje['chat']['id'];
+            if ($fila->base === self::PANEL) {
+                // El mismo Telegram vinculado otra vez: se queda el nuevo vínculo (no se cuenta dos veces)
+                DB::connection('central')->table('telegram_vinculos')->where('base', self::PANEL)->where('IdUsuario', $fila->IdUsuario)
+                    ->where('chat_id', $chat)->where('id', '!=', $fila->id)->delete();
+                if (count(self::chatsPanel((int) $fila->IdUsuario)) >= self::MAX_PANEL) {
+                    DB::connection('central')->table('telegram_vinculos')->where('id', $fila->id)->delete();
+                    self::enviar($chat, 'Ese usuario ya tiene '.self::MAX_PANEL.' Telegram vinculados. Quita uno en la Agenda del panel y vuelve a intentarlo.');
+
+                    continue;
+                }
+            }
             DB::connection('central')->table('telegram_vinculos')->where('id', $fila->id)
                 ->update(['chat_id' => (string) $mensaje['chat']['id'], 'nombre' => mb_substr($nombre, 0, 120) ?: null, 'vinculado_at' => now()]);
             self::enviar((string) $mensaje['chat']['id'], '✅ Listo'.($nombre ? ", {$nombre}" : '').'. Desde ahora te llegarán aquí tus avisos: '
-                .($fila->base === self::PANEL ? 'los recordatorios de tu agenda.' : 'tus citas, los pedidos de almacén y los demás avisos del sistema.'));
+                .($fila->base === self::PANEL ? 'los recordatorios de tu agenda y las alertas de tus empresas.' : 'tus citas, los pedidos de almacén y los demás avisos del sistema.'));
             if ($fila->base === self::PANEL) {
-                DB::connection('central')->table('superadmins')->where('id', $fila->IdUsuario)->update(['telegram_chat_id' => (string) $mensaje['chat']['id']]);
+                DB::connection('central')->table('superadmins')->where('id', $fila->IdUsuario)->whereNull('telegram_chat_id')->update(['telegram_chat_id' => $chat]);
             }
             $vinculados++;
         }
 
         return $vinculados;
+    }
+
+    /** Cuántos Telegram puede vincular cada usuario del panel (por ejemplo su celular, el de su socio y el de su asistente) */
+    public const MAX_PANEL = 3;
+
+    /**
+     * Los Telegram vinculados de un usuario del panel (id, chat_id, nombre, vinculado_at).
+     *
+     * @return Collection<int, object>
+     */
+    public static function vinculosPanel(int $usuario): Collection
+    {
+        if (! Schema::connection('central')->hasTable('telegram_vinculos')) {
+            return collect();
+        }
+
+        return DB::connection('central')->table('telegram_vinculos')->where('base', self::PANEL)->where('IdUsuario', $usuario)
+            ->whereNotNull('chat_id')->orderBy('id')->get(['id', 'chat_id', 'nombre', 'vinculado_at'])->unique('chat_id')->values();
+    }
+
+    /**
+     * Los chats a los que se le avisa a un usuario del panel: sus Telegram vinculados (y el antiguo, si quedó solo en su ficha).
+     *
+     * @return list<string>
+     */
+    public static function chatsPanel(int $usuario): array
+    {
+        $chats = self::vinculosPanel($usuario)->pluck('chat_id')->map(fn ($c) => (string) $c);
+        if ($chats->isEmpty() && ($antiguo = DB::connection('central')->table('superadmins')->where('id', $usuario)->value('telegram_chat_id'))) {
+            $chats->push((string) $antiguo);
+        }
+
+        return $chats->unique()->values()->all();
+    }
+
+    /** Quita uno de los Telegram del usuario del panel (o todos); su ficha queda con otro que siga vinculado */
+    public static function quitarPanel(int $usuario, ?int $vinculo = null): void
+    {
+        DB::connection('central')->table('telegram_vinculos')->where('base', self::PANEL)->where('IdUsuario', $usuario)
+            ->when($vinculo, fn ($q) => $q->where('id', $vinculo))->delete();
+        DB::connection('central')->table('superadmins')->where('id', $usuario)
+            ->update(['telegram_chat_id' => self::vinculosPanel($usuario)->first()?->chat_id]);
     }
 
     /** Pasa a los usuarios de la empresa conectada los chats que se vincularon */

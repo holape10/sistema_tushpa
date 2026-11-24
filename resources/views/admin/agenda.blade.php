@@ -13,7 +13,7 @@
             'avisos' => $e->avisos, 'autor' => $e->autor, 'puede' => AgendaPanel::puedeEditar($yo, $e)];
     @endphp
 
-    <div x-data="agendaPanel(@js((bool) $yo->telegram_chat_id))" class="space-y-4">
+    <div x-data="agendaPanel(@js($telegrams->count()))" class="space-y-4">
         <div class="flex flex-wrap items-center gap-3">
             <div class="flex-1 min-w-56">
                 <h1 class="text-xl font-bold">📅 Agenda</h1>
@@ -22,28 +22,34 @@
             <button type="button" @click="nuevo('{{ $hoy }}')" class="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Nuevo evento</button>
         </div>
 
-        {{-- Telegram de este usuario --}}
-        <div class="rounded-2xl bg-white shadow-sm p-4 flex flex-wrap items-center gap-3 text-sm">
+        {{-- Telegram de este usuario: hasta 3 (por ejemplo su celular, el de su socio y el de su asistente) --}}
+        <div class="rounded-2xl bg-white shadow-sm p-4 text-sm">
             @if (! $telegram)
                 <p class="text-amber-700">Telegram no está configurado en el servidor: los eventos se guardan, pero no avisan.</p>
             @else
-                <template x-if="vinculado">
-                    <p class="flex-1">✅ <b>Tu Telegram está vinculado</b>: ahí te llegan los avisos de la agenda y las ⚠️ alertas de tus empresas.
-                        <button type="button" @click="probar()" class="ml-2 underline text-sky-700">probar</button></p>
+                <div class="flex flex-wrap items-center gap-2">
+                    <p class="flex-1 min-w-60">📲 <b>Tus Telegram</b> ({{ $telegrams->count() }} de {{ \App\Support\TelegramCitas::MAX_PANEL }}): ahí te llegan los avisos de la agenda y las ⚠️ alertas de tus empresas.
+                        @if ($telegrams->isNotEmpty())<button type="button" @click="probar()" class="ml-1 underline text-sky-700">probar</button>@endif</p>
+                    @if ($telegrams->count() < \App\Support\TelegramCitas::MAX_PANEL)
+                        <button type="button" @click="vincular()" class="h-9 px-3 rounded-lg bg-sky-600 text-white font-bold">{{ $telegrams->isEmpty() ? 'Vincular mi Telegram' : '+ Vincular otro Telegram' }}</button>
+                    @endif
+                </div>
+                <template x-if="enlace">
+                    <p class="mt-2 text-xs text-slate-600">Abre <a :href="enlace" target="_blank" class="font-semibold text-sky-700 underline break-all" x-text="enlace"></a> en el celular que quieres vincular y toca <b>Iniciar</b>… (esta página se actualiza sola)</p>
                 </template>
-                <template x-if="vinculado">
-                    <form method="POST" action="{{ route('admin.agenda.telegram.quitar') }}" onsubmit="return confirm('¿Dejar de recibir los avisos por Telegram?')">@csrf
-                        <button class="text-slate-400 underline">quitar</button></form>
-                </template>
-                <template x-if="!vinculado">
-                    <div class="flex-1 flex flex-wrap items-center gap-2">
-                        <span>📲 Para recibir los avisos de la agenda y las ⚠️ alertas de tus empresas, vincula tu Telegram:</span>
-                        <button type="button" @click="vincular()" class="h-9 px-3 rounded-lg bg-sky-600 text-white font-bold">Vincular mi Telegram</button>
-                        <template x-if="enlace">
-                            <span class="text-xs text-slate-600">Abre <a :href="enlace" target="_blank" class="font-semibold text-sky-700 underline break-all" x-text="enlace"></a> y toca <b>Iniciar</b>…</span>
-                        </template>
-                    </div>
-                </template>
+                @if ($telegrams->isNotEmpty())
+                    <ul class="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-100">
+                        @foreach ($telegrams as $t)
+                            <li class="flex items-center gap-3 px-3 py-2">
+                                <span class="flex-1">✅ <b>{{ $t->nombre ?: 'Telegram '.$loop->iteration }}</b>
+                                    @if ($t->vinculado_at)<span class="text-xs text-slate-400">· desde {{ \Carbon\Carbon::parse($t->vinculado_at)->format('d/m/Y') }}</span>@endif</span>
+                                <form method="POST" action="{{ route('admin.agenda.telegram.quitar') }}" onsubmit="return confirm('¿Quitar este Telegram? Ya no le llegarán los avisos.')">@csrf
+                                    <input type="hidden" name="vinculo" value="{{ $t->id }}">
+                                    <button class="text-xs text-slate-400 hover:text-rose-600 underline">quitar</button></form>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
             @endif
         </div>
 
@@ -150,8 +156,8 @@
 
     <script>
         document.addEventListener('alpine:init', () => {
-            Alpine.data('agendaPanel', (vinculado) => ({
-                f: null, vinculado, enlace: null,
+            Alpine.data('agendaPanel', (vinculados) => ({
+                f: null, vinculados, enlace: null,
                 nuevo(fecha) { this.f = { id: null, titulo: '', detalle: '', fecha, hora: '09:00', todo_el_dia: false, general: false, color: 'indigo', avisos: [60], puede: true }; },
                 abrir(e) { this.f = { ...e, avisos: [...e.avisos] }; },
                 eliminar(id) {
@@ -168,9 +174,10 @@
                     if (!r.ok) { alert(r.mensaje); return; }
                     this.enlace = r.enlace;
                     window.open(r.enlace, '_blank');
-                    for (let i = 0; i < 45 && !this.vinculado; i++) {
+                    // Cuando se vincula el nuevo, la página se recarga para verlo en la lista
+                    for (let i = 0; i < 45; i++) {
                         await new Promise(ok => setTimeout(ok, 4000));
-                        this.vinculado = (await this.pedir(@js(route('admin.agenda.telegram.verificar')))).vinculado;
+                        if ((await this.pedir(@js(route('admin.agenda.telegram.verificar')))).vinculados > this.vinculados) { location.reload(); return; }
                     }
                 },
                 async probar() { const r = await this.pedir(@js(route('admin.agenda.telegram.probar'))); alert(r.mensaje); },

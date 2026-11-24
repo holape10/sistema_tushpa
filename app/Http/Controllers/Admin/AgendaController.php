@@ -10,7 +10,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /** Agenda del panel: la de cada usuario y la general de su marca, con avisos por Telegram */
@@ -32,7 +31,7 @@ class AgendaController extends Controller
             'mes' => $mes, 'desde' => $desde, 'hasta' => $hasta,
             'eventos' => AgendaPanel::entre($yo, $desde, $hasta),
             'proximos' => AgendaPanel::entre($yo, now()->startOfDay(), now()->addDays(14)->endOfDay())->where('inicio', '>=', now()->subHour()->toDateTimeString())->take(12),
-            'yo' => $yo, 'telegram' => TelegramCitas::configurado(),
+            'yo' => $yo, 'telegram' => TelegramCitas::configurado(), 'telegrams' => TelegramCitas::vinculosPanel((int) $yo->id),
             'marca' => $yo->marca?->nombre ?? 'TUSHPA',
         ]);
     }
@@ -60,36 +59,40 @@ class AgendaController extends Controller
 
     public function telegramEnlace(): JsonResponse
     {
-        $enlace = TelegramCitas::enlace((int) Auth::guard('superadmin')->id(), TelegramCitas::PANEL);
+        $id = (int) Auth::guard('superadmin')->id();
+        if (count(TelegramCitas::chatsPanel($id)) >= TelegramCitas::MAX_PANEL) {
+            return response()->json(['ok' => false, 'mensaje' => 'Ya tienes '.TelegramCitas::MAX_PANEL.' Telegram vinculados. Quita uno para vincular otro.']);
+        }
+        $enlace = TelegramCitas::enlace($id, TelegramCitas::PANEL);
 
         return response()->json($enlace ? ['ok' => true, 'enlace' => $enlace] : ['ok' => false, 'mensaje' => 'Falta el token del bot de Telegram en el servidor.']);
     }
 
+    /** Cuántos Telegram tiene vinculados (la pantalla espera a que suba al vincular uno nuevo) */
     public function telegramVerificar(): JsonResponse
     {
         TelegramCitas::recibir();
 
-        return response()->json(['ok' => true, 'vinculado' => (bool) DB::connection('central')->table('superadmins')
-            ->where('id', Auth::guard('superadmin')->id())->value('telegram_chat_id')]);
+        return response()->json(['ok' => true, 'vinculados' => count(TelegramCitas::chatsPanel((int) Auth::guard('superadmin')->id()))]);
     }
 
-    public function telegramQuitar(): RedirectResponse
+    /** Quita uno de sus Telegram (o todos, sin indicar cuál) */
+    public function telegramQuitar(Request $request): RedirectResponse
     {
-        $id = (int) Auth::guard('superadmin')->id();
-        DB::connection('central')->table('superadmins')->where('id', $id)->update(['telegram_chat_id' => null]);
-        DB::connection('central')->table('telegram_vinculos')->where('base', TelegramCitas::PANEL)->where('IdUsuario', $id)->delete();
+        TelegramCitas::quitarPanel((int) Auth::guard('superadmin')->id(), $request->integer('vinculo') ?: null);
 
-        return back()->with('ok', 'Telegram desvinculado: ya no te llegarán los avisos.');
+        return back()->with('ok', $request->integer('vinculo') ? 'Ese Telegram ya no recibirá los avisos.' : 'Telegram desvinculado: ya no te llegarán los avisos.');
     }
 
+    /** Prueba a todos sus Telegram */
     public function telegramProbar(): JsonResponse
     {
-        $chat = DB::connection('central')->table('superadmins')->where('id', Auth::guard('superadmin')->id())->value('telegram_chat_id');
-        if (! $chat) {
+        $chats = TelegramCitas::chatsPanel((int) Auth::guard('superadmin')->id());
+        if (! $chats) {
             return response()->json(['ok' => false, 'mensaje' => 'Primero vincula tu Telegram.']);
         }
-        [$ok, $detalle] = TelegramCitas::enviar((string) $chat, '📅 Prueba: así te llegarán los avisos de tu agenda.');
+        $fallos = collect($chats)->reject(fn ($chat) => TelegramCitas::enviar($chat, '📅 Prueba: así te llegarán los avisos de tu agenda y las alertas de tus empresas.')[0])->count();
 
-        return response()->json(['ok' => $ok, 'mensaje' => $ok ? '✔ Revisa tu Telegram.' : $detalle]);
+        return response()->json(['ok' => ! $fallos, 'mensaje' => $fallos ? "No llegó a {$fallos} de ".count($chats).' Telegram.' : '✔ Revisa tu Telegram ('.count($chats).').']);
     }
 }
