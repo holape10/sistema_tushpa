@@ -64,6 +64,28 @@ class AvicolaTest extends FlujoTestCase
         $this->assertSame([$clicod => 3], Avicola::saldoJabas($this->sucursal, $clicod), 'Se lleva 3 jabas.');
     }
 
+    public function test_se_paga_con_varios_medios_y_se_guarda_como_proforma(): void
+    {
+        $yape = DB::table('medios_pagos')->insertGetId(['nom_med_pag' => 'YAPE', 'IdEmpresa' => $this->usuario->IdEmpresa,
+            'id_empresa_negocio' => $this->sucursal, 'predeterminado' => '0']);
+
+        // 55.5 kg × 8.50 = 471.75: 300 en efectivo y 171.75 por Yape
+        $r = $this->postJson(route('avicola.vender'), $this->pesaje(['id_med_pag' => [$this->efectivo, $yape], 'mon_med_pag' => [300, 171.75],
+            'op_med_pag' => [null, '889911']]))->assertJson(['ok' => true]);
+        $medios = DB::table('venta_medio_pago')->where('IdCpe_cabecera', $r->json('id'))->orderBy('monto', 'desc')->get();
+        $this->assertSame([['300.00', null], ['171.75', '889911']], $medios->map(fn ($m) => [(string) $m->monto, $m->num_operacion])->all());
+        $this->postJson(route('avicola.vender'), $this->pesaje(['id_med_pag' => [$this->efectivo, $yape], 'mon_med_pag' => [300, 100]]))
+            ->assertJson(['ok' => false]);
+
+        // La proforma no emite ni descuenta stock
+        $stock = $this->stock($this->vivo);
+        $p = $this->postJson(route('avicola.proforma'), $this->pesaje())->assertJson(['ok' => true]);
+        $proforma = DB::table('proformas')->where('id_proforma', $p->json('id'))->first();
+        $this->assertSame(['AVICOLA', '471.75', 'PENDIENTE'], [$proforma->origen, (string) $proforma->total, $proforma->estado]);
+        $this->assertStringContainsString('3 JABAS · 30 AVES', (string) DB::table('proforma_detalle')->where('id_proforma', $proforma->id_proforma)->value('descripcion'));
+        $this->assertEqualsWithDelta($stock, $this->stock($this->vivo), 0.001);
+    }
+
     public function test_al_credito_va_a_su_cuenta_y_el_abono_paga_primero_lo_mas_antiguo(): void
     {
         $this->postJson(route('avicola.vender'), $this->pesaje(['credito' => true]))->assertJson(['ok' => true]);                          // 55.5 kg × 8.50 = 471.75

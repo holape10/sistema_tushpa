@@ -214,6 +214,7 @@ class Avicola
                     'descripcion' => mb_substr($p->pronom.($c['jabas'] ? " · {$c['jabas']} jabas" : '').($c['aves'] ? " · {$c['aves']} aves" : ''), 0, 150)]],
                 'id_med_pag' => $credito ? [] : ($d['id_med_pag'] ?? []),
                 'mon_med_pag' => $credito ? [] : ($d['mon_med_pag'] ?? [$total]),
+                'op_med_pag' => $credito ? [] : ($d['op_med_pag'] ?? []),
                 'paga' => $credito ? 0 : (float) ($d['paga'] ?? $total),
             ];
             if (! $credito && empty($datos['id_med_pag'])) {
@@ -248,6 +249,32 @@ class Avicola
 
             return ['venta' => $ventaId, 'comprobante' => $cabId];
         });
+    }
+
+    /**
+     * Proforma (cotización) de una venta por peso: los kilos netos al precio del día, con las jabas y aves en la
+     * descripción. No emite comprobante ni mueve stock; se cobra después desde Ventas › Proformas.
+     *
+     * @param  array<string, mixed>  $d
+     */
+    public static function proforma(User $user, array $d): int
+    {
+        $cfg = self::config((int) $user->id_empresa_negocio);
+        $p = self::producto($user, (int) $d['IdProducto']);
+        $pesoMuertas = round(max(0, (float) ($d['peso_muertas'] ?? 0)), 3);
+        $c = self::calcular($d['pesadas'] ?? [], (float) $cfg->tara_jaba, $pesoMuertas);
+        $precio = round((float) ($d['precio'] ?? $p->propun), 2);
+        if ($precio <= 0) {
+            throw new \RuntimeException("Pon el precio del día de {$p->pronom}.");
+        }
+
+        return Proformas::guardar($user, [
+            'origen' => 'AVICOLA', 'tdicod' => $d['tdicod'], 'clinum' => $d['clinum'], 'clinom' => $d['clinom'], 'clidir' => $d['clidir'] ?? null,
+            'observaciones' => mb_substr('Bruto '.self::kg($c['bruto']).' − tara '.self::kg($c['tara'])
+                .($pesoMuertas > 0 ? ' − muertas '.self::kg($pesoMuertas) : '').' = neto '.self::kg($c['neto']), 0, 100),
+            'items' => [['id' => $p->IdProducto, 'cantidad' => $c['neto'], 'precio' => $precio,
+                'descripcion' => mb_substr($p->pronom.($c['jabas'] ? " · {$c['jabas']} jabas" : '').($c['aves'] ? " · {$c['aves']} aves" : ''), 0, 150)]],
+        ]);
     }
 
     /** @param  list<array{jabas: int, aves: int, peso: float}>  $pesadas */

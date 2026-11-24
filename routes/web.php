@@ -504,6 +504,7 @@ Route::middleware('auth')->group(function () {
     Route::controller(AvicolaController::class)->prefix('avicola')->name('avicola.')->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/vender', 'vender')->middleware('throttle:60,1')->name('vender');
+        Route::post('/proforma', 'proforma')->middleware('throttle:60,1')->name('proforma');
         Route::post('/precios', 'precios')->name('precios');
         Route::get('/clientes', 'clientes')->name('clientes');
         Route::get('/clientes/{clicod}', 'cliente')->whereNumber('clicod')->name('cliente');

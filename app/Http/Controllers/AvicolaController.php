@@ -8,6 +8,8 @@ use App\Support\Avicola;
 use App\Support\AvicolaGranja;
 use App\Support\AvicolaReportes;
 use App\Support\Excel;
+use App\Support\Impresion\Impresion;
+use App\Support\Proformas;
 use App\Support\VentaDirecta;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -95,6 +97,7 @@ class AvicolaController extends Controller
             'aves_muertas' => 'nullable|integer|min:0|max:99999', 'peso_muertas' => 'nullable|numeric|min:0|max:99999',
             'precio' => 'required|numeric|min:0.01|max:9999', 'credito' => 'nullable|boolean', 'fecVen' => 'nullable|date',
             'id_med_pag' => 'nullable|array|max:5', 'id_med_pag.*' => 'integer', 'mon_med_pag' => 'nullable|array|max:5', 'mon_med_pag.*' => 'numeric|min:0',
+            'op_med_pag' => 'nullable|array|max:5', 'op_med_pag.*' => 'nullable|string|max:30',
             'paga' => 'nullable|numeric|min:0', 'jabas_devueltas' => 'nullable|integer|min:0|max:9999', 'ruta' => 'nullable|string|max:60',
         ]);
 
@@ -102,6 +105,26 @@ class AvicolaController extends Controller
             $r = Avicola::vender(Auth::user(), $d);
 
             return VentaDirecta::respuesta($r['comprobante']) + ['venta' => $r['venta']];
+        });
+    }
+
+    /** Proforma de la venta por peso: se guarda y sale en la impresora de caja (como en el Punto Venta) */
+    public function proforma(Request $request): JsonResponse
+    {
+        $this->sucursal();
+        $d = $request->validate([
+            'IdProducto' => 'required|integer', 'tdicod' => 'required|string|size:1', 'clinum' => 'required|string|max:15', 'clinom' => 'required|string|max:120',
+            'clidir' => 'nullable|string|max:150', 'pesadas' => 'required|array|min:1|max:200', 'pesadas.*.jabas' => 'nullable|integer|min:0|max:999',
+            'pesadas.*.aves' => 'nullable|integer|min:0|max:99999', 'pesadas.*.peso' => 'nullable|numeric|min:0|max:99999',
+            'peso_muertas' => 'nullable|numeric|min:0|max:99999', 'precio' => 'required|numeric|min:0.01|max:9999',
+        ]);
+
+        return $this->json(function () use ($d) {
+            $id = Avicola::proforma(Auth::user(), $d);
+            $p = DB::table('proformas')->where('id_proforma', $id)->first();
+
+            return ['id' => $id, 'numero' => Proformas::numero($p), 'total' => (float) $p->total, 'imprimir' => route('proformas.imprimir', $id),
+                'impresora' => Impresion::proforma($id, (int) Auth::user()->id_empresa_negocio)];
         });
     }
 

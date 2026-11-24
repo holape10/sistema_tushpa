@@ -129,13 +129,27 @@
                 <button type="button" @click="credito = false" class="flex-1 h-10 rounded-xl text-sm font-bold border" :class="!credito ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600'">Contado</button>
                 <button type="button" @click="credito = true" class="flex-1 h-10 rounded-xl text-sm font-bold border" :class="credito ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-600'">Al crédito (a cuenta)</button>
             </div>
-            <div x-show="!credito" class="grid grid-cols-2 gap-2">
-                <label class="text-xs font-semibold text-gray-500">Medio de pago
-                    <select x-model.number="medio" class="mt-1 block w-full h-10 rounded-xl border-gray-300 text-sm">
-                        @foreach ($medios as $m)<option value="{{ $m->id_med_pag }}">{{ $m->nom_med_pag }}</option>@endforeach
-                    </select></label>
-                <label class="text-xs font-semibold text-gray-500">Paga con (S/)
-                    <input type="number" step="0.01" min="0" x-model.number="paga" :placeholder="num(total, 2)" class="mt-1 block w-full h-10 rounded-xl border-gray-300 text-right"></label>
+            {{-- Contado: uno o varios medios. El primero se llena solo con lo que falta --}}
+            <div x-show="!credito" class="space-y-2">
+                <p class="text-xs font-semibold text-gray-500 uppercase">Cómo paga</p>
+                <template x-for="(m, i) in pagos" :key="i">
+                    <div class="flex gap-2 items-center">
+                        <select x-model.number="m.id" class="flex-1 h-10 rounded-xl border-gray-300 text-sm font-semibold">
+                            <template x-for="o in medios" :key="o.id"><option :value="o.id" x-text="o.nombre" :selected="o.id === m.id"></option></template>
+                        </select>
+                        <input type="number" step="0.01" min="0" :value="i === 0 ? montoDe(0).toFixed(2) : m.monto" @input="i === 0 ? null : m.monto = $event.target.value"
+                               :readonly="i === 0" class="w-28 h-10 rounded-xl border-gray-300 text-right font-bold" :class="i === 0 && 'bg-gray-50'">
+                        <input x-show="!esEfectivo(m.id)" x-model="m.op" maxlength="30" placeholder="N° operación" class="w-28 h-10 rounded-xl border-gray-300 text-sm">
+                        <button type="button" x-show="i > 0" @click="pagos.splice(i, 1)" class="text-gray-300 hover:text-rose-600 px-1">✕</button>
+                    </div>
+                </template>
+                <div class="flex items-center gap-3">
+                    <button type="button" @click="pagos.push({ id: medios.find(o => !esEfectivo(o.id))?.id ?? medios[0].id, monto: '', op: '' })" x-show="medios.length > 1 && pagos.length < 4"
+                            class="text-sm font-semibold text-indigo-600 hover:underline">+ Otro medio (Yape, tarjeta…)</button>
+                    <p x-show="montoDe(0) < 0" class="text-xs font-semibold text-rose-600">Los otros medios pasan el total.</p>
+                </div>
+                <label x-show="esEfectivo(pagos[0].id)" class="flex items-center gap-2 text-xs font-semibold text-gray-500">Paga con (S/)
+                    <input type="number" step="0.01" min="0" x-model.number="paga" :placeholder="num(montoDe(0), 2)" class="w-32 h-9 rounded-xl border-gray-300 text-right"></label>
             </div>
             <label x-show="credito" class="block text-xs font-semibold text-gray-500">Paga hasta el
                 <input type="date" x-model="fecVen" class="mt-1 block w-full h-10 rounded-xl border-gray-300"></label>
@@ -150,11 +164,17 @@
             <div class="rounded-2xl bg-gray-900 text-white p-4 flex items-end justify-between">
                 <div><p class="text-xs text-white/60">Total a cobrar</p><p class="text-3xl font-extrabold" x-text="'S/ ' + num(total, 2)"></p>
                     <p class="text-xs text-white/60" x-text="num(neto) + ' kg × S/ ' + num(precio, 2)"></p></div>
-                <div class="text-right" x-show="!credito && paga > total"><p class="text-xs text-white/60">Vuelto</p><p class="text-xl font-bold text-emerald-300" x-text="'S/ ' + num(paga - total, 2)"></p></div>
+                <div class="text-right" x-show="vuelto > 0"><p class="text-xs text-white/60">Vuelto</p><p class="text-xl font-bold text-emerald-300" x-text="'S/ ' + num(vuelto, 2)"></p></div>
             </div>
-            <button type="button" @click="registrar()" :disabled="procesando || neto <= 0 || precio <= 0"
+            <button type="button" @click="registrar(true)" :disabled="procesando || neto <= 0 || precio <= 0"
                     class="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-extrabold disabled:opacity-40"
                     x-text="procesando ? 'Registrando…' : '🖨 Registrar e imprimir'"></button>
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" @click="registrar(false)" :disabled="procesando || neto <= 0 || precio <= 0"
+                        class="h-11 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold disabled:opacity-40">✓ Registrar (sin imprimir)</button>
+                <button type="button" @click="proforma()" :disabled="procesando || neto <= 0 || precio <= 0"
+                        class="h-11 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold disabled:opacity-40">📝 Proforma</button>
+            </div>
             <iframe x-ref="impresion" class="hidden"></iframe>
         </section>
     </div>
@@ -198,7 +218,16 @@
                 producto: productos[0]?.id ?? null, precio: productos[0]?.precio ?? 0,
                 pesadas: [{ jabas: 0, aves: 0, peso: null }], avesMuertas: 0, pesoMuertas: 0,
                 tdocod: '13', cliente: { tdicod: '1', num: '00000000', nom: 'VENTA AL PORTADOR', dir: '' }, msg: '', msgOk: true,
-                credito: false, fecVen: @js(now()->addDays(7)->toDateString()), medio: {{ (int) ($medios->first()->id_med_pag ?? 0) }}, paga: null,
+                credito: false, fecVen: @js(now()->addDays(7)->toDateString()), paga: null,
+                medios: @js($medios->map(fn ($m) => ['id' => (int) $m->id_med_pag, 'nombre' => $m->nom_med_pag])->values()),
+                pagos: [{ id: {{ (int) ($medios->first()->id_med_pag ?? 0) }}, monto: '', op: '' }],
+                esEfectivo(id) { return String(this.medios.find(o => o.id === Number(id))?.nombre || '').toUpperCase() === 'EFECTIVO'; },
+                /** El primer medio se queda con lo que falta; los demás, con lo que se escribió */
+                montoDe(i) {
+                    if (i > 0) return Number(this.pagos[i].monto) || 0;
+                    return Math.round((this.total - this.pagos.slice(1).reduce((s, m) => s + (Number(m.monto) || 0), 0)) * 100) / 100;
+                },
+                get vuelto() { return !this.credito && this.esEfectivo(this.pagos[0].id) && this.paga > this.montoDe(0) ? this.paga - this.montoDe(0) : 0; },
                 devueltas: 0, ruta: '', procesando: false,
                 num(n, d = 3) { return (Math.round((Number(n) || 0) * 1000) / 1000).toLocaleString('es-PE', { minimumFractionDigits: d === 2 ? 2 : 0, maximumFractionDigits: d }); },
                 get jabas() { return this.pesadas.reduce((s, p) => s + (Number(p.jabas) || 0), 0); },
@@ -225,30 +254,53 @@
                         this.msg = '✔ Cliente encontrado.'; this.msgOk = true;
                     } catch (e) { this.msg = 'No se pudo consultar: escribe los datos.'; this.msgOk = false; }
                 },
-                async registrar() {
+                datos() {
+                    return {
+                        IdProducto: this.producto, precio: this.precio, tdocod: this.tdocod, tdicod: this.cliente.tdicod,
+                        clinum: this.cliente.num, clinom: this.cliente.nom, clidir: this.cliente.dir,
+                        pesadas: this.pesadas.map(p => ({ jabas: p.jabas || 0, aves: p.aves || 0, peso: p.peso || 0 })),
+                        aves_muertas: this.avesMuertas || 0, peso_muertas: this.pesoMuertas || 0,
+                    };
+                },
+                async enviar(url, body) {
+                    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) },
+                        body: JSON.stringify(body) });
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.mensaje || Object.values(d.errors || {})[0]?.[0] || 'No se pudo guardar.');
+                    return d;
+                },
+                async registrar(imprimir) {
                     if (this.procesando) return;
                     if (this.tdocod === '01' && this.cliente.tdicod !== '6') { tushpaAviso('La factura necesita el RUC del cliente.', 'error'); return; }
                     if (this.credito && this.cliente.num === '00000000') { tushpaAviso('Para vender al crédito elige al cliente.', 'error'); return; }
+                    if (!this.credito && this.montoDe(0) <= 0) { tushpaAviso('Revisa los medios de pago: pasan el total.', 'error'); return; }
                     this.procesando = true;
                     try {
-                        const r = await fetch(@js(route('avicola.vender')), {
-                            method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) },
-                            body: JSON.stringify({
-                                IdProducto: this.producto, precio: this.precio, tdocod: this.tdocod, tdicod: this.cliente.tdicod === '0' ? '0' : this.cliente.tdicod,
-                                clinum: this.cliente.num, clinom: this.cliente.nom, clidir: this.cliente.dir,
-                                pesadas: this.pesadas.map(p => ({ jabas: p.jabas || 0, aves: p.aves || 0, peso: p.peso || 0 })),
-                                aves_muertas: this.avesMuertas || 0, peso_muertas: this.pesoMuertas || 0, credito: this.credito, fecVen: this.fecVen,
-                                id_med_pag: [this.medio], mon_med_pag: [this.total], paga: this.paga || this.total, jabas_devueltas: this.devueltas || 0, ruta: this.ruta,
-                            }),
-                        });
-                        const d = await r.json();
-                        if (!d.ok) { tushpaAviso(d.mensaje || Object.values(d.errors || {})[0]?.[0] || 'No se pudo registrar.', 'error'); return; }
+                        const pagos = this.pagos.map((m, i) => ({ id: m.id, monto: this.montoDe(i), op: m.op })).filter(m => m.monto > 0);
+                        const d = await this.enviar(@js(route('avicola.vender')), { ...this.datos(), tdocod: this.tdocod, credito: this.credito, fecVen: this.fecVen,
+                            id_med_pag: pagos.map(m => m.id), mon_med_pag: pagos.map(m => m.monto), op_med_pag: pagos.map(m => m.op || null),
+                            paga: this.paga || this.total, jabas_devueltas: this.devueltas || 0, ruta: this.ruta });
                         tushpaAviso(`✔ ${d.numero} registrada: S/ ${this.num(d.total, 2)}`, 'ok');
-                        const directo = window.TushpaImpresion ? await TushpaImpresion.comprobante(d.id) : false;
-                        if (!directo) this.$refs.impresion.src = d.ticket + '&imprimir=1&t=' + Date.now();
+                        if (imprimir) {
+                            const directo = window.TushpaImpresion ? await TushpaImpresion.comprobante(d.id) : false;
+                            if (!directo) this.$refs.impresion.src = d.ticket + '&imprimir=1&t=' + Date.now();
+                        }
+                        setTimeout(() => location.reload(), imprimir ? 1800 : 900);
+                    } catch (e) {
+                        tushpaAviso(e.message || 'Sin conexión con el servidor.', 'error');
+                    } finally { this.procesando = false; }
+                },
+                /** Proforma: no es venta (no emite ni descuenta stock); se cobra después desde Ventas › Proformas */
+                async proforma() {
+                    if (this.procesando) return;
+                    this.procesando = true;
+                    try {
+                        const d = await this.enviar(@js(route('avicola.proforma')), this.datos());
+                        tushpaAviso(`📝 Proforma ${d.numero} guardada: S/ ${this.num(d.total, 2)}` + (d.impresora ? ` · impresa en ${d.impresora}` : ''), 'ok');
+                        if (!d.impresora) this.$refs.impresion.src = d.imprimir + '?imprimir=1&t=' + Date.now();
                         setTimeout(() => location.reload(), 1800);
                     } catch (e) {
-                        tushpaAviso('Sin conexión con el servidor.', 'error');
+                        tushpaAviso(e.message || 'Sin conexión con el servidor.', 'error');
                     } finally { this.procesando = false; }
                 },
             };
