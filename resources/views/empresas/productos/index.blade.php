@@ -35,6 +35,10 @@
                     ⬆ Importar Excel
                 </button>
             @endif
+            <button type="button" @click="$dispatch('crear-con-voz')"
+                    class="inline-flex justify-center items-center gap-1 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold hover:opacity-90 transition whitespace-nowrap">
+                🎤 Crear con voz (IA)
+            </button>
             <a href="{{ route('productos.create') }}"
                class="inline-flex justify-center items-center px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition whitespace-nowrap">
                 + Nuevo Producto
@@ -200,4 +204,6 @@
     @endif
 
     <div class="mt-4">{{ $productos->links() }}</div>
+
+    @include('empresas.productos.partials.crear_voz')
 @endsection

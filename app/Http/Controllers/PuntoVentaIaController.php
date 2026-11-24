@@ -48,24 +48,28 @@ class PuntoVentaIaController extends Controller
     }
 
     /** El producto que no existía: se crea con el nombre y precio que aceptó el cajero (Producto, unidad NIU) y vuelve listo para vender */
-    public function crearProducto(Request $request): JsonResponse
+    public function crearProducto(Request $request, ProductoController $productos): JsonResponse
     {
         $this->autorizar();
         $user = Auth::user();
         abort_unless($user->esAdmin() || $user->tieneModulo('/productos'), 403, 'Pide al administrador que cree el producto (no tienes acceso a Productos).');
-        $d = $request->validate(['nombre' => 'required|string|min:2|max:150', 'precio' => 'required|numeric|min:0.01|max:999999'],
-            [], ['nombre' => 'nombre del producto', 'precio' => 'precio']);
+        $d = $request->validate(['nombre' => 'required|string|min:2|max:150', 'precio' => 'required|numeric|min:0.01|max:999999',
+            'stock' => 'nullable|numeric|min:0|max:99999999'], [], ['nombre' => 'nombre del producto', 'precio' => 'precio', 'stock' => 'stock inicial']);
         $nombre = mb_strtoupper(trim(preg_replace('/\s+/', ' ', $d['nombre'])));
 
-        // Si ya existe con ese nombre (lo crearon recién), se usa ese
-        $producto = Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->where('pronom', $nombre)->first()
-            ?? Producto::create([
-                'pronom' => $nombre, 'promocion' => 0, 'umecod' => 'NIU', 'costo' => 0, 'propun' => round((float) $d['precio'], 2),
-                'stock_min' => 0, 'control_lote' => false, 'proest' => 'Activo',
-                'procod' => mb_substr('P'.time().random_int(10, 99), 0, 20), 'IdEmpresa' => $user->IdEmpresa, 'id_empresa_negocio' => $user->id_empresa_negocio,
-            ]);
-        Bitacora::registrar('producto.crear', "Creó el producto {$nombre} a S/ ".number_format((float) $producto->propun, 2).' desde el Punto Venta IA', null,
-            ['referencia' => ['producto', $producto->IdProducto]]);
+        // Si ya existe con ese nombre (lo crearon recién), se usa ese; si no, el mismo guardado del formulario de Nuevo Producto
+        $producto = Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->where('pronom', $nombre)->first();
+        if (! $producto) {
+            $sub = Request::create('', 'POST', ['promocion' => 0, 'pronom' => $nombre, 'propun' => $d['precio'], 'umecod' => 'NIU',
+                'stock_inicial' => $d['stock'] ?? null]);
+            $sub->setUserResolver(fn () => $user);
+            $sub->setLaravelSession($request->session());
+            $productos->store($sub);
+            $request->session()->forget('success');
+            $producto = Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->where('pronom', $nombre)->firstOrFail();
+            Bitacora::registrar('producto.crear', "Creó el producto {$nombre} a S/ ".number_format((float) $producto->propun, 2).' desde el Punto Venta IA', null,
+                ['referencia' => ['producto', $producto->IdProducto]]);
+        }
 
         return response()->json(['ok' => true, 'producto' => CatalogoVenta::porIds($user, [$producto->IdProducto])->first()]);
     }

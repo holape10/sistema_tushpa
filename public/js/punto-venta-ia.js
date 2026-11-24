@@ -171,7 +171,7 @@ window.PV_IA = (CFG) => {
                 const r = await fetch(CFG.rutas.iaProducto, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf() },
-                    body: JSON.stringify({ nombre: c.nombre, precio: c.precio }),
+                    body: JSON.stringify({ nombre: c.nombre, precio: c.precio, stock: c.stock || null }),
                 });
                 const d = await r.json();
                 if (!r.ok || !d.ok) { this.aviso(d.message || (d.errors ? Object.values(d.errors)[0][0] : 'No se pudo crear el producto.'), 'error'); return; }

@@ -51,6 +51,8 @@
                 <input x-model="c.nombre" required maxlength="150" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm uppercase"></label>
             <label class="w-32 text-xs font-semibold text-slate-500">Precio S/
                 <input type="number" step="0.01" min="0.01" x-model="c.precio" required class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm text-right font-bold"></label>
+            <label class="w-28 text-xs font-semibold text-slate-500">Stock inicial
+                <input type="number" step="any" min="0" x-model="c.stock" placeholder="0" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm text-right"></label>
             <button :disabled="c.enviando" class="h-10 px-4 rounded-xl bg-emerald-600 text-white text-sm font-bold disabled:opacity-50" x-text="c.enviando ? 'Creando…' : '✓ Aceptar'"></button>
             <button type="button" @click="ia.crear.splice(i, 1)" class="h-10 px-3 rounded-xl text-sm text-slate-500 hover:bg-slate-100">No</button>
         </form>

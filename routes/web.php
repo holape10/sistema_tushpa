@@ -99,6 +99,7 @@ use App\Http\Controllers\PrestamoReporteController;
 use App\Http\Controllers\ProcesoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProductoEtiquetaController;
+use App\Http\Controllers\ProductoVozController;
 use App\Http\Controllers\ProformaController;
 use App\Http\Controllers\PromocionVentaController;
 use App\Http\Controllers\PromotorController;
@@ -1241,6 +1242,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/productos/exportar', [ProductoController::class, 'exportar'])->name('productos.exportar');
     Route::get('/productos/plantilla', [ProductoController::class, 'plantilla'])->name('productos.plantilla');
     Route::post('/productos/importar', [ProductoController::class, 'importar'])->name('productos.importar');
+    // Crear productos hablando (IA): nombre, precio, stock inicial y presentaciones
+    Route::post('/productos/voz/interpretar', [ProductoVozController::class, 'interpretar'])->middleware('throttle:30,1')->name('productos.voz.interpretar');
+    Route::post('/productos/voz/crear', [ProductoVozController::class, 'crear'])->middleware('throttle:30,1')->name('productos.voz.crear');
     // Etiquetas con código de barras (ticketera, impresora de etiquetas o PDF)
     Route::get('/productos/etiquetas', [ProductoEtiquetaController::class, 'index'])->name('productos.etiquetas');
     Route::get('/productos/etiquetas/buscar', [ProductoEtiquetaController::class, 'buscar'])->name('productos.etiquetas.buscar');
