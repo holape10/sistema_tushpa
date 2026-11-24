@@ -3,6 +3,7 @@
 namespace Tests\Flujos;
 
 use App\Models\Central\Cliente;
+use App\Models\Central\Superadmin;
 use App\Support\Bitacora;
 use App\Support\Tenancy\AlertasPanel;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +50,29 @@ class AlertasPanelBitacoraTest extends FlujoTestCase
         $this->assertSame(['config.sucursal', 'producto.importar'], $alertas->pluck('accion')->all());
         $this->assertSame($this->usuario->apeusu, $alertas[0]->usuario);
         $this->assertNotNull($alertas[0]->bitacora_id);
+    }
+
+    public function test_la_alerta_tambien_le_llega_al_usuario_del_panel_que_tiene_la_empresa(): void
+    {
+        config(['tenancy.dominio' => config('tenancy.dominio') ?: 'tushpa.test',
+            'services.telegram.token' => 'bot-dueno', 'services.telegram.chat_id' => '123', 'services.telegram.citas_token' => 'bot-panel']);
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
+        $vendedor = Superadmin::create(['nombre' => 'VENDEDOR', 'email' => uniqid().'@prueba.test', 'password' => 'clave-de-prueba', 'activo' => true,
+            'es_dueno' => false, 'telegram_chat_id' => '999']);
+        $sinTelegram = Superadmin::create(['nombre' => 'OTRO', 'email' => uniqid().'@prueba.test', 'password' => 'clave-de-prueba', 'activo' => true, 'es_dueno' => false]);
+        $suya = Cliente::create(['ruc' => '20555555557', 'base_datos' => 'bd_prueba_alertas', 'razon_social' => 'EMPRESA DEL VENDEDOR', 'estado' => 'ACTIVO', 'creado_por' => $vendedor->id]);
+        $ajena = Cliente::create(['ruc' => '20555555558', 'base_datos' => 'bd_prueba_alertas2', 'razon_social' => 'EMPRESA DE OTRO', 'estado' => 'ACTIVO', 'creado_por' => $sinTelegram->id]);
+
+        app()->instance('tenancy.cliente', $suya);
+        Bitacora::registrar('usuario.crear', 'Creó el usuario CAJERO 2');
+        app()->instance('tenancy.cliente', $ajena);
+        Bitacora::registrar('usuario.crear', 'Creó el usuario CAJERO 3');
+        app()->forgetInstance('tenancy.cliente');
+        app()->terminate();
+
+        $enviados = collect(Http::recorded())->map(fn ($p) => [$p[0]['chat_id'], str_contains($p[0]['text'], 'EMPRESA DEL VENDEDOR') ? 'suya' : 'ajena']);
+        $this->assertEqualsCanonicalizing([['123', 'suya'], ['999', 'suya'], ['123', 'ajena']], $enviados->all(),
+            'Al dueño le llegan todas; al vendedor solo las de sus empresas; quien no vinculó su Telegram no recibe.');
     }
 
     public function test_la_alerta_muestra_exactamente_que_cambio(): void

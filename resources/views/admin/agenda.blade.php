@@ -28,7 +28,7 @@
                 <p class="text-amber-700">Telegram no está configurado en el servidor: los eventos se guardan, pero no avisan.</p>
             @else
                 <template x-if="vinculado">
-                    <p class="flex-1">✅ <b>Tu Telegram está vinculado</b>: ahí te llegan los avisos.
+                    <p class="flex-1">✅ <b>Tu Telegram está vinculado</b>: ahí te llegan los avisos de la agenda y las ⚠️ alertas de tus empresas.
                         <button type="button" @click="probar()" class="ml-2 underline text-sky-700">probar</button></p>
                 </template>
                 <template x-if="vinculado">
@@ -37,7 +37,7 @@
                 </template>
                 <template x-if="!vinculado">
                     <div class="flex-1 flex flex-wrap items-center gap-2">
-                        <span>📲 Para recibir los avisos, vincula tu Telegram:</span>
+                        <span>📲 Para recibir los avisos de la agenda y las ⚠️ alertas de tus empresas, vincula tu Telegram:</span>
                         <button type="button" @click="vincular()" class="h-9 px-3 rounded-lg bg-sky-600 text-white font-bold">Vincular mi Telegram</button>
                         <template x-if="enlace">
                             <span class="text-xs text-slate-600">Abre <a :href="enlace" target="_blank" class="font-semibold text-sky-700 underline break-all" x-text="enlace"></a> y toca <b>Iniciar</b>…</span>

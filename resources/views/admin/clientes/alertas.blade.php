@@ -7,6 +7,7 @@
         <div class="flex-1 min-w-0">
             <h1 class="text-xl font-bold">⚠️ Alertas de la empresa</h1>
             <p class="text-sm text-slate-500">{{ $cliente->nombre_comercial ?: $cliente->razon_social }} · RUC {{ $cliente->ruc }}</p>
+            <p class="text-xs text-slate-400">📲 Estas alertas también llegan por Telegram: <a href="{{ route('admin.agenda.index') }}" class="text-sky-700 underline">vincula tu Telegram en la Agenda</a>.</p>
         </div>
         {{-- La bitácora completa de la empresa en Excel --}}
         <form method="GET" action="{{ route('admin.clientes.bitacora.excel', $cliente->id) }}" class="flex flex-wrap items-end gap-2 bg-white rounded-xl shadow-sm p-2">

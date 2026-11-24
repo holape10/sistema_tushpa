@@ -3,8 +3,11 @@
 namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
+use App\Models\Central\Marca;
+use App\Models\Central\Superadmin;
 use App\Support\Bitacora;
 use App\Support\MonitorErrores;
+use App\Support\TelegramCitas;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -49,13 +52,36 @@ class AlertasPanel
             // También al Telegram del dueño (el mismo bot del monitor de errores), después de responder: no demora a la empresa
             $texto = self::textoTelegram($cliente, $accion, $descripcion, $usuario, $ip, $cambios);
             dispatch(fn () => MonitorErrores::avisar($texto))->afterResponse();
+            // Y al usuario del panel que tiene esa empresa (cada usuario de una marca ve solo las suyas), si vinculó su Telegram
+            if ($vendedor = self::encargado($cliente)) {
+                $suyo = self::textoTelegram($cliente, $accion, $descripcion, $usuario, $ip, $cambios, self::dominioPanel($vendedor));
+                dispatch(fn () => TelegramCitas::enviar((string) $vendedor->telegram_chat_id, $suyo))->afterResponse();
+            }
         } catch (\Throwable $e) {
             report($e);
         }
     }
 
     /** El mensaje de Telegram: qué empresa, quién, desde qué IP y qué cambió exactamente (las claves solo dicen "cambió") */
-    public static function textoTelegram(Cliente $cliente, string $accion, string $descripcion, ?string $usuario, ?string $ip, ?array $cambios): string
+    /** El usuario del panel que creó la empresa, si no es el dueño (a él ya le llega) y vinculó su Telegram en la Agenda */
+    public static function encargado(Cliente $cliente): ?Superadmin
+    {
+        if (! $cliente->creado_por || ! TelegramCitas::configurado()) {
+            return null;
+        }
+
+        return Superadmin::whereKey($cliente->creado_por)->where('activo', true)->where('es_dueno', false)->whereNotNull('telegram_chat_id')->first();
+    }
+
+    /** Dominio del panel de ese usuario: el de su marca o el de TUSHPA */
+    private static function dominioPanel(?Superadmin $usuario): string
+    {
+        $marca = $usuario?->marca_id ? Marca::find($usuario->marca_id) : null;
+
+        return strtolower((string) ($marca?->dominio ?: config('tenancy.dominio')));
+    }
+
+    public static function textoTelegram(Cliente $cliente, string $accion, string $descripcion, ?string $usuario, ?string $ip, ?array $cambios, ?string $panelDominio = null): string
     {
         $lineas = [];
         foreach (array_slice(array_values($cambios ?? []), 0, 12) as $c) {
@@ -66,7 +92,7 @@ class AlertasPanel
             $lineas[] = '… y '.(count($cambios) - 12).' cambio(s) más';
         }
         try {
-            $enlace = route('admin.clientes.alertas', ['panelDominio' => strtolower((string) config('tenancy.dominio')), 'cliente' => $cliente->id]);
+            $enlace = route('admin.clientes.alertas', ['panelDominio' => $panelDominio ?? self::dominioPanel(null), 'cliente' => $cliente->id]);
         } catch (\Throwable) {
             $enlace = null;
         }
