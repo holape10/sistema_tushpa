@@ -39,6 +39,8 @@ document.addEventListener('alpine:init', () => {
 
     Alpine.data('puntoVenta', () => ({
         cfg: CFG,
+        // Punto Venta IA (punto-venta-ia.js): el cajero arma y cobra la venta hablando
+        ...(window.PV_IA ? window.PV_IA(CFG) : {}),
 
         // Búsqueda
         busqueda: '',
@@ -1059,6 +1061,8 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             if (e.key === 'F2') { e.preventDefault(); this.$refs.buscador.focus(); return; }
+            // Punto Venta IA: F4 = hablar
+            if (e.key === 'F4' && this.iaEscuchar) { e.preventDefault(); this.iaEscuchar(); return; }
             if (e.key === 'F9') { e.preventDefault(); this.registrar(true); return; }
             if (e.key === 'F10') { e.preventDefault(); this.registrar(false); return; }
             if (e.key === 'F8') { e.preventDefault(); if (!this.edicion) this.guardarProforma(); return; }

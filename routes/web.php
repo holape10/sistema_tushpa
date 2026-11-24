@@ -104,6 +104,7 @@ use App\Http\Controllers\PromocionVentaController;
 use App\Http\Controllers\PromotorController;
 use App\Http\Controllers\PropinaController;
 use App\Http\Controllers\PuntoVentaController;
+use App\Http\Controllers\PuntoVentaIaController;
 use App\Http\Controllers\PvGrifoController;
 use App\Http\Controllers\PvTactilController;
 use App\Http\Controllers\PwaController;
@@ -854,6 +855,11 @@ Route::middleware('auth')->group(function () {
     // Punto Venta (escritorio): venta directa con teclado y lector de barras
     Route::get('/punto-venta', [PuntoVentaController::class, 'index'])->name('pv.index');
     Route::post('/punto-venta/registrar', [PuntoVentaController::class, 'registrar'])->name('pv.registrar');
+    // Punto Venta IA: el cajero arma y cobra la venta hablando
+    Route::get('/punto-venta-ia', [PuntoVentaController::class, 'ia'])->name('pv.ia');
+    Route::post('/punto-venta-ia/interpretar', [PuntoVentaIaController::class, 'interpretar'])->middleware('throttle:40,1')->name('pv.ia.interpretar');
+    Route::get('/punto-venta-ia/buscar', [PuntoVentaIaController::class, 'buscar'])->middleware('throttle:120,1')->name('pv.ia.buscar');
+    Route::post('/punto-venta-ia/producto', [PuntoVentaIaController::class, 'crearProducto'])->middleware('throttle:30,1')->name('pv.ia.producto');
 
     // PV Farmacia: punto de venta con lotes y vencimientos (FEFO)
     Route::get('/pv-farmacia', [PuntoVentaController::class, 'farmacia'])->name('pv.farmacia');

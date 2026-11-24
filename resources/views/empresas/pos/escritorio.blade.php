@@ -1,8 +1,12 @@
 @extends('layouts.app')
-@section('title', $farmacia ? 'PV Farmacia' : 'Punto Venta')
+@section('title', $farmacia ? 'PV Farmacia' : (! empty($ia) ? 'Punto Venta IA' : 'Punto Venta'))
 
 @section('content')
 <div x-data="puntoVenta" x-init="iniciar()" @keydown.window="teclaGlobal($event)" class="max-w-[100rem] mx-auto">
+
+    @if (! empty($ia))
+        @include('empresas.pos.partials.asistente_voz')
+    @endif
 
     @if ($farmacia)
         <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
@@ -726,9 +730,16 @@
             panel: @json(route('ventas.index')),
             clientes: @json(route('cobros.clientes')),
             cliente: @json(url('cobros/cliente')),
+            iaInterpretar: @json(route('pv.ia.interpretar')),
+            iaBuscar: @json(route('pv.ia.buscar')),
+            iaProducto: @json(route('pv.ia.producto')),
         },
     };
 </script>
 <script src="{{ asset('js/impresion.js') }}?v={{ filemtime(public_path('js/impresion.js')) }}" data-url="{{ url('impresion/comprobante') }}" data-csrf="{{ csrf_token() }}"></script>
+@if (! empty($ia))
+    {{-- Punto Venta IA: se suma al Punto Venta (debe cargarse antes) --}}
+    <script src="{{ asset('js/punto-venta-ia.js') }}?v={{ filemtime(public_path('js/punto-venta-ia.js')) }}"></script>
+@endif
 <script src="{{ asset('js/punto-venta.js') }}?v={{ filemtime(public_path('js/punto-venta.js')) }}"></script>
 @endpush

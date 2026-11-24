@@ -58,7 +58,7 @@ class Rubros
             '/cupones', '/promociones', '/reportes/propinas', '/metas-mozos', '/encuestas', '/autoservicio',
         ]],
         'GENERAL' => ['icono' => 'fa-cart-shopping', 'nombre' => 'Comercio general', 'ejemplos' => 'Comercio, ferretería, construcción, lavandería', 'modulos' => [
-            '/punto-venta', '/pv-movil', '/proformas', '/guias', '/inventarios', '/transferencias', '/kardex/movimiento?tipo=I',
+            '/punto-venta', '/punto-venta-ia', '/pv-movil', '/proformas', '/guias', '/inventarios', '/transferencias', '/kardex/movimiento?tipo=I',
             '/kardex/movimiento?tipo=E', '/productos?tipo=6', '/reportes/rentabilidad', '/reportes/compras', '/cuentas/cobrar/reporte',
             '/series',
         ]],

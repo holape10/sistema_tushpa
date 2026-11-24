@@ -39,7 +39,15 @@ class PuntoVentaController extends Controller
         return $this->pantalla(true, $request);
     }
 
-    private function pantalla(bool $farmacia, Request $request)
+    /** Punto Venta IA: el mismo punto de venta, pero el cajero arma y cobra la venta hablando */
+    public function ia(Request $request)
+    {
+        abort_unless(Auth::user()->puedeCobrar(), 403, 'Solo Administrador o Caja pueden vender.');
+
+        return $this->pantalla(false, $request, true);
+    }
+
+    private function pantalla(bool $farmacia, Request $request, bool $ia = false)
     {
         $user = Auth::user();
         // El vendedor entra sin caja: solo arma pedidos (proformas) que la caja cobra
@@ -99,7 +107,7 @@ class PuntoVentaController extends Controller
         // Varios venden en la misma PC: se elige quién vendió
         $vendedores = ! empty($negocio->pv_elegir_vendedor) && ! $soloPedido ? VentaDirecta::vendedores($user) : [];
 
-        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido', 'vendedores'));
+        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido', 'vendedores', 'ia'));
     }
 
     /** Editar una venta del Panel de Ventas: se abre en el Punto Venta con sus productos, cliente y pago */
