@@ -78,6 +78,16 @@
                 @if ($l['datos']['asientos'])
                     <p class="text-xs text-slate-500 mt-2">Debe {{ number_format($debe, 2) }} · Haber {{ number_format($haber, 2) }}</p>
                 @endif
+                @if ($clave === 'ventas')
+                    {{-- Cancelación (el cobro): va en el mismo Excel, en su propio subdiario --}}
+                    @if ($cfg['cancelacion'] === 'S')
+                        <p class="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                            💵 Incluye <b>{{ $l['datos']['cancelaciones'] ?? 0 }} asiento(s) de cancelación</b> (subdiario {{ $cfg['subdiario_cancelacion'] }}):
+                            Caja {{ $cfg['cta_caja'] }} (Debe) contra la cuenta por cobrar (Haber). Ventas al contado del mes y cobros de ventas al crédito.</p>
+                    @else
+                        <p class="mt-2 text-xs text-slate-400">Sin asientos de cancelación (desactivados en ⚙ Cuentas y subdiarios).</p>
+                    @endif
+                @endif
                 @foreach ($l['datos']['omitidos'] as $motivo => $cant)
                     <p class="text-xs text-amber-700 mt-1">No se exportan {{ $cant }}: {{ mb_strtolower($motivo) }}.</p>
                 @endforeach
@@ -96,10 +106,16 @@
 
                 <form method="GET" action="{{ route('concar.excel', $clave) }}" class="mt-auto pt-4 flex items-end gap-2">
                     <input type="hidden" name="periodo" value="{{ $periodo }}">
-                    <label class="text-xs font-semibold text-slate-500 w-36" title="Si en CONCAR ya tienes asientos en este subdiario y mes, empieza después del último">
-                        Correlativo inicial
+                    <label class="text-xs font-semibold text-slate-500 w-28" title="Si en CONCAR ya tienes asientos en este subdiario y mes, empieza después del último">
+                        {{ $clave === 'ventas' ? 'Correl. provisión' : 'Correlativo inicial' }}
                         <input type="number" name="desde" value="1" min="1" max="9999" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm">
                     </label>
+                    @if ($clave === 'ventas' && $cfg['cancelacion'] === 'S')
+                        <label class="text-xs font-semibold text-slate-500 w-28" title="Correlativo del subdiario de cancelación (si ya tienes asientos ahí este mes, empieza después del último)">
+                            Correl. cancelación
+                            <input type="number" name="desde_cancelacion" value="1" min="1" max="9999" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm">
+                        </label>
+                    @endif
                     <button @disabled(!$l['datos']['asientos'])
                             class="flex-1 h-10 rounded-xl {{ $l['color'] }} text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">
                         Descargar Excel CONCAR
@@ -173,6 +189,23 @@
                         <input name="{{ $campo }}" value="{{ old($campo, $cfg[$campo]) }}" maxlength="2" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm font-mono uppercase">
                     </label>
                 @endforeach
+            </div>
+            {{-- Cancelación: el cobro de la venta, como el sistema antiguo --}}
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                <p class="text-sm font-bold text-emerald-900">💵 Cancelación (el cobro)</p>
+                <p class="text-xs text-emerald-800 mb-2">Asiento de Caja (Debe) contra la cuenta por cobrar (Haber): las ventas al contado se cancelan el mismo día y las ventas al crédito en la fecha de cada cobro.</p>
+                <div class="grid sm:grid-cols-3 gap-3 text-sm">
+                    <label class="text-xs font-semibold text-slate-500">Generar cancelaciones
+                        <select name="cancelacion" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm">
+                            <option value="S" @selected($cfg['cancelacion'] === 'S')>Sí</option>
+                            <option value="N" @selected($cfg['cancelacion'] === 'N')>No (solo provisión)</option>
+                        </select></label>
+                    <label class="text-xs font-semibold text-slate-500">Subdiario de cancelación
+                        <input name="subdiario_cancelacion" value="{{ old('subdiario_cancelacion', $cfg['subdiario_cancelacion']) }}" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm font-mono"></label>
+                    <label class="text-xs font-semibold text-slate-500">Cuenta de caja (10) · Debe
+                        <input name="cta_caja" value="{{ old('cta_caja', $cfg['cta_caja']) }}" class="block w-full mt-1 h-10 rounded-xl border-slate-300 text-sm font-mono"></label>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">El Haber va a la misma cuenta por cobrar de la provisión ({{ $cfg['cta_por_cobrar'] }}), así CONCAR cruza el documento y queda saldado.</p>
             </div>
             <p class="text-xs text-slate-400">Las compras en dólares usan siempre conversión especial (C) con el tipo de cambio registrado en la compra.
                 Cada línea de venta usa la cuenta Debe/Haber de su producto (Productos &gt; Contabilidad); si no tiene, la de su tipo de producto y, al final, las de aquí.</p>

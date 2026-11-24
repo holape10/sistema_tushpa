@@ -46,7 +46,10 @@ class ConcarController extends Controller
             'formato' => 'required|in:PLANTILLA,ANTERIOR',
             'doc_factura' => 'required|string|max:2|regex:/^[0-9A-Za-z]+$/', 'doc_boleta' => 'required|string|max:2|regex:/^[0-9A-Za-z]+$/',
             'doc_nc' => 'required|string|max:2|regex:/^[0-9A-Za-z]+$/', 'doc_nd' => 'required|string|max:2|regex:/^[0-9A-Za-z]+$/',
+            'cancelacion' => 'required|in:S,N',
+            'subdiario_cancelacion' => 'required|string|max:4|regex:/^[0-9A-Za-z]+$/', 'cta_caja' => $cuenta,
         ], ['regex' => 'Solo letras y números, sin espacios ni puntos.'], [
+            'subdiario_cancelacion' => 'subdiario de cancelación', 'cta_caja' => 'cuenta de caja',
             'cta_por_cobrar' => 'cuenta por cobrar', 'cta_igv' => 'cuenta de IGV', 'cta_ventas' => 'cuenta de ventas gravadas',
             'cta_ventas_exo' => 'cuenta de ventas exoneradas', 'cta_compras' => 'cuenta de compras', 'cta_por_pagar' => 'cuenta por pagar',
         ]);
@@ -59,14 +62,16 @@ class ConcarController extends Controller
     public function descargar(Request $request, string $libro)
     {
         $ruc = $this->autorizar();
-        $d = $request->validate(['periodo' => 'required|digits:6', 'desde' => 'nullable|integer|min:1|max:9999']);
+        $d = $request->validate(['periodo' => 'required|digits:6', 'desde' => 'nullable|integer|min:1|max:9999',
+            'desde_cancelacion' => 'nullable|integer|min:1|max:9999']);
         $desde = (int) ($d['desde'] ?? 1);
+        $desdeCancelacion = (int) ($d['desde_cancelacion'] ?? 1);
 
-        $datos = $libro === 'ventas' ? Concar::ventas($ruc, $d['periodo'], $desde) : Concar::compras($ruc, $d['periodo'], $desde);
+        $datos = $libro === 'ventas' ? Concar::ventas($ruc, $d['periodo'], $desde, $desdeCancelacion) : Concar::compras($ruc, $d['periodo'], $desde);
         if (! $datos['filas']) {
             return back()->with('error', 'No hay '.$libro.' para exportar en ese periodo.');
         }
-        if ($datos['asientos'] + $desde - 1 > 9999) {
+        if ($datos['asientos'] + $desde - 1 > 9999 || ($datos['cancelaciones'] ?? 0) + $desdeCancelacion - 1 > 9999) {
             return back()->with('error', 'El correlativo pasa de 9999 asientos en el mes; CONCAR solo admite 4 dígitos.');
         }
 

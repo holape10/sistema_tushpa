@@ -37,12 +37,43 @@ class ConcarTest extends FlujoTestCase
 
         $v = Concar::ventas($this->usuario->IdEmpresa, now()->format('Ym'));
         $this->assertSame(2, $v['asientos']);
-        $cuentas = $this->porCuenta($v['filas']);
+        // Solo la provisión (subdiario 05); la cancelación se revisa aparte
+        $cuentas = $this->porCuenta(array_filter($v['filas'], fn ($f) => $f[1] === '05'));
         $this->assertEquals(['D' => 100.0], $cuentas['145101']);
         $this->assertEquals(['H' => 100.0], $cuentas['759901']);
         $this->assertEquals(['D' => 20.0], $cuentas['121201']);
         $this->assertEquals(['H' => 20.0], $cuentas['704110']);
         $this->assertSame([], $v['revisar']);
+    }
+
+    public function test_la_venta_al_contado_y_el_cobro_del_credito_salen_como_cancelacion(): void
+    {
+        $this->afectacion('20');
+        $sauna = $this->producto('SAUNA', 20);
+        $contado = $this->vender($sauna);
+        $credito = VentaDirecta::registrar($this->usuario, $this->venta([[$sauna, 3]], '03', [
+            'estadopago' => $this->credito, 'fecVen' => now()->addDays(15)->toDateString(), 'id_med_pag' => [], 'mon_med_pag' => [], 'paga' => 0,
+            'clinum' => '47664500', 'clinom' => 'CLIENTE A CREDITO',
+        ]), 'PV');
+        // Cobro parcial del crédito (Cuentas por cobrar)
+        $cue = DB::table('cuentas_cobrar')->where('IdCpe_cabecera', $credito)->value('cue_cob_id');
+        DB::table('cuentas_cobrar_detalle')->insert(['cue_cob_id' => $cue, 'numero_recibo' => 'RC-000001', 'fec_dep' => now()->toDateString(), 'abono' => 25,
+            'saldo_detalle' => 35, 'est_cue_cob_det' => 'REGISTRADO', 'fec_reg' => now()]);
+
+        $v = Concar::ventas($this->usuario->IdEmpresa, now()->format('Ym'), 1, 7);
+
+        $this->assertSame(2, $v['asientos'], 'Provisión: las dos ventas.');
+        $this->assertSame(2, $v['cancelaciones'], 'Cancelación: la venta al contado y el cobro del crédito.');
+        $cancel = array_values(array_filter($v['filas'], fn ($f) => $f[1] === '01'));
+        $this->assertSame(substr(now()->format('Ym'), 4, 2).'0007', $cancel[0][2], 'Con su propio correlativo.');
+        $this->assertEquals(['101101' => ['D' => 45.0], '121201' => ['H' => 45.0]], $this->porCuenta($cancel), 'Caja contra la cuenta por cobrar: 20 + 25.');
+        $numeroCredito = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $credito)->first();
+        $this->assertContains($numeroCredito->serdoc.'-'.str_pad($numeroCredito->numdoc, 8, '0', STR_PAD_LEFT), array_column($cancel, 18), 'Cancela el documento del crédito.');
+
+        // Se puede apagar: solo provisión
+        DB::table('concar_config')->updateOrInsert(['IdEmpresa' => $this->usuario->IdEmpresa], ['cancelacion' => 'N']);
+        $this->assertSame(0, Concar::ventas($this->usuario->IdEmpresa, now()->format('Ym'))['cancelaciones']);
+        $this->assertCount(0, array_filter(Concar::ventas($this->usuario->IdEmpresa, now()->format('Ym'))['filas'], fn ($f) => $f[1] === '01'));
     }
 
     public function test_una_cuenta_incompleta_no_sale_y_se_avisa(): void

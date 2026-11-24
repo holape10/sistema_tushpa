@@ -66,6 +66,8 @@ class Concar
         'cta_compras' => '601111', 'cta_por_pagar' => '421201', 'anexo_varios' => '00000000', 'tipo_conversion' => 'V',
         // PLANTILLA = plantilla oficial (3 filas de títulos); ANTERIOR = como el Excel del sistema antiguo (1 fila de títulos)
         'formato' => 'PLANTILLA', 'doc_factura' => 'FT', 'doc_boleta' => 'BV', 'doc_nc' => 'NA', 'doc_nd' => 'ND',
+        // Cancelación (el cobro): Caja (Debe) contra la cuenta por cobrar (Haber), en su propio subdiario
+        'cancelacion' => 'S', 'subdiario_cancelacion' => '01', 'cta_caja' => '101101',
     ];
 
     public static function config(string $ruc): array
@@ -122,8 +124,9 @@ class Concar
      *
      * @return array{filas: array, asientos: int, total: float, omitidos: array}
      */
-    public static function ventas(string $ruc, string $periodo, int $desde = 1): array
+    public static function ventas(string $ruc, string $periodo, int $desde = 1, int $desdeCancelacion = 1): array
     {
+        $cancelar = [];
         $cfg = self::config($ruc);
         $tipos = self::tiposDoc($cfg);
         $anterior = $cfg['formato'] === 'ANTERIOR';
@@ -228,10 +231,70 @@ class Concar
                 $filas[] = self::linea($cab, (string) $cta, $anexo, $dh('H'), $imp, $doc, 'VENTA EXONERADA', $anterior);
             }
             $total += $esNota ? -$tot : $tot;
+            // Al contado se cobra el mismo día: su cancelación (las notas de crédito y débito no se cancelan aquí)
+            if (! $esNota && $d->tdocod !== '08' && $d->estadopago === 'CONTADO') {
+                $cancelar[] = ['fecha' => $d->ccafem, 'moneda' => $d->moncod ?: 'PEN', 'importe' => $tot, 'cuentas' => $debe, 'anexo' => $anexo,
+                    'doc' => $doc, 'glosa' => 'COBRO '.$numero.' '.$d->ccanom];
+            }
+        }
+
+        $cancelaciones = ['filas' => [], 'asientos' => 0];
+        if ($cfg['cancelacion'] === 'S') {
+            $cancelaciones = self::cancelaciones($ruc, $periodo, $cfg, $cancelar, $desdeCancelacion, $anterior);
+            $filas = array_merge($filas, $cancelaciones['filas']);
         }
 
         return ['filas' => $filas, 'asientos' => $n - $desde, 'total' => round($total, 2), 'omitidos' => array_filter($omitidos),
-            'revisar' => self::cuentasRaras($filas)];
+            'cancelaciones' => $cancelaciones['asientos'], 'revisar' => self::cuentasRaras($filas)];
+    }
+
+    /**
+     * Asientos de cancelación (el cobro), en su propio subdiario y correlativo, como el sistema antiguo:
+     * Caja (Debe) contra la cuenta por cobrar del comprobante (Haber). Las ventas al contado del mes se cancelan el mismo
+     * día; las ventas al crédito, en la fecha de cada cobro registrado en Cuentas por cobrar (aunque la venta sea de otro mes).
+     *
+     * @param  list<array{fecha: string, moneda: string, importe: float, cuentas: array<string, float>, anexo: string, doc: array, glosa: string}>  $contado
+     * @return array{filas: array, asientos: int}
+     */
+    private static function cancelaciones(string $ruc, string $periodo, array $cfg, array $contado, int $desde, bool $anterior): array
+    {
+        $tipos = self::tiposDoc($cfg);
+        [$ini, $fin] = self::rango($periodo);
+        $cobros = Schema::hasTable('cuentas_cobrar_detalle') ? DB::table('cuentas_cobrar_detalle as cd')
+            ->join('cuentas_cobrar as cc', 'cc.cue_cob_id', '=', 'cd.cue_cob_id')
+            ->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'cc.IdCpe_cabecera')
+            ->where('c.IdEmpresa', $ruc)->whereNull('c.ccabaj')->whereIn('c.tdocod', ['01', '03'])
+            ->where('cd.est_cue_cob_det', '!=', 'ANULADO')->where('cd.abono', '>', 0)->whereBetween('cd.fec_dep', [$ini, $fin])
+            ->orderBy('cd.fec_dep')->orderBy('cd.cue_cob_det_id')
+            ->get(['cd.fec_dep', 'cd.abono', 'cd.numero_recibo', 'c.tdocod', 'c.serdoc', 'c.numdoc', 'c.ccafem', 'c.ccafve', 'c.ccandi', 'c.ccanom', 'c.moncod', 'c.cuenta12'])
+            : collect();
+
+        $lista = $contado;
+        foreach ($cobros as $c) {
+            $numero = $c->serdoc.'-'.($anterior ? (int) $c->numdoc : str_pad($c->numdoc, 8, '0', STR_PAD_LEFT));
+            $lista[] = [
+                'fecha' => $c->fec_dep, 'moneda' => $c->moncod ?: 'PEN', 'importe' => round((float) $c->abono, 2),
+                'cuentas' => [(($c->cuenta12 ?? null) ?: $cfg['cta_por_cobrar']) => round((float) $c->abono, 2)],
+                'anexo' => in_array(trim((string) $c->ccandi), ['', '0', '00000000'], true) ? $cfg['anexo_varios'] : trim($c->ccandi),
+                'doc' => ['tipo' => $tipos[$c->tdocod], 'numero' => $numero, 'fecha' => $c->ccafem, 'vence' => $c->ccafve ?: $c->ccafem, 'ref' => null,
+                    'glosa' => $anterior ? $tipos[$c->tdocod].' '.$numero : null],
+                'glosa' => 'COBRO '.$numero.' '.$c->ccanom.($c->numero_recibo ? ' '.$c->numero_recibo : ''),
+            ];
+        }
+        usort($lista, fn ($a, $b) => strcmp((string) $a['fecha'], (string) $b['fecha']));
+
+        $filas = [];
+        $n = $desde;
+        foreach ($lista as $x) {
+            $cab = self::cabecera($cfg, $cfg['subdiario_cancelacion'], $periodo, $n++, $x['fecha'], $x['moneda'], null, $x['glosa']);
+            $filas[] = self::linea($cab, $cfg['cta_caja'], $x['anexo'], 'D', $x['importe'], $x['doc'], 'COBRO', $anterior);
+            // La misma cuenta por cobrar de la provisión: así CONCAR cruza el documento y queda saldado
+            foreach (self::repartir($x['importe'], $x['cuentas']) ?: [$cfg['cta_por_cobrar'] => $x['importe']] as $cta => $imp) {
+                $filas[] = self::linea($cab, (string) $cta, $x['anexo'], 'H', $imp, $x['doc'], 'CANCELACION', $anterior);
+            }
+        }
+
+        return ['filas' => $filas, 'asientos' => $n - $desde];
     }
 
     /**
