@@ -889,6 +889,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/proformas', [ProformaController::class, 'index'])->name('proformas.index');
     Route::post('/proformas/guardar', [ProformaController::class, 'guardar'])->name('proformas.guardar');
     Route::get('/proformas/{id}/imprimir', [ProformaController::class, 'imprimir'])->whereNumber('id')->name('proformas.imprimir');
+    Route::get('/proformas/{id}/pdf', [ProformaController::class, 'pdf'])->whereNumber('id')->name('proformas.pdf');
+    Route::post('/proformas/{id}/directo', [ProformaController::class, 'directo'])->whereNumber('id')->middleware('throttle:30,1')->name('proformas.directo');
     Route::delete('/proformas/{id}', [ProformaController::class, 'destroy'])->whereNumber('id')->name('proformas.destroy');
 
     // PV Móvil: venta directa desde celular o tablet

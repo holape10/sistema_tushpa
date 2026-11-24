@@ -370,8 +370,10 @@
                 <div class="grid gap-1.5 p-1 bg-slate-100 rounded-xl" :style="`grid-template-columns: repeat(${cfg.comprobantes.length}, minmax(0, 1fr))`">
                     <template x-for="c in cfg.comprobantes" :key="c.tdocod">
                         <button type="button" @click="elegirComprobante(c.tdocod)"
-                                :class="tdocod === c.tdocod ? 'bg-white text-indigo-700 shadow' : 'text-slate-500 hover:text-slate-700'"
-                                class="h-10 rounded-lg text-sm font-bold transition" x-text="nombreComprobante(c.tdocod)"></button>
+                                {{-- El elegido bien marcado (relleno de color y check), que se note aun en pantallas de baja resolución --}}
+                                :class="tdocod === c.tdocod ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-300' : 'text-slate-500 hover:bg-white hover:text-slate-700'"
+                                class="h-10 rounded-lg text-sm font-bold transition" :aria-pressed="tdocod === c.tdocod"
+                                x-text="(tdocod === c.tdocod ? '✓ ' : '') + nombreComprobante(c.tdocod)"></button>
                     </template>
                 </div>
                 <div class="grid grid-cols-3 gap-2">
@@ -519,13 +521,32 @@
                 <div data-fidelizacion data-doc="cliente.num" data-total="total" class="mt-3 empty:hidden"></div>
                 <p x-show="procesando" x-cloak class="text-center text-sm text-slate-500 mt-2">Registrando…</p>
 
+                {{-- La proforma recién guardada, en pantalla: verla, imprimirla otra vez o abrirla en A4 para descargarla --}}
+                <template x-if="verProforma && ultimaProforma">
+                    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" @click.self="verProforma = false" @keydown.escape.window="verProforma = false">
+                        <div class="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                            <div class="flex items-center gap-3 px-4 py-3 bg-violet-600 text-white">
+                                <p class="flex-1 font-bold">📄 Proforma <span x-text="ultimaProforma.numero"></span> · <span x-text="soles(ultimaProforma.total)"></span></p>
+                                <button type="button" @click="verProforma = false" class="text-2xl leading-none text-white/80 hover:text-white" aria-label="Cerrar">×</button>
+                            </div>
+                            <p x-show="ultimaProforma.impresora" class="px-4 py-2 text-sm bg-emerald-50 text-emerald-800">🖨 Ya se mandó a la impresora <strong x-text="ultimaProforma.impresora"></strong>.</p>
+                            <iframe :src="ultimaProforma.imprimir + '?embebida=1'" class="w-full flex-1 min-h-[55vh] bg-slate-100" title="Proforma"></iframe>
+                            <div class="flex flex-wrap justify-end gap-2 px-4 py-3 border-t border-slate-100">
+                                <a :href="ultimaProforma.imprimir + '?formato=A4'" target="_blank" class="h-10 px-4 inline-flex items-center rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold hover:bg-slate-200">Ver en A4 / descargar</a>
+                                <button type="button" @click="imprimirProforma()" class="h-10 px-4 rounded-xl bg-violet-600 text-white text-sm font-bold hover:bg-violet-700">🖨 Imprimir</button>
+                                <button type="button" @click="verProforma = false" class="h-10 px-4 rounded-xl bg-slate-900 text-white text-sm font-bold">Listo</button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
                 {{-- Última proforma --}}
                 <template x-if="ultimaProforma">
                     <div class="mt-3 flex items-center justify-between gap-2 rounded-xl bg-violet-50 px-3 py-2 text-sm">
                         <span class="text-violet-800">Proforma: <strong x-text="ultimaProforma.numero"></strong> · <span x-text="soles(ultimaProforma.total)"></span></span>
                         <span class="flex gap-2 shrink-0">
                             <button type="button" @click="imprimirProforma()" class="text-xs font-semibold text-violet-700 hover:underline">Imprimir</button>
-                            <a :href="ultimaProforma.imprimir" target="_blank" class="text-xs font-semibold text-violet-700 hover:underline">Ver</a>
+                            <button type="button" @click="verProforma = true" class="text-xs font-semibold text-violet-700 hover:underline">Ver</button>
                             <a href="{{ route('proformas.index') }}" class="text-xs font-semibold text-violet-700 hover:underline">Todas</a>
                         </span>
                     </div>

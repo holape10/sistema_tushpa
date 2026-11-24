@@ -85,8 +85,17 @@
                         </td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             <div class="inline-flex flex-wrap justify-end gap-1.5">
-                                <a href="{{ route('proformas.imprimir', $p->id_proforma) }}" target="_blank"
-                                   class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200">🖨 Imprimir</a>
+                                {{-- Como en el Panel de Ventas: PDF A4, ver el ticket e imprimir directo en la ticketera de caja --}}
+                                <a href="{{ route('proformas.pdf', $p->id_proforma) }}" title="Descargar PDF (A4)"
+                                   class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100">📄 PDF</a>
+                                <a href="{{ route('proformas.imprimir', [$p->id_proforma, 'formato' => 'TICKET']) }}" target="_blank" title="Ver ticket"
+                                   class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200">🧾 Ticket</a>
+                                <button type="button" title="Imprimir directo en la impresora de caja" x-data="{ estado: '' }" :disabled="estado === 'enviando'"
+                                        @click="estado = 'enviando'; fetch(@js(route('proformas.directo', $p->id_proforma)), { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) } })
+                                            .then(r => r.json()).then(d => { estado = d.directa ? 'ok' : ''; tushpaAviso(d.mensaje, d.directa ? 'ok' : 'error'); })
+                                            .catch(() => { estado = ''; tushpaAviso('Sin conexión con el servidor.', 'error'); })"
+                                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-60"
+                                        x-text="estado === 'enviando' ? '…' : (estado === 'ok' ? '✓ Impresa' : '🖨 Imprimir')">🖨 Imprimir</button>
                                 @if (auth()->user()->esAdminOCaja() && $p->estado !== 'ANULADA')
                                     <a href="{{ route('guias.crear', ['proforma' => $p->id_proforma]) }}" title="Guía de remisión con el cliente y los productos de esta proforma"
                                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100">🚚 Guía</a>

@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
+use App\Support\Impresion\Impresion;
 use App\Support\Proformas;
+use Dompdf\Dompdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -88,10 +90,12 @@ class ProformaController extends Controller
         }
 
         $p = $this->proforma($id);
+        // Sale sola en la impresora de caja, como los comprobantes (el vendedor que solo toma pedidos no imprime)
+        $impresora = $request->boolean('imprimir') ? Impresion::proforma($id, (int) Auth::user()->id_empresa_negocio) : null;
 
         return response()->json([
             'estado' => 'success', 'id' => $id, 'numero' => Proformas::numero($p), 'total' => (float) $p->total,
-            'editada' => ! empty($request->id), 'imprimir' => route('proformas.imprimir', $id),
+            'editada' => ! empty($request->id), 'imprimir' => route('proformas.imprimir', $id), 'impresora' => $impresora,
         ]);
     }
 
@@ -106,6 +110,37 @@ class ProformaController extends Controller
         $formato = strtoupper((string) request('formato', $negocio->formato_impresion ?: 'TICKET')) === 'A4' ? 'A4' : 'TICKET';
 
         return view('empresas.proformas.imprimir', compact('p', 'detalle', 'negocio', 'empresa', 'usuario', 'formato'));
+    }
+
+    /** La proforma en PDF A4 para descargar (como «Descargar PDF» del Panel de Ventas) */
+    public function pdf($id)
+    {
+        $this->autorizar();
+        $p = $this->proforma($id);
+        $html = view('empresas.proformas.imprimir', ['p' => $p, 'detalle' => DB::table('proforma_detalle')->where('id_proforma', $id)->orderBy('id_proforma_detalle')->get(),
+            'negocio' => EmpresaNegocio::find($p->id_empresa_negocio), 'empresa' => Empresa::find($p->IdEmpresa),
+            'usuario' => DB::table('users')->where('IdUsuario', $p->IdUsuario)->value('apeusu'), 'formato' => 'A4', 'paraPdf' => true])->render();
+        $pdf = new Dompdf;
+        $pdf->loadHtml($html, 'UTF-8');
+        $pdf->setPaper('A4');
+        $pdf->render();
+
+        return response((string) $pdf->output(), 200, ['Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="proforma_'.Proformas::numero($p).'.pdf"']);
+    }
+
+    /** Imprimir directo en la impresora de caja (como el botón de la ticketera del Panel de Ventas) */
+    public function directo($id)
+    {
+        $this->autorizar();
+        $this->proforma($id);
+        $sucursal = (int) Auth::user()->id_empresa_negocio;
+        $impresora = Impresion::proforma((int) $id, $sucursal);
+
+        return response()->json(['directa' => (bool) $impresora, 'mensaje' => ! $impresora
+            ? 'No hay una impresora de caja configurada (menú Impresoras): usa «Ticket» o «PDF».'
+            : (Impresion::agenteConectado($sucursal) ? 'Enviada a la impresora '.$impresora.'.'
+                : 'En cola: el agente de impresión no está conectado, se imprimirá apenas se conecte.')]);
     }
 
     public function destroy($id)

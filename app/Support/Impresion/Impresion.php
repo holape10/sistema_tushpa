@@ -3,6 +3,8 @@
 namespace App\Support\Impresion;
 
 use App\Http\Controllers\CuentaController;
+use App\Models\Empresa;
+use App\Models\EmpresaNegocio;
 use App\Models\Mesa;
 use App\Support\ConsultaCpe;
 use App\Support\CuotasCredito;
@@ -11,6 +13,7 @@ use App\Support\Descuentos;
 use App\Support\Encuestas;
 use App\Support\Fidelizacion;
 use App\Support\NombreCorto;
+use App\Support\Proformas;
 use App\Support\PromocionesVenta;
 use App\Support\Propinas;
 use App\Support\Sunat\CodigoQr;
@@ -1219,6 +1222,61 @@ class Impresion
         self::firma($p);
         $p->avanzar(3)->cortar();
         self::encolar($imp, $p->bytes(), 'RECIBO', $referencia);
+
+        return (string) $imp->descripcion;
+    }
+
+    /**
+     * Proforma en la impresora de caja, sin ventana (como los comprobantes): ticket en la ticketera o PDF A4 en una
+     * impresora de Windows. Devuelve el nombre de la impresora, o null si la sucursal no tiene impresora de caja.
+     */
+    public static function proforma(int $id, int $sucursal): ?string
+    {
+        $imp = self::impresoraCaja($sucursal);
+        $p = DB::table('proformas')->where('id_proforma', $id)->where('id_empresa_negocio', $sucursal)->first();
+        if (! $imp || ! $p) {
+            return null;
+        }
+        $detalle = DB::table('proforma_detalle')->where('id_proforma', $id)->orderBy('id_proforma_detalle')->get();
+        $numero = Proformas::numero($p);
+        $usuario = (string) DB::table('users')->where('IdUsuario', $p->IdUsuario)->value('apeusu');
+
+        if ($imp->tip_conex_imp === 'WINDOWS') {
+            // Impresora A4: la misma proforma de la pantalla, en PDF
+            $pdf = new Dompdf;
+            $pdf->loadHtml(view('empresas.proformas.imprimir', ['p' => $p, 'detalle' => $detalle, 'negocio' => EmpresaNegocio::find($sucursal),
+                'empresa' => Empresa::find($p->IdEmpresa), 'usuario' => $usuario, 'formato' => 'A4', 'paraPdf' => true])->render(), 'UTF-8');
+            $pdf->setPaper('A4');
+            $pdf->render();
+            self::encolar($imp, $pdf->output(), 'PROFORMA', 'Proforma '.$numero);
+
+            return (string) $imp->descripcion;
+        }
+
+        $p2 = Escpos::para($imp);
+        self::encabezado($p2, $sucursal);
+        $p2->linea('=')->negrita()->texto('PROFORMA')->tamano(1, 2)->texto($numero)->tamano()->negrita(false)->alinear('izq')->linea('=')
+            ->texto('Fecha: '.Carbon::parse($p->created_at)->format('d/m/Y H:i'))
+            ->parrafo('Cliente: '.$p->clinom);
+        if ($p->clinum !== '00000000') {
+            $p2->texto(($p->tdicod === '6' ? 'RUC' : 'Doc').': '.$p->clinum);
+        }
+        if ($p->clidir) {
+            $p2->parrafo('Dir: '.$p->clidir);
+        }
+        $p2->linea();
+        foreach ($detalle as $d) {
+            $p2->parrafo((string) $d->descripcion)
+                ->dosColumnas('  '.rtrim(rtrim(number_format((float) $d->cantidad, 2), '0'), '.').' x '.number_format((float) $d->precio, 2), number_format((float) $d->total, 2));
+        }
+        $p2->linea()->negrita()->tamano(1, 2)->dosColumnas('TOTAL S/', number_format((float) $p->total, 2))->tamano()->negrita(false);
+        if ($p->observaciones) {
+            $p2->linea()->parrafo((string) $p->observaciones);
+        }
+        $p2->linea()->alinear('centro')->texto('Atendido por: '.$usuario)->texto('*** NO VÁLIDO COMO COMPROBANTE ***');
+        self::firma($p2);
+        $p2->avanzar(3)->cortar();
+        self::encolar($imp, $p2->bytes(), 'PROFORMA', 'Proforma '.$numero);
 
         return (string) $imp->descripcion;
     }

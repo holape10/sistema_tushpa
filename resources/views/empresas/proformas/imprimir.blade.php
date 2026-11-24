@@ -12,6 +12,7 @@
         hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
         table { width: 100%; border-collapse: collapse; }
         .det th { text-align: left; border-bottom: 1px solid #000; padding: 4px 2px; font-size: 11px; }
+        .det th.r { text-align: right; }
         .det td { padding: 4px 2px; vertical-align: top; {{ $a4 ? 'border-bottom: 1px solid #eee;' : '' }} }
         .cab { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
         .caja { border: 2px solid #111; border-radius: 8px; padding: 10px 18px; text-align: center; font-weight: bold; }
@@ -21,23 +22,30 @@
         .acciones a, .acciones button { display: inline-block; padding: 10px 18px; margin: 4px; border: 0; border-radius: 6px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 13px; }
         .b1 { background: #28a745; color: #fff; } .b2 { background: #3498db; color: #fff; }
         @media print { body { background: #fff; padding: 0; } .acciones { display: none; } .hoja { width: 100%; padding: {{ $a4 ? '0' : '0' }}; } }
+        @if (! empty($paraPdf))
+            body { background: #fff; padding: 0; font-family: 'DejaVu Sans', sans-serif; font-size: 11px; } .hoja { width: 100%; padding: 0; }
+        @endif
     </style>
 </head>
 <body>
 <div class="hoja">
     @if ($a4)
-        <div class="cab">
-            <div>
+        {{-- En tabla (no flex): así sale igual en el navegador y en el PDF --}}
+        <table><tr>
+            <td style="vertical-align:top">
                 @php $logoProforma = \App\Support\LogoNegocio::de($negocio->logo_suc ?? null, $empresa->LogEmpresa ?? null); @endphp
-                @if ($logoProforma)<img src="{{ asset($logoProforma) }}" alt="" style="max-height:70px;max-width:200px;margin-bottom:6px"><br>@endif
+                @if ($logoProforma)
+                    {{-- En el PDF la imagen va desde el disco (Dompdf no descarga de internet) --}}
+                    <img src="{{ ! empty($paraPdf) && is_file(public_path($logoProforma)) ? public_path($logoProforma) : asset($logoProforma) }}" alt="" style="max-height:70px;max-width:200px;margin-bottom:6px"><br>
+                @endif
                 <strong style="font-size:15px">{{ $empresa->NomEmpresa ?? '' }}</strong><br>
                 {{ $negocio->nombre_comercial ?? '' }}<br>
                 {{ $negocio->direccion ?? '' }}<br>
                 @if (!empty($negocio->departamento)) {{ $negocio->distrito }} - {{ $negocio->provincia }} - {{ $negocio->departamento }}<br>@endif
                 @if (!empty($negocio->telefono)) Tel: {{ $negocio->telefono }}@endif
-            </div>
-            <div class="caja">RUC {{ $p->IdEmpresa }}<br><span style="font-size:15px">PROFORMA</span><br>{{ $numero }}</div>
-        </div>
+            </td>
+            <td style="width:230px;vertical-align:top"><div class="caja">RUC {{ $p->IdEmpresa }}<br><span style="font-size:15px">PROFORMA</span><br>{{ $numero }}</div></td>
+        </tr></table>
         <hr style="border-top:1px solid #ccc;margin:14px 0">
     @else
         <div class="c">
@@ -87,10 +95,12 @@
     <p class="nota {{ $a4 ? '' : 'c' }}">Documento sin valor tributario.</p>
 </div>
 
+@if (empty($paraPdf) && ! request('embebida'))
 <div class="acciones">
     <button class="b1" onclick="window.print()">IMPRIMIR</button>
     <a class="b2" href="{{ request()->fullUrlWithQuery(['formato' => $a4 ? 'TICKET' : 'A4', 'imprimir' => null]) }}">VER EN {{ $a4 ? 'TICKET' : 'A4' }}</a>
 </div>
+@endif
 
 @if (request('imprimir') == 1)
     <script>window.addEventListener('load', () => setTimeout(() => window.print(), 400));</script>

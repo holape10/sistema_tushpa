@@ -101,6 +101,7 @@ document.addEventListener('alpine:init', () => {
         proformaId: null,
         proformaNumero: '',
         ultimaProforma: null,
+        verProforma: false,
 
         // Venta del Panel de Ventas que se está corrigiendo (aún no enviada a SUNAT)
         edicion: null,
@@ -1013,6 +1014,8 @@ document.addEventListener('alpine:init', () => {
                         id: this.proformaId, origen: CFG.farmacia ? 'FARMACIA' : 'PV', items: this.itemsParaEnviar(),
                         tdicod: this.cliente.tdicod, clinum: this.cliente.num.trim(), clinom: this.cliente.nom.trim(),
                         clidir: this.cliente.dir.trim(), observaciones: this.observaciones.trim(),
+                        // Sale sola en la impresora de caja (el vendedor que solo toma pedidos no imprime)
+                        imprimir: !CFG.soloPedido,
                     }),
                 });
                 if (r.status === 419) { this.aviso('La sesión expiró. Recarga la página (el detalle se conserva).', 'error'); return; }
@@ -1023,8 +1026,11 @@ document.addEventListener('alpine:init', () => {
 
                 this.ultimaProforma = d;
                 this.sonido(true);
-                this.aviso(`✔ Proforma ${d.numero} ${d.editada ? 'actualizada' : 'guardada'}`, 'ok');
+                this.aviso(`✔ Proforma ${d.numero} ${d.editada ? 'actualizada' : 'guardada'}` + (d.impresora ? ` · impresa en ${d.impresora}` : ''), 'ok');
                 this.nuevaVenta();
+                // Como los comprobantes: con impresora de caja ya salió directo; sin impresora, por el navegador en el
+                // formato de la sucursal (Ticket o A4). Para verla en pantalla está «Ver» en la última proforma.
+                if (!CFG.soloPedido && !d.impresora) this.imprimirProforma();
             } catch (e) {
                 this.aviso('Error de conexión con el servidor. Intenta otra vez.', 'error');
             } finally {
