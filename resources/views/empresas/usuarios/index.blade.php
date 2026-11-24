@@ -8,6 +8,9 @@
             <input name="q" value="{{ $q }}" placeholder="Nombre, usuario o DNI" class="block w-full rounded-lg border-gray-300 text-sm"></label>
         <button class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">Buscar</button>
         <a href="{{ route('usuarios.create') }}" class="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700">+ Nuevo empleado</a>
+        @if (auth()->user()->esAdmin())
+            <a href="{{ route('seguridad.equipos') }}" class="px-4 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900">🔐 Equipos y sesiones</a>
+        @endif
     </form>
 
     <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">

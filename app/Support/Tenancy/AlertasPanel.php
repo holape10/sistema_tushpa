@@ -22,6 +22,9 @@ class AlertasPanel
         'usuario.crear' => 'Creó un usuario',
         'usuario.editar' => 'Editó un usuario',
         'usuario.eliminar' => 'Eliminó un usuario',
+        // Seguridad de equipos: una acción delicada frenada por venir de un equipo no autorizado, o un "no fui yo"
+        'sesion.bloqueo_accion' => 'Acción delicada frenada (equipo no autorizado)',
+        'sesion.no_fui_yo' => 'Bloquearon un equipo («no fui yo»)',
     ];
 
     /** Lo anota en el panel si es una acción vigilada y la empresa es un cliente del panel (nunca rompe lo que se estaba haciendo) */

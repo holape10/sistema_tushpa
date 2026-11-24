@@ -9,6 +9,7 @@ use App\Support\Bitacora;
 use App\Support\ControlStock;
 use App\Support\DemoDatos;
 use App\Support\LogoNegocio;
+use App\Support\Seguridad\Dispositivos;
 use App\Support\SucursalNueva;
 use App\Support\Ubigeo;
 use Illuminate\Http\Request;
@@ -216,6 +217,17 @@ class SucursalController extends Controller
         }
         if ($errores) {
             return back()->withInput()->withErrors($errores);
+        }
+
+        // Seguridad: cambiar series o correlativos solo desde un equipo de confianza (así se frenó el sabotaje de correlativos)
+        $cambiaSeries = collect(self::SERIES)->contains(fn ($c) => (string) $datos[$c['serie']] !== (string) $sucursal->{$c['serie']}
+            || (int) $datos[$c['numero']] !== (int) $sucursal->{$c['numero']});
+        if ($cambiaSeries) {
+            try {
+                Dispositivos::exigirConfianza('cambiar series o correlativos');
+            } catch (\RuntimeException $e) {
+                return back()->withInput()->withErrors(['FseEmpresa' => $e->getMessage()]);
+            }
         }
 
         $datos['codigofiscal'] = $datos['codigofiscal'] ?? null;

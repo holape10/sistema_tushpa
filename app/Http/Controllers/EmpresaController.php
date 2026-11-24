@@ -7,6 +7,7 @@ use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
 use App\Support\EmpresaInicial;
 use App\Support\LogoNegocio;
+use App\Support\Seguridad\Dispositivos;
 use App\Support\Sunat\Certificado;
 use App\Support\Sunat\EnvioProgramado;
 use App\Support\Sunat\Sire;
@@ -141,6 +142,16 @@ class EmpresaController extends Controller
         ]);
 
         $empresa = Empresa::findOrFail($id);
+
+        // Seguridad: las credenciales de SUNAT (usuario y clave SOL, certificado, ambiente) solo desde un equipo de confianza
+        if ((string) $request->get('txtWsUsuario') !== (string) $empresa->wsusuario || $request->filled('txtWsContrasena') || $request->filled('txtPassCert')
+            || $request->hasFile('txtCertificado') || (string) $request->get('produccion') !== (string) $empresa->produccion) {
+            try {
+                Dispositivos::exigirConfianza('cambiar las credenciales de SUNAT');
+            } catch (\RuntimeException $e) {
+                return back()->withInput()->withErrors(['txtWsUsuario' => $e->getMessage()]);
+            }
+        }
 
         // 2. Asignar valores normales (formato, copias de impresión, ticket en pantalla y correo de envío ya no se usan:
         // el formato va por sucursal; se dejan como están)

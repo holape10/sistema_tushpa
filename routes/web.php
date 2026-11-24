@@ -96,6 +96,7 @@ use App\Http\Controllers\PrestamoCobranzaController;
 use App\Http\Controllers\PrestamoConfigController;
 use App\Http\Controllers\PrestamoController;
 use App\Http\Controllers\PrestamoReporteController;
+use App\Http\Controllers\PrimerosPasosController;
 use App\Http\Controllers\ProcesoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProductoEtiquetaController;
@@ -119,6 +120,7 @@ use App\Http\Controllers\RequerimientoController;
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\RespaldoEmpresaController;
 use App\Http\Controllers\SeguimientoController;
+use App\Http\Controllers\SeguridadController;
 use App\Http\Controllers\SerieController;
 use App\Http\Controllers\SireBandejaController;
 use App\Http\Controllers\SireController;
@@ -1296,6 +1298,14 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::get('/actividad', [LineaTiempoController::class, 'index'])
     ->middleware(['auth'])
     ->name('actividad.index');
+
+// Guía de primeros pasos (empresa nueva) y bienvenida (usuario nuevo)
+Route::post('/primeros-pasos/ocultar', [PrimerosPasosController::class, 'ocultar'])->middleware(['auth'])->name('primeros-pasos.ocultar');
+Route::post('/primeros-pasos/bienvenida', [PrimerosPasosController::class, 'bienvenida'])->middleware(['auth'])->name('primeros-pasos.bienvenida');
+
+// Seguridad: equipos y sesiones de cada usuario (solo el administrador)
+Route::get('/seguridad/equipos', [SeguridadController::class, 'index'])->middleware(['auth'])->name('seguridad.equipos');
+Route::post('/seguridad/equipos/{id}', [SeguridadController::class, 'accion'])->whereNumber('id')->middleware(['auth', 'throttle:30,1'])->name('seguridad.equipos.accion');
 
 // Bitácora de cambios: quién cambió qué y qué había antes (solo el administrador; solo se ve y se exporta)
 Route::get('/bitacora', [BitacoraController::class, 'index'])

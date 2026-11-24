@@ -7,6 +7,7 @@ use App\Models\EmpresaNegocio;
 use App\Models\User;
 use App\Support\RedLocal;
 use App\Support\Rubros;
+use App\Support\Seguridad\Dispositivos;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
@@ -114,6 +115,7 @@ class LoginMovilController extends Controller
         }
         Auth::login($user);
         $request->session()->regenerate();
+        $request->session()->put(Dispositivos::INGRESO, true);
 
         return redirect()->route($user->rutaInicio());
     }

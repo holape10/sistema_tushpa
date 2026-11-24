@@ -10,6 +10,7 @@ use App\Models\EmpresaNegocio;
 use App\Support\DemoDatos;
 use App\Support\Estudio;
 use App\Support\Rubros;
+use App\Support\Seguridad\Dispositivos;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -103,6 +104,11 @@ class AuthenticatedSessionController extends Controller
         $this->entrarALaSucursal($request);
 
         $request->session()->regenerate();
+        $request->session()->put(Dispositivos::INGRESO, true);
+        // Nombre de la PC (si el agente de impresión lo guardó en este navegador): para reconocer el equipo en Seguridad
+        if ($pc = trim((string) $request->input('equipo_pc'))) {
+            $request->session()->put('equipo_pc', mb_substr($pc, 0, 60));
+        }
 
         $rubro = (string) $request->input('rubro');
         if (Rubros::eligeEnLogin() && isset(Rubros::RUBROS[$rubro])) {

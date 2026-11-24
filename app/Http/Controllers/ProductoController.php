@@ -11,6 +11,7 @@ use App\Models\ProductoPresentacion;
 use App\Models\Subcategoria;
 use App\Models\UnidadMedida;
 use App\Support\Antiguo\Importador;
+use App\Support\AvisosCelular;
 use App\Support\Bitacora;
 use App\Support\Buscar;
 use App\Support\Excel;
@@ -20,6 +21,7 @@ use App\Support\Kardex;
 use App\Support\KardexSunat;
 use App\Support\Recetas;
 use App\Support\Rubros;
+use App\Support\Seguridad\Dispositivos;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -712,6 +714,9 @@ class ProductoController extends Controller
     /** Desde cuántos productos con el mismo precio nuevo la importación se frena y pide confirmar */
     public const FRENO_MISMO_PRECIO = 50;
 
+    /** Desde cuántos precios cambiados en una importación se exige un equipo de confianza (y se avisa si bajan mucho) */
+    public const MUCHOS_PRECIOS = 10;
+
     private static function numero(string $v): float|false|null
     {
         $v = str_replace([' ', 'S/', 's/'], '', $v);
@@ -926,6 +931,10 @@ class ProductoController extends Controller
                 // Freno: si el Excel deja a muchos productos con el MISMO precio nuevo (una celda arrastrada hacia abajo), no se
                 // guarda nada y se avisa. Si de verdad es así, se vuelve a subir marcando la casilla de confirmación.
                 $cambios = array_sum($nuevosPrecios);
+                // Seguridad: cambiar muchos precios a la vez solo desde un equipo de confianza (así se frenó el sabotaje de 122 precios)
+                if ($cambios >= self::MUCHOS_PRECIOS) {
+                    Dispositivos::exigirConfianza('cambiar el precio de '.$cambios.' productos a la vez');
+                }
                 if (! $mismoPrecioOk && $cambios >= self::FRENO_MISMO_PRECIO) {
                     arsort($nuevosPrecios);
                     $precioRepetido = (string) array_key_first($nuevosPrecios);
@@ -948,9 +957,17 @@ class ProductoController extends Controller
 
         $mensaje = "Importación terminada: {$creados} productos creados y {$actualizados} actualizados";
         if ($creados || $actualizados) {
+            // Muchos precios que bajan a menos de la mitad: queda como alerta y se avisa al celular del dueño
+            $bajan = collect($preciosCambiados)->filter(fn ($p) => $p[1] > 0 && $p[2] < $p[1] * 0.5)->count();
+            $sospechoso = count($preciosCambiados) >= self::MUCHOS_PRECIOS && $bajan >= count($preciosCambiados) * 0.5;
             Bitacora::registrar('producto.importar', "Importó productos desde Excel: {$creados} creados, {$actualizados} actualizados"
-                .($preciosCambiados ? ', '.count($preciosCambiados).' con precio nuevo' : ''), null,
-                ['datos' => ['archivo' => mb_substr((string) $request->file('archivo')->getClientOriginalName(), 0, 120), 'precios' => $preciosCambiados]]);
+                .($preciosCambiados ? ', '.count($preciosCambiados).' con precio nuevo' : '').($sospechoso ? " ({$bajan} bajaron a menos de la mitad)" : ''), null,
+                ['datos' => ['archivo' => mb_substr((string) $request->file('archivo')->getClientOriginalName(), 0, 120), 'precios' => $preciosCambiados],
+                    'alerta' => $sospechoso]);
+            if ($sospechoso) {
+                AvisosCelular::alDueno((int) $sucursal, '⚠️ Bajaron muchos precios', ($user->apeusu ?: $user->name)." importó un Excel: {$bajan} productos bajaron a menos de la mitad de su precio.",
+                    route('bitacora.index'));
+            }
         }
         $mensaje .= $stockInicial ? '; stock inicial cargado a '.count($stockInicial)." productos en {$almacen->descripcion}." : '.';
 

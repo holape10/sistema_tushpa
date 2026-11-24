@@ -153,6 +153,8 @@
                         @if ($rubros)
                             <input type="hidden" name="rubro" :value="rubro">
                         @endif
+                        {{-- Nombre de la PC que guardó el agente de impresión (Seguridad › Equipos lo muestra) --}}
+                        <input type="hidden" name="equipo_pc" x-init="try { $el.value = localStorage.getItem('tushpa_pc') || '' } catch (e) {}">
 
                         <div>
                             <label for="login_usuario" class="block text-sm font-semibold text-gray-700 mb-1.5">Usuario</label>

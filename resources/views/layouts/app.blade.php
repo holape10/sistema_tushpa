@@ -281,6 +281,17 @@
         <div class="kene kene-franja h-3 shrink-0 text-indigo-300/60" aria-hidden="true"></div>
 
         <main class="flex-1 overflow-y-auto p-4 sm:p-6">
+            {{-- Seguridad: ingresos desde equipos nuevos por revisar (solo el administrador) --}}
+            @if (auth()->check() && auth()->user()->esAdmin() && ! request()->routeIs('seguridad.*')
+                && ($nuevosEquipos = \App\Support\Seguridad\Dispositivos::porRevisar((string) auth()->user()->IdEmpresa)))
+                <a href="{{ route('seguridad.equipos') }}" class="mb-4 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100">
+                    <span class="text-xl">🔐</span>
+                    <span class="flex-1"><b>{{ $nuevosEquipos }} {{ $nuevosEquipos === 1 ? 'ingreso' : 'ingresos' }} desde un equipo nuevo.</b> ¿Fue tu personal? Revísalo y confírmalo, o bloquéalo si no lo reconoces.</span>
+                    <span class="font-bold whitespace-nowrap">Revisar →</span>
+                </a>
+            @endif
+            {{-- Primeros pasos: empresa nueva (administrador) o usuario nuevo (bienvenida) --}}
+            @include('partials.primeros_pasos')
             @yield('content')
         </main>
     </div>
