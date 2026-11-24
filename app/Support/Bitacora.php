@@ -105,7 +105,7 @@ class Bitacora
                 'ruta' => self::corto($peticion?->route()?->getName() ?? ($peticion ? $peticion->method().' '.$peticion->path() : null), 120),
             ]);
             // Lo delicado (editar empresa o sucursal, importar precios, usuarios) también sale como alerta en el panel
-            AlertasPanel::avisar($accion, $descripcion, $nombre, $peticion?->ip(), (int) $id);
+            AlertasPanel::avisar($accion, $descripcion, $nombre, $peticion?->ip(), (int) $id, $cambios);
         } catch (\Throwable $e) {
             report($e);
         }

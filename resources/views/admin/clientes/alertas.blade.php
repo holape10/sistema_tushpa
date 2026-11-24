@@ -37,7 +37,8 @@
                     <tr class="bg-amber-50/40">
                         <td class="px-4 py-2 whitespace-nowrap text-slate-600">{{ \Carbon\Carbon::parse($a->fecha)->format('d/m/Y H:i') }}</td>
                         <td class="px-4 py-2"><span class="text-xs font-bold text-amber-700">{{ $acciones[$a->accion] ?? $a->accion }}</span>
-                            <p class="text-slate-700">{{ $a->descripcion }}</p></td>
+                            <p class="text-slate-700">{{ $a->descripcion }}</p>
+                            @include('admin.clientes.partials.alerta_cambios', ['cambios' => $detalles[$a->bitacora_id] ?? []])</td>
                         <td class="px-4 py-2 text-slate-600">{{ $a->usuario ?: '—' }}</td>
                         <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ $a->ip ?: '—' }}</td>
                         <td class="px-4 py-2 text-right">
@@ -62,7 +63,8 @@
                     @foreach ($descartadas as $a)
                         <tr>
                             <td class="px-4 py-2 whitespace-nowrap">{{ \Carbon\Carbon::parse($a->fecha)->format('d/m/Y H:i') }}</td>
-                            <td class="px-4 py-2">{{ $a->descripcion }}</td>
+                            <td class="px-4 py-2">{{ $a->descripcion }}
+                                @include('admin.clientes.partials.alerta_cambios', ['cambios' => $detalles[$a->bitacora_id] ?? []])</td>
                             <td class="px-4 py-2">{{ $a->usuario }}</td>
                             <td class="px-4 py-2 text-xs whitespace-nowrap">Descartada por {{ $a->descartada_por }} · {{ \Carbon\Carbon::parse($a->descartada_el)->format('d/m H:i') }}</td>
                         </tr>

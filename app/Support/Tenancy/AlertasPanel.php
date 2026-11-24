@@ -3,6 +3,9 @@
 namespace App\Support\Tenancy;
 
 use App\Models\Central\Cliente;
+use App\Support\Bitacora;
+use App\Support\MonitorErrores;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -28,7 +31,7 @@ class AlertasPanel
     ];
 
     /** Lo anota en el panel si es una acción vigilada y la empresa es un cliente del panel (nunca rompe lo que se estaba haciendo) */
-    public static function avisar(string $accion, string $descripcion, ?string $usuario, ?string $ip, ?int $bitacoraId): void
+    public static function avisar(string $accion, string $descripcion, ?string $usuario, ?string $ip, ?int $bitacoraId, ?array $cambios = null): void
     {
         if (! isset(self::VIGILADAS[$accion]) || ! Tenancy::activa()) {
             return;
@@ -43,9 +46,38 @@ class AlertasPanel
                 'descripcion' => mb_substr($descripcion, 0, 255), 'usuario' => $usuario !== null ? mb_substr($usuario, 0, 120) : null,
                 'ip' => $ip !== null ? mb_substr($ip, 0, 45) : null,
             ]);
+            // También al Telegram del dueño (el mismo bot del monitor de errores), después de responder: no demora a la empresa
+            $texto = self::textoTelegram($cliente, $accion, $descripcion, $usuario, $ip, $cambios);
+            dispatch(fn () => MonitorErrores::avisar($texto))->afterResponse();
         } catch (\Throwable $e) {
             report($e);
         }
+    }
+
+    /** El mensaje de Telegram: qué empresa, quién, desde qué IP y qué cambió exactamente (las claves solo dicen "cambió") */
+    public static function textoTelegram(Cliente $cliente, string $accion, string $descripcion, ?string $usuario, ?string $ip, ?array $cambios): string
+    {
+        $lineas = [];
+        foreach (array_slice(array_values($cambios ?? []), 0, 12) as $c) {
+            // Una clave nunca viaja a Telegram: solo se dice que cambió
+            $lineas[] = '• '.(($c['despues'] ?? null) === '(cambió)' ? ($c['etiqueta'] ?? '').': cambió' : Bitacora::resumen([$c], 1));
+        }
+        if (count($cambios ?? []) > 12) {
+            $lineas[] = '… y '.(count($cambios) - 12).' cambio(s) más';
+        }
+        try {
+            $enlace = route('admin.clientes.alertas', ['panelDominio' => strtolower((string) config('tenancy.dominio')), 'cliente' => $cliente->id]);
+        } catch (\Throwable) {
+            $enlace = null;
+        }
+
+        return '⚠️ '.(self::VIGILADAS[$accion] ?? $accion)."\n\n"
+            .'🏢 '.($cliente->razon_social ?: $cliente->nombre_comercial).' · RUC '.$cliente->ruc."\n"
+            .'👤 '.($usuario ?: '—').($ip ? ' · IP '.$ip : '')."\n"
+            .'🕒 '.now()->format('d/m/Y H:i')."\n\n"
+            .'📝 '.$descripcion
+            .($lineas ? "\n\nCambios:\n".implode("\n", $lineas) : '')
+            .($enlace ? "\n\nRevísalo: ".$enlace : '');
     }
 
     /**
@@ -62,5 +94,29 @@ class AlertasPanel
 
         return DB::connection('central')->table('panel_alertas')->whereIn('cliente_id', collect($clienteIds)->all())->whereNull('descartada_el')
             ->groupBy('cliente_id')->selectRaw('cliente_id, COUNT(*) AS n')->pluck('n', 'cliente_id')->map(fn ($n) => (int) $n)->all();
+    }
+
+    /**
+     * Qué cambió exactamente en cada alerta (campo, antes y después), leído de la bitácora de la empresa.
+     *
+     * @param  Collection<int, int|null>  $ids
+     * @return array<int, list<array<string, mixed>>> [bitacora_id => cambios]
+     */
+    public static function detalles(Cliente $cliente, $ids): array
+    {
+        $ids = $ids->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        if ($ids->isEmpty() || ! $cliente->base_datos) {
+            return [];
+        }
+        try {
+            return Tenancy::en($cliente->base_datos, fn () => Schema::hasTable('bitacora')
+                ? DB::table('bitacora')->whereIn('id', $ids)->get(['id', 'cambios'])
+                    ->mapWithKeys(fn ($b) => [(int) $b->id => array_values(json_decode((string) $b->cambios, true) ?: [])])->all()
+                : []);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [];
+        }
     }
 }
