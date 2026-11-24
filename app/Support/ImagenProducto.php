@@ -52,6 +52,34 @@ class ImagenProducto
         return $carpeta.'/'.$nombre;
     }
 
+    /**
+     * Optimiza una foto que ya está guardada (traída del sistema antiguo, o subida antes de que existiera esto): la pasa a
+     * WEBP liviano con su miniatura y borra la original. Devuelve la ruta nueva (o la misma si ya estaba bien o no se pudo).
+     */
+    public static function optimizarGuardada(?string $ruta, int $maximoKb = 250): ?string
+    {
+        if (! $ruta || ! is_file(public_path($ruta))) {
+            return $ruta;
+        }
+        $esWebp = str_ends_with(strtolower($ruta), '.webp');
+        if ($esWebp && filesize(public_path($ruta)) <= $maximoKb * 1024) {
+            return $ruta;
+        }
+        $destino = preg_replace('/\.[a-z0-9]+$/i', '', $ruta).($esWebp ? '_opt' : '').'.webp';
+        if (! self::redimensionar(public_path($ruta), public_path($destino), self::LADO, self::orientacion(public_path($ruta)))) {
+            return $ruta;
+        }
+        self::redimensionar(public_path($destino), public_path(self::rutaMini($destino)), self::LADO_MINI);
+        // Se borra la original (y su miniatura vieja, si no es la misma que la nueva: "x.png" y "x.webp" comparten "x_mini.webp")
+        foreach (array_diff([$ruta, self::rutaMini($ruta)], [$destino, self::rutaMini($destino)]) as $vieja) {
+            if (str_starts_with($vieja, 'imagenes/productos/') && is_file(public_path($vieja))) {
+                @unlink(public_path($vieja));
+            }
+        }
+
+        return $destino;
+    }
+
     /** URL de la miniatura para un botón (se crea la primera vez que se necesita; mientras tanto, la foto original) */
     public static function mini(?string $ruta): ?string
     {

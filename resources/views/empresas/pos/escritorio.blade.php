@@ -47,6 +47,11 @@
                         <button type="button" @click="agregar(p)" @mouseenter="resultadoActivo = i"
                                 :class="i === resultadoActivo ? 'bg-indigo-600 text-white' : 'text-slate-800'"
                                 class="w-full flex items-center gap-4 px-5 py-3 text-left border-b border-slate-100 last:border-0">
+                            <template x-if="cfg.fotos">
+                                <span class="w-12 h-12 shrink-0 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center">
+                                    <template x-if="p.imagen"><img :src="p.imagen" alt="" loading="lazy" class="w-full h-full object-cover"></template>
+                                </span>
+                            </template>
                             <span class="flex-1 min-w-0">
                                 <span class="block text-xl font-bold leading-snug" x-text="p.nombre"></span>
                                 <span class="block text-sm opacity-70">
@@ -571,10 +576,15 @@
     {{-- Modal: elegir presentación al seleccionar un producto que se vende de varias formas --}}
     <div x-show="elegir" x-cloak class="fixed inset-0 z-[70] bg-slate-900/60 flex items-center justify-center p-4" @click.self="cerrarElegir()">
         <div x-show="elegir" x-transition class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div class="px-6 pt-5 pb-3">
-                <p class="text-xs font-bold uppercase tracking-wide text-indigo-600">¿Cómo lo vendes?</p>
-                <p class="text-xl font-extrabold text-slate-800 leading-tight" x-text="elegir?.p.nombre"></p>
-                <p class="text-xs text-slate-400 mt-1">Flechas + Enter, o el número de la opción · Esc para cancelar</p>
+            <div class="px-6 pt-5 pb-3 flex items-center gap-4">
+                <template x-if="cfg.fotos && elegir?.p.imagen">
+                    <img :src="elegir.p.imagen" alt="" class="w-20 h-20 shrink-0 rounded-2xl object-cover bg-slate-100 ring-1 ring-slate-200">
+                </template>
+                <div class="min-w-0">
+                    <p class="text-xs font-bold uppercase tracking-wide text-indigo-600">¿Cómo lo vendes?</p>
+                    <p class="text-xl font-extrabold text-slate-800 leading-tight" x-text="elegir?.p.nombre"></p>
+                    <p class="text-xs text-slate-400 mt-1">Flechas + Enter, o el número de la opción · Esc para cancelar</p>
+                </div>
             </div>
             <div class="px-4 pb-4 space-y-2 max-h-[60vh] overflow-y-auto">
                 <template x-for="(op, i) in (elegir?.opciones || [])" :key="i">
@@ -600,10 +610,15 @@
     <template x-if="pedir">
     <div class="fixed inset-0 z-[70] bg-slate-900/60 flex items-center justify-center p-4" @click.self="cerrarPedir()">
         <form @submit.prevent="confirmarPedir()" class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div class="px-6 pt-5 pb-3 bg-indigo-600 text-white">
-                <p class="text-xs font-bold uppercase tracking-wide text-indigo-200">Ingresar cantidad y precio</p>
-                <p class="text-xl font-extrabold leading-tight" x-text="pedir?.p.nombre"></p>
-                <p class="text-sm text-indigo-100" x-text="pedir?.detalle + (pedir?.p.stock !== null && pedir?.p.stock !== undefined ? ' · Stock ' + num(pedir.p.stock / (pedir.pres ? pedir.pres.factor : 1)) : '')"></p>
+            <div class="px-6 pt-5 pb-3 bg-indigo-600 text-white flex items-center gap-4">
+                <template x-if="cfg.fotos && pedir?.p.imagen">
+                    <img :src="pedir.p.imagen" alt="" class="w-20 h-20 shrink-0 rounded-2xl object-cover bg-white ring-2 ring-white/40">
+                </template>
+                <div class="min-w-0">
+                    <p class="text-xs font-bold uppercase tracking-wide text-indigo-200">Ingresar cantidad y precio</p>
+                    <p class="text-xl font-extrabold leading-tight" x-text="pedir?.p.nombre"></p>
+                    <p class="text-sm text-indigo-100" x-text="pedir?.detalle + (pedir?.p.stock !== null && pedir?.p.stock !== undefined ? ' · Stock ' + num(pedir.p.stock / (pedir.pres ? pedir.pres.factor : 1)) : '')"></p>
+                </div>
             </div>
             <div class="p-6 grid grid-cols-2 gap-4">
                 <label class="block">
@@ -695,6 +710,8 @@
         hoy: @json(now()->format('Y-m-d')),
         farmacia: @json($farmacia),
         diasAlerta: @json($diasAlerta),
+        // Sucursales › «Mostrar fotos de los productos al vender»: la foto sale en las ventanas de cantidad y presentación
+        fotos: @json(\App\Support\ImagenProducto::enVentas((int) auth()->user()->id_empresa_negocio)),
         proforma: @json($proforma),
         // Atención de la clínica por cobrar (llega desde la Agenda o al terminar la atención)
         clinica: @json($clinica ?? null),

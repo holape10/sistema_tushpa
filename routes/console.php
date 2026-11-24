@@ -5,6 +5,7 @@ use App\Jobs\ProbarCola;
 use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
 use App\Models\Central\SuperadminCobro;
+use App\Models\Producto;
 use App\Models\User;
 use App\Support\AgendaPanel;
 use App\Support\Antiguo\CargadorSql;
@@ -16,6 +17,7 @@ use App\Support\DemoDatos;
 use App\Support\Estudio;
 use App\Support\EstudioDescargas;
 use App\Support\GeoIp;
+use App\Support\ImagenProducto;
 use App\Support\MenusUsuarios;
 use App\Support\PadronRuc;
 use App\Support\PanelDueno;
@@ -751,3 +753,51 @@ Artisan::command('ventas:cuaderno {archivo : JSON con las hojas del cuaderno (da
 
     return $r['ok'] ? 0 : 1;
 })->purpose('Pasa al sistema, de una sola vez, las ventas de un cuaderno (una venta por hoja) con su fecha');
+
+Artisan::command('productos:optimizar-fotos {--ruc= : Solo esta empresa}', function () {
+    $bases = Tenancy::activa()
+        ? Cliente::where('estado', '!=', 'ELIMINADO')->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))->pluck('base_datos', 'ruc')
+        : collect(['local' => null]);
+    $total = 0;
+    foreach ($bases as $ruc => $base) {
+        $optimizar = function () {
+            $n = 0;
+            if (! Schema::hasTable('productos')) {
+                return 0;
+            }
+            DB::table('productos')->where(fn ($w) => $w->whereNotNull('imagenproducto')->orWhereNotNull('imagenes_extra'))
+                ->orderBy('IdProducto')->chunkById(200, function ($productos) use (&$n) {
+                    foreach ($productos as $p) {
+                        $cambios = [];
+                        $nueva = ImagenProducto::optimizarGuardada($p->imagenproducto);
+                        if ($nueva !== $p->imagenproducto) {
+                            $cambios['imagenproducto'] = $nueva;
+                        }
+                        $extras = Producto::fotosExtra($p->imagenes_extra);
+                        $nuevas = array_map(fn ($r) => ImagenProducto::optimizarGuardada($r), $extras);
+                        if ($nuevas !== $extras) {
+                            $cambios['imagenes_extra'] = json_encode($nuevas);
+                        }
+                        if ($cambios) {
+                            DB::table('productos')->where('IdProducto', $p->IdProducto)->update($cambios);
+                            $n++;
+                        }
+                    }
+                }, 'IdProducto');
+
+            return $n;
+        };
+        try {
+            $n = $base ? Tenancy::en($base, $optimizar) : $optimizar();
+        } catch (Throwable $e) {
+            $this->error("{$ruc}: ".$e->getMessage());
+
+            continue;
+        }
+        if ($n) {
+            $this->line("{$ruc}: {$n} producto(s) con fotos optimizadas");
+        }
+        $total += $n;
+    }
+    $this->info("Listo: {$total} producto(s) con fotos optimizadas.");
+})->purpose('Pasa a WEBP liviano (con miniatura) las fotos de productos que se guardaron pesadas (sistema antiguo o subidas antes)');

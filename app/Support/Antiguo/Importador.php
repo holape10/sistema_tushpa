@@ -12,6 +12,7 @@ use App\Models\ProductoPrecioDinamico;
 use App\Models\ProductoPresentacion;
 use App\Models\Subcategoria;
 use App\Models\User;
+use App\Support\ImagenProducto;
 use App\Support\Kardex;
 use App\Support\MenusUsuarios;
 use App\Support\Recetas;
@@ -573,7 +574,8 @@ class Importador
                 @mkdir(public_path($carpeta), 0775, true);
                 $archivo = $carpeta.'/'.$prod->IdProducto.'_'.substr(md5($img), 0, 10).'.'.$ext;
                 file_put_contents(public_path($archivo), $contenido);
-                $prod->update(['imagenproducto' => $archivo]);
+                // Liviana como las que se suben desde el sistema (WEBP y su miniatura)
+                $prod->update(['imagenproducto' => ImagenProducto::optimizarGuardada($archivo)]);
             } elseif ($img && $imagenes && ! $prod->imagenproducto) {
                 $this->aviso("Imagen \"{$img}\" de {$nombre} no está en el ZIP.");
             }
