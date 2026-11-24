@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Venta por peso')
+@section('title', 'Punto Venta Avícola')
 @section('content')
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     @include('empresas.partials.alert')
