@@ -153,6 +153,10 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/soporte-ia/{cliente}', [SoporteIaController::class, 'preguntar'])->whereNumber('cliente')->middleware('throttle:20,1')->name('soporte_ia.preguntar');
     Route::post('/soporte-ia/{cliente}/nueva', [SoporteIaController::class, 'nueva'])->whereNumber('cliente')->name('soporte_ia.nueva');
     Route::post('/asistente/{cliente}', [AsistenteController::class, 'guardar'])->whereNumber('cliente')->name('asistente.guardar');
+    // Manuales del asistente: tutoriales en PDF que la IA lee una vez para explicar cómo se hace cada cosa
+    Route::post('/asistente/manuales', [AsistenteController::class, 'subirManual'])->middleware('throttle:10,1')->name('asistente.manuales.subir');
+    Route::post('/asistente/manuales/{id}/leer', [AsistenteController::class, 'leerManual'])->whereNumber('id')->middleware('throttle:10,1')->name('asistente.manuales.leer');
+    Route::post('/asistente/manuales/{id}/eliminar', [AsistenteController::class, 'eliminarManual'])->whereNumber('id')->name('asistente.manuales.eliminar');
     Route::post('/errores/probar', [ErrorController::class, 'probar'])->middleware('throttle:5,1')->name('errores.probar');
     Route::post('/errores/resolver-todos', [ErrorController::class, 'resolverTodos'])->name('errores.resolver_todos');
     Route::post('/errores/{id}/resolver', [ErrorController::class, 'resolver'])->whereNumber('id')->name('errores.resolver');

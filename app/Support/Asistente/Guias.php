@@ -2,6 +2,7 @@
 
 namespace App\Support\Asistente;
 
+use App\Support\Rubros;
 use App\Support\Tutoriales;
 use Illuminate\Support\Str;
 
@@ -96,8 +97,10 @@ class Guias
     {
         return [
             'name' => 'ayuda_sistema',
-            'description' => 'Guías paso a paso de CÓMO HACER algo en el sistema (dónde está cada opción y qué botones tocar). Úsala cuando el usuario pregunte cómo se hace algo. '
-                .'Temas: '.collect(self::GUIAS)->map(fn ($g, $clave) => "{$clave} ({$g[0]})")->implode('; ').'. Si no sabes el tema exacto, manda palabras clave en "buscar".',
+            'description' => 'Guías paso a paso de CÓMO HACER algo en el sistema (dónde está cada opción y qué botones tocar) y los MANUALES de los tutoriales en PDF '
+                .'(punto de venta, comandas, cajas e impresoras, restaurante, gimnasio, odontología, préstamos, ferretería y más). Úsala cuando el usuario pregunte cómo se hace algo '
+                .'o cómo funciona una pantalla. Manda SIEMPRE en "buscar" las palabras de la pregunta (con sinónimos): con eso se buscan los manuales. '
+                .'Guías fijas: '.collect(self::GUIAS)->map(fn ($g, $clave) => "{$clave} ({$g[0]})")->implode('; ').'.',
             'inputSchema' => ['type' => 'object', 'properties' => [
                 'tema' => ['type' => 'string', 'enum' => array_keys(self::GUIAS)],
                 'buscar' => ['type' => 'string', 'description' => 'Palabras de lo que quiere hacer el usuario (si no hay un tema exacto).'],
@@ -114,14 +117,17 @@ class Guias
             ->map(fn ($g) => [$g, collect(preg_split('/\s+/', $texto, -1, PREG_SPLIT_NO_EMPTY))
                 ->filter(fn ($p) => mb_strlen($p) > 2 && str_contains(Str::lower(Str::ascii($g[0].' '.$g[1])), $p))->count()])
             ->filter(fn ($x) => $x[1] > 0)->sortByDesc(fn ($x) => $x[1])->take(2)->map(fn ($x) => $x[0])->all();
-        if (! $guias) {
-            return ['aviso' => 'No hay una guía para eso. Explica lo que sepas en general y sugiere escribir a soporte.',
+        // Los manuales (tutoriales en PDF leídos por la IA): se busca con lo que preguntó y, si eligió un tema, también con su título
+        $manuales = Manuales::buscar(trim($texto.' '.(isset(self::GUIAS[$tema]) ? self::GUIAS[$tema][0] : '')), Rubros::actual());
+        if (! $guias && $manuales->isEmpty()) {
+            return ['aviso' => 'No hay una guía ni un manual para eso. No inventes pantallas ni botones: dilo y sugiere escribir a soporte.',
                 'temas_disponibles' => collect(self::GUIAS)->map(fn ($g) => $g[0])->values()->all()];
         }
-        $palabras = collect($guias)->map(fn ($g) => $g[0])->implode(' ');
+        $palabras = collect($guias)->map(fn ($g) => $g[0])->implode(' ').' '.$manuales->pluck('titulo')->implode(' ');
 
         return [
             'guias' => collect($guias)->map(fn ($g) => ['titulo' => $g[0], 'pasos' => $g[2]])->values()->all(),
+            'manuales' => $manuales->all(),
             'tutoriales_con_video' => Tutoriales::activos()
                 ->filter(fn ($t) => collect(preg_split('/\s+/', Str::lower(Str::ascii($palabras))))->filter(fn ($p) => mb_strlen($p) > 4)
                     ->contains(fn ($p) => str_contains(Str::lower(Str::ascii($t->titulo.' '.$t->resumen)), $p)))

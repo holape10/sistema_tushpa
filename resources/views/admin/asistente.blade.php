@@ -31,6 +31,56 @@
     <p class="mb-6 text-xs text-slate-500">🛡️ Al llegar al tope, el asistente se pausa solo hasta el 1 del mes siguiente. El tope se cambia con <code>ASISTENTE_TOPE_USD</code> en el <code>.env</code>.
         Pon también un límite de gasto en platform.claude.com (Gasto › Límites) como segunda protección.</p>
 
+    {{-- Manuales: los tutoriales en PDF que el asistente usa para explicar cómo se hace cada cosa --}}
+    <div class="rounded-2xl bg-white shadow-sm mb-6" id="manuales">
+        <div class="p-4 border-b border-slate-100">
+            <p class="font-bold">📚 Manuales del asistente</p>
+            <p class="text-xs text-slate-500">Sube los tutoriales en PDF: la IA los lee <b>una sola vez</b> (cuesta centavos) y los deja en secciones. Cuando un usuario pregunta
+                «¿cómo emito una factura?» o «¿por qué no imprime la comanda?», el asistente responde con lo que dicen estos manuales.</p>
+        </div>
+        @if ($errors->has('pdf') || $errors->has('titulo') || $errors->has('ruc'))
+            <p class="mx-4 mt-3 rounded-lg bg-rose-50 text-rose-700 text-sm px-3 py-2">{{ $errors->first('pdf') ?: ($errors->first('titulo') ?: $errors->first('ruc')) }}</p>
+        @endif
+        <form method="POST" action="{{ route('admin.asistente.manuales.subir') }}" enctype="multipart/form-data" class="p-4 grid sm:grid-cols-12 gap-3 items-end border-b border-slate-100">
+            @csrf
+            <label class="sm:col-span-4 text-xs text-slate-500">PDF (máx. 20 MB y 100 páginas)
+                <input type="file" name="pdf" accept="application/pdf" required class="mt-1 block w-full text-sm"></label>
+            <label class="sm:col-span-3 text-xs text-slate-500">Título
+                <input name="titulo" value="{{ old('titulo') }}" maxlength="150" placeholder="Igual que el archivo" class="mt-1 w-full h-9 rounded-lg border-slate-300 text-sm"></label>
+            <label class="sm:col-span-2 text-xs text-slate-500">Rubro
+                <select name="rubro" class="mt-1 w-full h-9 rounded-lg border-slate-300 text-sm">
+                    @foreach ($rubros as $clave => $r)<option value="{{ $clave }}" @selected(old('rubro') === $clave)>{{ $r['nombre'] }}</option>@endforeach
+                </select></label>
+            <label class="sm:col-span-2 text-xs text-slate-500" title="Si el manual es solo para una empresa (trae sus impresoras, cajas, etc.)">Solo para el RUC
+                <input name="ruc" value="{{ old('ruc') }}" maxlength="11" inputmode="numeric" placeholder="Todas" class="mt-1 w-full h-9 rounded-lg border-slate-300 text-sm"></label>
+            <button class="sm:col-span-1 h-9 rounded-lg bg-indigo-600 text-white text-sm font-semibold">Subir</button>
+        </form>
+        <div class="divide-y divide-slate-100 text-sm" @if ($manuales->contains('estado', 'procesando')) x-data x-init="setTimeout(() => location.reload(), 15000)" @endif>
+            @forelse ($manuales as $m)
+                <div class="flex flex-wrap items-center gap-3 px-4 py-2.5">
+                    <div class="flex-1 min-w-56">
+                        <p class="font-semibold">{{ $m->titulo }}
+                            <span class="text-xs font-normal text-slate-400">· {{ $rubros[$m->rubro]['nombre'] ?? $m->rubro }}{{ $m->cliente_id ? ' · solo '.($m->cliente_nombre ?? 'una empresa') : '' }}</span></p>
+                        <p class="text-xs text-slate-500">
+                            @if ($m->estado === 'procesando')⏳ La IA lo está leyendo (puede tardar 1 a 3 minutos)…
+                            @elseif ($m->estado === 'error')<span class="text-rose-600">✕ {{ $m->error }}</span>
+                            @else ✓ {{ $m->secciones }} secciones · {{ $usd($m->costo_usd) }}@if ($m->error) · <span class="text-amber-700">{{ $m->error }}</span>@endif
+                            @endif
+                            · {{ \Carbon\Carbon::parse($m->created_at)->format('d/m/Y H:i') }}</p>
+                    </div>
+                    @if ($m->estado !== 'procesando')
+                        <form method="POST" action="{{ route('admin.asistente.manuales.leer', $m->id) }}">@csrf
+                            <button class="h-8 px-3 rounded-lg bg-white border border-slate-200 text-xs font-semibold" title="La IA vuelve a leer el PDF">Volver a leer</button></form>
+                    @endif
+                    <form method="POST" action="{{ route('admin.asistente.manuales.eliminar', $m->id) }}" onsubmit="return confirm('¿Quitar este manual? El asistente ya no lo usará.')">@csrf
+                        <button class="h-8 px-3 rounded-lg bg-white border border-rose-200 text-rose-600 text-xs font-semibold">Quitar</button></form>
+                </div>
+            @empty
+                <p class="px-4 py-6 text-center text-slate-400">Aún no hay manuales. Sube tus tutoriales en PDF para que el asistente los conozca.</p>
+            @endforelse
+        </div>
+    </div>
+
     <div class="rounded-2xl bg-white shadow-sm mb-6">
         <div class="p-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
             <p class="flex-1 font-bold">Empresas</p>

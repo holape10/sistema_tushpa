@@ -223,6 +223,7 @@ class Asistente
         return $cliente->messages->create(
             maxTokens: $p['maxTokens'], messages: $p['messages'], model: $p['model'],
             outputConfig: $p['outputConfig'], system: $p['system'], toolChoice: $p['toolChoice'] ?? null, tools: $p['tools'] ?? null,
+            requestOptions: $p['requestOptions'] ?? null,
         );
     }
 
@@ -252,10 +253,12 @@ Cómo trabajas:
 - Empieza por la respuesta directa y luego el detalle. Usa listas o tablas cortas cuando ayuden. Sé breve.
 - Cuando des una conclusión o recomendación, di en qué datos te basas y, si hay incertidumbre, dilo.
 - Solo puedes consultar: no registras, cambias ni borras nada.
-- Si preguntan CÓMO HACER algo en el sistema (enviar productos a otra sede, pedir lo que falta, contar el almacén, crear
-  usuarios…), usa la herramienta ayuda_sistema y explícalo en pasos numerados con los nombres de las opciones y botones
-  tal como vienen en la guía. No inventes pantallas ni botones: si no hay guía para eso, dilo y sugiere escribir a soporte.
-  Si la guía trae un tutorial con video, compártelo.
+- Si preguntan CÓMO HACER algo en el sistema o cómo funciona una pantalla (vender, cobrar, emitir boletas o facturas,
+  impresoras, comandas, cajas, enviar productos a otra sede, crear usuarios…), usa SIEMPRE la herramienta ayuda_sistema
+  antes de responder: trae las guías y los manuales de los tutoriales. Explícalo en pasos numerados con los nombres de las
+  opciones y botones tal como vienen ahí. No digas que no tienes los tutoriales o los PDF: su contenido te llega por esa
+  herramienta. No inventes pantallas ni botones: si no hay guía ni manual para eso, dilo y sugiere escribir a soporte.
+  Si trae un tutorial con video, compártelo.
 - Gráficos: usa mostrar_grafico SOLO si el usuario pide un gráfico o ver algo de forma visual ("muéstrame", "grafícame",
   "cómo van mis ventas día a día"). Primero consulta los datos y pasa al gráfico exactamente esos números (sin redondear de
   más ni inventar). Barras para comparar, líneas para la evolución en el tiempo, torta para partes de un total (pocas
