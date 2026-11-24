@@ -43,6 +43,13 @@ class FotosProductoTest extends FlujoTestCase
         $this->assertSame($nueva, ImagenProducto::optimizarGuardada($nueva));
     }
 
+    public function test_crear_y_editar_producto_ofrecen_tomar_la_foto_con_la_camara(): void
+    {
+        $this->get(route('productos.create'))->assertOk()->assertSee('Tomar foto con la cámara')->assertSee('camaraProducto()', false);
+        $producto = $this->producto('ACEITE MOBIL SAE 50', 18);
+        $this->get(route('productos.edit', $producto->IdProducto))->assertOk()->assertSee('Tomar foto con la cámara');
+    }
+
     public function test_el_punto_de_venta_muestra_las_fotos_solo_si_la_sucursal_lo_activa(): void
     {
         $this->get(route('pv.index'))->assertOk()->assertSee('fotos: false', false);
