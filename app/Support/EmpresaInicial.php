@@ -33,7 +33,8 @@ class EmpresaInicial
             'tipo_envio' => $d['envio'] ?? 1,
             'produccion' => $d['produccion'] ?? null,
             'formato' => $d['formato'] ?? 'ticket',
-            'icbper' => $d['icbper'] ?? null,
+            // Impuesto a las bolsas plásticas: S/ 0.50 por bolsa desde 2023 (se cambia en Empresas si hiciera falta)
+            'icbper' => $d['icbper'] ?? 0.50,
             'EstEmpresa' => 'Activo',
         ]);
 

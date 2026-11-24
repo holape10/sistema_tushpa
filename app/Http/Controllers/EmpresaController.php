@@ -8,6 +8,7 @@ use App\Support\ConsultaPeru;
 use App\Support\EmpresaInicial;
 use App\Support\LogoNegocio;
 use App\Support\Sunat\Certificado;
+use App\Support\Sunat\EnvioProgramado;
 use App\Support\Sunat\Sire;
 use App\Support\Tenancy\Contratos;
 use App\Support\Tenancy\Tenancy;
@@ -110,7 +111,7 @@ class EmpresaController extends Controller
     public const ETIQUETAS_BITACORA = ['NomEmpresa' => 'Razón social', 'DirEmpresa' => 'Dirección', 'EstEmpresa' => 'Estado', 'LogEmpresa' => 'Logo',
         'wsusuario' => 'Usuario SOL (envío a SUNAT)', 'claveSunat' => 'Clave SOL (envío a SUNAT)', 'produccion' => 'Envío a SUNAT en producción',
         'passcert' => 'Contraseña del certificado', 'certificado_archivo' => 'Certificado digital', 'fec_ini_cer' => 'Certificado vigente desde',
-        'fec_fin_cer' => 'Certificado vigente hasta', 'icbper' => 'ICBPER', 'tip_env_fac_id' => 'Envío de facturas', 'tipo_envio' => 'Tipo de envío',
+        'fec_fin_cer' => 'Certificado vigente hasta', 'icbper' => 'ICBPER', 'tip_env_fac_id' => 'Envío de facturas', 'tipo_envio' => 'Tipo de envío', 'envio_hora' => 'Hora del envío programado',
         'client_id' => 'ID API SUNAT (SIRE)', 'client_secret' => 'Clave API SUNAT (SIRE)', 'sire_usuario' => 'Usuario SOL del SIRE', 'sire_clave' => 'Clave SOL del SIRE',
         'cuentas_bancarias' => 'Cuentas bancarias del A4', 'anular_sin_enviar' => 'Anular boletas y facturas no enviadas a SUNAT'];
 
@@ -158,6 +159,11 @@ class EmpresaController extends Controller
         $empresa->icbper = $request->get('icbper');
         $empresa->tip_env_fac_id = $request->get('tip_env_fac');
         $empresa->tipo_envio = $request->get('envio');
+        // Programado: la hora del envío diario (HH:MM); sin hora válida se usa las 7 p. m.
+        if ((int) $request->get('envio') === EnvioProgramado::TIPO && Schema::hasColumn('empresa', 'envio_hora')) {
+            $hora = (string) $request->get('envio_hora');
+            $empresa->envio_hora = preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $hora) ? $hora : '19:00';
+        }
         if ($request->has('anular_sin_enviar')) {
             $empresa->anular_sin_enviar = $request->boolean('anular_sin_enviar');
         }

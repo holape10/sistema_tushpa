@@ -149,11 +149,21 @@
                                 <option value="0" @selected($empresa->produccion == '0')>BETA (pruebas)</option>
                                 <option value="1" @selected($empresa->produccion == '1')>PRODUCCIÓN</option>
                             </select></label>
-                        <label class="text-sm font-medium text-gray-600">Envío a SUNAT
-                            <select name="envio" class="{{ $input }}">
-                                <option value="1" @selected($empresa->tipo_envio == '1')>Automático</option>
-                                <option value="0" @selected($empresa->tipo_envio == '0')>Manual</option>
-                            </select></label>
+                        {{-- Programado: una vez al día a la hora elegida (facturas una por una, boletas en resumen diario) --}}
+                        <div x-data="{ envio: @js((string) old('envio', $empresa->tipo_envio ?? '1')) }">
+                            <label class="text-sm font-medium text-gray-600">Envío a SUNAT
+                                <select name="envio" x-model="envio" class="{{ $input }}">
+                                    <option value="1">Automático (al emitir)</option>
+                                    <option value="3">Programado (una vez al día)</option>
+                                    <option value="0">Manual</option>
+                                    @if (! in_array((string) $empresa->tipo_envio, ['0', '1', '3'], true))
+                                        <option value="{{ $empresa->tipo_envio }}">Manual</option>
+                                    @endif
+                                </select></label>
+                            <label x-show="envio === '3'" x-cloak class="block mt-2 text-sm font-medium text-gray-600">Todos los días a las
+                                <input type="time" name="envio_hora" value="{{ old('envio_hora', $empresa->envio_hora ?: '19:00') }}" class="{{ $input }}">
+                                <span class="block text-xs font-normal text-gray-500 mt-1">A esa hora las <b>facturas</b> (y sus notas) se envían una por una y las <b>boletas</b> en <b>resumen diario</b>.</span></label>
+                        </div>
                         <label class="text-sm font-medium text-gray-600">Usuario SOL
                             <input name="txtWsUsuario" value="{{ old('txtWsUsuario', $empresa->wsusuario) }}" class="{{ $input }} uppercase"></label>
                         <label class="text-sm font-medium text-gray-600">Clave SOL

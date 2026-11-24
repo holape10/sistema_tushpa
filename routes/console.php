@@ -23,6 +23,7 @@ use App\Support\PadronRuc;
 use App\Support\PanelDueno;
 use App\Support\Procesos;
 use App\Support\Promociones;
+use App\Support\Sunat\EnvioProgramado;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\TelegramCitas;
 use App\Support\Tenancy\CertificadosClientes;
@@ -421,6 +422,32 @@ Artisan::command('sunat:rescatar {--ruc= : Solo esta empresa}', function () {
 
 // Cada hora de 7am a 10pm: lo que está por vencer el plazo de SUNAT se envía solo
 Schedule::command('sunat:rescatar')->hourlyAt(20)->between('07:00', '22:00')->withoutOverlapping(50);
+
+// Envío programado (Empresas › Envío a SUNAT › Programado): a la hora que eligió cada empresa, facturas una por una y
+// boletas en resumen diario. Se revisa cada 10 minutos; a cada empresa le toca una vez al día.
+Artisan::command('sunat:programado {--ruc= : Solo esta empresa}', function () {
+    $bases = Tenancy::activa()
+        ? Cliente::where('estado', 'ACTIVO')->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))->pluck('base_datos', 'ruc')
+        : collect(['local' => null]);
+    foreach ($bases as $ruc => $base) {
+        try {
+            $r = $base ? Tenancy::en($base, fn () => Schema::hasColumn('empresa', 'envio_hora') ? EnvioProgramado::ejecutar() : null)
+                : EnvioProgramado::ejecutar();
+        } catch (Throwable $e) {
+            $this->error("{$ruc}: ".$e->getMessage());
+
+            continue;
+        }
+        if ($r && $r['empresas']) {
+            $this->line("<info>{$ruc}</info> facturas {$r['facturas']} · resúmenes {$r['resumenes']} · con problema {$r['fallidos']}");
+            foreach ($r['detalle'] as $d) {
+                $this->line("   {$d}");
+            }
+        }
+    }
+})->purpose('Envía a SUNAT a la hora programada de cada empresa: facturas una por una y boletas en resumen diario');
+
+Schedule::command('sunat:programado')->everyTenMinutes()->withoutOverlapping(30);
 
 Artisan::command('clinica:recordatorios {--ruc= : Solo esta empresa}', function () {
     // Los doctores que tocaron Iniciar en el bot de Telegram (de cualquier empresa)
