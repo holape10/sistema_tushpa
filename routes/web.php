@@ -8,6 +8,7 @@ use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AsistenteController;
 use App\Http\Controllers\AutoservicioController;
+use App\Http\Controllers\AvicolaController;
 use App\Http\Controllers\AvisoCelularController;
 use App\Http\Controllers\BancoController;
 use App\Http\Controllers\BitacoraController;
@@ -498,6 +499,34 @@ Route::middleware('auth')->group(function () {
     Route::get('/prestamos/cobranza/datos', [PrestamoCobranzaController::class, 'datos'])->name('prestamos.cobranza.datos');
     Route::get('/prestamos/reportes', [PrestamoReporteController::class, 'index'])->name('prestamos.reportes');
     Route::get('/prestamos/configuracion', [PrestamoConfigController::class, 'index'])->name('prestamos.configuracion');
+
+    // Avícola: venta por peso, precio del día, clientes (cuenta corriente y jabas), ingreso de pollo, beneficio, granja, mermas y reportes
+    Route::controller(AvicolaController::class)->prefix('avicola')->name('avicola.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/vender', 'vender')->middleware('throttle:60,1')->name('vender');
+        Route::post('/precios', 'precios')->name('precios');
+        Route::get('/clientes', 'clientes')->name('clientes');
+        Route::get('/clientes/{clicod}', 'cliente')->whereNumber('clicod')->name('cliente');
+        Route::post('/clientes/{clicod}/abonar', 'abonar')->whereNumber('clicod')->name('abonar');
+        Route::post('/clientes/{clicod}/jabas', 'jabas')->whereNumber('clicod')->name('jabas');
+        Route::get('/ingresos', 'ingresos')->name('ingresos');
+        Route::post('/ingresos', 'ingresar')->name('ingresar');
+        Route::get('/beneficio', 'beneficio')->name('beneficio');
+        Route::post('/beneficio', 'beneficiar')->name('beneficiar');
+        Route::get('/granja', 'granja')->name('granja');
+        Route::post('/granja', 'crearLote')->name('granja.crear');
+        Route::get('/granja/{id}', 'lote')->whereNumber('id')->name('lote');
+        Route::post('/granja/{id}/registro', 'registrarLote')->whereNumber('id')->name('lote.registro');
+        Route::post('/granja/{id}/cerrar', 'cerrarLote')->whereNumber('id')->name('lote.cerrar');
+        Route::get('/mermas', 'mermas')->name('mermas');
+        Route::post('/mermas', 'registrarMerma')->name('mermas.guardar');
+        Route::post('/mermas/{id}/anular', 'anularMerma')->whereNumber('id')->name('mermas.anular');
+        Route::get('/reportes', 'reportes')->name('reportes');
+        Route::get('/reportes/excel', 'excel')->name('reportes.excel');
+        Route::get('/configuracion', 'configuracion')->name('configuracion');
+        Route::post('/configuracion', 'guardarConfiguracion')->name('configuracion.guardar');
+        Route::post('/configuracion/productos', 'crearTipicos')->name('configuracion.productos');
+    });
 
     // Colegio: alumnos, pensiones, sorteo, reportes y configuración
     Route::controller(ColegioController::class)->prefix('colegio')->name('colegio.')->group(function () {

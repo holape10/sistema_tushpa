@@ -98,6 +98,12 @@ class Rubros
             '/courier', '/courier/manifiestos', '/courier/reparto', '/courier/reportes', '/courier/creditos', '/courier/reclamos', '/courier/tarifas',
             '/motorizados', '/punto-venta',
         ]],
+        // Avícola: distribuidora de pollo vivo (venta por peso con jabas y precio del día), pollería (beneficio y partes) y granja
+        'AVICOLA' => ['icono' => 'fa-drumstick-bite', 'nombre' => 'Avícola', 'ejemplos' => 'Pollo vivo por peso, jabas, pollería y granja', 'modulos' => [
+            '/avicola', '/avicola/clientes', '/avicola/ingresos', '/avicola/beneficio', '/avicola/granja', '/avicola/mermas', '/avicola/reportes', '/avicola/configuracion',
+            '/punto-venta', '/pv-movil', '/proformas', '/guias', '/inventarios', '/kardex/movimiento?tipo=I', '/kardex/movimiento?tipo=E',
+            '/reportes/rentabilidad', '/reportes/compras', '/cuentas/cobrar/reporte',
+        ]],
         // Estudio contable o empresa que solo lleva su contabilidad (sin vender con el sistema)
         'CONTABLE' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudio contable, contabilidad de la empresa, SIRE, planilla', 'sin_base' => true, 'modulos' => [
             '/inicio', '/usuarios', '/empresas', '/sucursales', '/clientes', '/proveedores', '/soporte', '/respaldo', '/bitacora',
