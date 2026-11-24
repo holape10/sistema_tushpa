@@ -58,11 +58,25 @@ class Manuales
         return Str::lower(Str::ascii($texto));
     }
 
+    /** Huella del contenido del archivo: el mismo PDF da la misma huella aunque se llame distinto o tenga otro título */
+    public static function huella(UploadedFile $pdf): string
+    {
+        return hash_file('sha256', $pdf->getRealPath());
+    }
+
+    /** El manual que ya tiene ese mismo PDF (null si es nuevo) */
+    public static function yaSubido(string $huella): ?object
+    {
+        return Schema::connection('central')->hasColumn('asistente_manuales', 'huella')
+            ? self::db()->where('huella', $huella)->first(['id', 'titulo', 'created_at']) : null;
+    }
+
     /** Guarda el PDF y crea el manual "procesando" (la lectura va aparte: tarda) */
     public static function subir(UploadedFile $pdf, string $titulo, string $rubro, ?int $clienteId, string $quien): int
     {
+        $conHuella = Schema::connection('central')->hasColumn('asistente_manuales', 'huella') ? ['huella' => self::huella($pdf)] : [];
         $id = self::db()->insertGetId(['titulo' => $titulo, 'rubro' => $rubro, 'cliente_id' => $clienteId, 'estado' => 'procesando',
-            'subido_por' => mb_substr($quien, 0, 120), 'created_at' => now(), 'updated_at' => now()]);
+            'subido_por' => mb_substr($quien, 0, 120), 'created_at' => now(), 'updated_at' => now()] + $conHuella);
         $pdf->storeAs(self::CARPETA, $id.'.pdf', 'local');
         self::db()->where('id', $id)->update(['archivo' => self::CARPETA.'/'.$id.'.pdf']);
 

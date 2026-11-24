@@ -8,6 +8,7 @@ use App\Support\Asistente\Asistente;
 use App\Support\Asistente\Manuales;
 use App\Support\Asistente\Soporte;
 use App\Support\Tutoriales;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -77,6 +78,11 @@ class AsistenteController extends Controller
             if (! $clienteId) {
                 return back()->withInput()->withErrors(['ruc' => 'No hay una empresa con ese RUC.']);
             }
+        }
+        // El mismo archivo (aunque tenga otro nombre o título) no se sube ni se paga dos veces
+        if ($previo = Manuales::yaSubido(Manuales::huella($request->file('pdf')))) {
+            return back()->withInput()->withErrors(['pdf' => "Este PDF ya está subido como «{$previo->titulo}» (".Carbon::parse($previo->created_at)->format('d/m/Y').'). '
+                .'Si quieres que la IA lo lea otra vez, usa «Volver a leer» en ese manual.']);
         }
         if ($motivo = Soporte::bloqueo()) {
             return back()->withInput()->withErrors(['pdf' => $motivo]);

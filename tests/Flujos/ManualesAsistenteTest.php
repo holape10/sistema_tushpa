@@ -3,12 +3,14 @@
 namespace Tests\Flujos;
 
 use App\Models\Central\Cliente;
+use App\Models\Central\Superadmin;
 use App\Support\Asistente\Asistente;
 use App\Support\Asistente\Herramientas;
 use App\Support\Asistente\Manuales;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 
 /** Manuales del asistente: la IA lee el PDF una vez, lo deja en secciones y ayuda_sistema responde con ellas (sin la API real) */
 class ManualesAsistenteTest extends FlujoTestCase
@@ -62,6 +64,21 @@ class ManualesAsistenteTest extends FlujoTestCase
         $this->assertSame('Vender en Punto Venta', $r['manuales'][0]['manual']);
         $this->assertStringContainsString('Pulsa IMPRIMIR', $r['manuales'][0]['texto']);
         $this->assertCount(1, $this->llamadas, 'Preguntar no vuelve a leer el PDF.');
+    }
+
+    public function test_el_mismo_pdf_no_se_sube_dos_veces_aunque_tenga_otro_nombre_o_titulo(): void
+    {
+        URL::defaults(['panelDominio' => strtolower((string) config('tenancy.dominio'))]);
+        $this->actingAs(Superadmin::create(['nombre' => 'DUEÑO', 'email' => uniqid().'@prueba.test', 'password' => 'clave-de-prueba', 'activo' => true, 'es_dueno' => true]), 'superadmin');
+        $this->leer('Vender en Punto Venta', "### Emitir una factura\nPalabras: factura\n1. Escribe el RUC del cliente y pulsa IMPRIMIR.");
+        $antes = Manuales::db()->count();
+
+        $this->post(route('admin.asistente.manuales.subir'), ['titulo' => 'Otro título', 'rubro' => 'TODOS',
+            'pdf' => UploadedFile::fake()->createWithContent('copia.pdf', '%PDF-1.4 prueba')])
+            ->assertSessionHasErrors(['pdf' => 'Este PDF ya está subido como «Vender en Punto Venta» ('.now()->format('d/m/Y').'). Si quieres que la IA lo lea otra vez, usa «Volver a leer» en ese manual.']);
+
+        $this->assertSame($antes, Manuales::db()->count());
+        $this->assertCount(1, $this->llamadas, 'No se vuelve a pagar por leerlo.');
     }
 
     public function test_un_manual_hecho_para_otra_empresa_no_le_aparece_a_las_demas(): void
