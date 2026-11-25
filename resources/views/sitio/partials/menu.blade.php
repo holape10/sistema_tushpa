@@ -28,6 +28,7 @@
                         <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">El sistema <i class="fas fa-chevron-down small ms-1"></i></a>
                         <ul class="dropdown-menu menu-sub">
                             <li><a class="dropdown-item" href="{{ $ancla('rubros') }}"><i class="fas fa-store"></i>Rubros</a></li>
+                            <li><a class="dropdown-item" href="{{ $ancla('ia') }}"><i class="fas fa-wand-magic-sparkles"></i>Asistente IA</a></li>
                             <li><a class="dropdown-item" href="{{ $ancla('facturacion') }}"><i class="fas fa-file-invoice"></i>Facturación SUNAT</a></li>
                             <li><a class="dropdown-item" href="{{ $ancla('funciones') }}"><i class="fas fa-puzzle-piece"></i>Funciones</a></li>
                             <li><a class="dropdown-item" href="{{ $ancla('clientes') }}"><i class="fas fa-users"></i>Clientes</a></li>

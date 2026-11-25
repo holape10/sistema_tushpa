@@ -109,6 +109,16 @@
                 ['fa-hand-holding-dollar', 'Paga en origen o destino', 'Boleta o factura al enviar o al recoger.'],
                 ['fa-warehouse', 'Varias agencias', 'Cada agencia despacha, recibe y entrega lo suyo.'],
             ]],
+        'avicola' => ['icono' => 'fa-pollo', 'nombre' => 'Avícola', 'ejemplos' => 'Distribuidoras de pollo vivo, pollerías y granjas',
+            'texto' => 'Vende pollo por peso con sus jabas y el precio del día, y sabe cuánto te debe cada cliente.',
+            'funciones' => [
+                ['fa-scale-balanced', 'Venta por peso', 'Pesadas con jabas: el sistema descuenta la tara y calcula el total.'],
+                ['fa-tags', 'Precio del día', 'Cambias el precio una vez y todas las ventas lo usan.'],
+                ['fa-box-open', 'Control de jabas', 'Cuántas jabas lleva y debe devolver cada cliente.'],
+                ['fa-hand-holding-dollar', 'Cuenta de cada cliente', 'Ventas al crédito, abonos y saldo al día.'],
+                ['fa-scissors', 'Pollería', 'Beneficio del pollo y venta por partes.'],
+                ['fa-chart-line', 'Mermas y reportes', 'Mortalidad, merma de peso y lo ganado por día.'],
+            ]],
         'contabilidad' => ['icono' => 'fa-calculator', 'nombre' => 'Contabilidad', 'ejemplos' => 'Estudios contables y empresas que llevan su contabilidad',
             'texto' => 'Lleva la contabilidad, el SIRE y la planilla de tus empresas en el mismo sistema.',
             'funciones' => [
@@ -146,7 +156,7 @@
 
     // SEO: título (hasta ~60 caracteres), descripción (hasta ~155), dirección canónica y datos estructurados
     $seoTitulo = 'Sistema de Facturación Electrónica SUNAT | TUSHPA';
-    $seoDescripcion = 'Sistema de facturación electrónica SUNAT, punto de venta, inventario y caja para restaurantes, hoteles y comercios. Hecho en Iquitos. Prueba gratis '.config('sitio.dias_prueba').' días.';
+    $seoDescripcion = 'Facturación electrónica SUNAT con asistente IA, punto de venta, inventario y caja para restaurantes, hoteles y comercios. Hecho en Iquitos. Prueba gratis '.config('sitio.dias_prueba').' días.';
     $seoUrl = \App\Support\SeoSitio::url('/');
     $seoJson = \App\Support\SeoSitio::json([
         \App\Support\SeoSitio::organizacion(),
@@ -200,6 +210,7 @@
                 <h1 class="mt-3 mb-4">Factura a SUNAT y controla tu negocio <span class="resalte">desde un solo sistema</span></h1>
                 <p class="bajada mb-4">
                     Comandas, punto de venta, hotel, inventario, caja y boletas electrónicas.
+                    Con <b>asistente de inteligencia artificial</b> que te ayuda a vender, comprar y crear tus productos.
                     Funciona en tu PC, tablet y celular, sin instalar nada.
                 </p>
                 <div class="d-flex flex-wrap gap-3 mb-4">
@@ -209,6 +220,7 @@
                 <div class="d-flex flex-wrap gap-2">
                     <span class="chip-portada"><i class="fas fa-circle-check" style="color:#ffd700"></i>Sin tarjeta</span>
                     <span class="chip-portada"><i class="fas fa-bolt" style="color:#ffd700"></i>Listo en segundos</span>
+                    <span class="chip-portada"><i class="fas fa-wand-magic-sparkles" style="color:#ffd700"></i>Con inteligencia artificial</span>
                     <span class="chip-portada"><i class="fas fa-headset" style="color:#ffd700"></i>Soporte por WhatsApp</span>
                 </div>
             </div>
@@ -245,11 +257,47 @@
     <div class="container d-flex flex-wrap justify-content-center gap-4 text-center">
         <span><i class="fas fa-file-invoice"></i>Facturación electrónica SUNAT</span>
         <span><i class="fas fa-store"></i>{{ count($rubros) }} rubros de negocio</span>
+        <span><i class="fas fa-wand-magic-sparkles"></i>Asistente con IA</span>
         <span><i class="fas fa-mobile-screen"></i>PC, tablet y celular</span>
         <span><i class="fas fa-database"></i>Base de datos propia por empresa</span>
         <span><i class="fas fa-location-dot"></i>Desde Iquitos, Loreto</span>
     </div>
 </div>
+
+{{-- Inteligencia artificial: lo que la IA hace dentro del sistema --}}
+<section id="ia" class="seccion seccion-ia">
+    <div class="container">
+        <div class="seccion-titulo revelar">
+            <span class="etiqueta"><i class="fas fa-wand-magic-sparkles me-1"></i>Inteligencia artificial incluida</span>
+            <h2>Tu negocio con un <span class="resalte-ia">asistente IA</span> que trabaja contigo</h2>
+            <p>Habla o toma una foto y la IA hace el trabajo pesado. Tú solo revisas y aceptas.</p>
+        </div>
+        @php
+            $funcionesIa = [
+                ['fa-microphone', 'Vende hablando', 'En el Punto Venta IA dices "2 jabones y una Inca Kola, paga con Yape" y la venta se arma sola.'],
+                ['fa-file-invoice-dollar', 'Ingresa tus compras', 'Sube la foto, el PDF o el XML de la factura de tu proveedor y la compra se llena sola.'],
+                ['fa-box-open', 'Crea tus productos', 'Díctalos o súbelos con foto: nombre, precio, stock y presentaciones en segundos.'],
+                ['fa-boxes-stacked', 'Cuenta tu inventario', 'Toma una foto a las cajas o a la ruma y la IA te dice cuántas hay.'],
+                ['fa-comments', 'Pregúntale lo que quieras', '"¿Cuánto vendí hoy?", "¿Qué se está acabando?", "¿Quién me debe?": te responde al instante.'],
+                ['fa-chart-column', 'Reportes y gráficos', 'Pídele un reporte o un gráfico de tus ventas y te lo muestra ahí mismo.'],
+            ];
+        @endphp
+        <div class="row g-4">
+            @foreach ($funcionesIa as [$icono, $titulo, $texto])
+                <div class="col-sm-6 col-lg-4 revelar">
+                    <div class="tarjeta tarjeta-ia">
+                        <div class="icono"><i class="fas {{ $icono }}"></i></div>
+                        <h4>{{ $titulo }}</h4>
+                        <p>{{ $texto }}</p>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+        <div class="text-center mt-5 revelar">
+            <a href="{{ route('sitio.registro') }}" class="btn btn-achiote btn-lg"><i class="fas fa-wand-magic-sparkles me-2"></i>Pruébalo gratis con IA</a>
+        </div>
+    </div>
+</section>
 
 {{-- Rubros --}}
 <section id="rubros" class="seccion">

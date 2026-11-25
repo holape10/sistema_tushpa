@@ -109,7 +109,7 @@ class InicioController extends Controller
         'Mantenimiento' => 'fa-gear', 'Contactos' => 'fa-address-book', 'Asistencia' => 'fa-user-clock',
         'Planilla' => 'fa-money-check', 'Contabilidad' => 'fa-scale-balanced', 'SUNAT' => 'fa-cloud-arrow-up',
         'SIRE' => 'fa-landmark', 'Cuentas' => 'fa-hand-holding-dollar', 'Restaurante' => 'fa-utensils', 'Gimnasio' => 'fa-dumbbell', 'Estacionamiento' => 'fa-square-parking', 'Clínica' => 'fa-stethoscope',
-        'Courier' => 'fa-truck-fast', 'Avícola' => 'fa-drumstick-bite',
+        'Courier' => 'fa-truck-fast', 'Avícola' => 'fa-pollo',
     ];
 
     private const COLORES = ['#2563eb', '#16a34a', '#dc2626', '#7c3aed', '#ea580c', '#0891b2', '#db2777', '#ca8a04', '#0f766e', '#4f46e5'];

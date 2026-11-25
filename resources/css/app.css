@@ -88,3 +88,15 @@
 @media (min-width: 2500px) {
     html { font-size: 20px; }
 }
+
+/* Pollo (Font Awesome gratis no tiene uno): mismo tamaño y color que los demás íconos <i class="fas fa-pollo"> */
+.fas.fa-pollo::before {
+    content: "";
+    display: inline-block;
+    width: 1.1em;
+    height: 1em;
+    vertical-align: -.125em;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill-rule='evenodd' d='M36 9C36 5 40 4 41 7C42 3 47 4 46 8C49 7 51 10 48 12L38 13Z M44 11C49 11 52 15 51 19L58 21L51 24C51 26 50 28 48 29C52 35 52 44 45 50C39 55 27 55 19 50C11 45 6 36 6 26C6 20 9 14 13 11C14 17 18 23 24 26C29 28 33 27 36 24C35 20 35 16 38 13C40 12 42 11 44 11Z M45.8 17A1.8 1.8 0 1 0 42.2 17A1.8 1.8 0 1 0 45.8 17Z M48 25C50 26 50 31 47 31C45 31 45 27 48 25Z M26 52h3v6h4v2.5h-7Z M36 52h3v6h4v2.5h-7Z'/%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill-rule='evenodd' d='M36 9C36 5 40 4 41 7C42 3 47 4 46 8C49 7 51 10 48 12L38 13Z M44 11C49 11 52 15 51 19L58 21L51 24C51 26 50 28 48 29C52 35 52 44 45 50C39 55 27 55 19 50C11 45 6 36 6 26C6 20 9 14 13 11C14 17 18 23 24 26C29 28 33 27 36 24C35 20 35 16 38 13C40 12 42 11 44 11Z M45.8 17A1.8 1.8 0 1 0 42.2 17A1.8 1.8 0 1 0 45.8 17Z M48 25C50 26 50 31 47 31C45 31 45 27 48 25Z M26 52h3v6h4v2.5h-7Z M36 52h3v6h4v2.5h-7Z'/%3E%3C/svg%3E") no-repeat center / contain;
+}
