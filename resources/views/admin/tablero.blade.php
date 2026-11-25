@@ -25,6 +25,10 @@
         $aceptadosPct = $electronicos ? floor($sunat['aceptados'] * 1000 / $electronicos) / 10 : 0;
         $etiquetaCada = max(1, (int) ceil(count($serie) / 12));
         $iconos = ['01' => '🧾', '03' => '🎫', '07' => '↩️', '08' => '➕', '09' => '🚚', '13' => '📝'];
+        // Los filtros se mantienen al cambiar de periodo
+        $filtros = array_filter(['usuario' => $f['usuario'] ?: null, 'marca' => $f['marca'] !== '' ? $f['marca'] : null,
+            'pendientes' => $f['pendientes'] ? 1 : null, 'buscar' => $f['buscar'] !== '' ? $f['buscar'] : null]);
+        $hayFiltros = (bool) $filtros;
     @endphp
 
     {{-- Encabezado y periodo --}}
@@ -37,7 +41,7 @@
         <div class="flex flex-wrap items-center gap-2">
             <div class="flex bg-white rounded-xl shadow-sm p-1 text-sm">
                 @foreach (Tablero::PERIODOS as $clave => $texto)
-                    <a href="{{ route('admin.tablero', ['periodo' => $clave]) }}"
+                    <a href="{{ route('admin.tablero', ['periodo' => $clave] + $filtros) }}"
                        class="px-3 py-1.5 rounded-lg font-semibold {{ $periodo === $clave ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100' }}">{{ $texto }}</a>
                 @endforeach
             </div>
@@ -45,10 +49,43 @@
                 <input type="date" name="desde" value="{{ $desde }}" class="flex-1 min-w-0 border-0 rounded-lg text-sm py-1 px-2 focus:ring-indigo-500">
                 <span class="text-slate-400">→</span>
                 <input type="date" name="hasta" value="{{ $hasta }}" class="flex-1 min-w-0 border-0 rounded-lg text-sm py-1 px-2 focus:ring-indigo-500">
+                @foreach ($filtros as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                 <button class="px-3 py-1.5 rounded-lg bg-slate-900 text-white font-semibold">Ver</button>
             </form>
         </div>
     </div>
+
+    {{-- Filtros: por usuario y marca (todo el tablero); solo las que faltan enviar y buscar empresa (la lista) --}}
+    <form method="GET" class="mb-5 flex flex-wrap items-end gap-2 rounded-2xl bg-white shadow-sm px-4 py-3 text-sm {{ $hayFiltros ? 'ring-2 ring-indigo-400' : '' }}">
+        <input type="hidden" name="periodo" value="{{ $periodo }}">
+        @if ($periodo === 'rango')<input type="hidden" name="desde" value="{{ $desde }}"><input type="hidden" name="hasta" value="{{ $hasta }}">@endif
+        @if ($usuarios->isNotEmpty())
+            <label class="text-xs font-semibold text-slate-500">Usuario
+                <select name="usuario" class="mt-1 block h-9 rounded-lg border-slate-300 text-sm">
+                    <option value="">Todos</option>
+                    @foreach ($usuarios as $u)<option value="{{ $u->id }}" @selected($f['usuario'] === (int) $u->id)>{{ $u->nombre }}</option>@endforeach
+                </select></label>
+        @endif
+        @if ($marcas->isNotEmpty())
+            <label class="text-xs font-semibold text-slate-500">Marca
+                <select name="marca" class="mt-1 block h-9 rounded-lg border-slate-300 text-sm">
+                    <option value="">Todas</option>
+                    <option value="tushpa" @selected($f['marca'] === 'tushpa')>{{ config('marca.nombre', 'TUSHPA') }} (sin marca)</option>
+                    @foreach ($marcas as $m)<option value="{{ $m->id }}" @selected($f['marca'] === (string) $m->id)>{{ $m->nombre }}</option>@endforeach
+                </select></label>
+        @endif
+        <label class="text-xs font-semibold text-slate-500 flex-1 min-w-48">Empresa
+            <input name="buscar" value="{{ $f['buscar'] }}" placeholder="Nombre o RUC" class="mt-1 block w-full h-9 rounded-lg border-slate-300 text-sm"></label>
+        <label class="h-9 inline-flex items-center gap-2 px-3 rounded-lg cursor-pointer {{ $f['pendientes'] ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-700' }}">
+            <input type="checkbox" name="pendientes" value="1" @checked($f['pendientes']) class="rounded text-rose-600">
+            <span class="font-semibold">Solo las que faltan enviar</span>
+            <span class="px-1.5 rounded-full text-[11px] font-bold {{ $conPendientes ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-500' }}">{{ $conPendientes }}</span>
+        </label>
+        <button class="h-9 px-4 rounded-lg bg-indigo-600 text-white font-semibold">Filtrar</button>
+        @if ($hayFiltros)
+            <a href="{{ route('admin.tablero', ['periodo' => $periodo] + ($periodo === 'rango' ? ['desde' => $desde, 'hasta' => $hasta] : [])) }}" class="h-9 px-3 inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-800">✕ Quitar filtros</a>
+        @endif
+    </form>
 
     {{-- Precio por comprobante del PSE: lo escribe el dueño y se recuerda en este navegador --}}
     <div x-data="{
@@ -193,7 +230,8 @@
     {{-- Empresas --}}
     <div class="rounded-2xl bg-white shadow-sm overflow-hidden">
         <div class="px-5 py-4 flex items-center">
-            <p class="font-bold text-slate-800 flex-1">Empresas que más emitieron</p>
+            <p class="font-bold text-slate-800 flex-1">{{ $f['pendientes'] ? 'Empresas que faltan enviar (las que más deben, primero)' : 'Empresas que más emitieron' }}
+                @if ($hayFiltros)<span class="ml-1 text-xs font-normal text-slate-400">· {{ count($empresas) }} empresa(s)</span>@endif</p>
             <span class="text-xs text-slate-400 mr-3">Se actualiza cada 10 minutos</span>
             <a href="{{ request()->fullUrlWithQuery(['fresco' => 1]) }}" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">↻ Actualizar ahora</a>
         </div>
