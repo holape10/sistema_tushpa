@@ -9,6 +9,7 @@ use App\Support\PreciosCompra;
 use App\Support\Recetas;
 use App\Support\Requerimientos;
 use App\Support\Rubros;
+use App\Support\Separados;
 use App\View\Composers\MenuComposer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -136,6 +137,8 @@ class InicioController extends Controller
             'reportes' => $reportes,
             'resumen' => $user->esAdminOCaja() ? $this->resumenDeHoy((int) $user->id_empresa_negocio) : null,
             'porAcabarse' => $user->esAdminOCaja() ? $this->porAcabarse((int) $user->id_empresa_negocio) : null,
+            // Separados pendientes: cuánto falta cobrar, cuáles vencieron y cuáles ya se pueden entregar
+            'separados' => $user->puedeCobrar() ? Separados::resumen((int) $user->id_empresa_negocio) : null,
             // La próxima campaña (Navidad, escolar…) y los productos que ganan menos porque subió su costo
             'campana' => $user->esAdmin() || $user->tieneModulo('/compras') ? $this->campana((int) $user->id_empresa_negocio) : null,
             'preciosCosto' => $user->esAdmin() || $user->tieneModulo('/productos') ? PreciosCompra::sugerencias((int) $user->id_empresa_negocio)->count() : 0,

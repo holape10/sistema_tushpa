@@ -106,6 +106,8 @@ document.addEventListener('alpine:init', () => {
         proformaNumero: '',
         ultimaProforma: null,
         verProforma: false,
+        // Separado (apartado): el cliente deja un adelanto y el producto queda reservado hasta que termine de pagar
+        separado: null,
 
         // Venta del Panel de Ventas que se está corrigiendo (aún no enviada a SUNAT)
         edicion: null,
@@ -1042,6 +1044,53 @@ document.addEventListener('alpine:init', () => {
             this.proformaNumero = '';
             if (limpiarUrl || new URLSearchParams(location.search).has('proforma')) {
                 history.replaceState(null, '', location.pathname);
+            }
+        },
+
+        // ---------- Separar (apartado) ----------
+        abrirSeparar() {
+            if (!this.carrito.length) { this.aviso('Agrega los productos que el cliente quiere separar.', 'error'); return; }
+            if (this.cliente.num.trim() === PORTADOR.num || !this.cliente.nom.trim()) { this.aviso('Para separar pon el DNI y el nombre del cliente.', 'error'); return; }
+            const vence = new Date(Date.now() + CFG.separados.dias * 86400000).toISOString().slice(0, 10);
+            const pred = CFG.medios.find(m => m.predeterminado) || CFG.medios[0];
+            this.separado = { adelanto: '', medio: pred?.id ?? null, vence, telefono: '' };
+            this.enfocar('separar-adelanto');
+        },
+        async separar(imprimir = true) {
+            const s = this.separado;
+            const adelanto = Number(s.adelanto) || 0;
+            if (!(adelanto > 0)) { this.aviso('Escribe el adelanto que deja el cliente.', 'error'); return; }
+            if (adelanto >= this.total) { this.aviso('Ese adelanto paga todo: mejor cóbralo y entrégalo.', 'error'); return; }
+            if (!s.vence || s.vence <= CFG.hoy) { this.aviso('La fecha para recogerlo debe ser después de hoy.', 'error'); return; }
+            // Lo mismo que se revisa al cobrar, menos los medios de pago (el adelanto es el pago de hoy)
+            if (CFG.vendedores && CFG.vendedores.length && !this.vendedor) { this.aviso('Elige el vendedor que hizo la venta.', 'error'); return; }
+            if (this.carrito.some(it => !it.descripcion.trim() || !(it.cantidad > 0) || !(it.precio > 0))) { this.aviso('Revisa los productos: cantidades y precios mayores a 0.', 'error'); return; }
+            if (this.tdocod === '01' && !(this.cliente.tdicod === '6' && /^(10|15|17|20)\d{9}$/.test(this.cliente.num.trim()))) { this.aviso('La factura necesita un RUC válido.', 'error'); return; }
+            this.procesando = true;
+            try {
+                const r = await fetch(CFG.separados.crear, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CFG.csrf },
+                    body: JSON.stringify({
+                        items: this.itemsParaEnviar(), vendedor: this.vendedor || null, tdocod: this.tdocod, fecEmi: CFG.hoy,
+                        tdicod: this.cliente.tdicod, clinum: this.cliente.num.trim(), clinom: this.cliente.nom.trim(), clidir: this.cliente.dir.trim(),
+                        observaciones: this.observaciones.trim(), adelanto, adelanto_medio: s.medio, vence: s.vence, telefono: String(s.telefono || '').trim() || null,
+                    }),
+                });
+                if (r.status === 419) { this.aviso('La sesión expiró. Recarga la página.', 'error'); return; }
+                const d = await r.json();
+                if (r.status === 422) { this.sonido(false); this.aviso(Object.values(d.errors)[0][0], 'error'); return; }
+                if (d.estado !== 'success') { this.sonido(false); this.aviso(d.mensaje || 'No se pudo separar.', 'error'); return; }
+                this.sonido(true);
+                this.separado = null;
+                this.ultima = d.venta;
+                BUSQUEDAS.clear(); // el stock cambió: lo separado ya no está disponible
+                this.aviso(`📦 ${d.codigo} separado · falta ${this.soles(d.saldo)}`, 'ok');
+                if (imprimir) this.imprimirUltima();
+                this.nuevaVenta();
+            } catch (e) {
+                this.aviso('Error de conexión con el servidor. Intenta otra vez.', 'error');
+            } finally {
+                this.procesando = false;
             }
         },
 

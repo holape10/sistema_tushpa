@@ -93,6 +93,15 @@
             </div>
         @endif
 
+        @if ($separados ?? null)
+            {{-- Separados (apartados) pendientes --}}
+            <a href="{{ route('separados.index') }}" class="mb-7 flex flex-wrap items-center gap-3 rounded-2xl bg-amber-50 ring-1 ring-amber-200 text-amber-900 p-4 hover:bg-amber-100">
+                <span class="text-3xl">📦</span>
+                <span class="flex-1"><b class="block">{{ $separados['cantidad'] }} separado(s) · faltan cobrar S/ {{ number_format($separados['por_cobrar'], 2) }}</b>
+                    <span class="text-sm">{{ $separados['listos'] ? $separados['listos'].' ya pagado(s), listo(s) para entregar. ' : '' }}{{ $separados['vencidos'] ? $separados['vencidos'].' vencido(s): avísales por WhatsApp. ' : '' }}Ver separados →</span></span>
+            </a>
+        @endif
+
         @if ($porAcabarse && $porAcabarse['total'])
             @php $num = fn ($n) => rtrim(rtrim(number_format($n, 3), '0'), '.') ?: '0'; @endphp
             <section class="mb-7 rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-4 sm:p-5">

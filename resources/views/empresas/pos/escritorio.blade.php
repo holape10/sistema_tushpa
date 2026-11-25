@@ -3,6 +3,7 @@
 
 @section('barra_compacta', '1')
 @section('content')
+@php($separados = \App\Support\Separados::disponible())
 @php($usaBalanza = \App\Models\Producto::where('id_empresa_negocio', auth()->user()->id_empresa_negocio)->whereIn('umecod', ['KGM', 'GRM'])->where('proest', 'Activo')->exists())
 @include('partials.pantalla_completa')
 <div x-data="puntoVenta" x-init="iniciar()" @keydown.window="teclaGlobal($event)" class="max-w-[100rem] mx-auto">
@@ -540,7 +541,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 {{ $soloPedido ? '' : 'sm:grid-cols-4' }} gap-2 mt-4">
+                <div class="grid grid-cols-2 {{ $soloPedido ? '' : ($separados ? 'sm:grid-cols-5' : 'sm:grid-cols-4') }} gap-2 mt-4">
                     @unless ($soloPedido)
                     <button type="button" @click="registrar(true)" :disabled="procesando"
                             class="h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
@@ -555,6 +556,13 @@
                             class="h-14 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
                         <span x-text="proformaId ? 'GUARDAR {{ $soloPedido ? 'PEDIDO' : 'PROF.' }}' : '{{ $soloPedido ? 'GUARDAR PEDIDO' : 'PROFORMA' }}'"></span><span class="block text-[10px] font-semibold opacity-80">F8</span>
                     </button>
+                    @if ($separados && ! $soloPedido)
+                        {{-- Separar (apartado): deja un adelanto y el producto queda reservado hasta que termine de pagar --}}
+                        <button type="button" @click="abrirSeparar()" :disabled="procesando || edicion" title="El cliente deja un adelanto y se lo lleva cuando termine de pagar"
+                                class="h-14 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
+                            SEPARAR<span class="block text-[10px] font-semibold opacity-80">apartado</span>
+                        </button>
+                    @endif
                     <button type="button" @click="cancelar()" :disabled="procesando"
                             class="h-14 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-extrabold tracking-wide shadow disabled:opacity-50">
                         CANCELAR
@@ -684,6 +692,35 @@
     </div>
     </template>
 
+    {{-- Separar: adelanto, medio, hasta cuándo lo recoge y su celular (el cliente ya está en la venta) --}}
+    <template x-if="separado">
+        <div class="fixed inset-0 z-[70] bg-slate-900/60 flex items-center justify-center p-4" @click.self="separado = null" @keydown.escape.window="separado = null">
+            <form @submit.prevent="separar(true)" class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+                <div class="px-6 py-4 bg-amber-500 text-white">
+                    <p class="text-xl font-extrabold">📦 Separar para <span x-text="cliente.nom"></span></p>
+                    <p class="text-sm text-amber-50">Total <b x-text="soles(total)"></b> · el producto queda reservado y se entrega cuando termine de pagar.</p>
+                </div>
+                <div class="p-6 grid grid-cols-2 gap-3">
+                    <label class="col-span-2 block text-xs font-bold uppercase text-slate-500">Adelanto que deja
+                        <input id="separar-adelanto" type="number" step="0.01" min="0.01" x-model="separado.adelanto" class="mt-1 w-full h-14 rounded-2xl border-2 border-amber-300 text-center text-3xl font-extrabold"></label>
+                    <label class="block text-xs font-bold uppercase text-slate-500">Paga con
+                        <select x-model.number="separado.medio" class="mt-1 w-full h-11 rounded-xl border-slate-300 text-sm">
+                            <template x-for="m in cfg.medios" :key="m.id"><option :value="m.id" x-text="m.nombre"></option></template>
+                        </select></label>
+                    <label class="block text-xs font-bold uppercase text-slate-500">Recoge hasta
+                        <input type="date" x-model="separado.vence" :min="cfg.hoy" class="mt-1 w-full h-11 rounded-xl border-slate-300 text-sm"></label>
+                    <label class="col-span-2 block text-xs font-bold uppercase text-slate-500">Celular (para avisarle por WhatsApp)
+                        <input x-model="separado.telefono" inputmode="tel" maxlength="15" placeholder="987654321" class="mt-1 w-full h-11 rounded-xl border-slate-300 text-sm"></label>
+                    <p class="col-span-2 text-right text-lg text-slate-500">Falta <b class="text-2xl text-rose-600" x-text="soles(Math.max(total - (Number(separado.adelanto) || 0), 0))"></b></p>
+                </div>
+                <div class="px-6 pb-6 grid grid-cols-2 gap-3">
+                    <button :disabled="procesando" class="h-14 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-lg font-extrabold disabled:opacity-50">📦 Separar e imprimir</button>
+                    <button type="button" @click="separado = null" class="h-14 rounded-2xl bg-slate-200 text-slate-700 text-lg font-extrabold">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </template>
+
     {{-- Impresión del ticket sin salir de la pantalla --}}
     <iframe x-ref="impresion" class="hidden" title="Impresión"></iframe>
 
@@ -762,6 +799,8 @@
         agendaClinica: @json(route('clinica.agenda')),
         // Venta abierta para corregirla desde el Panel de Ventas
         edicion: @json($edicion ?? null),
+        // Separados (apartados)
+        separados: @json($separados ? ['crear' => route('separados.crear'), 'dias' => \App\Support\Separados::DIAS] : null),
         rutas: {
             proforma: @json(route('proformas.guardar')),
             productos: @json(route('pos.productos')),

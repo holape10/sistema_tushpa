@@ -125,6 +125,7 @@ use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\RespaldoEmpresaController;
 use App\Http\Controllers\SeguimientoController;
 use App\Http\Controllers\SeguridadController;
+use App\Http\Controllers\SeparadoController;
 use App\Http\Controllers\SerieController;
 use App\Http\Controllers\SireBandejaController;
 use App\Http\Controllers\SireController;
@@ -903,6 +904,12 @@ Route::middleware('auth')->group(function () {
 
     // Campañas (Navidad, escolar, Día de la Madre…): qué comprar según lo vendido el año pasado
     Route::get('/campanas', [CampanaController::class, 'index'])->name('campanas.index');
+
+    // Separados (apartados): adelanto hoy, el producto queda reservado y se entrega al terminar de pagar
+    Route::get('/separados', [SeparadoController::class, 'index'])->name('separados.index');
+    Route::post('/separados', [SeparadoController::class, 'crear'])->name('separados.crear');
+    Route::post('/separados/{id}/entregar', [SeparadoController::class, 'entregar'])->whereNumber('id')->name('separados.entregar');
+    Route::get('/separados/{id}/whatsapp', [SeparadoController::class, 'whatsapp'])->whereNumber('id')->name('separados.whatsapp');
 
     // Pasar el cuaderno con foto (IA): cada hoja de ventas anotadas a mano se lee, se revisa y se registra como una venta
     Route::get('/punto-venta/cuaderno', [CuadernoController::class, 'index'])->name('cuaderno.index');

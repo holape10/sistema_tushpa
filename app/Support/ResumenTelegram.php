@@ -34,6 +34,11 @@ class ResumenTelegram
     {
         $texto = str_replace(['*', '_'], '', PanelDueno::mensajeDia($sucursal, $fecha));
         $deudas = self::deudas($sucursal, $fecha);
+        // Separados pendientes (lo que falta cobrar ya está dentro de "te deben")
+        if ($sep = Separados::resumen($sucursal)) {
+            $deudas = trim($deudas."\n📦 Separados: ".$sep['cantidad'].' pendiente(s)'.($sep['vencidos'] ? ', '.$sep['vencidos'].' vencido(s)' : '')
+                .($sep['listos'] ? ', '.$sep['listos'].' listo(s) para entregar' : ''));
+        }
         if ($deudas === '') {
             return $texto;
         }
