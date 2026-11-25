@@ -1,6 +1,6 @@
 @php($rubros = $rubros ?? null)
 {{-- Varias empresas en la misma PC: el login lleva el color y el nombre de esta empresa (Mantenimiento › Apariencia) --}}
-@php($nombreEmpresa = $rubros ? null : \App\Support\Apariencia::nombre())
+@php($nombreEmpresa = $rubros ? null : \App\Support\Apariencia::nombre(completo: true))
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -139,9 +139,10 @@
                     @if ($nombreEmpresa)
                         {{-- Para no confundirse de empresa cuando se usan varias en la misma PC --}}
                         <div class="mb-5 flex items-center gap-3 rounded-2xl bg-indigo-600 px-4 py-3 text-white">
-                            <i class="fas fa-store text-xl"></i>
+                            <i class="fas fa-store text-2xl shrink-0"></i>
                             <span class="min-w-0"><span class="block text-[11px] uppercase tracking-wide text-indigo-100">Estás entrando a</span>
-                                <span class="block truncate text-lg font-black">{{ $nombreEmpresa }}</span></span>
+                                {{-- Completo, en dos o tres líneas si es largo --}}
+                                <span class="block text-lg font-black leading-tight break-words">{{ $nombreEmpresa }}</span></span>
                         </div>
                     @endif
                     <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">Iniciar sesión</h2>

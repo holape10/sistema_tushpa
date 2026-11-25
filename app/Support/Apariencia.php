@@ -90,8 +90,9 @@ class Apariencia
     /**
      * El nombre de la empresa para reconocerla al vuelo (login y pestaña del navegador): el nombre comercial de la
      * sucursal del usuario o, antes de entrar, el de la empresa de esta base. null si no se sabe.
+     * Corto para la pestaña del navegador; $completo para el login (ahí se lee entero).
      */
-    public static function nombre(): ?string
+    public static function nombre(bool $completo = false): ?string
     {
         try {
             if (Auth::check()) {
@@ -107,7 +108,7 @@ class Apariencia
         }
         $nombre = trim((string) $nombre);
 
-        return $nombre !== '' ? mb_strimwidth($nombre, 0, 28, '…') : null;
+        return $nombre !== '' ? ($completo ? $nombre : mb_strimwidth($nombre, 0, 28, '…')) : null;
     }
 
     /** Solo valores conocidos; lo demás vuelve a lo de siempre */
