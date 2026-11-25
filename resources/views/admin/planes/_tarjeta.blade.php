@@ -46,4 +46,11 @@
     </div>
     <p class="text-[11px] text-slate-400">Activo = se puede asignar a clientes en el panel. Mostrar en la web = sale en tushpa.app y en el registro.</p>
     <button class="w-full h-10 rounded-xl {{ $nuevo ? 'bg-slate-800' : 'bg-indigo-600 hover:bg-indigo-700' }} text-white text-sm font-bold">{{ $nuevo ? 'Crear plan' : 'Guardar' }}</button>
+    @unless ($nuevo)
+        <button type="submit" formaction="{{ route('admin.planes.eliminar', $pl) }}" formnovalidate
+                onclick="return confirm(@js('¿Eliminar el plan '.$pl->nombre.'? No se puede deshacer.'))"
+                class="w-full text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline">
+            <i class="fas fa-trash-can mr-1"></i>Eliminar plan
+        </button>
+    @endunless
 </form>

@@ -80,6 +80,7 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/mensajes/{id}/atendido', [ClienteController::class, 'mensajeWebAtendido'])->whereNumber('id')->name('mensajes.atendido');
     Route::get('/planes', [ClienteController::class, 'planesIndex'])->name('planes.index');
     Route::post('/planes/{plan?}', [ClienteController::class, 'planesGuardar'])->whereNumber('plan')->name('planes.guardar');
+    Route::post('/planes/{plan}/eliminar', [ClienteController::class, 'planesEliminar'])->whereNumber('plan')->name('planes.eliminar');
     Route::get('/visitas', [VisitaController::class, 'index'])->name('visitas.index');
     Route::get('/anuncios', [AnuncioController::class, 'index'])->name('anuncios.index');
     Route::post('/anuncios/{id?}', [AnuncioController::class, 'guardar'])->whereNumber('id')->name('anuncios.guardar');

@@ -19,6 +19,7 @@ use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Reiniciador;
 use App\Support\Tenancy\Tenancy;
 use App\Support\Ubigeo;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -572,6 +573,24 @@ class ClienteController extends Controller
         }
 
         return redirect()->route('admin.planes.index')->with('ok', "Plan {$d['nombre']} guardado.");
+    }
+
+    /**
+     * Eliminar un plan. Solo si ninguna empresa (activa o suspendida) lo tiene: si no, primero se les cambia de plan.
+     * Las empresas eliminadas que lo tenían se quedan con el nombre del plan, sin el enlace.
+     */
+    public function planesEliminar(Plan $plan): RedirectResponse
+    {
+        abort_unless($this->puedeEditarPlanes(), 403, 'Solo el dueño del sistema cambia los planes.');
+        abort_if((int) ($plan->marca_id ?? 0) !== (int) ($this->marcaId() ?? 0), 404);
+        $enUso = Cliente::where('plan_id', $plan->id)->where('estado', '!=', 'ELIMINADO')->count();
+        if ($enUso > 0) {
+            return back()->withErrors(['plan' => "No se puede eliminar el plan {$plan->nombre}: lo tienen {$enUso} empresa(s). Cámbialas de plan primero o solo desactívalo."]);
+        }
+        Cliente::where('plan_id', $plan->id)->update(['plan_id' => null]);
+        $plan->delete();
+
+        return redirect()->route('admin.planes.index')->with('ok', "Plan {$plan->nombre} eliminado.");
     }
 
     /** Los planes que se pueden asignar a una empresa de esa marca (null = los de TUSHPA) */
