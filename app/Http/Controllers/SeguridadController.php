@@ -37,7 +37,7 @@ class SeguridadController extends Controller
             ->each(fn ($e) => $e->abiertas = (int) ($abiertas[$e->id] ?? 0));
 
         return view('empresas.seguridad.equipos', [
-            'porUsuario' => $equipos->groupBy('IdUsuario'), 'actual' => Dispositivos::actual(), 'deConfianza' => Dispositivos::deConfianza(),
+            'porUsuario' => $equipos->groupBy('IdUsuario'), 'actual' => Dispositivos::actual(), 'deConfianza' => Dispositivos::deConfianza(), 'puedeRevisar' => Dispositivos::puedeRevisar(Auth::user()),
         ]);
     }
 
@@ -53,11 +53,16 @@ class SeguridadController extends Controller
 
         // Confirmar o bloquear: solo desde un equipo de confianza (y nunca el mismo equipo desde el que se está)
         if (in_array($d['accion'], ['confiar', 'bloquear'], true)) {
-            if (! Dispositivos::deConfianza()) {
+            if (! Dispositivos::puedeRevisar(Auth::user())) {
                 return back()->with('error', 'Solo se puede confirmar o bloquear desde un equipo de confianza. Hazlo desde tu PC o celular de siempre.');
             }
-            if ($actual && (int) $actual->id === (int) $equipo->id) {
+            if ($d['accion'] === 'bloquear' && $actual && (int) $actual->id === (int) $equipo->id) {
                 return back()->with('error', 'No puedes bloquear el equipo desde el que estás ahora.');
+            }
+            // Sin ningún equipo de confianza en la empresa: se autoriza ahí mismo, pero queda como alerta (panel y Telegram)
+            if (! Dispositivos::deConfianza() && $d['accion'] === 'confiar') {
+                Bitacora::registrar('sesion.autorizo_sin_confianza', "Autorizó el equipo {$equipo->nombre} de {$equipo->apeusu} sin tener un equipo de confianza (IP {$equipo->ip})",
+                    null, ['alerta' => true]);
             }
         }
 

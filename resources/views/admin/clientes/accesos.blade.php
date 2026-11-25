@@ -64,4 +64,50 @@
             </tbody>
         </table>
     </div>
+
+    {{-- Equipos de los usuarios: soporte los autoriza o bloquea sin depender de un equipo de confianza de la empresa --}}
+    @if ($equipos->isNotEmpty())
+        @php($nombres = $usuarios->keyBy('IdUsuario'))
+        @php($porRevisar = $equipos->flatten()->where('por_revisar', true)->whereNull('bloqueado_el')->count())
+        <div class="mt-6 bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center gap-3">
+                <div class="flex-1 min-w-60"><p class="font-bold">🔐 Equipos (PC y celulares)</p>
+                    <p class="text-xs text-slate-500">Si la empresa se quedó sin un equipo de confianza (cambió de PC, borró el navegador) o entraste tú desde tu PC, autorízalos aquí.</p></div>
+                @if ($porRevisar)
+                    <form method="POST" action="{{ route('admin.clientes.equipos', [$cliente->id, 'todos']) }}" onsubmit="return confirm('¿Autorizar los {{ $porRevisar }} equipos por revisar? Revisa antes que los reconozcas.')">@csrf
+                        <input type="hidden" name="accion" value="confiar">
+                        <button class="h-9 px-3 rounded-xl bg-emerald-600 text-white text-xs font-bold">✓ Autorizar los {{ $porRevisar }} por revisar</button></form>
+                @endif
+            </div>
+            <div class="divide-y divide-slate-100 text-sm">
+                @foreach ($equipos as $idUsuario => $lista)
+                    @php($u = $nombres[$idUsuario] ?? null)
+                    <p class="px-4 pt-3 pb-1 text-xs font-bold text-slate-500 uppercase">{{ $u ? trim($u->apeusu ?: $u->name).' · '.$u->email : 'Usuario '.$idUsuario }}</p>
+                    @foreach ($lista as $e)
+                        <div class="px-4 py-2 flex flex-wrap items-center gap-3 {{ $e->por_revisar && ! $e->bloqueado_el ? 'bg-amber-50/60' : '' }}">
+                            <span class="text-lg">{{ $e->tipo === 'PC' ? '💻' : '📱' }}</span>
+                            <div class="flex-1 min-w-56"><p class="font-semibold">{{ $e->nombre }}</p>
+                                <p class="text-xs text-slate-500">IP {{ $e->ip }}{{ $e->ciudad ? ' ('.$e->ciudad.')' : '' }} · última vez {{ \Carbon\Carbon::parse($e->ultima_vez)->format('d/m/Y H:i') }}</p></div>
+                            @if ($e->bloqueado_el)
+                                <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700">Bloqueado</span>
+                            @elseif ($e->por_revisar)
+                                <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-200 text-amber-900">Por revisar</span>
+                            @elseif ($e->confiable)
+                                <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">✓ De confianza</span>
+                            @endif
+                            @if (! $e->confiable || $e->bloqueado_el)
+                                <form method="POST" action="{{ route('admin.clientes.equipos', [$cliente->id, $e->id]) }}">@csrf <input type="hidden" name="accion" value="confiar">
+                                    <button class="h-8 px-3 rounded-lg bg-emerald-600 text-white text-xs font-bold">{{ $e->bloqueado_el ? 'Desbloquear' : '✓ Autorizar' }}</button></form>
+                            @endif
+                            @unless ($e->bloqueado_el)
+                                <form method="POST" action="{{ route('admin.clientes.equipos', [$cliente->id, $e->id]) }}" onsubmit="return confirm('¿Bloquear este equipo? Se cierra su sesión y ya no podrá entrar.')">@csrf
+                                    <input type="hidden" name="accion" value="bloquear">
+                                    <button class="h-8 px-3 rounded-lg bg-white border border-rose-200 text-rose-600 text-xs font-bold">Bloquear</button></form>
+                            @endunless
+                        </div>
+                    @endforeach
+                @endforeach
+            </div>
+        </div>
+    @endif
 @endsection

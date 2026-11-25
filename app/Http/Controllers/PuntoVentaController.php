@@ -6,6 +6,7 @@ use App\Models\EmpresaNegocio;
 use App\Models\MedioPago;
 use App\Models\Turno;
 use App\Support\Acciones;
+use App\Support\CatalogoVenta;
 use App\Support\Clinica;
 use App\Support\EdicionVenta;
 use App\Support\Lotes;
@@ -107,7 +108,10 @@ class PuntoVentaController extends Controller
         // Varios venden en la misma PC: se elige quién vendió
         $vendedores = ! empty($negocio->pv_elegir_vendedor) && ! $soloPedido ? VentaDirecta::vendedores($user) : [];
 
-        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido', 'vendedores', 'ia'));
+        // Botones rápidos con los productos que más se mueven (si algo falla, la caja abre igual sin ellos)
+        $masVendidos = rescue(fn () => CatalogoVenta::masVendidos($user), [], true);
+
+        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido', 'vendedores', 'ia', 'masVendidos'));
     }
 
     /** Editar una venta del Panel de Ventas: se abre en el Punto Venta con sus productos, cliente y pago */

@@ -2,7 +2,11 @@
 
 namespace Tests\Flujos;
 
+use App\Http\Controllers\Admin\AccesoController;
+use App\Models\Central\Cliente;
+use App\Models\Central\Superadmin;
 use App\Support\Seguridad\Dispositivos;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -111,5 +115,42 @@ class SeguridadEquiposTest extends FlujoTestCase
         // El equipo bloqueado ya no entra
         $this->desde($this->otro)->get(route('inicio'))->assertRedirect('/login');
         $this->assertGuest();
+    }
+
+    public function test_sin_ningun_equipo_de_confianza_el_administrador_autoriza_ahi_mismo_y_queda_la_alerta(): void
+    {
+        $this->desde($this->miPc)->get(route('inicio'));
+        // Cambió de PC o borró el navegador: ningún equipo suyo es de confianza
+        DB::table('dispositivos')->where('IdUsuario', $this->usuario->IdUsuario)->update(['confiable' => false, 'por_revisar' => true]);
+        $mio = DB::table('dispositivos')->where('IdUsuario', $this->usuario->IdUsuario)->where('token', $this->miPc)->first();
+
+        $this->desde($this->miPc)->post(route('seguridad.equipos.accion', $mio->id), ['accion' => 'confiar'])->assertSessionHas('success');
+
+        $this->assertTrue((bool) DB::table('dispositivos')->where('id', $mio->id)->value('confiable'));
+        $this->assertSame(1, DB::table('bitacora')->where('accion', 'sesion.autorizo_sin_confianza')->where('alerta', 1)->count(), 'Queda la alerta para el panel.');
+
+        // Ya tiene uno de confianza: desde otro equipo nuevo ya no se aprueba solo
+        $this->entraConClave($this->otro)->get(route('inicio'));
+        $otro = DB::table('dispositivos')->where('IdUsuario', $this->usuario->IdUsuario)->where('token', $this->otro)->first();
+        $this->desde($this->otro)->post(route('seguridad.equipos.accion', $otro->id), ['accion' => 'confiar'])->assertSessionHas('error');
+    }
+
+    public function test_soporte_autoriza_desde_el_panel_los_equipos_por_revisar(): void
+    {
+        $this->desde($this->miPc)->get(route('inicio'));
+        $this->entraConClave($this->otro)->get(route('inicio'));
+        DB::connection('central')->beginTransaction();
+        try {
+            $cliente = Cliente::create(['ruc' => '20555555559', 'base_datos' => DB::connection()->getDatabaseName(), 'razon_social' => 'EMPRESA DE PRUEBA', 'estado' => 'ACTIVO']);
+            $this->actingAs(Superadmin::create(['nombre' => 'SOPORTE', 'email' => uniqid().'@prueba.test', 'password' => 'clave-de-prueba', 'activo' => true, 'es_dueno' => true]), 'superadmin');
+
+            app(AccesoController::class)->equipo(Request::create('/', 'POST', ['accion' => 'confiar']), $cliente, 'todos');
+
+            $otro = DB::table('dispositivos')->where('IdUsuario', $this->usuario->IdUsuario)->where('token', $this->otro)->first();
+            $this->assertSame([1, 0], [(int) $otro->confiable, (int) $otro->por_revisar]);
+            $this->assertSame('Panel: SOPORTE', (string) $otro->revisado_por);
+        } finally {
+            DB::connection('central')->rollBack();
+        }
     }
 }

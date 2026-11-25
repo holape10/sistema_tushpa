@@ -11,12 +11,17 @@
             si fue tu trabajador, confírmalo; si no, bloquéalo («no fui yo») y cámbiale la clave.</p>
     </div>
 
-    @unless ($deConfianza)
+    @if (! $deConfianza && $puedeRevisar)
+        <div class="rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            ℹ️ <b>Aún no tienes un equipo de confianza.</b> Confirma con <b>«✓ Sí, fue él»</b> los equipos que reconoces (empieza por <b>este equipo</b>) y bloquea los que no.
+            Desde que tengas uno de confianza, los equipos nuevos se confirmarán desde ahí.
+        </div>
+    @elseif (! $deConfianza)
         <div class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             ⚠️ <b>Este equipo todavía no es de confianza.</b> Para confirmar o bloquear equipos entra desde tu PC o celular de siempre;
-            ahí podrás confirmar también este.
+            ahí podrás confirmar también este. Si ya no tienes esa PC o celular, pide a soporte que lo autorice.
         </div>
-    @endunless
+    @endif
 
     @forelse ($porUsuario as $equipos)
         @php($u = $equipos->first())

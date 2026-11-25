@@ -169,6 +169,29 @@ class Dispositivos
     }
 
     /**
+     * ¿Algún administrador de la empresa tiene un equipo de confianza? Si no tiene ninguno (cambió de PC, borró el
+     * navegador, recién empieza), el administrador puede autorizar sus equipos ahí mismo; si tiene uno, debe usar ese
+     * (así quien robó la clave no se aprueba solo).
+     */
+    public static function hayAdminDeConfianza(string $empresa): bool
+    {
+        if (! self::disponible()) {
+            return true;
+        }
+
+        return DB::table('dispositivos as d')->join('users as u', 'u.IdUsuario', '=', 'd.IdUsuario')
+            ->join('role_user as r', 'r.user_IdUsuario', '=', 'u.IdUsuario')
+            ->where('u.IdEmpresa', $empresa)->where('r.role_id', 2)->where('u.estusu', 1)
+            ->where('d.confiable', true)->whereNull('d.bloqueado_el')->exists();
+    }
+
+    /** Puede confirmar o bloquear equipos: desde un equipo de confianza, o si ningún administrador tiene uno */
+    public static function puedeRevisar(User $user): bool
+    {
+        return self::deConfianza() || ($user->esAdmin() && ! self::hayAdminDeConfianza((string) $user->IdEmpresa));
+    }
+
+    /**
      * Frena una acción delicada que no viene de un equipo de confianza.
      *
      * @throws \RuntimeException
@@ -181,7 +204,7 @@ class Dispositivos
             DB::transactionLevel() > 0 ? app()->terminating($anotar) : $anotar();
 
             throw new \RuntimeException("Por seguridad, «{$accion}» solo se puede hacer desde un equipo de confianza. "
-                .'Confirma este equipo desde una PC o celular ya autorizado (Seguridad › Equipos y sesiones).');
+                .'Confirma este equipo desde una PC o celular ya autorizado (Seguridad › Equipos y sesiones) o pide a soporte que lo autorice.');
         }
     }
 

@@ -88,6 +88,25 @@
                 </div>
             </div>
 
+            {{-- Más vendidos: los productos que más se mueven en la sucursal, un toque y entran (o teclas 1 a 9 fuera de las casillas) --}}
+            <div x-show="cfg.masVendidos.length && !(edicion && edicion.soloCabecera)" x-cloak>
+                <div class="flex items-center justify-between mx-1 mb-1.5 text-[11px] font-bold tracking-wide text-slate-500">
+                    <span>⭐ MÁS VENDIDOS · UN TOQUE Y ENTRA</span><span class="font-semibold text-slate-400">teclas 1 a 9</span>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-5 xl:grid-cols-9 gap-2">
+                    <template x-for="(p, i) in cfg.masVendidos" :key="p.id">
+                        <button type="button" @click="tocarRapido(i)" :title="p.nombre"
+                                :class="rapidoTocado === i ? 'ring-2 ring-indigo-500 bg-indigo-50' : 'bg-white hover:bg-indigo-50'"
+                                class="relative h-20 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center gap-0.5 px-1 transition">
+                            <span class="absolute top-1 left-2 text-[11px] font-bold text-indigo-300" x-text="i + 1"></span>
+                            <template x-if="cfg.fotos && p.imagen"><img :src="p.imagen" alt="" loading="lazy" class="w-8 h-8 rounded-lg object-cover"></template>
+                            <span class="text-[11px] font-bold text-slate-800 text-center leading-tight line-clamp-2" x-text="p.nombre"></span>
+                            <span class="text-[11px] font-bold text-indigo-600" x-text="'S/ ' + num2(p.precio)"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
             {{-- Proforma abierta --}}
             <div x-show="proformaId" x-cloak class="flex flex-wrap items-center gap-2 rounded-2xl bg-violet-600 text-white px-4 py-3 shadow-sm">
                 <span class="font-bold">📄 Proforma <span x-text="proformaNumero"></span></span>
@@ -717,6 +736,8 @@
         diasAlerta: @json($diasAlerta),
         // Sucursales › «Mostrar fotos de los productos al vender»: la foto sale en las ventanas de cantidad y presentación
         fotos: @json(\App\Support\ImagenProducto::enVentas((int) auth()->user()->id_empresa_negocio)),
+        // Botones rápidos: los que más se venden en la sucursal (últimos 30 días)
+        masVendidos: @json($masVendidos ?? []),
         proforma: @json($proforma),
         // Atención de la clínica por cobrar (llega desde la Agenda o al terminar la atención)
         clinica: @json($clinica ?? null),

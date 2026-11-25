@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Central\Cliente;
+use App\Support\Bitacora;
+use App\Support\Seguridad\Dispositivos;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 /**
@@ -35,7 +38,40 @@ class AccesoController extends Controller
             ->get(['u.IdUsuario', 'u.name', 'u.apeusu', 'u.email', 'u.estusu', 'r.description as rol', 'ru.role_id', 'n.nombre_comercial as sucursal'])
             ->unique('IdUsuario')->values());
 
-        return view('admin.clientes.accesos', ['cliente' => $cliente, 'usuarios' => $usuarios]);
+        // Equipos de sus usuarios (si la empresa ya tiene el control de equipos): los por revisar primero
+        $equipos = Tenancy::en($cliente->base_datos, fn () => Schema::hasTable('dispositivos')
+            ? DB::table('dispositivos')->orderByDesc('por_revisar')->orderByRaw('bloqueado_el IS NOT NULL')->orderByDesc('ultima_vez')->limit(200)->get()
+            : collect());
+
+        return view('admin.clientes.accesos', ['cliente' => $cliente, 'usuarios' => $usuarios, 'equipos' => $equipos->groupBy('IdUsuario')]);
+    }
+
+    /**
+     * Autorizar o bloquear un equipo desde el panel (soporte): sirve cuando la empresa se quedó sin un equipo de confianza
+     * desde donde aprobar (cambió de PC, borró el navegador) o cuando soporte entra desde su propia PC. "todos" autoriza
+     * todos los equipos por revisar de la empresa.
+     */
+    public function equipo(Request $request, Cliente $cliente, string $id): RedirectResponse
+    {
+        $this->autorizar($cliente);
+        $accion = $request->validate(['accion' => 'required|in:confiar,bloquear'])['accion'];
+        $quien = 'Panel: '.mb_substr((string) Auth::guard('superadmin')->user()->nombre, 0, 100);
+
+        $n = Tenancy::en($cliente->base_datos, function () use ($id, $accion, $quien) {
+            $equipos = DB::table('dispositivos')->when($id === 'todos', fn ($q) => $q->where('por_revisar', true)->whereNull('bloqueado_el'),
+                fn ($q) => $q->where('id', (int) $id))->get();
+            abort_if($equipos->isEmpty() && $id !== 'todos', 404);
+            foreach ($equipos as $e) {
+                $accion === 'confiar' ? Dispositivos::confiar($e, $quien) : Dispositivos::bloquear($e, $quien);
+                Bitacora::registrar($accion === 'confiar' ? 'sesion.equipo_confiable' : 'sesion.bloqueo_soporte',
+                    ($accion === 'confiar' ? 'Soporte autorizó el equipo ' : 'Soporte bloqueó el equipo ').$e->nombre, null,
+                    ['usuario' => null, 'nombre' => $quien, 'referencia' => ['dispositivo', $e->id]]);
+            }
+
+            return $equipos->count();
+        });
+
+        return back()->with('ok', $accion === 'confiar' ? "{$n} equipo(s) autorizado(s): ya pueden confirmar y hacer acciones delicadas." : 'Equipo bloqueado y su sesión cerrada.');
     }
 
     /** 4 letras y 4 números, sin las que se confunden (l, i, o) para dictarla por teléfono: ej. "kafm4827" */

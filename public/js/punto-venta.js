@@ -1080,7 +1080,27 @@ document.addEventListener('alpine:init', () => {
                     : (this.sonido(false), this.aviso(`El código ${codigo} no pertenece a ningún producto`, 'error')));
             } else if (e.key.length === 1) {
                 this._teclas += e.key;
+                // Teclas 1 a 9 = botones de más vendidos. El lector de barras teclea muy seguido: si llega otra tecla enseguida, no cuenta
+                if (/^[1-9]$/.test(e.key) && this._teclas.length === 1 && (CFG.masVendidos || [])[e.key - 1]) {
+                    const marca = ahora;
+                    setTimeout(() => {
+                        if (this._horaTecla === marca && this._teclas === e.key) { this._teclas = ''; this.tocarRapido(Number(e.key) - 1); }
+                    }, 120);
+                }
             }
+        },
+
+        /** Botón de más vendidos: entra directo con cantidad 1 (si tiene presentaciones, pregunta cuál) */
+        rapidoTocado: null,
+        tocarRapido(i) {
+            const p = (CFG.masVendidos || [])[i];
+            if (!p) return;
+            this.agregar(p, false);
+            this.rapidoTocado = i;
+            clearTimeout(this._rapidoTimer);
+            this._rapidoTimer = setTimeout(() => { this.rapidoTocado = null; }, 500);
+            // Sin el foco en el buscador, las teclas 1 a 9 y el lector de barras siguen funcionando
+            this.$nextTick(() => { if (document.activeElement === this.$refs.buscador) this.$refs.buscador.blur(); });
         },
 
         // ---------- Avisos y sonido ----------

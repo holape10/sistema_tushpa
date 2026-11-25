@@ -6,6 +6,7 @@ use App\Models\Producto;
 use App\Models\UnidadMedida;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -57,6 +58,32 @@ class CatalogoVenta
         $productos = self::consulta($user->id_empresa_negocio, $almacenId)->whereIn('productos.IdProducto', $ids ?: [0])->get();
 
         return collect(self::formatear($productos, $almacenId))->keyBy('id');
+    }
+
+    /**
+     * Los productos que más se mueven en la sucursal (en cuántas ventas de los últimos 30 días aparecen), listos para
+     * los botones rápidos del Punto Venta. Se calcula una vez por hora (no recarga cada vez que se abre la caja).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function masVendidos(User $user, int $cuantos = 9): array
+    {
+        $sucursal = (int) $user->id_empresa_negocio;
+        $ids = Cache::remember('pv-mas-vendidos:'.DB::connection()->getDatabaseName().':'.$sucursal, now()->addHour(), fn () => DB::table('cpe_detalle as d')
+            ->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
+            ->join('productos as p', 'p.IdProducto', '=', 'd.IdProducto')
+            ->where('c.id_empresa_negocio', $sucursal)->whereNull('c.ccabaj')->whereIn('c.tdocod', ['01', '03', '12', '13'])
+            ->where('c.ccafem', '>=', now()->subDays(30)->toDateString())
+            ->where('p.proest', 'Activo')->whereNotIn('p.promocion', Producto::NO_VENDIBLES)
+            ->groupBy('d.IdProducto')->orderByRaw('COUNT(DISTINCT d.IdCpe_cabecera) DESC')->limit($cuantos)
+            ->pluck('d.IdProducto')->map(fn ($id) => (int) $id)->all());
+        if (! $ids) {
+            return [];
+        }
+        $productos = self::porIds($user, $ids);
+
+        // En el orden de más a menos vendido (los que ya no existen o se desactivaron no salen)
+        return collect($ids)->map(fn ($id) => $productos[$id] ?? null)->filter()->values()->all();
     }
 
     /** El stock que se muestra al vender es el del almacén de esta caja (o el predeterminado) */

@@ -100,6 +100,8 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::post('/prospectos/carta/{id}/contactado', [ProspectoController::class, 'contactado'])->whereNumber('id')->name('prospectos.contactado');
     Route::get('/clientes/{cliente}/accesos', [AccesoController::class, 'index'])->whereNumber('cliente')->name('clientes.accesos');
     Route::post('/clientes/{cliente}/accesos/{usuario}', [AccesoController::class, 'clave'])->whereNumber(['cliente', 'usuario'])->middleware('throttle:20,1')->name('clientes.accesos.clave');
+    // Equipos de la empresa: soporte los autoriza o bloquea (si se quedó sin un equipo de confianza)
+    Route::post('/clientes/{cliente}/equipos/{id}', [AccesoController::class, 'equipo'])->whereNumber('cliente')->where('id', '[0-9]+|todos')->middleware('throttle:30,1')->name('clientes.equipos');
     // Contrato de servicio: generarlo, ver el DNI y el contrato firmado, aprobarlo u observarlo
     Route::get('/clientes/{cliente}/contrato', [ContratoController::class, 'index'])->whereNumber('cliente')->name('clientes.contrato');
     Route::post('/clientes/{cliente}/contrato', [ContratoController::class, 'generar'])->whereNumber('cliente')->name('clientes.contrato.generar');
