@@ -103,9 +103,9 @@ class SeguridadEquiposTest extends FlujoTestCase
         $this->entraConClave($this->otro)->get(route('inicio'));
         $intruso = DB::table('dispositivos')->where('IdUsuario', $this->usuario->IdUsuario)->where('token', $this->otro)->first();
 
-        // Desde el equipo nuevo no puede aprobarse a sí mismo
-        $this->desde($this->otro)->post(route('seguridad.equipos.accion', $intruso->id), ['accion' => 'confiar'])->assertSessionHas('error');
-        $this->assertFalse((bool) DB::table('dispositivos')->where('id', $intruso->id)->value('confiable'));
+        // El administrador puede confirmar desde un equipo nuevo, pero queda como alerta para el panel
+        $this->desde($this->otro)->post(route('seguridad.equipos.accion', $intruso->id), ['accion' => 'confiar'])->assertSessionHas('success');
+        $this->assertSame(1, DB::table('bitacora')->where('accion', 'sesion.autorizo_sin_confianza')->where('alerta', 1)->count());
 
         // Desde el de confianza: "no fui yo"
         $tokenAntes = DB::table('users')->where('IdUsuario', $this->usuario->IdUsuario)->value('remember_token');
@@ -118,7 +118,7 @@ class SeguridadEquiposTest extends FlujoTestCase
         $this->assertGuest();
     }
 
-    public function test_sin_ningun_equipo_de_confianza_el_administrador_autoriza_ahi_mismo_y_queda_la_alerta(): void
+    public function test_el_administrador_autoriza_ahi_mismo_desde_cualquier_equipo_y_queda_la_alerta(): void
     {
         $this->desde($this->miPc)->get(route('inicio'));
         // Cambió de PC o borró el navegador: ningún equipo suyo es de confianza
@@ -130,10 +130,6 @@ class SeguridadEquiposTest extends FlujoTestCase
         $this->assertTrue((bool) DB::table('dispositivos')->where('id', $mio->id)->value('confiable'));
         $this->assertSame(1, DB::table('bitacora')->where('accion', 'sesion.autorizo_sin_confianza')->where('alerta', 1)->count(), 'Queda la alerta para el panel.');
 
-        // Ya tiene uno de confianza: desde otro equipo nuevo ya no se aprueba solo
-        $this->entraConClave($this->otro)->get(route('inicio'));
-        $otro = DB::table('dispositivos')->where('IdUsuario', $this->usuario->IdUsuario)->where('token', $this->otro)->first();
-        $this->desde($this->otro)->post(route('seguridad.equipos.accion', $otro->id), ['accion' => 'confiar'])->assertSessionHas('error');
     }
 
     public function test_la_alerta_de_accion_frenada_trae_el_equipo_para_autorizarlo_desde_el_panel(): void

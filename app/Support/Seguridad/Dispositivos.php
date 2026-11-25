@@ -185,10 +185,13 @@ class Dispositivos
             ->where('d.confiable', true)->whereNull('d.bloqueado_el')->exists();
     }
 
-    /** Puede confirmar o bloquear equipos: desde un equipo de confianza, o si ningún administrador tiene uno */
+    /**
+     * Puede confirmar o bloquear equipos: el administrador siempre (desde un equipo que no es de confianza queda como alerta
+     * para el panel); los demás, solo desde un equipo de confianza.
+     */
     public static function puedeRevisar(User $user): bool
     {
-        return self::deConfianza() || ($user->esAdmin() && ! self::hayAdminDeConfianza((string) $user->IdEmpresa));
+        return $user->esAdmin() || self::deConfianza();
     }
 
     /**
