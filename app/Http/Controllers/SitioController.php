@@ -64,6 +64,10 @@ class SitioController extends Controller
     {
         $datos = SeoSitio::ciudad($ciudad);
         abort_unless($datos, 404);
+        // Ciudad con partner (config/ciudades.php › contacto): la portada completa con sus datos y los textos de la ciudad
+        if (! empty($datos['contacto'])) {
+            return view('sitio.inicio', ['planes' => $this->planes(), 'ciudad' => $datos]);
+        }
 
         return view('sitio.ciudad', ['c' => $datos]);
     }

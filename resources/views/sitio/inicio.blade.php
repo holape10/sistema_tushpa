@@ -1,4 +1,11 @@
 @php
+    // $ciudad: la portada para una ciudad con partner (SitioController::ciudad), con sus textos y su contacto
+    $ciudad ??= null;
+    // Pedido de la maqueta y del ticket: platos de la zona
+    $platos = $ciudad && $ciudad['slug'] === 'piura'
+        ? [['2', 'Seco de chabelo', 'SECO DE CHABELO', 50.00], ['1', 'Ceviche de mero', 'CEVICHE DE MERO', 35.00], ['1', 'Majarisco', 'MAJARISCO', 38.00], ['1', 'Jarra de clarito', 'JARRA DE CLARITO', 14.00]]
+        : [['2', 'Ceviche de doncella', 'CEVICHE DE DONCELLA', 56.00], ['1', 'Juane de gallina', 'JUANE DE GALLINA', 22.00], ['2', 'Tacacho con cecina', 'TACACHO C/CECINA', 44.00], ['1', 'Jarra de aguaje', 'JARRA DE AGUAJE', 15.00]];
+    $totalPlatos = number_format(array_sum(array_column($platos, 3)), 2);
     // Lo que hace el sistema en cada rubro (solo funciones que existen en TUSHPA)
     $rubros = [
         'restaurante' => ['icono' => 'fa-utensils', 'nombre' => 'Restaurantes', 'ejemplos' => 'Restaurantes, cevicherías, cafeterías, bares y discotecas',
@@ -142,7 +149,7 @@
             'funciones' => [['fa-check', $rubroSistema['nombre'], $rubroSistema['ejemplos']], ['fa-file-invoice', 'Facturación electrónica', 'Boletas y facturas a SUNAT.'],
                 ['fa-cash-register', 'Caja y reportes', 'Apertura, cierre y reportes de ventas.']]];
     }
-    $whatsapp = 'https://wa.me/'.config('soporte.whatsapp').'?text='.rawurlencode('Hola, quiero información sobre el sistema TUSHPA.');
+    $whatsapp = 'https://wa.me/'.config('soporte.whatsapp').'?text='.rawurlencode('Hola, quiero información sobre el sistema TUSHPA'.($ciudad ? ' en '.$ciudad['nombre'] : '').'.');
 
     // Preguntas frecuentes: se muestran abajo y también salen en los datos estructurados (mismo texto en ambos)
     $preguntas = [
@@ -158,12 +165,20 @@
     $seoTitulo = 'Sistema de Facturación Electrónica SUNAT | TUSHPA';
     $seoDescripcion = 'Facturación electrónica SUNAT con asistente IA, punto de venta, inventario y caja para restaurantes, hoteles y comercios. Hecho en Iquitos. Prueba gratis '.config('sitio.dias_prueba').' días.';
     $seoUrl = \App\Support\SeoSitio::url('/');
-    $seoJson = \App\Support\SeoSitio::json([
+    if ($ciudad) {
+        // Las preguntas de la ciudad primero (su texto propio es lo que Google posiciona)
+        $preguntas = array_merge($ciudad['preguntas'], array_slice($preguntas, 0, 3));
+        $seoTitulo = $ciudad['titulo'];
+        $seoDescripcion = $ciudad['descripcion'];
+        $seoUrl = $ciudad['url'];
+    }
+    $seoJson = \App\Support\SeoSitio::json(array_merge([
         \App\Support\SeoSitio::organizacion(),
         \App\Support\SeoSitio::sitioWeb(),
         \App\Support\SeoSitio::aplicacion($planes, $seoDescripcion),
+    ], $ciudad ? [\App\Support\SeoSitio::servicio($ciudad), \App\Support\SeoSitio::migas([['Inicio', \App\Support\SeoSitio::url('/')], [$ciudad['h1'], $ciudad['url']]])] : [], [
         \App\Support\SeoSitio::preguntas($preguntas),
-    ]);
+    ]));
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -206,13 +221,22 @@
     <div class="container">
         <div class="row align-items-center g-5">
             <div class="col-lg-6">
-                <span class="etiqueta">Hecho en la Amazonía · para todo el Perú</span>
-                <h1 class="mt-3 mb-4">Factura a SUNAT y controla tu negocio <span class="resalte">desde un solo sistema</span></h1>
-                <p class="bajada mb-4">
-                    Comandas, punto de venta, hotel, inventario, caja y boletas electrónicas.
-                    Con <b>asistente de inteligencia artificial</b> que te ayuda a vender, comprar y crear tus productos.
-                    Funciona en tu PC, tablet y celular, sin instalar nada.
-                </p>
+                @if ($ciudad)
+                    <span class="etiqueta"><i class="fas fa-location-dot me-1"></i>{{ $ciudad['nombre'] }} · te atendemos en persona y por WhatsApp</span>
+                    <h1 class="mt-3 mb-4">{{ \Illuminate\Support\Str::beforeLast($ciudad['h1'], ' en ') }} <span class="resalte">en {{ $ciudad['nombre'] }}</span></h1>
+                    <p class="bajada mb-4">
+                        {{ $ciudad['bajada'] }}
+                        Con <b>asistente de inteligencia artificial</b> que te ayuda a vender, comprar y crear tus productos.
+                    </p>
+                @else
+                    <span class="etiqueta">Hecho en la Amazonía · para todo el Perú</span>
+                    <h1 class="mt-3 mb-4">Factura a SUNAT y controla tu negocio <span class="resalte">desde un solo sistema</span></h1>
+                    <p class="bajada mb-4">
+                        Comandas, punto de venta, hotel, inventario, caja y boletas electrónicas.
+                        Con <b>asistente de inteligencia artificial</b> que te ayuda a vender, comprar y crear tus productos.
+                        Funciona en tu PC, tablet y celular, sin instalar nada.
+                    </p>
+                @endif
                 <div class="d-flex flex-wrap gap-3 mb-4">
                     <a href="{{ route('sitio.registro') }}" class="btn btn-achiote btn-lg"><i class="fas fa-rocket me-2"></i>Prueba gratis {{ config('sitio.dias_prueba') }} días</a>
                     <button type="button" class="btn btn-hueco btn-lg" data-bs-toggle="modal" data-bs-target="#modalDemo"><i class="fas fa-circle-play me-2"></i>Ver demo</button>
@@ -235,11 +259,10 @@
                                 <div>MESA 01</div><div class="ocupada">MESA 02</div><div class="junta">MESA 03</div><div>MESA 04</div>
                             </div>
                             <div class="small fw-bold text-uppercase texto-gris mb-1">Mesa 02 · Piso 01</div>
-                            <div class="maqueta-linea"><span>2 × Ceviche de doncella</span><b>S/ 56.00</b></div>
-                            <div class="maqueta-linea"><span>1 × Juane de gallina</span><b>S/ 22.00</b></div>
-                            <div class="maqueta-linea"><span>2 × Tacacho con cecina</span><b>S/ 44.00</b></div>
-                            <div class="maqueta-linea"><span>1 × Jarra de aguaje</span><b>S/ 15.00</b></div>
-                            <div class="maqueta-total"><span>Total</span><span>S/ 137.00</span></div>
+                            @foreach ($platos as [$cantidad, $plato, , $importe])
+                                <div class="maqueta-linea"><span>{{ $cantidad }} × {{ $plato }}</span><b>S/ {{ number_format($importe, 2) }}</b></div>
+                            @endforeach
+                            <div class="maqueta-total"><span>Total</span><span>S/ {{ $totalPlatos }}</span></div>
                             <div class="maqueta-sunat"><i class="fas fa-circle-check"></i>Boleta B001-00245 · ACEPTADA</div>
                         </div>
                     </div>
@@ -260,9 +283,50 @@
         <span><i class="fas fa-wand-magic-sparkles"></i>Asistente con IA</span>
         <span><i class="fas fa-mobile-screen"></i>PC, tablet y celular</span>
         <span><i class="fas fa-database"></i>Base de datos propia por empresa</span>
-        <span><i class="fas fa-location-dot"></i>Desde Iquitos, Loreto</span>
+        <span><i class="fas fa-location-dot"></i>{{ $ciudad ? 'Atención en '.$ciudad['nombre'] : 'Desde Iquitos, Loreto' }}</span>
     </div>
 </div>
+
+@if ($ciudad)
+    {{-- Para los negocios de la ciudad: sus textos y quién atiende --}}
+    <section id="negocios" class="seccion">
+        <div class="container">
+            <div class="seccion-titulo revelar">
+                <span class="etiqueta"><i class="fas fa-location-dot me-1"></i>{{ $ciudad['nombre'] }}, {{ $ciudad['region'] }}</span>
+                <h2>Un sistema para los negocios de {{ $ciudad['nombre'] }}</h2>
+            </div>
+            <div class="row g-5 align-items-center">
+                <div class="col-lg-7 revelar">
+                    @foreach ($ciudad['parrafos'] as $parrafo)
+                        <p class="texto-gris fs-5 {{ $loop->last ? 'mb-4' : 'mb-3' }}">{{ $parrafo }}</p>
+                    @endforeach
+                    <div class="row g-3">
+                        @foreach ($ciudad['rubros'] as [$icono, $nombre, $texto])
+                            <div class="col-sm-6">
+                                <div class="funcion"><i class="fas {{ $icono }}"></i><div><b>{{ $nombre }}</b><span>{{ $texto }}</span></div></div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="col-lg-5 revelar">
+                    <div class="tarjeta p-4" style="height:auto">
+                        <div class="icono fondo-selva"><i class="fas fa-user-tie"></i></div>
+                        <h3 class="fs-4 fw-bold mb-2">{{ $ciudad['atencion']['titulo'] }}</h3>
+                        <p class="mb-3">Te atiende <b>{{ $ciudad['contacto']['nombre'] }}</b>. Te acompaña a cargar tus productos, configurar tu impresora y emitir tu primer comprobante.</p>
+                        <ul class="list-unstyled mb-4 small">
+                            <li class="mb-2"><i class="fas fa-location-dot me-2" style="color:var(--selva-500)"></i>{{ $ciudad['contacto']['direccion'] }}</li>
+                            <li class="mb-2"><i class="fab fa-whatsapp me-2" style="color:#25d366"></i>{{ collect($ciudad['contacto']['telefonos'])->implode(' · ') }}</li>
+                            @foreach ($ciudad['contacto']['correos'] ?? [] as $correo)
+                                <li class="mb-2"><i class="fas fa-envelope me-2" style="color:var(--selva-500)"></i><a href="mailto:{{ $correo }}" class="text-reset">{{ $correo }}</a></li>
+                            @endforeach
+                        </ul>
+                        <a href="{{ $whatsapp }}" target="_blank" rel="noopener" class="btn btn-selva w-100"><i class="fab fa-whatsapp me-2"></i>Escribir a {{ \Illuminate\Support\Str::before($ciudad['contacto']['nombre'], ' ') }}</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+@endif
 
 {{-- Inteligencia artificial: lo que la IA hace dentro del sistema --}}
 <section id="ia" class="seccion seccion-ia">
@@ -358,16 +422,15 @@
             </div>
             <div class="col-lg-6 revelar">
                 <div class="ticket">
-                    <div class="c"><b>TU NEGOCIO S.A.C.</b><br>RUC 20XXXXXXXXX<br>Jr. Próspero 123 · Iquitos</div>
+                    <div class="c"><b>TU NEGOCIO S.A.C.</b><br>RUC 20XXXXXXXXX<br>{{ $ciudad ? 'Av. Grau 123 · '.$ciudad['nombre'] : 'Jr. Próspero 123 · Iquitos' }}</div>
                     <hr>
                     <div class="c"><b>BOLETA DE VENTA ELECTRÓNICA</b><br>B001-00245</div>
                     <hr>
-                    <div class="d-flex justify-content-between"><span>2 CEVICHE DE DONCELLA</span><span>56.00</span></div>
-                    <div class="d-flex justify-content-between"><span>1 JUANE DE GALLINA</span><span>22.00</span></div>
-                    <div class="d-flex justify-content-between"><span>2 TACACHO C/CECINA</span><span>44.00</span></div>
-                    <div class="d-flex justify-content-between"><span>1 JARRA DE AGUAJE</span><span>15.00</span></div>
+                    @foreach ($platos as [$cantidad, , $platoTicket, $importe])
+                        <div class="d-flex justify-content-between"><span>{{ $cantidad }} {{ $platoTicket }}</span><span>{{ number_format($importe, 2) }}</span></div>
+                    @endforeach
                     <hr>
-                    <div class="d-flex justify-content-between"><b>TOTAL S/</b><b>137.00</b></div>
+                    <div class="d-flex justify-content-between"><b>TOTAL S/</b><b>{{ $totalPlatos }}</b></div>
                     <div class="qr"></div>
                     <div class="c" style="font-size:.7rem">Consulta tu comprobante en:<br><b>tunegocio.{{ config('tenancy.dominio') }}/cpe</b></div>
                 </div>
@@ -449,7 +512,8 @@
 @include('sitio.partials.planes')
 @include('sitio.partials.certificados')
 
-{{-- Programa reseller: invita a vender TUSHPA (la página explica los beneficios; los precios, por WhatsApp) --}}
+{{-- Programa reseller: invita a vender TUSHPA (la página explica los beneficios; los precios, por WhatsApp). No va en la página de un partner --}}
+@unless ($ciudad)
 <section class="seccion pt-0">
     <div class="container">
         <div class="llamada revelar text-start">
@@ -467,6 +531,7 @@
         </div>
     </div>
 </section>
+@endunless
 
 {{-- Clientes --}}
 <section id="clientes" class="seccion overflow-hidden">

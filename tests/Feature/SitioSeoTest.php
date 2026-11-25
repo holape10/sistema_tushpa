@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Support\ContactoWeb;
 use App\Support\SeoSitio;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Application;
@@ -37,7 +38,7 @@ class SitioSeoTest extends TestCase
             $respuesta->assertOk();
             $respuesta->assertSee('<link rel="canonical" href="https://tushpa.app'.$ciudad['ruta'].'">', false);
             $respuesta->assertSee('<title>'.e($ciudad['titulo']).'</title>', false);
-            $respuesta->assertSee($ciudad['h1']);
+            $respuesta->assertSeeText($ciudad['h1']);
 
             preg_match('~<script type="application/ld\+json">(.+?)</script>~s', $respuesta->getContent(), $coincidencia);
             $grafo = json_decode($coincidencia[1] ?? '', true, flags: JSON_THROW_ON_ERROR);
@@ -47,6 +48,22 @@ class SitioSeoTest extends TestCase
             $this->assertContains('FAQPage', $tipos, "Faltan las preguntas en {$slug}");
             $this->assertContains('BreadcrumbList', $tipos, "Falta el recorrido en {$slug}");
         }
+    }
+
+    public function test_la_ciudad_con_partner_lleva_la_portada_completa_con_su_contacto(): void
+    {
+        $ciudad = SeoSitio::ciudad('piura');
+        $this->assertNotEmpty($ciudad['contacto'] ?? null, 'Piura debe tener su partner en config/ciudades.php');
+        ContactoWeb::olvidar();
+
+        $this->get('https://tushpa.app'.$ciudad['ruta'])->assertOk()
+            ->assertSee('id="ia"', false)
+            ->assertSee('id="rubros"', false)
+            ->assertSee($ciudad['contacto']['nombre'])
+            ->assertSee($ciudad['contacto']['direccion'])
+            ->assertSee($ciudad['parrafos'][0])
+            ->assertDontSee('Pillco Pérez 285, Iquitos')
+            ->assertDontSee('Quiero ser reseller');
     }
 
     public function test_el_sitemap_lista_la_portada_y_todas_las_ciudades(): void
