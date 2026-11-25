@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Support\PanelDueno;
 use App\Support\Reportes;
+use App\Support\ResumenTelegram;
+use App\Support\TelegramCitas;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -65,7 +68,73 @@ class PanelDuenoController extends Controller
             'config' => DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->first(['meta_mensual', 'gastos_fijos_mes', 'whatsapp_dueno', 'atiende_de_noche']),
             // Vende mucho de madrugada y aún cuenta por días: se le sugiere contar por noches
             'sugerirNoche' => $ver === 'panel' && ! PanelDueno::corte($suc) && $this->vendeDeMadrugada($suc),
+            // Resumen del día y deudas por Telegram: los administradores de la empresa
+            'telegram' => TelegramCitas::configurado() ? $this->administradoresTelegram() : null,
         ]);
+    }
+
+    /** @return Collection<int, object> */
+    private function administradoresTelegram()
+    {
+        TelegramCitas::sincronizar();
+
+        return ResumenTelegram::administradores((string) Auth::user()->IdEmpresa);
+    }
+
+    private function administradorTelegram(int $usuario): object
+    {
+        $this->sucursal();
+        $u = ResumenTelegram::administradores((string) Auth::user()->IdEmpresa)->firstWhere('IdUsuario', $usuario);
+        abort_unless($u, 404);
+
+        return $u;
+    }
+
+    public function telegramEnlace(int $usuario): JsonResponse
+    {
+        $this->administradorTelegram($usuario);
+        $enlace = TelegramCitas::enlace($usuario);
+
+        return response()->json($enlace ? ['ok' => true, 'enlace' => $enlace]
+            : ['ok' => false, 'mensaje' => 'Telegram no está configurado en el servidor (falta el token del bot).']);
+    }
+
+    /** ¿Ya tocaron Iniciar en el bot? Devuelve los administradores vinculados */
+    public function telegramVerificar(): JsonResponse
+    {
+        $this->sucursal();
+        TelegramCitas::recibir();
+
+        return response()->json(['ok' => true, 'vinculados' => $this->administradoresTelegram()->whereNotNull('telegram_chat_id')
+            ->pluck('IdUsuario')->map(fn ($id) => (int) $id)->values()]);
+    }
+
+    public function telegramRecibir(Request $request, int $usuario): JsonResponse
+    {
+        $this->administradorTelegram($usuario);
+        DB::table('users')->where('IdUsuario', $usuario)->update(['telegram_resumen' => $request->boolean('recibir')]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Prueba: le manda ya el resumen de hoy (con las deudas) */
+    public function telegramProbar(int $usuario): JsonResponse
+    {
+        $u = $this->administradorTelegram($usuario);
+        if (! $u->telegram_chat_id) {
+            return response()->json(['ok' => false, 'mensaje' => 'Ese administrador aún no vincula su Telegram.']);
+        }
+        [$ok, $detalle] = TelegramCitas::enviar((string) $u->telegram_chat_id, ResumenTelegram::mensaje($this->sucursal(), now()));
+
+        return response()->json(['ok' => $ok, 'mensaje' => $ok ? '✔ Le llegó el resumen de hoy a su Telegram.' : $detalle]);
+    }
+
+    public function telegramQuitar(int $usuario): JsonResponse
+    {
+        $this->administradorTelegram($usuario);
+        DB::table('users')->where('IdUsuario', $usuario)->update(['telegram_resumen' => false]);
+
+        return response()->json(['ok' => true]);
     }
 
     /**

@@ -39,6 +39,8 @@ document.addEventListener('alpine:init', () => {
 
     Alpine.data('puntoVenta', () => ({
         cfg: CFG,
+        // Balanza por cable (balanza.js): el peso entra solo en la cantidad de los productos que se venden por kilo
+        balanza: { kg: null, estable: false, conectada: false },
         // Punto Venta IA (punto-venta-ia.js): el cajero arma y cobra la venta hablando
         ...(window.PV_IA ? window.PV_IA(CFG) : {}),
 
@@ -113,6 +115,10 @@ document.addEventListener('alpine:init', () => {
         clinicaNombre: '',
 
         iniciar() {
+            if (CFG.balanza && window.Balanza?.disponible()) {
+                window.addEventListener('balanza', e => this.pesoBalanza(e.detail));
+                Balanza.reconectar();
+            }
             if (!CFG.comprobantes.some(c => c.tdocod === this.tdocod)) this.tdocod = CFG.comprobantes[0]?.tdocod;
             this.nuevoMedio = CFG.medios[0]?.id ?? null;
             this.reiniciarPago();
@@ -276,6 +282,35 @@ document.addEventListener('alpine:init', () => {
         },
 
         enfocar(id) { this.$nextTick(() => { const el = document.getElementById(id); if (el) { el.focus(); el.select?.(); } }); },
+
+        // ---------- Balanza ----------
+        balanzaDisponible() { return !!(CFG.balanza && window.Balanza?.disponible()); },
+        async conectarBalanza() {
+            if (this.balanza.conectada) {
+                if (confirm('¿Cambiar la velocidad o el comando de la balanza? (Cancelar = desconectarla)')) {
+                    if (Balanza.configurar()) { await Balanza.desconectar(); Balanza.reconectar(); }
+                } else Balanza.desconectar();
+                return;
+            }
+            try { await Balanza.conectar(); this.aviso('Balanza conectada: pon el producto y el peso entra solo.'); }
+            catch (e) { if (e.name !== 'NotFoundError') this.aviso(e.message || 'No se pudo conectar la balanza.', 'error'); }
+        },
+        /** Se vende por kilo (o gramo): la cantidad la da la balanza */
+        porPeso(p, pres) { return !pres && ['KGM', 'GRM'].includes(p?.umecod); },
+        pesoBalanza(d) {
+            this.balanza = d;
+            // Con la ventana de cantidad abierta y sin escribir a mano, la cantidad sigue al peso
+            if (this.pedir?.porPeso && !this.pedir.aMano && d.kg > 0) {
+                this.pedir.cantidad = this.pedir.p.umecod === 'GRM' ? Math.round(d.kg * 1000) : d.kg;
+            }
+        },
+
+        // ---------- Cámara: leer el código de barras sin lector (el mismo lector de PV Móvil) ----------
+        escanearCamara() {
+            if (!window.EscanerBarras) { this.aviso('No se pudo cargar el lector de la cámara.', 'error'); return; }
+            EscanerBarras.abrir(codigo => this.porCodigo(codigo).then(p => p ? this.agregar(p, false, this.presDeCodigo(p))
+                : (this.sonido(false), this.aviso(`El código ${codigo} no pertenece a ningún producto`, 'error'))));
+        },
 
         // ---------- Voz ----------
         alternarVoz() {
@@ -501,7 +536,9 @@ document.addEventListener('alpine:init', () => {
         // ---------- Modal: cantidad y precio (subir el precio, todos; bajarlo, con permiso) ----------
         abrirPedir(p, pres) {
             const precio = pres ? pres.precio : p.precio;
-            this.pedir = { p, pres, cantidad: 1, precio: redondear(precio),
+            const porPeso = this.balanza.conectada && this.porPeso(p, pres);
+            const kg = this.balanza.kg > 0 ? this.balanza.kg : null;
+            this.pedir = { p, pres, porPeso, aMano: false, cantidad: porPeso && kg ? (p.umecod === 'GRM' ? Math.round(kg * 1000) : kg) : 1, precio: redondear(precio),
                            detalle: pres?.alterno ? (p.unidad || 'Unidad') + ' · ' + pres.nombre
                                : (pres ? this.nombrePresentacion({ presentacion: pres.id, presentaciones: p.presentaciones, unidad: p.unidad }) : (p.unidad || 'Unidad')) };
             this.busqueda = '';

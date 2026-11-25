@@ -3,7 +3,8 @@
 @section('content')
 @php
     $ejemplos = ['¿Cómo van mis ventas este mes comparado con el mes pasado?', 'Muéstrame un gráfico de mis ventas por día de este mes',
-        '¿Qué insumos se están por acabar y cuánto debo comprar?', '¿Quiénes me deben y cuánto está vencido?',
+        '¿Qué se está por acabar y cuánto debo comprar?', '¿Quiénes me deben y cuánto está vencido?',
+        '¿Qué productos no se vendieron en 30 días y cuánta plata tengo parada?', '¿Qué productos me dejan más ganancia este mes?',
         '¿Hay algo raro en mi caja, descuentos o anulaciones de esta semana?', '¿Cómo envío productos del almacén a otra sede?'];
 @endphp
 <div class="max-w-3xl mx-auto flex flex-col" style="min-height: calc(100vh - 9rem)" x-data="asistente(@js($historial), @js($cupo))">

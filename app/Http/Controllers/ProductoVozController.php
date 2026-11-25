@@ -84,7 +84,8 @@ class ProductoVozController extends Controller
                 if ($foto) {
                     @unlink($foto);
                 }
-                $resultados[] = ['nombre' => $nombre, 'ok' => true, 'mensaje' => 'Creado'];
+                $resultados[] = ['nombre' => $nombre, 'ok' => true, 'mensaje' => 'Creado',
+                    'id' => (int) Producto::where('id_empresa_negocio', $user->id_empresa_negocio)->where('pronom', $nombre)->value('IdProducto')];
             } catch (ValidationException $e) {
                 $resultados[] = ['nombre' => $nombre, 'ok' => false, 'mensaje' => collect($e->errors())->flatten()->first()];
             }

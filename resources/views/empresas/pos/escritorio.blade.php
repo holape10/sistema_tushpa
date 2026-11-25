@@ -3,6 +3,7 @@
 
 @section('barra_compacta', '1')
 @section('content')
+@php($usaBalanza = \App\Models\Producto::where('id_empresa_negocio', auth()->user()->id_empresa_negocio)->whereIn('umecod', ['KGM', 'GRM'])->where('proest', 'Activo')->exists())
 @include('partials.pantalla_completa')
 <div x-data="puntoVenta" x-init="iniciar()" @keydown.window="teclaGlobal($event)" class="max-w-[100rem] mx-auto">
 
@@ -45,6 +46,19 @@
                         class="w-16 h-16 shrink-0 rounded-2xl text-white flex items-center justify-center shadow-sm"
                         :title="escuchando ? 'Escuchando… (clic para detener)' : 'Buscar por voz'" aria-label="Buscar por voz">
                     <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-14 0m7 7v4m-4 0h8M12 15a3 3 0 003-3V5a3 3 0 00-6 0v7a3 3 0 003 3z"/></svg>
+                </button>
+                {{-- Balanza por cable (Chrome/Edge): con productos por kilo; el peso entra solo en la cantidad --}}
+                <button type="button" x-show="balanzaDisponible()" x-cloak @click="conectarBalanza()"
+                        :class="balanza.conectada ? 'bg-amber-500 hover:bg-amber-400 w-auto px-3' : 'bg-slate-700 hover:bg-slate-600 w-16'"
+                        class="h-16 shrink-0 rounded-2xl text-white flex flex-col items-center justify-center shadow-sm leading-tight"
+                        :title="balanza.conectada ? 'Balanza conectada (clic para configurar o desconectar)' : 'Conectar la balanza'" aria-label="Balanza">
+                    <span class="text-2xl">⚖️</span>
+                    <span x-show="balanza.conectada" class="text-xs font-extrabold" x-text="balanza.kg !== null ? num(balanza.kg) + ' kg' : '—'"></span>
+                </button>
+                {{-- Escanear con la cámara (celular, tablet o webcam), para quien no tiene lector de barras --}}
+                <button type="button" @click="escanearCamara()" class="w-16 h-16 shrink-0 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center shadow-sm"
+                        title="Escanear código con la cámara" aria-label="Escanear código con la cámara">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
                 </button>
                 </div>
                 <div x-show="resultadosAbiertos" x-cloak
@@ -647,7 +661,9 @@
             <div class="p-6 grid grid-cols-2 gap-4">
                 <label class="block">
                     <span class="text-xs font-bold uppercase text-slate-500">Cantidad</span>
-                    <input id="pedir-cantidad" type="number" step="any" min="0.01" x-model.number="pedir.cantidad" @focus="$event.target.select()"
+                    <span x-show="pedir?.porPeso" x-cloak class="ml-1 normal-case text-xs font-bold" :class="balanza.estable ? 'text-emerald-600' : 'text-amber-600'"
+                          x-text="balanza.estable ? '⚖ de la balanza' : '⚖ pesando…'"></span>
+                    <input id="pedir-cantidad" type="number" step="any" min="0.01" x-model.number="pedir.cantidad" @focus="$event.target.select()" @input="pedir.aMano = true"
                            @keydown.enter.prevent="cfg.editarPrecio ? enfocar('pedir-precio') : confirmarPedir()"
                            class="mt-1 w-full h-16 rounded-2xl border-2 border-indigo-300 text-center text-3xl font-extrabold text-slate-800 focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500">
                 </label>
@@ -736,6 +752,8 @@
         diasAlerta: @json($diasAlerta),
         // Sucursales › «Mostrar fotos de los productos al vender»: la foto sale en las ventanas de cantidad y presentación
         fotos: @json(\App\Support\ImagenProducto::enVentas((int) auth()->user()->id_empresa_negocio)),
+        // Balanza: el botón sale si la sucursal vende algo por kilo o por gramo
+        balanza: @json($usaBalanza),
         // Botones rápidos: los que más se venden en la sucursal (últimos 30 días)
         masVendidos: @json($masVendidos ?? []),
         proforma: @json($proforma),
@@ -763,5 +781,7 @@
     {{-- Punto Venta IA: se suma al Punto Venta (debe cargarse antes) --}}
     <script src="{{ asset('js/punto-venta-ia.js') }}?v={{ filemtime(public_path('js/punto-venta-ia.js')) }}"></script>
 @endif
+<script src="{{ asset('js/balanza.js') }}?v={{ filemtime(public_path('js/balanza.js')) }}"></script>
+<script src="{{ asset('js/escaner-barras.js') }}?v={{ filemtime(public_path('js/escaner-barras.js')) }}"></script>
 <script src="{{ asset('js/punto-venta.js') }}?v={{ filemtime(public_path('js/punto-venta.js')) }}"></script>
 @endpush

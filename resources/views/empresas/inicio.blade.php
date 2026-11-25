@@ -77,15 +77,22 @@
             <section class="mb-7 rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-4 sm:p-5">
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                     <h2 class="font-black text-amber-900">⚠️ Por acabarse ({{ $porAcabarse['total'] }})</h2>
-                    <span class="text-sm text-amber-800">Compra o revisa estos productos antes de que falten.</span>
-                    <a href="{{ url('/kardex/stock') }}" class="ml-auto text-sm font-bold text-amber-900 underline">Ver stock</a>
+                    <span class="text-sm text-amber-800">Cómpralos antes de que falten: el sistema mira lo que vendes cada día.</span>
+                    <span class="ml-auto flex flex-wrap gap-3">
+                        @if (auth()->user()->esAdmin() || auth()->user()->tieneModulo('/requerimientos'))
+                            <a href="{{ route('requerimientos.create') }}" class="text-sm font-bold text-amber-900 underline">Hacer el pedido</a>
+                        @endif
+                        <a href="{{ url('/kardex/stock') }}" class="text-sm font-bold text-amber-900 underline">Ver stock</a>
+                    </span>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     @foreach ($porAcabarse['items'] as $p)
                         <span class="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm shadow-sm ring-1 {{ $p->stock <= 0 ? 'ring-rose-300' : 'ring-amber-200' }}">
                             <b class="text-gray-800">{{ $p->nombre }}</b>
                             <span class="{{ $p->stock <= 0 ? 'text-rose-600 font-bold' : 'text-amber-700' }}">{{ $p->stock <= 0 ? 'se acabó' : 'quedan '.$num($p->stock).' '.$p->unidad }}</span>
+                            @if ($p->dias !== null)<span class="text-xs text-amber-700">· alcanza ~{{ $num($p->dias) }} día(s)</span>@endif
                             @if ($p->minimo > 0)<span class="text-xs text-gray-400">mín. {{ $num($p->minimo) }}</span>@endif
+                            @if ($p->sugerido > 0)<span class="text-xs font-bold text-emerald-700">comprar {{ $num($p->sugerido) }}</span>@endif
                         </span>
                     @endforeach
                     @if ($porAcabarse['total'] > $porAcabarse['items']->count())

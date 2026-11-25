@@ -169,7 +169,8 @@ class InicioController extends Controller
      * @return array{total: float, comprobantes: int, pendientes: int}
      */
     /**
-     * Insumos y productos por acabarse: los que llegaron a su stock mínimo y los insumos de recetas que ya no tienen stock.
+     * Qué comprar: los productos que se acabaron, llegaron a su stock mínimo o no alcanzan para los próximos días según lo
+     * que se vende por día (aunque no tengan stock mínimo), con cuánto conviene comprar; y los insumos de recetas sin stock.
      *
      * @return array{total: int, items: Collection<int, object>}
      */
@@ -179,17 +180,15 @@ class InicioController extends Controller
         if (! $almacen) {
             return ['total' => 0, 'items' => collect()];
         }
-        $q = DB::table('productos as p')->join('producto_stock as ps', fn ($j) => $j->on('ps.IdProducto', '=', 'p.IdProducto')->where('ps.id_almacen', $almacen->id_almacen))
-            ->where('p.id_empresa_negocio', $sucursal)->where('p.proest', 'Activo')->whereIn('p.promocion', [0, 4])
-            ->where(fn ($w) => $w->where(fn ($v) => $v->where('p.stock_min', '>', 0)->whereColumn('ps.stock', '<=', 'p.stock_min'))
-                ->orWhere(fn ($v) => $v->where('p.promocion', 4)->where('ps.stock', '<=', 0)
-                    ->whereExists(fn ($e) => $e->from('producto_receta as r')->whereColumn('r.IdInsumo', 'p.IdProducto'))));
+        $enRecetas = DB::table('producto_receta')->distinct()->pluck('IdInsumo')->flip();
+        $lista = Requerimientos::sugerencias($sucursal, (int) $almacen->id_almacen)
+            ->filter(fn ($p) => $p->estado !== 'ok' || ($p->tipo === 4 && $p->stock <= 0 && isset($enRecetas[$p->id])))
+            ->values();
 
         return [
-            'total' => (clone $q)->count(),
-            'items' => $q->orderByRaw('ps.stock - p.stock_min')->limit(8)->get(['p.pronom', 'p.umecod', 'p.stock_min', 'ps.stock'])
-                ->map(fn ($p) => (object) ['nombre' => $p->pronom, 'stock' => (float) $p->stock, 'minimo' => (float) $p->stock_min,
-                    'unidad' => Recetas::nombreUnidad($p->umecod ?: 'NIU')]),
+            'total' => $lista->count(),
+            'items' => $lista->take(8)->map(fn ($p) => (object) ['nombre' => $p->nombre, 'stock' => $p->stock, 'minimo' => $p->minimo,
+                'dias' => $p->estado === 'se_acaba' ? $p->dias : null, 'sugerido' => $p->sugerido, 'unidad' => Recetas::nombreUnidad($p->unidad)]),
         ];
     }
 

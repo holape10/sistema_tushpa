@@ -23,6 +23,7 @@ use App\Support\PadronRuc;
 use App\Support\PanelDueno;
 use App\Support\Procesos;
 use App\Support\Promociones;
+use App\Support\ResumenTelegram;
 use App\Support\Sunat\EnvioProgramado;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\TelegramCitas;
@@ -493,6 +494,8 @@ Artisan::command('push:claves {--forzar : Cambiarlas aunque ya existan (los celu
 
 Artisan::command('dueno:resumen {--noche : Negocios que atienden de noche (resumen de la noche que terminó)} {--ruc= : Solo esta empresa}', function () {
     $noche = (bool) $this->option('noche');
+    // Los que tocaron Iniciar en el bot de Telegram (de cualquier empresa)
+    TelegramCitas::recibir();
     // De día: el resumen de hoy (a las 11 pm) · de noche: el de la noche que empezó ayer a mediodía (a las 12:05 pm)
     $fecha = $noche ? now()->subDay() : now();
     $clientes = Tenancy::activa()
@@ -501,6 +504,13 @@ Artisan::command('dueno:resumen {--noche : Negocios que atienden de noche (resum
     $enviados = 0;
     foreach ($clientes as $cliente) {
         $enviar = function () use ($noche, $fecha, &$enviados) {
+            // Por Telegram (gratis): a los administradores que lo activaron en el Panel del dueño, con lo que deben los clientes
+            if (Schema::hasColumn('users', 'telegram_resumen') && TelegramCitas::configurado()) {
+                TelegramCitas::sincronizar();
+                foreach (DB::table('empresa_negocios')->where('atiende_de_noche', $noche)->pluck('id_empresa_negocio') as $suc) {
+                    $enviados += ResumenTelegram::enviar((int) $suc, $fecha);
+                }
+            }
             if (! Schema::hasTable('push_suscripciones') || ! Schema::hasColumn('push_suscripciones', 'dueno')) {
                 return;
             }

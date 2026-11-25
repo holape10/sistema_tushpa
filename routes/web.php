@@ -49,6 +49,7 @@ use App\Http\Controllers\CourierReclamoController;
 use App\Http\Controllers\CourierRepartoController;
 use App\Http\Controllers\CourierReporteController;
 use App\Http\Controllers\CourierWebController;
+use App\Http\Controllers\CuadernoController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\CuponController;
 use App\Http\Controllers\DashboardController;
@@ -894,6 +895,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/punto-venta-ia/buscar', [PuntoVentaIaController::class, 'buscar'])->middleware('throttle:120,1')->name('pv.ia.buscar');
     Route::post('/punto-venta-ia/producto', [PuntoVentaIaController::class, 'crearProducto'])->middleware('throttle:30,1')->name('pv.ia.producto');
 
+    // Pasar el cuaderno con foto (IA): cada hoja de ventas anotadas a mano se lee, se revisa y se registra como una venta
+    Route::get('/punto-venta/cuaderno', [CuadernoController::class, 'index'])->name('cuaderno.index');
+    Route::post('/punto-venta/cuaderno/leer', [CuadernoController::class, 'leer'])->middleware('throttle:20,1')->name('cuaderno.leer');
+    Route::post('/punto-venta/cuaderno/registrar', [CuadernoController::class, 'registrar'])->middleware('throttle:60,1')->name('cuaderno.registrar');
+
     // PV Farmacia: punto de venta con lotes y vencimientos (FEFO)
     Route::get('/pv-farmacia', [PuntoVentaController::class, 'farmacia'])->name('pv.farmacia');
     Route::post('/pv-farmacia/registrar', [PuntoVentaController::class, 'registrarFarmacia'])->name('pv.farmacia.registrar');
@@ -1351,6 +1357,12 @@ Route::middleware('auth')->prefix('panel-dueno')->name('dueno.')->controller(Pan
     Route::get('/', 'index')->name('index');
     Route::get('/resumen-dia', 'resumenDia')->name('resumen_dia');
     Route::post('/configuracion', 'configuracion')->name('configuracion');
+    // Resumen del día y deudas de clientes por Telegram (el bot de los recordatorios, gratis)
+    Route::post('/telegram/verificar', 'telegramVerificar')->middleware('throttle:60,1')->name('telegram.verificar');
+    Route::post('/telegram/{usuario}/enlace', 'telegramEnlace')->whereNumber('usuario')->name('telegram.enlace');
+    Route::post('/telegram/{usuario}/recibir', 'telegramRecibir')->whereNumber('usuario')->name('telegram.recibir');
+    Route::post('/telegram/{usuario}/probar', 'telegramProbar')->whereNumber('usuario')->middleware('throttle:10,1')->name('telegram.probar');
+    Route::post('/telegram/{usuario}/quitar', 'telegramQuitar')->whereNumber('usuario')->name('telegram.quitar');
 });
 
 require __DIR__.'/auth.php';

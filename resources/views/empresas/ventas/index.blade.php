@@ -56,6 +56,8 @@
                     <button class="px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"><i class="fas fa-search"></i> Buscar</button>
                     <a href="{{ route('ventas.exportar', request()->query()) }}" class="px-5 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700"><i class="fas fa-file-excel"></i> Excel</a>
                     <a href="{{ route('ventas.index') }}" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm hover:bg-gray-200">Limpiar</a>
+                    {{-- Ventas anotadas a mano: la IA lee la foto de cada hoja del cuaderno --}}
+                    <a href="{{ route('cuaderno.index') }}" class="ml-auto px-4 py-2 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 whitespace-nowrap">📒 Pasar cuaderno (IA)</a>
                 </div>
             </div>
         </form>

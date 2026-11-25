@@ -34,10 +34,6 @@ class VentasCuaderno
                 ['No encontré estos productos (créalos o corrige el nombre para que sea igual):'], $faltan->map(fn ($n) => '  - '.$n)->all())];
         }
 
-        $contado = (int) DB::table('credito_dias')->where('id_empresa_negocio', $sucursal)->where('cre_dia_tip', 'CONTADO')->value('cre_dia_id');
-        $efectivo = (int) (DB::table('medios_pagos')->where('id_empresa_negocio', $sucursal)->where('nom_med_pag', 'like', '%EFECTIVO%')->value('id_med_pag')
-            ?: DB::table('medios_pagos')->where('id_empresa_negocio', $sucursal)->orderBy('id_med_pag')->value('id_med_pag'));
-
         $ventas = [];
         DB::beginTransaction();
         try {
@@ -47,12 +43,7 @@ class VentasCuaderno
                 if (abs($total - (float) $hoja['total']) > 0.001) {
                     throw new \RuntimeException("{$hoja['nombre']}: las líneas suman S/ {$total} y el cuaderno dice S/ {$hoja['total']}.");
                 }
-                $id = VentaDirecta::registrar($user, [
-                    'tdocod' => $tdocod, 'estadopago' => $contado, 'fecEmi' => $cuaderno['fecha'],
-                    'tdicod' => '1', 'clinum' => '00000000', 'clinom' => 'CLIENTES VARIOS',
-                    'observaciones' => mb_substr('Cuaderno '.$hoja['nombre'], 0, 100),
-                    'items' => $items, 'id_med_pag' => [$efectivo], 'mon_med_pag' => [$total], 'paga' => $total,
-                ], 'PV');
+                $id = self::registrarHoja($user, $cuaderno['fecha'], $hoja['nombre'], $items, $tdocod);
                 $cab = DB::table('cpe_cabecera')->where('IdCpe_cabecera', $id)->first();
                 $ventas[] = $id;
                 $mensajes[] = sprintf('%s: %s-%s · %d líneas · S/ %.2f · fecha %s', $hoja['nombre'], $cab->serdoc, $cab->numdoc, count($items), $total,
@@ -66,5 +57,27 @@ class VentasCuaderno
         }
 
         return ['ok' => true, 'ventas' => $grabar ? $ventas : [], 'mensajes' => $mensajes];
+    }
+
+    /**
+     * Registra una hoja del cuaderno como una venta al contado en efectivo a CLIENTES VARIOS, con la fecha del cuaderno.
+     *
+     * @param  list<array{id: int, cantidad: float, precio: float}>  $items
+     * @return int IdCpe_cabecera
+     */
+    public static function registrarHoja(User $user, string $fecha, string $nombre, array $items, string $tdocod): int
+    {
+        $sucursal = (int) $user->id_empresa_negocio;
+        $contado = (int) DB::table('credito_dias')->where('id_empresa_negocio', $sucursal)->where('cre_dia_tip', 'CONTADO')->value('cre_dia_id');
+        $efectivo = (int) (DB::table('medios_pagos')->where('id_empresa_negocio', $sucursal)->where('nom_med_pag', 'like', '%EFECTIVO%')->value('id_med_pag')
+            ?: DB::table('medios_pagos')->where('id_empresa_negocio', $sucursal)->orderBy('id_med_pag')->value('id_med_pag'));
+        $total = round(array_sum(array_map(fn ($i) => $i['cantidad'] * $i['precio'], $items)), 2);
+
+        return VentaDirecta::registrar($user, [
+            'tdocod' => $tdocod, 'estadopago' => $contado, 'fecEmi' => $fecha,
+            'tdicod' => '1', 'clinum' => '00000000', 'clinom' => 'CLIENTES VARIOS',
+            'observaciones' => mb_substr('Cuaderno '.$nombre, 0, 100),
+            'items' => $items, 'id_med_pag' => [$efectivo], 'mon_med_pag' => [$total], 'paga' => $total,
+        ], 'PV');
     }
 }

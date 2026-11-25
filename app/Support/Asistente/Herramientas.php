@@ -80,6 +80,14 @@ class Herramientas
                 ]],
             ],
             [
+                'name' => 'productos_sin_venta',
+                'description' => 'Mercadería parada: productos con stock en el almacén principal que NO se vendieron en los últimos N días (por defecto 30), '
+                    .'con cuánto hay, cuánta plata hay metida ahí (al costo) y cuándo se vendió por última vez. Sirve para rematar, poner en oferta o dejar de comprar.',
+                'inputSchema' => ['type' => 'object', 'properties' => [
+                    'dias' => ['type' => 'integer', 'description' => 'Días sin venta (por defecto 30).'], 'sucursal' => $sucursal,
+                ]],
+            ],
+            [
                 'name' => 'control_insumos',
                 'description' => 'Por insumo: lo que se debió gastar según las recetas de lo vendido, las mermas registradas y lo que faltó o sobró en los conteos de inventario, con la desviación en % y la pérdida en soles.',
                 'inputSchema' => ['type' => 'object', 'properties' => ['desde' => $desde, 'hasta' => $hasta, 'sucursal' => $sucursal], 'required' => ['desde', 'hasta']],
@@ -114,6 +122,7 @@ class Herramientas
                 'ventas_por_horario' => self::porHorario($user, $input),
                 'alertas' => self::alertas($user, $input),
                 'stock' => self::stock($user, $input),
+                'productos_sin_venta' => self::sinVenta($user, $input),
                 'control_insumos' => self::controlInsumos($user, $input),
                 'cuentas_pendientes' => self::cuentas($user, $input),
                 'saldos_contables' => self::saldos($user, $input),
@@ -238,6 +247,32 @@ class Herramientas
         return ['almacen' => $almacen->descripcion, 'productos_en_total' => $lista->count(),
             'productos' => $lista->take(60)->map(fn ($p) => ['nombre' => $p->nombre, 'unidad' => $p->unidad, 'stock' => $p->stock, 'minimo' => $p->minimo,
                 'gasto_por_dia' => $p->consumo_dia, 'alcanza_dias' => $p->dias, 'estado' => $p->estado, 'costo' => $p->costo])->values()->all()];
+    }
+
+    /** Productos con stock que no se venden hace N días, con la plata parada al costo */
+    private static function sinVenta(User $user, array $input): array
+    {
+        $sede = self::sede($user, $input);
+        $almacen = Kardex::almacenPredeterminado($sede);
+        if (! $almacen) {
+            throw new \InvalidArgumentException('La sede no tiene almacén.');
+        }
+        $dias = min(max((int) ($input['dias'] ?? 30), 1), 365);
+        $ultimas = DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
+            ->where('c.id_empresa_negocio', $sede)->whereNull('c.ccabaj')->whereNotIn('c.tdocod', ['07', '08'])
+            ->groupBy('d.IdProducto')->selectRaw('d.IdProducto, MAX(c.fecha_hora) as ultima');
+        $filas = DB::table('productos as p')->join('producto_stock as s', fn ($j) => $j->on('s.IdProducto', '=', 'p.IdProducto')->where('s.id_almacen', $almacen->id_almacen))
+            ->leftJoinSub($ultimas, 'u', 'u.IdProducto', '=', 'p.IdProducto')
+            ->where('p.id_empresa_negocio', $sede)->where('p.proest', 'Activo')->where('p.promocion', 0)->where('s.stock', '>', 0)
+            ->where(fn ($w) => $w->whereNull('u.ultima')->orWhere('u.ultima', '<', now()->subDays($dias)))
+            ->get(['p.pronom', 'p.umecod', 'p.costo', 'p.propun', 's.stock', 'u.ultima'])
+            ->map(fn ($p) => ['nombre' => $p->pronom, 'stock' => (float) $p->stock, 'unidad' => $p->umecod, 'precio' => (float) $p->propun,
+                'plata_parada_al_costo' => round((float) $p->stock * (float) $p->costo, 2), 'ultima_venta' => $p->ultima ? substr((string) $p->ultima, 0, 10) : 'nunca'])
+            ->sortByDesc('plata_parada_al_costo')->values();
+
+        return ['almacen' => $almacen->descripcion, 'dias_sin_venta' => $dias, 'productos_en_total' => $filas->count(),
+            'plata_parada_total' => round($filas->sum('plata_parada_al_costo'), 2), 'productos' => $filas->take(self::FILAS)->all(),
+            'nota' => 'plata_parada_al_costo es 0 si el producto no tiene costo registrado.'];
     }
 
     private static function controlInsumos(User $user, array $input): array

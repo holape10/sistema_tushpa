@@ -28,6 +28,9 @@
                     data-bienvenida="Te avisaré al momento si anulan una venta, quitan un plato de cocina, dan cortesías o descuentos, o falta plata en caja."
                     class="hidden px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-gray-900 font-black text-sm shadow">🔔 Avisarme al celular</button>
             @endif
+            @if ($telegram)
+                <a href="#resumen-telegram" class="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 font-black text-sm shadow">✈️ Resumen por Telegram</a>
+            @endif
             <button type="button" @click="config = true" class="px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 font-bold text-sm">⚙ Meta y gastos</button>
         </div>
     </section>
@@ -485,6 +488,72 @@
                 <button class="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold">Guardar</button></div>
         </form>
     </div>
+
+    {{-- Resumen del día y deudas de clientes por Telegram (gratis): cada administrador vincula su Telegram y lo activa --}}
+    @if ($telegram)
+        <section id="resumen-telegram" class="bg-white rounded-2xl shadow-sm p-5 space-y-3" x-data="resumenTelegram(@js($telegram->map(fn ($a) => ['id' => (int) $a->IdUsuario,
+                'nombre' => trim((string) ($a->apeusu ?: $a->name)), 'vinculado' => (bool) $a->telegram_chat_id, 'recibir' => (bool) $a->telegram_resumen, 'enlace' => null])->values()))">
+            <div>
+                <h2 class="font-extrabold text-gray-800">✈️ Resumen del día por Telegram</h2>
+                <p class="text-sm text-gray-500">Cada noche ({{ ($config->atiende_de_noche ?? false) ? 'a las 12:05 pm, al cerrar la noche' : 'a las 11 pm' }}) le llega gratis a su Telegram:
+                    lo vendido y en qué medios, lo más vendido, lo que se está acabando y <b>cuánto te deben tus clientes</b> (quiénes y desde cuándo).
+                    Primero vincula el Telegram: abre el enlace en el celular de esa persona y toca <b>Iniciar</b>.</p>
+            </div>
+            <p x-show="aviso" x-text="aviso" x-cloak class="rounded-xl bg-indigo-50 text-indigo-800 px-3 py-2 text-sm"></p>
+            <div class="divide-y divide-gray-100">
+                <template x-for="a in admins" :key="a.id">
+                    <div class="py-3 flex flex-wrap items-center gap-2">
+                        <p class="flex-1 min-w-40 font-semibold text-gray-800" x-text="a.nombre"></p>
+                        <template x-if="!a.vinculado && !a.enlace">
+                            <button type="button" @click="vincular(a)" class="h-9 px-3 rounded-xl bg-sky-600 text-white text-sm font-bold">Vincular Telegram</button>
+                        </template>
+                        <template x-if="!a.vinculado && a.enlace">
+                            <span class="flex flex-wrap items-center gap-2 text-sm">
+                                <a :href="a.enlace" target="_blank" class="h-9 px-3 inline-flex items-center rounded-xl bg-sky-50 text-sky-700 font-bold">Abrir en Telegram ↗</a>
+                                <span class="text-gray-500">esperando que toque <b>Iniciar</b>…</span>
+                            </span>
+                        </template>
+                        <template x-if="a.vinculado">
+                            <span class="flex flex-wrap items-center gap-2">
+                                <span class="text-sm font-semibold text-emerald-700">✔ Vinculado</span>
+                                <label class="flex items-center gap-2 rounded-xl px-3 h-9 ring-1 text-sm font-semibold cursor-pointer" :class="a.recibir ? 'ring-emerald-300 bg-emerald-50 text-emerald-800' : 'ring-gray-200 text-gray-600'">
+                                    <input type="checkbox" :checked="a.recibir" @change="recibir(a, $event.target.checked)" class="rounded text-emerald-600"> Recibir el resumen cada noche</label>
+                                <button type="button" @click="probar(a)" class="h-9 px-3 rounded-xl bg-gray-100 text-sm font-bold">Enviar el de hoy</button>
+                            </span>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </section>
+        <script>
+            document.addEventListener('alpine:init', () => {
+                Alpine.data('resumenTelegram', (admins) => ({
+                    admins, aviso: '',
+                    async post(url, datos = {}) {
+                        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content }, body: JSON.stringify(datos) });
+                        return r.json();
+                    },
+                    ruta(a, accion) { return @js(url('panel-dueno/telegram')) + '/' + a.id + '/' + accion; },
+                    async vincular(a) {
+                        const r = await this.post(this.ruta(a, 'enlace'));
+                        if (!r.ok) { this.aviso = r.mensaje; return; }
+                        a.enlace = r.enlace;
+                        window.open(r.enlace, '_blank');
+                        this.esperar(45);
+                    },
+                    // Cada 4 s pregunta si ya tocó Iniciar en el bot
+                    async esperar(vueltas) {
+                        const r = await this.post(@js(route('dueno.telegram.verificar')));
+                        this.admins.forEach(a => { if (!a.vinculado && (r.vinculados || []).includes(a.id)) { a.vinculado = true; a.enlace = null; this.recibir(a, true); this.aviso = '✔ ' + a.nombre + ' quedó vinculado: cada noche le llegará el resumen.'; } });
+                        if (this.admins.some(a => a.enlace && !a.vinculado) && vueltas > 1) setTimeout(() => this.esperar(vueltas - 1), 4000);
+                    },
+                    async recibir(a, valor) { a.recibir = valor; await this.post(this.ruta(a, valor ? 'recibir' : 'quitar'), { recibir: valor }); },
+                    async probar(a) { this.aviso = 'Enviando…'; const r = await this.post(this.ruta(a, 'probar')); this.aviso = r.mensaje; },
+                }));
+            });
+        </script>
+    @endif
 </div>
 
 <script>
