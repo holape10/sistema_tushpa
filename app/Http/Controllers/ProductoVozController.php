@@ -7,6 +7,7 @@ use App\Models\Producto;
 use App\Support\Asistente\ProductoVoz;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
@@ -27,6 +28,21 @@ class ProductoVozController extends Controller
         }
     }
 
+    /** Crear con foto: la IA lee el paquete; la foto queda para ser la imagen del producto */
+    public function foto(Request $request): JsonResponse
+    {
+        $request->validate([
+            'foto' => 'required|file|max:12288|extensions:'.ProductoVoz::EXTENSIONES,
+            'texto' => 'nullable|string|max:500',
+        ], ['foto.extensions' => 'Toma una foto (JPG o PNG).', 'foto.max' => 'La foto pesa más de 12 MB.']);
+        set_time_limit(90);
+        try {
+            return response()->json(['ok' => true] + ProductoVoz::leerFoto(Auth::user(), $request->file('foto'), (string) $request->texto));
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+    }
+
     public function crear(Request $request, ProductoController $productos): JsonResponse
     {
         $d = $request->validate([
@@ -35,6 +51,7 @@ class ProductoVozController extends Controller
             'productos.*.costo' => 'nullable|numeric|min:0|max:999999', 'productos.*.stock' => 'nullable|numeric|min:0|max:99999999',
             'productos.*.unidad' => 'nullable|exists:unidad_medida,umecod', 'productos.*.categoria' => 'nullable|string|max:50',
             'productos.*.presentaciones' => 'nullable|array|max:20',
+            'productos.*.codigo_barra' => 'nullable|string|max:50', 'productos.*.foto' => 'nullable|uuid',
         ], [], ['productos.*.precio' => 'precio', 'productos.*.nombre' => 'nombre']);
         $user = Auth::user();
 
@@ -51,17 +68,22 @@ class ProductoVozController extends Controller
                 ['cat_nom' => mb_strtoupper($categoria), 'id_empresa_negocio' => $user->id_empresa_negocio],
                 ['IdEmpresa' => $user->IdEmpresa, 'visible' => 1])->cat_id : null;
 
+            // La foto leída por la IA pasa a ser la imagen del producto
+            $foto = ProductoVoz::rutaFoto($p['foto'] ?? null);
             // El mismo guardado del formulario de Nuevo Producto
             $sub = Request::create('', 'POST', [
                 'promocion' => 0, 'pronom' => $nombre, 'propun' => $p['precio'], 'costo' => $p['costo'] ?? null,
-                'umecod' => $p['unidad'] ?? 'NIU', 'cat_id' => $catId, 'stock_inicial' => $p['stock'] ?? null,
+                'umecod' => $p['unidad'] ?? 'NIU', 'cat_id' => $catId, 'stock_inicial' => $p['stock'] ?? null, 'codigo_barra' => $p['codigo_barra'] ?? null,
                 'presentaciones' => array_values(array_map(fn ($x) => ['umecod' => $x['unidad'] ?? 'NIU', 'nombre' => $x['nombre'] ?? null,
                     'factor' => $x['factor'] ?? null, 'precio' => $x['precio'] ?? null], $p['presentaciones'] ?? [])),
-            ]);
+            ], [], $foto ? ['imagen' => new UploadedFile($foto, 'foto.webp', 'image/webp', null, true)] : []);
             $sub->setUserResolver(fn () => $user);
             $sub->setLaravelSession($request->session());
             try {
                 $productos->store($sub);
+                if ($foto) {
+                    @unlink($foto);
+                }
                 $resultados[] = ['nombre' => $nombre, 'ok' => true, 'mensaje' => 'Creado'];
             } catch (ValidationException $e) {
                 $resultados[] = ['nombre' => $nombre, 'ok' => false, 'mensaje' => collect($e->errors())->flatten()->first()];

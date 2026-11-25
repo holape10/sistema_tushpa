@@ -3,6 +3,9 @@
 namespace Tests\Flujos;
 
 use App\Support\Asistente\Asistente;
+use App\Support\Asistente\ProductoVoz;
+use App\Support\ImagenProducto;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
 /** Productos › Crear con voz (IA): la IA llena nombre, precio, stock y presentaciones; al aceptar se crean como en el formulario */
@@ -45,6 +48,41 @@ class ProductoVozTest extends FlujoTestCase
         $this->assertSame([['nombre' => 'CAJA X12', 'unidad' => 'BX', 'factor' => 12, 'precio' => 38]], $r['productos'][0]['presentaciones']);
         $this->assertSame('NIU', $r['productos'][1]['unidad'], 'Una unidad que no existe pasa a NIU.');
         $this->assertStringContainsString('BX=', $this->enviado['messages'][0]['content'], 'La IA recibe las unidades de la lista.');
+    }
+
+    public function test_con_foto_la_ia_lee_el_paquete_y_la_foto_queda_como_imagen_del_producto(): void
+    {
+        Asistente::$falso = function (array $p) {
+            $this->enviado = $p;
+
+            return (object) ['stopReason' => 'end_turn', 'content' => [(object) ['type' => 'text', 'text' => json_encode(['productos' => [
+                ['nombre' => 'leche evaporada gloria 400 g', 'precio' => 4.5, 'costo' => null, 'stock' => 12, 'unidad' => 'NIU', 'categoria' => 'lacteos',
+                    'codigo_barra' => '7751271 001019', 'presentaciones' => []],
+            ], 'respuesta' => 'Leí la leche Gloria'])]],
+                'usage' => (object) ['inputTokens' => 1800, 'outputTokens' => 150, 'cacheReadInputTokens' => 0, 'cacheCreationInputTokens' => 0]];
+        };
+
+        $leido = $this->post(route('productos.foto.leer'), ['foto' => UploadedFile::fake()->image('leche.jpg', 900, 1200), 'texto' => 'a 4.50 stock 12'],
+            ['Accept' => 'application/json'])->assertOk()->json();
+
+        $this->assertTrue($leido['ok'], json_encode($leido));
+        $producto = $leido['productos'][0];
+        $this->assertSame('LECHE EVAPORADA GLORIA 400 G', $producto['nombre']);
+        $this->assertSame('7751271001019', $producto['codigo_barra'], 'El código de barras queda solo con sus dígitos.');
+        $this->assertSame('image', $this->enviado['messages'][0]['content'][0]['type'], 'La IA recibe la foto.');
+        $this->assertStringContainsString('a 4.50 stock 12', $this->enviado['messages'][0]['content'][1]['text']);
+        $temporal = ProductoVoz::rutaFoto($producto['foto']);
+        $this->assertNotNull($temporal, 'La foto espera a que se cree el producto.');
+
+        $creado = $this->postJson(route('productos.voz.crear'), ['productos' => [$producto]])->assertOk()->json();
+
+        $this->assertTrue($creado['ok'], json_encode($creado));
+        $p = DB::table('productos')->where('id_empresa_negocio', $this->sucursal)->where('pronom', 'LECHE EVAPORADA GLORIA 400 G')->first();
+        $this->assertSame('7751271001019', $p->codigo_barra);
+        $this->assertNotEmpty($p->imagenproducto, 'La foto pasa a ser la imagen del producto.');
+        $this->assertFileExists(public_path($p->imagenproducto));
+        $this->assertFileDoesNotExist($temporal, 'La foto de espera se borra al crear el producto.');
+        ImagenProducto::borrar($p->imagenproducto);
     }
 
     public function test_al_aceptar_se_crean_con_stock_inicial_presentaciones_y_categoria(): void

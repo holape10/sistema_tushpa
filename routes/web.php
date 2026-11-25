@@ -1276,6 +1276,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/productos/importar', [ProductoController::class, 'importar'])->name('productos.importar');
     // Crear productos hablando (IA): nombre, precio, stock inicial y presentaciones
     Route::post('/productos/voz/interpretar', [ProductoVozController::class, 'interpretar'])->middleware('throttle:30,1')->name('productos.voz.interpretar');
+    Route::post('/productos/foto/leer', [ProductoVozController::class, 'foto'])->middleware('throttle:30,1')->name('productos.foto.leer');
     Route::post('/productos/voz/crear', [ProductoVozController::class, 'crear'])->middleware('throttle:30,1')->name('productos.voz.crear');
     // Etiquetas con código de barras (ticketera, impresora de etiquetas o PDF)
     Route::get('/productos/etiquetas', [ProductoEtiquetaController::class, 'index'])->name('productos.etiquetas');

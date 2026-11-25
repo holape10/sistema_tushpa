@@ -39,6 +39,10 @@
                     class="inline-flex justify-center items-center gap-1 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold hover:opacity-90 transition whitespace-nowrap">
                 🎤 Crear con voz (IA)
             </button>
+            <button type="button" @click="$dispatch('crear-con-foto')"
+                    class="inline-flex justify-center items-center gap-1 px-4 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-violet-600 text-white text-sm font-semibold hover:opacity-90 transition whitespace-nowrap">
+                📷 Crear con foto (IA)
+            </button>
             <a href="{{ route('productos.create') }}"
                class="inline-flex justify-center items-center px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition whitespace-nowrap">
                 + Nuevo Producto
