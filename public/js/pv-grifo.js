@@ -182,6 +182,14 @@ document.addEventListener('alpine:init', () => {
             const porImporte = it.importe !== null;
             this.despacho = { p: { ...p, precio: it.precio }, modo: porImporte ? 'S' : 'G', valor: String(porImporte ? it.importe : it.cant), editar: i };
         },
+        /** Un solo paso: agrega el despacho y cobra de una vez (lo que ya estaba en la lista también se cobra) */
+        despachoEImprimir() {
+            this.confirmarDespacho();
+            if (!this.despacho) this.cobrar();
+        },
+        get nombreComprobante() { return NOMBRES[this.tdocod] || 'Comprobante'; },
+        get nombreMedio() { return this.esContado ? (CFG.medios.find(m => m.id === this.medio)?.nombre || 'Contado') : 'Crédito'; },
+
         confirmarDespacho() {
             const d = this.despacho;
             const v = parseFloat(d.valor) || 0;
@@ -433,7 +441,7 @@ document.addEventListener('alpine:init', () => {
             if (this.despacho) {
                 if (e.key === 'Escape') { this.despacho = null; return; }
                 if (e.target.closest('input')) return;
-                if (e.key === 'Enter') { e.preventDefault(); this.confirmarDespacho(); }
+                if (e.key === 'Enter') { e.preventDefault(); e.shiftKey && this.despacho.editar === undefined ? this.despachoEImprimir() : this.confirmarDespacho(); }
                 else if (/^[0-9.]$/.test(e.key)) { e.preventDefault(); this.teclaDespacho(e.key); }
                 else if (e.key === 'Backspace') { e.preventDefault(); this.teclaDespacho('⌫'); }
                 return;

@@ -336,8 +336,15 @@
                     <button type="button" @click="teclaDespacho(k)" class="h-14 rounded-2xl bg-slate-100 text-2xl font-bold active:bg-slate-200" x-text="k"></button>
                 </template>
             </div>
-            <button type="button" @click="confirmarDespacho()" class="mt-3 w-full h-14 rounded-2xl bg-slate-900 text-white text-lg font-black active:scale-[.98]"
-                    x-text="despacho?.editar !== undefined ? 'GUARDAR' : 'AGREGAR'"></button>
+            {{-- Como en los grifos: el islero pone el monto y sale el ticket (con el comprobante, cliente y medio que estén elegidos) --}}
+            <div class="mt-3 grid gap-2" :class="despacho?.editar === undefined ? 'grid-cols-2' : 'grid-cols-1'">
+                <button type="button" @click="confirmarDespacho()" class="h-14 rounded-2xl bg-slate-200 text-slate-800 text-lg font-black active:scale-[.98]"
+                        x-text="despacho?.editar !== undefined ? 'GUARDAR' : '+ AGREGAR'"></button>
+                <button type="button" x-show="despacho?.editar === undefined" @click="despachoEImprimir()" :disabled="procesando"
+                        class="h-14 rounded-2xl bg-emerald-600 text-white text-lg font-black active:scale-[.98] disabled:opacity-50">🖨 COBRAR E IMPRIMIR</button>
+            </div>
+            <p x-show="despacho?.editar === undefined" class="mt-2 text-center text-xs text-slate-500">
+                Cobrar e imprimir: <b x-text="nombreComprobante"></b> · <span x-text="cliente.nom"></span> · <span x-text="nombreMedio"></span> (Shift + Enter)</p>
         </div>
     </div>
 </div>
