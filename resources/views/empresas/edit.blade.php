@@ -178,6 +178,14 @@
                                 <span class="block text-xs text-gray-500">Se anulan en Ventas igual que una nota de venta (vuelve el stock y sale de la caja). Ya enviadas a SUNAT
                                     no se puede: solo con comunicación de baja o nota de crédito. Ojo: SUNAT verá ese número como faltante en la serie.</span></span>
                         </label>
+                        {{-- Contingencia: solo las empresas que a veces emiten en papel (sin luz ni internet) ven la casilla en el Punto Venta --}}
+                        <label class="sm:col-span-3 flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 cursor-pointer">
+                            <input type="hidden" name="usa_contingencia" value="0">
+                            <input type="checkbox" name="usa_contingencia" value="1" @checked(old('usa_contingencia', $empresa->usa_contingencia ?? false)) class="mt-0.5 rounded text-violet-600">
+                            <span class="text-sm"><span class="font-semibold text-gray-800">📝 Usa comprobantes de contingencia (en papel)</span>
+                                <span class="block text-xs text-gray-500">Si a veces emiten boletas o facturas en papel (sin luz ni internet), el Punto Venta muestra la casilla
+                                    «Comprobante en papel» para pasarlas al sistema después. Si no la usan, déjala apagada y no les aparece.</span></span>
+                        </label>
                     </div>
                 </section>
 

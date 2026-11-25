@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\Sunat\SunatService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Comprobantes de contingencia: cuando no se puede emitir electrónicamente (sin luz ni internet, por ejemplo en la
@@ -20,6 +21,16 @@ class Contingencia
 
     /** Serie de contingencia: solo números (0001); las electrónicas empiezan con letra (B001, F001) */
     public const PATRON_SQL = '^[0-9]+$';
+
+    /** ¿La empresa usa contingencia? (Empresa › SUNAT). Sin la columna aún (antes de migrar), se muestra como antes */
+    public static function activa(string $empresa): bool
+    {
+        if (! Schema::hasColumn('empresa', 'usa_contingencia')) {
+            return true;
+        }
+
+        return (bool) DB::table('empresa')->where('IdEmpresa', $empresa)->value('usa_contingencia');
+    }
 
     public static function esSerie(?string $serie): bool
     {

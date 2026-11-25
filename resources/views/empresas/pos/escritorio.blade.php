@@ -386,16 +386,6 @@
                         <span class="text-[11px] text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full font-semibold">🧾 Vendedor: solo pedidos (la caja los cobra)</span>
                     @endif
                 </div>
-                {{-- Quién hizo la venta (varios venden en la misma PC) --}}
-                <template x-if="cfg.vendedores.length">
-                    <label class="flex items-center gap-2 rounded-xl px-3 py-2" :class="vendedor ? 'bg-indigo-50' : 'bg-amber-50 ring-1 ring-amber-300'">
-                        <span class="text-xs font-bold uppercase text-slate-600 whitespace-nowrap">🧑‍💼 Vendedor</span>
-                        <select x-model.number="vendedor" @change="guardarVendedor()" class="flex-1 h-9 rounded-lg border-slate-300 text-sm font-semibold">
-                            <option value="">— ¿Quién vendió? —</option>
-                            <template x-for="v in cfg.vendedores" :key="v.id"><option :value="v.id" x-text="v.nombre" :selected="v.id === vendedor"></option></template>
-                        </select>
-                    </label>
-                </template>
                 <div class="grid gap-1.5 p-1 bg-slate-100 rounded-xl" :style="`grid-template-columns: repeat(${cfg.comprobantes.length}, minmax(0, 1fr))`">
                     <template x-for="c in cfg.comprobantes" :key="c.tdocod">
                         <button type="button" @click="elegirComprobante(c.tdocod)"
@@ -405,7 +395,16 @@
                                 x-text="(tdocod === c.tdocod ? '✓ ' : '') + nombreComprobante(c.tdocod)"></button>
                     </template>
                 </div>
-                <div class="grid grid-cols-3 gap-2">
+                {{-- Vendedor (si varios venden en la misma PC), forma de pago y fechas en una sola fila --}}
+                <div class="grid gap-2" :style="`grid-template-columns: repeat(${2 + (cfg.vendedores.length ? 1 : 0) + (esContado ? 0 : 1)}, minmax(0, 1fr))`">
+                    <label x-show="cfg.vendedores.length" x-cloak>
+                        <span class="text-xs font-semibold" :class="vendedor ? 'text-slate-500' : 'text-amber-700'">🧑‍💼 Vendedor</span>
+                        <select x-model.number="vendedor" @change="guardarVendedor()" class="mt-1 w-full h-10 rounded-xl text-sm font-semibold"
+                                :class="vendedor ? 'border-slate-200' : 'border-amber-400 bg-amber-50 ring-1 ring-amber-300'">
+                            <option value="">¿Quién vendió?</option>
+                            <template x-for="v in cfg.vendedores" :key="v.id"><option :value="v.id" x-text="v.nombre" :selected="v.id === vendedor"></option></template>
+                        </select>
+                    </label>
                     <label>
                         <span class="text-xs font-semibold text-slate-500">F. Pago</span>
                         <select x-model="estadopago" @change="cambioEstadoPago()" class="mt-1 w-full h-10 rounded-xl border-slate-200 text-sm font-semibold">
@@ -423,8 +422,8 @@
                         <input type="date" x-model="fecVen" :min="cfg.hoy" class="mt-1 w-full h-10 rounded-xl border-slate-200 text-sm">
                     </label>
                 </div>
-                {{-- Contingencia: pasar al sistema una factura o boleta que se hizo en papel (sin luz ni internet) --}}
-                @if ($turno)
+                {{-- Contingencia: pasar al sistema una factura o boleta que se hizo en papel (sin luz ni internet); solo si la empresa la usa --}}
+                @if ($turno && \App\Support\Contingencia::activa((string) auth()->user()->IdEmpresa))
                     <div x-show="['01', '03'].includes(tdocod)" class="rounded-xl ring-1 px-3 py-2" :class="contingencia.activa ? 'ring-violet-300 bg-violet-50' : 'ring-slate-200'">
                         <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
                             <input type="checkbox" x-model="contingencia.activa" class="rounded text-violet-600">

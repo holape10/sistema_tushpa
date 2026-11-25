@@ -16,6 +16,15 @@ class ContingenciaTest extends FlujoTestCase
         return $this->venta([[$this->producto('ARENA '.uniqid(), 40, 10), 2]], $tdocod, ['fecEmi' => $fecha, 'contingencia' => ['serie' => $serie, 'numero' => $numero]]);
     }
 
+    public function test_la_casilla_del_papel_solo_sale_en_las_empresas_que_usan_contingencia(): void
+    {
+        $this->get(route('pv.index'))->assertOk()->assertDontSee('Comprobante en papel (contingencia)');
+
+        DB::table('empresa')->where('IdEmpresa', $this->usuario->IdEmpresa)->update(['usa_contingencia' => true]);
+
+        $this->get(route('pv.index'))->assertOk()->assertSee('Comprobante en papel (contingencia)');
+    }
+
     public function test_el_papel_entra_con_su_serie_numero_y_fecha_y_queda_para_enviarse_solo_a_sunat(): void
     {
         $id = VentaDirecta::registrar($this->usuario, $this->papel('1', 125, '2026-10-25'), 'PV');

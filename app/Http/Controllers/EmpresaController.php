@@ -114,7 +114,8 @@ class EmpresaController extends Controller
         'passcert' => 'Contraseña del certificado', 'certificado_archivo' => 'Certificado digital', 'fec_ini_cer' => 'Certificado vigente desde',
         'fec_fin_cer' => 'Certificado vigente hasta', 'icbper' => 'ICBPER', 'tip_env_fac_id' => 'Envío de facturas', 'tipo_envio' => 'Tipo de envío', 'envio_hora' => 'Hora del envío programado',
         'client_id' => 'ID API SUNAT (SIRE)', 'client_secret' => 'Clave API SUNAT (SIRE)', 'sire_usuario' => 'Usuario SOL del SIRE', 'sire_clave' => 'Clave SOL del SIRE',
-        'cuentas_bancarias' => 'Cuentas bancarias del A4', 'anular_sin_enviar' => 'Anular boletas y facturas no enviadas a SUNAT'];
+        'cuentas_bancarias' => 'Cuentas bancarias del A4', 'anular_sin_enviar' => 'Anular boletas y facturas no enviadas a SUNAT',
+        'usa_contingencia' => 'Usa comprobantes de contingencia (en papel)'];
 
     public function update(Request $request, $id)
     {
@@ -177,6 +178,9 @@ class EmpresaController extends Controller
         }
         if ($request->has('anular_sin_enviar')) {
             $empresa->anular_sin_enviar = $request->boolean('anular_sin_enviar');
+        }
+        if ($request->has('usa_contingencia') && Schema::hasColumn('empresa', 'usa_contingencia')) {
+            $empresa->usa_contingencia = $request->boolean('usa_contingencia');
         }
         // Cuentas bancarias del A4: solo las que tienen banco y número o CCI
         if ($request->has('cuentas')) {
