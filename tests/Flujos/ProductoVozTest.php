@@ -85,6 +85,14 @@ class ProductoVozTest extends FlujoTestCase
         ImagenProducto::borrar($p->imagenproducto);
     }
 
+    public function test_el_nombre_se_guarda_en_mayusculas_aunque_se_escriba_en_minusculas(): void
+    {
+        $this->post(route('productos.store'), ['promocion' => 0, 'pronom' => '  burro juego  inflable color amarillo ', 'propun' => 40, 'umecod' => 'NIU'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue(DB::table('productos')->where('id_empresa_negocio', $this->sucursal)->where('pronom', 'BURRO JUEGO INFLABLE COLOR AMARILLO')->exists());
+    }
+
     public function test_al_aceptar_se_crean_con_stock_inicial_presentaciones_y_categoria(): void
     {
         $r = $this->postJson(route('productos.voz.crear'), ['productos' => [

@@ -4,6 +4,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
 class Producto extends Model
@@ -22,6 +23,12 @@ class Producto extends Model
 
     /** Tipos que no aparecen en las pantallas de venta: insumos y opciones */
     public const NO_VENDIBLES = [4, self::OPCION];
+
+    /** El nombre se guarda siempre en MAYÚSCULAS y sin espacios de más, se escriba como se escriba (formulario, compras, IA…) */
+    protected function pronom(): Attribute
+    {
+        return Attribute::make(set: fn (?string $valor) => $valor === null ? null : mb_strtoupper(preg_replace('/\s+/u', ' ', trim($valor))));
+    }
 
     public function categoria()
     {
