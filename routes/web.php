@@ -3,6 +3,7 @@
 use App\Http\Controllers\ActivoFijoController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AlmacenController;
+use App\Http\Controllers\AparienciaController;
 use App\Http\Controllers\ArqueoCajaController;
 use App\Http\Controllers\AsistenciaAdminController;
 use App\Http\Controllers\AsistenciaController;
@@ -904,6 +905,10 @@ Route::middleware('auth')->group(function () {
 
     // Campañas (Navidad, escolar, Día de la Madre…): qué comprar según lo vendido el año pasado
     Route::get('/campanas', [CampanaController::class, 'index'])->name('campanas.index');
+
+    // Mantenimiento › Apariencia: color, fondo y tamaño de letra del sistema (solo el administrador)
+    Route::get('/apariencia', [AparienciaController::class, 'index'])->name('apariencia.index');
+    Route::post('/apariencia', [AparienciaController::class, 'guardar'])->name('apariencia.guardar');
 
     // Separados (apartados): adelanto hoy, el producto queda reservado y se entrega al terminar de pagar
     Route::get('/separados', [SeparadoController::class, 'index'])->name('separados.index');

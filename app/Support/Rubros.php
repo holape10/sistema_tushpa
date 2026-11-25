@@ -20,7 +20,7 @@ class Rubros
         '/reportes/ventas', '/reportes/sunat', '/reportes/ventas-cliente', '/reportes/ventas-producto', '/reportes/productos-ranking',
         '/reportes/ventas-detallado', '/reportes/ventas-producto-detalle',
         '/clientes', '/proveedores', '/usuarios', '/empresas', '/sucursales', '/mediospagos', '/categorias', '/productos',
-        '/impresoras', '/compras', '/ordenes-compra', '/gastos', '/centros-costo', '/activos-fijos', '/almacenes', '/kardex', '/kardex/stock', '/kardex/inventario', '/kardex/sunat', '/cuentas/cobrar', '/cuentas/pagar', '/flujo-caja', '/bancos', '/soporte',
+        '/impresoras', '/apariencia', '/compras', '/ordenes-compra', '/gastos', '/centros-costo', '/activos-fijos', '/almacenes', '/kardex', '/kardex/stock', '/kardex/inventario', '/kardex/sunat', '/cuentas/cobrar', '/cuentas/pagar', '/flujo-caja', '/bancos', '/soporte',
         '/respaldo', '/bitacora', '/mis-comprobantes', '/sunat/consulta-cpe',
     ];
 

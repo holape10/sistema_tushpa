@@ -7,7 +7,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     @if (config('marca.es_tushpa'))<link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">@endif
     <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
-    <title>@yield('title', 'Sistema '.config('marca.nombre'))</title>
+    {{-- Con el nombre de la empresa delante: varias empresas abiertas en pestañas no se confunden --}}
+    @php $nombreEmpresaPestana = \App\Support\Apariencia::nombre(); @endphp
+    <title>{{ $nombreEmpresaPestana ? $nombreEmpresaPestana.' · ' : '' }}@yield('title', 'Sistema '.config('marca.nombre'))</title>
     @php
         // Menú: solo módulos que ya tienen pantalla (los '#' aún no existen) y el grupo de la página actual abierto
         $esActual = function ($mod) {
@@ -98,6 +100,8 @@
         @endif
     @endauth
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    {{-- Mantenimiento › Apariencia: el color, el fondo y la letra que eligió la empresa --}}
+    @auth {!! \App\Support\Apariencia::estilo() !!} @endauth
     @include('partials.pwa')
 </head>
 

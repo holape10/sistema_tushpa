@@ -1,10 +1,12 @@
 @php($rubros = $rubros ?? null)
+{{-- Varias empresas en la misma PC: el login lleva el color y el nombre de esta empresa (Mantenimiento › Apariencia) --}}
+@php($nombreEmpresa = $rubros ? null : \App\Support\Apariencia::nombre())
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar Sesión - Sistema {{ config('marca.nombre') }}</title>
+    <title>{{ $nombreEmpresa ? $nombreEmpresa.' · ' : '' }}Iniciar Sesión - Sistema {{ config('marca.nombre') }}</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
     <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     {{-- Íconos sin frenar la pantalla: se cargan en paralelo y se aplican al llegar --}}
@@ -12,6 +14,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    {!! \App\Support\Apariencia::estilo(\App\Support\Apariencia::deLaBase()) !!}
     @include('partials.pwa')
 </head>
 <body class="min-h-screen bg-gray-50">
@@ -132,6 +135,14 @@
                             <i class="fas" :class="rubros[rubro]?.icono"></i> <span x-text="rubros[rubro]?.nombre"></span>
                             <span class="text-xs font-normal text-indigo-400">· cambiar</span>
                         </button>
+                    @endif
+                    @if ($nombreEmpresa)
+                        {{-- Para no confundirse de empresa cuando se usan varias en la misma PC --}}
+                        <div class="mb-5 flex items-center gap-3 rounded-2xl bg-indigo-600 px-4 py-3 text-white">
+                            <i class="fas fa-store text-xl"></i>
+                            <span class="min-w-0"><span class="block text-[11px] uppercase tracking-wide text-indigo-100">Estás entrando a</span>
+                                <span class="block truncate text-lg font-black">{{ $nombreEmpresa }}</span></span>
+                        </div>
                     @endif
                     <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">Iniciar sesión</h2>
                     <p class="text-gray-500 text-sm mt-1 mb-7">Bienvenido de nuevo. Ingresa con tu usuario y contraseña.</p>
