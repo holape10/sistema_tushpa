@@ -30,6 +30,20 @@ class CuentaController extends Controller
         abort_unless(Auth::user()->esAdminOCaja(), 403, 'Solo Administrador o Caja.');
     }
 
+    /** Abre WhatsApp con el mensaje de cobro del cliente (todas sus compras pendientes) */
+    public function whatsapp(string $tipo, string $documento)
+    {
+        $this->autorizar();
+        abort_unless($tipo === 'cobrar', 404);
+        $aviso = Cuentas::avisoCobro((int) Auth::user()->id_empresa_negocio, $documento);
+        if (! $aviso) {
+            return back()->with('error', 'Ese cliente ya no tiene saldo pendiente.');
+        }
+        Bitacora::registrar('cuenta.cobro_whatsapp', "Envió por WhatsApp el cobro al cliente {$documento} por S/ ".number_format($aviso['saldo'], 2));
+
+        return redirect()->away('https://wa.me/'.($aviso['telefono'] ?? '').'?text='.rawurlencode($aviso['texto']));
+    }
+
     public function index(Request $request, string $tipo)
     {
         $this->autorizar();

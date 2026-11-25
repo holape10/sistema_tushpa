@@ -15,6 +15,7 @@ use App\Support\MesesCerrados;
 use App\Support\OrdenesCompra;
 use App\Support\Precios;
 use App\Support\PreciosCompra;
+use App\Support\ProveedoresPrecios;
 use App\Support\Recetas;
 use App\Support\Requerimientos;
 use App\Support\Rubros;
@@ -322,6 +323,20 @@ class CompraController extends Controller
         ];
     }
 
+    /** ¿A qué proveedor le compro más barato? Por producto, el último costo de cada proveedor (6 meses) */
+    public function comparar(Request $request)
+    {
+        $this->autorizar();
+        $q = trim((string) $request->get('q'));
+        $lista = ProveedoresPrecios::comparar((int) Auth::user()->id_empresa_negocio, null, $q);
+
+        return view('empresas.compras.comparar', [
+            'q' => $q, 'dias' => ProveedoresPrecios::DIAS,
+            // Primero los que tienen varios proveedores (ahí está el ahorro)
+            'productos' => $lista->sortByDesc(fn ($c) => [$c->ahorro, $c->proveedores->count()])->values(),
+        ]);
+    }
+
     /** Productos que se pueden comprar (simples e insumos), con su último costo */
     public function productos(Request $request)
     {
@@ -357,8 +372,11 @@ class CompraController extends Controller
             ->get(['productos.IdProducto', 'productos.procod', 'productos.pronom', 'productos.umecod', 'productos.costo', 'productos.promocion', 'productos.control_lote', 'productos.control_serie', 'producto_stock.stock']);
         $presentaciones = Precios::presentaciones($productos->pluck('IdProducto'));
         $unidades = UnidadMedida::pluck('umenom', 'umecod');
+        // El proveedor que lo vende más barato (si se le compró a más de uno)
+        $mejores = ProveedoresPrecios::mejores((int) $user->id_empresa_negocio, $productos->pluck('IdProducto')->map(fn ($id) => (int) $id)->all());
 
         return response()->json($productos->map(fn ($p) => [
+            'mejor' => $mejores[(int) $p->IdProducto] ?? null,
             'id' => $p->IdProducto, 'codigo' => $p->procod, 'nombre' => $p->pronom,
             'costo' => (float) $p->costo, 'stock' => (float) ($p->stock ?? 0), 'insumo' => (int) $p->promocion === 4,
             'control_lote' => (bool) $p->control_lote, 'control_serie' => (bool) $p->control_serie, 'unidad' => $unidades[$p->umecod] ?? $p->umecod,

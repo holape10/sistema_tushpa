@@ -115,6 +115,8 @@ document.addEventListener('alpine:init', () => {
         clinicaNombre: '',
 
         iniciar() {
+            // Precio x Mayor automático: cada cambio del carrito revisa si alguna línea llegó (o bajó de) su cantidad
+            if (window.PrecioMayor) this.$watch('carrito', () => PrecioMayor.aplicar(this.carrito));
             if (CFG.balanza && window.Balanza?.disponible()) {
                 window.addEventListener('balanza', e => this.pesoBalanza(e.detail));
                 Balanza.reconectar();
@@ -354,7 +356,7 @@ document.addEventListener('alpine:init', () => {
                 if (lista.length === 1) {
                     const p = lista[0];
                     // Con presentaciones o varios precios se pregunta cuál; si no, entra directo con la cantidad dicha
-                    if ((p.presentaciones || []).length || (p.precios || []).length || p.control_serie) this.agregar(p);
+                    if (this.hayQueElegir(p) || p.control_serie) this.agregar(p);
                     else this.agregar(p, false, null, cantidad, p.precio);
                 } else if (!lista.length) {
                     this.sonido(false);
@@ -441,15 +443,16 @@ document.addEventListener('alpine:init', () => {
         agregar(p, editar = true, pres, cantidad = 1, precioElegido = null) {
             if (this.edicion?.soloCabecera) { this.aviso('En esta venta los productos no cambian (es de mesa o tiene descuento o cortesía).', 'error'); return; }
             if (pres === undefined) {
-                if ((p.presentaciones || []).length || (p.precios || []).length) { this.abrirElegir(p, editar); return; }
+                if (this.hayQueElegir(p)) { this.abrirElegir(p, editar); return; }
                 pres = null;
             }
             // Elegido en la búsqueda: primero se pide cantidad y precio (como el sistema anterior); el lector de barras suma directo
             if (editar && !p.control_serie) { this.abrirPedir(p, pres); return; }
             const confirmado = precioElegido !== null;
             const precio = confirmado ? precioElegido : (pres ? pres.precio : p.precio);
+            // Una línea que pasó sola al Precio x Mayor sigue siendo la misma línea del producto
             let it = this.carrito.find(x => x.id === p.id && (x.presentacion || null) === (pres?.id ?? null)
-                && redondear(x.precio) === redondear(precio) && !x.lote);
+                && (redondear(x.precio) === redondear(precio) || (x.mayorAuto && redondear(x.precioBase) === redondear(precio))) && !x.lote);
             // Con número de serie: una sola línea por producto; la cantidad es la cantidad de series elegidas
             if (it && it.control_serie) {
                 this.enfocar('serie-' + it.key);
@@ -480,12 +483,18 @@ document.addEventListener('alpine:init', () => {
             else this.$refs.buscador.focus();
         },
 
+        /** ¿Se pregunta presentación o precio? El Precio x Mayor automático no se pregunta: se aplica solo por la cantidad */
+        hayQueElegir(p) {
+            return (p.presentaciones || []).length > 0 || (p.precios || []).some(x => !(p.mayor && Math.abs(x.precio - p.mayor.precio) < 0.005));
+        },
+
         /** Línea del detalle a partir de un producto del buscador (con su presentación, si se eligió) */
         nuevoItem(p, pres = null, extra = {}) {
             return { key: this._sigKey++, id: p.id, codigo: p.codigo, descripcion: p.nombre, nombre: p.nombre, cantidad: 1,
                      precio: pres ? pres.precio : p.precio, precioBase: pres ? pres.precio : p.precio, precioUnidad: p.precio,
                      dinamico: !!p.dinamico, unidad: p.unidad || 'Unidad', presentaciones: p.presentaciones || [],
                      presentacion: pres?.id ?? null, factor: pres?.factor ?? 1,
+                     mayor: pres ? null : (p.mayor || null), mayorAuto: false,
                      stock: p.stock, flash: false,
                      lotes: p.lotes || [], sin_lote: p.sin_lote || 0, control_lote: !!p.control_lote, lote: '',
                      control_serie: !!p.control_serie, seriesDisponibles: p.series || [], series: [], serieTexto: '', garantia: p.garantia || 0,

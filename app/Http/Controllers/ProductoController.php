@@ -25,6 +25,7 @@ use App\Support\Seguridad\Dispositivos;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class ProductoController extends Controller
@@ -91,6 +92,18 @@ class ProductoController extends Controller
         return in_array($tipo, [4, 8], true) || ! is_numeric($valor) || (float) $valor <= 0 ? null : round((float) $valor, 2);
     }
 
+    /** Desde cuántas unidades se cobra solo el Precio x Mayor (solo si hay Precio x Mayor) */
+    private static function mayorDesde(Request $request, int $tipo): array
+    {
+        if (! Schema::hasColumn('productos', 'mayor_desde')) {
+            return [];
+        }
+        $desde = self::precioExtra($request->precio2, $tipo) !== null && is_numeric($request->mayor_desde) && (float) $request->mayor_desde > 0
+            ? round((float) $request->mayor_desde, 3) : null;
+
+        return ['mayor_desde' => $desde];
+    }
+
     private function reglas(bool $sinPrecioVenta, bool $esInsumo = false): array
     {
         return [
@@ -98,6 +111,7 @@ class ProductoController extends Controller
             'descripcion' => 'nullable|string|max:255',
             'propun' => $sinPrecioVenta ? 'nullable|numeric|min:0' : 'required|numeric|min:0.01',
             'precio2' => 'nullable|numeric|min:0|max:999999',
+            'mayor_desde' => 'nullable|numeric|min:1|max:99999',
             'precio3' => 'nullable|numeric|min:0|max:999999',
             'costo' => $esInsumo ? 'required|numeric|gt:0' : 'nullable|numeric|min:0',
             'debe' => 'nullable|string|min:4|max:12|regex:/^[0-9A-Za-z]+$/',
@@ -349,6 +363,7 @@ class ProductoController extends Controller
                 'promocion' => $tipo,
                 'precio2' => self::precioExtra($request->precio2, $tipo),
                 'precio3' => self::precioExtra($request->precio3, $tipo),
+                ...self::mayorDesde($request, $tipo),
                 'cat_id' => $request->cat_id,
                 'subcat_id' => $request->subcat_id,
                 'stock_min' => $request->stock_min ?: 0,
@@ -481,6 +496,7 @@ class ProductoController extends Controller
                 + ['propun' => in_array($tipo, [4, 8], true) ? ($request->propun ?: 0) : $request->propun,
                     'precio2' => self::precioExtra($request->precio2, $tipo), 'precio3' => self::precioExtra($request->precio3, $tipo),
                     'codigo_barra' => trim((string) $request->codigo_barra) ?: null,
+                    ...self::mayorDesde($request, $tipo),
                     // El código interno se puede cambiar (vacío = se queda el actual; ya se revisó que no se repita)
                     'procod' => trim((string) $request->procod) ?: $producto->procod,
                     'descripcion' => trim((string) $request->descripcion) ?: null,

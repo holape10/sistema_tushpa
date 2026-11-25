@@ -72,6 +72,8 @@ document.addEventListener('alpine:init', () => {
         ultimaProforma: null,
 
         iniciar() {
+            // Precio x Mayor automático (precio-mayor.js): igual que en el Punto Venta
+            if (window.PrecioMayor) this.$watch('carrito', () => PrecioMayor.aplicar(this.carrito));
             const contado = CFG.estadopagos.find(e => e.cre_dia_tip === 'CONTADO') || CFG.estadopagos[0];
             this.estadopago = contado ? contado.cre_dia_id : null;
             this.medioUnico = CFG.medios.length ? CFG.medios[0].id_med_pag : null; // vienen con el predeterminado primero
@@ -233,6 +235,7 @@ document.addEventListener('alpine:init', () => {
             return { id: p.id, codigo: p.codigo, nombre: p.nombre, precio, precioBase: precio, precioUnidad: p.precio,
                 dinamico: !!p.dinamico, unidad: p.unidad || 'Unidad', presentaciones: p.presentaciones || [],
                 presentacion: pres?.id ?? null, factor: pres?.factor ?? 1, imagen: p.imagen || null,
+                mayor: pres ? null : (p.mayor || null), mayorAuto: false,
                 stock: p.stock, cantidad: 1, flash: false, ...extra };
         },
 

@@ -112,6 +112,11 @@
                         </td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
                             <button type="button" @click="historial({{ $c->id }})" class="text-xs font-semibold text-slate-500 hover:text-indigo-700 mr-2">Historial</button>
+                            @if ($abierta && $tipo === 'cobrar' && $c->doc_persona)
+                                {{-- Cobrarle por WhatsApp: su saldo de todas sus compras pendientes y cómo pagar --}}
+                                <a href="{{ route('cuentas.whatsapp', ['tipo' => 'cobrar', 'documento' => $c->doc_persona]) }}" target="_blank" rel="noopener"
+                                   title="Cobrarle por WhatsApp" class="inline-flex h-8 px-3 mr-1 items-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100 text-xs font-bold">💬 Cobrar</a>
+                            @endif
                             @if ($abierta)
                                 <button type="button" @click="abrirPago(@js(['id' => $c->id, 'doc' => $c->serie . '-' . $c->numero, 'persona' => $c->persona, 'saldo' => (float) $c->saldo, 'moneda' => $moneda]))"
                                         class="h-8 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold">{{ $tx['accion'] }}</button>

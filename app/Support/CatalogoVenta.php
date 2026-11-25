@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Productos tal como los ven las cajas (Punto Venta, PV Farmacia, PV Móvil y proformas):
@@ -103,7 +104,8 @@ class CatalogoVenta
             ->whereNotIn('productos.promocion', Producto::NO_VENDIBLES) // los insumos no se venden
             ->select(['productos.IdProducto', 'productos.procod', 'productos.codigo_barra', 'productos.pronom', 'productos.propun',
                 'productos.umecod', 'productos.promocion', 'productos.control_lote', 'productos.control_serie', 'productos.garantia_meses',
-                'productos.imagenproducto', 'productos.precio2', 'productos.precio3', 'producto_stock.stock']);
+                'productos.imagenproducto', 'productos.precio2', 'productos.precio3', 'producto_stock.stock',
+                ...(Schema::hasColumn('productos', 'mayor_desde') ? ['productos.mayor_desde'] : [])]);
     }
 
     /** @return array<int, array{nombre: string, precio: float}> */
@@ -152,6 +154,8 @@ class CatalogoVenta
                 'presentaciones' => $presentaciones[$p->IdProducto] ?? [],
                 // Precio 2 y 3 (por mayor, especial…): la caja elige con cuál cobrar la unidad base
                 'precios' => self::preciosExtra($p),
+                // Precio x Mayor automático: desde esa cantidad (unidad base) la caja lo cobra sola
+                'mayor' => (float) ($p->mayor_desde ?? 0) > 0 && (float) $p->precio2 > 0 ? ['desde' => (float) $p->mayor_desde, 'precio' => round((float) $p->precio2, 2)] : null,
                 // Código de barras de una presentación: la caja la agrega ya elegida
                 'presentacion' => $deProducto === (int) $p->IdProducto ? $presentacionElegida : null,
                 // Preparados y combos no llevan stock propio

@@ -707,6 +707,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/reporte', [CuentaController::class, 'reporte'])->name('cuentas.reporte');
         Route::post('/saldar-importadas', [CuentaController::class, 'saldarImportadas'])->name('cuentas.saldar_importadas');
         Route::get('/{id}/pagos', [CuentaController::class, 'pagos'])->whereNumber('id')->name('cuentas.pagos');
+        // Cobrar el fiado por WhatsApp: abre el chat del cliente con su saldo y cómo pagar (gratis)
+        Route::get('/whatsapp/{documento}', [CuentaController::class, 'whatsapp'])->where('documento', '[0-9A-Za-z-]{1,15}')->name('cuentas.whatsapp');
         Route::post('/{id}/pagar', [CuentaController::class, 'pagar'])->whereNumber('id')->name('cuentas.pagar');
         Route::post('/pago/{detId}/anular', [CuentaController::class, 'anularPago'])->whereNumber('detId')->name('cuentas.anular_pago');
         Route::get('/pago/{detId}/recibo', [CuentaController::class, 'recibo'])->whereNumber('detId')->name('cuentas.recibo');
@@ -886,6 +888,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/compras/productos', [CompraController::class, 'productos'])->name('compras.productos');
     Route::post('/compras/producto-nuevo', [CompraController::class, 'productoRapido'])->name('compras.producto_nuevo');
     Route::get('/compras/proveedores', [CompraController::class, 'proveedores'])->name('compras.proveedores');
+    // ¿A qué proveedor le compro más barato? (por producto, el último costo de cada proveedor)
+    Route::get('/compras/comparar-proveedores', [CompraController::class, 'comparar'])->name('compras.comparar');
     Route::get('/compras/proveedor/{doc}', [CompraController::class, 'proveedor'])->name('compras.proveedor');
 
     // Punto Venta (escritorio): venta directa con teclado y lector de barras

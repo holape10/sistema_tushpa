@@ -330,4 +330,54 @@ class Cuentas
             ->where('cc.id_empresa_negocio', $sucursal)->where('c.ped_tip', 'ANTIGUO')->whereIn('cc.estado_cob', ['PENDIENTE', 'PARCIAL'])
             ->when($hasta, fn ($q) => $q->where('c.ccafem', '<=', $hasta));
     }
+
+    /**
+     * Mensaje para cobrarle al cliente su fiado por WhatsApp: cada documento pendiente con su saldo, el total y cómo pagar
+     * (Yape o Plin si la sucursal los tiene, con el enlace a su QR). También el celular del cliente, si se conoce.
+     *
+     * @return array{texto: string, telefono: ?string, saldo: float}|null
+     */
+    public static function avisoCobro(int $sucursal, string $documento): ?array
+    {
+        $pendientes = self::consulta('cobrar', $sucursal)->whereIn('cc.estado_cob', ['PENDIENTE', 'PARCIAL'])->where('cc.saldo', '>', 0)
+            ->where('d.ccandi', $documento)->orderBy('d.ccafem')->get();
+        if ($pendientes->isEmpty()) {
+            return null;
+        }
+        $negocio = DB::table('empresa_negocios')->where('id_empresa_negocio', $sucursal)->first(['nombre_comercial', 'IdEmpresa']);
+        $soles = fn ($n) => 'S/ '.number_format((float) $n, 2);
+        $fecha = fn ($f) => $f ? date('d/m/Y', strtotime((string) $f)) : '';
+        $nombre = mb_convert_case(strtok(trim((string) $pendientes->first()->persona), ' ') ?: '', MB_CASE_TITLE);
+        $saldo = round((float) $pendientes->sum('saldo'), 2);
+
+        $lineas = ['Hola'.($nombre ? " {$nombre}" : '').' 👋, te escribimos de '.$negocio->nombre_comercial.'.', '',
+            'Tienes pendiente '.($pendientes->count() === 1 ? 'esta compra:' : 'estas compras:')];
+        foreach ($pendientes as $c) {
+            $vencida = $c->fec_ven && $c->fec_ven < now()->toDateString();
+            $lineas[] = '• '.$c->serie.'-'.$c->numero.' del '.$fecha($c->fecha).': '.$soles($c->saldo).($vencida ? ' (venció el '.$fecha($c->fec_ven).')' : '');
+        }
+        $lineas[] = '';
+        $lineas[] = '*Total por pagar: '.$soles($saldo).'*';
+        // Yape / Plin de la sucursal (con su QR, si se subió)
+        $billeteras = MedioPago::where('id_empresa_negocio', $sucursal)->where(fn ($q) => $q->where('nom_med_pag', 'like', '%YAPE%')->orWhere('nom_med_pag', 'like', '%PLIN%'))
+            ->get(['nom_med_pag', 'qr']);
+        if ($billeteras->isNotEmpty()) {
+            $lineas[] = 'Puedes pagar por '.$billeteras->pluck('nom_med_pag')->map(fn ($n) => mb_convert_case((string) $n, MB_CASE_TITLE))->implode(' o ').' o en la tienda.';
+            foreach ($billeteras->filter(fn ($b) => $b->qr) as $b) {
+                $lineas[] = 'QR '.mb_convert_case((string) $b->nom_med_pag, MB_CASE_TITLE).': '.asset($b->qr);
+            }
+        } else {
+            $lineas[] = 'Puedes acercarte a pagar a la tienda.';
+        }
+        $lineas[] = '';
+        $lineas[] = '¡Gracias por tu preferencia! 🙌';
+
+        $telefono = DB::table('cliente')->where('clinum', $documento)->where('rucemp', $negocio->IdEmpresa)->value('telefono')
+            ?: DB::table('cpe_cabecera')->where('id_empresa_negocio', $sucursal)->where('ccandi', $documento)->whereNotNull('telefono_cliente')
+                ->where('telefono_cliente', '!=', '')->orderByDesc('IdCpe_cabecera')->value('telefono_cliente');
+        $digitos = preg_replace('/\D/', '', (string) $telefono);
+
+        return ['texto' => implode("\n", $lineas), 'saldo' => $saldo,
+            'telefono' => strlen($digitos) === 9 ? '51'.$digitos : (strlen($digitos) >= 11 ? $digitos : null)];
+    }
 }

@@ -27,4 +27,11 @@
         @endforeach
     </div>
     <p class="text-[11px] text-gray-400 mt-1">Al vender, la caja elige con qué precio cobrar (sin pedir permiso).</p>
+    {{-- Precio x Mayor automático: desde N unidades la caja lo cobra sola (en Punto Venta y PV Móvil) --}}
+    <label class="flex flex-wrap items-center gap-2 mt-2 text-xs font-medium text-gray-600">
+        <span>Cobrar el Precio x Mayor solo desde</span>
+        <input type="number" step="any" min="1" name="mayor_desde" value="{{ old('mayor_desde', isset($p) && ($p?->mayor_desde ?? null) ? rtrim(rtrim(number_format((float) $p->mayor_desde, 3, '.', ''), '0'), '.') : '') }}"
+               placeholder="ej. 12" class="w-20 h-8 rounded-lg border-gray-300 text-sm text-right focus:border-indigo-500 focus:ring-indigo-500">
+        <span>unidades <span class="text-gray-400">(vacío = la caja lo elige a mano)</span></span>
+    </label>
 </div>

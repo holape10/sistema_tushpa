@@ -32,6 +32,7 @@
     </script>
     <script src="{{ asset('js/impresion.js') }}?v={{ filemtime(public_path('js/impresion.js')) }}" data-url="{{ url('impresion/comprobante') }}" data-csrf="{{ csrf_token() }}"></script>
 <script src="{{ asset('js/escaner-barras.js') }}?v={{ filemtime(public_path('js/escaner-barras.js')) }}"></script>
+<script src="{{ asset('js/precio-mayor.js') }}?v={{ filemtime(public_path('js/precio-mayor.js')) }}"></script>
 <script src="{{ asset('js/pos-movil.js') }}?v={{ filemtime(public_path('js/pos-movil.js')) }}"></script>
 <script src="{{ asset('js/whatsapp-cpe.js') }}?v={{ filemtime(public_path('js/whatsapp-cpe.js')) }}" data-base="{{ url('/') }}" data-csrf="{{ csrf_token() }}"></script>
     @include('partials.pwa')
@@ -158,7 +159,7 @@
                     <div class="flex items-start gap-2">
                         <div class="flex-1 min-w-0">
                             <p class="font-semibold text-sm leading-snug" x-text="nombreLinea(it)"></p>
-                            <p class="text-[11px] text-slate-400"><span x-text="it.codigo || 'Línea libre'"></span><span x-show="it.dinamico && !it.presentacion" class="text-emerald-600 font-semibold"> · ⚡ precio dinámico</span></p>
+                            <p class="text-[11px] text-slate-400"><span x-text="it.codigo || 'Línea libre'"></span><span x-show="it.dinamico && !it.presentacion" class="text-emerald-600 font-semibold"> · ⚡ precio dinámico</span><span x-show="it.mayorAuto" class="text-violet-600 font-bold"> · 📦 por mayor</span></p>
                             {{-- Presentación elegida al agregar --}}
                             <template x-if="it.presentaciones && it.presentaciones.length">
                                 <span class="mt-1 inline-block px-2 py-0.5 rounded-lg bg-indigo-50 text-[11px] font-bold text-indigo-700"

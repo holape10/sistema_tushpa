@@ -169,6 +169,8 @@
                                 <span class="flex-1 min-w-0">
                                     <span class="block font-bold" x-text="p.nombre"></span>
                                     <span class="block text-xs opacity-70" x-text="p.codigo + (p.insumo ? ' · INSUMO' : '') + (p.control_lote ? ' · LOTE' : '') + ' · Stock ' + num(p.stock)"></span>
+                                    <span x-show="p.mejor" class="block text-xs font-semibold" :class="i === resultadoActivo ? 'text-amber-200' : 'text-emerald-700'"
+                                          x-text="p.mejor ? '💡 Más barato: ' + p.mejor.proveedor + ' a ' + num2(p.mejor.costo) : ''"></span>
                                 </span>
                                 <span class="text-sm font-semibold whitespace-nowrap" x-text="'Últ. costo ' + num2(p.costo)"></span>
                             </button>

@@ -183,7 +183,7 @@
                                                     <template x-for="u in cfg.unidades" :key="u.umecod"><option :value="u.umecod" :selected="u.umecod === it.umecod" x-text="u.umenom"></option></template>
                                                 </select>
                                             </template>
-                                            <span x-show="it.dinamico && !it.presentacion" class="text-emerald-600 font-semibold"> · ⚡ precio dinámico</span>
+                                            <span x-show="it.dinamico && !it.presentacion" class="text-emerald-600 font-semibold"> · ⚡ precio dinámico</span><span x-show="it.mayorAuto" class="text-violet-600 font-bold"> · 📦 precio por mayor</span>
                                             <span x-show="it.stock !== null && it.cantidad * (it.factor || 1) > it.stock" class="text-rose-500" x-text="' · Stock disponible: ' + num(it.stock) + ' ' + (it.unidad || '')"></span>
                                         </span>
                                         {{-- Presentación elegida al agregar (para cambiarla, quita la línea y agrégala otra vez) --}}
@@ -781,6 +781,7 @@
     {{-- Punto Venta IA: se suma al Punto Venta (debe cargarse antes) --}}
     <script src="{{ asset('js/punto-venta-ia.js') }}?v={{ filemtime(public_path('js/punto-venta-ia.js')) }}"></script>
 @endif
+<script src="{{ asset('js/precio-mayor.js') }}?v={{ filemtime(public_path('js/precio-mayor.js')) }}"></script>
 <script src="{{ asset('js/balanza.js') }}?v={{ filemtime(public_path('js/balanza.js')) }}"></script>
 <script src="{{ asset('js/escaner-barras.js') }}?v={{ filemtime(public_path('js/escaner-barras.js')) }}"></script>
 <script src="{{ asset('js/punto-venta.js') }}?v={{ filemtime(public_path('js/punto-venta.js')) }}"></script>
