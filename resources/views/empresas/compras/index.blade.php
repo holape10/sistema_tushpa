@@ -9,6 +9,13 @@
     @if (session('error'))
         <div class="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ session('error') }}</div>
     @endif
+    @if ($subidos = session('precios_compra'))
+        {{-- La compra subió el costo de productos que se revenden: con el mismo precio ahora ganan menos --}}
+        <div class="rounded-xl bg-rose-50 border border-rose-200 text-rose-900 px-4 py-3 text-sm flex flex-wrap items-center gap-3">
+            <span>📈 Con esta compra, <b>{{ $subidos['cantidad'] }} producto(s)</b> te cuestan más y ahora ganas menos.</span>
+            <a href="{{ route('productos.precios_costo', ['compra' => $subidos['compra']]) }}" class="ml-auto h-9 px-4 inline-flex items-center rounded-lg bg-rose-600 text-white font-bold">Revisar precios</a>
+        </div>
+    @endif
 
     <div class="flex flex-wrap items-end gap-3">
         <form method="GET" class="flex flex-wrap items-end gap-2 flex-1">

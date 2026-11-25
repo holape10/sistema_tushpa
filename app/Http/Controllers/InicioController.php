@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Campanas;
 use App\Support\Kardex;
 use App\Support\Notas;
+use App\Support\PreciosCompra;
 use App\Support\Recetas;
 use App\Support\Requerimientos;
 use App\Support\Rubros;
@@ -134,6 +136,9 @@ class InicioController extends Controller
             'reportes' => $reportes,
             'resumen' => $user->esAdminOCaja() ? $this->resumenDeHoy((int) $user->id_empresa_negocio) : null,
             'porAcabarse' => $user->esAdminOCaja() ? $this->porAcabarse((int) $user->id_empresa_negocio) : null,
+            // La próxima campaña (Navidad, escolar…) y los productos que ganan menos porque subió su costo
+            'campana' => $user->esAdmin() || $user->tieneModulo('/compras') ? $this->campana((int) $user->id_empresa_negocio) : null,
+            'preciosCosto' => $user->esAdmin() || $user->tieneModulo('/productos') ? PreciosCompra::sugerencias((int) $user->id_empresa_negocio)->count() : 0,
             // Lo que pidió cocina o almacén, para salir a comprarlo
             'requerimientos' => Requerimientos::atiende($user) ? DB::table('requerimientos as r')->leftJoin('users as u', 'u.IdUsuario', '=', 'r.IdUsuario')
                 // Por atender (lo de mi sede que se compra, o lo que otra sede me pide) y lo que viene en camino a mi sede
@@ -190,6 +195,27 @@ class InicioController extends Controller
             'items' => $lista->take(8)->map(fn ($p) => (object) ['nombre' => $p->nombre, 'stock' => $p->stock, 'minimo' => $p->minimo,
                 'dias' => $p->estado === 'se_acaba' ? $p->dias : null, 'sugerido' => $p->sugerido, 'unidad' => Recetas::nombreUnidad($p->unidad)]),
         ];
+    }
+
+    /**
+     * La campaña que viene (si el negocio revende productos): cuánto vendió en esas fechas el año pasado.
+     *
+     * @return array{clave: string, nombre: string, icono: string, dias: int, vendido_pasado: float}|null
+     */
+    private function campana(int $sucursal): ?array
+    {
+        $c = Campanas::proxima();
+        if (! $c) {
+            return null;
+        }
+        [$desde, $hasta] = Campanas::fechas($c['clave'], $c['inicio']->year - 1);
+        $pasado = Campanas::totalVendido($sucursal, $desde, $hasta);
+        if ($pasado <= 0 && Campanas::totalVendido($sucursal, now()->subDays(30), now()) <= 0) {
+            return null;
+        }
+
+        return ['clave' => $c['clave'], 'nombre' => Campanas::LISTA[$c['clave']][0], 'icono' => Campanas::LISTA[$c['clave']][1],
+            'dias' => max((int) now()->startOfDay()->diffInDays($c['inicio'], false), 0), 'vendido_pasado' => $pasado];
     }
 
     private function resumenDeHoy(int $sucursal): array

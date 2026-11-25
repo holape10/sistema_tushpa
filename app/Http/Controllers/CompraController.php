@@ -14,6 +14,7 @@ use App\Support\Contabilidad\Contabilidad;
 use App\Support\MesesCerrados;
 use App\Support\OrdenesCompra;
 use App\Support\Precios;
+use App\Support\PreciosCompra;
 use App\Support\Recetas;
 use App\Support\Requerimientos;
 use App\Support\Rubros;
@@ -268,6 +269,10 @@ class CompraController extends Controller
         session()->flash('success', ($id ? 'Se actualizó' : 'Se registró')." la compra {$cab->com_doc_ser}-{$cab->com_doc_num}.");
         if ($aviso = Recetas::avisoDeCompra((int) Auth::user()->id_empresa_negocio, $comId)) {
             session()->flash('costos', $aviso);
+        }
+        // Productos que ahora ganan menos por el costo nuevo: se ofrece subirles el precio
+        if (($n = PreciosCompra::sugerencias((int) Auth::user()->id_empresa_negocio, $comId)->count()) > 0) {
+            session()->flash('precios_compra', ['compra' => $comId, 'cantidad' => $n]);
         }
 
         return response()->json(['estado' => 'success', 'redirect' => route('compras.index')]);

@@ -7,6 +7,7 @@ use Anthropic\Core\Exceptions\APIStatusException;
 use App\Models\User;
 use App\Support\ImagenProducto;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -45,6 +46,27 @@ class CuadernoFoto
     ];
 
     /**
+     * Productos activos de la sucursal para que la IA empareje (primero los más vendidos en 90 días).
+     *
+     * @return Collection<int, object>
+     */
+    public static function productos(int $sucursal): Collection
+    {
+        return DB::table('productos as p')->where('p.id_empresa_negocio', $sucursal)->where('p.proest', 'Activo')->where('p.promocion', '!=', 8)
+            ->leftJoinSub(DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
+                ->where('c.id_empresa_negocio', $sucursal)->where('c.fecha_hora', '>=', now()->subDays(90))
+                ->groupBy('d.IdProducto')->selectRaw('d.IdProducto, COUNT(*) as veces'), 'v', 'v.IdProducto', '=', 'p.IdProducto')
+            ->orderByDesc(DB::raw('COALESCE(v.veces, 0)'))->orderBy('p.pronom')->limit(self::MAX_PRODUCTOS)
+            ->get(['p.IdProducto', 'p.pronom', 'p.propun']);
+    }
+
+    /** "12: ARROZ (S/ 3.50)" una por línea, para el mensaje a la IA */
+    public static function lista(Collection $productos): string
+    {
+        return $productos->map(fn ($p) => "{$p->IdProducto}: {$p->pronom} (S/ ".number_format((float) $p->propun, 2, '.', '').')')->implode("\n");
+    }
+
+    /**
      * @return array{fecha: ?string, total: ?float, lineas: list<array{texto: string, cantidad: float, precio: float, importe: float, producto: ?int}>, aviso: string}
      */
     public static function leer(User $user, UploadedFile $foto): array
@@ -52,14 +74,8 @@ class CuadernoFoto
         if ($motivo = Asistente::bloqueoComun()) {
             throw new \RuntimeException($motivo);
         }
-        $sucursal = (int) $user->id_empresa_negocio;
-        $productos = DB::table('productos as p')->where('p.id_empresa_negocio', $sucursal)->where('p.proest', 'Activo')
-            ->leftJoinSub(DB::table('cpe_detalle as d')->join('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'd.IdCpe_cabecera')
-                ->where('c.id_empresa_negocio', $sucursal)->where('c.fecha_hora', '>=', now()->subDays(90))
-                ->groupBy('d.IdProducto')->selectRaw('d.IdProducto, COUNT(*) as veces'), 'v', 'v.IdProducto', '=', 'p.IdProducto')
-            ->orderByDesc(DB::raw('COALESCE(v.veces, 0)'))->orderBy('p.pronom')->limit(self::MAX_PRODUCTOS)
-            ->get(['p.IdProducto', 'p.pronom', 'p.propun']);
-        $lista = $productos->map(fn ($p) => "{$p->IdProducto}: {$p->pronom} (S/ ".number_format((float) $p->propun, 2, '.', '').')')->implode("\n");
+        $productos = self::productos((int) $user->id_empresa_negocio);
+        $lista = self::lista($productos);
 
         $tmp = tempnam(sys_get_temp_dir(), 'cua').'.webp';
         if (! ImagenProducto::redimensionar($foto->getRealPath(), $tmp, self::LADO_FOTO, ImagenProducto::orientacion($foto->getRealPath()))) {

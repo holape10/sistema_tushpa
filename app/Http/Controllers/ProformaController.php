@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Empresa;
 use App\Models\EmpresaNegocio;
+use App\Support\Asistente\CuadernoFoto;
+use App\Support\Asistente\PedidoWhatsapp;
 use App\Support\Impresion\Impresion;
 use App\Support\Proformas;
 use Dompdf\Dompdf;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -70,6 +73,33 @@ class ProformaController extends Controller
         $resumen = ['cantidad' => (clone $pendientes)->count(), 'total' => (float) (clone $pendientes)->sum('total')];
 
         return view('empresas.proformas.index', compact('proformas', 'q', 'estado', 'desde', 'hasta', 'resumen'));
+    }
+
+    /** Pedido de WhatsApp: se pega el mensaje (o la foto de la lista) del cliente y la IA arma la proforma */
+    public function whatsapp()
+    {
+        $this->autorizar();
+
+        return view('empresas.proformas.whatsapp', [
+            'productos' => CuadernoFoto::productos((int) Auth::user()->id_empresa_negocio)->sortBy('pronom')
+                ->map(fn ($p) => ['id' => (int) $p->IdProducto, 'nombre' => $p->pronom, 'precio' => (float) $p->propun])->values(),
+            'negocio' => (string) DB::table('empresa_negocios')->where('id_empresa_negocio', Auth::user()->id_empresa_negocio)->value('nombre_comercial'),
+        ]);
+    }
+
+    public function whatsappLeer(Request $request): JsonResponse
+    {
+        $this->autorizar();
+        $request->validate([
+            'texto' => 'nullable|required_without:foto|string|max:3000',
+            'foto' => 'nullable|file|max:12288|extensions:'.PedidoWhatsapp::EXTENSIONES,
+        ], ['texto.required_without' => 'Pega el mensaje del cliente o sube la foto de su lista.', 'foto.extensions' => 'Sube una foto (JPG o PNG).']);
+        set_time_limit(120);
+        try {
+            return response()->json(['ok' => true] + PedidoWhatsapp::leer(Auth::user(), (string) $request->texto, $request->file('foto')));
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
     }
 
     /** Desde las cajas (JSON): crea la proforma o guarda los cambios si trae id */

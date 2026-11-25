@@ -72,6 +72,27 @@
             </section>
         @endif
 
+        @if (($campana ?? null) || ($preciosCosto ?? 0))
+            <div class="mb-7 grid gap-3 {{ ($campana ?? null) && ($preciosCosto ?? 0) ? 'sm:grid-cols-2' : '' }}">
+                @if ($campana ?? null)
+                    {{-- La campaña que viene: qué comprar según lo vendido en esas fechas el año pasado --}}
+                    <a href="{{ route('campanas.index', ['campana' => $campana['clave']]) }}" class="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white p-4 shadow-sm hover:opacity-95">
+                        <span class="text-3xl">{{ $campana['icono'] }}</span>
+                        <span class="flex-1"><b class="block">{{ $campana['nombre'] }} {{ $campana['dias'] > 0 ? 'empieza en '.$campana['dias'].' día(s)' : 'ya empezó' }}</b>
+                            <span class="text-sm text-white/85">{{ $campana['vendido_pasado'] > 0 ? 'El año pasado vendiste S/ '.number_format($campana['vendido_pasado'], 2).' en esas fechas.' : 'Calcula qué comprar con lo que vendes ahora.' }} Mira qué comprar →</span></span>
+                    </a>
+                @endif
+                @if ($preciosCosto ?? 0)
+                    {{-- Subió el costo en las compras y con el mismo precio ahora gana menos --}}
+                    <a href="{{ route('productos.precios_costo') }}" class="flex items-center gap-3 rounded-2xl bg-rose-50 ring-1 ring-rose-200 text-rose-900 p-4 hover:bg-rose-100">
+                        <span class="text-3xl">📈</span>
+                        <span class="flex-1"><b class="block">{{ $preciosCosto }} producto(s) ganan menos</b>
+                            <span class="text-sm">Te subieron el costo y sigues vendiendo al mismo precio. Revisa sus precios →</span></span>
+                    </a>
+                @endif
+            </div>
+        @endif
+
         @if ($porAcabarse && $porAcabarse['total'])
             @php $num = fn ($n) => rtrim(rtrim(number_format($n, 3), '0'), '.') ?: '0'; @endphp
             <section class="mb-7 rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-4 sm:p-5">

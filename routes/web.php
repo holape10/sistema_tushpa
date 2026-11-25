@@ -13,6 +13,7 @@ use App\Http\Controllers\AvisoCelularController;
 use App\Http\Controllers\BancoController;
 use App\Http\Controllers\BitacoraController;
 use App\Http\Controllers\CajaSinInternetController;
+use App\Http\Controllers\CampanaController;
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\CentroCostoController;
@@ -92,6 +93,7 @@ use App\Http\Controllers\PisoController;
 use App\Http\Controllers\PlanillaController;
 use App\Http\Controllers\PlanoMesasController;
 use App\Http\Controllers\PosMovilController;
+use App\Http\Controllers\PreciosCostoController;
 use App\Http\Controllers\PreparadoController;
 use App\Http\Controllers\PrestamoClienteController;
 use App\Http\Controllers\PrestamoCobranzaController;
@@ -895,6 +897,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/punto-venta-ia/buscar', [PuntoVentaIaController::class, 'buscar'])->middleware('throttle:120,1')->name('pv.ia.buscar');
     Route::post('/punto-venta-ia/producto', [PuntoVentaIaController::class, 'crearProducto'])->middleware('throttle:30,1')->name('pv.ia.producto');
 
+    // Campañas (Navidad, escolar, Día de la Madre…): qué comprar según lo vendido el año pasado
+    Route::get('/campanas', [CampanaController::class, 'index'])->name('campanas.index');
+
     // Pasar el cuaderno con foto (IA): cada hoja de ventas anotadas a mano se lee, se revisa y se registra como una venta
     Route::get('/punto-venta/cuaderno', [CuadernoController::class, 'index'])->name('cuaderno.index');
     Route::post('/punto-venta/cuaderno/leer', [CuadernoController::class, 'leer'])->middleware('throttle:20,1')->name('cuaderno.leer');
@@ -933,6 +938,9 @@ Route::middleware('auth')->group(function () {
     // Proformas: se crean en los puntos de venta y se cobran abriéndolas en la caja
     Route::get('/proformas', [ProformaController::class, 'index'])->name('proformas.index');
     Route::post('/proformas/guardar', [ProformaController::class, 'guardar'])->name('proformas.guardar');
+    // Pedido de WhatsApp: la IA arma la proforma con el mensaje o la foto de la lista del cliente
+    Route::get('/proformas/whatsapp', [ProformaController::class, 'whatsapp'])->name('proformas.whatsapp');
+    Route::post('/proformas/whatsapp/leer', [ProformaController::class, 'whatsappLeer'])->middleware('throttle:30,1')->name('proformas.whatsapp.leer');
     Route::get('/proformas/{id}/imprimir', [ProformaController::class, 'imprimir'])->whereNumber('id')->name('proformas.imprimir');
     Route::get('/proformas/{id}/pdf', [ProformaController::class, 'pdf'])->whereNumber('id')->name('proformas.pdf');
     Route::post('/proformas/{id}/directo', [ProformaController::class, 'directo'])->whereNumber('id')->middleware('throttle:30,1')->name('proformas.directo');
@@ -1285,6 +1293,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/productos/foto/leer', [ProductoVozController::class, 'foto'])->middleware('throttle:30,1')->name('productos.foto.leer');
     Route::post('/productos/voz/crear', [ProductoVozController::class, 'crear'])->middleware('throttle:30,1')->name('productos.voz.crear');
     // Etiquetas con código de barras (ticketera, impresora de etiquetas o PDF)
+    // Precios por costo: lo que subió de costo en las compras y ahora gana menos, con el precio que mantiene su ganancia
+    Route::get('/productos/precios-costo', [PreciosCostoController::class, 'index'])->name('productos.precios_costo');
+    Route::post('/productos/precios-costo', [PreciosCostoController::class, 'guardar'])->name('productos.precios_costo.guardar');
     Route::get('/productos/etiquetas', [ProductoEtiquetaController::class, 'index'])->name('productos.etiquetas');
     Route::get('/productos/etiquetas/buscar', [ProductoEtiquetaController::class, 'buscar'])->name('productos.etiquetas.buscar');
     Route::post('/productos/etiquetas', [ProductoEtiquetaController::class, 'imprimir'])->middleware('throttle:30,1')->name('productos.etiquetas.imprimir');

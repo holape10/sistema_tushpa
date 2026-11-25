@@ -21,6 +21,11 @@
             Para <strong>editarla o cobrarla</strong> se abre en la caja: al registrar se emite el comprobante.
         </div>
     </div>
+    {{-- Pedidos que llegan por WhatsApp: la IA los arma con el mensaje o la foto de la lista del cliente --}}
+    <div class="mb-4 flex flex-wrap items-center gap-3 rounded-2xl bg-emerald-50 ring-1 ring-emerald-200 p-4">
+        <p class="flex-1 min-w-[14rem] text-sm text-emerald-900"><b>¿Te piden por WhatsApp?</b> Pega el mensaje del cliente (o la foto de su lista) y la IA arma la proforma con tus productos y precios, lista para responderle con el total.</p>
+        <a href="{{ route('proformas.whatsapp') }}" class="h-11 px-5 inline-flex items-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black whitespace-nowrap">💬 Pedido de WhatsApp (IA)</a>
+    </div>
 
     <form method="GET" class="bg-white rounded-2xl shadow-sm p-4 mb-4 grid grid-cols-2 sm:grid-cols-6 gap-3 items-end">
         <label class="col-span-2 text-xs font-semibold text-gray-500">Buscar
