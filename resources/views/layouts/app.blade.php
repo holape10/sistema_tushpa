@@ -242,7 +242,15 @@
     <!-- Contenido -->
     <div class="flex-1 flex flex-col overflow-hidden transition-[padding] duration-200" :class="anclado ? 'pl-64' : ''">
         @include('partials.anuncio_general')
-        <header class="relative z-20 bg-white shadow-sm px-4 py-3 flex items-center justify-between" :class="anclado ? 'pl-6' : 'pl-16'">
+        @php $barraCompacta = $__env->hasSection('barra_compacta'); @endphp
+        {{-- Pantallas de venta: la barra de arriba se esconde (más espacio) y baja al pasar el mouse por el borde de arriba
+             (o al tocarlo en una tablet). Los 3 palitos del menú siguen siempre a la vista. --}}
+        <div @if ($barraCompacta) x-data="{ verBarra: false }" @mouseleave="verBarra = false" class="fixed top-0 inset-x-0 z-30" @endif>
+        @if ($barraCompacta)
+            <div @mouseenter="verBarra = true" @click="verBarra = !verBarra" class="h-2.5 w-full" aria-hidden="true"></div>
+        @endif
+        <header class="bg-white shadow-sm px-4 py-3 flex items-center justify-between {{ $barraCompacta ? 'absolute top-0 inset-x-0 transition-transform duration-200' : 'relative z-20' }}"
+                :class="[anclado ? 'pl-6' : 'pl-16'{{ $barraCompacta ? ", verBarra ? 'translate-y-0' : '-translate-y-full'" : '' }}]">
             <h1 class="text-gray-700 font-semibold text-sm sm:text-base">@yield('title', 'Panel')</h1>
             <div class="flex items-center gap-4">
                 @include('partials.pwa_boton')
@@ -278,9 +286,13 @@
                 </form>
             </div>
         </header>
-        <div class="kene kene-franja h-3 shrink-0 text-indigo-300/60" aria-hidden="true"></div>
+        </div>
+        @unless ($barraCompacta)
+            <div class="kene kene-franja h-3 shrink-0 text-indigo-300/60" aria-hidden="true"></div>
+        @endunless
 
-        <main class="flex-1 overflow-y-auto p-4 sm:p-6">
+        {{-- Con la barra escondida, el contenido deja libre la esquina de los 3 palitos --}}
+        <main class="flex-1 overflow-y-auto p-4 sm:p-6 {{ $barraCompacta ? 'pl-16 sm:pl-16' : '' }}">
             {{-- Seguridad: ingresos desde equipos nuevos por revisar (solo el administrador) --}}
             @if (auth()->check() && auth()->user()->esAdmin() && ! request()->routeIs('seguridad.*')
                 && ($nuevosEquipos = \App\Support\Seguridad\Dispositivos::porRevisar((string) auth()->user()->IdEmpresa)))

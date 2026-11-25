@@ -1,6 +1,7 @@
 @extends('layouts.app')
 @section('title', $farmacia ? 'PV Farmacia' : (! empty($ia) ? 'Punto Venta IA' : 'Punto Venta'))
 
+@section('barra_compacta', '1')
 @section('content')
 @include('partials.pantalla_completa')
 <div x-data="puntoVenta" x-init="iniciar()" @keydown.window="teclaGlobal($event)" class="max-w-[100rem] mx-auto">
