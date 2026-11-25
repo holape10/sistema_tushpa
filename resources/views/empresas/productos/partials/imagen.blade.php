@@ -37,6 +37,7 @@
                 <div class="relative aspect-square rounded-xl overflow-hidden ring-2 ring-indigo-300 bg-white">
                     <img :src="f" alt="" class="w-full h-full object-cover">
                     <span class="absolute bottom-1 left-1 px-1.5 rounded bg-indigo-600 text-white text-[10px] font-bold">NUEVA</span>
+                    <button type="button" @click="quitarFotoNueva(i)" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs" title="Quitar">✕</button>
                 </div>
             </template>
             <label x-show="fotosExtra.length + fotosNuevas.length < {{ \App\Models\Producto::MAX_IMAGENES - 1 }}"
@@ -136,7 +137,7 @@
                 const campo = document.querySelector(this.destino === 'extra' ? 'input[name="fotos_extra[]"]' : 'input[name="imagen"]');
                 if (!campo) return;
                 const dt = new DataTransfer();
-                if (this.destino === 'extra') [...campo.files].forEach(f => dt.items.add(f));
+                // La foto extra va sola: el formulario la suma a las que ya se eligieron
                 dt.items.add(archivo);
                 campo.files = dt.files;
                 campo.dispatchEvent(new Event('change', { bubbles: true }));

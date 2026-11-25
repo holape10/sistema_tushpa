@@ -28,6 +28,8 @@
     function productoForm() {
         const ini = @json($inicial);
         let key = 1;
+        // Las fotos adicionales nuevas (archivos de verdad, fuera de Alpine para que el navegador las acepte tal cual)
+        const archivosExtra = [];
         return {
             ...ini,
             quitarImagen: false,
@@ -52,13 +54,34 @@
                 });
             },
 
-            // Fotos adicionales: entre las que ya tiene y las nuevas no pasan de 3
+            // Fotos adicionales: cada vez que se eligen (o se toman con la cámara) se SUMAN a las anteriores, sin pasar de 3
+            // entre las que ya tiene y las nuevas. Las nuevas se pueden quitar antes de guardar.
             elegirFotosExtra(e) {
-                const libres = {{ \App\Models\Producto::MAX_IMAGENES - 1 }} - this.fotosExtra.length;
-                const archivos = [...e.target.files];
-                if (archivos.some(a => a.size > 8 * 1024 * 1024)) { alert('Cada foto debe pesar hasta 8 MB.'); e.target.value = ''; this.fotosNuevas = []; return; }
-                if (archivos.length > libres) { alert('Puedes agregar ' + libres + ' foto(s) más (4 en total con la principal).'); e.target.value = ''; this.fotosNuevas = []; return; }
-                this.fotosNuevas = archivos.map(a => URL.createObjectURL(a));
+                const libres = {{ \App\Models\Producto::MAX_IMAGENES - 1 }} - this.fotosExtra.length - archivosExtra.length;
+                let archivos = [...e.target.files];
+                if (archivos.some(a => a.size > 8 * 1024 * 1024)) {
+                    alert('Cada foto debe pesar hasta 8 MB.');
+                    archivos = archivos.filter(a => a.size <= 8 * 1024 * 1024);
+                }
+                if (archivos.length > libres) {
+                    alert(libres > 0 ? 'Solo entran ' + libres + ' foto(s) más (4 en total con la principal).' : 'Ya tienes las 4 fotos (con la principal). Quita una para poner otra.');
+                    archivos = archivos.slice(0, Math.max(0, libres));
+                }
+                archivosExtra.push(...archivos);
+                this.fotosNuevas.push(...archivos.map(a => URL.createObjectURL(a)));
+                this.sincronizarExtras(e.target);
+            },
+            quitarFotoNueva(i) {
+                URL.revokeObjectURL(this.fotosNuevas[i]);
+                archivosExtra.splice(i, 1);
+                this.fotosNuevas.splice(i, 1);
+                this.sincronizarExtras(this.$refs.fotosExtra);
+            },
+            // El campo del formulario lleva exactamente las fotos nuevas que se ven en pantalla
+            sincronizarExtras(campo) {
+                const dt = new DataTransfer();
+                archivosExtra.forEach(a => dt.items.add(a));
+                campo.files = dt.files;
             },
             quitarFotoExtra(f) {
                 this.fotosExtra = this.fotosExtra.filter(x => x.ruta !== f.ruta);
