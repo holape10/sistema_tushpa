@@ -40,7 +40,8 @@ class AlertaController extends Controller
         $descartadas = (clone $tabla)->whereNotNull('descartada_el')->orderByDesc('descartada_el')->limit(30)->get();
 
         return view('admin.clientes.alertas', ['cliente' => $cliente, 'pendientes' => $pendientes, 'descartadas' => $descartadas,
-            'acciones' => AlertasPanel::VIGILADAS, 'detalles' => AlertasPanel::detalles($cliente, $pendientes->merge($descartadas)->pluck('bitacora_id'))]);
+            'acciones' => AlertasPanel::VIGILADAS, 'detalles' => AlertasPanel::detalles($cliente, $pendientes->merge($descartadas)->pluck('bitacora_id')),
+            'seguridad' => AlertasPanel::equipos($cliente, $pendientes)]);
     }
 
     /** Descarta una alerta (id) o todas las pendientes de la empresa: ya no sale el ⚠️ en la lista */

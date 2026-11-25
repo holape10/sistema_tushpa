@@ -69,7 +69,7 @@
     @if ($equipos->isNotEmpty())
         @php($nombres = $usuarios->keyBy('IdUsuario'))
         @php($porRevisar = $equipos->flatten()->where('por_revisar', true)->whereNull('bloqueado_el')->count())
-        <div class="mt-6 bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div id="equipos" class="mt-6 bg-white rounded-2xl shadow-sm overflow-hidden">
             <div class="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center gap-3">
                 <div class="flex-1 min-w-60"><p class="font-bold">🔐 Equipos (PC y celulares)</p>
                     <p class="text-xs text-slate-500">Si la empresa se quedó sin un equipo de confianza (cambió de PC, borró el navegador) o entraste tú desde tu PC, autorízalos aquí.</p></div>

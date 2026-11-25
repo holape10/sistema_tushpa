@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AccesoController;
 use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
 use App\Support\Seguridad\Dispositivos;
+use App\Support\Tenancy\AlertasPanel;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -133,6 +134,31 @@ class SeguridadEquiposTest extends FlujoTestCase
         $this->entraConClave($this->otro)->get(route('inicio'));
         $otro = DB::table('dispositivos')->where('IdUsuario', $this->usuario->IdUsuario)->where('token', $this->otro)->first();
         $this->desde($this->otro)->post(route('seguridad.equipos.accion', $otro->id), ['accion' => 'confiar'])->assertSessionHas('error');
+    }
+
+    public function test_la_alerta_de_accion_frenada_trae_el_equipo_para_autorizarlo_desde_el_panel(): void
+    {
+        $this->desde($this->miPc)->get(route('inicio'));
+        $this->entraConClave($this->otro)->get(route('inicio'));
+        DB::connection('central')->beginTransaction();
+        try {
+            config(['tenancy.dominio' => config('tenancy.dominio') ?: 'tushpa.test']);
+            $cliente = Cliente::create(['ruc' => '20555555560', 'base_datos' => DB::connection()->getDatabaseName(), 'razon_social' => 'EMPRESA DE PRUEBA', 'estado' => 'ACTIVO']);
+            app()->instance('tenancy.cliente', $cliente);
+            $archivo = UploadedFile::fake()->createWithContent('precios.csv', "Nombre,Precio de venta\n".collect(range(1, 12))
+                ->map(fn ($i) => $this->producto("PRODUCTO {$i}", 10)->pronom.',1.34')->implode("\n"));
+            $this->entraConClave($this->otro)->post(route('productos.importar'), ['archivo' => $archivo])->assertSessionHasErrors('archivo');
+            app()->terminate();
+            app()->forgetInstance('tenancy.cliente');
+
+            $alertas = DB::connection('central')->table('panel_alertas')->where('cliente_id', $cliente->id)->where('accion', 'sesion.bloqueo_accion')->get();
+            $equipos = AlertasPanel::equipos($cliente, $alertas)['equipos'];
+
+            $this->assertSame($this->otro, $equipos[$alertas->first()->id]->token ?? null, 'El equipo frenado sale para autorizarlo con un clic.');
+        } finally {
+            app()->forgetInstance('tenancy.cliente');
+            DB::connection('central')->rollBack();
+        }
     }
 
     public function test_soporte_autoriza_desde_el_panel_los_equipos_por_revisar(): void

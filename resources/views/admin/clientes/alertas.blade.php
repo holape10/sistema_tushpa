@@ -7,6 +7,8 @@
         <div class="flex-1 min-w-0">
             <h1 class="text-xl font-bold">⚠️ Alertas de la empresa</h1>
             <p class="text-sm text-slate-500">{{ $cliente->nombre_comercial ?: $cliente->razon_social }} · RUC {{ $cliente->ruc }}</p>
+            <a href="{{ route('admin.clientes.accesos', $cliente->id) }}#equipos" class="inline-flex items-center gap-1 mt-1 h-7 px-2.5 rounded-lg text-xs font-bold {{ $seguridad['porRevisar'] ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-600' }}">
+                🔐 Equipos de la empresa{{ $seguridad['porRevisar'] ? ' · '.$seguridad['porRevisar'].' por revisar' : '' }}</a>
             <p class="text-xs text-slate-400">📲 Estas alertas también llegan por Telegram: <a href="{{ route('admin.agenda.index') }}" class="text-sky-700 underline">vincula tu Telegram en la Agenda</a>.</p>
         </div>
         {{-- La bitácora completa de la empresa en Excel --}}
@@ -39,7 +41,20 @@
                         <td class="px-4 py-2 whitespace-nowrap text-slate-600">{{ \Carbon\Carbon::parse($a->fecha)->format('d/m/Y H:i') }}</td>
                         <td class="px-4 py-2"><span class="text-xs font-bold text-amber-700">{{ $acciones[$a->accion] ?? $a->accion }}</span>
                             <p class="text-slate-700">{{ $a->descripcion }}</p>
-                            @include('admin.clientes.partials.alerta_cambios', ['cambios' => $detalles[$a->bitacora_id] ?? []])</td>
+                            @include('admin.clientes.partials.alerta_cambios', ['cambios' => $detalles[$a->bitacora_id] ?? []])
+                            @if ($eq = $seguridad['equipos'][$a->id] ?? null)
+                                <div class="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                                    <span class="text-slate-500">Equipo: <b>{{ $eq->nombre }}</b></span>
+                                    @if ($eq->bloqueado_el)
+                                        <span class="px-1.5 rounded bg-rose-100 text-rose-700 font-bold">Bloqueado</span>
+                                    @elseif ($eq->confiable)
+                                        <span class="px-1.5 rounded bg-emerald-100 text-emerald-700 font-bold">✓ Ya es de confianza</span>
+                                    @else
+                                        <form method="POST" action="{{ route('admin.clientes.equipos', [$cliente->id, $eq->id]) }}">@csrf <input type="hidden" name="accion" value="confiar">
+                                            <button class="h-7 px-2.5 rounded-lg bg-emerald-600 text-white font-bold" title="El cliente podrá hacer esa acción desde ese equipo">✓ Autorizar ese equipo</button></form>
+                                    @endif
+                                </div>
+                            @endif</td>
                         <td class="px-4 py-2 text-slate-600">{{ $a->usuario ?: '—' }}</td>
                         <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ $a->ip ?: '—' }}</td>
                         <td class="px-4 py-2 text-right">

@@ -200,7 +200,10 @@ class Dispositivos
     {
         if (! self::deConfianza()) {
             // Dentro de una transacción el registro se desharía junto con la acción: se anota al terminar la petición
-            $anotar = fn () => Bitacora::registrar('sesion.bloqueo_accion', "Se frenó «{$accion}»: no se hizo desde un equipo de confianza", null, ['alerta' => true]);
+            // Con el equipo como referencia: desde las alertas del panel se autoriza con un clic
+            $equipo = self::actual();
+            $anotar = fn () => Bitacora::registrar('sesion.bloqueo_accion', "Se frenó «{$accion}»: no se hizo desde un equipo de confianza", null,
+                ['alerta' => true] + ($equipo ? ['referencia' => ['dispositivo', $equipo->id]] : []));
             DB::transactionLevel() > 0 ? app()->terminating($anotar) : $anotar();
 
             throw new \RuntimeException("Por seguridad, «{$accion}» solo se puede hacer desde un equipo de confianza. "

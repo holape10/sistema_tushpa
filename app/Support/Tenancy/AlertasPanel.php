@@ -163,4 +163,44 @@ class AlertasPanel
             return [];
         }
     }
+
+    /**
+     * El equipo de cada alerta de "acción frenada" (para autorizarlo con un clic desde el panel): el que quedó anotado en la
+     * bitácora o, en las alertas antiguas, el equipo que tenía esa IP. También cuántos equipos están por revisar.
+     *
+     * @param  Collection<int, object>  $alertas
+     * @return array{equipos: array<int, object>, porRevisar: int}
+     */
+    public static function equipos(Cliente $cliente, $alertas): array
+    {
+        $vacio = ['equipos' => [], 'porRevisar' => 0];
+        if (! $cliente->base_datos) {
+            return $vacio;
+        }
+        try {
+            return Tenancy::en($cliente->base_datos, function () use ($alertas, $vacio) {
+                if (! Schema::hasTable('dispositivos')) {
+                    return $vacio;
+                }
+                $frenadas = $alertas->where('accion', 'sesion.bloqueo_accion');
+                $refs = DB::table('bitacora')->whereIn('id', $frenadas->pluck('bitacora_id')->filter())->where('referencia_tipo', 'dispositivo')
+                    ->pluck('referencia_id', 'id');
+                $equipos = [];
+                foreach ($frenadas as $a) {
+                    $equipo = isset($refs[$a->bitacora_id]) ? DB::table('dispositivos')->where('id', (int) $refs[$a->bitacora_id])->first()
+                        : ($a->ip ? DB::table('dispositivos')->where('ip', $a->ip)->orderByDesc('ultima_vez')->first() : null);
+                    if ($equipo) {
+                        $equipos[$a->id] = $equipo;
+                    }
+                }
+
+                return ['equipos' => $equipos,
+                    'porRevisar' => DB::table('dispositivos')->where('por_revisar', true)->whereNull('bloqueado_el')->count()];
+            });
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $vacio;
+        }
+    }
 }
