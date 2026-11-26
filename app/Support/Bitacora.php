@@ -106,6 +106,11 @@ class Bitacora
             ]);
             // Lo delicado (editar empresa o sucursal, importar precios, usuarios) también sale como alerta en el panel
             AlertasPanel::avisar($accion, $descripcion, $nombre, $peticion?->ip(), (int) $id, $cambios);
+            // Y al Telegram de los administradores que pidieron los cambios de precios o los movimientos importantes
+            // (solo si lo anotado se guarda: si la operación se deshace, no se avisa)
+            $sucursal = array_key_exists('sucursal', $extra) ? $extra['sucursal'] : $usuario?->id_empresa_negocio;
+            DB::afterCommit(fn () => AvisosTelegram::deBitacora($accion, $descripcion, $cambios, (bool) ($extra['alerta'] ?? false),
+                $sucursal ? (int) $sucursal : null, $nombre));
         } catch (\Throwable $e) {
             report($e);
         }

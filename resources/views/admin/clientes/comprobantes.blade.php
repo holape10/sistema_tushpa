@@ -37,6 +37,24 @@
 
     {{-- Las acciones van de uno en uno (3 a la vez al consultar o enviar) y cada fila muestra cómo quedó, como en el sistema de la empresa --}}
     <div x-data="comprobantesPanel()">
+        {{-- Días con boletas sin resumen: cada día se envía de un clic (como lo ve la empresa en su Resumen diario) --}}
+        @if ($dias->isNotEmpty())
+            <div class="mb-3 rounded-2xl bg-violet-50 ring-1 ring-violet-200 p-3">
+                <p class="text-sm font-bold text-violet-900 mb-2">🧾 Días con boletas sin resumen <span class="font-normal text-violet-700">· SUNAT da 7 días desde la emisión</span></p>
+                <div class="flex flex-wrap gap-2">
+                    @foreach ($dias as $d)
+                        @php $atraso = (int) \Carbon\Carbon::parse($d->ccafem)->diffInDays(now()->startOfDay()); @endphp
+                        <span class="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-1.5 text-sm shadow-sm ring-1 {{ $atraso > 7 ? 'ring-rose-300' : 'ring-violet-200' }}">
+                            <b class="text-slate-800">{{ \Carbon\Carbon::parse($d->ccafem)->format('d/m/Y') }}</b>
+                            <span class="text-slate-500">{{ $d->cantidad }} · S/ {{ number_format((float) $d->total, 2) }}</span>
+                            @if ($atraso > 7)<span class="text-[11px] font-bold text-rose-600">{{ $atraso }} días</span>@endif
+                            <button type="button" @click="resumenDia(@js($d->ccafem))" :disabled="trabajando"
+                                    class="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold disabled:opacity-50">Enviar resumen</button>
+                        </span>
+                    @endforeach
+                </div>
+            </div>
+        @endif
         <div class="bg-white rounded-2xl shadow-sm p-3 mb-3 flex flex-wrap items-center gap-2 text-sm">
             <span class="font-semibold" x-text="sel.length + ' marcado(s)'"></span>
             @foreach (['consultar' => ['🔎 Consultar en SUNAT', 'bg-sky-50 text-sky-700'], 'enviar' => ['📤 Enviar a SUNAT', 'bg-indigo-50 text-indigo-700'],
@@ -165,6 +183,26 @@
                         return;
                     }
                     this.trabajando = false;
+                },
+                /** Un día completo por resumen diario: todas sus boletas pendientes, sin marcarlas una por una */
+                async resumenDia(fecha) {
+                    if (!confirm(`¿Enviar el resumen diario del ${fecha.split('-').reverse().join('/')}? Van todas las boletas (y sus notas) pendientes de ese día.`)) return;
+                    this.trabajando = true;
+                    this.progreso = 'Enviando el resumen del día a SUNAT…';
+                    try {
+                        const res = await fetch(@js(route('admin.clientes.comprobantes.resumen_dia', $cliente->id)), { method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) }, body: JSON.stringify({ fecha }) });
+                        const lista = await res.json();
+                        if (!Array.isArray(lista)) throw new Error();
+                        const ok = lista.filter(r => r.ok).length;
+                        const error = lista.find(r => !r.ok);
+                        this.progreso = `Resumen del ${fecha.split('-').reverse().join('/')}: ${ok} de ${lista.length} en el resumen o aceptada(s).`
+                            + (error ? ' Problema: ' + error.mensaje : ' Si quedan "EN RESUMEN", usa Consultar en unos minutos.') + ' Actualizando…';
+                        setTimeout(() => location.reload(), error ? 6000 : 2500);
+                    } catch (e) {
+                        this.progreso = 'No se pudo enviar el resumen. Intenta de nuevo.';
+                        this.trabajando = false;
+                    }
                 },
                 async ejecutar(accion) {
                     if (accion === 'resumen') return this.resumenDiario();

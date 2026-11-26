@@ -143,7 +143,7 @@ class Encuestas
             $mesa = $o->ped_id ? DB::table('pedidos as p')->leftJoin('mesas as m', 'm.mes_id', '=', 'p.mes_id')->where('p.ped_id', $o->ped_id)->value('m.mes_nom') : null;
             AvisosCelular::alDueno($o->sucursal, '😟 Un cliente calificó '.number_format($nota, 1).' de 5',
                 trim(($mesa ? 'Mesa '.$mesa.'. ' : '').'Comida '.$d['comida'].', atención '.$d['atencion'].', rapidez '.$d['rapidez'].'.'
-                    .($fila['comentario'] ? ' "'.$fila['comentario'].'"' : '').($fila['telefono'] ? ' Cel. '.$fila['telefono'] : '')), route('encuestas.index'));
+                    .($fila['comentario'] ? ' "'.$fila['comentario'].'"' : '').($fila['telefono'] ? ' Cel. '.$fila['telefono'] : '')), route('encuestas.index'), telegram: false);
             self::alTelegram($o->sucursal, $nota, $fila, $mesa);
         }
     }

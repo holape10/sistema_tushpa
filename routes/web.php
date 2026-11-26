@@ -11,6 +11,7 @@ use App\Http\Controllers\AsistenteController;
 use App\Http\Controllers\AutoservicioController;
 use App\Http\Controllers\AvicolaController;
 use App\Http\Controllers\AvisoCelularController;
+use App\Http\Controllers\AvisosTelegramController;
 use App\Http\Controllers\BancoController;
 use App\Http\Controllers\BitacoraController;
 use App\Http\Controllers\CajaSinInternetController;
@@ -913,6 +914,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/ventas/{venta}/cambio', [CambioController::class, 'create'])->whereNumber('venta')->name('cambios.create');
     Route::post('/ventas/{venta}/cambio', [CambioController::class, 'store'])->whereNumber('venta')->middleware('throttle:30,1')->name('cambios.store');
     Route::get('/cambios/{id}', [CambioController::class, 'show'])->whereNumber('id')->name('cambios.show');
+
+    // Mantenimiento › Avisos por Telegram: la central de lo que le llega a cada administrador
+    Route::get('/avisos-telegram', [AvisosTelegramController::class, 'index'])->name('avisos_telegram.index');
+    Route::post('/avisos-telegram/verificar', [AvisosTelegramController::class, 'verificar'])->middleware('throttle:60,1')->name('avisos_telegram.verificar');
+    Route::post('/avisos-telegram/{usuario}/enlace', [AvisosTelegramController::class, 'enlace'])->whereNumber('usuario')->name('avisos_telegram.enlace');
+    Route::post('/avisos-telegram/{usuario}/guardar', [AvisosTelegramController::class, 'guardar'])->whereNumber('usuario')->name('avisos_telegram.guardar');
+    Route::post('/avisos-telegram/{usuario}/probar', [AvisosTelegramController::class, 'probar'])->whereNumber('usuario')->middleware('throttle:10,1')->name('avisos_telegram.probar');
+    Route::post('/avisos-telegram/{usuario}/quitar', [AvisosTelegramController::class, 'quitar'])->whereNumber('usuario')->name('avisos_telegram.quitar');
 
     // Mantenimiento › Apariencia: color, fondo y tamaño de letra del sistema (solo el administrador)
     Route::get('/apariencia', [AparienciaController::class, 'index'])->name('apariencia.index');

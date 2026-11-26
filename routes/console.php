@@ -12,6 +12,7 @@ use App\Support\Antiguo\CargadorSql;
 use App\Support\Antiguo\Importador;
 use App\Support\Asistente\TelegramAsistente;
 use App\Support\AvisosCelular;
+use App\Support\AvisosTelegram;
 use App\Support\ClinicaRecordatorios;
 use App\Support\Colas;
 use App\Support\DemoDatos;
@@ -24,7 +25,6 @@ use App\Support\PadronRuc;
 use App\Support\PanelDueno;
 use App\Support\Procesos;
 use App\Support\Promociones;
-use App\Support\ResumenTelegram;
 use App\Support\Sunat\EnvioProgramado;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\TelegramCitas;
@@ -505,13 +505,6 @@ Artisan::command('dueno:resumen {--noche : Negocios que atienden de noche (resum
     $enviados = 0;
     foreach ($clientes as $cliente) {
         $enviar = function () use ($noche, $fecha, &$enviados) {
-            // Por Telegram (gratis): a los administradores que lo activaron en el Panel del dueño, con lo que deben los clientes
-            if (Schema::hasColumn('users', 'telegram_resumen') && TelegramCitas::configurado()) {
-                TelegramCitas::sincronizar();
-                foreach (DB::table('empresa_negocios')->where('atiende_de_noche', $noche)->pluck('id_empresa_negocio') as $suc) {
-                    $enviados += ResumenTelegram::enviar((int) $suc, $fecha);
-                }
-            }
             if (! Schema::hasTable('push_suscripciones') || ! Schema::hasColumn('push_suscripciones', 'dueno')) {
                 return;
             }
@@ -761,6 +754,27 @@ Artisan::command('telegram:responder', function () {
 })->purpose('Responde por Telegram las preguntas de los administradores al Asistente IA');
 
 Schedule::command('telegram:responder')->everyMinute()->withoutOverlapping(5);
+
+// El resumen de ventas por Telegram, a la hora que eligió cada administrador (Mantenimiento › Avisos por Telegram)
+Artisan::command('telegram:resumenes {--ruc= : Solo esta empresa}', function () {
+    TelegramCitas::recibir();
+    $clientes = Tenancy::activa()
+        ? Cliente::where('estado', 'ACTIVO')->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))->get()
+        : collect([null]);
+    $enviados = 0;
+    foreach ($clientes as $cliente) {
+        try {
+            $enviados += $cliente ? Tenancy::en($cliente->base_datos, fn () => AvisosTelegram::resumenesProgramados()) : AvisosTelegram::resumenesProgramados();
+        } catch (Throwable $e) {
+            $this->error(($cliente?->ruc ?? 'local').': '.$e->getMessage());
+        }
+    }
+    if ($enviados) {
+        $this->info("Resúmenes por Telegram: {$enviados}");
+    }
+})->purpose('Manda por Telegram el resumen de ventas a la hora que eligió cada administrador');
+
+Schedule::command('telegram:resumenes')->everyFifteenMinutes()->withoutOverlapping(14);
 
 Artisan::command('ventas:cuaderno {archivo : JSON con las hojas del cuaderno (database/seeders/data/...)} {--tipo=13 : 13 = nota de venta, 03 = boleta} {--usuario= : IdUsuario que vende (vacío = el administrador con turno abierto)} {--grabar : Grabar de verdad (sin esto solo revisa y no deja nada)}', function () {
     $ruta = is_file($this->argument('archivo')) ? $this->argument('archivo') : base_path($this->argument('archivo'));

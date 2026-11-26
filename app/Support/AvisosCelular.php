@@ -79,11 +79,16 @@ class AvisosCelular
     /**
      * Para el dueño: algo que conviene saber al momento. Sale solo si lo que lo causó se guardó (después del commit).
      */
-    public static function alDueno(int $sucursal, string $titulo, string $cuerpo, ?string $url = null): void
+    public static function alDueno(int $sucursal, string $titulo, string $cuerpo, ?string $url = null, bool $telegram = true): void
     {
         $aviso = ['titulo' => $titulo, 'cuerpo' => mb_strimwidth($cuerpo, 0, 180, '…'), 'url' => $url ?? route('dueno.index', ['ver' => 'alertas']),
             'etiqueta' => 'dueno-'.substr(md5($titulo.$cuerpo), 0, 10)];
         DB::afterCommit(fn () => self::encolar($sucursal, 'dueno', $aviso));
+        // También al Telegram de los administradores que pidieron las alertas (Mantenimiento › Avisos por Telegram).
+        // $telegram = false: avisos que en Telegram tienen su propia opción (resumen, pedidos de almacén, encuestas…)
+        if ($telegram) {
+            DB::afterCommit(fn () => AvisosTelegram::alerta($sucursal, $titulo, $cuerpo));
+        }
     }
 
     /** @param  array{titulo: string, cuerpo: string, url: string, etiqueta: string}  $aviso */

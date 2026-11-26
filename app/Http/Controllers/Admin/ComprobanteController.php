@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\AnulacionVenta;
 use App\Support\Bitacora;
 use App\Support\ConsultaPeru;
+use App\Support\Contingencia;
 use App\Support\EliminarPrueba;
 use App\Support\Impresion\ComprobantePdf;
 use App\Support\Sunat\CambioFecha;
@@ -57,7 +58,7 @@ class ComprobanteController extends Controller
         $pendiente = fn ($x) => $x->whereNull('est_sunat')->orWhereRaw("UPPER(TRIM(est_sunat)) NOT REGEXP '^(ACEPTAD|OBSERVAD|ANULAD|RECHAZAD)'");
         $rechazado = fn ($w) => $w->whereRaw("UPPER(TRIM(est_sunat)) REGEXP '^RECHAZAD'");
 
-        [$lista, $conteo, $anios] = Tenancy::en($cliente->base_datos, function () use ($filtro, $q, $anio, $desde, $hasta, $request, $pendiente, $rechazado) {
+        [$lista, $conteo, $anios, $dias] = Tenancy::en($cliente->base_datos, function () use ($filtro, $q, $anio, $desde, $hasta, $request, $pendiente, $rechazado) {
             $base = fn () => DB::table('cpe_cabecera')->whereIn('tdocod', SunatService::TIPOS_ELECTRONICOS)->whereNull('ccabaj');
             // Borrar pruebas: los últimos emitidos de todo tipo (también notas de venta y anulados), del más reciente al más antiguo
             $ultimos = $filtro === 'pruebas';
@@ -75,11 +76,14 @@ class ComprobanteController extends Controller
                 'rechazados' => $rechazado($base())->count(),
             ];
             $anios = $base()->selectRaw('DISTINCT YEAR(ccafem) AS a')->orderByDesc('a')->pluck('a');
+            // Días con boletas (y sus notas) sin resumen: se envían de un clic, como en el sistema de la empresa
+            $dias = self::boletasSinResumen()->groupBy('ccafem')->orderBy('ccafem')
+                ->select('ccafem', DB::raw('COUNT(*) as cantidad'), DB::raw('SUM(ccaitv) as total'))->get();
 
-            return [$lista, $conteo, $anios];
+            return [$lista, $conteo, $anios, $dias];
         });
 
-        return view('admin.clientes.comprobantes', compact('cliente', 'lista', 'conteo', 'anios', 'filtro', 'q', 'anio', 'desde', 'hasta'));
+        return view('admin.clientes.comprobantes', compact('cliente', 'lista', 'conteo', 'anios', 'filtro', 'q', 'anio', 'desde', 'hasta', 'dias'));
     }
 
     /**
@@ -143,13 +147,42 @@ class ComprobanteController extends Controller
      * Boletas (y sus notas) por resumen diario, como lo hace la empresa: se agrupan por sucursal y fecha y en cada grupo
      * va todo lo pendiente de ese día (SUNAT lo recibe junto). Devuelve cómo quedó cada comprobante marcado.
      */
+    /** Boletas y sus notas pendientes de resumen (sin las de contingencia, que van en papel) */
+    private static function boletasSinResumen()
+    {
+        return DB::table('cpe_cabecera')->whereNull('ccabaj')
+            ->where(fn ($q) => $q->where('tdocod', '03')->orWhere(fn ($n) => $n->whereIn('tdocod', ['07', '08'])->where('serdoc', 'like', 'B%')))
+            ->whereIn('est_sunat', SunatService::ESTADOS_REENVIABLES)
+            ->where('serdoc', 'not regexp', Contingencia::PATRON_SQL);
+    }
+
+    /** Resumen de un día completo (todas sus boletas pendientes, de todas las sucursales), de un clic */
+    public function resumenDia(Request $request, Cliente $cliente): JsonResponse
+    {
+        $this->autorizar($cliente);
+        $fecha = $request->validate(['fecha' => 'required|date|before_or_equal:today'])['fecha'];
+        $ids = Tenancy::en($cliente->base_datos, fn () => self::boletasSinResumen()->where('ccafem', $fecha)->pluck('IdCpe_cabecera')->map(fn ($id) => (int) $id)->all());
+        if (! $ids) {
+            return response()->json([]);
+        }
+        @set_time_limit(600);
+
+        return response()->json($this->enviarResumenes($cliente, $ids));
+    }
+
     public function resumen(Request $request, Cliente $cliente): JsonResponse
     {
         $this->autorizar($cliente);
         $ids = array_map('intval', $request->validate(['ids' => 'required|array|max:500', 'ids.*' => 'integer'])['ids']);
         @set_time_limit(600);   // cada día marcado es un envío a SUNAT y la espera de su ticket
 
-        return response()->json(Tenancy::en($cliente->base_datos, function () use ($ids) {
+        return response()->json($this->enviarResumenes($cliente, $ids));
+    }
+
+    /** Envía por resumen diario las boletas de esos ids (agrupadas por sucursal y fecha) y dice cómo quedó cada una */
+    private function enviarResumenes(Cliente $cliente, array $ids)
+    {
+        return Tenancy::en($cliente->base_datos, function () use ($ids) {
             $admin = User::join('role_user as ru', 'ru.user_IdUsuario', '=', 'users.IdUsuario')->where('ru.role_id', 2)->orderBy('users.IdUsuario')->first(['users.*']);
             if ($admin) {
                 Auth::guard('web')->setUser($admin);
@@ -187,7 +220,7 @@ class ComprobanteController extends Controller
                 'fecha' => Carbon::parse($c->ccafem)->format('d/m/Y'),
                 'vencido' => ! $c->ccabaj && in_array($c->est_sunat ?: 'PENDIENTE', SunatService::ESTADOS_REENVIABLES, true) && CambioFecha::vencido($c),
             ])->values();
-        }));
+        });
     }
 
     /** PDF A4 del comprobante (el mismo que descarga la empresa), sin entrar a su sistema */

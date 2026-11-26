@@ -249,7 +249,7 @@ class EstudioDescargas
         if (($sucursal = Estudio::sucursalDe((string) Estudio::ruc())) && Estudio::activo()) {
             AvisosCelular::alDueno($sucursal, '📥 Descarga de '.Contabilidad\Contabilidad::nombrePeriodo($periodo).' lista',
                 "{$r['listas']} tarea(s) listas en {$r['empresas']} empresa(s)".($r['errores'] ? ", {$r['errores']} con error" : '').($r['omitidas'] ? ", {$r['omitidas']} sin credenciales" : '').'.',
-                route('estudio.descargas', ['periodo' => $periodo]));
+                route('estudio.descargas', ['periodo' => $periodo]), telegram: false);
             AvisosCelular::enviar();
         }
     }

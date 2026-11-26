@@ -221,7 +221,7 @@ class Requerimientos
         AvisosCelular::alDueno((int) ($r->sucursal_origen ?: $r->id_empresa_negocio),
             ($r->urgente ? '🚨 URGENTE: ' : '📝 ').'Requerimiento '.self::codigo($r).$deSede.($editado ? ' (cambiado)' : ''),
             "{$quien} pide {$lineas} producto(s) para el ".date('d/m', strtotime($r->fecha_para)).($r->observaciones ? ": {$r->observaciones}" : '.'),
-            route('requerimientos.show', $id));
+            route('requerimientos.show', $id), telegram: false);
     }
 
     /** Las otras sedes de la empresa (a las que se les puede pedir) */

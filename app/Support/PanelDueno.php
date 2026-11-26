@@ -395,7 +395,7 @@ class PanelDueno
         AvisosCelular::alDueno($suc, '📊 Resumen de '.$periodo,
             'Vendiste S/ '.number_format($dia->total, 2).' en '.$dia->tickets.' ventas'
             .($var !== null ? ' ('.($var >= 0 ? '+' : '').$var.'% vs. la semana pasada)' : '').'. Toca para ver el detalle y enviarlo por WhatsApp.',
-            route('dueno.index', ['resumen' => 1, 'fecha' => $fecha->toDateString()]));
+            route('dueno.index', ['resumen' => 1, 'fecha' => $fecha->toDateString()]), telegram: false);
 
         return true;
     }
