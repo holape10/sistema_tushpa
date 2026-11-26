@@ -36,6 +36,16 @@ class AparienciaTest extends FlujoTestCase
         }
     }
 
+    public function test_en_una_marca_el_login_lleva_su_icono_y_no_el_de_tushpa(): void
+    {
+        $this->post(route('logout'));
+        config(['marca.es_tushpa' => false, 'marca.icono' => 'imagenes/marcas/wilcat-icono.png']);
+
+        $this->get(route('login'))->assertOk()
+            ->assertSee(asset('imagenes/marcas/wilcat-icono.png'), false)
+            ->assertDontSee(asset('favicon.ico'), false);
+    }
+
     public function test_solo_acepta_opciones_conocidas_y_solo_el_administrador(): void
     {
         $this->post(route('apariencia.guardar'), ['color' => 'arcoiris', 'fondo' => 'gris', 'letra' => 'normal'])->assertSessionHasErrors('color');

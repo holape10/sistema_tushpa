@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#312e81">
     <title>PV Móvil - Sistema {{ config('marca.nombre') }}</title>
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    @if (config('marca.es_tushpa'))<link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">@endif
     <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     <style>[x-cloak]{display:none!important}</style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])

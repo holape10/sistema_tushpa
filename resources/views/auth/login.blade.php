@@ -7,7 +7,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $nombreEmpresa ? $nombreEmpresa.' · ' : '' }}Iniciar Sesión - Sistema {{ config('marca.nombre') }}</title>
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    @if (config('marca.es_tushpa'))<link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">@endif
     <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     {{-- Íconos sin frenar la pantalla: se cargan en paralelo y se aplican al llegar --}}
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
@@ -34,7 +34,7 @@
             .login-rubro-sale { opacity: 0; transform: translateY(-8px); }
             @media (prefers-reduced-motion: reduce) { .login-flota, .login-flota-2, .login-orbe, .login-entra { animation: none; } }
         </style>
-        <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-[#0b0a2e] via-indigo-900 to-blue-800 flex-col items-center justify-center overflow-hidden px-10 py-12 isolate"
+        <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-[#0b0a2e] via-indigo-900 to-blue-800 flex-col items-center justify-start overflow-hidden px-10 pt-10 pb-12 isolate"
              @unless (config('marca.es_tushpa')) style="background-image: linear-gradient(135deg, {{ config('marca.color') }}, {{ config('marca.color_secundario') }})" @endunless>
             <x-kene-adorno patron="laberinto" color="text-white/[0.05]" :franja="false" />
             <!-- Luces de fondo que se mueven despacio -->

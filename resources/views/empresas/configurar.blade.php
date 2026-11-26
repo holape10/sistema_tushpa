@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configurar Empresa - Sistema {{ config('marca.nombre') }}</title>
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    @if (config('marca.es_tushpa'))<link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">@endif
     <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>

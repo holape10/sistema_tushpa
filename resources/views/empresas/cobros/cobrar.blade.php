@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $directa ? 'Punto de venta' : 'Cobrar' }} - Sistema {{ config('marca.nombre') }}</title>
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    @if (config('marca.es_tushpa'))<link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">@endif
     <link rel="icon" href="{{ asset(config('marca.icono')) }}" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
