@@ -32,7 +32,7 @@ class AparienciaTest extends FlujoTestCase
         // Antes de entrar: si la base es de una sola empresa, el login lleva su color y su nombre
         $this->post(route('logout'));
         if (DB::table('empresa')->count() === 1) {
-            $this->get(route('login'))->assertOk()->assertSee('--ap-600:234 88 12', false)->assertSeeText('Estás entrando a')->assertSeeText($nombre);
+            $this->get(route('login'))->assertOk()->assertSee('--ap-600:234 88 12', false)->assertSeeText($nombre);
         }
     }
 

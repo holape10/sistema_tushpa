@@ -154,6 +154,9 @@ class CatalogoVenta
                 'presentaciones' => $presentaciones[$p->IdProducto] ?? [],
                 // Precio 2 y 3 (por mayor, especial…): la caja elige con cuál cobrar la unidad base
                 'precios' => self::preciosExtra($p),
+                // Lista de precios del cliente (Por mayor / Especial): la caja los aplica sola
+                'precio2' => (float) $p->precio2 > 0 ? round((float) $p->precio2, 2) : null,
+                'precio3' => (float) $p->precio3 > 0 ? round((float) $p->precio3, 2) : null,
                 // Precio x Mayor automático: desde esa cantidad (unidad base) la caja lo cobra sola
                 'mayor' => (float) ($p->mayor_desde ?? 0) > 0 && (float) $p->precio2 > 0 ? ['desde' => (float) $p->mayor_desde, 'precio' => round((float) $p->precio2, 2)] : null,
                 // Código de barras de una presentación: la caja la agrega ya elegida

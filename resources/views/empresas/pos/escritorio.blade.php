@@ -184,7 +184,7 @@
                                                     <template x-for="u in cfg.unidades" :key="u.umecod"><option :value="u.umecod" :selected="u.umecod === it.umecod" x-text="u.umenom"></option></template>
                                                 </select>
                                             </template>
-                                            <span x-show="it.dinamico && !it.presentacion" class="text-emerald-600 font-semibold"> · ⚡ precio dinámico</span><span x-show="it.mayorAuto" class="text-violet-600 font-bold"> · 📦 precio por mayor</span>
+                                            <span x-show="it.dinamico && !it.presentacion" class="text-emerald-600 font-semibold"> · ⚡ precio dinámico</span><span x-show="it.mayorAuto" class="text-violet-600 font-bold"> · 📦 precio por mayor</span><span x-show="it.listaAuto" class="text-violet-600 font-bold"> · ⭐ precio del cliente</span>
                                             <span x-show="it.stock !== null && it.cantidad * (it.factor || 1) > it.stock" class="text-rose-500" x-text="' · Stock disponible: ' + num(it.stock) + ' ' + (it.unidad || '')"></span>
                                         </span>
                                         {{-- Presentación elegida al agregar (para cambiarla, quita la línea y agrégala otra vez) --}}

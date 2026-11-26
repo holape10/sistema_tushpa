@@ -7,6 +7,7 @@ use App\Models\Turno;
 use App\Support\Acciones;
 use App\Support\AnulacionVenta;
 use App\Support\Bitacora;
+use App\Support\Cambios;
 use App\Support\ConsultaPeru;
 use App\Support\Contingencia;
 use App\Support\Impresion\ComprobantePdf;
@@ -239,6 +240,10 @@ class VentaController extends Controller
 
         if ($cab->ccabaj) {
             return response()->json(['success' => false, 'message' => 'La venta ya está anulada.']);
+        }
+        // Lo devuelto en un cambio ya volvió al stock: anularla entera lo devolvería dos veces
+        if (Cambios::tiene((int) $cab->IdCpe_cabecera)) {
+            return response()->json(['success' => false, 'message' => 'Esta venta tuvo un cambio de producto: ya no se puede anular completa.']);
         }
         $esNota = in_array($cab->tdocod, ['07', '08'], true);
         // Las notas de crédito y débito no van a la caja: solo se dan de baja ante SUNAT (no dependen del turno)

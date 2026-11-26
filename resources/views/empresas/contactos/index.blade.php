@@ -54,7 +54,8 @@
                                     <span class="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-white font-black {{ $colores[$c->id % count($colores)] }}">{{ mb_substr($c->nombre, 0, 1) }}</span>
                                     <span class="min-w-0"><span class="block font-semibold text-gray-800 truncate max-w-[320px]">{{ $c->nombre }}</span>
                                         <span class="block text-xs text-gray-400">{{ $docs[$c->tdicod] ?? 'DOC' }} {{ $c->doc }}{{ $c->activo ? '' : ' · INACTIVO' }}
-                                            @if ($esCliente && ($c->mensual ?? false))<span class="ml-1 px-1.5 rounded bg-violet-100 text-violet-700 font-semibold">MENSUAL S/ {{ number_format($c->monto, 2) }}</span>@endif</span></span>
+                                            @if ($esCliente && ($c->mensual ?? false))<span class="ml-1 px-1.5 rounded bg-violet-100 text-violet-700 font-semibold">MENSUAL S/ {{ number_format($c->monto, 2) }}</span>@endif
+                                            @if ($esCliente && ($c->lista_precio ?? null))<span class="ml-1 px-1.5 rounded bg-amber-100 text-amber-800 font-semibold">{{ $c->lista_precio === 'mayor' ? 'POR MAYOR' : 'ESPECIAL' }}</span>@endif</span></span>
                                 </div>
                             </td>
                             <td class="px-3 py-2 text-xs text-gray-600">
@@ -75,7 +76,8 @@
                                 <button type="button" title="Editar" class="text-indigo-600 px-1"
                                         @click="editar({{ $c->id }}, @js(['tdicod' => $c->tdicod ?: ($c->doc && strlen($c->doc) === 11 ? '6' : '1'), 'doc' => $c->doc, 'nombre' => $c->nombre,
                                             'direccion' => $c->direccion === '--' ? '' : $c->direccion, 'telefono' => $c->telefono, 'correo' => $c->correo, 'contacto' => $c->contacto, 'activo' => (bool) $c->activo,
-                                            'mensual' => (bool) ($c->mensual ?? false), 'comprobante' => $c->comprobante ?? '', 'monto' => (float) ($c->monto ?? 0)]))"><i class="fas fa-pen"></i></button>
+                                            'mensual' => (bool) ($c->mensual ?? false), 'comprobante' => $c->comprobante ?? '', 'monto' => (float) ($c->monto ?? 0),
+                                            'lista_precio' => $c->lista_precio ?? '']))"><i class="fas fa-pen"></i></button>
                                 <form method="POST" action="{{ route('contactos.eliminar', [$tipo, $c->id]) }}" class="inline"
                                       onsubmit="return confirm('{{ $c->operaciones ? 'Tiene operaciones: se desactivará. ¿Continuar?' : '¿Eliminar este ' . $singular . '?' }}')">
                                     @csrf @method('DELETE')<button class="text-rose-500 px-1" title="{{ $c->operaciones ? 'Desactivar' : 'Eliminar' }}"><i class="fas fa-trash"></i></button></form>
@@ -123,6 +125,13 @@
                                 <label class="block">Persona de contacto<input x-model="form.contacto" maxlength="100" placeholder="Ej. vendedor que te atiende" class="block w-full mt-1 rounded-lg border-gray-300 uppercase"></label>
                             @endunless
                             @if ($esCliente)
+                                {{-- Lista de precios: al ponerlo en una venta, la caja le cobra el Precio x Mayor o el Especial de cada producto --}}
+                                <label class="block">Precios para este cliente
+                                    <select x-model="form.lista_precio" class="block w-full mt-1 rounded-lg border-gray-300">
+                                        <option value="">Normales</option>
+                                        <option value="mayor">Por mayor (usa el Precio x Mayor de cada producto)</option>
+                                        <option value="especial">Especial (usa el Precio Especial de cada producto)</option>
+                                    </select></label>
                                 <div class="rounded-xl border border-violet-200 bg-violet-50 p-3 space-y-2">
                                     <label class="flex items-center gap-2 font-semibold text-violet-800"><input type="checkbox" x-model="form.mensual" class="rounded text-violet-600">
                                         Facturación mensual <span class="font-normal text-xs text-violet-600">(sale en Venta Masiva)</span></label>
@@ -172,7 +181,7 @@
     <script>
         function contactos(tipo) {
             const base = @js(url('/')) + '/' + tipo;
-            const vacio = () => ({ tdicod: '6', doc: '', nombre: '', direccion: '', telefono: '', correo: '', contacto: '', activo: true, mensual: false, comprobante: '01', monto: 0 });
+            const vacio = () => ({ tdicod: '6', doc: '', nombre: '', direccion: '', telefono: '', correo: '', contacto: '', activo: true, mensual: false, comprobante: '01', monto: 0, lista_precio: '' });
             return {
                 form: null, id: null, error: '', enviando: false, buscando: false, sunat: '', sunatOk: true,
                 hist: { abierto: false, cargando: false, nombre: '', filas: [] },

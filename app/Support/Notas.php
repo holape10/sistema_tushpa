@@ -70,9 +70,15 @@ class Notas
             ->groupBy('d.IdCpe_detalle_ref')->select('d.IdCpe_detalle_ref', DB::raw('SUM(d.cdecan) as devuelto'))
             ->pluck('devuelto', 'IdCpe_detalle_ref');
 
+        // Lo devuelto en un cambio de producto tampoco se puede devolver otra vez
+        $cantidades = $porLinea->map(fn ($v) => (float) $v)->all();
+        foreach (Cambios::devuelto($refId) as $linea => $cant) {
+            $cantidades[$linea] = ($cantidades[$linea] ?? 0) + $cant;
+        }
+
         return [
             'total' => (float) DB::table('cpe_cabecera')->whereIn('IdCpe_cabecera', $notas)->sum('ccaitv'),
-            'cantidades' => $porLinea->map(fn ($v) => (float) $v)->all(),
+            'cantidades' => $cantidades,
             'notas' => $notas->count(),
         ];
     }
@@ -103,6 +109,9 @@ class Notas
             // ---- Líneas de la nota ----
             $lineas = [];
             if ($total) {
+                if (Cambios::tiene($refId)) {
+                    throw new \RuntimeException('Esta venta tuvo un cambio de producto: ya no se puede anular por completo. Usa devolución por ítem.');
+                }
                 if ($usado['notas']) {
                     throw new \RuntimeException('El comprobante ya tiene notas de crédito; ya no se puede anular por completo. Usa devolución por ítem o disminución en el valor.');
                 }

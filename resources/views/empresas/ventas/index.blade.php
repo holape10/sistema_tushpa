@@ -180,6 +180,7 @@
                                                 'aceptado' => in_array($v->est_sunat, ['ACEPTADO', 'OBSERVADO'], true),
                                                 'estado' => $v->est_sunat ?: 'PENDIENTE',
                                                 'guia' => !$anulada && !in_array($v->tdocod, ['07', '08'], true),
+                                                'cambio' => !$anulada && in_array($v->tdocod, ['01', '03', '13'], true),
                                                 'esNota' => in_array($v->tdocod, ['07', '08'], true),
                                                 'descartar' => !$anulada && auth()->user()->esAdmin() && $v->est_sunat === 'RECHAZADO' && in_array($v->tdocod, ['01', '03', '07', '08'], true),
                                                 'baja' => $puedeBaja = $puedeAnular && in_array($v->tdocod, ['01', '03', '07', '08'], true) && !$anulada && !$v->anulado_nc && !$v->res_id_baja
@@ -233,6 +234,10 @@
                     <div class="border-t border-gray-100 my-1"></div>
                 </div>
             </template>
+            {{-- Cambio de producto: devuelve algo y se lleva otro de igual o mayor valor --}}
+            <a x-show="menu.venta?.cambio" :href="`{{ url('ventas') }}/${menu.venta?.id}/cambio`" class="flex items-center gap-3 px-3 py-2 hover:bg-sky-50">
+                <i class="fas fa-right-left text-sky-600 w-4"></i>
+                <span><span class="font-semibold">Cambio de producto</span><span class="block text-[11px] text-gray-400">Devuelve uno y se lleva otro (cobra la diferencia)</span></span></a>
             <a x-show="menu.venta?.guia" :href="`{{ route('guias.crear') }}?venta=${menu.venta?.id}`" class="flex items-center gap-3 px-3 py-2 hover:bg-indigo-50">
                 <i class="fas fa-truck-fast text-indigo-600 w-4"></i>
                 <span><span class="font-semibold">Guía de remisión</span><span class="block text-[11px] text-gray-400">Ya trae el cliente y los productos</span></span></a>

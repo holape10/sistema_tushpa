@@ -118,7 +118,11 @@ document.addEventListener('alpine:init', () => {
 
         iniciar() {
             // Precio x Mayor automático: cada cambio del carrito revisa si alguna línea llegó (o bajó de) su cantidad
-            if (window.PrecioMayor) this.$watch('carrito', () => PrecioMayor.aplicar(this.carrito));
+            // y la lista de precios del cliente (Por mayor / Especial)
+            if (window.PrecioMayor) {
+                this.$watch('carrito', () => PrecioMayor.aplicar(this.carrito, this.cliente.lista || null));
+                this.$watch('cliente.lista', () => PrecioMayor.aplicar(this.carrito, this.cliente.lista || null));
+            }
             if (CFG.balanza && window.Balanza?.disponible()) {
                 window.addEventListener('balanza', e => this.pesoBalanza(e.detail));
                 Balanza.reconectar();
@@ -454,7 +458,7 @@ document.addEventListener('alpine:init', () => {
             const precio = confirmado ? precioElegido : (pres ? pres.precio : p.precio);
             // Una línea que pasó sola al Precio x Mayor sigue siendo la misma línea del producto
             let it = this.carrito.find(x => x.id === p.id && (x.presentacion || null) === (pres?.id ?? null)
-                && (redondear(x.precio) === redondear(precio) || (x.mayorAuto && redondear(x.precioBase) === redondear(precio))) && !x.lote);
+                && (redondear(x.precio) === redondear(precio) || (x.autoPrecio && redondear(x.precioBase) === redondear(precio))) && !x.lote);
             // Con número de serie: una sola línea por producto; la cantidad es la cantidad de series elegidas
             if (it && it.control_serie) {
                 this.enfocar('serie-' + it.key);
@@ -496,7 +500,8 @@ document.addEventListener('alpine:init', () => {
                      precio: pres ? pres.precio : p.precio, precioBase: pres ? pres.precio : p.precio, precioUnidad: p.precio,
                      dinamico: !!p.dinamico, unidad: p.unidad || 'Unidad', presentaciones: p.presentaciones || [],
                      presentacion: pres?.id ?? null, factor: pres?.factor ?? 1,
-                     mayor: pres ? null : (p.mayor || null), mayorAuto: false,
+                     mayor: pres ? null : (p.mayor || null), precio2: pres ? null : (p.precio2 ?? null), precio3: pres ? null : (p.precio3 ?? null),
+                     mayorAuto: false, listaAuto: false, autoPrecio: null, autoValor: null,
                      stock: p.stock, flash: false,
                      lotes: p.lotes || [], sin_lote: p.sin_lote || 0, control_lote: !!p.control_lote, lote: '',
                      control_serie: !!p.control_serie, seriesDisponibles: p.series || [], series: [], serieTexto: '', garantia: p.garantia || 0,
@@ -769,7 +774,8 @@ document.addEventListener('alpine:init', () => {
 
         usarCliente(c) {
             this.cliente = { tdicod: c.tdicod || (String(c.num).length === 11 ? '6' : '1'), num: c.num, nom: c.nom || '', dir: c.dir && c.dir !== '--' ? c.dir : '',
-                             dirs: Array.isArray(c.dirs) ? c.dirs : [] };
+                             dirs: Array.isArray(c.dirs) ? c.dirs : [], lista: c.lista || null };
+            if (this.cliente.lista) this.aviso(this.cliente.lista === 'mayor' ? '📦 Cliente por mayor: se cobra con el Precio x Mayor.' : '⭐ Cliente especial: se cobra con el Precio Especial.', 'ok');
             this._ultimoDoc = c.num;
             this.sugerencias = [];
             if (this.cliente.tdicod === '6' && CFG.comprobantes.some(x => x.tdocod === '01')) {

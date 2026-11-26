@@ -14,6 +14,7 @@ use App\Http\Controllers\AvisoCelularController;
 use App\Http\Controllers\BancoController;
 use App\Http\Controllers\BitacoraController;
 use App\Http\Controllers\CajaSinInternetController;
+use App\Http\Controllers\CambioController;
 use App\Http\Controllers\CampanaController;
 use App\Http\Controllers\CartaController;
 use App\Http\Controllers\CategoriaController;
@@ -905,6 +906,11 @@ Route::middleware('auth')->group(function () {
 
     // Campañas (Navidad, escolar, Día de la Madre…): qué comprar según lo vendido el año pasado
     Route::get('/campanas', [CampanaController::class, 'index'])->name('campanas.index');
+
+    // Cambio de producto ("cambio sí, devolución no"): desde el Panel de Ventas
+    Route::get('/ventas/{venta}/cambio', [CambioController::class, 'create'])->whereNumber('venta')->name('cambios.create');
+    Route::post('/ventas/{venta}/cambio', [CambioController::class, 'store'])->whereNumber('venta')->middleware('throttle:30,1')->name('cambios.store');
+    Route::get('/cambios/{id}', [CambioController::class, 'show'])->whereNumber('id')->name('cambios.show');
 
     // Mantenimiento › Apariencia: color, fondo y tamaño de letra del sistema (solo el administrador)
     Route::get('/apariencia', [AparienciaController::class, 'index'])->name('apariencia.index');

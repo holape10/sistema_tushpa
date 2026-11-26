@@ -2,9 +2,13 @@
 @section('title', 'Inventario ciego')
 @section('content')
 @php
+    $presentaciones ??= collect();
     $lista = $productos->map(fn ($p) => ['id' => (int) $p->IdProducto, 'nombre' => $p->pronom, 'categoria' => $p->cat_nom ?? 'Sin categoría',
         'unidad' => \App\Support\Recetas::nombreUnidad($p->umecod ?: 'NIU'), 'contado' => '',
-        'buscar' => mb_strtolower(\Illuminate\Support\Str::ascii($p->pronom.' '.($p->cat_nom ?? '')))])->values();
+        // Códigos que se pueden escanear: el del producto suma 1, el de una presentación suma su factor
+        'codigos' => collect([$p->codigo_barra => 1, $p->procod => 1])->filter(fn ($f, $c) => trim((string) $c) !== '')
+            ->union(collect($presentaciones[$p->IdProducto] ?? [])->mapWithKeys(fn ($x) => [$x->codigo_barra => (float) $x->factor]))->all(),
+        'buscar' => mb_strtolower(\Illuminate\Support\Str::ascii($p->pronom.' '.($p->cat_nom ?? '').' '.$p->codigo_barra.' '.$p->procod))])->values();
 @endphp
 <div class="max-w-3xl mx-auto space-y-4" x-data="conteoCiego(@js($lista))">
     @if (session('error'))<div class="rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm">{{ session('error') }}</div>@endif
@@ -29,8 +33,11 @@
         <div class="bg-white rounded-2xl shadow-sm">
             <div class="p-4 border-b border-gray-100 flex flex-wrap items-center gap-2">
                 <input type="search" x-model="texto" placeholder="Buscar producto o insumo…" class="h-10 flex-1 min-w-56 rounded-xl border-gray-300 text-sm">
+                {{-- Escanear y contar: cada escaneo suma 1 (o lo que trae la presentación); la cámara se vuelve a abrir sola --}}
+                <button type="button" @click="escanear()" class="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold whitespace-nowrap">▦ Escanear y contar</button>
                 <span class="text-sm text-gray-500">Contados: <b x-text="contados.length"></b> de {{ $productos->count() }}</span>
             </div>
+            <p x-show="ultimo" x-cloak class="px-4 py-2 text-sm font-semibold bg-emerald-50 text-emerald-800" x-text="ultimo"></p>
             <div class="divide-y divide-gray-100">
                 <template x-for="p in visibles" :key="p.id">
                     <label class="flex items-center gap-3 px-4 py-2.5" :class="p.contado !== '' ? 'bg-emerald-50/50' : ''">
@@ -52,10 +59,24 @@
 @endsection
 
 @push('scripts')
+<script src="{{ asset('js/escaner-barras.js') }}?v={{ filemtime(public_path('js/escaner-barras.js')) }}"></script>
 <script>
     document.addEventListener('alpine:init', () => {
         Alpine.data('conteoCiego', (productos) => ({
-            productos, texto: '',
+            productos, texto: '', ultimo: '',
+            // Cada código leído suma al producto (sin decirle cuánto hay en el sistema) y vuelve a abrir la cámara
+            escanear() {
+                if (!window.EscanerBarras) { alert('No se pudo cargar el lector de la cámara.'); return; }
+                EscanerBarras.abrir(codigo => {
+                    const p = this.productos.find(x => x.codigos && x.codigos[codigo] !== undefined);
+                    if (!p) { this.ultimo = '✕ El código ' + codigo + ' no es de ningún producto.'; navigator.vibrate?.([80, 60, 80]); return; }
+                    const suma = Number(p.codigos[codigo]) || 1;
+                    p.contado = Math.round(((Number(p.contado) || 0) + suma) * 1000) / 1000;
+                    this.ultimo = '✓ ' + p.nombre + ': +' + suma + ' → ' + p.contado + ' ' + p.unidad;
+                    this.texto = '';
+                    setTimeout(() => this.escanear(), 350);
+                });
+            },
             async conFoto(p) {
                 const cantidad = await window.contarConFoto(p.id, p.nombre);
                 if (cantidad !== null) p.contado = cantidad;

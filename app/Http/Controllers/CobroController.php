@@ -33,6 +33,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class CobroController extends Controller
 {
@@ -355,11 +356,11 @@ class CobroController extends Controller
             ->orderByRaw('clinom LIKE ? DESC', [$q.'%']) // primero los que empiezan con lo escrito
             ->orderBy('clinom')
             ->limit(10)
-            ->get(['clinum', 'clinom', 'clidir', 'clicor', 'telefono', 'tdicod', 'fecha_nac']);
+            ->get(['clinum', 'clinom', 'clidir', 'clicor', 'telefono', 'tdicod', 'fecha_nac', ...(Schema::hasColumn('cliente', 'lista_precio') ? ['lista_precio'] : [])]);
 
         return response()->json($clientes->map(fn ($c) => [
             'num' => $c->clinum, 'nom' => $c->clinom, 'dir' => $c->clidir, 'cor' => $c->clicor,
-            'tel' => $c->telefono, 'tdicod' => $c->tdicod, 'nac' => $c->fecha_nac,
+            'tel' => $c->telefono, 'tdicod' => $c->tdicod, 'nac' => $c->fecha_nac, 'lista' => $c->lista_precio ?? null,
         ]));
     }
 
@@ -372,7 +373,7 @@ class CobroController extends Controller
         if ($cli) {
             return response()->json([
                 'nom' => $cli->clinom, 'dir' => $cli->clidir, 'tdicod' => $cli->tdicod,
-                'cor' => $cli->clicor, 'tel' => $cli->telefono, 'nac' => $cli->fecha_nac,
+                'cor' => $cli->clicor, 'tel' => $cli->telefono, 'nac' => $cli->fecha_nac, 'lista' => $cli->lista_precio ?? null,
                 // Todas sus direcciones (cliente con varias sucursales) para elegir en el comprobante
                 'dirs' => ClienteDirecciones::de($cli->clicod, $cli->clidir),
             ]);

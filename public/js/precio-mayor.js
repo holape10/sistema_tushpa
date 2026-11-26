@@ -1,27 +1,47 @@
 /**
- * Precio x Mayor automático (Productos › "Cobrar el Precio x Mayor solo desde N unidades"), compartido por las cajas.
- * Cada línea del carrito trae `mayor: { desde, precio }` del catálogo. Al llegar a esa cantidad (en la unidad base, sin
- * presentación) la línea pasa al Precio x Mayor; si baja de esa cantidad vuelve a su precio. Si el cajero puso otro
- * precio a mano, se respeta. El servidor ya acepta el Precio x Mayor como precio de lista (no pide permiso).
+ * Precios automáticos de las cajas (Punto Venta y PV Móvil), en un solo lugar para que no se pisen:
+ *  1. Precio del cliente: si el cliente tiene lista "Por mayor" o "Especial" (Contactos › Clientes), cada línea va con el
+ *     Precio x Mayor o el Precio Especial del producto (si lo tiene).
+ *  2. Precio x Mayor por cantidad: desde N unidades (Productos › "Cobrar el Precio x Mayor solo desde N"), la línea pasa
+ *     al Precio x Mayor; si baja de N vuelve a su precio.
+ * Solo en la unidad base (sin presentación) y sin importe fijo. Si el cajero cambia el precio a mano, se respeta.
+ * El servidor ya acepta el Precio x Mayor y el Especial como precios de lista (no piden permiso).
  *
- *   PrecioMayor.aplicar(carrito)   después de cualquier cambio de cantidad (las cajas lo llaman con $watch)
+ *   PrecioMayor.aplicar(carrito, lista)   lista: 'mayor' | 'especial' | null (la del cliente de la venta)
+ *
+ * Cada línea trae del catálogo: precioBase, precio2 (x Mayor), precio3 (Especial) y mayor: { desde, precio }.
+ * Marca la línea con autoPrecio = 'lista' | 'cantidad' (y mayorAuto / listaAuto para mostrarlo).
  */
 (function () {
     const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
 
+    function objetivo(it, lista) {
+        const deLista = lista === 'mayor' ? Number(it.precio2) : (lista === 'especial' ? Number(it.precio3) : 0);
+        if (deLista > 0) return { precio: r2(deLista), motivo: 'lista' };
+        if (it.mayor && (Number(it.cantidad) || 0) >= it.mayor.desde) return { precio: r2(it.mayor.precio), motivo: 'cantidad' };
+        return null;
+    }
+
     window.PrecioMayor = {
-        aplicar(carrito) {
+        aplicar(carrito, lista = null) {
             for (const it of carrito || []) {
-                if (!it.mayor || it.presentacion || (it.importe !== undefined && it.importe !== null)) continue;
-                const llega = (Number(it.cantidad) || 0) >= it.mayor.desde;
-                if (llega && !it.mayorAuto && r2(it.precio) === r2(it.precioBase)) {
-                    it.precio = it.mayor.precio;
-                    it.mayorAuto = true;
-                } else if (!llega && it.mayorAuto) {
-                    // Vuelve a su precio solo si nadie lo cambió a mano mientras tanto
-                    if (r2(it.precio) === r2(it.mayor.precio)) it.precio = it.precioBase;
-                    it.mayorAuto = false;
+                if (it.presentacion || (it.importe !== undefined && it.importe !== null)) continue;
+                // El cajero lo cambió a mano después: se respeta y deja de ser automático
+                if (it.autoPrecio && r2(it.precio) !== r2(it.autoValor)) { it.autoPrecio = null; it.autoValor = null; }
+                const t = objetivo(it, lista);
+                if (t && (it.autoPrecio || r2(it.precio) === r2(it.precioBase))) {
+                    if (r2(it.precio) !== t.precio) it.precio = t.precio;
+                    it.autoPrecio = t.motivo;
+                    it.autoValor = t.precio;
+                } else if (!t && it.autoPrecio) {
+                    it.precio = it.precioBase;
+                    it.autoPrecio = null;
+                    it.autoValor = null;
                 }
+                const cantidad = it.autoPrecio === 'cantidad';
+                const deLista = it.autoPrecio === 'lista';
+                if (it.mayorAuto !== cantidad) it.mayorAuto = cantidad;
+                if (it.listaAuto !== deLista) it.listaAuto = deLista;
             }
         },
     };

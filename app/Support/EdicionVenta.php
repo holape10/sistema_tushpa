@@ -27,6 +27,9 @@ class EdicionVenta
             return 'Ya se envió a SUNAT ('.$cab->est_sunat.'): para corregirla emite una nota de crédito.';
         }
         $id = (int) $cab->IdCpe_cabecera;
+        if (Cambios::tiene($id)) {
+            return 'Tuvo un cambio de producto: sus productos ya no se pueden editar.';
+        }
         if (DB::table('cpe_cabecera')->where('IdCpe_cabecera_ref', $id)->whereNull('ccabaj')->exists()) {
             return 'Tiene notas de crédito o débito.';
         }

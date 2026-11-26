@@ -43,7 +43,11 @@ class ConteoCiegoController extends Controller
             'almacenes' => $almacenes,
             'productos' => DB::table('productos as p')->leftJoin('categorias as c', 'c.cat_id', '=', 'p.cat_id')
                 ->where('p.id_empresa_negocio', $sucursal)->where('p.proest', 'Activo')->whereIn('p.promocion', Compras::TIPOS_CON_STOCK)
-                ->orderBy('c.cat_nom')->orderBy('p.pronom')->get(['p.IdProducto', 'p.pronom', 'p.umecod', 'c.cat_nom']),
+                ->orderBy('c.cat_nom')->orderBy('p.pronom')->get(['p.IdProducto', 'p.pronom', 'p.umecod', 'c.cat_nom', 'p.procod', 'p.codigo_barra']),
+            // Escanear y contar: el código de barras de cada presentación suma su factor (1 caja = 12)
+            'presentaciones' => DB::table('producto_presentacion as pp')->join('productos as p', 'p.IdProducto', '=', 'pp.IdProducto')
+                ->where('p.id_empresa_negocio', $sucursal)->where('pp.estado', 1)->whereNotNull('pp.codigo_barra')->where('pp.codigo_barra', '!=', '')
+                ->get(['pp.IdProducto', 'pp.codigo_barra', 'pp.factor'])->groupBy('IdProducto'),
         ]);
     }
 
