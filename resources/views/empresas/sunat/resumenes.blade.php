@@ -99,6 +99,10 @@
                             <td class="px-3 py-2 min-w-[150px]">
                                 @include('empresas.sunat._estado', ['estado' => $r->est_sunat])
                                 <span class="block text-xs text-gray-500 mt-1 break-words">{{ $r->res_est }}</span>
+                                @if ($r->res_ticket && in_array($r->est_sunat, ['ENVIADO', 'EN PROCESO'], true))
+                                    {{-- El sistema lo consulta solo (sunat:tickets): la empresa no tiene que estar pendiente --}}
+                                    <span class="block text-[11px] text-sky-700 mt-0.5">⏱ El sistema lo consulta solo cada hora: no tienes que hacer nada.</span>
+                                @endif
                                 {{-- Acciones debajo del estado: así la tabla no se sale del recuadro --}}
                                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2">
                                 {{-- Trabado: SUNAT no responde el ticket por horas. Se revisa boleta por boleta y se liberan las que no tiene --}}

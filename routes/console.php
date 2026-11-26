@@ -25,6 +25,7 @@ use App\Support\PadronRuc;
 use App\Support\PanelDueno;
 use App\Support\Procesos;
 use App\Support\Promociones;
+use App\Support\Sunat\ConsultaTickets;
 use App\Support\Sunat\EnvioProgramado;
 use App\Support\Sunat\RescateEnvios;
 use App\Support\TelegramCitas;
@@ -421,6 +422,28 @@ Artisan::command('sunat:rescatar {--ruc= : Solo esta empresa}', function () {
         }
     }
 })->purpose('Envía a SUNAT las facturas (desde el día 2) y boletas (desde el día 5) que nadie envió y están por vencer');
+
+// Cada hora: los resúmenes diarios ENVIADO o EN PROCESO (de hace más de una hora) se consultan solos en SUNAT
+Artisan::command('sunat:tickets {--ruc= : Solo esta empresa}', function () {
+    $bases = Tenancy::activa()
+        ? Cliente::where('estado', 'ACTIVO')->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))->pluck('base_datos', 'ruc')
+        : collect(['local' => null]);
+    foreach ($bases as $ruc => $base) {
+        try {
+            $r = $base ? Tenancy::en($base, fn () => ConsultaTickets::ejecutar()) : ConsultaTickets::ejecutar();
+            Auth::logout();
+        } catch (Throwable $e) {
+            $this->error("{$ruc}: ".$e->getMessage());
+
+            continue;
+        }
+        if ($r['consultados']) {
+            $this->line("<info>{$ruc}</info> tickets consultados {$r['consultados']} · aceptados {$r['aceptados']} · rechazados {$r['rechazados']} · siguen en proceso {$r['siguen']}");
+        }
+    }
+})->purpose('Consulta en SUNAT los resúmenes diarios que siguen en proceso (los que se enviaron hace más de una hora)');
+
+Schedule::command('sunat:tickets')->hourlyAt(50)->withoutOverlapping(50);
 
 // Cada hora de 7am a 10pm: lo que está por vencer el plazo de SUNAT se envía solo
 Schedule::command('sunat:rescatar')->hourlyAt(20)->between('07:00', '22:00')->withoutOverlapping(50);

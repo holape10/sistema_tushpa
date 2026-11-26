@@ -116,6 +116,7 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/clientes/{cliente}/bitacora/excel', [AlertaController::class, 'bitacoraExcel'])->whereNumber('cliente')->middleware('throttle:10,1')->name('clientes.bitacora.excel');
     Route::get('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'index'])->whereNumber('cliente')->name('clientes.comprobantes');
     Route::post('/clientes/{cliente}/comprobantes/resumen', [ComprobanteController::class, 'resumen'])->whereNumber('cliente')->name('clientes.comprobantes.resumen');
+    Route::post('/clientes/{cliente}/comprobantes/resumenes/{res}/ticket', [ComprobanteController::class, 'ticket'])->whereNumber(['cliente', 'res'])->middleware('throttle:30,1')->name('clientes.comprobantes.ticket');
     Route::post('/clientes/{cliente}/comprobantes/resumen-dia', [ComprobanteController::class, 'resumenDia'])->whereNumber('cliente')->name('clientes.comprobantes.resumen_dia');
     Route::get('/clientes/{cliente}/comprobantes/{id}/pdf', [ComprobanteController::class, 'pdf'])->whereNumber(['cliente', 'id'])->name('clientes.comprobantes.pdf');
     Route::post('/clientes/{cliente}/comprobantes/{id}', [ComprobanteController::class, 'accion'])->whereNumber(['cliente', 'id'])->name('clientes.comprobantes.accion');

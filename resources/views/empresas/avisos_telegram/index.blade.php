@@ -6,7 +6,7 @@
 <div x-data="avisosTelegram(@js($admins))" class="max-w-5xl mx-auto space-y-4">
     <section class="rounded-3xl bg-gradient-to-br from-sky-500 to-indigo-700 text-white p-5 sm:p-6 shadow-lg">
         <h1 class="text-2xl sm:text-3xl font-black">✈️ Avisos por Telegram</h1>
-        <p class="mt-1 text-white/90">Todo lo que pasa en tu negocio, en tu celular y <b>gratis</b>: el resumen de ventas a la hora que quieras, alertas al momento,
+        <p class="mt-1 text-white/90">Todo lo que pasa en tu negocio, en tu celular: el resumen de ventas a la hora que quieras, alertas al momento,
             cambios de precios y más. Aquí eliges qué le llega a cada administrador.</p>
         <p class="mt-2 text-sm text-white/90">💬 Además, cuando quieras, <b>pregúntale al bot</b>: "¿cuánto vendí hoy?", "¿qué se está acabando?", "¿quién me debe más?"</p>
     </section>

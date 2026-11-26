@@ -33,7 +33,7 @@ use Illuminate\View\View;
  */
 class ComprobanteController extends Controller
 {
-    public const FILTROS = ['pendientes' => 'Pendientes de SUNAT', 'rechazados' => 'Rechazados', 'todos' => 'Todos', 'pruebas' => '🗑 Borrar pruebas'];
+    public const FILTROS = ['pendientes' => 'Pendientes de SUNAT', 'rechazados' => 'Rechazados', 'todos' => 'Todos', 'resumenes' => '🧾 Resúmenes enviados', 'pruebas' => '🗑 Borrar pruebas'];
 
     private const ACCIONES = ['consultar', 'enviar', 'fecha', 'aceptado', 'descartar', 'anular', 'eliminar', 'beta'];
 
@@ -47,6 +47,9 @@ class ComprobanteController extends Controller
     {
         $this->autorizar($cliente);
         $filtro = array_key_exists($request->get('filtro'), self::FILTROS) ? $request->get('filtro') : 'pendientes';
+        if ($filtro === 'resumenes') {
+            return $this->resumenes($request, $cliente);
+        }
         $q = trim((string) $request->get('q'));
         $anio = (int) $request->get('anio');
         $desde = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->get('desde')) ? $request->get('desde') : null;
@@ -147,6 +150,39 @@ class ComprobanteController extends Controller
      * Boletas (y sus notas) por resumen diario, como lo hace la empresa: se agrupan por sucursal y fecha y en cada grupo
      * va todo lo pendiente de ese día (SUNAT lo recibe junto). Devuelve cómo quedó cada comprobante marcado.
      */
+    /**
+     * Los resúmenes diarios que se enviaron (desde la empresa, el envío programado o este panel): cuándo, de qué día,
+     * cuántas boletas llevó, su ticket y cómo respondió SUNAT. Los que siguen EN PROCESO se consultan solos cada hora.
+     */
+    private function resumenes(Request $request, Cliente $cliente): View
+    {
+        $resumenes = Tenancy::en($cliente->base_datos, fn () => DB::table('resumenes as r')->leftJoin('users as u', 'u.IdUsuario', '=', 'r.IdUsuario')
+            ->leftJoin('empresa_negocios as s', 's.id_empresa_negocio', '=', 'r.id_empresa_negocio')
+            ->orderByDesc('r.res_id')->select('r.*', 'u.apeusu', 'u.name', 's.nombre_comercial')
+            ->paginate(50, ['*'], 'pagina', (int) $request->get('pagina', 1))->withQueryString());
+
+        return view('admin.clientes.resumenes', ['cliente' => $cliente, 'resumenes' => $resumenes, 'filtro' => 'resumenes']);
+    }
+
+    /** Consulta ya el ticket de un resumen (sin esperar a la consulta automática) */
+    public function ticket(Cliente $cliente, int $res): JsonResponse
+    {
+        $this->autorizar($cliente);
+
+        return response()->json(Tenancy::en($cliente->base_datos, function () use ($res) {
+            $r = DB::table('resumenes')->where('res_id', $res)->first();
+            if (! $r) {
+                return ['estado' => 'ERROR', 'mensaje' => 'Ese resumen no existe.'];
+            }
+            $negocio = EmpresaNegocio::findOrFail($r->id_empresa_negocio);
+            try {
+                return (new SunatService(Empresa::findOrFail($negocio->IdEmpresa), $negocio))->consultarTicket($res);
+            } catch (\Throwable $e) {
+                return ['estado' => $r->est_sunat, 'mensaje' => mb_substr($e->getMessage(), 0, 250)];
+            }
+        }));
+    }
+
     /** Boletas y sus notas pendientes de resumen (sin las de contingencia, que van en papel) */
     private static function boletasSinResumen()
     {
