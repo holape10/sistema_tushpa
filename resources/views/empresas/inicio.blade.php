@@ -109,6 +109,9 @@
                     <h2 class="font-black text-amber-900">⚠️ Por acabarse ({{ $porAcabarse['total'] }})</h2>
                     <span class="text-sm text-amber-800">Cómpralos antes de que falten: el sistema mira lo que vendes cada día.</span>
                     <span class="ml-auto flex flex-wrap gap-3">
+                        @if (auth()->user()->esAdminOCaja())
+                            <a href="{{ route('compras.pedidos') }}" class="text-sm font-bold text-amber-900 underline">🛒 Armar pedidos por proveedor</a>
+                        @endif
                         @if (auth()->user()->esAdmin() || auth()->user()->tieneModulo('/requerimientos'))
                             <a href="{{ route('requerimientos.create') }}" class="text-sm font-bold text-amber-900 underline">Hacer el pedido</a>
                         @endif

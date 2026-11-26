@@ -33,6 +33,7 @@ class ProveedoresPrecios
             $p = $compras->first();
             // Lo más reciente de cada proveedor (las compras en dólares, al tipo de cambio de esa compra)
             $proveedores = $compras->groupBy(fn ($c) => $c->prov_id ?: $c->prov_num)->map(fn ($g) => (object) [
+                'id' => $g->first()->prov_id ? (int) $g->first()->prov_id : null,
                 'proveedor' => trim((string) ($g->first()->prov_raz ?: $g->first()->prov_num)) ?: 'SIN PROVEEDOR',
                 'costo' => round((float) $g->first()->costo * ($g->first()->mon_id === 'USD' ? max((float) $g->first()->tip_cam, 1) : 1), 2),
                 'fecha' => (string) $g->first()->com_fec,

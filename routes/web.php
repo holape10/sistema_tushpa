@@ -893,6 +893,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/compras/proveedores', [CompraController::class, 'proveedores'])->name('compras.proveedores');
     // ¿A qué proveedor le compro más barato? (por producto, el último costo de cada proveedor)
     Route::get('/compras/comparar-proveedores', [CompraController::class, 'comparar'])->name('compras.comparar');
+    // Pedidos sugeridos: lo que se acaba, agrupado por el proveedor más barato, para pedírselo por WhatsApp
+    Route::get('/compras/pedidos', [CompraController::class, 'pedidos'])->name('compras.pedidos');
     Route::get('/compras/proveedor/{doc}', [CompraController::class, 'proveedor'])->name('compras.proveedor');
 
     // Punto Venta (escritorio): venta directa con teclado y lector de barras

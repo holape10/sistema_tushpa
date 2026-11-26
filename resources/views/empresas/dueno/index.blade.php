@@ -497,6 +497,7 @@
                 <h2 class="font-extrabold text-gray-800">✈️ Resumen del día por Telegram</h2>
                 <p class="text-sm text-gray-500">Cada noche ({{ ($config->atiende_de_noche ?? false) ? 'a las 12:05 pm, al cerrar la noche' : 'a las 11 pm' }}) le llega gratis a su Telegram:
                     lo vendido y en qué medios, lo más vendido, lo que se está acabando y <b>cuánto te deben tus clientes</b> (quiénes y desde cuándo).
+                    Además, <b>pregúntale al bot</b> cuando quieras: "¿cuánto vendí hoy?", "¿qué se está acabando?", "¿quién me debe más?" y te responde con tus datos.
                     Primero vincula el Telegram: abre el enlace en el celular de esa persona y toca <b>Iniciar</b>.</p>
             </div>
             <p x-show="aviso" x-text="aviso" x-cloak class="rounded-xl bg-indigo-50 text-indigo-800 px-3 py-2 text-sm"></p>

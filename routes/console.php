@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\AgendaPanel;
 use App\Support\Antiguo\CargadorSql;
 use App\Support\Antiguo\Importador;
+use App\Support\Asistente\TelegramAsistente;
 use App\Support\AvisosCelular;
 use App\Support\ClinicaRecordatorios;
 use App\Support\Colas;
@@ -749,6 +750,17 @@ Artisan::command('agenda:avisos', function () {
 })->purpose('Manda por Telegram los avisos de la agenda del panel');
 
 Schedule::command('agenda:avisos')->everyFiveMinutes()->withoutOverlapping(10);
+
+// El Asistente IA por Telegram: lee lo que le escribieron al bot y responde las preguntas de los administradores
+Artisan::command('telegram:responder', function () {
+    TelegramCitas::recibir();
+    $n = TelegramAsistente::responder();
+    if ($n) {
+        $this->info("{$n} pregunta(s) respondida(s) por Telegram.");
+    }
+})->purpose('Responde por Telegram las preguntas de los administradores al Asistente IA');
+
+Schedule::command('telegram:responder')->everyMinute()->withoutOverlapping(5);
 
 Artisan::command('ventas:cuaderno {archivo : JSON con las hojas del cuaderno (database/seeders/data/...)} {--tipo=13 : 13 = nota de venta, 03 = boleta} {--usuario= : IdUsuario que vende (vacío = el administrador con turno abierto)} {--grabar : Grabar de verdad (sin esto solo revisa y no deja nada)}', function () {
     $ruta = is_file($this->argument('archivo')) ? $this->argument('archivo') : base_path($this->argument('archivo'));

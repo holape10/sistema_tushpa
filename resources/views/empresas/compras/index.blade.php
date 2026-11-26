@@ -38,6 +38,7 @@
             </label>
             <button class="h-10 px-4 rounded-xl bg-slate-800 text-white text-sm font-semibold">Filtrar</button>
         </form>
+        <a href="{{ route('compras.pedidos') }}" class="h-10 px-4 inline-flex items-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 text-sm font-bold">🛒 Armar pedidos</a>
         <a href="{{ route('compras.comparar') }}" class="h-10 px-4 inline-flex items-center rounded-xl bg-sky-50 text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100 text-sm font-bold">🏷️ ¿A quién le compro más barato?</a>
         <a href="{{ route('compras.create') }}" class="h-10 px-5 inline-flex items-center rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold">+ Nueva compra</a>
     </div>

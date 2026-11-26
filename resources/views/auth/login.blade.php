@@ -90,7 +90,7 @@
         @endunless
 
         <!-- Panel derecho: formulario -->
-        <div class="flex-1 flex items-center justify-center px-4 sm:px-6 py-10 {{ $rubros ? 'bg-gradient-to-b from-indigo-50 via-white to-gray-50' : 'bg-gray-50' }}">
+        <div class="flex-1 flex justify-center {{ $rubros ? 'items-center' : 'items-start' }} px-4 sm:px-6 pt-6 pb-10 lg:pt-8 {{ $rubros ? 'bg-gradient-to-b from-indigo-50 via-white to-gray-50' : 'bg-gray-50' }}">
             <div class="w-full {{ $rubros ? 'max-w-5xl' : 'max-w-sm' }}" x-data="{ rubro: @js(old('rubro', '')), rubros: @js($rubros ? $rubros->map(fn ($r) => ['nombre' => $r['nombre'], 'icono' => $r['icono']]) : []) }">
 
                 @if ($rubros)
@@ -145,7 +145,7 @@
                         </div>
                     @endif
                     <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">Iniciar sesión</h2>
-                    <p class="text-gray-500 text-sm mt-1 mb-7">Bienvenido de nuevo. Ingresa con tu usuario y contraseña.</p>
+                    <div class="mb-6"></div>
 
                     @if (session('success'))
                         <div class="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-2 text-sm">

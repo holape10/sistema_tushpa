@@ -13,6 +13,7 @@ use App\Support\ConsultaPeru;
 use App\Support\Contabilidad\Contabilidad;
 use App\Support\MesesCerrados;
 use App\Support\OrdenesCompra;
+use App\Support\PedidosProveedor;
 use App\Support\Precios;
 use App\Support\PreciosCompra;
 use App\Support\ProveedoresPrecios;
@@ -321,6 +322,18 @@ class CompraController extends Controller
             'almacen' => DB::table('almacenes')->where('id_almacen', $c['id_almacen'])->value('descripcion') ?? $c['id_almacen'],
             'observacion' => $c['comp_obs'], 'productos' => $productos,
         ];
+    }
+
+    /** Pedidos sugeridos por proveedor: lo que se acaba para los próximos días, con el proveedor más barato */
+    public function pedidos(Request $request)
+    {
+        $this->autorizar();
+        $dias = in_array($request->integer('dias'), PedidosProveedor::DIAS, true) ? $request->integer('dias') : 7;
+        $suc = (int) Auth::user()->id_empresa_negocio;
+        $negocio = (string) DB::table('empresa_negocios')->where('id_empresa_negocio', $suc)->value('nombre_comercial');
+
+        return view('empresas.compras.pedidos', ['dias' => $dias, 'grupos' => PedidosProveedor::armar($suc, $dias),
+            'mensaje' => fn ($g) => PedidosProveedor::mensaje($g, $negocio)]);
     }
 
     /** ¿A qué proveedor le compro más barato? Por producto, el último costo de cada proveedor (6 meses) */

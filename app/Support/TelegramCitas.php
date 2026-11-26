@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Support\Asistente\TelegramAsistente;
 use App\Support\Tenancy\Tenancy;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -84,7 +85,9 @@ class TelegramCitas
             Cache::forever($clave, (int) $u['update_id'] + 1);
             $mensaje = $u['message'] ?? null;
             if (! $mensaje || ! preg_match('#^/start\s+([a-z0-9]{16})$#i', trim((string) ($mensaje['text'] ?? '')), $m)) {
-                if ($mensaje && isset($mensaje['chat']['id'])) {
+                // Un Telegram ya vinculado le pregunta al Asistente IA de su empresa; si no, se le pide vincularlo
+                if ($mensaje && isset($mensaje['chat']['id'])
+                    && ! TelegramAsistente::recibir((string) $mensaje['chat']['id'], (string) ($mensaje['text'] ?? ''))) {
                     self::enviar((string) $mensaje['chat']['id'], 'Hola 👋 Para recibir aquí tus avisos, toca "Vincular Telegram" en el sistema.');
                 }
 
@@ -112,7 +115,8 @@ class TelegramCitas
             DB::connection('central')->table('telegram_vinculos')->where('id', $fila->id)
                 ->update(['chat_id' => (string) $mensaje['chat']['id'], 'nombre' => mb_substr($nombre, 0, 120) ?: null, 'vinculado_at' => now()]);
             self::enviar((string) $mensaje['chat']['id'], '✅ Listo'.($nombre ? ", {$nombre}" : '').'. Desde ahora te llegarán aquí tus avisos: '
-                .($fila->base === self::PANEL ? 'los recordatorios de tu agenda y las alertas de tus empresas.' : 'tus citas, los pedidos de almacén y los demás avisos del sistema.'));
+                .($fila->base === self::PANEL ? 'los recordatorios de tu agenda y las alertas de tus empresas.'
+                    : 'tus avisos del sistema. Si eres el administrador, también puedes preguntarme por tu negocio: "¿cuánto vendí hoy?"'));
             if ($fila->base === self::PANEL) {
                 DB::connection('central')->table('superadmins')->where('id', $fila->IdUsuario)->whereNull('telegram_chat_id')->update(['telegram_chat_id' => $chat]);
             }
