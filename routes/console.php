@@ -32,6 +32,7 @@ use App\Support\TelegramCitas;
 use App\Support\Tenancy\CertificadosClientes;
 use App\Support\Tenancy\DatosCobro;
 use App\Support\Tenancy\Inventario;
+use App\Support\Tenancy\PartePanel;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Respaldos;
 use App\Support\Tenancy\Tenancy;
@@ -444,6 +445,18 @@ Artisan::command('sunat:tickets {--ruc= : Solo esta empresa}', function () {
 })->purpose('Consulta en SUNAT los resúmenes diarios que siguen en proceso (los que se enviaron hace más de una hora)');
 
 Schedule::command('sunat:tickets')->hourlyAt(50)->withoutOverlapping(50);
+
+// Cada mañana a las 7:00: el parte de soporte al Telegram del dueño (y de cada usuario del panel, sus empresas)
+Artisan::command('panel:parte {--ruc= : Solo esta empresa}', function () {
+    if (! Tenancy::activa()) {
+        $this->line('Solo con el multi-empresa activo.');
+
+        return;
+    }
+    $this->info('Parte enviado a '.PartePanel::enviar($this->option('ruc')).' Telegram(s).');
+})->purpose('Manda por Telegram las empresas con algo urgente o importante (el diagnóstico del panel)');
+
+Schedule::command('panel:parte')->dailyAt('07:00')->withoutOverlapping(60);
 
 // Cada hora de 7am a 10pm: lo que está por vencer el plazo de SUNAT se envía solo
 Schedule::command('sunat:rescatar')->hourlyAt(20)->between('07:00', '22:00')->withoutOverlapping(50);

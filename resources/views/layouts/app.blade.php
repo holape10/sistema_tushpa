@@ -108,6 +108,14 @@
 <body class="bg-gray-100" x-data="menuLateral(@js($modulosMenu), @js($grupoActual ?: null))"
       @keydown.escape.window="cerrar()" @keydown.window.alt.m.prevent="abierto ? cerrar() : (abrir(), $nextTick(() => $refs.filtroMenu.focus()))">
 
+@isset($modoSoporte)
+    {{-- Modo soporte: alguien del panel está viendo el sistema como este usuario --}}
+    <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-[100] w-max max-w-[95vw] flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold text-white shadow-xl {{ $modoSoporte['modo'] === 'mirar' ? 'bg-sky-700' : 'bg-rose-700' }}">
+        <span>🛟 Modo soporte ({{ $modoSoporte['nombre'] }}) viendo como <b>{{ $modoSoporte['usuario'] }}</b> · {{ $modoSoporte['modo'] === 'mirar' ? 'solo para mirar' : 'puede hacer cambios' }}
+            · hasta las {{ now()->setTimestamp($modoSoporte['hasta'])->format('H:i') }}</span>
+        <form method="POST" action="{{ route('soporte.salir') }}">@csrf<button class="px-3 py-0.5 rounded-lg bg-white/20 hover:bg-white/30">Salir</button></form>
+    </div>
+@endisset
 <div class="flex h-screen overflow-hidden">
 
     <!-- Menú lateral -->

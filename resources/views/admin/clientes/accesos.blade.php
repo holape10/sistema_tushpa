@@ -56,6 +56,12 @@
                                 @endunless
                                 <button class="px-3 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold">Cambiar</button>
                             </form>
+                            @if ($u->estusu && $cliente->activo())
+                                <form method="POST" action="{{ route('admin.clientes.soporte', [$cliente->id, $u->IdUsuario]) }}" target="_blank" class="mt-2 flex justify-start md:justify-end">
+                                    @csrf<input type="hidden" name="modo" value="mirar">
+                                    <button class="px-3 h-8 rounded-xl bg-sky-50 text-sky-700 text-xs font-bold hover:bg-sky-100" title="Entrar a su sistema como este usuario, solo para mirar (queda en su bitácora)">👁 Ver como este usuario</button>
+                                </form>
+                            @endif
                         </td>
                     </tr>
                 @empty

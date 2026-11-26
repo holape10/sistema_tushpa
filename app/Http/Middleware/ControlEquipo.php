@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\User;
 use App\Support\Seguridad\Dispositivos;
+use App\Support\Tenancy\ModoSoporte;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,7 +19,7 @@ class ControlEquipo
     public function handle(Request $request, Closure $next): Response
     {
         $user = Auth::guard('web')->user();
-        if ($user instanceof User && $request->hasSession()) {
+        if ($user instanceof User && $request->hasSession() && ! ModoSoporte::actual()) {
             try {
                 $equipo = Dispositivos::controlar($request, $user);
             } catch (\Throwable $e) {

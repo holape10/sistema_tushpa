@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\ComprobanteController;
 use App\Http\Controllers\Admin\ContratoController;
 use App\Http\Controllers\Admin\CorreccionProductosController;
 use App\Http\Controllers\Admin\DatosCobroController;
+use App\Http\Controllers\Admin\DiagnosticoController;
 use App\Http\Controllers\Admin\ErrorController;
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\MarcaController;
@@ -114,6 +115,11 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/clientes/{cliente}/alertas', [AlertaController::class, 'index'])->whereNumber('cliente')->name('clientes.alertas');
     Route::post('/clientes/{cliente}/alertas/descartar', [AlertaController::class, 'descartar'])->whereNumber('cliente')->name('clientes.alertas.descartar');
     Route::get('/clientes/{cliente}/bitacora/excel', [AlertaController::class, 'bitacoraExcel'])->whereNumber('cliente')->middleware('throttle:10,1')->name('clientes.bitacora.excel');
+    // 🩺 Soporte de la empresa: diagnóstico con arreglos de un clic, ver su sistema como uno de sus usuarios y su línea de tiempo
+    Route::get('/clientes/{cliente}/diagnostico', [DiagnosticoController::class, 'index'])->whereNumber('cliente')->name('clientes.diagnostico');
+    Route::post('/clientes/{cliente}/diagnostico/arreglar', [DiagnosticoController::class, 'herramienta'])->whereNumber('cliente')->middleware('throttle:30,1')->name('clientes.diagnostico.arreglar');
+    Route::post('/clientes/{cliente}/soporte/{usuario}', [DiagnosticoController::class, 'soporte'])->whereNumber(['cliente', 'usuario'])->middleware('throttle:20,1')->name('clientes.soporte');
+    Route::get('/clientes/{cliente}/linea-tiempo', [DiagnosticoController::class, 'lineaTiempo'])->whereNumber('cliente')->name('clientes.linea_tiempo');
     Route::get('/clientes/{cliente}/comprobantes', [ComprobanteController::class, 'index'])->whereNumber('cliente')->name('clientes.comprobantes');
     Route::post('/clientes/{cliente}/comprobantes/resumen', [ComprobanteController::class, 'resumen'])->whereNumber('cliente')->name('clientes.comprobantes.resumen');
     Route::post('/clientes/{cliente}/comprobantes/resumenes/{res}/ticket', [ComprobanteController::class, 'ticket'])->whereNumber(['cliente', 'res'])->middleware('throttle:30,1')->name('clientes.comprobantes.ticket');

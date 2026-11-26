@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Support\Tenancy\ModoSoporte;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
@@ -21,7 +22,8 @@ class BitacoraSesion
     public static function escuchar(): void
     {
         Event::listen(Login::class, function (Login $e) {
-            if ($e->guard === 'web' && $e->user instanceof User) {
+            // Soporte entrando como el usuario (modo soporte): se anota aparte, no como si el usuario hubiera entrado
+            if ($e->guard === 'web' && $e->user instanceof User && ! ModoSoporte::actual()) {
                 Bitacora::registrar('sesion.ingreso', $e->remember && ! request()->isMethod('post') ? 'Volvió a entrar (sesión recordada)' : 'Inició sesión',
                     null, ['usuario' => $e->user, 'referencia' => ['usuario', $e->user->IdUsuario]]);
             }
@@ -53,7 +55,7 @@ class BitacoraSesion
         });
 
         Event::listen(Logout::class, function (Logout $e) {
-            if ($e->guard === 'web' && $e->user instanceof User) {
+            if ($e->guard === 'web' && $e->user instanceof User && ! ModoSoporte::actual()) {
                 Bitacora::registrar('sesion.salida', 'Cerró sesión', null, ['usuario' => $e->user]);
             }
         });

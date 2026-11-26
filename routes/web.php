@@ -88,6 +88,7 @@ use App\Http\Controllers\MesaController;
 use App\Http\Controllers\MetaMozoController;
 use App\Http\Controllers\MiContratoController;
 use App\Http\Controllers\MisComprobantesController;
+use App\Http\Controllers\ModoSoporteController;
 use App\Http\Controllers\MotorizadoController;
 use App\Http\Controllers\NotaController;
 use App\Http\Controllers\OrdenCompraController;
@@ -1408,5 +1409,9 @@ Route::middleware('auth')->prefix('panel-dueno')->name('dueno.')->controller(Pan
     Route::post('/telegram/{usuario}/probar', 'telegramProbar')->whereNumber('usuario')->middleware('throttle:10,1')->name('telegram.probar');
     Route::post('/telegram/{usuario}/quitar', 'telegramQuitar')->whereNumber('usuario')->name('telegram.quitar');
 });
+
+// Modo soporte ("Ver como el cliente" desde el panel): enlace de un solo uso para entrar y el botón para salir
+Route::get('/soporte/entrar/{token}', [ModoSoporteController::class, 'entrar'])->where('token', '[A-Za-z0-9]{48}')->middleware('throttle:20,1')->name('soporte.entrar');
+Route::post('/soporte/salir', [ModoSoporteController::class, 'salir'])->name('soporte.salir');
 
 require __DIR__.'/auth.php';

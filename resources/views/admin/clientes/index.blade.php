@@ -196,6 +196,7 @@
                             @if ($cl->estado === 'ELIMINADO')
                                 <span class="text-xs text-slate-400">Eliminado</span>
                             @else
+                            <a href="{{ route('admin.clientes.diagnostico', $cl->id) }}" class="text-xs font-bold text-emerald-700 hover:text-emerald-800 mr-2" title="Su estado de salud, arreglos de un clic, ver como el cliente y su línea de tiempo">🩺 Diagnóstico</a>
                             <a href="{{ route('admin.clientes.edit', $cl) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2">Editar</a>
                             @if (auth('superadmin')->user()->es_dueno)
                                 <a href="{{ route('admin.anuncios.index', ['empresa' => $cl->id]) }}" class="text-xs font-semibold text-slate-600 hover:text-indigo-700 mr-2" title="Mostrarle un mensaje arriba de su sistema">Anunciar</a>
