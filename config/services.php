@@ -94,6 +94,8 @@ return [
     // Cobro en línea del servicio TUSHPA (tarjeta, Yape y billeteras con QR) a las empresas que le pagan al dueño del
     // sistema. Llaves de prueba (pk_test / sk_test) o de producción (pk_live / sk_live) del CulqiPanel → Desarrollo → API Keys
     'culqi' => [
+        // Apagado mientras no se use: aunque haya llaves, no se muestra "Pagar en línea" (CULQI_ACTIVO=true para prenderlo)
+        'activo' => (bool) env('CULQI_ACTIVO', false),
         'publica' => env('CULQI_PUBLIC_KEY'),
         'privada' => env('CULQI_SECRET_KEY'),
     ],

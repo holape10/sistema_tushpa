@@ -22,7 +22,7 @@ class PagosOnlineTest extends TestCase
         Carbon::setTestNow('2026-11-01 10:00:00');
         // Base central de mentira en memoria: la prueba no toca la base central de verdad
         config(['database.connections.central' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => ''],
-            'services.culqi.publica' => 'pk_test_x', 'services.culqi.privada' => 'sk_test_x', 'tenancy.dominio' => 'tushpa.app']);
+            'services.culqi.activo' => true, 'services.culqi.publica' => 'pk_test_x', 'services.culqi.privada' => 'sk_test_x', 'tenancy.dominio' => 'tushpa.app']);
         DB::purge('central');
         $central = Schema::connection('central');
         $central->create('planes', function (Blueprint $t) {
@@ -67,6 +67,15 @@ class PagosOnlineTest extends TestCase
     {
         Carbon::setTestNow();
         parent::tearDown();
+    }
+
+    public function test_apagado_no_se_ofrece_pagar_en_linea_aunque_haya_llaves(): void
+    {
+        $this->assertTrue(PagosOnline::disponiblePara($this->cliente));
+
+        config(['services.culqi.activo' => false]);
+
+        $this->assertFalse(PagosOnline::disponiblePara($this->cliente));
     }
 
     public function test_con_tarjeta_la_empresa_se_reactiva_y_vence_en_un_mes_desde_hoy(): void

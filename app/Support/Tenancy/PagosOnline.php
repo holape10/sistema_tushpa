@@ -25,7 +25,7 @@ class PagosOnline
 
     public static function configurado(): bool
     {
-        return (bool) config('services.culqi.publica') && (bool) config('services.culqi.privada');
+        return (bool) config('services.culqi.activo') && (bool) config('services.culqi.publica') && (bool) config('services.culqi.privada');
     }
 
     /** ¿Puede pagar en línea? Con llaves puestas, con plan con precio, y si le paga al dueño del sistema */
