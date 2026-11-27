@@ -315,6 +315,31 @@ class CajaSinInternet
         return ['ok' => true, 'id' => $cabId, 'numero' => $numero, 'mensaje' => null];
     }
 
+    /**
+     * Descarta una venta sin internet que no se pudo subir (quedó con error): deja de frenar el cierre de la caja de esa
+     * PC. Queda anotada como DESCARTADA y en la bitácora (con alerta), para que el administrador sepa que esa venta no
+     * entró al sistema. Una venta que ya subió no se puede descartar.
+     *
+     * @param  array{uuid: string, tdocod: string, serie: string, numero: int, total: float, fecha: string, error: ?string}  $v
+     */
+    public static function descartar(User $user, string $pc, array $v): void
+    {
+        $ya = DB::table('ventas_offline')->where('uuid', $v['uuid'])->first();
+        if ($ya && $ya->estado === 'OK') {
+            throw new \RuntimeException('Esa venta ya está en el sistema: no se puede descartar.');
+        }
+        $numero = $v['serie'].'-'.str_pad((string) $v['numero'], 8, '0', STR_PAD_LEFT);
+        DB::table('ventas_offline')->updateOrInsert(['uuid' => $v['uuid']], [
+            'id_empresa_negocio' => $user->id_empresa_negocio, 'pc' => $pc, 'IdUsuario' => $user->IdUsuario, 'tdocod' => $v['tdocod'], 'serie' => $v['serie'],
+            'numero' => (int) $v['numero'], 'total' => (float) $v['total'], 'fecha_venta' => $v['fecha'], 'estado' => 'DESCARTADA',
+            'error' => mb_substr((string) ($ya->error ?? $v['error'] ?? ''), 0, 500) ?: null, 'datos' => $ya->datos ?? json_encode($v),
+            'updated_at' => now(), 'created_at' => $ya->created_at ?? now(),
+        ]);
+        Bitacora::registrar('caja.offline_descartada', "Descartó la venta sin internet {$numero} por S/ ".number_format((float) $v['total'], 2)
+            .' (no se pudo subir'.(($ya->error ?? $v['error'] ?? null) ? ': '.mb_substr((string) ($ya->error ?? $v['error']), 0, 120) : '').')', null,
+            ['alerta' => true, 'referencia' => ['venta_offline', $v['uuid']], 'datos' => ['pc' => $pc]]);
+    }
+
     private static function anotar(User $user, string $pc, array $v, ?int $cabId, string $estado, ?string $error): void
     {
         DB::table('ventas_offline')->updateOrInsert(['uuid' => $v['uuid']], [

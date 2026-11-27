@@ -40,6 +40,24 @@ class CajaSinInternetController extends Controller
         return response()->json(['ok' => true, 'csrf' => csrf_token()] + CajaSinInternet::paquete(Auth::user(), $pc));
     }
 
+    /** Descarta una venta sin internet que quedó con error (ya no frena el cierre de la caja); queda en la bitácora */
+    public function descartar(Request $request): JsonResponse
+    {
+        $this->autorizar();
+        $d = $request->validate([
+            'pc' => 'nullable|string|max:40', 'uuid' => 'required|uuid', 'tdocod' => 'required|in:'.implode(',', array_keys(CajaSinInternet::TIPOS)),
+            'serie' => 'required|string|size:4', 'numero' => 'required|integer|min:1', 'total' => 'required|numeric|min:0',
+            'fecha' => 'required|date_format:Y-m-d H:i:s', 'error' => 'nullable|string|max:500',
+        ]);
+        try {
+            CajaSinInternet::descartar(Auth::user(), mb_substr((string) ($d['pc'] ?? '') ?: 'PC', 0, 40), $d);
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
     /** Sube las ventas hechas sin internet (de a varias); cada una se responde por separado */
     public function sincronizar(Request $request): JsonResponse
     {

@@ -120,7 +120,7 @@
     }
 
     async function pendientes() {
-        return (await todos('ventas')).filter((v) => v.estado !== 'OK').sort((a, b) => a.guardada - b.guardada);
+        return (await todos('ventas')).filter((v) => v.estado !== 'OK' && v.estado !== 'DESCARTADA').sort((a, b) => a.guardada - b.guardada);
     }
 
     async function ventas() {
@@ -190,8 +190,28 @@
     async function limpiarViejas() {
         const limite = Date.now() - 3 * 86400000;
         for (const v of await todos('ventas')) {
-            if (v.estado === 'OK' && (v.subida || 0) < limite) await quitar('ventas', v.uuid);
+            if ((v.estado === 'OK' || v.estado === 'DESCARTADA') && (v.subida || 0) < limite) await quitar('ventas', v.uuid);
         }
+    }
+
+    /** Descarta una venta con error (no se pudo subir): el servidor la anota en la bitácora y deja de frenar el cierre */
+    async function descartar(uuid) {
+        const v = await leer('ventas', uuid);
+        if (!v || v.estado !== 'ERROR') throw new Error('Solo se descartan las ventas con error.');
+        if (!navigator.onLine || !CFG.descartar) throw new Error('Necesitas internet para descartarla.');
+        const p = await actualizarPaquete();
+        const r = await fetch(CFG.descartar, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': p.csrf },
+            body: JSON.stringify({ pc: pcLocal(), uuid: v.uuid, tdocod: v.tdocod, serie: v.serie, numero: v.numero, total: v.total, fecha: v.fecha, error: v.error || null }),
+        });
+        const d = await r.json().catch(() => null);
+        if (!r.ok || !d?.ok) throw new Error(d?.mensaje || d?.message || 'No se pudo descartar. Intenta de nuevo.');
+        v.estado = 'DESCARTADA';
+        v.subida = Date.now();
+        await guardarVenta(v);
+        window.dispatchEvent(new CustomEvent('caja-offline-sincronizada', { detail: { subidas: 0, errores: 0, quedan: (await pendientes()).length, ajenas: 0 } }));
+        return v;
     }
 
     async function reintentar(uuid) {
@@ -426,7 +446,7 @@
     }
 
     window.CajaOffline = {
-        pcLocal, activarSola, paquete, actualizarPaquete, siguienteNumero, guardarVenta, ventas, pendientes, sincronizar, reintentar,
+        pcLocal, activarSola, paquete, actualizarPaquete, siguienteNumero, guardarVenta, ventas, pendientes, sincronizar, reintentar, descartar,
         mesas, guardarMesa, borrarMesa, totales, numeroLetras, Ticket, ticketVenta, ticketComanda, ticketPrecuenta,
         agenteDisponible, imprimir, mantener, TIPOS,
     };

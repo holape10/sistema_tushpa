@@ -374,7 +374,7 @@
 
 @if (auth()->user()->esAdminOCaja())
     {{-- Caja sin internet: si esta PC se activó, mantiene sus datos al día, sube lo vendido sin conexión y avisa si se cae el internet --}}
-    <script>window.TUSHPA_CAJA = { paquete: @json(route('offline.paquete')), sincronizar: @json(route('offline.sincronizar')), pagina: @json(route('offline.index')) };</script>
+    <script>window.TUSHPA_CAJA = { paquete: @json(route('offline.paquete')), sincronizar: @json(route('offline.sincronizar')), descartar: @json(route('offline.descartar')), pagina: @json(route('offline.index')) };</script>
     <script src="{{ asset('js/caja-sin-internet.js') }}?v={{ filemtime(public_path('js/caja-sin-internet.js')) }}"></script>
     <div id="aviso-sin-internet" style="display:none" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white rounded-2xl shadow-xl px-5 py-3 flex items-center gap-3 text-sm font-semibold">
         <span>Se cayó el internet.</span>

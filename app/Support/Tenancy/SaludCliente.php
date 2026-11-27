@@ -54,7 +54,7 @@ class SaludCliente
     public static function revisarBase(): array
     {
         $problemas = [];
-        foreach (['rechazados', 'boletas', 'facturas', 'resumenes', 'certificado', 'turnos', 'correlativos', 'equipos', 'stockNegativo'] as $revision) {
+        foreach (['rechazados', 'boletas', 'facturas', 'resumenes', 'certificado', 'turnos', 'correlativos', 'ventasSinInternet', 'equipos', 'stockNegativo'] as $revision) {
             try {
                 array_push($problemas, ...self::$revision());
             } catch (\Throwable $e) {
@@ -204,6 +204,23 @@ class SaludCliente
             'Sucursal '.$a['nombre_sucursal'].'. El próximo comprobante saldría con un número repetido.', null,
             [['accion' => 'igualar_correlativo', 'datos' => ['sucursal' => $a['sucursal'], 'clave' => $a['clave']], 'texto' => "Ponerlo en {$a['emitido']}",
                 'confirmar' => "¿Poner el correlativo de {$a['serie']} en {$a['emitido']}? El próximo saldrá con el ".($a['emitido'] + 1).'.']]), self::correlativosAtrasados());
+    }
+
+    /** Ventas hechas sin internet que no pudieron subir: frenan el cierre de la caja de esa PC */
+    private static function ventasSinInternet(): array
+    {
+        if (! Schema::hasTable('ventas_offline')) {
+            return [];
+        }
+        $fallas = DB::table('ventas_offline')->where('estado', 'ERROR')->where('updated_at', '>=', now()->subDays(15))->orderByDesc('updated_at')->get(['serie', 'numero', 'pc', 'error']);
+        if ($fallas->isEmpty()) {
+            return [];
+        }
+        $ultima = $fallas->first();
+
+        return [self::problema('naranja', $fallas->count().' venta(s) sin internet no pudieron subir',
+            'Frenan el cierre de la caja en esa PC. La última: '.$ultima->serie.'-'.$ultima->numero.' ('.$ultima->pc.'): '.mb_substr((string) $ultima->error, 0, 150)
+            .'. En esa PC: Caja sin internet › Ventas de esta PC › Reintentar o Descartar.')];
     }
 
     private static function equipos(): array

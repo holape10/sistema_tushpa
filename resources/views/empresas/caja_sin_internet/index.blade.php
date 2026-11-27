@@ -14,6 +14,7 @@
         window.TUSHPA_CAJA = {
             paquete: @json(route('offline.paquete')),
             sincronizar: @json(route('offline.sincronizar')),
+            descartar: @json(route('offline.descartar')),
             pagina: @json(route('offline.index')),
         };
     </script>
@@ -479,6 +480,13 @@
 
                 async reimprimir(v) { await this.imprimirVenta(v); },
                 async reintentar(v) { await C.reintentar(v.uuid); await this.refrescar(); },
+                async descartar(v) {
+                    const numero = v.serie + '-' + String(v.numero).padStart(8, '0');
+                    if (!confirm('¿Descartar la venta ' + numero + ' por S/ ' + Number(v.total).toFixed(2) + '?\n\nNo entrará al sistema (ni a SUNAT) y ya no frenará el cierre de la caja. Queda anotado en la bitácora.')) return;
+                    try { await C.descartar(v.uuid); this.avisar('Venta ' + numero + ' descartada.'); }
+                    catch (e) { this.avisar(e.message === 'SESION' ? 'Tu sesión venció. Ingresa de nuevo al sistema.' : e.message, 'error'); }
+                    await this.refrescar();
+                },
             };
         }
     </script>
@@ -967,13 +975,14 @@
                                 <td class="text-right" x-text="Number(v.total).toFixed(2)"></td>
                                 <td>
                                     <span class="px-2 py-0.5 rounded-full text-xs font-bold"
-                                          :class="{ 'bg-green-100 text-green-700': v.estado === 'OK', 'bg-amber-100 text-amber-800': v.estado === 'PENDIENTE', 'bg-red-100 text-red-700': v.estado === 'ERROR' }"
-                                          x-text="v.estado === 'OK' ? 'Subida' : (v.estado === 'PENDIENTE' ? 'Por subir' : 'Error')" :title="v.error || ''"></span>
+                                          :class="{ 'bg-green-100 text-green-700': v.estado === 'OK', 'bg-amber-100 text-amber-800': v.estado === 'PENDIENTE', 'bg-red-100 text-red-700': v.estado === 'ERROR', 'bg-gray-200 text-gray-600': v.estado === 'DESCARTADA' }"
+                                          x-text="v.estado === 'OK' ? 'Subida' : (v.estado === 'PENDIENTE' ? 'Por subir' : (v.estado === 'DESCARTADA' ? 'Descartada' : 'Error'))" :title="v.error || ''"></span>
                                     <span x-show="v.error" class="block text-xs text-red-600" x-text="v.error"></span>
                                 </td>
                                 <td class="text-right whitespace-nowrap">
                                     <button type="button" @click="reimprimir(v)" class="text-xs text-indigo-700 hover:underline">Reimprimir</button>
                                     <button type="button" x-show="v.estado === 'ERROR'" @click="reintentar(v)" class="ml-2 text-xs text-red-700 hover:underline">Reintentar</button>
+                                    <button type="button" x-show="v.estado === 'ERROR'" @click="descartar(v)" class="ml-2 text-xs text-gray-500 hover:underline" title="Si no se puede subir: deja de frenar el cierre de la caja">Descartar</button>
                                 </td>
                             </tr>
                         </template>

@@ -10,6 +10,7 @@ use App\Support\CajaSinInternet;
 use App\Support\CartaMesa;
 use App\Support\Sunat\CambioFecha;
 use App\Support\Sunat\RescateEnvios;
+use App\Support\Tenancy\SaludCliente;
 use App\Support\VentaDirecta;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -73,6 +74,37 @@ class CajaYSunatTest extends FlujoTestCase
 
         // Otra caja sin internet tiene su propia serie: nunca choca con la primera
         $this->assertNotSame($serie['serie'], CajaSinInternet::series($this->sucursal, 'CAJA02')['03']['serie']);
+    }
+
+    public function test_una_venta_sin_internet_con_error_se_descarta_y_queda_en_la_bitacora(): void
+    {
+        $plato = $this->producto('LOMO SALTADO', 25, 10);
+        $serie = CajaSinInternet::series($this->sucursal, 'CAJA01')['03'];
+        CajaSinInternet::registrar($this->usuario, 'CAJA01', $this->ventaSinInternet($serie, 1, 25, $plato->IdProducto));
+        $conError = $this->ventaSinInternet($serie, 1, 25, $plato->IdProducto);   // mismo número: no sube
+        $this->assertFalse(CajaSinInternet::registrar($this->usuario, 'CAJA01', $conError)['ok']);
+        $falla = fn () => collect(SaludCliente::revisarBase()['problemas'])->first(fn ($p) => str_contains($p['titulo'], 'sin internet no pudieron subir'));
+        $this->assertNotNull($falla(), 'El diagnóstico del panel avisa la venta que no subió');
+
+        $this->postJson(route('offline.descartar'), ['pc' => 'CAJA01'] + array_intersect_key($conError, array_flip(['uuid', 'tdocod', 'serie', 'numero', 'total', 'fecha'])))
+            ->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertSame('DESCARTADA', DB::table('ventas_offline')->where('uuid', $conError['uuid'])->value('estado'));
+        $this->assertSame(1, DB::table('cpe_cabecera')->where('serdoc', $serie['serie'])->count());
+        $this->assertNull($falla(), 'Descartada ya no sale en el diagnóstico');
+        $this->assertStringContainsString('Descartó la venta sin internet', DB::table('bitacora')->where('accion', 'caja.offline_descartada')->orderByDesc('id')->value('descripcion'));
+    }
+
+    public function test_una_venta_sin_internet_que_ya_subio_no_se_puede_descartar(): void
+    {
+        $plato = $this->producto('TALLARIN', 18, 10);
+        $serie = CajaSinInternet::series($this->sucursal, 'CAJA01')['03'];
+        $venta = $this->ventaSinInternet($serie, 1, 18, $plato->IdProducto);
+        $this->assertTrue(CajaSinInternet::registrar($this->usuario, 'CAJA01', $venta)['ok']);
+
+        $this->postJson(route('offline.descartar'), ['pc' => 'CAJA01'] + array_intersect_key($venta, array_flip(['uuid', 'tdocod', 'serie', 'numero', 'total', 'fecha'])))
+            ->assertStatus(422)->assertJson(['ok' => false]);
+        $this->assertSame('OK', DB::table('ventas_offline')->where('uuid', $venta['uuid'])->value('estado'));
     }
 
     public function test_el_pedido_de_la_carta_qr_corregido_por_el_mozo_llega_a_la_mesa_con_lo_que_quedo(): void

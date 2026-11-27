@@ -699,6 +699,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/caja-sin-internet', [CajaSinInternetController::class, 'index'])->name('offline.index');
     Route::get('/caja-sin-internet/paquete', [CajaSinInternetController::class, 'paquete'])->name('offline.paquete');
     Route::post('/caja-sin-internet/sincronizar', [CajaSinInternetController::class, 'sincronizar'])->middleware('throttle:60,1')->name('offline.sincronizar');
+    Route::post('/caja-sin-internet/descartar', [CajaSinInternetController::class, 'descartar'])->middleware('throttle:30,1')->name('offline.descartar');
     Route::get('/cobros/clientes', [CobroController::class, 'sugerirClientes'])->name('cobros.clientes');
     Route::get('/cobros/cupon', [CobroController::class, 'cupon'])->middleware('throttle:30,1')->name('cobros.cupon');
     Route::post('/cobros/registrar', [CobroController::class, 'registrar'])->name('cobros.registrar');
