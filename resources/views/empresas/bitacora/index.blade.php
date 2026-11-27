@@ -117,7 +117,8 @@
                                     <table class="w-full text-left">
                                         <thead class="text-xs text-gray-500"><tr><th class="py-1 pr-3">Campo</th><th class="py-1 pr-3">Antes</th><th class="py-1">Después</th></tr></thead>
                                         <tbody class="divide-y divide-gray-100">
-                                            @foreach ($cambios as $c)
+                                            @foreach ($cambios as $clave => $c)
+                                                @php $campo = Bitacora::campo($clave, $c); @endphp
                                                 <tr class="align-top">
                                                     <td class="py-1.5 pr-3 font-semibold text-gray-700 whitespace-nowrap">{{ $c['etiqueta'] ?? '' }}</td>
                                                     @if (isset($c['agrego']) || isset($c['quito']))
@@ -126,8 +127,8 @@
                                                     @elseif (($c['despues'] ?? null) === '(cambió)' && ($c['antes'] ?? null) === null)
                                                         <td class="py-1.5 pr-3 text-gray-400" colspan="2">🔒 Cambió (por seguridad no se guarda la clave)</td>
                                                     @else
-                                                        <td class="py-1.5 pr-3 text-gray-500 break-words">{{ Bitacora::mostrar($c['antes'] ?? null) }}</td>
-                                                        <td class="py-1.5 text-gray-900 font-medium break-words">{{ Bitacora::mostrar($c['despues'] ?? null) }}</td>
+                                                        <td class="py-1.5 pr-3 text-gray-500 break-words">{{ Bitacora::mostrar($c['antes'] ?? null, $campo) }}</td>
+                                                        <td class="py-1.5 text-gray-900 font-medium break-words">{{ Bitacora::mostrar($c['despues'] ?? null, $campo) }}</td>
                                                     @endif
                                                 </tr>
                                             @endforeach

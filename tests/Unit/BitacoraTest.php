@@ -42,6 +42,18 @@ class BitacoraTest extends TestCase
         $this->assertSame('Nombre', $todos['nombre']['etiqueta']);
     }
 
+    public function test_los_codigos_y_los_interruptores_se_leen_en_palabras(): void
+    {
+        $cambios = Bitacora::diferencias(['produccion' => '0', 'permite_descuentos' => 1, 'tip_igv_pred' => '10', 'FnuEmpresa' => 0],
+            ['produccion' => '1', 'permite_descuentos' => 0, 'tip_igv_pred' => '20', 'FnuEmpresa' => 1],
+            ['produccion' => 'Envío a SUNAT en producción', 'permite_descuentos' => 'Permite descuentos', 'tip_igv_pred' => 'IGV por defecto', 'FnuEmpresa' => 'Último N° de factura']);
+
+        $this->assertSame('Envío a SUNAT en producción: Pruebas (BETA) → Producción (real) · Permite descuentos: Sí → No · IGV por defecto: Gravado → Exonerado'
+            .' · Último N° de factura: 0 → 1', Bitacora::resumen($cambios, 4), 'Un correlativo sigue siendo un número');
+        $this->assertSame('Producción (real)', Bitacora::mostrar('1', 'produccion'));
+        $this->assertSame('1', Bitacora::mostrar('1'), 'Sin el campo, el valor sale tal cual');
+    }
+
     public function test_el_resumen_se_lee_en_una_linea(): void
     {
         $cambios = Bitacora::diferencias(['propun' => 20, 'proest' => 'Activo', 'password' => 'x'], ['propun' => 22, 'proest' => '', 'password' => 'y'],

@@ -102,9 +102,9 @@ class AlertasPanel
     public static function textoTelegram(Cliente $cliente, string $accion, string $descripcion, ?string $usuario, ?string $ip, ?array $cambios, ?string $panelDominio = null): string
     {
         $lineas = [];
-        foreach (array_slice(array_values($cambios ?? []), 0, 12) as $c) {
-            // Una clave nunca viaja a Telegram: solo se dice que cambió
-            $lineas[] = '• '.(($c['despues'] ?? null) === '(cambió)' ? ($c['etiqueta'] ?? '').': cambió' : Bitacora::resumen([$c], 1));
+        foreach (array_slice($cambios ?? [], 0, 12, true) as $clave => $c) {
+            // Una clave nunca viaja a Telegram: solo se dice que cambió (con su campo, los códigos salen en palabras)
+            $lineas[] = '• '.(($c['despues'] ?? null) === '(cambió)' ? ($c['etiqueta'] ?? '').': cambió' : Bitacora::resumen([$clave => $c], 1));
         }
         if (count($cambios ?? []) > 12) {
             $lineas[] = '… y '.(count($cambios) - 12).' cambio(s) más';

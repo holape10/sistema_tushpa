@@ -51,6 +51,16 @@ class Bitacora
     public const ICONOS = ['sesion' => '🔑', 'usuario' => '👤', 'venta' => '🧾', 'comanda' => '🍽️', 'caja' => '💵', 'cuenta' => '💳', 'compra' => '📦', 'gasto' => '🧾',
         'producto' => '🏷️', 'almacen' => '📦', 'config' => '⚙️', 'contabilidad' => '📒', 'respaldo' => '💾', 'sistema' => '🛠️'];
 
+    /** Valores guardados como código que se muestran en palabras (en la bitácora, el panel, el Excel y Telegram) */
+    private const VALORES = [
+        'produccion' => ['0' => 'Pruebas (BETA)', '1' => 'Producción (real)'],
+        'tip_igv_pred' => ['10' => 'Gravado', '20' => 'Exonerado', '30' => 'Inafecto'],
+        'tdocod_pred' => ['01' => 'Factura', '03' => 'Boleta', '13' => 'Nota de venta'],
+    ];
+
+    /** Interruptores (0 / 1) que se muestran como Sí / No */
+    private const SI_NO = '/^(permite_|usa_|es_|exigir_|anular_|control_lote|control_serie|icbper$|carta_|mostrar_|imprimir_|pide_|tiene_|solo_|activ)|_(activo|activa)$/';
+
     /** Campos que nunca se comparan (cambian solos) */
     private const IGNORAR = ['created_at', 'updated_at', 'remember_token', 'deleted_at'];
 
@@ -205,13 +215,14 @@ class Bitacora
     public static function resumen(?array $cambios, int $max = 3): string
     {
         $partes = [];
-        foreach (array_slice($cambios ?? [], 0, $max) as $c) {
+        foreach (array_slice($cambios ?? [], 0, $max, true) as $clave => $c) {
+            $campo = self::campo($clave, $c);
             if (isset($c['agrego']) || isset($c['quito'])) {
                 $partes[] = $c['etiqueta'].': '.trim(($c['agrego'] ? '+'.implode(', +', $c['agrego']).' ' : '').($c['quito'] ? '−'.implode(', −', $c['quito']) : ''));
             } elseif ($c['despues'] === '(cambió)' && $c['antes'] === null) {
                 $partes[] = $c['etiqueta'].' cambió';
             } else {
-                $partes[] = $c['etiqueta'].': '.self::mostrar($c['antes']).' → '.self::mostrar($c['despues']);
+                $partes[] = $c['etiqueta'].': '.self::mostrar($c['antes'], $campo).' → '.self::mostrar($c['despues'], $campo);
             }
         }
         $resto = count($cambios ?? []) - $max;
@@ -219,9 +230,35 @@ class Bitacora
         return implode(' · ', $partes).($resto > 0 ? " · y {$resto} cambio(s) más" : '');
     }
 
-    public static function mostrar(mixed $v): string
+    /**
+     * Un valor para mostrarlo: con el campo, los códigos salen en palabras ("Envío a SUNAT: Pruebas (BETA) → Producción
+     * (real)", "Permite descuentos: No → Sí"). Sirve también para lo que ya estaba anotado antes.
+     */
+    public static function mostrar(mixed $v, ?string $campo = null): string
     {
-        return $v === null || $v === '' ? '(vacío)' : (string) $v;
+        if ($v === null || $v === '') {
+            return '(vacío)';
+        }
+        $texto = (string) $v;
+        if ($campo !== null) {
+            if (isset(self::VALORES[$campo][$texto])) {
+                return self::VALORES[$campo][$texto];
+            }
+            if ($campo === 'control_stock' && isset(ControlStock::NIVELES[$texto])) {
+                return ControlStock::NIVELES[$texto][0];
+            }
+            if (($texto === '0' || $texto === '1') && preg_match(self::SI_NO, $campo)) {
+                return $texto === '1' ? 'Sí' : 'No';
+            }
+        }
+
+        return $texto;
+    }
+
+    /** El campo de un cambio: la clave con que se guardó (o su "campo" si se anotó como lista) */
+    public static function campo(int|string $clave, array $cambio): ?string
+    {
+        return $cambio['campo'] ?? (is_string($clave) ? $clave : null);
     }
 
     /** La base actual tiene la tabla (se pregunta una vez por base) */
