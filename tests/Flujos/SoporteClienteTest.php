@@ -131,6 +131,34 @@ class SoporteClienteTest extends FlujoTestCase
         }
     }
 
+    public function test_soporte_con_permiso_de_cambios_trabaja_como_administrador_aunque_entre_como_cajero(): void
+    {
+        $cajero = $this->usuario->replicate();
+        $cajero->email = 'cajero'.uniqid().'@prueba.test';
+        $cajero->acciones_bloqueadas = json_encode(['anular_ventas']);
+        $cajero->save();
+        DB::table('role_user')->insert(['role_id' => 4, 'user_IdUsuario' => $cajero->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
+        $this->actingAs($cajero);
+        $this->app['request']->setLaravelSession($sesion = $this->app['session.store']);
+        $visita = fn (string $modo) => $sesion->put(ModoSoporte::SESION, ['id' => 1, 'nombre' => 'GABY', 'usuario' => 'CAJERO', 'modo' => $modo, 'hasta' => now()->addHour()->timestamp]);
+
+        $visita('mirar');
+        $comoMirar = $cajero->fresh();
+        $this->assertFalse($comoMirar->esAdmin());
+        $this->assertFalse($comoMirar->puede('anular_ventas'));
+
+        $visita('cambiar');
+        $comoSoporte = $cajero->fresh();
+        $this->assertTrue($comoSoporte->esAdmin(), 'Con «Puede hacer cambios» trabaja como administrador');
+        $this->assertTrue($comoSoporte->puede('anular_ventas'));
+        $this->assertTrue($comoSoporte->tieneModulo('/configuracion/empresa'));
+        $this->assertFalse($this->usuario->fresh()->tieneRol([4]), 'Los demás usuarios no cambian');
+
+        // La pantalla sale con el menú completo de la empresa
+        $this->withSession([ModoSoporte::SESION => ['id' => 1, 'nombre' => 'GABY', 'usuario' => 'CAJERO', 'modo' => 'cambiar', 'hasta' => now()->addHour()->timestamp]])
+            ->get(route('turnos.index'))->assertOk()->assertSee('SOPORTE');
+    }
+
     public function test_un_enlace_de_soporte_no_sirve_en_otra_empresa(): void
     {
         [$cliente, $yo] = $this->enElPanel();

@@ -3,8 +3,10 @@
 namespace App\View\Composers;
 
 use App\Models\EmpresaNegocio;
+use App\Models\Modulo;
 use App\Support\Rubros;
 use App\Support\Sunat\SunatService;
+use App\Support\Tenancy\ModoSoporte;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -21,7 +23,12 @@ class MenuComposer
     {
         if (Auth::check()) {
             $user = Auth::user();
-            $grupos = Rubros::filtrarMenu($user->modulos()->orderBy('mod_id')->get())->groupBy('mod_gen');
+            // Soporte con «Puede hacer cambios»: el menú completo de la empresa (lo que tienen todos sus usuarios)
+            $modulos = ModoSoporte::conTodo()
+                ? Modulo::whereIn('mod_id', DB::table('modulos_usuario as mu')->join('users as u', 'u.IdUsuario', '=', 'mu.user_IdUsuario')
+                    ->where('u.IdEmpresa', $user->IdEmpresa)->select('mu.mod_id'))->orderBy('mod_id')->get()
+                : $user->modulos()->orderBy('mod_id')->get();
+            $grupos = Rubros::filtrarMenu($modulos)->groupBy('mod_gen');
             $posicion = fn ($grupo) => ($i = array_search($grupo, self::ORDEN_GRUPOS, true)) === false ? 100 : $i;
             $view->with('menu', $grupos->sortBy(fn ($mods, $grupo) => sprintf('%03d %s', $posicion($grupo), $grupo)));
             $view->with('usuario', $user);

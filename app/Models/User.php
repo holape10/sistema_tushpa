@@ -6,8 +6,10 @@ namespace App\Models;
 
 use App\Support\Acciones;
 use App\Support\Clinica;
+use App\Support\Tenancy\ModoSoporte;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class User extends Authenticatable
@@ -58,8 +60,11 @@ class User extends Authenticatable
     /** @return array<int, int> */
     private function rolesIds(): array
     {
-        return $this->rolesCache ??= DB::table('role_user')->where('user_IdUsuario', $this->IdUsuario)
-            ->pluck('role_id')->map(fn ($id) => (int) $id)->all();
+        return $this->rolesCache ??= array_values(array_unique(array_merge(
+            DB::table('role_user')->where('user_IdUsuario', $this->IdUsuario)->pluck('role_id')->map(fn ($id) => (int) $id)->all(),
+            // Soporte con «Puede hacer cambios» trabaja como administrador, aunque haya entrado como otro usuario
+            ModoSoporte::conTodo() && (int) $this->IdUsuario === (int) Auth::guard('web')->id() ? [2] : []
+        )));
     }
 
     public function esAdmin(): bool

@@ -87,6 +87,15 @@ class ModoSoporte
         return (self::actual()['modo'] ?? null) === 'mirar';
     }
 
+    /**
+     * Soporte con «Puede hacer cambios»: entra con los poderes del administrador de la empresa (todas las opciones de su
+     * menú, todas las acciones especiales y las delicadas), sea cual sea el usuario que eligió.
+     */
+    public static function conTodo(): bool
+    {
+        return (self::actual()['modo'] ?? null) === 'cambiar';
+    }
+
     public static function terminar(int $id): void
     {
         try {

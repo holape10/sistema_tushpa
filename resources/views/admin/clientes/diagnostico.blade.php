@@ -84,7 +84,7 @@
                         @foreach ($modos as $valor => $texto)
                             <label class="flex items-center gap-2 text-sm"><input type="radio" name="modo" value="{{ $valor }}" x-model="modo"> {{ $texto }}</label>
                         @endforeach
-                        <p x-show="modo === 'cambiar'" x-cloak class="text-xs text-rose-700">Lo que guardes queda como hecho por ese usuario (y en la bitácora, que entró soporte).</p>
+                        <p x-show="modo === 'cambiar'" x-cloak class="text-xs text-rose-700">Entras con poderes de administrador: todo su menú, todas las acciones y las delicadas (credenciales SUNAT, correlativos). Lo que guardes queda como hecho por ese usuario y en la bitácora, que entró soporte.</p>
                         <button class="w-full h-10 rounded-xl bg-sky-600 text-white text-sm font-bold">Entrar a su sistema ↗</button>
                     </form>
                 @else
@@ -110,6 +110,8 @@
                     <a href="{{ route('admin.clientes.alertas', $cliente->id) }}" class="rounded-xl bg-slate-50 px-3 py-2 hover:bg-slate-100">🗂 Bitácora</a>
                     @if ($esDueno)
                         <a href="{{ route('admin.soporte_ia.index', ['cliente' => $cliente->id]) }}" class="rounded-xl bg-slate-50 px-3 py-2 hover:bg-slate-100">🤖 Soporte IA</a>
+                    @endif
+                    @if ($esDueno || auth('superadmin')->user()->puede_base_datos)
                         <a href="{{ route('admin.basedatos.index', ['base' => $cliente->base_datos]) }}" class="rounded-xl bg-slate-50 px-3 py-2 hover:bg-slate-100">🗄 Base de datos</a>
                     @endif
                 </div>
