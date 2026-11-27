@@ -907,6 +907,9 @@ Route::middleware('auth')->group(function () {
 
     // Punto Venta (escritorio): venta directa con teclado y lector de barras
     Route::get('/punto-venta', [PuntoVentaController::class, 'index'])->name('pv.index');
+    // Tomar Pedido: como una venta, pero solo guarda el pedido con su número del día; la caja lo trae por ese número
+    Route::get('/pedidos', [PuntoVentaController::class, 'pedido'])->name('pv.pedido');
+    Route::get('/pedidos/buscar', [PuntoVentaController::class, 'buscarPedido'])->middleware('throttle:120,1')->name('pv.pedido.buscar');
     Route::post('/punto-venta/registrar', [PuntoVentaController::class, 'registrar'])->name('pv.registrar');
     // Punto Venta IA: el cajero arma y cobra la venta hablando
     Route::get('/punto-venta-ia', [PuntoVentaController::class, 'ia'])->name('pv.ia');

@@ -105,6 +105,10 @@ document.addEventListener('alpine:init', () => {
         proformaId: null,
         proformaNumero: '',
         ultimaProforma: null,
+        // Pedidos del día: el número que la caja escribe para traer el pedido, y el que se acaba de guardar (Tomar Pedido)
+        numeroPedido: '',
+        buscandoPedido: false,
+        pedidoGuardado: null,
         verProforma: false,
         // Separado (apartado): el cliente deja un adelanto y el producto queda reservado hasta que termine de pagar
         separado: null,
@@ -1001,7 +1005,30 @@ document.addEventListener('alpine:init', () => {
             this.proformaId = pf.id;
             this.proformaNumero = pf.numero;
             if (pf.cliente && pf.cliente.num) this.usarCliente(pf.cliente);
-            this.aviso(`Proforma ${pf.numero} abierta: edítala o cóbrala`, 'ok');
+            this.aviso(pf.pedido ? `Pedido N° ${pf.pedido}: revisa y cobra (IMPRIMIR)` : `Proforma ${pf.numero} abierta: edítala o cóbrala`, 'ok');
+        },
+
+        /** Caja: trae el pedido de hoy con ese número (sus productos y su cliente) para cobrarlo e imprimirlo */
+        async buscarPedido() {
+            const n = parseInt(String(this.numeroPedido).trim(), 10);
+            if (!CFG.buscarPedido || this.buscandoPedido) return;
+            if (!(n > 0)) { this.aviso('Escribe el número del pedido.', 'error'); return; }
+            if (this.carrito.length && !confirm('Hay productos en el detalle. ¿Reemplazarlos por el pedido N° ' + n + '?')) return;
+            this.buscandoPedido = true;
+            try {
+                const r = await fetch(CFG.buscarPedido + '?numero=' + n, { headers: { Accept: 'application/json' } });
+                if (r.status === 401 || r.status === 419) { window.location.reload(); return; }
+                const d = await r.json().catch(() => null);
+                if (!d || !d.ok) { this.sonido(false); this.aviso(d?.mensaje || (d?.errors ? Object.values(d.errors)[0][0] : 'No se pudo traer el pedido.'), 'error'); return; }
+                this.carrito = [];
+                this.cargarProforma(d.pedido);
+                this.numeroPedido = '';
+                this.sonido(true);
+            } catch (e) {
+                this.aviso('Error de conexión con el servidor. Intenta otra vez.', 'error');
+            } finally {
+                this.buscandoPedido = false;
+            }
         },
 
         /** Atención de la clínica por cobrar: sus líneas pendientes y el paciente como cliente (como una proforma) */
@@ -1114,7 +1141,7 @@ document.addEventListener('alpine:init', () => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CFG.csrf },
                     body: JSON.stringify({
-                        id: this.proformaId, origen: CFG.farmacia ? 'FARMACIA' : 'PV', items: this.itemsParaEnviar(),
+                        id: this.proformaId, origen: CFG.modoPedido ? 'PEDIDO' : (CFG.farmacia ? 'FARMACIA' : 'PV'), items: this.itemsParaEnviar(),
                         tdicod: this.cliente.tdicod, clinum: this.cliente.num.trim(), clinom: this.cliente.nom.trim(),
                         clidir: this.cliente.dir.trim(), observaciones: this.observaciones.trim(),
                         // Sale sola en la impresora de caja (el vendedor que solo toma pedidos no imprime)
@@ -1129,7 +1156,9 @@ document.addEventListener('alpine:init', () => {
 
                 this.ultimaProforma = d;
                 this.sonido(true);
-                this.aviso(`✔ Proforma ${d.numero} ${d.editada ? 'actualizada' : 'guardada'}` + (d.impresora ? ` · impresa en ${d.impresora}` : ''), 'ok');
+                // Tomar Pedido: el número del día, grande, para el cliente (no se imprime)
+                if (CFG.modoPedido && d.pedido) this.pedidoGuardado = d;
+                this.aviso(CFG.modoPedido && d.pedido ? `✔ Pedido N° ${d.pedido} guardado` : `✔ Proforma ${d.numero} ${d.editada ? 'actualizada' : 'guardada'}` + (d.impresora ? ` · impresa en ${d.impresora}` : ''), 'ok');
                 this.nuevaVenta();
                 // Como los comprobantes: con impresora de caja ya salió directo; sin impresora, por el navegador en el
                 // formato de la sucursal (Ticket o A4). Para verla en pantalla está «Ver» en la última proforma.

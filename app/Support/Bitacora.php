@@ -59,7 +59,7 @@ class Bitacora
     ];
 
     /** Interruptores (0 / 1) que se muestran como Sí / No */
-    private const SI_NO = '/^(permite_|usa_|es_|exigir_|anular_|control_lote|control_serie|icbper$|carta_|mostrar_|imprimir_|pide_|tiene_|solo_|activ)|_(activo|activa)$/';
+    private const SI_NO = '/^(permite_|usa_|es_|exigir_|anular_|trabaja_|control_lote|control_serie|icbper$|carta_|mostrar_|imprimir_|pide_|tiene_|solo_|activ)|_(activo|activa)$/';
 
     /** Campos que nunca se comparan (cambian solos) */
     private const IGNORAR = ['created_at', 'updated_at', 'remember_token', 'deleted_at'];

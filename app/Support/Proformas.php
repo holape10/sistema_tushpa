@@ -13,11 +13,14 @@ use Illuminate\Support\Facades\DB;
  */
 class Proformas
 {
-    public const ORIGENES = ['PV' => 'Punto Venta', 'FARMACIA' => 'PV Farmacia', 'POS' => 'PV Móvil', 'TACTIL' => 'PV Táctil', 'GRIFO' => 'PV Grifo', 'WEB' => 'Tienda virtual', 'AVICOLA' => 'PV Avícola', 'WHATSAPP' => 'Pedido de WhatsApp'];
+    public const ORIGENES = ['PV' => 'Punto Venta', 'FARMACIA' => 'PV Farmacia', 'POS' => 'PV Móvil', 'TACTIL' => 'PV Táctil', 'GRIFO' => 'PV Grifo', 'WEB' => 'Tienda virtual', 'AVICOLA' => 'PV Avícola', 'WHATSAPP' => 'Pedido de WhatsApp', 'PEDIDO' => 'Pedido'];
+
+    /** Serie interna de los pedidos (su número del día es pedido_dia: vuelve a 1 cada día) */
+    public const SERIE_PEDIDO = 'PEDI';
 
     public const REGLAS = [
         'id' => 'nullable|integer',
-        'origen' => 'required|in:PV,FARMACIA,POS,TACTIL,GRIFO,WEB,AVICOLA,WHATSAPP',
+        'origen' => 'required|in:PV,FARMACIA,POS,TACTIL,GRIFO,WEB,AVICOLA,WHATSAPP,PEDIDO',
         'tdicod' => 'required|string|size:1',
         'clinum' => 'required|string|max:15',
         'clinom' => 'required|string|max:120',
@@ -36,6 +39,11 @@ class Proformas
 
     public static function numero(object $p): string
     {
+        // El pedido se nombra por su número del día
+        if (! empty($p->pedido_dia)) {
+            return 'PEDIDO N° '.$p->pedido_dia;
+        }
+
         return $p->serie.'-'.str_pad($p->numero, 8, '0', STR_PAD_LEFT);
     }
 
@@ -67,11 +75,20 @@ class Proformas
             } else {
                 // Correlativo bloqueado para que dos cajas no repitan número
                 $sucursal = EmpresaNegocio::where('id_empresa_negocio', $user->id_empresa_negocio)->lockForUpdate()->first();
-                $sucursal->NumProforma = (int) $sucursal->NumProforma + 1;
-                $sucursal->save();
+                if (($datos['origen'] ?? null) === 'PEDIDO') {
+                    // Pedido: número del día (1, 2, 3… y vuelve a 1 al día siguiente); no usa el correlativo de las proformas
+                    [$serie, $numero] = [self::SERIE_PEDIDO, (int) DB::table('proformas')->where('id_empresa_negocio', $user->id_empresa_negocio)
+                        ->where('serie', self::SERIE_PEDIDO)->max('numero') + 1];
+                    $cabecera['pedido_dia'] = (int) DB::table('proformas')->where('id_empresa_negocio', $user->id_empresa_negocio)
+                        ->where('fecha', now()->toDateString())->max('pedido_dia') + 1;
+                } else {
+                    $sucursal->NumProforma = (int) $sucursal->NumProforma + 1;
+                    $sucursal->save();
+                    [$serie, $numero] = [$sucursal->SerProforma ?: 'PR01', $sucursal->NumProforma];
+                }
 
                 $id = DB::table('proformas')->insertGetId($cabecera + [
-                    'serie' => $sucursal->SerProforma ?: 'PR01', 'numero' => $sucursal->NumProforma,
+                    'serie' => $serie, 'numero' => $numero,
                     'fecha' => now()->toDateString(), 'estado' => 'PENDIENTE', 'origen' => $datos['origen'],
                     'IdUsuario' => $user->IdUsuario, 'IdEmpresa' => $user->IdEmpresa,
                     'id_empresa_negocio' => $user->id_empresa_negocio, 'created_at' => now(),
@@ -109,6 +126,25 @@ class Proformas
         }
 
         return $proforma;
+    }
+
+    /**
+     * El pedido de hoy con ese número, listo para la caja (como una proforma). Si no está pendiente, el motivo.
+     *
+     * @return array<string, mixed>|string
+     */
+    public static function pedidoDelDia(User $user, int $numero): array|string
+    {
+        $p = DB::table('proformas')->where('id_empresa_negocio', $user->id_empresa_negocio)->where('fecha', now()->toDateString())
+            ->where('pedido_dia', $numero)->first();
+        if (! $p) {
+            return "No hay un pedido N° {$numero} de hoy en esta sucursal.";
+        }
+        if ($p->estado !== 'PENDIENTE') {
+            return "El pedido N° {$numero} ya se cobró.";
+        }
+
+        return self::paraCaja($user, (int) $p->id_proforma) ?? "El pedido N° {$numero} ya se cobró.";
     }
 
     public static function marcarFacturada(int $id, int $cabId): void
@@ -155,6 +191,7 @@ class Proformas
         return [
             'id' => $p->id_proforma,
             'numero' => self::numero($p),
+            'pedido' => ! empty($p->pedido_dia) ? (int) $p->pedido_dia : null,
             'cliente' => ['tdicod' => $p->tdicod, 'num' => $p->clinum, 'nom' => $p->clinom, 'dir' => $p->clidir ?? ''],
             'observaciones' => $p->observaciones ?? '',
             'items' => $items,

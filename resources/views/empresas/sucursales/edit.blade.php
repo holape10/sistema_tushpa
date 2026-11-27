@@ -461,6 +461,13 @@
                         @elseif ($campo('clinica_doctor_cobra'))
                             <input type="hidden" name="clinica_doctor_cobra" value="1">
                         @endif
+                        {{-- Trabaja con pedidos: el vendedor toma el pedido (número del día) y la caja lo cobra con ese número --}}
+                        <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
+                            <input type="checkbox" name="trabaja_pedidos" value="1" @checked($campo('trabaja_pedidos')) class="mt-0.5 rounded text-indigo-600">
+                            <span><span class="font-semibold text-gray-800">🧾 Trabaja con pedidos</span>
+                                <span class="block text-xs text-gray-500">El vendedor arma el pedido en <b>Ventas › Tomar Pedido</b> (como una venta, sin imprimir) y le sale un número: 1, 2, 3… (vuelve a 1 cada día).
+                                    En la caja aparece el campo <b>N° de pedido</b>: se escribe ese número, salen sus productos y recién ahí se cobra e imprime.</span></span>
+                        </label>
                         {{-- Varias personas venden en la misma PC: en el Punto Venta se elige quién vendió --}}
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
                             <input type="checkbox" name="pv_elegir_vendedor" value="1" @checked($campo('pv_elegir_vendedor')) class="mt-0.5 rounded text-indigo-600">

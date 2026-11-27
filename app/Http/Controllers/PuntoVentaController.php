@@ -48,11 +48,36 @@ class PuntoVentaController extends Controller
         return $this->pantalla(false, $request, true);
     }
 
-    private function pantalla(bool $farmacia, Request $request, bool $ia = false)
+    /**
+     * Tomar Pedido (sucursales que trabajan con pedidos): la misma pantalla de venta, pero solo guarda el pedido y le da su
+     * número del día; no imprime ni cobra. La caja lo trae con ese número.
+     */
+    public function pedido(Request $request)
     {
         $user = Auth::user();
-        // El vendedor entra sin caja: solo arma pedidos (proformas) que la caja cobra
-        $soloPedido = ! $user->puedeCobrar() && $user->esVendedor();
+        abort_unless($user->esAdminOCaja() || $user->esVendedor(), 403, 'Solo Administrador, Caja o Vendedor toman pedidos.');
+        if (! (bool) EmpresaNegocio::where('id_empresa_negocio', $user->id_empresa_negocio)->value('trabaja_pedidos')) {
+            return redirect()->route('inicio')->with('error', 'Esta sucursal no trabaja con pedidos: actívalo en Mantenimiento › Sucursales.');
+        }
+
+        return $this->pantalla(false, $request, false, true);
+    }
+
+    /** Caja: el pedido de hoy con ese número, para cobrarlo e imprimirlo */
+    public function buscarPedido(Request $request)
+    {
+        $this->autorizar();
+        $numero = (int) $request->validate(['numero' => 'required|integer|min:1|max:99999'], [], ['numero' => 'número de pedido'])['numero'];
+        $pedido = Proformas::pedidoDelDia(Auth::user(), $numero);
+
+        return response()->json(is_string($pedido) ? ['ok' => false, 'mensaje' => $pedido] : ['ok' => true, 'pedido' => $pedido]);
+    }
+
+    private function pantalla(bool $farmacia, Request $request, bool $ia = false, bool $modoPedido = false)
+    {
+        $user = Auth::user();
+        // El vendedor entra sin caja: solo arma pedidos (proformas) que la caja cobra; en «Tomar Pedido» nadie cobra
+        $soloPedido = $modoPedido || (! $user->puedeCobrar() && $user->esVendedor());
         if (! $soloPedido) {
             $this->autorizar();
         }
@@ -111,7 +136,7 @@ class PuntoVentaController extends Controller
         // Botones rápidos con los productos que más se mueven (si algo falla, la caja abre igual sin ellos)
         $masVendidos = rescue(fn () => CatalogoVenta::masVendidos($user), [], true);
 
-        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido', 'vendedores', 'ia', 'masVendidos'));
+        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido', 'vendedores', 'ia', 'masVendidos', 'modoPedido'));
     }
 
     /** Editar una venta del Panel de Ventas: se abre en el Punto Venta con sus productos, cliente y pago */

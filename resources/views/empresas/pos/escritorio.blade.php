@@ -28,6 +28,24 @@
         {{-- ================= IZQUIERDA: búsqueda, detalle y medios de pago ================= --}}
         <div class="lg:col-span-7 space-y-4 min-w-0">
 
+            @if ($modoPedido ?? false)
+                {{-- Tomar Pedido: se arma como una venta, pero solo se guarda el pedido con su número del día (no imprime ni cobra) --}}
+                <div class="rounded-2xl bg-indigo-600 text-white px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1 shadow-sm">
+                    <span class="text-lg font-black">🧾 Tomar Pedido</span>
+                    <span class="text-sm text-indigo-100">Agrega los productos y presiona <b>GUARDAR PEDIDO</b>: te sale el número para el cliente. La caja lo cobra con ese número.</span>
+                </div>
+            @elseif (! $soloPedido && ($negocio->trabaja_pedidos ?? false))
+                {{-- Caja de una sucursal que trabaja con pedidos: el número del pedido trae sus productos para cobrar e imprimir --}}
+                <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-amber-50 ring-1 ring-amber-200 px-3 py-2">
+                    <label for="numero-pedido" class="text-sm font-black text-amber-900">🧾 N° DE PEDIDO</label>
+                    <input id="numero-pedido" x-model="numeroPedido" @keydown.enter.prevent.stop="buscarPedido()" inputmode="numeric" autocomplete="off" placeholder="Ej. 7"
+                           class="h-11 w-28 rounded-xl border-amber-300 text-center text-xl font-black text-slate-800 focus:ring-amber-300 focus:border-amber-500">
+                    <button type="button" @click="buscarPedido()" :disabled="buscandoPedido" class="h-11 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold disabled:opacity-50"
+                            x-text="buscandoPedido ? 'Buscando…' : 'Traer pedido'">Traer pedido</button>
+                    <span class="text-xs text-amber-800">Escribe el número que le dio el vendedor y presiona Enter: salen sus productos para cobrar e imprimir.</span>
+                </div>
+            @endif
+
             {{-- Buscador: nombre, código o lector de barras --}}
             <div class="relative" @click.outside="resultadosAbiertos = false" x-show="!(edicion && edicion.soloCabecera)">
                 <div class="flex gap-2">
@@ -591,8 +609,8 @@
                     </div>
                 </template>
 
-                {{-- Última proforma --}}
-                <template x-if="ultimaProforma">
+                {{-- Última proforma (en Tomar Pedido no: el pedido no se imprime) --}}
+                <template x-if="ultimaProforma && !PV.modoPedido">
                     <div class="mt-3 flex items-center justify-between gap-2 rounded-xl bg-violet-50 px-3 py-2 text-sm">
                         <span class="text-violet-800">Proforma: <strong x-text="ultimaProforma.numero"></strong> · <span x-text="soles(ultimaProforma.total)"></span></span>
                         <span class="flex gap-2 shrink-0">
@@ -745,6 +763,20 @@
             </div>
         </div>
     </div>
+    @if ($modoPedido ?? false)
+        {{-- Pedido guardado: su número del día, grande, para decírselo al cliente --}}
+        <div x-show="pedidoGuardado" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+             x-effect="pedidoGuardado && $nextTick(() => $refs.okPedido && $refs.okPedido.focus())">
+            <div class="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl">
+                <p class="text-lg font-bold text-slate-600">✔ Pedido guardado</p>
+                <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mt-3">Número de pedido</p>
+                <p class="text-8xl font-black leading-none text-indigo-600" x-text="pedidoGuardado && pedidoGuardado.pedido"></p>
+                <p class="mt-3 text-slate-600">Total <b x-text="soles(pedidoGuardado ? pedidoGuardado.total : 0)"></b> · en caja dan este número para cobrar.</p>
+                <button type="button" x-ref="okPedido" @click="pedidoGuardado = null; $nextTick(() => $refs.buscador.focus())"
+                        class="mt-6 h-12 w-full rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700">Nuevo pedido</button>
+            </div>
+        </div>
+    @endif
 </div>
 <script src="{{ asset('js/fidelizacion-pos.js') }}?v={{ filemtime(public_path('js/fidelizacion-pos.js')) }}" data-previa="{{ route('fidelizacion.previa') }}" data-reservar="{{ route('fidelizacion.reservar') }}" data-csrf="{{ csrf_token() }}"></script>
 @endsection
@@ -761,6 +793,9 @@
         editarPrecio: @json(auth()->user()->puede('cambiar_precio') || auth()->user()->puede('subir_precio')),
         // Vendedor sin caja: solo guarda pedidos (proformas) que la caja cobra
         soloPedido: @json($soloPedido ?? false),
+        // Tomar Pedido: guarda el pedido con su número del día (no imprime); la caja lo trae por ese número
+        modoPedido: @json($modoPedido ?? false),
+        buscarPedido: @json(! ($soloPedido ?? false) && ($negocio->trabaja_pedidos ?? false) ? route('pv.pedido.buscar') : null),
         // Sucursal con «Elegir el vendedor en el Punto Venta»: quiénes pueden figurar como vendedor
         vendedores: @json($vendedores ?? []),
         sucursal: @json((int) auth()->user()->id_empresa_negocio),

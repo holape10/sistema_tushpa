@@ -124,7 +124,7 @@ class ProformaController extends Controller
         $impresora = $request->boolean('imprimir') ? Impresion::proforma($id, (int) Auth::user()->id_empresa_negocio) : null;
 
         return response()->json([
-            'estado' => 'success', 'id' => $id, 'numero' => Proformas::numero($p), 'total' => (float) $p->total,
+            'estado' => 'success', 'id' => $id, 'numero' => Proformas::numero($p), 'total' => (float) $p->total, 'pedido' => ! empty($p->pedido_dia) ? (int) $p->pedido_dia : null,
             'editada' => ! empty($request->id), 'imprimir' => route('proformas.imprimir', $id), 'impresora' => $impresora,
         ]);
     }

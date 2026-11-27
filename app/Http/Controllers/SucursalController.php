@@ -118,7 +118,8 @@ class SucursalController extends Controller
         'SerNDB' => 'Serie de notas de débito (boleta)', 'NumNDB' => 'Último N° de nota de débito (boleta)', 'SerGuia' => 'Serie de guías', 'NumGuia' => 'Último N° de guía',
         'SerProforma' => 'Serie de proformas', 'NumProforma' => 'Último N° de proforma', 'tip_igv_pred' => 'IGV por defecto', 'tdocod_pred' => 'Comprobante por defecto',
         'control_stock' => 'Control de stock', 'permite_descuentos' => 'Permite descuentos', 'permite_cortesias' => 'Permite cortesías', 'permite_bonificaciones' => 'Permite bonificaciones',
-        'descuento_max_cajero' => 'Descuento máximo del cajero', 'exigir_operacion' => 'Exigir N° de operación', 'formato_impresion' => 'Formato de impresión'];
+        'descuento_max_cajero' => 'Descuento máximo del cajero', 'exigir_operacion' => 'Exigir N° de operación', 'formato_impresion' => 'Formato de impresión',
+        'trabaja_pedidos' => 'Trabaja con pedidos'];
 
     public function update(Request $request, $id)
     {
@@ -263,6 +264,7 @@ class SucursalController extends Controller
         $datos['foto_texto'] = trim((string) ($datos['foto_texto'] ?? '')) ?: null;
         $datos['imagenes_venta'] = $request->boolean('imagenes_venta');
         $datos['pv_elegir_vendedor'] = $request->boolean('pv_elegir_vendedor');
+        $datos['trabaja_pedidos'] = $request->boolean('trabaja_pedidos');
         $datos['igv_restaurante'] = $request->boolean('igv_restaurante');
         $datos['diseno_a4'] = $datos['diseno_a4'] ?? 'MODERNO';
         $datos['a4_cancelado_grande'] = $request->boolean('a4_cancelado_grande');
