@@ -30,9 +30,21 @@
 
             @if ($modoPedido ?? false)
                 {{-- Tomar Pedido: se arma como una venta, pero solo se guarda el pedido con su número del día (no imprime ni cobra) --}}
-                <div class="rounded-2xl bg-indigo-600 text-white px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1 shadow-sm">
-                    <span class="text-lg font-black">🧾 Tomar Pedido</span>
-                    <span class="text-sm text-indigo-100">Agrega los productos y presiona <b>GUARDAR PEDIDO</b>: te sale el número para el cliente. La caja lo cobra con ese número.</span>
+                <div class="rounded-2xl bg-indigo-600 text-white px-4 py-3 flex flex-wrap items-center gap-3 shadow-sm">
+                    <span class="text-lg font-black flex-1" x-text="proformaId ? '🧾 Pedido N° ' + pedidoAbierto : '🧾 Tomar Pedido'">🧾 Tomar Pedido</span>
+                    <template x-if="!proformaId">
+                        <span class="flex items-center gap-2">
+                            <input x-model="numeroPedido" @keydown.enter.prevent.stop="buscarPedido()" inputmode="numeric" autocomplete="off" placeholder="N° pedido"
+                                   class="h-10 w-28 rounded-xl border-0 text-center text-lg font-black text-slate-800 focus:ring-4 focus:ring-indigo-300">
+                            <button type="button" @click="buscarPedido()" :disabled="buscandoPedido" class="h-10 px-4 rounded-xl bg-white/20 hover:bg-white/30 text-sm font-bold disabled:opacity-50">Abrir</button>
+                        </span>
+                    </template>
+                    <template x-if="proformaId">
+                        <span class="flex items-center gap-2">
+                            <button type="button" @click="anularPedido()" :disabled="procesando" class="h-10 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-sm font-bold disabled:opacity-50">Anular pedido</button>
+                            <button type="button" @click="nuevaVenta()" class="h-10 px-4 rounded-xl bg-white/20 hover:bg-white/30 text-sm font-bold">Nuevo</button>
+                        </span>
+                    </template>
                 </div>
             @elseif (! $soloPedido && ($negocio->trabaja_pedidos ?? false))
                 {{-- Caja de una sucursal que trabaja con pedidos: el número del pedido trae sus productos para cobrar e imprimir --}}
@@ -42,7 +54,6 @@
                            class="h-11 w-28 rounded-xl border-amber-300 text-center text-xl font-black text-slate-800 focus:ring-amber-300 focus:border-amber-500">
                     <button type="button" @click="buscarPedido()" :disabled="buscandoPedido" class="h-11 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold disabled:opacity-50"
                             x-text="buscandoPedido ? 'Buscando…' : 'Traer pedido'">Traer pedido</button>
-                    <span class="text-xs text-amber-800">Escribe el número que le dio el vendedor y presiona Enter: salen sus productos para cobrar e imprimir.</span>
                 </div>
             @endif
 
@@ -768,10 +779,10 @@
         <div x-show="pedidoGuardado" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
              x-effect="pedidoGuardado && $nextTick(() => $refs.okPedido && $refs.okPedido.focus())">
             <div class="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl">
-                <p class="text-lg font-bold text-slate-600">✔ Pedido guardado</p>
+                <p class="text-lg font-bold text-slate-600" x-text="pedidoGuardado && pedidoGuardado.editada ? '✔ Pedido actualizado' : '✔ Pedido guardado'">✔ Pedido guardado</p>
                 <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mt-3">Número de pedido</p>
                 <p class="text-8xl font-black leading-none text-indigo-600" x-text="pedidoGuardado && pedidoGuardado.pedido"></p>
-                <p class="mt-3 text-slate-600">Total <b x-text="soles(pedidoGuardado ? pedidoGuardado.total : 0)"></b> · en caja dan este número para cobrar.</p>
+                <p class="mt-3 text-slate-600">Total <b x-text="soles(pedidoGuardado ? pedidoGuardado.total : 0)"></b></p>
                 <button type="button" x-ref="okPedido" @click="pedidoGuardado = null; $nextTick(() => $refs.buscador.focus())"
                         class="mt-6 h-12 w-full rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700">Nuevo pedido</button>
             </div>
@@ -795,7 +806,8 @@
         soloPedido: @json($soloPedido ?? false),
         // Tomar Pedido: guarda el pedido con su número del día (no imprime); la caja lo trae por ese número
         modoPedido: @json($modoPedido ?? false),
-        buscarPedido: @json(! ($soloPedido ?? false) && ($negocio->trabaja_pedidos ?? false) ? route('pv.pedido.buscar') : null),
+        buscarPedido: @json(($modoPedido ?? false) || (! ($soloPedido ?? false) && ($negocio->trabaja_pedidos ?? false)) ? route('pv.pedido.buscar') : null),
+        anularPedido: @json(($modoPedido ?? false) ? route('pv.pedido.anular', 0) : null),
         // Sucursal con «Elegir el vendedor en el Punto Venta»: quiénes pueden figurar como vendedor
         vendedores: @json($vendedores ?? []),
         sucursal: @json((int) auth()->user()->id_empresa_negocio),

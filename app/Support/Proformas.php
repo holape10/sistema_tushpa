@@ -140,11 +140,33 @@ class Proformas
         if (! $p) {
             return "No hay un pedido N° {$numero} de hoy en esta sucursal.";
         }
+        if ($p->estado === 'ANULADO') {
+            return "El pedido N° {$numero} fue anulado.";
+        }
         if ($p->estado !== 'PENDIENTE') {
             return "El pedido N° {$numero} ya se cobró.";
         }
 
         return self::paraCaja($user, (int) $p->id_proforma) ?? "El pedido N° {$numero} ya se cobró.";
+    }
+
+    /**
+     * Anula un pedido que el cliente ya no quiere. No se borra: su número del día queda usado (no se le da a otro cliente)
+     * y en la caja dice que fue anulado.
+     */
+    public static function anularPedido(User $user, int $id): object
+    {
+        return DB::transaction(function () use ($user, $id) {
+            $p = self::bloquearPendiente($user, $id);
+            if (empty($p->pedido_dia)) {
+                throw new \RuntimeException('Eso no es un pedido.');
+            }
+            DB::table('proformas')->where('id_proforma', $id)->update(['estado' => 'ANULADO', 'updated_at' => now()]);
+            Bitacora::registrar('venta.pedido_anulado', 'Anuló el pedido N° '.$p->pedido_dia.' (S/ '.number_format((float) $p->total, 2).')', null,
+                ['referencia' => ['proforma', $id]]);
+
+            return $p;
+        });
     }
 
     public static function marcarFacturada(int $id, int $cabId): void

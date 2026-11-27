@@ -63,14 +63,27 @@ class PuntoVentaController extends Controller
         return $this->pantalla(false, $request, false, true);
     }
 
-    /** Caja: el pedido de hoy con ese número, para cobrarlo e imprimirlo */
+    /** El pedido de hoy con ese número: la caja lo trae para cobrarlo; el vendedor, para cambiarlo o anularlo */
     public function buscarPedido(Request $request)
     {
-        $this->autorizar();
+        abort_unless(Auth::user()->esAdminOCaja() || Auth::user()->esVendedor(), 403, 'Solo Administrador, Caja o Vendedor ven los pedidos.');
         $numero = (int) $request->validate(['numero' => 'required|integer|min:1|max:99999'], [], ['numero' => 'número de pedido'])['numero'];
         $pedido = Proformas::pedidoDelDia(Auth::user(), $numero);
 
         return response()->json(is_string($pedido) ? ['ok' => false, 'mensaje' => $pedido] : ['ok' => true, 'pedido' => $pedido]);
+    }
+
+    /** El cliente ya no quiere el pedido: queda ANULADO (su número no se vuelve a dar) */
+    public function anularPedido(int $id)
+    {
+        abort_unless(Auth::user()->esAdminOCaja() || Auth::user()->esVendedor(), 403, 'Solo Administrador, Caja o Vendedor anulan pedidos.');
+        try {
+            $p = Proformas::anularPedido(Auth::user(), $id);
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+
+        return response()->json(['ok' => true, 'mensaje' => 'Pedido N° '.$p->pedido_dia.' anulado.']);
     }
 
     private function pantalla(bool $farmacia, Request $request, bool $ia = false, bool $modoPedido = false)

@@ -53,6 +53,47 @@ class PedidosDelDiaTest extends FlujoTestCase
         $this->getJson(route('pv.pedido.buscar', ['numero' => 2]))->assertJson(['ok' => false, 'mensaje' => 'El pedido N° 2 ya se cobró.']);
     }
 
+    public function test_al_cambiar_el_pedido_conserva_su_numero(): void
+    {
+        $this->pedido();
+        [$id, , $plato] = $this->pedido(1);
+
+        // El cliente agrega más: se abre el N° 2 y se guarda con 4
+        Proformas::guardar($this->usuario, ['id' => $id, 'origen' => 'PEDIDO', 'tdicod' => '1', 'clinum' => '00000000', 'clinom' => 'VENTA AL PORTADOR',
+            'items' => [['id' => $plato->IdProducto, 'cantidad' => 4, 'precio' => 15]]]);
+
+        $p = DB::table('proformas')->where('id_proforma', $id)->first();
+        $this->assertSame([2, 60.0], [(int) $p->pedido_dia, (float) $p->total]);
+        $this->assertSame(2, DB::table('proformas')->where('id_empresa_negocio', $this->sucursal)->whereNotNull('pedido_dia')->count(), 'No se creó otro pedido');
+    }
+
+    public function test_anular_el_pedido_no_libera_su_numero(): void
+    {
+        $this->trabajaConPedidos();
+        $this->pedido();
+        [$id] = $this->pedido();
+
+        $this->postJson(route('pv.pedido.anular', $id))->assertOk()->assertJson(['ok' => true, 'mensaje' => 'Pedido N° 2 anulado.']);
+
+        $this->assertSame('ANULADO', DB::table('proformas')->where('id_proforma', $id)->value('estado'));
+        $this->getJson(route('pv.pedido.buscar', ['numero' => 2]))->assertJson(['ok' => false, 'mensaje' => 'El pedido N° 2 fue anulado.']);
+        [, $siguiente] = $this->pedido();
+        $this->assertSame(3, (int) $siguiente->pedido_dia, 'El 2 no se le da a otro cliente');
+        $this->postJson(route('pv.pedido.anular', $id))->assertJson(['ok' => false]);
+    }
+
+    public function test_el_vendedor_abre_su_pedido_para_cambiarlo(): void
+    {
+        $this->trabajaConPedidos();
+        $this->pedido();
+        $vendedor = $this->usuario->replicate();
+        $vendedor->email = 'vendedor'.uniqid().'@prueba.test';
+        $vendedor->save();
+        DB::table('role_user')->insert(['role_id' => 5, 'user_IdUsuario' => $vendedor->IdUsuario, 'id_empresa_negocio' => $this->sucursal]);
+
+        $this->actingAs($vendedor)->getJson(route('pv.pedido.buscar', ['numero' => 1]))->assertOk()->assertJson(['ok' => true]);
+    }
+
     public function test_el_numero_de_ayer_no_se_confunde_con_el_de_hoy(): void
     {
         $this->trabajaConPedidos();

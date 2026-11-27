@@ -109,6 +109,8 @@ document.addEventListener('alpine:init', () => {
         numeroPedido: '',
         buscandoPedido: false,
         pedidoGuardado: null,
+        // Tomar Pedido: el número del pedido que se está cambiando
+        pedidoAbierto: null,
         verProforma: false,
         // Separado (apartado): el cliente deja un adelanto y el producto queda reservado hasta que termine de pagar
         separado: null,
@@ -1005,7 +1007,8 @@ document.addEventListener('alpine:init', () => {
             this.proformaId = pf.id;
             this.proformaNumero = pf.numero;
             if (pf.cliente && pf.cliente.num) this.usarCliente(pf.cliente);
-            this.aviso(pf.pedido ? `Pedido N° ${pf.pedido}: revisa y cobra (IMPRIMIR)` : `Proforma ${pf.numero} abierta: edítala o cóbrala`, 'ok');
+            this.pedidoAbierto = pf.pedido || null;
+            this.aviso(pf.pedido ? (CFG.modoPedido ? `Pedido N° ${pf.pedido} abierto` : `Pedido N° ${pf.pedido}: revisa y cobra (IMPRIMIR)`) : `Proforma ${pf.numero} abierta: edítala o cóbrala`, 'ok');
         },
 
         /** Caja: trae el pedido de hoy con ese número (sus productos y su cliente) para cobrarlo e imprimirlo */
@@ -1071,10 +1074,32 @@ document.addEventListener('alpine:init', () => {
             this.aviso(`Editando ${v.numero}: corrige y presiona REGISTRAR`, 'ok');
         },
 
+        /** Tomar Pedido: el cliente ya no quiere el pedido abierto; queda anulado (su número no se vuelve a dar) */
+        async anularPedido() {
+            if (!CFG.anularPedido || !this.proformaId || this.procesando) return;
+            if (!confirm('¿Anular el pedido N° ' + this.pedidoAbierto + '?')) return;
+            this.procesando = true;
+            try {
+                const r = await fetch(CFG.anularPedido.replace(/\/0\/anular$/, '/' + this.proformaId + '/anular'), { method: 'POST',
+                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': CFG.csrf } });
+                if (r.status === 401 || r.status === 419) { window.location.reload(); return; }
+                const d = await r.json().catch(() => null);
+                if (!d || !d.ok) { this.sonido(false); this.aviso(d?.mensaje || 'No se pudo anular el pedido.', 'error'); return; }
+                this.sonido(true);
+                this.aviso('✔ ' + d.mensaje, 'ok');
+                this.nuevaVenta();
+            } catch (e) {
+                this.aviso('Error de conexión con el servidor. Intenta otra vez.', 'error');
+            } finally {
+                this.procesando = false;
+            }
+        },
+
         /** Deja de editar la proforma; el detalle queda como una venta nueva */
         soltarProforma(limpiarUrl = true) {
             this.proformaId = null;
             this.proformaNumero = '';
+            this.pedidoAbierto = null;
             if (limpiarUrl || new URLSearchParams(location.search).has('proforma')) {
                 history.replaceState(null, '', location.pathname);
             }
