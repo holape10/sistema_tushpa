@@ -146,7 +146,9 @@ class IdentificarEmpresa
     {
         abort_unless(preg_match('/^[a-z0-9][a-z0-9-]{0,39}$/', $subdominio), 404);
         $cliente = preg_match('/^\d{11}$/', $subdominio)
-            ? Cliente::where('ruc', $subdominio)->orderByRaw("estado = 'ELIMINADO'")->orderBy('id')->first()
+            // El mismo RUC puede tener sistema en otra marca: aquí se busca el de la marca de este dominio
+            ? Cliente::where('ruc', $subdominio)->where(fn ($q) => $marcaId ? $q->where('marca_id', $marcaId) : $q->whereNull('marca_id'))
+                ->orderByRaw("estado = 'ELIMINADO'")->orderBy('id')->first()
             : Cliente::where('subdominio', $subdominio)->first();
         // Solo en el dominio de su marca (si la columna aún no existe mientras se actualiza, todas son de TUSHPA)
         abort_unless($cliente && (int) ($cliente->marca_id ?? 0) === (int) ($marcaId ?? 0), 404);

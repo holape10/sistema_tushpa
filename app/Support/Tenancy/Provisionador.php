@@ -92,14 +92,19 @@ class Provisionador
         }
     }
 
-    /** El número del próximo sistema del RUC: el primero libre desde 2 (ni registrado en el panel ni como base en el servidor) */
-    private static function siguienteSede(string $ruc, ?string $prefijo): int
+    /**
+     * El número del próximo sistema del RUC: el primero libre desde 2, ni registrado en el panel (de cualquier marca) ni
+     * como base en el servidor. El número es único por RUC aunque el otro sistema sea de otra marca: de él sale el rango
+     * de los resúmenes en SUNAT (Tenancy::desfaseResumenes), y dos sistemas del mismo RUC nunca deben repetirlo.
+     */
+    public static function siguienteSede(string $ruc, ?string $prefijo): int
     {
         $central = DB::connection('central');
         $usadas = Cliente::where('ruc', $ruc)->where('estado', '!=', 'ELIMINADO')->pluck('base_datos')->all();
+        $sedesUsadas = array_map(fn ($b) => Tenancy::sedeDeBase((string) $b), $usadas);
         for ($sede = 2; $sede <= 99; $sede++) {
             $base = Tenancy::nombreBase($ruc, $prefijo, $sede);
-            if (! in_array($base, $usadas, true) && ! $central->selectOne('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [$base])) {
+            if (! in_array($sede, $sedesUsadas, true) && ! in_array($base, $usadas, true) && ! $central->selectOne('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [$base])) {
                 return $sede;
             }
         }

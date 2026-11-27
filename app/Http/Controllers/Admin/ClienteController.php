@@ -190,11 +190,9 @@ class ClienteController extends Controller
         $d['plan'] = isset($d['plan_id']) ? Plan::find($d['plan_id'])?->nombre : null;
         // La empresa de un revendedor con marca entra por su dominio y su base lleva su prefijo (bd_ws_…)
         $d['marca_id'] = $this->marcaId();
-        // Ese RUC ya tiene sistema: se crea otro aparte (otra sede), solo si es de la misma marca
+        // Ese RUC ya tiene sistema (en este panel o en el de otra marca, por ejemplo para otro negocio): se crea otro
+        // aparte, con su propia base y su propio rango de resúmenes en SUNAT (Provisionador::siguienteSede)
         $otro = Cliente::where('ruc', $d['ruc'])->where('estado', '!=', 'ELIMINADO')->first();
-        if ($otro && (int) ($otro->marca_id ?? 0) !== (int) ($d['marca_id'] ?? 0)) {
-            return back()->withInput()->withErrors(['ruc' => 'Ese RUC ya tiene sistema en otro panel.']);
-        }
         if ($otro && empty($d['subdominio'])) {
             return back()->withInput()->withErrors(['subdominio' => "El RUC ya tiene sistema ({$otro->host()}). Para crearle otro aparte (otra sede) ponle un subdominio propio, ej. ".mb_strtolower(preg_replace('/[^a-z0-9]/i', '', (string) ($otro->nombre_comercial ?: 'empresa'))).'2.']);
         }

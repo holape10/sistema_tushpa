@@ -583,10 +583,9 @@ class SunatService
                 ->setCompany($this->company())
                 ->setDetails($detalles);
 
-            $resultado = $see->send($summary);
-            if ($xml = $see->getFactory()->getLastXml()) {
-                file_put_contents($this->rutaArchivo($summary->getName(), 'xml'), $xml);
-            }
+            // Con la tasa del IGV de cada boleta en su línea (SUNAT la exige: error 2992)
+            [$resultado, $xml] = ResumenXml::enviar($see, $summary, $lote->map(fn ($c) => ResumenXml::tasa($c))->values()->all());
+            file_put_contents($this->rutaArchivo($summary->getName(), 'xml'), $xml);
 
             if (! $resultado->isSuccess()) {
                 $e = $resultado->getError();
@@ -716,8 +715,14 @@ class SunatService
 
         Certificado::exigirVigente($this->empresa);
         $see = $this->see();
-        $resultado = $see->send($documento);
-        if ($xml = $see->getFactory()->getLastXml()) {
+        if ($documento instanceof Summary) {
+            // Baja de una boleta por resumen: también lleva la tasa del IGV en su línea (error 2992)
+            [$resultado, $xml] = ResumenXml::enviar($see, $documento, [ResumenXml::tasa($cab)]);
+        } else {
+            $resultado = $see->send($documento);
+            $xml = $see->getFactory()->getLastXml();
+        }
+        if ($xml) {
             file_put_contents($this->rutaArchivo($documento->getName(), 'xml'), $xml);
         }
 

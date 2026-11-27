@@ -69,6 +69,17 @@ class SedesMismoRucTest extends TestCase
         $this->assertSame('bd_'.self::RUC, $this->entrar(self::RUC.'.tushpa.app'));
     }
 
+    public function test_el_ruc_abre_el_sistema_de_la_marca_de_su_dominio(): void
+    {
+        $ruc = '20610126805';
+        // Primero lo creó otra marca (otro negocio) y después este panel
+        Cliente::create(['ruc' => $ruc, 'base_datos' => 'bd_ws_'.$ruc, 'marca_id' => 7]);
+        Cliente::create(['ruc' => $ruc, 'subdominio' => 'riverice', 'base_datos' => 'bd_'.$ruc.'_2']);
+
+        $this->assertSame('bd_'.$ruc.'_2', $this->entrar($ruc.'.tushpa.app'));
+        $this->assertSame('bd_'.$ruc.'_2', $this->entrar('riverice.tushpa.app'));
+    }
+
     public function test_el_nombre_de_la_base_de_cada_sede_y_su_rango_de_resumenes(): void
     {
         $this->assertSame('bd_'.self::RUC.'_3', Tenancy::nombreBase(self::RUC, null, 3));
