@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\RespaldoController;
 use App\Http\Controllers\Admin\ServidorController;
 use App\Http\Controllers\Admin\SoporteIaController;
 use App\Http\Controllers\Admin\TableroController;
+use App\Http\Controllers\Admin\TelegramController;
 use App\Http\Controllers\Admin\TicketController;
 use App\Http\Controllers\Admin\TutorialController;
 use App\Http\Controllers\Admin\UsuarioController;
@@ -143,6 +144,8 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     // Mis cuentas y QR de cobro (cada usuario, también el dueño, puede tener varios)
     // Monitor de errores del sistema (solo el dueño)
     Route::get('/errores', [ErrorController::class, 'index'])->name('errores.index');
+    // Quién usa el bot de Telegram, con filtro por empresa (solo el dueño)
+    Route::get('/telegram', [TelegramController::class, 'index'])->name('telegram.index');
     // Asistente IA: gasto del mes y qué empresas lo tienen (solo el dueño)
     Route::get('/asistente', [AsistenteController::class, 'index'])->name('asistente.index');
     // Estado del servidor: memoria, disco, MySQL y cuánto pesa la base de cada empresa (solo el dueño)
