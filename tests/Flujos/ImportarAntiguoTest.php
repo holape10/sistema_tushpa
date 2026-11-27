@@ -2,6 +2,7 @@
 
 namespace Tests\Flujos;
 
+use App\Models\Empresa;
 use App\Models\Producto;
 use App\Support\Antiguo\Importador;
 use App\Support\Colas;
@@ -127,6 +128,48 @@ class ImportarAntiguoTest extends FlujoTestCase
     private function importar(): array
     {
         return (new Importador)->importar($this->usuario, 20, ['secciones' => array_keys(Importador::SECCIONES), 'dia0' => 'domingo']);
+    }
+
+    /** La tabla empresa del sistema antiguo con sus credenciales SUNAT */
+    private function empresaAntigua(array $datos): void
+    {
+        $a = DB::connection(Importador::CONEXION);
+        $a->statement('CREATE TABLE empresa (IdEmpresa VARCHAR(11), wsusuario VARCHAR(255), claveSunat VARCHAR(255), passcert VARCHAR(255),
+            client_id VARCHAR(100), client_secret VARCHAR(100), produccion VARCHAR(5))');
+        $a->table('empresa')->insert($datos + ['IdEmpresa' => $this->usuario->IdEmpresa]);
+    }
+
+    public function test_trae_las_credenciales_sunat_y_solo_falta_subir_el_certificado(): void
+    {
+        // Recién creada: el usuario SOL de relleno (TUSHPA01) cuenta como no puesto
+        DB::table('empresa')->where('IdEmpresa', $this->usuario->IdEmpresa)->update(['wsusuario' => 'TUSHPA01', 'claveSunat' => null, 'passcert' => null,
+            'client_id' => null, 'client_secret' => null]);
+        $this->empresaAntigua(['wsusuario' => 'devsoft1', 'claveSunat' => 'DevSoft1', 'passcert' => 'SAMANTA2027',
+            'client_id' => '0d2aa664-0000-1111', 'client_secret' => 'I7HZfhvg1xkTKS', 'produccion' => '1']);
+
+        $r = (new Importador)->importar($this->usuario, 20, ['secciones' => ['credenciales']]);
+
+        $empresa = Empresa::find($this->usuario->IdEmpresa);
+        $this->assertSame(['DEVSOFT1', 'DevSoft1', 'SAMANTA2027', '0d2aa664-0000-1111', 'I7HZfhvg1xkTKS'],
+            [$empresa->wsusuario, $empresa->claveSunat, $empresa->passcert, $empresa->client_id, $empresa->client_secret]);
+        $this->assertNotSame('DevSoft1', DB::table('empresa')->where('IdEmpresa', $this->usuario->IdEmpresa)->value('claveSunat'), 'La clave se guarda cifrada');
+        $this->assertSame(5, $r['secciones']['credenciales']['actualizados']);
+        $this->assertStringContainsString('Solo falta subir el certificado', implode(' ', $r['avisos']));
+        $this->assertStringContainsString('PRODUCCIÓN', implode(' ', $r['avisos']));
+    }
+
+    public function test_no_pisa_lo_ya_puesto_ni_trae_las_claves_de_prueba_del_sistema_antiguo(): void
+    {
+        DB::table('empresa')->where('IdEmpresa', $this->usuario->IdEmpresa)->update(['client_id' => null, 'client_secret' => null, 'passcert' => null]);
+        $empresa = Empresa::find($this->usuario->IdEmpresa);
+        $empresa->wsusuario = 'YAPUESTO';
+        $empresa->save();
+        $this->empresaAntigua(['wsusuario' => 'FACTURA1', 'claveSunat' => 'Factura1', 'client_id' => 'ID-ANTIGUO']);
+
+        (new Importador)->importar($this->usuario, 20, ['secciones' => ['credenciales']]);
+
+        $empresa->refresh();
+        $this->assertSame(['YAPUESTO', 'ID-ANTIGUO'], [$empresa->wsusuario, $empresa->client_id]);
     }
 
     private function importado(string $nombre): object

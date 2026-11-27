@@ -217,6 +217,10 @@ class EmpresaController extends Controller
             if ($file->getSize() > 10 * 1024 * 1024) {
                 return back()->withInput()->with('error', 'El certificado no debe superar los 10MB');
             }
+            // Sin escribirla, la contraseña que ya está guardada (por ejemplo la que se importó del sistema antiguo)
+            if ($password === '') {
+                $password = (string) ($empresa->passcert ?? '');
+            }
             if ($password === '') {
                 return back()->withInput()->with('error', 'Escribe la contraseña del certificado.');
             }

@@ -6,16 +6,19 @@ use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\UsuarioController;
 use App\Models\Categoria;
 use App\Models\Combo;
+use App\Models\Empresa;
 use App\Models\Modulo;
 use App\Models\Producto;
 use App\Models\ProductoPrecioDinamico;
 use App\Models\ProductoPresentacion;
 use App\Models\Subcategoria;
 use App\Models\User;
+use App\Support\Bitacora;
 use App\Support\ImagenProducto;
 use App\Support\Kardex;
 use App\Support\MenusUsuarios;
 use App\Support\Recetas;
+use App\Support\Seguridad\Dispositivos;
 use App\Support\Unidades;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -59,6 +62,8 @@ class Importador
         'medios' => 'Medios de pago y formas de pago',
         'mesas' => 'Pisos y mesas',
         'usuarios' => 'Usuarios y empleados (con sus mismas contraseñas y rol)',
+        // Lo de Mantenimiento › Empresas: así solo falta subir el certificado (.pfx)
+        'credenciales' => 'Credenciales SUNAT: usuario secundario y clave SOL, API SUNAT (client_id y client_secret) y la contraseña del certificado',
         // Al final: necesita clientes, productos, proveedores y medios de pago ya importados para enlazarlos
         'historial' => 'Historial: ventas, notas de crédito, turnos de caja, proformas, compras, cuentas por cobrar/pagar, guías, gastos y kardex (con estado SUNAT y correlativos)',
         // Después del historial: cuadra el stock con el que tenía el sistema antiguo (también en negativo)
@@ -274,6 +279,7 @@ class Importador
                     'medios' => $this->medios($user, $suc, $rucAntiguo),
                     'mesas' => $this->mesas($user, $suc),
                     'usuarios' => $this->usuarios($user, $suc),
+                    'credenciales' => $this->credenciales($user, $suc),
                     'historial' => $this->historial($user, $suc, $opc),
                 });
             } catch (\Throwable $e) {
@@ -863,6 +869,79 @@ class Importador
      * Usuarios con su empleado, rol y módulos. La contraseña se copia tal cual (mismo cifrado de Laravel):
      * cada uno entra con la misma clave del sistema antiguo. Los usuarios que ya existen aquí no se tocan.
      */
+    /**
+     * Credenciales que no son de la empresa: las de prueba que traía de fábrica el sistema antiguo (FACTURA1), las de la
+     * beta de SUNAT (MODDATOS) y la que pone el sistema nuevo mientras no se configura (TUSHPA01).
+     */
+    private const CREDENCIALES_DE_PRUEBA = ['FACTURA1', 'MODDATOS', 'TUSHPA01'];
+
+    private static function sinPoner(mixed $valor): bool
+    {
+        $valor = strtoupper(trim((string) $valor));
+
+        return $valor === '' || in_array($valor, self::CREDENCIALES_DE_PRUEBA, true);
+    }
+
+    /**
+     * Credenciales SUNAT de la empresa (Mantenimiento › Empresas): usuario secundario y clave SOL, API SUNAT y la
+     * contraseña del certificado. Solo del mismo RUC, solo llena lo que aquí está vacío (lo ya puesto no se pisa) y nunca
+     * las credenciales de prueba que el sistema antiguo traía de fábrica. Las claves se guardan cifradas.
+     */
+    private function credenciales(User $user, int $suc): void
+    {
+        if (! $this->hay('empresa')) {
+            $this->aviso('El respaldo no tiene la tabla empresa: no hay credenciales SUNAT que importar.');
+
+            return;
+        }
+        if (! $this->mismoRuc($user, $suc)) {
+            $this->aviso('Credenciales SUNAT NO importadas: el respaldo es de otro RUC.');
+            $this->sumar('credenciales', 'omitidos');
+
+            return;
+        }
+        $antigua = $this->src('empresa')->where('IdEmpresa', $user->IdEmpresa)->first();
+        $empresa = Empresa::find($user->IdEmpresa);
+        if (! $antigua || ! $empresa) {
+            $this->aviso('Credenciales SUNAT: el respaldo no tiene la empresa '.$user->IdEmpresa.'.');
+
+            return;
+        }
+        // Las mismas reglas que al cambiarlas a mano: solo desde un equipo de confianza
+        Dispositivos::exigirConfianza('cambiar las credenciales de SUNAT');
+
+        $campos = ['wsusuario' => 'Usuario secundario SOL', 'claveSunat' => 'Clave SOL', 'client_id' => 'ID de la API SUNAT',
+            'client_secret' => 'Clave de la API SUNAT', 'passcert' => 'Contraseña del certificado'];
+        $traidos = [];
+        $antes = [];
+        foreach ($campos as $col => $nombre) {
+            $valor = trim((string) self::v($antigua, $col, ''));
+            if (self::sinPoner($valor) || ! Schema::hasColumn('empresa', $col)) {
+                continue;
+            }
+            if (! self::sinPoner($empresa->{$col})) {
+                $this->sumar('credenciales', 'omitidos');
+
+                continue;   // ya está puesta aquí: no se pisa
+            }
+            $antes[$col] = $empresa->{$col};
+            $empresa->{$col} = $col === 'wsusuario' ? strtoupper($valor) : $valor;
+            $traidos[$col] = $nombre;
+        }
+        if (! $traidos) {
+            $this->aviso('Credenciales SUNAT: no había nada nuevo que traer (ya estaban puestas o el sistema antiguo no las tenía).');
+
+            return;
+        }
+        $empresa->save();
+        $this->sumar('credenciales', 'actualizados', count($traidos));
+        Bitacora::registrar('config.empresa', 'Importó del sistema antiguo las credenciales SUNAT: '.implode(', ', $traidos),
+            Bitacora::diferencias($antes, array_intersect_key($empresa->getAttributes(), $traidos), $traidos));
+        $this->aviso('Credenciales SUNAT importadas: '.implode(', ', $traidos).'. Solo falta subir el certificado (.pfx) en Mantenimiento › Empresas'
+            .(isset($traidos['passcert']) ? ' (su contraseña ya está puesta).' : '.')
+            .((string) self::v($antigua, 'produccion', '') === '1' ? ' En el sistema antiguo enviaba en PRODUCCIÓN: cámbialo a producción después de subir el certificado.' : ''));
+    }
+
     private function usuarios(User $user, int $suc): void
     {
         if (! $this->hay('users')) {
