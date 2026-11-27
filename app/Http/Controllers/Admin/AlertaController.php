@@ -8,6 +8,7 @@ use App\Support\Bitacora;
 use App\Support\Excel;
 use App\Support\Tenancy\AlertasPanel;
 use App\Support\Tenancy\Tenancy;
+use App\Support\Tenancy\VisibilidadPanel;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,7 +30,7 @@ class AlertaController extends Controller
     private function autorizar(Cliente $cliente): void
     {
         $yo = Auth::guard('superadmin')->user();
-        abort_unless($yo->es_dueno || (int) $cliente->creado_por === (int) $yo->id, 404);
+        abort_unless(VisibilidadPanel::puedeVer($yo, $cliente), 404);
     }
 
     public function index(Cliente $cliente): View

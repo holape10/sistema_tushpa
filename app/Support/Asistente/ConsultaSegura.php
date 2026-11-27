@@ -49,7 +49,9 @@ class ConsultaSegura
         $actual = mb_strtolower((string) DB::getDatabaseName());
         foreach (DB::select('SHOW DATABASES') as $fila) {
             $base = mb_strtolower((string) (array_values((array) $fila)[0] ?? ''));
-            if ($base !== '' && $base !== $actual && preg_match('/`?\b'.preg_quote($base, '/').'\b`?\s*\./i', $sinTextos)) {
+            $nombre = preg_quote($base, '/');
+            // otra_base.tabla, o SHOW TABLES / COLUMNS FROM otra_base (sin punto)
+            if ($base !== '' && $base !== $actual && (preg_match('/`?\b'.$nombre.'\b`?\s*\./i', $sinTextos) || preg_match('/\b(from|in)\s+`?'.$nombre.'\b/i', $sinTextos))) {
                 return "Solo se consulta la base de esta empresa (no {$base}).";
             }
         }

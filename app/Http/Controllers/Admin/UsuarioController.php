@@ -68,6 +68,7 @@ class UsuarioController extends Controller
         Superadmin::create($datos + [
             'activo' => 1, 'creado_por' => $this->yo()->id,
             'puede_crear_usuarios' => $this->yo()->es_dueno && $request->boolean('puede_crear_usuarios') ? 1 : 0,
+            'puede_base_datos' => $this->yo()->es_dueno && $request->boolean('puede_base_datos') ? 1 : 0,
         ]);
 
         return back()->with('ok', "Usuario {$datos['email']} creado. Ya puede entrar al panel.");
@@ -81,6 +82,19 @@ class UsuarioController extends Controller
 
         return back()->with('ok', $usuario->puede_crear_usuarios
             ? "{$usuario->nombre} ahora puede crear usuarios." : "{$usuario->nombre} ya no puede crear usuarios.");
+    }
+
+    /**
+     * Dar o quitar el permiso de Base de datos (solo el dueño). Con él ve y edita (con su segunda clave) solo las bases de
+     * las empresas de su marca, o las que creó si no tiene marca.
+     */
+    public function permisoBaseDatos(Superadmin $usuario): RedirectResponse
+    {
+        abort_unless($this->yo()->es_dueno && $this->puedeManejar($usuario), 403);
+        $usuario->update(['puede_base_datos' => $usuario->puede_base_datos ? 0 : 1]);
+
+        return back()->with('ok', $usuario->puede_base_datos
+            ? "{$usuario->nombre} ahora puede usar la Base de datos (solo las empresas de su marca)." : "{$usuario->nombre} ya no puede usar la Base de datos.");
     }
 
     public function estado(Superadmin $usuario): RedirectResponse

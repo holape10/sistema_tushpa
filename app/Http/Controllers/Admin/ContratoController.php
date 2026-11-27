@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Central\Cliente;
 use App\Support\Tenancy\Contratos;
 use App\Support\Tenancy\DatosCobro;
+use App\Support\Tenancy\VisibilidadPanel;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -23,7 +24,7 @@ class ContratoController extends Controller
     private function autorizar(Cliente $cliente): void
     {
         $yo = Auth::guard('superadmin')->user();
-        abort_unless($yo->es_dueno || (int) $cliente->creado_por === (int) $yo->id, 404);
+        abort_unless(VisibilidadPanel::puedeVer($yo, $cliente), 404);
     }
 
     /** El contrato lo hace quien cobra: el dueño o, en las empresas de una marca, el revendedor (sale a su nombre) */

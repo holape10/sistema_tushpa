@@ -9,7 +9,6 @@ use App\Support\EdicionBd;
 use App\Support\EdicionTabla;
 use App\Support\Excel;
 use App\Support\ExploradorBd;
-use App\Support\Servidor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,7 +26,9 @@ class BaseDatosController extends Controller
 {
     private function autorizar(): void
     {
-        abort_unless((bool) Auth::guard('superadmin')->user()->es_dueno, 403, 'Solo el dueño del sistema usa el explorador de bases.');
+        $yo = Auth::guard('superadmin')->user();
+        // El dueño, o quien tiene el permiso de Base de datos (por ejemplo el experto de una marca: solo ve sus empresas)
+        abort_unless((bool) $yo->es_dueno || (bool) ($yo->puede_base_datos ?? false), 403, 'No tienes permiso para usar la Base de datos.');
     }
 
     private function yo(): object
@@ -58,7 +59,7 @@ class BaseDatosController extends Controller
     {
         $this->autorizar();
         $d = $request->validate(['base' => 'required|string|max:64', 'sql' => 'required|string|max:20000']);
-        $base = ExploradorBd::base($d['base']);
+        $base = ExploradorBd::base($d['base'], $this->yo());
         abort_unless($base, 404, 'Esa base no existe.');
         // Queda anotado quién consultó qué (es la base de un cliente)
         Log::info('Explorador de bases', ['usuario' => $this->yo()->email, 'base' => $base, 'sql' => mb_substr($d['sql'], 0, 1000)]);
@@ -103,7 +104,7 @@ class BaseDatosController extends Controller
             'editar' => 'nullable|array', 'editar.*.llave' => 'required|array', 'editar.*.antes' => 'present|array', 'editar.*.valores' => 'required|array|min:1',
             'borrar' => 'nullable|array', 'borrar.*.llave' => 'required|array',
             'agregar' => 'nullable|array', 'agregar.*' => 'array']);
-        $base = ExploradorBd::base($d['base']);
+        $base = ExploradorBd::base($d['base'], $this->yo());
         if (! $base) {
             return response()->json(['ok' => false, 'mensaje' => 'Esa base no existe.'], 404);
         }
@@ -124,7 +125,7 @@ class BaseDatosController extends Controller
     {
         $this->autorizar();
         $d = $request->validate(['base' => 'required|string|max:64', 'pregunta' => 'required|string|max:2000']);
-        abort_unless(ExploradorBd::base($d['base']), 404, 'Esa base no existe.');
+        abort_unless(ExploradorBd::base($d['base'], $this->yo()), 404, 'Esa base no existe.');
         try {
             $r = AsistenteSql::sugerir($d['base'], (string) $this->yo()->email, $d['pregunta']);
         } catch (\RuntimeException $e) {
@@ -181,7 +182,7 @@ class BaseDatosController extends Controller
     /** Vuelve al explorador en la misma base (no a la página anterior: puede ser el resultado de un POST) */
     private function volver(Request $request): RedirectResponse
     {
-        return redirect()->route('admin.basedatos.index', array_filter(['base' => ExploradorBd::base($request->input('base'))]));
+        return redirect()->route('admin.basedatos.index', array_filter(['base' => ExploradorBd::base($request->input('base'), $this->yo())]));
     }
 
     /** @return array<string, string> base => «nombre · RUC · subdominio · base» de las bases de empresas */
@@ -197,7 +198,7 @@ class BaseDatosController extends Controller
 
     private function pantalla(Request $request, array $extra = [])
     {
-        $base = ExploradorBd::base($request->input('base'));
+        $base = ExploradorBd::base($request->input('base'), $this->yo());
         $tabla = $base ? (string) $request->input('tabla', '') : '';
         $vista = null;
         $errorTabla = null;
@@ -211,7 +212,7 @@ class BaseDatosController extends Controller
         $sesion = $request->session()->get('bd_edicion');
 
         return view('admin.basedatos', $extra + [
-            'bases' => Servidor::bases(), 'etiquetas' => $this->etiquetas(), 'base' => $base, 'tablas' => $base ? ExploradorBd::tablas($base) : collect(),
+            'bases' => ExploradorBd::bases($this->yo()), 'etiquetas' => $this->etiquetas(), 'base' => $base, 'tablas' => $base ? ExploradorBd::tablas($base) : collect(),
             'tabla' => $tabla, 'vista' => $vista, 'errorTabla' => $errorTabla, 'q' => (string) $request->input('q', ''),
             'pagina' => max(1, (int) $request->input('pagina', 1)), 'sql' => (string) $request->input('sql', ''),
             'resultado' => $extra['resultado'] ?? null, 'error' => $extra['error'] ?? null,

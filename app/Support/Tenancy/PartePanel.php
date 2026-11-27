@@ -92,7 +92,7 @@ class PartePanel
         }
         $yaAvisado = (string) config('services.telegram.chat_id');
         foreach (Superadmin::where('activo', true)->get() as $u) {
-            $suyas = $u->es_dueno ? $empresas : array_values(array_filter($empresas, fn ($e) => (int) $e['cliente']->creado_por === (int) $u->id));
+            $suyas = array_values(array_filter($empresas, fn ($e) => VisibilidadPanel::puedeVer($u, $e['cliente'])));
             $dominio = strtolower((string) (($u->marca_id ? Marca::find($u->marca_id)?->dominio : null) ?: config('tenancy.dominio')));
             if (! ($suyo = self::mensaje($suyas, $dominio))) {
                 continue;

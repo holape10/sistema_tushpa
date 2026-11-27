@@ -76,8 +76,11 @@ class AlertasPanel
         if (! TelegramCitas::configurado()) {
             return [];
         }
+        // Los que ven la empresa en el panel: el dueño, los de su marca (todos) o, en TUSHPA, quien la creó
         $usuarios = Superadmin::where('activo', true)
-            ->where(fn ($q) => $q->where('es_dueno', true)->when($cliente->creado_por, fn ($w) => $w->orWhere('id', $cliente->creado_por)))->get();
+            ->where(fn ($q) => $q->where('es_dueno', true)
+                ->when($cliente->marca_id, fn ($w) => $w->orWhere('marca_id', $cliente->marca_id), fn ($w) => $w->when($cliente->creado_por, fn ($x) => $x->orWhere('id', $cliente->creado_por))))
+            ->get()->filter(fn ($u) => VisibilidadPanel::puedeVer($u, $cliente));
         $yaAvisado = (string) config('services.telegram.chat_id');
         $destinos = [];
         foreach ($usuarios as $u) {

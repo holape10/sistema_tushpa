@@ -2,8 +2,10 @@
 
 namespace App\Support;
 
+use App\Models\Central\Cliente;
 use App\Support\Asistente\ConsultaSegura;
 use App\Support\Tenancy\Tenancy;
+use App\Support\Tenancy\VisibilidadPanel;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -25,12 +27,35 @@ class ExploradorBd
     /** Milisegundos como mucho para ver o buscar en una tabla grande */
     private const MILISEGUNDOS = 8000;
 
-    /** La base solo si es una de la lista (nunca las del motor de MySQL) */
-    public static function base(?string $base): ?string
+    /**
+     * La base solo si es una de las que esa persona puede ver (nunca las del motor de MySQL): el dueño, todas; quien
+     * tiene el permiso de Base de datos, solo las de las empresas de su marca (o, sin marca, las que creó). Nunca la central.
+     */
+    public static function base(?string $base, object $quien): ?string
     {
         $base = (string) $base;
 
-        return $base !== '' && Servidor::bases()->contains('base', $base) ? $base : null;
+        return $base !== '' && self::bases($quien)->contains('base', $base) ? $base : null;
+    }
+
+    /**
+     * Las bases que esa persona puede abrir en el explorador.
+     *
+     * @return Collection<int, object>
+     */
+    public static function bases(object $quien): Collection
+    {
+        $todas = Servidor::bases();
+        if ($quien->es_dueno ?? false) {
+            return $todas;
+        }
+        if (! ($quien->puede_base_datos ?? false)) {
+            return collect();
+        }
+        // Las mismas empresas que ve en el panel (su marca completa, o las que creó)
+        $suyas = VisibilidadPanel::filtrar(Cliente::where('estado', '!=', 'ELIMINADO'), $quien)->pluck('base_datos')->filter()->all();
+
+        return $todas->filter(fn ($b) => in_array($b->base, $suyas, true))->values();
     }
 
     /**

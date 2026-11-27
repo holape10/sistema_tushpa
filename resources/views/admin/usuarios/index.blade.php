@@ -29,6 +29,10 @@
                     <input type="checkbox" name="puede_crear_usuarios" value="1" class="mt-0.5 rounded text-indigo-600">
                     <span>También puede crear usuarios</span>
                 </label>
+                <label class="flex items-start gap-2 text-sm">
+                    <input type="checkbox" name="puede_base_datos" value="1" class="mt-0.5 rounded text-indigo-600">
+                    <span>Puede usar la <b>Base de datos</b> <span class="block text-[11px] text-slate-400">Solo las empresas de su marca. Para cambiar datos crea su propia segunda clave.</span></span>
+                </label>
             @endif
             @if ($marcas->isNotEmpty())
                 <label class="block text-xs font-semibold text-slate-500">Panel
@@ -69,10 +73,10 @@
                             <td class="px-4 py-3 text-xs">
                                 @if ($u->es_dueno)
                                     Todo
-                                @elseif ($u->puede_crear_usuarios)
-                                    <span class="text-emerald-700 font-semibold">Crea usuarios</span>
                                 @else
-                                    Solo empresas
+                                    @if ($u->puede_crear_usuarios)<span class="block text-emerald-700 font-semibold">Crea usuarios</span>@endif
+                                    @if ($u->puede_base_datos)<span class="block text-violet-700 font-semibold">🗄️ Base de datos</span>@endif
+                                    @if (! $u->puede_crear_usuarios && ! $u->puede_base_datos) Solo empresas @endif
                                 @endif
                             </td>
                             <td class="px-4 py-3">
@@ -83,6 +87,13 @@
                                                 <button class="px-2.5 py-1 rounded-lg text-xs font-semibold {{ $u->puede_crear_usuarios ? 'bg-slate-100 text-slate-700' : 'bg-emerald-50 text-emerald-700' }}">
                                                     {{ $u->puede_crear_usuarios ? 'Quitar permiso de crear usuarios' : 'Dar permiso de crear usuarios' }}</button>
                                             </form>
+                                            @unless ($u->es_dueno)
+                                                <form method="POST" action="{{ route('admin.usuarios.base_datos', $u->id) }}"
+                                                      onsubmit="return confirm(@js($u->puede_base_datos ? '¿Quitarle la Base de datos a '.$u->nombre.'?' : '¿Darle la Base de datos a '.$u->nombre.'? Verá y podrá cambiar (con su segunda clave) los datos de las empresas de su marca.'))">@csrf
+                                                    <button class="px-2.5 py-1 rounded-lg text-xs font-semibold {{ $u->puede_base_datos ? 'bg-slate-100 text-slate-700' : 'bg-violet-50 text-violet-700' }}">
+                                                        {{ $u->puede_base_datos ? 'Quitar Base de datos' : '🗄️ Dar Base de datos' }}</button>
+                                                </form>
+                                            @endunless
                                         @endif
                                         <button type="button" @click="clave = !clave" class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-semibold" title="Si olvidó su contraseña, ponle una nueva y pásasela">🔑 Restablecer contraseña</button>
                                         <form method="POST" action="{{ route('admin.usuarios.estado', $u->id) }}"

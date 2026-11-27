@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Support\Soporte;
+use App\Support\Tenancy\VisibilidadPanel;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,8 +22,7 @@ class TicketController extends Controller
     {
         $yo = Auth::guard('superadmin')->user();
 
-        return DB::connection('central')->table('soporte_tickets as t')->join('clientes as c', 'c.id', '=', 't.cliente_id')
-            ->when(! $yo->es_dueno, fn ($q) => $q->where('c.creado_por', $yo->id));
+        return VisibilidadPanel::filtrar(DB::connection('central')->table('soporte_tickets as t')->join('clientes as c', 'c.id', '=', 't.cliente_id'), $yo, 'c');
     }
 
     /** Para el número rojo del menú */

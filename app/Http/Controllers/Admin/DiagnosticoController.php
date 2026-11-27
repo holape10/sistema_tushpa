@@ -9,6 +9,7 @@ use App\Support\Tenancy\HerramientasSoporte;
 use App\Support\Tenancy\ModoSoporte;
 use App\Support\Tenancy\SaludCliente;
 use App\Support\Tenancy\Tenancy;
+use App\Support\Tenancy\VisibilidadPanel;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,7 +27,7 @@ class DiagnosticoController extends Controller
     private function autorizar(Cliente $cliente): void
     {
         $yo = Auth::guard('superadmin')->user();
-        abort_unless($yo->es_dueno || (int) $cliente->creado_por === (int) $yo->id, 404);
+        abort_unless(VisibilidadPanel::puedeVer($yo, $cliente), 404);
         abort_if($cliente->estado === 'ELIMINADO', 404);
     }
 

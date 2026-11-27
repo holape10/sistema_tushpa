@@ -139,6 +139,7 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     Route::get('/usuarios', [UsuarioController::class, 'index'])->name('usuarios.index');
     Route::post('/usuarios', [UsuarioController::class, 'store'])->name('usuarios.store');
     Route::post('/usuarios/{usuario}/permiso', [UsuarioController::class, 'permiso'])->whereNumber('usuario')->name('usuarios.permiso');
+    Route::post('/usuarios/{usuario}/base-datos', [UsuarioController::class, 'permisoBaseDatos'])->whereNumber('usuario')->name('usuarios.base_datos');
     Route::post('/usuarios/{usuario}/estado', [UsuarioController::class, 'estado'])->whereNumber('usuario')->name('usuarios.estado');
     Route::post('/usuarios/{usuario}/clave', [UsuarioController::class, 'clave'])->whereNumber('usuario')->name('usuarios.clave');
     // Mis cuentas y QR de cobro (cada usuario, también el dueño, puede tener varios)

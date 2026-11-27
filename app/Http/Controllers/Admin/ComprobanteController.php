@@ -17,6 +17,7 @@ use App\Support\Sunat\CambioFecha;
 use App\Support\Sunat\EnviadoEnBeta;
 use App\Support\Sunat\SunatService;
 use App\Support\Tenancy\Tenancy;
+use App\Support\Tenancy\VisibilidadPanel;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,7 +41,7 @@ class ComprobanteController extends Controller
     private function autorizar(Cliente $cliente): void
     {
         $yo = Auth::guard('superadmin')->user();
-        abort_unless($yo->es_dueno || (int) $cliente->creado_por === (int) $yo->id, 404);
+        abort_unless(VisibilidadPanel::puedeVer($yo, $cliente), 404);
     }
 
     public function index(Request $request, Cliente $cliente): View

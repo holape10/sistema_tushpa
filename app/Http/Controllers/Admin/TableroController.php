@@ -7,6 +7,7 @@ use App\Models\Central\Cliente;
 use App\Models\Central\Marca;
 use App\Models\Central\Superadmin;
 use App\Support\TableroComprobantes;
+use App\Support\Tenancy\VisibilidadPanel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -29,8 +30,7 @@ class TableroController extends Controller
         // Filtros: por usuario del panel y por marca (todo el tablero); solo las que faltan enviar y buscar empresa (la lista)
         $f = ['usuario' => $yo->es_dueno ? (int) $request->get('usuario') : 0, 'marca' => $yo->es_dueno ? (string) $request->get('marca') : '',
             'pendientes' => $request->boolean('pendientes'), 'buscar' => trim((string) $request->get('buscar'))];
-        $clientes = Cliente::query()->where('estado', '!=', 'ELIMINADO')
-            ->when(! $yo->es_dueno, fn ($q) => $q->where('creado_por', $yo->id))
+        $clientes = VisibilidadPanel::filtrar(Cliente::query(), $yo)->where('estado', '!=', 'ELIMINADO')
             ->when($f['usuario'], fn ($q) => $q->where('creado_por', $f['usuario']))
             ->when($f['marca'] === 'tushpa', fn ($q) => $q->whereNull('marca_id'))
             ->when($f['marca'] !== '' && $f['marca'] !== 'tushpa', fn ($q) => $q->where('marca_id', (int) $f['marca']))

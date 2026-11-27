@@ -18,6 +18,7 @@ use App\Support\Tenancy\Eliminador;
 use App\Support\Tenancy\Provisionador;
 use App\Support\Tenancy\Reiniciador;
 use App\Support\Tenancy\Tenancy;
+use App\Support\Tenancy\VisibilidadPanel;
 use App\Support\Ubigeo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,10 +35,10 @@ class ClienteController extends Controller
         return (bool) Auth::guard('superadmin')->user()->es_dueno;
     }
 
-    /** Empresas que ve este usuario del panel: el dueño todas; los demás, solo las que crearon */
+    /** Empresas que ve este usuario del panel: el dueño todas; los de una marca, todas las de su marca; los demás, las que crearon */
     private function mios()
     {
-        return Cliente::query()->when(! $this->esDueno(), fn ($q) => $q->where('creado_por', Auth::guard('superadmin')->id()));
+        return VisibilidadPanel::filtrar(Cliente::query(), Auth::guard('superadmin')->user(), 'clientes');
     }
 
     /** La marca del usuario del panel (null = TUSHPA) */
@@ -56,7 +57,7 @@ class ClienteController extends Controller
 
     private function autorizar(Cliente $cliente): void
     {
-        abort_unless($this->esDueno() || (int) $cliente->creado_por === (int) Auth::guard('superadmin')->id(), 404);
+        abort_unless(VisibilidadPanel::puedeVer(Auth::guard('superadmin')->user(), $cliente), 404);
     }
 
     /**
