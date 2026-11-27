@@ -98,6 +98,10 @@ class Rubros
             '/courier', '/courier/manifiestos', '/courier/reparto', '/courier/reportes', '/courier/creditos', '/courier/reclamos', '/courier/tarifas',
             '/motorizados', '/punto-venta',
         ]],
+        // Transportes: pasajes terrestres, fluviales, aéreos y en tren con número de asiento sobre el plano de cada unidad
+        'TRANSPORTES' => ['icono' => 'fa-bus', 'nombre' => 'Transportes', 'ejemplos' => 'Pasajes en bus, lancha, avión o tren con plano de asientos', 'modulos' => [
+            '/transportes', '/transportes/salidas', '/transportes/unidades', '/transportes/rutas', '/punto-venta',
+        ]],
         // Avícola: distribuidora de pollo vivo (venta por peso con jabas y precio del día), pollería (beneficio y partes) y granja
         'AVICOLA' => ['icono' => 'fa-pollo', 'nombre' => 'Avícola', 'ejemplos' => 'Pollo vivo por peso, jabas, pollería y granja', 'modulos' => [
             '/avicola', '/avicola/clientes', '/avicola/ingresos', '/avicola/beneficio', '/avicola/granja', '/avicola/mermas', '/avicola/reportes', '/avicola/configuracion',

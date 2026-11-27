@@ -147,6 +147,7 @@ use App\Http\Controllers\TiendaConfigController;
 use App\Http\Controllers\TiendaController;
 use App\Http\Controllers\TipoCambioController;
 use App\Http\Controllers\TransferenciaController;
+use App\Http\Controllers\TransporteController;
 use App\Http\Controllers\TransporteGuiaController;
 use App\Http\Controllers\TratamientoClinicoController;
 use App\Http\Controllers\TributoController;
@@ -1103,6 +1104,21 @@ Route::middleware('auth')->prefix('estacionamiento')->name('estacionamiento.')->
     Route::get('/reporte', 'reporte')->name('reporte');
 });
 // Courier: envíos, guía con QR, despacho, recepción y entrega con clave; tarifas por ruta y agencias
+// Transportes: venta de pasajes sobre el plano de asientos, salidas, unidades (con su plano), rutas y manifiesto
+Route::middleware('auth')->prefix('transportes')->name('transportes.')->controller(TransporteController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::post('/salidas/{id}/vender', 'vender')->whereNumber('id')->middleware('throttle:60,1')->name('vender');
+    Route::get('/salidas/{id}/manifiesto', 'manifiesto')->whereNumber('id')->name('manifiesto');
+    Route::get('/salidas', 'salidasIndex')->name('salidas');
+    Route::post('/salidas', 'salidaGuardar')->name('salidas.guardar');
+    Route::post('/salidas/{id}/estado', 'salidaEstado')->whereNumber('id')->name('salidas.estado');
+    Route::get('/unidades', 'unidadesIndex')->name('unidades');
+    Route::get('/unidades/plantilla/{clave}', 'plantilla')->where('clave', '[A-Z0-9_]{2,20}')->name('unidades.plantilla');
+    Route::post('/unidades', 'unidadGuardar')->name('unidades.guardar');
+    Route::get('/rutas', 'rutasIndex')->name('rutas');
+    Route::post('/rutas', 'rutaGuardar')->name('rutas.guardar');
+});
+
 Route::middleware('auth')->prefix('courier')->name('courier.')->controller(CourierController::class)->group(function () {
     Route::get('/', 'index')->name('index');
     Route::get('/nuevo', 'nuevo')->name('nuevo');
