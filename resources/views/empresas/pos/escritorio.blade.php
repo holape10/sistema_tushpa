@@ -426,7 +426,11 @@
                 <div class="flex items-center justify-between">
                     <h2 class="text-xs font-bold text-slate-500 uppercase">Comprobante</h2>
                     @if ($turno)
-                        <span class="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold">Turno N° {{ $turno->turno }}</span>
+                        <span class="flex items-center gap-2">
+                            <span class="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold">Turno N° {{ $turno->turno }}</span>
+                            <button type="button" @click="$dispatch('pausar-caja')" title="Dejar la caja en pausa (el turno sigue abierto)"
+                                    class="text-[11px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-full">⏸ Pausar</button>
+                        </span>
                     @else
                         <span class="text-[11px] text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full font-semibold">🧾 Vendedor: solo pedidos (la caja los cobra)</span>
                     @endif
@@ -789,6 +793,9 @@
         </div>
     @endif
 </div>
+@unless ($soloPedido)
+    @include('empresas.pos.partials.pausa', ['pausa' => $pausa ?? null, 'inactividad' => (int) ($negocio->pausa_inactividad ?? 0)])
+@endunless
 <script src="{{ asset('js/fidelizacion-pos.js') }}?v={{ filemtime(public_path('js/fidelizacion-pos.js')) }}" data-previa="{{ route('fidelizacion.previa') }}" data-reservar="{{ route('fidelizacion.reservar') }}" data-csrf="{{ csrf_token() }}"></script>
 @endsection
 

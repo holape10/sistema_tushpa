@@ -10,8 +10,10 @@ use App\Support\CatalogoVenta;
 use App\Support\Clinica;
 use App\Support\EdicionVenta;
 use App\Support\Lotes;
+use App\Support\PausasCaja;
 use App\Support\Proformas;
 use App\Support\VentaDirecta;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -73,6 +75,34 @@ class PuntoVentaController extends Controller
         return response()->json(is_string($pedido) ? ['ok' => false, 'mensaje' => $pedido] : ['ok' => true, 'pedido' => $pedido]);
     }
 
+    /** Pausar caja: el mensaje grande para los clientes (el turno sigue abierto) */
+    public function pausar(Request $request)
+    {
+        $this->autorizar();
+        $d = $request->validate(['motivo' => 'required|in:'.implode(',', array_keys(PausasCaja::MOTIVOS)), 'minutos' => 'nullable|integer|min:1|max:240',
+            'pc' => 'nullable|string|max:40']);
+        if (! PausasCaja::disponible()) {
+            return response()->json(['ok' => false, 'mensaje' => 'Falta actualizar el sistema para pausar la caja.']);
+        }
+        $p = PausasCaja::iniciar(Auth::user(), $d['motivo'], $d['minutos'] ?? null, $d['pc'] ?? null);
+        $inicio = Carbon::parse($p->inicio);
+
+        return response()->json(['ok' => true, 'pausa' => ['motivo' => $p->motivo, 'minutos' => $p->minutos, 'pc' => $p->pc, 'inicio' => $inicio->format('H:i'),
+            'vuelve' => $p->minutos ? $inicio->copy()->addMinutes($p->minutos)->format('H:i') : null]]);
+    }
+
+    /** Volver a la caja: la clave del cajero o la de un administrador */
+    public function reanudar(Request $request)
+    {
+        try {
+            $minutos = PausasCaja::terminar(Auth::user(), (string) $request->input('clave', ''));
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+
+        return response()->json(['ok' => true, 'minutos' => $minutos]);
+    }
+
     /** El cliente ya no quiere el pedido: queda ANULADO (su número no se vuelve a dar) */
     public function anularPedido(int $id)
     {
@@ -96,7 +126,12 @@ class PuntoVentaController extends Controller
         }
 
         $turno = $soloPedido ? null : Turno::abiertoDe($user);
-        if (! $turno && ! $soloPedido) {
+        // Caja en pausa: se muestra el mensaje grande aunque el turno ya no esté (se cerró desde otro lado)
+        $pausa = $soloPedido ? null : PausasCaja::abierta($user);
+        if ($pausa) {
+            $request->session()->put(PausasCaja::SESION, $pausa->id);
+        }
+        if (! $turno && ! $soloPedido && ! $pausa) {
             return redirect()->route('turnos.index')->with('error', 'Debes aperturar tu turno antes de vender.');
         }
 
@@ -149,7 +184,7 @@ class PuntoVentaController extends Controller
         // Botones rápidos con los productos que más se mueven (si algo falla, la caja abre igual sin ellos)
         $masVendidos = rescue(fn () => CatalogoVenta::masVendidos($user), [], true);
 
-        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido', 'vendedores', 'ia', 'masVendidos', 'modoPedido'));
+        return view('empresas.pos.escritorio', compact('turno', 'negocio', 'comprobantes', 'estadopagos', 'mediospagos', 'documentos', 'farmacia', 'diasAlerta', 'proforma', 'edicion', 'clinica', 'soloPedido', 'vendedores', 'ia', 'masVendidos', 'modoPedido', 'pausa'));
     }
 
     /** Editar una venta del Panel de Ventas: se abre en el Punto Venta con sus productos, cliente y pago */

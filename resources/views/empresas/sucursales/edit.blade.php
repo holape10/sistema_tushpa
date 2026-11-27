@@ -461,6 +461,13 @@
                         @elseif ($campo('clinica_doctor_cobra'))
                             <input type="hidden" name="clinica_doctor_cobra" value="1">
                         @endif
+                        {{-- Pausar caja sola: si nadie la usa esos minutos, queda en pausa con «Caja cerrada» y pide la clave --}}
+                        <label class="flex flex-wrap items-center gap-3 rounded-xl border-2 border-gray-200 px-4 py-3">
+                            <span class="flex-1 min-w-[14rem]"><span class="font-semibold text-gray-800">⏸ Pausar la caja sola</span>
+                                <span class="block text-xs text-gray-500">Si nadie usa el Punto Venta esos minutos, queda en «Caja cerrada» y pide la clave para volver. 0 = nunca.</span></span>
+                            <span class="flex items-center gap-2 text-sm text-gray-600">
+                                <input type="number" name="pausa_inactividad" min="0" max="120" value="{{ (int) $campo('pausa_inactividad') }}" class="w-20 rounded-lg border-gray-300 text-sm text-center"> min</span>
+                        </label>
                         {{-- Etiquetas de la balanza etiquetadora (supermercados): al escanearlas entra el producto con su peso o precio --}}
                         <div x-data="{ etiquetas: @js((bool) $campo('balanza_etiqueta')) }" class="rounded-xl border-2 border-gray-200 px-4 py-3">
                             <label class="flex items-start gap-3 cursor-pointer">

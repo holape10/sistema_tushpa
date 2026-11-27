@@ -120,7 +120,7 @@ class SucursalController extends Controller
         'control_stock' => 'Control de stock', 'permite_descuentos' => 'Permite descuentos', 'permite_cortesias' => 'Permite cortesías', 'permite_bonificaciones' => 'Permite bonificaciones',
         'descuento_max_cajero' => 'Descuento máximo del cajero', 'exigir_operacion' => 'Exigir N° de operación', 'formato_impresion' => 'Formato de impresión',
         'trabaja_pedidos' => 'Trabaja con pedidos', 'balanza_etiqueta' => 'Lee etiquetas de balanza', 'balanza_prefijo' => 'Prefijo de las etiquetas de balanza',
-        'balanza_modo' => 'Las etiquetas de balanza traen'];
+        'balanza_modo' => 'Las etiquetas de balanza traen', 'pausa_inactividad' => 'Pausar la caja sola tras (minutos)'];
 
     public function update(Request $request, $id)
     {
@@ -270,6 +270,8 @@ class SucursalController extends Controller
         $datos['balanza_etiqueta'] = $request->boolean('balanza_etiqueta');
         $datos['balanza_prefijo'] = preg_match('/^2\d?$/', (string) $request->input('balanza_prefijo')) ? $request->input('balanza_prefijo') : '2';
         $datos['balanza_modo'] = $request->input('balanza_modo') === 'PRECIO' ? 'PRECIO' : 'PESO';
+        // Minutos sin usar la caja para que se pause sola (0 = nunca)
+        $datos['pausa_inactividad'] = max(0, min(120, (int) $request->input('pausa_inactividad', 0)));
         $datos['igv_restaurante'] = $request->boolean('igv_restaurante');
         $datos['diseno_a4'] = $datos['diseno_a4'] ?? 'MODERNO';
         $datos['a4_cancelado_grande'] = $request->boolean('a4_cancelado_grande');

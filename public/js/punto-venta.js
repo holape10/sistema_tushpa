@@ -1221,6 +1221,8 @@ document.addEventListener('alpine:init', () => {
 
         // ---------- Teclado ----------
         teclaGlobal(e) {
+            // Caja en pausa: ningún atajo (F9, F10…) hace nada hasta que vuelva el cajero
+            if (window.cajaEnPausa) return;
             if (this.elegir) {
                 // Modal de presentación: flechas + Enter, o el número de la opción; Esc cancela
                 const n = this.elegir.opciones.length;

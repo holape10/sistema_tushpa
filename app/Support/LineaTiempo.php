@@ -52,6 +52,15 @@ class LineaTiempo
             }
         }
 
+        // ---- Pausas de caja (el turno siguió abierto)
+        if (Schema::hasTable('caja_pausas')) {
+            foreach (DB::table('caja_pausas')->where('id_empresa_negocio', $sucursal)->whereBetween('inicio', [$desde, $hasta])->get() as $p) {
+                $titulo = PausasCaja::MOTIVOS[$p->motivo][0] ?? $p->motivo;
+                $agregar((string) $p->inicio, (int) $p->IdUsuario, 'caja', '⏸', 'Pausó la caja: '.mb_strtolower($titulo).($p->motivo === 'INACTIVIDAD' ? ' (sola, por inactividad)' : ''),
+                    ($p->pc ? $p->pc.' · ' : '').($p->fin ? 'volvió a las '.now()->parse($p->fin)->format('H:i').' ('.(int) now()->parse($p->inicio)->diffInMinutes(now()->parse($p->fin)).' min)' : 'sigue en pausa'));
+            }
+        }
+
         // ---- Comprobantes (cobros) y lo que se le hizo: descuento, cortesía, anulación
         $mesas = fn ($pedidos) => DB::table('pedidos as p')->leftJoin('mesas as m', 'm.mes_id', '=', 'p.mes_id')->leftJoin('pisos as pi', 'pi.pis_id', '=', 'p.pis_id')
             ->whereIn('p.ped_id', $pedidos)->get(['p.ped_id', 'p.ped_tip', 'm.mes_nom', 'pi.pis_nom'])->keyBy('ped_id');

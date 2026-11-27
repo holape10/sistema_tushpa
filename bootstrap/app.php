@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AvisarCambios;
 use App\Http\Middleware\CabecerasSeguridad;
+use App\Http\Middleware\CajaEnPausa;
 use App\Http\Middleware\ControlEquipo;
 use App\Http\Middleware\EmpresaDelEstudio;
 use App\Http\Middleware\IdentificarEmpresa;
@@ -46,7 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Mozos y promotores solo con el Wi-Fi del local (si la sucursal lo activó)
         // Estudio contable: cada usuario solo en las empresas que puede ver (antes que cualquier pantalla)
         // Equipos (PC/celular) de cada usuario: los nuevos se avisan al dueño y los bloqueados se sacan
-        $middleware->web(append: [ModoSoporte::class, ControlEquipo::class, EmpresaDelEstudio::class, SoloMenuContador::class, PermisoDelMenu::class, SoloWifiLocal::class, AvisarCambios::class, CabecerasSeguridad::class, RegistrarVisita::class.':demos']);
+        $middleware->web(append: [ModoSoporte::class, CajaEnPausa::class, ControlEquipo::class, EmpresaDelEstudio::class, SoloMenuContador::class, PermisoDelMenu::class, SoloWifiLocal::class, AvisarCambios::class, CabecerasSeguridad::class, RegistrarVisita::class.':demos']);
         // Los avisos de Culqi llegan de su servidor (sin sesión): se confirman preguntándole a Culqi
         $middleware->validateCsrfTokens(except: ['culqi/webhook']);
 

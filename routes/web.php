@@ -910,6 +910,9 @@ Route::middleware('auth')->group(function () {
     // Tomar Pedido: como una venta, pero solo guarda el pedido con su número del día; la caja lo trae por ese número
     Route::get('/pedidos', [PuntoVentaController::class, 'pedido'])->name('pv.pedido');
     Route::get('/pedidos/buscar', [PuntoVentaController::class, 'buscarPedido'])->middleware('throttle:120,1')->name('pv.pedido.buscar');
+    // Pausar caja: mensaje grande para los clientes; se vuelve con la clave (el turno sigue abierto)
+    Route::post('/punto-venta/pausa', [PuntoVentaController::class, 'pausar'])->middleware('throttle:30,1')->name('pv.pausa.pausar');
+    Route::post('/punto-venta/pausa/reanudar', [PuntoVentaController::class, 'reanudar'])->middleware('throttle:30,1')->name('pv.pausa.reanudar');
     Route::post('/pedidos/{id}/anular', [PuntoVentaController::class, 'anularPedido'])->whereNumber('id')->middleware('throttle:60,1')->name('pv.pedido.anular');
     Route::post('/punto-venta/registrar', [PuntoVentaController::class, 'registrar'])->name('pv.registrar');
     // Punto Venta IA: el cajero arma y cobra la venta hablando
