@@ -6,7 +6,8 @@
         <a href="{{ route('admin.clientes.index') }}" class="h-9 px-3 rounded-xl bg-white shadow-sm text-sm font-semibold flex items-center">← Clientes</a>
         <div class="flex-1 min-w-0">
             <h1 class="text-xl font-bold">⚠️ Alertas de la empresa</h1>
-            <p class="text-sm text-slate-500">{{ $cliente->nombre_comercial ?: $cliente->razon_social }} · RUC {{ $cliente->ruc }}</p>
+            <p class="text-sm text-slate-500">{{ $cliente->nombre_comercial ?: $cliente->razon_social }} · RUC {{ $cliente->ruc }}
+                · <a href="{{ $cliente->url() }}" target="_blank" class="font-semibold text-indigo-700 underline" title="Su sistema (cada sistema del mismo RUC tiene su propia dirección)">{{ $cliente->host() }}</a></p>
             <a href="{{ route('admin.clientes.accesos', $cliente->id) }}#equipos" class="inline-flex items-center gap-1 mt-1 h-7 px-2.5 rounded-lg text-xs font-bold {{ $seguridad['porRevisar'] ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-600' }}">
                 🔐 Equipos de la empresa{{ $seguridad['porRevisar'] ? ' · '.$seguridad['porRevisar'].' por revisar' : '' }}</a>
             <p class="text-xs text-slate-400">📲 Estas alertas también llegan por Telegram: <a href="{{ route('admin.agenda.index') }}" class="text-sky-700 underline">vincula tu Telegram en la Agenda</a>.</p>

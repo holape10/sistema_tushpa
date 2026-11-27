@@ -11,7 +11,8 @@
         <a href="{{ route('admin.clientes.index') }}" class="h-9 px-3 rounded-xl bg-white shadow-sm text-sm font-semibold flex items-center">← Clientes</a>
         <div>
             <h1 class="text-xl font-bold">Comprobantes SUNAT</h1>
-            <p class="text-sm text-slate-500">{{ $cliente->nombre_comercial ?: $cliente->razon_social }} · RUC {{ $cliente->ruc }}</p>
+            <p class="text-sm text-slate-500">{{ $cliente->nombre_comercial ?: $cliente->razon_social }} · RUC {{ $cliente->ruc }}
+                · <a href="{{ $cliente->url() }}" target="_blank" class="font-semibold text-indigo-700 underline" title="Su sistema (cada sistema del mismo RUC tiene su propia dirección)">{{ $cliente->host() }}</a></p>
         </div>
     </div>
     <div class="flex gap-1 p-1 bg-white rounded-xl shadow-sm text-sm mb-4 w-fit">

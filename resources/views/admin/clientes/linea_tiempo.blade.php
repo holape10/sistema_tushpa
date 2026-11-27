@@ -11,7 +11,8 @@
         <a href="{{ route('admin.clientes.diagnostico', $cliente->id) }}" class="h-9 px-3 rounded-xl bg-white shadow-sm text-sm font-semibold flex items-center">← Diagnóstico</a>
         <div class="flex-1 min-w-[14rem]">
             <h1 class="text-xl font-bold">🕑 Línea de tiempo</h1>
-            <p class="text-sm text-slate-500">{{ $cliente->nombre_comercial ?: $cliente->razon_social }} · RUC {{ $cliente->ruc }}</p>
+            <p class="text-sm text-slate-500">{{ $cliente->nombre_comercial ?: $cliente->razon_social }} · RUC {{ $cliente->ruc }}
+                · <a href="{{ $cliente->url() }}" target="_blank" class="font-semibold text-indigo-700 underline" title="Su sistema (cada sistema del mismo RUC tiene su propia dirección)">{{ $cliente->host() }}</a></p>
         </div>
         <form method="GET" class="flex flex-wrap items-center gap-2">
             <input type="date" name="fecha" value="{{ $fecha }}" max="{{ now()->toDateString() }}" onchange="this.form.submit()" class="h-9 rounded-xl border-slate-300 text-sm">
