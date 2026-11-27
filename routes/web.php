@@ -39,6 +39,7 @@ use App\Http\Controllers\ConcarController;
 use App\Http\Controllers\ConsultaCpeController;
 use App\Http\Controllers\ConsumoCajasController;
 use App\Http\Controllers\ContabilidadController;
+use App\Http\Controllers\ContabilidadDbfController;
 use App\Http\Controllers\ContabilidadRegistroController;
 use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\ConteoCiegoController;
@@ -761,6 +762,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/sire/bandeja', [SireBandejaController::class, 'index'])->name('sire.bandeja');
     Route::post('/sire/bandeja/{ruc}/{libro}/pedir', [SireBandejaController::class, 'pedir'])->where('ruc', '\d{11}')->whereIn('libro', ['ventas', 'compras'])->middleware('throttle:120,1')->name('sire.bandeja.pedir');
     Route::post('/sire/bandeja/{ruc}/{libro}/revisar', [SireBandejaController::class, 'revisar'])->where('ruc', '\d{11}')->whereIn('libro', ['ventas', 'compras'])->middleware('throttle:240,1')->name('sire.bandeja.revisar');
+
+    // Otros › Contabilidad DBF: el tienfact.dbf de ventas armado con los comprobantes del sistema (sin esperar el SIRE)
+    Route::get('/contabilidad-dbf', [ContabilidadDbfController::class, 'index'])->name('contabilidad_dbf.index');
+    Route::get('/contabilidad-dbf/descargar', [ContabilidadDbfController::class, 'descargar'])->middleware('throttle:30,1')->name('contabilidad_dbf.descargar');
 
     // SIRE → sistema contable en FoxPro: revisar cuentas y montos y descargar tienfact.dbf / almaingr.dbf
     Route::get('/sire/dbf', [SireDbfController::class, 'index'])->name('sire.dbf');

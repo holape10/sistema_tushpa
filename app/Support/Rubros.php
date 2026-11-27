@@ -21,7 +21,7 @@ class Rubros
         '/reportes/ventas-detallado', '/reportes/ventas-producto-detalle',
         '/clientes', '/proveedores', '/usuarios', '/empresas', '/sucursales', '/mediospagos', '/categorias', '/productos',
         '/impresoras', '/apariencia', '/avisos-telegram', '/compras', '/ordenes-compra', '/gastos', '/centros-costo', '/activos-fijos', '/almacenes', '/kardex', '/kardex/stock', '/kardex/inventario', '/kardex/sunat', '/cuentas/cobrar', '/cuentas/pagar', '/flujo-caja', '/bancos', '/soporte',
-        '/respaldo', '/bitacora', '/mis-comprobantes', '/sunat/consulta-cpe',
+        '/respaldo', '/bitacora', '/mis-comprobantes', '/sunat/consulta-cpe', '/contabilidad-dbf',
     ];
 
     /** Contabilidad completa: libros, registro de ventas y compras, SIRE, tributos, planilla, asistencia y CONCAR */
