@@ -1,8 +1,13 @@
 {{-- Accesos de transportes: todas sus pantallas a un toque --}}
 @php
-    $secciones = [['transportes.index', 'Vender pasajes', 'fa-ticket']];
+    $secciones = [];
+    if (Auth::user()->puedeCobrar()) {
+        $secciones[] = ['transportes.index', 'Vender pasajes', 'fa-ticket'];
+    }
+    $secciones[] = ['transportes.embarque', 'Embarque', 'fa-qrcode'];
     if (Auth::user()->esAdmin()) {
-        array_push($secciones, ['transportes.salidas', 'Salidas', 'fa-calendar-days'], ['transportes.unidades', 'Unidades y planos', 'fa-bus'], ['transportes.rutas', 'Rutas', 'fa-route']);
+        array_push($secciones, ['transportes.salidas', 'Salidas', 'fa-calendar-days'], ['transportes.unidades', 'Unidades y planos', 'fa-bus'],
+            ['transportes.rutas', 'Rutas', 'fa-route'], ['transportes.reporte', 'Reporte', 'fa-chart-column'], ['transportes.configuracion', 'Configuración', 'fa-gear']);
     }
 @endphp
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">

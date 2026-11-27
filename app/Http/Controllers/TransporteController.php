@@ -4,20 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Models\MedioPago;
 use App\Support\Bitacora;
-use App\Support\Impresion;
+use App\Support\Impresion\Impresion;
 use App\Support\Transportes;
 use App\Support\VentaDirecta;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
- * Transportes: venta de pasajes sobre el plano de asientos, salidas, unidades (con su plano) y rutas, y el manifiesto
- * de pasajeros. Vende quien cobra (con su turno de caja); lo demás lo configura el administrador.
+ * Transportes: venta y reserva de pasajes sobre el plano de asientos (por tramos), cambios de asiento o fecha, boleto con
+ * QR y embarque, salidas, unidades (con su plano), rutas, manifiesto, reporte con gastos por salida y la configuración de
+ * la reserva por internet. Vende quien cobra (con su turno de caja); lo demás lo configura el administrador.
  */
 class TransporteController extends Controller
 {
@@ -70,24 +72,25 @@ class TransporteController extends Controller
             foreach (Transportes::asientosDe($plano) as $a) {
                 $precios[$a['cat']] ??= Transportes::precio($elegida, $a['cat']);
             }
-            $datos = ['plano' => $plano, 'ocupados' => collect(Transportes::ocupados($elegida->id))->map(fn ($p) => $p->nombre)->all(), 'precios' => $precios];
+            $ruta = DB::table('tra_rutas')->where('id', $elegida->ruta_id)->first();
+            $datos = ['plano' => $plano, 'activos' => Transportes::paraPlano($elegida->id), 'precios' => $precios, 'paradas' => Transportes::paradas($ruta),
+                'otras' => $proximas->where('ruta_id', $elegida->ruta_id)->map(fn ($s) => ['id' => $s->id, 'texto' => now()->parse($s->salida)->format('d/m H:i').' · '.$s->unidad])->values()->all()];
         }
         $medios = MedioPago::where('id_empresa_negocio', $this->sucursal())->orderByDesc('predeterminado')->get(['id_med_pag', 'nom_med_pag']);
+        $web = $this->reservasWeb();
+        $reservaMin = (int) Transportes::config($this->sucursal())->reserva_min;
 
-        return view('empresas.transportes.venta', compact('proximas', 'elegida', 'datos', 'medios'));
+        return view('empresas.transportes.venta', compact('proximas', 'elegida', 'datos', 'medios', 'web', 'reservaMin'));
     }
 
     public function vender(Request $request, int $id): JsonResponse
     {
         $this->vende();
         $this->salida($id);
-        $d = $request->validate([
-            'pasajeros' => 'required|array|min:1|max:60', 'pasajeros.*.asiento' => 'required|string|max:8',
-            'pasajeros.*.tdicod' => 'required|string|size:1', 'pasajeros.*.doc' => 'required|string|max:15', 'pasajeros.*.nombre' => 'required|string|max:150',
-            'pasajeros.*.telefono' => 'nullable|string|max:20',
+        $d = $this->datosPasajeros($request) + $request->validate([
             'tdocod' => 'required|in:01,03,13', 'clinum' => 'nullable|string|max:15', 'clinom' => 'nullable|string|max:150', 'clidir' => 'nullable|string|max:200',
-            'id_med_pag' => 'nullable|integer', 'paga' => 'nullable|numeric|min:0', 'imprimir' => 'nullable|boolean',
-        ], [], ['pasajeros.*.doc' => 'documento del pasajero', 'pasajeros.*.nombre' => 'nombre del pasajero']);
+            'id_med_pag' => 'nullable|integer', 'paga' => 'nullable|numeric|min:0', 'operacion' => 'nullable|string|max:30', 'imprimir' => 'nullable|boolean',
+        ]);
         try {
             $cabId = Transportes::vender(Auth::user(), $id, $d);
         } catch (\RuntimeException $e) {
@@ -255,5 +258,194 @@ class TransporteController extends Controller
         }
 
         return back()->with('success', 'Ruta guardada.');
+    }
+
+    // ------------------------------------------------------------------ reservas, cambios y boleto
+
+    /** Lo que está tomado en la salida (para refrescar el plano) y las reservas por internet que esperan su pago */
+    public function estado(int $id): JsonResponse
+    {
+        $this->vende();
+        if ($id) {
+            $this->salida($id);
+        }
+
+        return response()->json(['activos' => $id ? Transportes::paraPlano($id) : [], 'web' => $this->reservasWeb()]);
+    }
+
+    /** Reservas por internet pendientes, para la caja */
+    private function reservasWeb(): array
+    {
+        return Transportes::reservasWeb($this->sucursal())->map(fn ($r) => ['grupo' => $r->grupo, 'salida_id' => (int) $r->salida_id,
+            'salida' => now()->parse($r->salida)->format('d/m H:i'), 'ruta' => $r->origen.' → '.$r->destino, 'pasajes' => (int) $r->pasajes,
+            'total' => round((float) $r->total, 2), 'nombre' => $r->nombre, 'telefono' => $r->telefono, 'medio' => $r->medio,
+            'operacion' => $r->operacion, 'vence' => now()->parse($r->vence)->format('H:i')])->values()->all();
+    }
+
+    private function datosPasajeros(Request $request): array
+    {
+        return $request->validate([
+            'pasajeros' => 'required|array|min:1|max:60', 'pasajeros.*.asiento' => 'required|string|max:8',
+            'pasajeros.*.tdicod' => 'required|string|size:1', 'pasajeros.*.doc' => 'required|string|max:15', 'pasajeros.*.nombre' => 'required|string|max:150',
+            'pasajeros.*.telefono' => 'nullable|string|max:20', 'pasajeros.*.precio' => 'nullable|numeric|min:0|max:99999',
+            'desde' => 'nullable|integer|min:0|max:99', 'hasta' => 'nullable|integer|min:1|max:99',
+        ], [], ['pasajeros.*.doc' => 'documento del pasajero', 'pasajeros.*.nombre' => 'nombre del pasajero']);
+    }
+
+    public function reservar(Request $request, int $id): JsonResponse
+    {
+        $this->vende();
+        $this->salida($id);
+        $d = $this->datosPasajeros($request);
+        try {
+            $grupo = Transportes::reservar($this->sucursal(), (int) Auth::user()->IdUsuario, $id, $d);
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+        $vence = DB::table('tra_pasajes')->where('grupo', $grupo)->value('reservado_hasta');
+
+        return response()->json(['ok' => true, 'grupo' => $grupo, 'vence' => now()->parse($vence)->format('d/m H:i')]);
+    }
+
+    public function cobrarReserva(Request $request, string $grupo): JsonResponse
+    {
+        $this->vende();
+        $d = $request->validate(['tdocod' => 'required|in:01,03,13', 'clinum' => 'nullable|string|max:15', 'clinom' => 'nullable|string|max:150',
+            'clidir' => 'nullable|string|max:200', 'id_med_pag' => 'nullable|integer', 'paga' => 'nullable|numeric|min:0',
+            'operacion' => 'nullable|string|max:30', 'imprimir' => 'nullable|boolean']);
+        try {
+            $cabId = Transportes::cobrarReserva(Auth::user(), $grupo, $d);
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+        $impreso = false;
+        if ($d['imprimir'] ?? false) {
+            try {
+                $impreso = Impresion::comprobante($cabId);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        return response()->json(['ok' => true, 'comprobante' => VentaDirecta::respuesta($cabId) + ['impreso' => $impreso]]);
+    }
+
+    public function liberarReserva(string $grupo): JsonResponse
+    {
+        $this->vende();
+        try {
+            $n = Transportes::liberarReserva($this->sucursal(), $grupo);
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+        Bitacora::registrar('venta.reserva_liberada', "Liberó una reserva de {$n} asiento(s)", null, ['referencia' => ['reserva', $grupo]]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function cambiar(Request $request, int $id): JsonResponse
+    {
+        $this->vende();
+        $d = $request->validate(['salida_id' => 'required|integer', 'asiento' => 'required|string|max:8']);
+        try {
+            $texto = Transportes::cambiar(Auth::user(), $id, (int) $d['salida_id'], $d['asiento']);
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()]);
+        }
+
+        return response()->json(['ok' => true, 'mensaje' => $texto]);
+    }
+
+    /** El boleto en PDF (con su QR para el embarque) de una venta o reserva */
+    public function boleto(string $grupo): Response
+    {
+        $this->vende();
+        $pdf = Transportes::boletoPdf($this->sucursal(), $grupo);
+        abort_unless($pdf, 404);
+
+        return response($pdf, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="BOLETO '.$grupo.'.pdf"']);
+    }
+
+    // ------------------------------------------------------------------ embarque
+
+    public function embarque(Request $request): View
+    {
+        $salidas = $this->salidas()->whereIn('s.estado', ['PROGRAMADA', 'PARTIO'])->whereBetween('s.salida', [now()->subHours(12), now()->addDays(2)])
+            ->orderBy('s.salida')->get();
+        $elegida = $request->filled('salida') ? $salidas->firstWhere('id', (int) $request->salida) : null;
+        $elegida ??= $salidas->first(fn ($s) => now()->parse($s->salida)->gte(now()->subHour())) ?? $salidas->first();
+        $pasajeros = $elegida ? Transportes::manifiesto($elegida->id) : [];
+
+        return view('empresas.transportes.embarque', compact('salidas', 'elegida', 'pasajeros'));
+    }
+
+    public function embarcar(Request $request): JsonResponse
+    {
+        $d = $request->validate(['codigo' => 'required|string|max:200', 'salida_id' => 'nullable|integer']);
+
+        return response()->json(Transportes::embarcar(Auth::user(), $d['codigo'], $d['salida_id'] ?? null));
+    }
+
+    // ------------------------------------------------------------------ reporte y gastos
+
+    public function reporte(Request $request): View
+    {
+        $this->admin();
+        $fecha = fn ($v, $def) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $v) ? $v : $def;
+        $desde = $fecha($request->get('desde'), now()->startOfMonth()->toDateString());
+        $hasta = $fecha($request->get('hasta'), now()->toDateString());
+        $salidas = Transportes::reporte($this->sucursal(), $desde, $hasta);
+        $gastos = DB::table('tra_gastos')->whereIn('salida_id', $salidas->pluck('id'))->orderBy('id')->get()->groupBy('salida_id');
+        $cajeros = DB::table('tra_pasajes as p')->join('tra_salidas as s', 's.id', '=', 'p.salida_id')
+            ->leftJoin('cpe_cabecera as c', 'c.IdCpe_cabecera', '=', 'p.IdCpe_cabecera')->leftJoin('users as u', 'u.IdUsuario', '=', 'p.IdUsuario')
+            ->whereIn('p.salida_id', $salidas->pluck('id'))->where('p.estado', 'VENDIDO')->whereNull('c.ccabaj')
+            ->groupBy('p.IdUsuario', 'u.apeusu')->selectRaw("COALESCE(u.apeusu, 'INTERNET') AS cajero, COUNT(*) AS pasajes, SUM(p.precio) AS cobrado")
+            ->orderByDesc('cobrado')->get();
+
+        return view('empresas.transportes.reporte', compact('salidas', 'gastos', 'cajeros', 'desde', 'hasta'));
+    }
+
+    public function gastoGuardar(Request $request): RedirectResponse
+    {
+        $this->admin();
+        $d = $request->validate(['salida_id' => 'required|integer', 'concepto' => 'required|string|max:80', 'monto' => 'required|numeric|min:0.01|max:999999']);
+        $this->salida((int) $d['salida_id']);
+        DB::table('tra_gastos')->insert(['salida_id' => $d['salida_id'], 'concepto' => mb_strtoupper(trim($d['concepto'])), 'monto' => round((float) $d['monto'], 2),
+            'IdUsuario' => Auth::user()->IdUsuario, 'created_at' => now()]);
+
+        return back()->with('success', 'Gasto agregado.');
+    }
+
+    public function gastoQuitar(int $id): RedirectResponse
+    {
+        $this->admin();
+        $gasto = DB::table('tra_gastos')->where('id', $id)->first();
+        abort_unless($gasto, 404);
+        $this->salida((int) $gasto->salida_id);
+        DB::table('tra_gastos')->where('id', $id)->delete();
+
+        return back()->with('success', 'Gasto quitado.');
+    }
+
+    // ------------------------------------------------------------------ configuración
+
+    public function configuracion(): View
+    {
+        $this->admin();
+
+        return view('empresas.transportes.configuracion', ['config' => Transportes::config($this->sucursal()),
+            'enlace' => route('pasajes.web', $this->sucursal())]);
+    }
+
+    public function configuracionGuardar(Request $request): RedirectResponse
+    {
+        $this->admin();
+        $d = $request->validate(['reserva_min' => 'required|integer|min:5|max:10080', 'web_reserva_min' => 'required|integer|min:10|max:1440',
+            'web_texto' => 'nullable|string|max:255']);
+        DB::table('tra_config')->updateOrInsert(['id_empresa_negocio' => $this->sucursal()], ['reserva_min' => $d['reserva_min'],
+            'web_activo' => $request->boolean('web_activo'), 'web_reserva_min' => $d['web_reserva_min'], 'web_texto' => $d['web_texto'] ?? null,
+            'updated_at' => now(), 'created_at' => now()]);
+
+        return back()->with('success', 'Configuración guardada.');
     }
 }

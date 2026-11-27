@@ -94,6 +94,7 @@ use App\Http\Controllers\MotorizadoController;
 use App\Http\Controllers\NotaController;
 use App\Http\Controllers\OrdenCompraController;
 use App\Http\Controllers\PanelDuenoController;
+use App\Http\Controllers\PasajesWebController;
 use App\Http\Controllers\PisoController;
 use App\Http\Controllers\PlanillaController;
 use App\Http\Controllers\PlanoMesasController;
@@ -1117,6 +1118,31 @@ Route::middleware('auth')->prefix('transportes')->name('transportes.')->controll
     Route::post('/unidades', 'unidadGuardar')->name('unidades.guardar');
     Route::get('/rutas', 'rutasIndex')->name('rutas');
     Route::post('/rutas', 'rutaGuardar')->name('rutas.guardar');
+    Route::get('/salidas/{id}/estado', 'estado')->whereNumber('id')->name('estado');
+    Route::post('/salidas/{id}/reservar', 'reservar')->whereNumber('id')->middleware('throttle:60,1')->name('reservar');
+    Route::post('/reservas/{grupo}/cobrar', 'cobrarReserva')->where('grupo', '[A-Z0-9]{10}')->middleware('throttle:60,1')->name('reservas.cobrar');
+    Route::post('/reservas/{grupo}/liberar', 'liberarReserva')->where('grupo', '[A-Z0-9]{10}')->name('reservas.liberar');
+    Route::post('/pasajes/{id}/cambiar', 'cambiar')->whereNumber('id')->name('pasajes.cambiar');
+    Route::get('/boleto/{grupo}', 'boleto')->where('grupo', '[A-Z0-9]{10}')->name('boleto');
+    Route::get('/embarque', 'embarque')->name('embarque');
+    Route::post('/embarque', 'embarcar')->middleware('throttle:120,1')->name('embarcar');
+    Route::get('/reporte', 'reporte')->name('reporte');
+    Route::post('/gastos', 'gastoGuardar')->name('gastos.guardar');
+    Route::post('/gastos/{id}/quitar', 'gastoQuitar')->whereNumber('id')->name('gastos.quitar');
+    Route::get('/configuracion', 'configuracion')->name('configuracion');
+    Route::post('/configuracion', 'configuracionGuardar')->name('configuracion.guardar');
+});
+// Pasajes por internet (sin sesión del sistema): el pasajero con su cuenta reserva y paga por Yape, Plin…; la caja confirma
+Route::prefix('pasajes')->name('pasajes.')->controller(PasajesWebController::class)->middleware('throttle:120,1,pasajes-web')->group(function () {
+    Route::get('/{sucursal?}', 'index')->whereNumber('sucursal')->name('web');
+    Route::get('/{sucursal}/salida/{id}', 'ver')->whereNumber(['sucursal', 'id'])->name('salida');
+    Route::post('/{sucursal}/salida/{id}/reservar', 'reservar')->whereNumber(['sucursal', 'id'])->middleware('throttle:10,10,pasajes-reservar')->name('reservar');
+    Route::get('/{sucursal}/cuenta', 'cuenta')->whereNumber('sucursal')->name('cuenta');
+    Route::post('/{sucursal}/registro', 'registro')->whereNumber('sucursal')->middleware('throttle:5,10,pasajes-registro')->name('registro');
+    Route::post('/{sucursal}/ingresar', 'ingresar')->whereNumber('sucursal')->middleware('throttle:10,10,pasajes-ingresar')->name('ingresar');
+    Route::post('/{sucursal}/salir', 'salir')->whereNumber('sucursal')->name('salir');
+    Route::get('/{sucursal}/mis-pasajes', 'mis')->whereNumber('sucursal')->name('mis');
+    Route::get('/{sucursal}/boleto/{grupo}', 'boleto')->whereNumber('sucursal')->where('grupo', '[A-Z0-9]{10}')->name('boleto');
 });
 
 Route::middleware('auth')->prefix('courier')->name('courier.')->controller(CourierController::class)->group(function () {

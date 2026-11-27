@@ -18,6 +18,7 @@ use App\Support\PromocionesVenta;
 use App\Support\Propinas;
 use App\Support\Sunat\CodigoQr;
 use App\Support\Sunat\NumeroLetras;
+use App\Support\Transportes;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Illuminate\Support\Facades\Auth;
@@ -1277,6 +1278,45 @@ class Impresion
         self::firma($p2);
         $p2->avanzar(3)->cortar();
         self::encolar($imp, $p2->bytes(), 'PROFORMA', 'Proforma '.$numero);
+
+        return (string) $imp->descripcion;
+    }
+
+    /**
+     * Aviso en la impresora de caja de una reserva de pasajes hecha por internet: con quién llamar para confirmar el pago.
+     * En una impresora de Windows sale el boleto en PDF. Devuelve el nombre de la impresora, o null si no hay.
+     */
+    public static function reservaTransporte(string $grupo, int $sucursal): ?string
+    {
+        $imp = self::impresoraCaja($sucursal);
+        $pasajes = Transportes::boletos($sucursal, $grupo);
+        if (! $imp || ! $pasajes) {
+            return null;
+        }
+        $primero = $pasajes[0];
+        if ($imp->tip_conex_imp === 'WINDOWS') {
+            self::encolar($imp, (string) Transportes::boletoPdf($sucursal, $grupo), 'RESERVA', 'Reserva web '.$grupo);
+
+            return (string) $imp->descripcion;
+        }
+        $p = Escpos::para($imp);
+        self::encabezado($p, $sucursal);
+        $p->linea('=')->negrita()->tamano(1, 2)->texto('RESERVA POR INTERNET')->tamano()->negrita(false)->alinear('izq')->linea('=')
+            ->parrafo($primero->tramo)
+            ->texto('Salida: '.Carbon::parse($primero->salida)->format('d/m/Y H:i'))
+            ->texto('Unidad: '.$primero->unidad)->linea();
+        foreach ($pasajes as $x) {
+            $p->dosColumnas('ASIENTO '.$x->asiento, number_format((float) $x->precio, 2))->parrafo('  '.$x->nombre.' '.$x->doc);
+        }
+        $total = array_sum(array_map(fn ($x) => (float) $x->precio, $pasajes));
+        $p->linea()->negrita()->tamano(1, 2)->dosColumnas('TOTAL S/', number_format($total, 2))->tamano()->negrita(false)->linea()
+            ->negrita()->texto('LLAMAR: '.($primero->telefono ?: '-'))->negrita(false)
+            ->texto('Paga con: '.($primero->medio_web ?: '-'))
+            ->texto('Operacion: '.($primero->operacion_web ?: '-'))
+            ->texto('Vence: '.($primero->reservado_hasta ? Carbon::parse($primero->reservado_hasta)->format('d/m H:i') : '-'))
+            ->linea()->alinear('centro')->texto('Confirma el pago y cobra la reserva')->texto('en Venta de pasajes')
+            ->avanzar(3)->cortar();
+        self::encolar($imp, $p->bytes(), 'RESERVA', 'Reserva web '.$grupo);
 
         return (string) $imp->descripcion;
     }

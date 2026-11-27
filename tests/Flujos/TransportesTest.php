@@ -3,6 +3,7 @@
 namespace Tests\Flujos;
 
 use App\Support\Transportes;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /** Transportes: plano de asientos, venta de pasajes con su comprobante, asientos que no se repiten y manifiesto */
@@ -60,7 +61,7 @@ class TransportesTest extends FlujoTestCase
         $this->assertStringContainsString('PASAJE LIMA - HUANCAYO', DB::table('cpe_detalle')->where('IdCpe_cabecera', $cab->IdCpe_cabecera)->value('cdedes'));
         $this->assertEquals(['1', '2'], array_keys(Transportes::ocupados($salida)));
 
-        $this->vender($salida, [2])->assertJson(['ok' => false, 'mensaje' => 'El asiento 2 ya está vendido: elige otro.']);
+        $this->vender($salida, [2])->assertJson(['ok' => false, 'mensaje' => 'El asiento 2 ya está ocupado en ese tramo: elige otro.']);
         $this->vender($salida, [99])->assertJson(['ok' => false]);
         $this->assertSame(1, DB::table('cpe_cabecera')->where('ped_tip', 'TRANSPORTE')->count(), 'No se emitió otro comprobante');
 
@@ -99,5 +100,220 @@ class TransportesTest extends FlujoTestCase
         $this->assertSame('LANCHA SAN PEDRO', DB::table('tra_unidades')->where('id', $r->json('id'))->value('nombre'));
         $this->postJson(route('transportes.unidades.guardar'), ['tipo' => 'TERRESTRE', 'nombre' => 'VACIA', 'plano' => ['pisos' => [['filas' => 2, 'columnas' => 2, 'celdas' => []]]]])
             ->assertJson(['ok' => false, 'mensaje' => 'El plano no tiene asientos.']);
+    }
+
+    // ------------------------------------------------------------------ fase 2
+
+    /** Una salida de una ruta con paradas: LIMA (0) - LA OROYA (1) - HUANCAYO (2) */
+    private function salidaConParadas(): int
+    {
+        $salida = $this->salida();
+        DB::table('tra_rutas')->where('id', DB::table('tra_salidas')->where('id', $salida)->value('ruta_id'))->update(['paradas' => 'La Oroya']);
+
+        return $salida;
+    }
+
+    private function pasajero(string $asiento, array $extra = []): array
+    {
+        return $extra + ['asiento' => $asiento, 'tdicod' => '1', 'doc' => '4567890'.((int) $asiento % 10), 'nombre' => 'PASAJERO '.$asiento, 'telefono' => '987654321'];
+    }
+
+    public function test_por_tramos_el_asiento_se_vende_dos_veces_sin_cruzarse_y_el_tramo_cobra_lo_escrito(): void
+    {
+        $salida = $this->salidaConParadas();
+
+        $this->vender($salida, [7], ['desde' => 0, 'hasta' => 1, 'pasajeros' => [$this->pasajero('7', ['precio' => 25])]])->assertJson(['ok' => true]);
+        $this->vender($salida, [7], ['desde' => 1, 'hasta' => 99])->assertJson(['ok' => true]);
+        $this->vender($salida, [7], ['desde' => 0, 'hasta' => 99])->assertJson(['ok' => false, 'mensaje' => 'El asiento 7 ya está ocupado en ese tramo: elige otro.']);
+
+        $pasajes = DB::table('tra_pasajes')->where('salida_id', $salida)->orderBy('id')->get();
+        $this->assertSame([25.0, 50.0], [(float) $pasajes[0]->precio, (float) $pasajes[1]->precio], 'El tramo cobra lo escrito; el viaje completo, el de su categoría');
+        $this->assertStringContainsString('PASAJE LIMA - LA OROYA', DB::table('cpe_detalle')->where('IdCpe_cabecera', $pasajes[0]->IdCpe_cabecera)->value('cdedes'));
+    }
+
+    public function test_el_viaje_completo_ignora_el_precio_que_llega(): void
+    {
+        $salida = $this->salida();
+
+        $this->vender($salida, [3], ['pasajeros' => [$this->pasajero('3', ['precio' => 1])]])->assertJson(['ok' => true]);
+
+        $this->assertSame(50.0, (float) DB::table('tra_pasajes')->where('salida_id', $salida)->value('precio'));
+    }
+
+    public function test_la_reserva_toma_el_asiento_hasta_que_vence_y_al_cobrarla_queda_vendida(): void
+    {
+        $salida = $this->salida();
+
+        $grupo = $this->postJson(route('transportes.reservar', $salida), ['pasajeros' => [$this->pasajero('4')]])->assertJson(['ok' => true])->json('grupo');
+        $this->vender($salida, [4])->assertJson(['ok' => false]);
+        $this->assertSame(0, DB::table('cpe_cabecera')->where('ped_tip', 'TRANSPORTE')->count(), 'Reservar no emite comprobante');
+
+        // Vence (2 horas por defecto): el asiento vuelve a estar libre, pero si nadie lo tomó la reserva se cobra igual
+        Carbon::setTestNow(now()->addHours(3));
+        $this->assertSame([], Transportes::ocupados($salida));
+        $r = $this->postJson(route('transportes.reservas.cobrar', $grupo), ['tdocod' => '03', 'id_med_pag' => $this->efectivo])->assertJson(['ok' => true]);
+
+        $pasaje = DB::table('tra_pasajes')->where('grupo', $grupo)->first();
+        $this->assertSame(['VENDIDO', (int) $r->json('comprobante.id')], [$pasaje->estado, (int) $pasaje->IdCpe_cabecera]);
+        $this->postJson(route('transportes.reservas.cobrar', $grupo), ['tdocod' => '03'])->assertJson(['ok' => false, 'mensaje' => 'Esa reserva ya no existe (se cobró o se liberó).']);
+    }
+
+    public function test_la_reserva_vencida_que_otro_ya_tomo_no_se_cobra_y_liberar_suelta_el_asiento(): void
+    {
+        $salida = $this->salida();
+        $grupo = Transportes::reservar($this->sucursal, null, $salida, ['pasajeros' => [$this->pasajero('9')]]);
+        Carbon::setTestNow(now()->addHours(3));
+        $this->vender($salida, [9])->assertJson(['ok' => true]);
+
+        $this->postJson(route('transportes.reservas.cobrar', $grupo), ['tdocod' => '03'])
+            ->assertJson(['ok' => false, 'mensaje' => 'La reserva venció y el asiento 9 ya lo tomó otra persona.']);
+
+        $otra = Transportes::reservar($this->sucursal, null, $salida, ['pasajeros' => [$this->pasajero('10')]]);
+        $this->postJson(route('transportes.reservas.liberar', $otra))->assertJson(['ok' => true]);
+        $this->assertArrayNotHasKey('10', Transportes::ocupados($salida));
+    }
+
+    public function test_cambia_de_asiento_y_de_fecha_sin_anular_la_boleta(): void
+    {
+        $salida = $this->salida();
+        $cab = $this->vender($salida, [1])->json('comprobante.id');
+        $pasaje = DB::table('tra_pasajes')->where('salida_id', $salida)->value('id');
+        $base = DB::table('tra_salidas')->where('id', $salida)->first();
+        $manana = DB::table('tra_salidas')->insertGetId(['id_empresa_negocio' => $this->sucursal, 'ruta_id' => $base->ruta_id, 'unidad_id' => $base->unidad_id,
+            'salida' => now()->addDays(2)->setTime(21, 0), 'precio' => 50, 'estado' => 'PROGRAMADA', 'created_at' => now(), 'updated_at' => now()]);
+        $this->vender($salida, [2]);
+
+        $this->postJson(route('transportes.pasajes.cambiar', $pasaje), ['salida_id' => $salida, 'asiento' => '2'])
+            ->assertJson(['ok' => false, 'mensaje' => 'El asiento 2 ya está ocupado en esa salida.']);
+        $this->postJson(route('transportes.pasajes.cambiar', $pasaje), ['salida_id' => $manana, 'asiento' => '5'])->assertJson(['ok' => true]);
+
+        $p = DB::table('tra_pasajes')->where('id', $pasaje)->first();
+        $this->assertSame([$manana, '5', (int) $cab], [(int) $p->salida_id, $p->asiento, (int) $p->IdCpe_cabecera]);
+        $this->assertNull(DB::table('cpe_cabecera')->where('IdCpe_cabecera', $cab)->value('ccabaj'), 'La boleta sigue vigente');
+        $this->assertArrayNotHasKey('1', Transportes::ocupados($salida));
+
+        // Solo a otra salida de la misma ruta
+        $otraRuta = $this->salida();
+        $this->postJson(route('transportes.pasajes.cambiar', $pasaje), ['salida_id' => $otraRuta, 'asiento' => '5'])
+            ->assertJson(['ok' => false, 'mensaje' => 'Solo se cambia a una salida de la misma ruta.']);
+    }
+
+    public function test_el_embarque_valida_el_qr_una_sola_vez_y_rechaza_reservas_y_otras_salidas(): void
+    {
+        $salida = $this->salida();
+        $this->vender($salida, [6]);
+        $codigo = DB::table('tra_pasajes')->where('salida_id', $salida)->value('codigo');
+        $grupo = Transportes::reservar($this->sucursal, null, $salida, ['pasajeros' => [$this->pasajero('8')]]);
+        $reserva = DB::table('tra_pasajes')->where('grupo', $grupo)->value('codigo');
+
+        $this->postJson(route('transportes.embarcar'), ['codigo' => $codigo, 'salida_id' => $salida + 1000])->assertJson(['ok' => false]);
+        $this->postJson(route('transportes.embarcar'), ['codigo' => strtolower($codigo), 'salida_id' => $salida])->assertJson(['ok' => true, 'mensaje' => 'Puede subir: asiento 6.']);
+        $this->postJson(route('transportes.embarcar'), ['codigo' => $codigo, 'salida_id' => $salida])->assertJson(['ok' => false, 'mensaje' => 'Ya subió a las 12:00.']);
+        $this->postJson(route('transportes.embarcar'), ['codigo' => $reserva])->assertJson(['ok' => false, 'mensaje' => 'Es una reserva sin pagar: que pase por caja.']);
+        $this->postJson(route('transportes.embarcar'), ['codigo' => 'ZZZZZZZZZZ'])->assertJson(['ok' => false, 'mensaje' => 'Ese boleto no existe en esta empresa.']);
+
+        $this->get(route('transportes.embarque', ['salida' => $salida]))->assertOk()->assertSee('PASAJERO 6');
+    }
+
+    public function test_el_reporte_resta_los_gastos_de_lo_cobrado(): void
+    {
+        $salida = $this->salida();
+        $this->vender($salida, [1, 2]);
+        $this->post(route('transportes.gastos.guardar'), ['salida_id' => $salida, 'concepto' => 'combustible', 'monto' => 30])->assertRedirect();
+
+        $fila = Transportes::reporte($this->sucursal, now()->toDateString(), now()->addDays(3)->toDateString())->firstWhere('id', $salida);
+
+        $this->assertSame([2, 100.0, 30.0], [(int) $fila->vendidos, (float) $fila->cobrado, (float) $fila->gastos]);
+        $this->get(route('transportes.reporte', ['desde' => now()->toDateString(), 'hasta' => now()->addDays(3)->toDateString()]))
+            ->assertOk()->assertSee('COMBUSTIBLE')->assertSee('S/ 70.00');
+        $this->get(route('transportes.configuracion'))->assertOk();
+    }
+
+    // ------------------------------------------------------------------ por internet
+
+    private function webActiva(): int
+    {
+        DB::table('tra_config')->insert(['id_empresa_negocio' => $this->sucursal, 'web_activo' => true, 'web_reserva_min' => 60]);
+
+        return (int) DB::table('medios_pagos')->insertGetId(['nom_med_pag' => 'YAPE', 'IdEmpresa' => $this->usuario->IdEmpresa, 'id_empresa_negocio' => $this->sucursal]);
+    }
+
+    private function registrarse(string $doc = '44556677'): void
+    {
+        $this->post(route('pasajes.registro', $this->sucursal), ['doc' => $doc, 'nombre' => 'Ana Torres', 'celular' => '987111222',
+            'password' => 'secreto1', 'password_confirmation' => 'secreto1'])->assertRedirect();
+    }
+
+    public function test_sin_venta_por_internet_la_pagina_no_existe(): void
+    {
+        $this->get(route('pasajes.web', $this->sucursal))->assertNotFound();
+    }
+
+    public function test_el_pasajero_reserva_por_internet_la_caja_la_cobra_y_baja_su_boleto(): void
+    {
+        $yape = $this->webActiva();
+        $salida = $this->salida(['precios' => json_encode(['SEMICAMA' => 60])]);
+        $this->get(route('pasajes.web', $this->sucursal))->assertOk()->assertSee('LIMA → HUANCAYO', false)->assertDontSee('TUSHPA');
+
+        // Sin cuenta no reserva
+        $this->postJson(route('pasajes.reservar', [$this->sucursal, $salida]), ['pasajeros' => [['asiento' => '3', 'doc' => '44556677', 'nombre' => 'ANA']], 'medio' => $yape])
+            ->assertJson(['ok' => false, 'cuenta' => true]);
+
+        $this->registrarse();
+        $this->get(route('pasajes.salida', [$this->sucursal, $salida]))->assertOk()->assertSee('ANA TORRES');
+        $this->postJson(route('pasajes.reservar', [$this->sucursal, $salida]), ['pasajeros' => [['asiento' => '3', 'doc' => '44556677', 'nombre' => 'Ana Torres', 'precio' => 1]],
+            'medio' => $yape, 'operacion' => 'op123'])->assertJson(['ok' => true]);
+
+        $p = DB::table('tra_pasajes')->where('salida_id', $salida)->first();
+        $this->assertSame(['RESERVADO', 'WEB', 'YAPE', 'OP123', '987111222', 60.0], [$p->estado, $p->origen_venta, $p->medio_web, $p->operacion_web, $p->telefono, (float) $p->precio],
+            'El precio lo pone la empresa, no el navegador');
+        $this->assertEquals(now()->addMinutes(60), now()->parse($p->reservado_hasta));
+        $this->assertCount(1, Transportes::reservasWeb($this->sucursal));
+        $this->get(route('pasajes.mis', $this->sucursal))->assertOk()->assertSee('Esperando tu pago');
+
+        // La caja confirma el pago y la cobra con el medio que eligió el pasajero
+        $this->postJson(route('transportes.reservas.cobrar', $p->grupo), ['tdocod' => '03', 'id_med_pag' => $yape, 'operacion' => 'OP123'])->assertJson(['ok' => true]);
+        $this->assertSame('VENDIDO', DB::table('tra_pasajes')->where('id', $p->id)->value('estado'));
+        $this->assertCount(0, Transportes::reservasWeb($this->sucursal));
+        $this->get(route('pasajes.mis', $this->sucursal))->assertOk()->assertSee('Pagado');
+        $this->get(route('pasajes.boleto', [$this->sucursal, $p->grupo]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+
+        // Otro pasajero no ve ese boleto
+        $this->post(route('pasajes.salir', $this->sucursal));
+        $this->registrarse('11223344');
+        $this->get(route('pasajes.boleto', [$this->sucursal, $p->grupo]))->assertNotFound();
+    }
+
+    public function test_la_reserva_por_internet_sale_impresa_en_la_caja_predeterminada(): void
+    {
+        $yape = $this->webActiva();
+        $salida = $this->salida();
+        foreach (['COMPARTIDO', 'WINDOWS'] as $i => $conexion) {
+            DB::table('configuracion_impresoras')->where('id_empresa_negocio', $this->sucursal)->delete();
+            DB::table('configuracion_impresoras')->insert(['descripcion' => 'CAJA', 'ruta' => 'CAJA', 'IdEmpresa' => $this->usuario->IdEmpresa,
+                'id_empresa_negocio' => $this->sucursal, 'tip_conex_imp' => $conexion, 'columnas' => 42, 'diseno' => 'CLASICO', 'activo' => 1, 'predeterminado' => 1]);
+            $this->registrarse('7000000'.$i);
+            $this->postJson(route('pasajes.reservar', [$this->sucursal, $salida]), ['pasajeros' => [['asiento' => (string) (11 + $i), 'doc' => '7000000'.$i, 'nombre' => 'ANA']],
+                'medio' => $yape])->assertJson(['ok' => true]);
+            $this->post(route('pasajes.salir', $this->sucursal));
+        }
+
+        $cola = DB::table('cola_impresion')->where('id_empresa_negocio', $this->sucursal)->where('tipo', 'RESERVA')->orderBy('id')->pluck('contenido');
+        $this->assertCount(2, $cola);
+        $this->assertStringContainsString('LLAMAR: 987111222', base64_decode($cola[0]), 'La ticketera dice a quién llamar');
+        $this->assertStringStartsWith('%PDF', base64_decode($cola[1]), 'La impresora A4 recibe el boleto en PDF');
+    }
+
+    public function test_la_cuenta_web_no_se_duplica_y_pide_la_contrasena_correcta(): void
+    {
+        $this->webActiva();
+        $this->registrarse();
+        $this->post(route('pasajes.salir', $this->sucursal));
+
+        $this->post(route('pasajes.registro', $this->sucursal), ['doc' => '44556677', 'nombre' => 'OTRA', 'celular' => '987000000',
+            'password' => 'secreto1', 'password_confirmation' => 'secreto1'])->assertSessionHasErrors('doc');
+        $this->post(route('pasajes.ingresar', $this->sucursal), ['doc' => '44556677', 'password' => 'mala'])->assertSessionHasErrors('doc');
+        $this->post(route('pasajes.ingresar', $this->sucursal), ['doc' => '44556677', 'password' => 'secreto1'])->assertRedirect(route('pasajes.web', $this->sucursal));
+        $this->get(route('pasajes.cuenta', $this->sucursal))->assertRedirect(route('pasajes.mis', $this->sucursal));
     }
 }
