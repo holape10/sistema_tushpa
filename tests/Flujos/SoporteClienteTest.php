@@ -4,6 +4,7 @@ namespace Tests\Flujos;
 
 use App\Models\Central\Cliente;
 use App\Models\Central\Superadmin;
+use App\Support\Seguridad\Dispositivos;
 use App\Support\Tenancy\HerramientasSoporte;
 use App\Support\Tenancy\ModoSoporte;
 use App\Support\Tenancy\PartePanel;
@@ -112,6 +113,22 @@ class SoporteClienteTest extends FlujoTestCase
         // El enlace ya se usó: no vuelve a servir
         $this->get($ruta)->assertRedirect('/login');
         $this->assertGuest();
+    }
+
+    public function test_soporte_con_permiso_de_cambios_cuenta_como_equipo_de_confianza(): void
+    {
+        Dispositivos::$enPruebas = true;
+        try {
+            $this->app['request']->setLaravelSession($sesion = $this->app['session.store']);
+            $sesion->put(ModoSoporte::SESION, ['id' => 1, 'nombre' => 'GABY', 'usuario' => 'ADMIN', 'modo' => 'mirar', 'hasta' => now()->addHour()->timestamp]);
+            $this->assertFalse(Dispositivos::deConfianza(), 'Solo para mirar: su PC no es de confianza');
+
+            $sesion->put(ModoSoporte::SESION.'.modo', 'cambiar');
+            $this->assertTrue(Dispositivos::deConfianza(), 'Con «Puede hacer cambios» soporte arregla credenciales y correlativos');
+            Dispositivos::exigirConfianza('cambiar las credenciales de SUNAT');
+        } finally {
+            Dispositivos::$enPruebas = false;
+        }
     }
 
     public function test_un_enlace_de_soporte_no_sirve_en_otra_empresa(): void

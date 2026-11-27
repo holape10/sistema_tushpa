@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\AvisosCelular;
 use App\Support\Bitacora;
 use App\Support\GeoIp;
+use App\Support\Tenancy\ModoSoporte;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
@@ -158,10 +159,14 @@ class Dispositivos
         return DB::table('dispositivos')->where('IdUsuario', $user->IdUsuario)->where('token', $token)->first();
     }
 
-    /** ¿La petición actual viene de un equipo de confianza? (sin control instalado aún, sí) */
+    /**
+     * ¿La petición actual viene de un equipo de confianza? (sin control instalado aún, sí). Soporte que entró desde el
+     * panel con «Puede hacer cambios» también cuenta: su entrada ya la autorizó el panel (enlace de un solo uso) y queda
+     * en la bitácora; su PC no se registra como equipo de la empresa.
+     */
     public static function deConfianza(): bool
     {
-        if (! self::disponible()) {
+        if (! self::disponible() || (ModoSoporte::actual()['modo'] ?? null) === 'cambiar') {
             return true;
         }
 
