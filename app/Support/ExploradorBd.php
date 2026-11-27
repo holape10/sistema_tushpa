@@ -47,7 +47,10 @@ class ExploradorBd
      * Columnas y una página de filas de una tabla (las más nuevas primero si tiene llave), con búsqueda opcional en
      * sus columnas de texto.
      *
-     * @return array{columnas: list<array{nombre: string, tipo: string, nulo: bool, llave: bool}>, filas: list<array<string, mixed>>, hay_mas: bool, buscadas: list<string>}
+     * Para la edición en la tabla también dice qué columnas se pueden editar y qué celdas llegan cortadas (textos largos):
+     * esas no se editan, porque al guardarlas se perdería lo que no se ve.
+     *
+     * @return array{columnas: list<array{nombre: string, tipo: string, nulo: bool, llave: bool, auto: bool, defecto: bool, editable: bool}>, filas: list<array<string, mixed>>, hay_mas: bool, buscadas: list<string>, llave: list<string>, cortados: list<list<string>>}
      */
     public static function ver(string $base, string $tabla, ?string $buscar = null, int $pagina = 1): array
     {
@@ -58,7 +61,8 @@ class ExploradorBd
         return Tenancy::en($base, function () use ($tabla, $buscar, $pagina) {
             $llave = collect(Schema::getIndexes($tabla))->firstWhere('primary', true)['columns'] ?? [];
             $columnas = collect(Schema::getColumns($tabla))->map(fn ($c) => ['nombre' => $c['name'], 'tipo' => $c['type'], 'nulo' => (bool) $c['nullable'],
-                'llave' => in_array($c['name'], $llave, true)])->values()->all();
+                'llave' => in_array($c['name'], $llave, true), 'auto' => (bool) ($c['auto_increment'] ?? false), 'defecto' => ($c['default'] ?? null) !== null,
+                'editable' => EdicionTabla::columnaEditable($c, $llave)])->values()->all();
             // Se busca en las columnas de texto y números (no en las de claves u ocultas)
             $buscadas = collect($columnas)->filter(fn ($c) => preg_match('/char|text|int|decimal|date/i', $c['tipo']) && ! preg_match('/pass|clave|secret|token|certificado/i', $c['nombre']))
                 ->pluck('nombre')->take(20)->values()->all();
@@ -78,8 +82,11 @@ class ExploradorBd
                 $conexion->statement('SET SESSION MAX_EXECUTION_TIME = 0');
             }
 
-            return ['columnas' => $columnas, 'filas' => $filas->take(self::POR_PAGINA)->map(fn ($f) => ConsultaSegura::tapar((array) $f))->all(),
-                'hay_mas' => $filas->count() > self::POR_PAGINA, 'buscadas' => $buscadas];
+            $pagina = $filas->take(self::POR_PAGINA);
+
+            return ['columnas' => $columnas, 'filas' => $pagina->map(fn ($f) => ConsultaSegura::tapar((array) $f))->all(),
+                'hay_mas' => $filas->count() > self::POR_PAGINA, 'buscadas' => $buscadas, 'llave' => $llave,
+                'cortados' => $pagina->map(fn ($f) => EdicionTabla::cortados((array) $f))->all()];
         });
     }
 

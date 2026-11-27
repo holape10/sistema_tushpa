@@ -156,7 +156,17 @@
                                     @endforeach
                                 </div>
                             </details>
-                            @include('admin.partials.tabla_filas', ['filas' => $vista['filas'], 'titulos' => array_column($vista['columnas'], 'nombre')])
+                            @if ($edicion && $vista['llave'])
+                                {{-- Segunda clave abierta y tabla con llave: se edita aquí mismo --}}
+                                @include('admin.partials.tabla_editable', ['delicada' => \App\Support\EdicionTabla::delicada($tabla)])
+                            @else
+                                @if ($edicion)
+                                    <p class="px-4 py-2 border-b text-xs text-amber-800 bg-amber-50">Esta tabla no tiene llave primaria: para cambiarla usa una orden SQL (arriba).</p>
+                                @elseif ($tieneClave)
+                                    <p class="px-4 py-2 border-b text-xs text-slate-500">✏️ Para editar aquí mismo (celdas, ➖ borrar, ➕ agregar) abre tu segunda clave arriba.</p>
+                                @endif
+                                @include('admin.partials.tabla_filas', ['filas' => $vista['filas'], 'titulos' => array_column($vista['columnas'], 'nombre')])
+                            @endif
                             <div class="px-4 py-2 flex items-center gap-3 text-sm">
                                 @if ($pagina > 1)<a href="{{ route('admin.basedatos.index', ['base' => $base, 'tabla' => $tabla, 'q' => $q, 'pagina' => $pagina - 1]) }}" class="font-bold text-indigo-700">← Anteriores</a>@endif
                                 <span class="text-slate-500">Página {{ $pagina }}{{ $q !== '' ? ' · buscando «'.$q.'»' : '' }}</span>

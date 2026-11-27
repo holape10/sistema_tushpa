@@ -111,6 +111,12 @@ class ConsultaSegura
      *
      * @param  array<string, mixed>  $fila
      */
+    /** ¿Es una columna de claves o secretos? (nunca se muestra ni se edita desde el panel) */
+    public static function esSensible(string $columna): bool
+    {
+        return (bool) preg_match(self::SENSIBLE, $columna);
+    }
+
     public static function tapar(array $fila): array
     {
         foreach ($fila as $col => $valor) {

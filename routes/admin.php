@@ -157,6 +157,8 @@ Route::middleware(['auth:superadmin', PanelActivo::class])->group(function () {
     // Explorador de bases de solo lectura: tablas, filas y consultas SELECT (solo el dueño)
     Route::get('/base-datos', [BaseDatosController::class, 'index'])->name('basedatos.index');
     Route::post('/base-datos/consulta', [BaseDatosController::class, 'consulta'])->middleware('throttle:60,1')->name('basedatos.consulta');
+    // Edición directa en la tabla (celdas, filas borradas y nuevas), aplicada toda junta con la segunda clave abierta
+    Route::post('/base-datos/tabla', [BaseDatosController::class, 'tabla'])->middleware('throttle:30,1')->name('basedatos.tabla');
     // Asistente IA que escribe la consulta, y la segunda clave para poder cambiar datos (cada cambio queda registrado)
     Route::post('/base-datos/ia', [BaseDatosController::class, 'ia'])->middleware('throttle:20,1')->name('basedatos.ia');
     Route::post('/base-datos/clave', [BaseDatosController::class, 'clave'])->middleware('throttle:5,1')->name('basedatos.clave');

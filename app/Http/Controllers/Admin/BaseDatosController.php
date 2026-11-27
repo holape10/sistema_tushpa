@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Central\Cliente;
 use App\Support\Asistente\AsistenteSql;
 use App\Support\EdicionBd;
+use App\Support\EdicionTabla;
 use App\Support\Excel;
 use App\Support\ExploradorBd;
 use App\Support\Servidor;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -88,6 +90,33 @@ class BaseDatosController extends Controller
         }
 
         return $this->pantalla($request, ['resultado' => $resultado]);
+    }
+
+    /**
+     * Edición en la tabla: las celdas cambiadas, las filas borradas (➖) y las nuevas (➕), aplicadas juntas o ninguna
+     * (EdicionTabla). Pide la segunda clave abierta, igual que una orden SQL.
+     */
+    public function tabla(Request $request): JsonResponse
+    {
+        $this->autorizar();
+        $d = $request->validate(['base' => 'required|string|max:64', 'tabla' => 'required|string|max:64',
+            'editar' => 'nullable|array', 'editar.*.llave' => 'required|array', 'editar.*.antes' => 'present|array', 'editar.*.valores' => 'required|array|min:1',
+            'borrar' => 'nullable|array', 'borrar.*.llave' => 'required|array',
+            'agregar' => 'nullable|array', 'agregar.*' => 'array']);
+        $base = ExploradorBd::base($d['base']);
+        if (! $base) {
+            return response()->json(['ok' => false, 'mensaje' => 'Esa base no existe.'], 404);
+        }
+        if (! $this->edicionActiva($request)) {
+            return response()->json(['ok' => false, 'mensaje' => 'Se cerró la edición: vuelve a poner tu segunda clave (arriba).'], 423);
+        }
+        try {
+            $r = EdicionTabla::aplicar($base, $d['tabla'], $request->only(['editar', 'borrar', 'agregar']), $this->yo(), $request->ip());
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['ok' => true, 'mensaje' => 'Listo: '.$r['editadas'].' fila(s) editada(s), '.$r['borradas'].' borrada(s) y '.$r['agregadas'].' agregada(s).'] + $r);
     }
 
     /** El asistente IA sugiere la consulta (no ejecuta nada) */
