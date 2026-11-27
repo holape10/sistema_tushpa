@@ -33,7 +33,7 @@ class Inventario
     public static function protegidas(): array
     {
         return array_values(array_filter(array_unique(array_merge(
-            [(string) config('tenancy.base_sistema'), (string) config('database.connections.central.database')],
+            [(string) config('tenancy.base_sistema'), (string) config('database.connections.central.database'), Provisionador::plantilla()],
             Cliente::where('estado', '!=', 'ELIMINADO')->pluck('base_datos')->map(fn ($b) => (string) $b)->all()
         ))));
     }

@@ -130,6 +130,27 @@ Artisan::command('estudio:activar {ruc : RUC de la empresa que será el estudio 
     }
 })->purpose('Convierte una base en estudio contable: su empresa es el estudio y registra dentro las empresas de sus clientes');
 
+// La base plantilla al día (actualizar.sh, con el sistema ya atendiendo): crear una empresa copia la plantilla, no espera
+Artisan::command('clientes:plantilla', function () {
+    if (! Tenancy::activa()) {
+        return;
+    }
+    $central = DB::connection('central');
+    if (! (int) $central->selectOne('SELECT GET_LOCK(?, 300) AS l', ['tushpa_plantilla'])->l) {
+        $this->line('La plantilla se está usando: queda para la próxima.');
+
+        return;
+    }
+    try {
+        Provisionador::alDia();
+        $this->info('Plantilla al día ('.Provisionador::plantilla().').');
+    } catch (Throwable $e) {
+        $this->error($e->getMessage());
+    } finally {
+        $central->selectOne('SELECT RELEASE_LOCK(?) AS l', ['tushpa_plantilla']);
+    }
+})->purpose('Pone al día la base plantilla con que se crean las empresas');
+
 Artisan::command('clientes:migrar {--ruc= : Solo este cliente}', function () {
     $clientes = Cliente::query()
         ->when($this->option('ruc'), fn ($q, $ruc) => $q->where('ruc', $ruc))

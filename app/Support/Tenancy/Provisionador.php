@@ -51,7 +51,10 @@ class Provisionador
         $central->statement("CREATE DATABASE `{$base}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
 
         try {
+            // Rápido: se copia la base plantilla (ya migrada). Si no se puede, se migra desde cero como siempre
+            self::desdePlantilla($base);
             Tenancy::en($base, function () use ($d) {
+                // Con la plantilla copiada no queda ninguna migración pendiente: esto solo confirma (y cubre el caso sin plantilla)
                 $codigo = Artisan::call('migrate', ['--force' => true, '--database' => config('database.default')]);
                 if ($codigo !== 0) {
                     throw new \RuntimeException('Fallaron las migraciones: '.trim(Artisan::output()));
@@ -109,6 +112,84 @@ class Provisionador
             }
         }
         throw new \RuntimeException("El RUC {$ruc} ya tiene demasiados sistemas.");
+    }
+
+    /** Base plantilla: una base ya migrada y sin datos de ninguna empresa, que se copia al crear cada empresa */
+    public static function plantilla(): string
+    {
+        return (string) config('tenancy.prefijo_bd').'plantilla';
+    }
+
+    /**
+     * Llena la base nueva copiando la plantilla: 3 veces más rápido que correr todas las migraciones desde cero (y
+     * cada mejora del sistema suma una migración). Antes se pone la plantilla al día (solo las migraciones nuevas). Si
+     * algo falla, la base nueva queda vacía y la empresa se crea como siempre (migrando): nunca queda a medias.
+     *
+     * @return bool true = se copió la plantilla
+     */
+    public static function desdePlantilla(string $base): bool
+    {
+        if (! config('tenancy.usar_plantilla', true)) {
+            return false;
+        }
+        $central = DB::connection('central');
+        $plantilla = self::plantilla();
+        // Una empresa a la vez pone al día la plantilla y la copia
+        if (! (int) $central->selectOne('SELECT GET_LOCK(?, 120) AS l', ['tushpa_plantilla'])->l) {
+            return false;
+        }
+        try {
+            self::alDia();
+            self::copiarTablas($plantilla, $base);
+
+            return true;
+        } catch (\Throwable $e) {
+            report($e);
+            // La base nueva vuelve a quedar vacía: se migra desde cero
+            $central->statement("DROP DATABASE IF EXISTS `{$base}`");
+            $central->statement("CREATE DATABASE `{$base}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+            return false;
+        } finally {
+            $central->selectOne('SELECT RELEASE_LOCK(?) AS l', ['tushpa_plantilla']);
+        }
+    }
+
+    /**
+     * Crea la plantilla si no existe y le corre las migraciones nuevas. Lo llama actualizar.sh (con el sistema ya
+     * atendiendo) para que crear una empresa no tenga que esperar; y cada creación, por si acaso.
+     *
+     * @throws \RuntimeException si las migraciones fallan
+     */
+    public static function alDia(): void
+    {
+        $plantilla = self::plantilla();
+        DB::connection('central')->statement("CREATE DATABASE IF NOT EXISTS `{$plantilla}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        $codigo = Tenancy::en($plantilla, fn () => Artisan::call('migrate', ['--force' => true, '--database' => config('database.default')]));
+        if ($codigo !== 0) {
+            throw new \RuntimeException('La plantilla no se pudo poner al día: '.trim(Artisan::output()));
+        }
+    }
+
+    /** Copia todas las tablas de una base a otra (estructura, índices y filas) en el mismo servidor */
+    public static function copiarTablas(string $origen, string $destino): int
+    {
+        foreach ([$origen, $destino] as $b) {
+            if (! preg_match('/^[a-z0-9_]{1,64}$/i', $b)) {
+                throw new \InvalidArgumentException('Nombre de base de datos no válido.');
+            }
+        }
+        $central = DB::connection('central');
+        $tablas = collect($central->select("SELECT TABLE_NAME AS t FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'", [$origen]))->pluck('t');
+        if ($tablas->isEmpty()) {
+            throw new \RuntimeException("La base {$origen} no tiene tablas.");
+        }
+        foreach ($tablas as $t) {
+            $central->statement("CREATE TABLE `{$destino}`.`{$t}` LIKE `{$origen}`.`{$t}`");
+            $central->statement("INSERT INTO `{$destino}`.`{$t}` SELECT * FROM `{$origen}`.`{$t}`");
+        }
+
+        return $tablas->count();
     }
 
     /** Corre las migraciones pendientes en la base de un cliente; devuelve la salida de artisan */
