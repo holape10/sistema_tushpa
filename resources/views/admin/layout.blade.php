@@ -151,6 +151,21 @@
 
     <div class="contenido-panel transition-[padding] duration-200">
         <main class="@yield('ancho', 'max-w-6xl') mx-auto px-3 sm:px-4 py-4 sm:py-6">
+            {{-- Certificados digitales vencidos o por vencer (15 días) de las empresas que ve este usuario --}}
+            @auth('superadmin')
+                @php $franjaCert = \App\Support\Tenancy\CertificadosClientes::paraFranja(auth('superadmin')->user()); @endphp
+                @if ($franjaCert['vencidos'] || $franjaCert['por_vencer'])
+                    <a href="{{ route('admin.clientes.index', ['filtro' => 'certificados']) }}"
+                       class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-sm font-semibold {{ $franjaCert['vencidos'] ? 'bg-rose-50 border border-rose-200 text-rose-800' : 'bg-amber-50 border border-amber-200 text-amber-900' }}">
+                        <span>🔐 Certificados digitales:
+                            @if ($franjaCert['vencidos']) <b>{{ $franjaCert['vencidos'] }} vencido(s)</b>@endif
+                            @if ($franjaCert['vencidos'] && $franjaCert['por_vencer']) · @endif
+                            @if ($franjaCert['por_vencer']) <b>{{ $franjaCert['por_vencer'] }} vence(n) en 15 días o menos</b>@endif
+                        </span>
+                        <span class="ml-auto underline">Ver cuáles →</span>
+                    </a>
+                @endif
+            @endauth
             @if (session('ok'))
                 <div class="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm">{{ session('ok') }}</div>
             @endif
