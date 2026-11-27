@@ -2,6 +2,7 @@
 
 namespace Tests\Flujos;
 
+use App\Support\DemoDatos;
 use App\Support\Transportes;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -302,6 +303,27 @@ class TransportesTest extends FlujoTestCase
         $this->assertCount(2, $cola);
         $this->assertStringContainsString('LLAMAR: 987111222', base64_decode($cola[0]), 'La ticketera dice a quién llamar');
         $this->assertStringStartsWith('%PDF', base64_decode($cola[1]), 'La impresora A4 recibe el boleto en PDF');
+    }
+
+    public function test_la_demo_de_transportes_trae_salidas_vendidas_y_reservas_vigentes_y_se_puede_repetir(): void
+    {
+        $demo = fn () => (new DemoDatos($this->usuario))->cargar(['transportes']);
+        $salidas = fn () => DB::table('tra_salidas')->where('id_empresa_negocio', $this->sucursal)->count();
+
+        $resumen = $demo();
+        $antes = [$salidas(), DB::table('tra_pasajes')->where('estado', 'VENDIDO')->count()];
+        $this->assertSame([3, 3], [$resumen['rutas'], $resumen['unidades']]);
+        $this->assertSame([2, 2], [$resumen['reservas por internet'], $resumen['reservas en caja']]);
+        $this->assertGreaterThan(0, Transportes::reporte($this->sucursal, now()->subDays(3)->toDateString(), now()->toDateString())->sum('gastos'));
+
+        // Al día siguiente se vuelve a cargar: se agregan solo las salidas que faltan y las reservas se renuevan
+        Carbon::setTestNow(now()->addDay());
+        $demo();
+        $this->assertGreaterThan($antes[0], $salidas());
+        $this->assertLessThan($antes[0] + 10, $salidas(), 'No duplica lo que ya estaba');
+        $this->assertCount(2, Transportes::reservasWeb($this->sucursal), 'Siempre dos reservas por internet vigentes');
+        $this->assertSame(0, DB::table('tra_salidas')->where('id_empresa_negocio', $this->sucursal)->where('estado', 'PROGRAMADA')->where('salida', '<', now())->count());
+        $this->get(route('pasajes.web', $this->sucursal))->assertOk()->assertSee('IQUITOS → NAUTA', false);
     }
 
     public function test_la_cuenta_web_no_se_duplica_y_pide_la_contrasena_correcta(): void

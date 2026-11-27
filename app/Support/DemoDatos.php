@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 
 /**
  * Datos de ejemplo para la empresa demo (demos.tushpa.app): productos, clientes y lo propio de cada rubro
- * (mesas, farmacia con lotes, grifo, hotel, gimnasio, estacionamiento, club, clínica y comercio).
+ * (mesas, farmacia con lotes, grifo, hotel, gimnasio, estacionamiento, club, clínica, comercio, courier y transportes).
  * Además, cada rubro tiene su propia sucursal con su administrador (usuario demo.{rubro}) y solo sus datos:
  * al elegir el rubro en el login de la demo se entra a esa sucursal y no se ven productos de otros negocios.
  * Se puede correr varias veces: lo que ya existe (por nombre) no se duplica. No emite comprobantes.
@@ -37,6 +37,7 @@ class DemoDatos
         'PRESTAMOS' => ['PRÉSTAMOS DEL ORIENTE', ['prestamos']],
         'COLEGIO' => ['COLEGIO NUEVO HORIZONTE', ['colegio']],
         'COURIER' => ['ENVÍOS RÁPIDO AMAZÓNICO', ['courier']],
+        'TRANSPORTES' => ['TURISMO SELVA EXPRESS', ['transportes']],
         'CONTABLE' => ['ESTUDIO CONTABLE DEMO', []],
     ];
 
@@ -545,6 +546,145 @@ class DemoDatos
                 Courier::evento($r['env_id'], 'ENTREGADO', 'Entregado a '.Courier::enmascarar($desNom), $destinos[$ciudad], $this->admin->IdUsuario);
             }
             $this->sumar('envíos de courier');
+        }
+    }
+
+    /**
+     * Transportes de ejemplo: un bus de 2 pisos con paradas (venta por tramos), una van y una lancha con hamacas, salidas
+     * de los días pasados (con gastos, para el reporte) y de las próximas dos semanas con asientos vendidos, reservas en
+     * caja y reservas por internet esperando su pago. Los pasajes de la demo no tienen comprobante (no se envía nada a
+     * SUNAT). Al volver a correrlo se agregan las salidas de los días que faltan y las reservas se renuevan.
+     */
+    private function transportes(): void
+    {
+        if (! Schema::hasTable('tra_pasajes') || ! Schema::hasColumn('tra_pasajes', 'codigo')) {
+            return;
+        }
+        DB::table('tra_config')->updateOrInsert(['id_empresa_negocio' => $this->suc], ['reserva_min' => 120, 'web_activo' => 1, 'web_reserva_min' => 1440,
+            'web_texto' => 'Yapea o plinea al 965 000 000 y espera nuestra llamada para confirmar tu pasaje.', 'updated_at' => now()]);
+        foreach (['YAPE', 'PLIN'] as $medio) {
+            if (! DB::table('medios_pagos')->where('id_empresa_negocio', $this->suc)->where('nom_med_pag', $medio)->exists()) {
+                DB::table('medios_pagos')->insert(['nom_med_pag' => $medio, 'IdEmpresa' => $this->ruc, 'id_empresa_negocio' => $this->suc]);
+            }
+        }
+
+        // [origen, destino, paradas, minutos, precio, plantilla, tipo, unidad, placa, precios por categoría, horas, cada cuántos días]
+        $rutas = [
+            ['LIMA', 'HUANCAYO', 'LA OROYA, JAUJA', 480, 60, 'BUS_2P', 'TERRESTRE', 'BUS 01 · DOS PISOS', 'BDF-701', ['CAMA' => 90, 'SEMICAMA' => 60], ['08:00', '21:00'], 1],
+            ['IQUITOS', 'NAUTA', null, 120, 15, 'VAN', 'TERRESTRE', 'VAN 01', 'EGX-215', [], ['06:00', '12:00', '17:00'], 1],
+            ['IQUITOS', 'YURIMAGUAS', 'NAUTA, LAGUNAS', 4320, 100, 'LANCHA', 'FLUVIAL', 'LANCHA SAN PEDRO', null, ['ECONOMICO' => 100, 'HAMACA' => 80], ['18:00'], 2],
+        ];
+        // Lo que ya partió (de una carga anterior) queda como partido
+        DB::table('tra_salidas')->where('id_empresa_negocio', $this->suc)->where('estado', 'PROGRAMADA')->where('salida', '<', now())->update(['estado' => 'PARTIO']);
+        $proximas = [];
+        foreach ($rutas as [$origen, $destino, $paradas, $minutos, $precio, $plantilla, $tipo, $unidad, $placa, $precios, $horas, $cada]) {
+            $rutaId = DB::table('tra_rutas')->where('id_empresa_negocio', $this->suc)->where('origen', $origen)->where('destino', $destino)->value('id');
+            if (! $rutaId) {
+                $rutaId = DB::table('tra_rutas')->insertGetId(['id_empresa_negocio' => $this->suc, 'origen' => $origen, 'destino' => $destino, 'paradas' => $paradas,
+                    'duracion_min' => $minutos, 'precio' => $precio, 'activo' => 1, 'created_at' => now(), 'updated_at' => now()]);
+                $this->sumar('rutas');
+            }
+            $unidadId = DB::table('tra_unidades')->where('id_empresa_negocio', $this->suc)->where('nombre', $unidad)->value('id');
+            if (! $unidadId) {
+                $plano = Transportes::plantilla($plantilla);
+                $unidadId = DB::table('tra_unidades')->insertGetId(['id_empresa_negocio' => $this->suc, 'tipo' => $tipo, 'nombre' => $unidad, 'placa' => $placa,
+                    'plano' => json_encode($plano, JSON_UNESCAPED_UNICODE), 'asientos' => count(Transportes::asientosDe($plano)), 'activo' => 1,
+                    'created_at' => now(), 'updated_at' => now()]);
+                $this->sumar('unidades');
+            }
+            $asientos = array_values(Transportes::asientosDe(Transportes::plano(DB::table('tra_unidades')->where('id', $unidadId)->first())));
+            foreach (range(-3, 14) as $dia) {
+                // Cada cuántos días según la fecha (no según hoy), para que al repetir la carga caigan en los mismos días
+                if (intdiv(now()->startOfDay()->addDays($dia)->timestamp, 86400) % $cada !== 0) {
+                    continue;
+                }
+                foreach ($horas as $hora) {
+                    $cuando = now()->startOfDay()->addDays($dia)->setTimeFromTimeString($hora);
+                    $salidaId = DB::table('tra_salidas')->where('id_empresa_negocio', $this->suc)->where('ruta_id', $rutaId)->where('salida', $cuando)->value('id');
+                    if (! $salidaId) {
+                        $salidaId = DB::table('tra_salidas')->insertGetId(['id_empresa_negocio' => $this->suc, 'ruta_id' => $rutaId, 'unidad_id' => $unidadId,
+                            'salida' => $cuando, 'conductor' => $tipo === 'FLUVIAL' ? 'CAP. JORGE PINEDO' : 'JUAN CARLOS RÍOS', 'precio' => $precio,
+                            'precios' => $precios ? json_encode($precios) : null, 'estado' => $cuando->isPast() ? 'PARTIO' : 'PROGRAMADA',
+                            'IdUsuario' => $this->admin->IdUsuario, 'created_at' => now(), 'updated_at' => now()]);
+                        $this->sumar('salidas');
+                        $this->pasajesDemo(DB::table('tra_salidas')->where('id', $salidaId)->first(), $asientos, $dia);
+                    }
+                    if ($cuando->isFuture()) {
+                        $proximas[$destino][] = $salidaId;
+                    }
+                }
+            }
+        }
+        $this->reservasDemo($proximas);
+    }
+
+    /** Asientos vendidos de una salida (más llena mientras más cerca) y, si ya partió, quiénes subieron y sus gastos */
+    private function pasajesDemo(object $salida, array $asientos, int $dia): void
+    {
+        $nombres = [['45200101', 'CARLOS ALBERTO RÍOS VELA'], ['45200102', 'MARÍA ISABEL TORRES PEZO'], ['45200103', 'JOSÉ LUIS PANDURO SOTO'],
+            ['45200104', 'ROSA MARÍA SANGAMA DÍAZ'], ['45200105', 'PEDRO PABLO VÁSQUEZ RUIZ'], ['45200106', 'LUCÍA FERNANDA PINEDO CRUZ'],
+            ['45200107', 'JORGE ENRIQUE TELLO AREVALO'], ['45200108', 'ANA SOFÍA MOZOMBITE CHUNG'], ['45200109', 'RAÚL ANDRÉS GRÁNDEZ LÓPEZ'],
+            ['45200110', 'CARMEN ROSA HUAMÁN QUISPE'], ['45200111', 'LUIS MIGUEL SALDAÑA RAMOS'], ['45200112', 'GLADYS NOEMÍ PIZANGO VEGA']];
+        $ocupacion = $dia < 0 ? 0.75 : max(0.1, 0.6 - $dia * 0.05);
+        $partio = $salida->estado === 'PARTIO';
+        $n = (int) round(count($asientos) * $ocupacion);
+        foreach ($asientos as $i => $a) {
+            // Repartidos por todo el plano, no todos adelante
+            if ((($i * 7 + $salida->id) % count($asientos)) >= $n) {
+                continue;
+            }
+            [$doc, $nombre] = $nombres[($i + $salida->id) % count($nombres)];
+            DB::table('tra_pasajes')->insert(['salida_id' => $salida->id, 'asiento' => $a['n'], 'piso' => $a['piso'], 'categoria' => $a['cat'],
+                'posicion' => $a['pos'], 'precio' => Transportes::precio($salida, $a['cat']), 'tdicod' => '1', 'doc' => $doc, 'nombre' => $nombre,
+                'telefono' => '9652001'.str_pad((string) ($i % 100), 2, '0', STR_PAD_LEFT), 'estado' => 'VENDIDO', 'IdUsuario' => $this->admin->IdUsuario,
+                'codigo' => strtoupper(Str::random(10)), 'grupo' => strtoupper(Str::random(10)), 'origen_venta' => 'CAJA',
+                'embarcado_at' => $partio && $i % 9 !== 0 ? $salida->salida : null, 'embarcado_por' => $partio ? $this->admin->IdUsuario : null,
+                'created_at' => now()->parse($salida->salida)->subDays(2), 'updated_at' => now()]);
+            $this->sumar('pasajes vendidos');
+        }
+        if ($partio) {
+            foreach ([['COMBUSTIBLE', 0.25], ['PEAJES Y PUERTO', 0.05], ['VIÁTICOS DEL PERSONAL', 0.06]] as [$concepto, $parte]) {
+                DB::table('tra_gastos')->insert(['salida_id' => $salida->id, 'concepto' => $concepto,
+                    'monto' => round(count($asientos) * (float) $salida->precio * $parte, 2), 'IdUsuario' => $this->admin->IdUsuario, 'created_at' => now()]);
+            }
+        }
+    }
+
+    /**
+     * Reservas que se ven al entrar: en caja y por internet (esperando que la caja confirme el pago). Se renuevan cada
+     * vez que se carga la demo, así nunca están vencidas.
+     *
+     * @param  array<string, list<int>>  $proximas  destino => salidas futuras
+     */
+    private function reservasDemo(array $proximas): void
+    {
+        $salidas = DB::table('tra_salidas')->where('id_empresa_negocio', $this->suc)->pluck('id');
+        DB::table('tra_pasajes')->whereIn('salida_id', $salidas)->where('estado', 'RESERVADO')->delete();
+        $pasajero = DB::table('tra_web_usuarios')->where('doc', '70000101')->value('id')
+            ?? DB::table('tra_web_usuarios')->insertGetId(['tdicod' => '1', 'doc' => '70000101', 'nombre' => 'MARÍA FERNANDA RÍOS PANDURO',
+                'celular' => '965100101', 'password' => bcrypt(Str::random(40)), 'created_at' => now(), 'updated_at' => now()]);
+        // [destino, cuántos asientos, por internet, medio, operación, tramo hasta]
+        foreach ([['HUANCAYO', 2, true, 'YAPE', '04512873', null], ['NAUTA', 1, true, 'PLIN', null, null],
+            ['HUANCAYO', 1, false, null, null, 1], ['YURIMAGUAS', 2, false, null, null, null]] as $k => [$destino, $cuantos, $web, $medio, $operacion, $hasta]) {
+            $salidaId = $proximas[$destino][0] ?? null;
+            if (! $salidaId) {
+                continue;
+            }
+            $unidad = DB::table('tra_unidades')->where('id', DB::table('tra_salidas')->where('id', $salidaId)->value('unidad_id'))->first();
+            $libres = array_values(array_diff(array_keys(Transportes::asientosDe(Transportes::plano($unidad))),
+                array_keys(Transportes::ocupados($salidaId, 0, $hasta ?? 99))));
+            $pasajeros = [];
+            foreach (array_slice($libres, $k * 3, $cuantos) as $j => $asiento) {
+                $pasajeros[] = ['asiento' => (string) $asiento, 'tdicod' => '1', 'doc' => $web && $j === 0 ? '70000101' : '4530010'.$k.$j,
+                    'nombre' => $web && $j === 0 ? 'MARÍA FERNANDA RÍOS PANDURO' : ($web ? 'JOSÉ ANTONIO RÍOS PANDURO' : 'CLIENTE QUE RESERVÓ '.($k + 1)),
+                    'telefono' => '96510010'.($k + 1)];
+            }
+            if (! $pasajeros) {
+                continue;
+            }
+            Transportes::reservar($this->suc, $web ? null : (int) $this->admin->IdUsuario, $salidaId, ['pasajeros' => $pasajeros, 'hasta' => $hasta],
+                $web ? ['origen' => 'WEB', 'minutos' => 1440, 'web_usuario_id' => $pasajero, 'medio_web' => $medio, 'operacion_web' => $operacion] : ['minutos' => 1440]);
+            $this->sumar($web ? 'reservas por internet' : 'reservas en caja');
         }
     }
 
