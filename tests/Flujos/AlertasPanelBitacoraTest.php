@@ -139,7 +139,7 @@ class AlertasPanelBitacoraTest extends FlujoTestCase
 
         $detalles = AlertasPanel::detalles($cliente, collect([$alerta->bitacora_id]));
 
-        $this->assertSame(['etiqueta' => 'Correlativo de boletas', 'antes' => '1520', 'despues' => '1'], $detalles[$alerta->bitacora_id][0]);
+        $this->assertSame(['etiqueta' => 'Correlativo de boletas', 'antes' => '1520', 'despues' => '1'], $detalles[$alerta->bitacora_id]['Bnu'], 'Cada cambio con el nombre de su campo (así los códigos se leen en palabras)');
         $html = view('admin.clientes.partials.alerta_cambios', ['cambios' => $detalles[$alerta->bitacora_id]])->render();
         $this->assertMatchesRegularExpression('/Correlativo de boletas:.*1520.*→.*>1</s', $html);
         $this->assertStringContainsString('cambió (no se muestra por seguridad)', $html, 'Las claves no se muestran.');

@@ -142,6 +142,7 @@ class AlertasPanel
 
     /**
      * Qué cambió exactamente en cada alerta (campo, antes y después), leído de la bitácora de la empresa.
+     * Se conserva el nombre de cada campo: con él los códigos se muestran en palabras (0 → 1 = Pruebas → Producción).
      *
      * @param  Collection<int, int|null>  $ids
      * @return array<int, list<array<string, mixed>>> [bitacora_id => cambios]
@@ -155,7 +156,7 @@ class AlertasPanel
         try {
             return Tenancy::en($cliente->base_datos, fn () => Schema::hasTable('bitacora')
                 ? DB::table('bitacora')->whereIn('id', $ids)->get(['id', 'cambios'])
-                    ->mapWithKeys(fn ($b) => [(int) $b->id => array_values(json_decode((string) $b->cambios, true) ?: [])])->all()
+                    ->mapWithKeys(fn ($b) => [(int) $b->id => json_decode((string) $b->cambios, true) ?: []])->all()
                 : []);
         } catch (\Throwable $e) {
             report($e);

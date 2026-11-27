@@ -61,6 +61,17 @@ class AlertasPanelTest extends TestCase
         $this->get(route('admin.clientes.alertas', $cliente->id))->assertOk()->assertSee('Nada por revisar')->assertSee('Descartada por VENDEDOR');
     }
 
+    public function test_el_cambio_de_la_alerta_se_lee_en_palabras(): void
+    {
+        // Así llega de la bitácora de la empresa: cada cambio con el nombre de su campo
+        $cambios = json_decode(json_encode(['produccion' => ['etiqueta' => 'Envío a SUNAT en producción', 'antes' => '0', 'despues' => '1']]), true);
+
+        $html = view('admin.clientes.partials.alerta_cambios', ['cambios' => $cambios])->render();
+
+        $this->assertStringContainsString('Pruebas (BETA)', $html);
+        $this->assertStringContainsString('Producción (real)', $html);
+    }
+
     public function test_otro_vendedor_no_ve_las_alertas_ajenas(): void
     {
         [, $cliente] = $this->empresa();
