@@ -435,10 +435,30 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             const exacto = await this.porCodigo(q);
+            if (exacto && exacto.etiqueta) { this.agregarEtiqueta(exacto); return; }
             if (exacto) { this.agregar(exacto, false, this.presDeCodigo(exacto)); return; }
             const lista = this.resultadosAbiertos && this.resultados.length ? this.resultados : await this.buscar();
             if (lista.length) this.agregar(lista[this.resultadoActivo] || lista[0]);
             else { this.sonido(false); this.aviso(`“${q}” no pertenece a ningún producto`, 'error'); }
+        },
+
+        /**
+         * Etiqueta de la balanza etiquetadora: el producto con su peso (o su precio) ya puesto, en su propia línea (cada
+         * bolsa pesada es una línea). En modo precio la cantidad sale del precio y el total es el de la etiqueta.
+         */
+        agregarEtiqueta(p) {
+            const e = p.etiqueta;
+            const cantidad = e.cantidad != null ? e.cantidad : (p.precio > 0 ? Math.round(e.importe / p.precio * 1000) / 1000 : 1);
+            const it = this.nuevoItem(p, null, { cantidad, ...(e.importe != null ? { importe: e.importe } : {}) });
+            this.carrito.push(it);
+            const linea = this.carrito[this.carrito.length - 1];
+            linea.flash = true;
+            setTimeout(() => { linea.flash = false; }, 600);
+            this.sonido(true);
+            this.busqueda = '';
+            this.resultados = [];
+            this.resultadosAbiertos = false;
+            this.$refs.buscador.focus();
         },
 
         moverResultado(paso) {

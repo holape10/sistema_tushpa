@@ -119,7 +119,8 @@ class SucursalController extends Controller
         'SerProforma' => 'Serie de proformas', 'NumProforma' => 'Último N° de proforma', 'tip_igv_pred' => 'IGV por defecto', 'tdocod_pred' => 'Comprobante por defecto',
         'control_stock' => 'Control de stock', 'permite_descuentos' => 'Permite descuentos', 'permite_cortesias' => 'Permite cortesías', 'permite_bonificaciones' => 'Permite bonificaciones',
         'descuento_max_cajero' => 'Descuento máximo del cajero', 'exigir_operacion' => 'Exigir N° de operación', 'formato_impresion' => 'Formato de impresión',
-        'trabaja_pedidos' => 'Trabaja con pedidos'];
+        'trabaja_pedidos' => 'Trabaja con pedidos', 'balanza_etiqueta' => 'Lee etiquetas de balanza', 'balanza_prefijo' => 'Prefijo de las etiquetas de balanza',
+        'balanza_modo' => 'Las etiquetas de balanza traen'];
 
     public function update(Request $request, $id)
     {
@@ -265,6 +266,10 @@ class SucursalController extends Controller
         $datos['imagenes_venta'] = $request->boolean('imagenes_venta');
         $datos['pv_elegir_vendedor'] = $request->boolean('pv_elegir_vendedor');
         $datos['trabaja_pedidos'] = $request->boolean('trabaja_pedidos');
+        // Etiquetas de la balanza etiquetadora: prefijo (2 o 20…29) y si traen el peso o el precio
+        $datos['balanza_etiqueta'] = $request->boolean('balanza_etiqueta');
+        $datos['balanza_prefijo'] = preg_match('/^2\d?$/', (string) $request->input('balanza_prefijo')) ? $request->input('balanza_prefijo') : '2';
+        $datos['balanza_modo'] = $request->input('balanza_modo') === 'PRECIO' ? 'PRECIO' : 'PESO';
         $datos['igv_restaurante'] = $request->boolean('igv_restaurante');
         $datos['diseno_a4'] = $datos['diseno_a4'] ?? 'MODERNO';
         $datos['a4_cancelado_grande'] = $request->boolean('a4_cancelado_grande');

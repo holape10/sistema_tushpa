@@ -461,6 +461,22 @@
                         @elseif ($campo('clinica_doctor_cobra'))
                             <input type="hidden" name="clinica_doctor_cobra" value="1">
                         @endif
+                        {{-- Etiquetas de la balanza etiquetadora (supermercados): al escanearlas entra el producto con su peso o precio --}}
+                        <div x-data="{ etiquetas: @js((bool) $campo('balanza_etiqueta')) }" class="rounded-xl border-2 border-gray-200 px-4 py-3">
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input type="checkbox" name="balanza_etiqueta" value="1" x-model="etiquetas" class="mt-0.5 rounded text-indigo-600">
+                                <span><span class="font-semibold text-gray-800">⚖️ Lee etiquetas de balanza</span>
+                                    <span class="block text-xs text-gray-500">Para la fruta, carne o queso pesados en una balanza que imprime etiqueta (código que empieza con 2). El PLU de la balanza es el código del producto.</span></span>
+                            </label>
+                            <div x-show="etiquetas" x-cloak class="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
+                                <label class="font-medium text-gray-600">El código empieza con
+                                    <input name="balanza_prefijo" value="{{ $campo('balanza_prefijo') ?: '2' }}" maxlength="2" inputmode="numeric" class="mt-1 block w-full rounded-lg border-gray-300 text-sm"></label>
+                                <label class="font-medium text-gray-600">La etiqueta trae
+                                    <select name="balanza_modo" class="mt-1 block w-full rounded-lg border-gray-300 text-sm">
+                                        @foreach (\App\Support\EtiquetaBalanza::MODOS as $valor => $texto)<option value="{{ $valor }}" @selected(($campo('balanza_modo') ?: 'PESO') === $valor)>{{ $texto }}</option>@endforeach
+                                    </select></label>
+                            </div>
+                        </div>
                         {{-- Trabaja con pedidos: el vendedor toma el pedido (número del día) y la caja lo cobra con ese número --}}
                         <label class="flex items-start gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 cursor-pointer">
                             <input type="checkbox" name="trabaja_pedidos" value="1" @checked($campo('trabaja_pedidos')) class="mt-0.5 rounded text-indigo-600">

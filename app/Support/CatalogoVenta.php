@@ -49,6 +49,19 @@ class CatalogoVenta
             ->limit($codigo !== '' ? 1 : 20)
             ->get();
 
+        // Etiqueta de la balanza etiquetadora (2 + PLU + peso o precio): solo si el código no es de ningún producto
+        if ($codigo !== '' && $productos->isEmpty() && ($cfg = EtiquetaBalanza::configuracion((int) $sucursal)) && ($etiqueta = EtiquetaBalanza::leer($codigo, $cfg))) {
+            $codigos = EtiquetaBalanza::codigosDelPlu($etiqueta['plu']);
+            $producto = self::consulta($sucursal, $almacenId)
+                ->where(fn ($w) => $w->whereIn('productos.procod', $codigos)->orWhereIn('productos.codigo_barra', $codigos))->limit(1)->get();
+            $lista = self::formatear($producto, $almacenId);
+            if ($lista) {
+                $lista[0]['etiqueta'] = $etiqueta;
+            }
+
+            return $lista;
+        }
+
         return self::formatear($productos, $almacenId, $presentacion ? (int) $presentacion->id_presentacion : null, $presentacion ? (int) $presentacion->IdProducto : null);
     }
 
